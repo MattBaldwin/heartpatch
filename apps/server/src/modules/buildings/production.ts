@@ -15,6 +15,13 @@ import {
   productionYield,
   storageCycles,
   warehouseWindows,
+  coverWindows,
+  eatenBy,
+  eatsCap,
+  followsWeather,
+  pacedProgress,
+  worksPace,
+  worksSource,
   type BuildingProduction,
   type DeliveryWindow,
   type ItemCounts,
@@ -24,13 +31,17 @@ import {
   type ResourceBuilding,
   type ResourceBuildingLevel,
   type UpkeepBuilding,
+  type WeatherFront,
   type WorkPause,
   type WorkProgress,
+  type WorksBuilding,
 } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { mapLocalTime, instantOfLocal, localDate } from '../../lib/time.js';
-import { grantItems, seasonsOn } from '../inventory/service.js';
+import { consumeItems, grantItems, seasonsOn } from '../inventory/service.js';
+import { createInventoryRepo } from '../inventory/repo.js';
+import { frontsBetween, weatherMap } from '../weather/plans.js';
 import { workPauseOf } from '../explore/homesteads.js';
 import { seasonsAtFor } from '../jobs/work.js';
 import { BUILDING_DATA } from './hearthfire.js';
@@ -42,9 +53,16 @@ import { createBuildingsRepo, type BuildingRow } from './repo.js';
  * an instant (CLAUDE.md rule 4). Nothing ticks: `produced_since`,
  * `paused_at` and the owner's homestead flags are all it needs, and the
  * settle, the take-down and lost land bank what it says.
+ *
+ * Wild Isle works (#621 W1-8) produce the same way, from their own `makes`:
+ * one whose pace follows the weather reads the stored fronts over its tile
+ * (`worksFronts`, plain reads, never locked), and one that `eats` takes it
+ * from its owner's bag when it banks (`bankOutput`, under the caller's
+ * inventory lock), banking only the cycles the bag pays for. The Warehouse
+ * never delivers for works.
  */
 
-/** A row's building data when it pays a morning upkeep (resource or Warehouse), else null. */
+/** A row's building data when it pays a morning upkeep (resource, Warehouse or works), else null. */
 export function upkeepBuildingOf(row: Pick<BuildingRow, 'buildingId'>): UpkeepBuilding | null {
   const building = BUILDING_DATA.get(row.buildingId);
   return building && paysUpkeep(building) ? building : null;
@@ -90,9 +108,11 @@ export const warehouseIn = (rows: readonly BuildingRow[]): BuildingRow | null =>
  * a Warehouse; else while it stood, paid and joined.
  */
 export function deliveryOf(
-  row: Pick<BuildingRow, 'level'>,
+  row: Pick<BuildingRow, 'level' | 'kind'>,
   warehouse: BuildingRow | null,
 ): DeliveryWindow[] {
+  // Resource buildings only: a works keeps its own storage (#621 W1-8).
+  if (row.kind !== 'resource') return [];
   if (!warehouse || row.level < RESOURCE_BUILDING_RULES.warehouseDeliversFromLevel) return [];
   return warehouseWindows({
     placedAtMs: warehouse.placedAt.getTime(),
@@ -101,63 +121,155 @@ export function deliveryOf(
   });
 }
 
-/** A resource building's output at an instant. */
+/** What a works building's output reads besides its row (#621 W1-8). */
+export interface ProductionContext {
+  /** The owner's map's fronts since its works' counts started (`worksFronts`), or null: clear skies. */
+  readonly fronts?: readonly WeatherFront[] | null;
+  /**
+   * The owner's bag, to cap an eater's cycles by (`eatsCap`). Left out: no
+   * cap (what it could make at most, for an inventory lock).
+   */
+  readonly bag?: Readonly<ItemCounts>;
+}
+
+/** A producing building's output at an instant: a resource building or a Wild Isle works. */
 export interface ProductionAt {
-  building: ResourceBuilding;
+  building: ResourceBuilding | WorksBuilding;
   level: ResourceBuildingLevel;
   source: ProductionSource;
   cycleSeconds: number;
   /** Its own storage in cycles, or null while the Warehouse delivers for it now. */
   maxCycles: number | null;
   progress: WorkProgress;
-  /** What the finished cycles make, each judged in its season. */
+  /** What the finished cycles make, each judged in its season (an eater's capped by the bag given). */
   ready: ItemCounts;
   homesteadPause: WorkPause | null;
+  /** What a works eats a cycle (#621 W1-8), or null. */
+  eats: ItemCounts | null;
+  /** What `ready` eats (`eats` × its cycles). */
+  eaten: ItemCounts;
+  /** Every item banking it can touch, for the caller's one inventory lock: made and eaten, uncapped. */
+  touches: ItemCounts;
+  /** What the first `cycles` finished cycles make (an eater banks only those the bag pays for). */
+  yieldOf: (cycles: number) => ItemCounts;
+}
+
+/** A works building's pace on its tile from the fronts (#621 W1-8), or null when it ignores the weather. */
+function paceOf(
+  building: WorksBuilding,
+  row: Pick<BuildingRow, 'q' | 'r'>,
+  sinceMs: number,
+  fronts: readonly WeatherFront[] | null | undefined,
+) {
+  if (!followsWeather(building)) return null;
+  return worksPace(
+    building,
+    coverWindows(fronts ?? [], { q: row.q, r: row.r }, sinceMs, Number.MAX_SAFE_INTEGER),
+  );
 }
 
 /**
- * A resource building's output at `at`: finished cycles since
- * `produced_since`, stopped at full storage, at `paused_at`, and with a
- * cut-off homestead's stretch left out. While its owner's `warehouse`
- * delivers for it (level 3+, PR 8), nothing caps it; from when the Warehouse
- * stopped, its own storage does. Null for other kinds, or a row with no
- * count started.
+ * A producing building's output at `at`: finished cycles since
+ * `produced_since`, stopped at full storage, at `paused_at` (or a knock),
+ * and with a cut-off homestead's stretch left out. While its owner's
+ * `warehouse` delivers for it (level 3+ resource buildings, PR 8), nothing
+ * caps it; from when the Warehouse stopped, its own storage does. A works
+ * (#621 W1-8) paces by the weather in `ctx.fronts` and an eater's `ready`
+ * is capped by `ctx.bag`. Null for other kinds, or a row with no count started.
  */
 export function productionAt(
   row: BuildingRow,
   at: Date,
   timeZone: string,
   warehouse: BuildingRow | null,
+  ctx: ProductionContext = {},
 ): ProductionAt | null {
   const building = BUILDING_DATA.get(row.buildingId);
-  if (building?.kind !== 'resource' || row.producedSince === null) return null;
+  if ((building?.kind !== 'resource' && building?.kind !== 'works') || row.producedSince === null) {
+    return null;
+  }
   const level = levelOf(building.levels, row.level);
-  const source = productionSource(building, JOB_RULES, EXPLORE_RULES);
+  const source =
+    building.kind === 'works'
+      ? worksSource(building)
+      : productionSource(building, JOB_RULES, EXPLORE_RULES);
   if (!level || !source) return null;
   const cycleSeconds = productionCycleSeconds(source.seconds, level, JOB_RULES);
   const storage = storageCycles(level, cycleSeconds);
   const homesteadPause = homesteadPauseOf(row);
   const windows = deliveryOf(row, warehouse);
-  const progress = deliveredProgress(
-    {
-      sinceMs: row.producedSince.getTime(),
-      nowMs: at.getTime(),
-      pausedAtMs: stoppedAtMs(row),
-      cycleSeconds,
-      maxCycles: storage,
-      homesteadPause,
-    },
-    windows,
-    JOB_RULES,
-  );
-  const ready = productionYield(
-    source,
-    progress.finishedMs,
-    GAME_DATA.resources,
-    seasonsAtFor(timeZone),
-  );
+  const facts = {
+    sinceMs: row.producedSince.getTime(),
+    nowMs: at.getTime(),
+    pausedAtMs: stoppedAtMs(row),
+    cycleSeconds,
+    maxCycles: storage,
+    homesteadPause,
+  };
+  const pace = building.kind === 'works' ? paceOf(building, row, facts.sinceMs, ctx.fronts) : null;
+  const progress = pace ? pacedProgress(facts, pace) : deliveredProgress(facts, windows, JOB_RULES);
+  const yieldOf = (cycles: number) =>
+    productionYield(
+      source,
+      progress.finishedMs.slice(0, Math.max(0, cycles)),
+      GAME_DATA.resources,
+      seasonsAtFor(timeZone),
+    );
+  const eats = building.kind === 'works' && building.eats ? { ...building.eats } : null;
+  const paid = Math.min(progress.cycles, ctx.bag ? eatsCap(eats ?? undefined, ctx.bag) : Infinity);
+  const ready = yieldOf(paid);
+  const touches = { ...yieldOf(progress.cycles), ...eatenBy(eats ?? undefined, progress.cycles) };
   const maxCycles = deliveringAt(windows, at.getTime()) ? null : storage;
-  return { building, level, source, cycleSeconds, maxCycles, progress, ready, homesteadPause };
+  return {
+    building,
+    level,
+    source,
+    cycleSeconds,
+    maxCycles,
+    progress,
+    ready,
+    homesteadPause,
+    eats,
+    eaten: eatenBy(eats ?? undefined, paid),
+    touches,
+    yieldOf,
+  };
+}
+
+/**
+ * The fronts the owner's weather-paced works need (#621 W1-8): the stored
+ * plans from the earliest such count's start to `at`, read without a lock
+ * (tech spec §7: `weather_days` is inserted, never locked). Null, and no
+ * query at all, when none of `rows` follows the weather (always on a Cozy
+ * Patch); null too on a map with no weather.
+ */
+export async function worksFronts(
+  tx: Executor,
+  mapId: string,
+  rows: readonly BuildingRow[],
+  at: Date,
+): Promise<WeatherFront[] | null> {
+  const paced = rows.filter((r) => {
+    const b = BUILDING_DATA.get(r.buildingId);
+    return b?.kind === 'works' && followsWeather(b) && r.producedSince !== null;
+  });
+  if (paced.length === 0) return null;
+  const map = await weatherMap(tx, mapId);
+  if (!map) return null;
+  const from = new Date(Math.min(...paced.map((r) => r.producedSince?.getTime() ?? at.getTime())));
+  return frontsBetween(tx, map, from < at ? from : at, at);
+}
+
+/**
+ * Banks producing rows in order, eaters last (#621 W1-8: a Greenhouse's
+ * Greens land before a Watermill eats them).
+ */
+export function eatersLast<T extends Pick<BuildingRow, 'buildingId'>>(rows: readonly T[]): T[] {
+  const eats = (r: T) => {
+    const b = BUILDING_DATA.get(r.buildingId);
+    return b?.kind === 'works' && b.eats !== undefined ? 1 : 0;
+  };
+  return [...rows].sort((a, b) => eats(a) - eats(b));
 }
 
 /**
@@ -186,8 +298,9 @@ export function productionView(
   at: Date,
   timeZone: string,
   warehouse: BuildingRow | null,
+  ctx: ProductionContext = {},
 ): BuildingProduction | null {
-  const made = productionAt(row, at, timeZone, warehouse);
+  const made = productionAt(row, at, timeZone, warehouse, ctx);
   if (!made) return null;
   const napping = row.homestead !== null && homesteadPauseOf(row)?.toMs === null;
   const seasonEnd = seasonEndsAt(made.source.resource, at, timeZone);
@@ -212,6 +325,8 @@ export function productionView(
     delivering: made.maxCycles === null && row.pausedAt === null && canWorkAt(row, at, timeZone),
     nextMorningAt: nextMorningAt(at, HOLLOW_RULES.morningMinute, timeZone).toISOString(),
     seasonEndsAt: seasonEnd?.toISOString() ?? null,
+    // A Wild Isle works that eats (#621 W1-8): what each cycle takes from the bag.
+    ...(made.eats ? { eats: made.eats } : {}),
   };
 }
 
@@ -288,12 +403,16 @@ export interface Banked {
 }
 
 /**
- * Banks a resource building's finished output into its owner's bag (ledger
+ * Banks a producing building's finished output into its owner's bag (ledger
  * reason `produced`, ref the row) inside the caller's transaction, after the
- * caller has locked the row (step 8) and the inventory rows (step 11), and
- * moves its count on: from where the cycles stopped, or from now when it was
- * full (time past full never pays). Returns what landed and its
- * `building.produced` event to append, or null when nothing finished.
+ * caller has locked the row (step 8) and the inventory rows its output can
+ * touch (step 11, `made.touches`), and moves its count on: from where the
+ * cycles stopped, or from now when it was full (time past full never pays).
+ * A works that eats (#621 W1-8) banks only the cycles the bag holds enough
+ * for, read here under that lock, and takes what they eat (ledger reason
+ * `works-eat`); the rest it couldn't grind were idle and pay nothing. Returns
+ * what landed and its `building.produced` event to append, or null when
+ * nothing finished.
  */
 export async function bankOutput(
   tx: Executor,
@@ -303,16 +422,26 @@ export async function bankOutput(
   if (made.progress.cycles === 0) return null;
   const producedSince = new Date(made.progress.nextSinceMs);
   await createBuildingsRepo(tx).setProduction(row.id, { producedSince });
-  // A dormant Pumpkin Barn's cycles make nothing: the count still moves on.
-  if (Object.keys(made.ready).length === 0) return null;
   const owner = { mapId: row.mapId, userId: row.ownerUserId };
-  await grantItems(tx, owner, made.ready, 'produced', row.id);
+  let ready = made.ready;
+  if (made.eats) {
+    const bag = await createInventoryRepo(tx).lockItems(owner, Object.keys(made.eats));
+    const paid = Math.min(made.progress.cycles, eatsCap(made.eats, bag));
+    ready = made.yieldOf(paid);
+    const eaten = eatenBy(made.eats, paid);
+    if (Object.keys(eaten).length > 0) {
+      await consumeItems(tx, owner, eaten, 'works-eat', row.id);
+    }
+  }
+  // A dormant Pumpkin Barn's cycles make nothing: the count still moves on.
+  if (Object.keys(ready).length === 0) return null;
+  await grantItems(tx, owner, ready, 'produced', row.id);
   const produced = {
     buildingRowId: row.id,
     buildingId: row.buildingId,
     q: row.q,
     r: row.r,
-    items: made.ready,
+    items: ready,
   };
   return {
     produced,
@@ -359,10 +488,14 @@ export function productionBeforeUnpaid(
   timeZone: string,
   warehouse: BuildingRow | null,
 ): ProductionAt | null {
+  // A works that eats (#621 W1-8) banks nothing here: these paths grant
+  // without taking from the bag, so it can't pay for a cycle (an empty bag).
+  // One whose pace follows the weather counts at clear skies.
   return productionAt(
     withUnpaidPause(row, at, timeZone),
     at,
     timeZone,
     warehouse && withUnpaidPause(warehouse, at, timeZone),
+    { bag: {} },
   );
 }

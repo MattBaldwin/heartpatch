@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { checkResourceBuildings, paysUpkeep, type Building } from '../schemas/data/buildings.js';
 import { isBuildable } from '../schemas/data/home-base.js';
+import { isBuildableOn } from '../home/water-works.js';
 import { BUILDINGS } from './buildings.js';
 import { HOME_BASE_RULES } from './home-base.js';
 import { JOB_RULES } from './jobs.js';
@@ -47,13 +48,17 @@ describe('resource buildings and the Warehouse (#601)', () => {
 
   it('has one building for every land with a yield, and one Warehouse', () => {
     const terrains = economy.flatMap((b) => (b.kind === 'resource' ? [b.terrain] : []));
-    expect([...terrains].sort()).toEqual(JOB_RULES.terrainYields.map((y) => y.terrain).sort());
+    // The coast's Fish (#621 W1-8) come from a Fishing Pier, a works.
+    const lands = JOB_RULES.terrainYields.map((y) => y.terrain).filter((t) => t !== 'coast');
+    expect([...terrains].sort()).toEqual(lands.sort());
     expect(economy.filter((b) => b.kind === 'warehouse').map((b) => b.id)).toEqual(['warehouse']);
   });
 
   it('builds the resource buildings (PR 7) and the Warehouse (PR 9)', () => {
     for (const b of economy) {
-      expect(isBuildable(HOME_BASE_RULES, b), b.id).toBe(true);
+      // Wild Isle works pay upkeep too (#621 W1-8), built by the patch type.
+      expect(isBuildable(HOME_BASE_RULES, b), b.id).toBe(b.kind !== 'works');
+      expect(isBuildableOn(HOME_BASE_RULES, b, 'wild-isle'), b.id).toBe(true);
     }
   });
 });

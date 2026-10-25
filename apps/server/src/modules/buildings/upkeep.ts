@@ -6,6 +6,7 @@ import {
   upkeepMornings,
   upkeepOrder,
   type LocalDate,
+  type UpkeepEntry,
   type UpkeepPlanEntry,
 } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
@@ -40,17 +41,25 @@ const UPKEEP_REF_NAMESPACE = '6c1f4f0e-3b8a-4d52-9a7e-2f5b8c0d1e47';
 export const upkeepRefId = (buildingRowId: string, day: LocalDate): string =>
   uuidV5(`${buildingRowId}/${day}`, UPKEEP_REF_NAMESPACE);
 
+/** A row's upkeep kind (`UpkeepEntry.kind`), or null for one that pays none. */
+export function upkeepKindOf(row: Pick<BuildingRow, 'kind'>): UpkeepEntry['kind'] | null {
+  return row.kind === 'resource' || row.kind === 'warehouse' || row.kind === 'works'
+    ? row.kind
+    : null;
+}
+
 /** The player's upkeep buildings as `upkeepOrder` reads them, in charge order. */
 export function inChargeOrder(rows: readonly BuildingRow[]): BuildingRow[] {
   const byId = new Map(rows.map((r) => [r.id, r]));
   return upkeepOrder(
     rows.flatMap((row) => {
       const upkeep = upkeepOf(row);
-      if (upkeep === null || (row.kind !== 'resource' && row.kind !== 'warehouse')) return [];
+      const kind = upkeepKindOf(row);
+      if (upkeep === null || kind === null) return [];
       return [
         {
           id: row.id,
-          kind: row.kind,
+          kind,
           level: row.level,
           upkeep,
           placedAtMs: row.placedAt.getTime(),
@@ -114,7 +123,7 @@ export async function chargeUpkeep(
   const now = mapLocalTime(at, timeZone);
   const entries: UpkeepPlanEntry[] = ordered.map((row) => ({
     id: row.id,
-    kind: row.kind === 'warehouse' ? 'warehouse' : 'resource',
+    kind: upkeepKindOf(row) ?? 'resource',
     level: row.level,
     upkeep: upkeepOf(row) ?? 0,
     placedAtMs: row.placedAt.getTime(),

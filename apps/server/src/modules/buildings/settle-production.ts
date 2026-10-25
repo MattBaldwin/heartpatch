@@ -4,10 +4,12 @@ import type { NewGameEvent } from '../../db/game-events.js';
 import {
   bankOutput,
   canWorkAt,
+  eatersLast,
   nextMorningAt,
   productionAt,
   upkeepOf,
   warehouseIn,
+  worksFronts,
   type Produced,
 } from './production.js';
 import { createBuildingsRepo, type BuildingRow } from './repo.js';
@@ -22,6 +24,11 @@ import { chargeUpkeep, resumeUpkeep } from './upkeep.js';
  * `lockGrantRows`, given `grants`), then `apply`, which takes the Heart
  * Coin balance (step 12b) and must run after anything else at step 11
  * (training's `species_seen`) and before the caller's events (`maps`).
+ *
+ * Wild Isle works (#621 W1-8) settle with them: same locks, same upkeep.
+ * Their weather is the stored plans' fronts (`worksFronts`, plain reads,
+ * `weather_days` never locked), and an eater's items are in `grants` too, so
+ * the one `lockGrantRows` holds them before it takes from the bag in `apply`.
  */
 
 /** The tiles of the player's upkeep buildings, read unlocked: the settle locks them with its own. */
@@ -69,10 +76,13 @@ export async function lockProducing(
     lockedTiles.has(r.tileId),
   );
   const rows = weather ? await weather(locked) : locked;
-  // Before the mornings are charged: a Warehouse that pauses only makes less.
+  // Wild Isle works' weather: read once, no lock (none at all on a Cozy Patch).
+  const fronts = await worksFronts(tx, map.id, rows, at);
+  // Before the mornings are charged: a Warehouse that pauses only makes less,
+  // and an eater's whole count (uncapped) with what it would eat.
   const warehouse = warehouseIn(rows);
   const grants = rows.flatMap((row) => {
-    const items = productionAt(row, at, map.timeZone, warehouse)?.ready ?? {};
+    const items = productionAt(row, at, map.timeZone, warehouse, { fronts })?.touches ?? {};
     return Object.keys(items).length > 0 ? [{ userId, items }] : [];
   });
   return {
@@ -89,8 +99,9 @@ export async function lockProducing(
       // from there (PR 8). Every one of them banks here, so its wake-up
       // below starts a fresh stretch.
       const warehouse = warehouseIn(charged.rows);
-      for (const row of charged.rows) {
-        const made = productionAt(row, at, map.timeZone, warehouse);
+      // Eaters last, so what the others made this settle can feed them.
+      for (const row of eatersLast(charged.rows)) {
+        const made = productionAt(row, at, map.timeZone, warehouse, { fronts });
         const bank = made ? await bankOutput(tx, row, made) : null;
         if (bank) {
           produced.push(bank.produced);
@@ -109,7 +120,8 @@ export async function lockProducing(
       for (const row of woken.rows) {
         // Napping or out of season: nothing to ask again for until that changes.
         if (!canWorkAt(row, at, map.timeZone)) continue;
-        const next = productionAt(row, at, map.timeZone, awake)?.progress.nextReadyMs ?? null;
+        const next =
+          productionAt(row, at, map.timeZone, awake, { fronts })?.progress.nextReadyMs ?? null;
         if (next !== null) due.push(next);
       }
       return { produced, events, due };

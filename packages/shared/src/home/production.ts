@@ -12,12 +12,15 @@ import type {
   ResourceBuilding,
   ResourceBuildingLevel,
   ResourceBuildingRules,
+  WorksBuilding,
 } from '../schemas/data/buildings.js';
 import { CLEARED_TERRAIN } from '../schemas/data/clearing.js';
 import type { ExploreRules } from '../schemas/data/explore.js';
 import type { JobRules } from '../schemas/data/jobs.js';
 import type { Resource } from '../schemas/data/resources.js';
+import type { WeatherKind } from '../schemas/data/weather.js';
 import type { LocalDate } from '../schemas/time.js';
+import type { CoverWindow } from '../weather/plan.js';
 import { addDays, daysBetween } from './local-date.js';
 
 // Resource buildings and the Warehouse (#601, owner decisions 2026-10-22):
@@ -79,6 +82,20 @@ export function productionSource(
 }
 
 /**
+ * What a Wild Isle works building makes (#621 W1-8): its own `makes`, per
+ * cycle as written. Unlike a resource building it adds no homestead +1:
+ * `makes` is the building's own number (a Watermill's 2 Greens → 1 Flour
+ * stays exact), and the River Well's 3 is the Cozy well's 2 + 1.
+ */
+export function worksSource(building: Pick<WorksBuilding, 'makes'>): ProductionSource {
+  return {
+    resource: building.makes.resource,
+    perCycle: building.makes.quantity,
+    seconds: building.makes.seconds,
+  };
+}
+
+/**
  * Seconds per cycle at a level: a plain squishy gatherer's cycle (the
  * source's time × `cyclePercent`) at `pacePercent` of its pace. Whole-number
  * maths, floored, at least 1. Forest at 300 %: 15 min × 2 ÷ 3 = 10 min.
@@ -136,6 +153,174 @@ export function productionProgress(
   );
   // Paused for upkeep: nothing more finishes until it wakes.
   return until < facts.nowMs ? { ...progress, nextReadyMs: null } : progress;
+}
+
+/** A stretch at its own pace (epoch ms, `[fromMs, toMs)`), as a whole percent of 100 %. */
+export interface PaceWindow {
+  readonly fromMs: number;
+  readonly toMs: number;
+  readonly percent: number;
+}
+
+/** A works building's pace over time: `basePercent` outside its windows. */
+export interface WorksPace {
+  readonly basePercent: number;
+  readonly windows: readonly PaceWindow[];
+}
+
+/** Which front's kind counts where two cover one tile, as `weatherAt` picks it (a storm first). */
+const KIND_ORDER: readonly WeatherKind[] = ['storm', 'rain', 'fog', 'drought'];
+
+/** Does this works building's pace follow the weather (`weather` or `onlyWhile`, not weatherproof)? */
+export function followsWeather(
+  building: Pick<WorksBuilding, 'weather' | 'onlyWhile' | 'weatherproof'>,
+): boolean {
+  if (building.weatherproof === true) return false;
+  return building.onlyWhile !== undefined || Object.keys(building.weather ?? {}).length > 0;
+}
+
+/**
+ * A works building's pace on its tile from the fronts' stretches over it
+ * (`coverWindows`, plan §4 "Effects"). Where fronts of several kinds cover
+ * it, the one `weatherAt` would show sets the pace (`weather[kind]`, 100 %
+ * if it lists none). An `onlyWhile` building works only while a front of
+ * that kind covers it, and is still at 0 % elsewhere. A weatherproof one
+ * ignores the weather. Windows at the base pace are left out.
+ */
+export function worksPace(
+  building: Pick<WorksBuilding, 'weather' | 'onlyWhile' | 'weatherproof'>,
+  cover: readonly CoverWindow[],
+): WorksPace {
+  if (!followsWeather(building)) return { basePercent: 100, windows: [] };
+  const paceOf = (kind: WeatherKind) => building.weather?.[kind] ?? 100;
+  const only = building.onlyWhile ?? null;
+  const basePercent = only === null ? paceOf('clear') : 0;
+  const cuts = [...new Set(cover.flatMap((w) => [w.fromMs, w.toMs]))].sort((a, b) => a - b);
+  const windows: PaceWindow[] = [];
+  for (let i = 0; i + 1 < cuts.length; i++) {
+    const fromMs = cuts[i] as number;
+    const toMs = cuts[i + 1] as number;
+    const kinds = new Set(
+      cover.filter((w) => w.fromMs <= fromMs && fromMs < w.toMs).map((w) => w.kind),
+    );
+    if (kinds.size === 0) continue;
+    const top = KIND_ORDER.find((k) => kinds.has(k as Exclude<WeatherKind, 'clear'>)) ?? 'clear';
+    const gate = only === null || kinds.has(only) ? 1 : 0;
+    const percent = gate * paceOf(only ?? top);
+    if (percent === basePercent) continue;
+    const last = windows[windows.length - 1];
+    if (last && last.toMs === fromMs && last.percent === percent) {
+      windows[windows.length - 1] = { ...last, toMs };
+    } else {
+      windows.push({ fromMs, toMs, percent });
+    }
+  }
+  return { basePercent, windows };
+}
+
+/** One stretch at one pace, from `fromMs` until `toMs` (Infinity: on and on). */
+interface PaceSegment {
+  fromMs: number;
+  toMs: number;
+  percent: number;
+}
+
+/** The pace from `sinceMs` on, as segments in order: the windows, the base, and 0 % while cut off. */
+function paceSegments(sinceMs: number, pace: WorksPace, pause: WorkPause | null): PaceSegment[] {
+  const pauseTo = pause ? (pause.toMs ?? Infinity) : -Infinity;
+  const cuts = [
+    ...new Set(
+      [
+        ...pace.windows.flatMap((w) => [w.fromMs, w.toMs]),
+        ...(pause ? [pause.fromMs, pauseTo] : []),
+      ].filter((ms) => ms > sinceMs && Number.isFinite(ms)),
+    ),
+  ].sort((a, b) => a - b);
+  const starts = [sinceMs, ...cuts];
+  return starts.map((fromMs, i) => {
+    const toMs = starts[i + 1] ?? Infinity;
+    const cut = pause !== null && pause.fromMs <= fromMs && fromMs < pauseTo;
+    const w = pace.windows.find((x) => x.fromMs <= fromMs && fromMs < x.toMs);
+    return { fromMs, toMs, percent: cut ? 0 : (w?.percent ?? pace.basePercent) };
+  });
+}
+
+/**
+ * `productionProgress` for a works building whose pace follows the weather
+ * (#621 W1-8, plan §4 "Effects"): a cycle is `cycleSeconds` of work at
+ * 100 %, and work piles up at each stretch's pace (`worksPace`), so 150 %
+ * fog finishes cycles half again as fast and an `onlyWhile` barrel only
+ * fills under its rain. Whole-number maths in percent-milliseconds; a
+ * cycle finishes at the first whole millisecond its work is done. Storage,
+ * an upkeep pause or a knock (`pausedAtMs`) and a cut-off homestead (0 %)
+ * work as `productionProgress`'s. With no windows at 100 % it's the same.
+ */
+export function pacedProgress(facts: ProductionFacts, pace: WorksPace): WorkProgress {
+  const until = Math.max(
+    facts.sinceMs,
+    facts.pausedAtMs === null ? facts.nowMs : Math.min(facts.nowMs, facts.pausedAtMs),
+  );
+  const max = facts.maxCycles ?? Number.MAX_SAFE_INTEGER;
+  const cycleWork = facts.cycleSeconds * 1000 * 100;
+  const segments = paceSegments(facts.sinceMs, pace, facts.homesteadPause);
+  const finishedMs: number[] = [];
+  let nextReadyMs: number | null = null;
+  let done = 0; // work in the cycle under way (percent-ms)
+  for (const seg of segments) {
+    if (seg.percent === 0) continue;
+    let at = seg.fromMs;
+    for (;;) {
+      const needMs = Math.ceil((cycleWork - done) / seg.percent);
+      const finish = at + needMs;
+      if (finish > seg.toMs) {
+        // Only part of a cycle fits: carry it on into the next stretch.
+        if (Number.isFinite(seg.toMs)) done += (seg.toMs - at) * seg.percent;
+        break;
+      }
+      if (finish > until || finishedMs.length >= max) {
+        nextReadyMs = finish;
+        break;
+      }
+      finishedMs.push(finish);
+      done = 0;
+      at = finish;
+    }
+    if (nextReadyMs !== null) break;
+  }
+  const cycles = Math.min(finishedMs.length, max);
+  const paused = until < facts.nowMs;
+  if (cycles >= max) {
+    return { cycles, full: true, nextReadyMs: null, nextSinceMs: facts.nowMs, finishedMs };
+  }
+  return {
+    cycles,
+    full: false,
+    nextReadyMs: paused ? null : nextReadyMs,
+    nextSinceMs: finishedMs[cycles - 1] ?? facts.sinceMs,
+    finishedMs,
+  };
+}
+
+/**
+ * How many cycles the bag pays for (#621 W1-8, plan §4): a works building
+ * that `eats` takes it from its owner's bag each cycle at the settle, so
+ * the cycles it can bank are the fewest any item covers. Infinity when it
+ * eats nothing.
+ */
+export function eatsCap(eats: Readonly<ItemCounts> | undefined, bag: Readonly<ItemCounts>): number {
+  let cap = Infinity;
+  for (const [id, n] of Object.entries(eats ?? {})) {
+    if (n > 0) cap = Math.min(cap, Math.floor((bag[id] ?? 0) / n));
+  }
+  return cap;
+}
+
+/** What `cycles` cycles of a works building eat. */
+export function eatenBy(eats: Readonly<ItemCounts> | undefined, cycles: number): ItemCounts {
+  const out: ItemCounts = {};
+  if (cycles <= 0) return out;
+  for (const [id, n] of Object.entries(eats ?? {})) if (n > 0) out[id] = n * cycles;
+  return out;
 }
 
 /**
@@ -344,7 +529,7 @@ export function upkeepMornings(
 export interface UpkeepEntry {
   /** Its `buildings` row id. */
   id: string;
-  kind: 'resource' | 'warehouse';
+  kind: 'resource' | 'warehouse' | 'works';
   level: number;
   /** Heart Coins a morning at its level. */
   upkeep: number;

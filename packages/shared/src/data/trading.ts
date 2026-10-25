@@ -43,6 +43,9 @@ export const TRADE_VALUES: TradeValues = {
     water: 3, // TUNE:
     greens: 4, // TUNE:
     ice: 6, // TUNE:
+    fish: 5, // TUNE: Wild Isle (#621 W1-8)
+    flour: 6, // TUNE: two Greens and a mill's work
+    salt: 5, // TUNE:
     heartdust: 15, // TUNE:
     treats: 6, // TUNE:
     pumpkins: 8, // TUNE:
@@ -100,6 +103,10 @@ export const SELL_RULES: SellRules = {
     greens: { lot: 5, coins: 1 }, // TUNE:
     water: { lot: 5, coins: 1 }, // TUNE:
     ice: { lot: 3, coins: 1 }, // TUNE:
+    // Wild Isle (#621 W1-8): `pnpm sim:wild-isle` sets them against works upkeep.
+    fish: { lot: 3, coins: 1 }, // TUNE:
+    flour: { lot: 2, coins: 1 }, // TUNE: more than the two Greens it's ground from
+    salt: { lot: 3, coins: 1 }, // TUNE:
     emberwood: { lot: 3, coins: 1 }, // TUNE:
     pumpkins: { lot: 3, coins: 1 }, // TUNE:
     glimmer: { lot: 1, coins: 2 }, // TUNE:
