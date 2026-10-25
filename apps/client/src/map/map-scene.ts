@@ -245,13 +245,11 @@ export function topOf(tile: PublicTile): number {
 
 /**
  * A tile instance's placement on a mesh lofted at `height`: the height
- * wobble scales it, so its top lands at `topOf(tile)`. A tile `sunk` (an
- * isle out at sea, #621) starts that far under the island's top, so it
- * stands in the water.
+ * wobble scales it, so its top lands at `topOf(tile)`.
  */
-function tileMatrix(tile: PublicTile, height: number, sunk = 0): Matrix {
+function tileMatrix(tile: PublicTile, height: number): Matrix {
   const p = hexToWorld(tile, HEX_SIZE);
-  return placeAt(p.x, -sunk, p.z, new Vector3(1, (topOf(tile) + DOME + sunk) / (height + DOME), 1));
+  return placeAt(p.x, 0, p.z, new Vector3(1, (topOf(tile) + DOME) / (height + DOME), 1));
 }
 
 /** One instanced tile mesh and the tiles it draws, for recolouring when ownership changes. */
@@ -1040,11 +1038,6 @@ export class MapScene {
     return tile ? tileScreenRectOf(this.scene, tile) : null;
   }
 
-  /** How far under the island's top a tile stands: an isle's foot is in the sea (#621). */
-  private sunk(tile: Hex): number {
-    return this.isles.has(hexKey(tile)) ? OCEAN.sink : 0;
-  }
-
   /**
    * The soft island under the tiles. With ocean tiles (Wild Isle, #621) it's
    * the sea instead (`buildSea`); returns the sea's radius then, else null.
@@ -1160,15 +1153,16 @@ export class MapScene {
   }
 
   /**
-   * A low sand skirt under each isle tile out at sea (#621), so an isle sits
-   * on its own sandbar in the shallows instead of tiles adrift. One mesh,
-   * one instance a tile; none on a map without isles.
+   * A low sand skirt under each isle tile out at sea (#621): its top is the
+   * tile's foot (y = 0, as the island's top is for island tiles) and it
+   * slopes into the shallows, so an isle stands on its own sandbar instead
+   * of tiles adrift. One mesh, one instance a tile; none without isles.
    */
   private buildIsleSand(tiles: readonly PublicTile[]): void {
     const isles = tiles.filter((t) => this.isles.has(hexKey(t)));
     if (isles.length === 0) return;
     const r = HEX_SIZE * OCEAN.isleSand;
-    const top = OCEAN.level + 0.035;
+    const top = 0;
     const mesh = meshFrom(
       this.scene,
       'isle-sand',
@@ -1240,7 +1234,7 @@ export class MapScene {
       if (look.glow > 0) mat.emissiveColor = linear(look.color).scale(look.glow);
       const plugin = attachTerrainPlugin(mat, this.clock, { water: group.key === 'lake' });
       if (!plugin) animated = false;
-      const matrices = group.tiles.map((tile) => tileMatrix(tile, h, this.sunk(tile)));
+      const matrices = group.tiles.map((tile) => tileMatrix(tile, h));
       // Both detail levels share the colours: recolouring one recolours both.
       const colors = new Float32Array(group.tiles.length * 4);
       for (const m of [mesh, far]) {
@@ -1348,7 +1342,7 @@ export class MapScene {
     const matrices = group.tiles.map((stale, i) =>
       group.terrains[i] === MOVED_HOME
         ? GONE
-        : tileMatrix(this.tiles.get(hexKey(stale)) ?? stale, group.look.height, this.sunk(stale)),
+        : tileMatrix(this.tiles.get(hexKey(stale)) ?? stale, group.look.height),
     );
     setInstances(group.mesh, matrices);
     setInstances(group.far, matrices);

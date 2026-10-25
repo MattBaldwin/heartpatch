@@ -40,6 +40,7 @@ import { listenForTaps } from './tap-detector.js';
 import { seedName } from '../home/home-name-view.js';
 import { describeTile } from './tile-info.js';
 import { mountTilePanel } from './tile-panel.js';
+import { emptyTileActions } from './tile-actions.js';
 import { wildMarkers } from './wild-markers.js';
 import './map.css';
 
@@ -397,8 +398,10 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     );
     // Water (Wild Isle, #621) can't be claimed or explored. (W1-5b/W1-6: a
     // bridge or dock action on a river or lake tile goes through here.)
-    if (isWaterTile(tile)) options.tileActions?.hide();
-    else options.tileActions?.show(panel.actions, tile, state.view);
+    if (isWaterTile(tile)) {
+      options.tileActions?.hide();
+      emptyTileActions(panel.actions);
+    } else options.tileActions?.show(panel.actions, tile, state.view);
     if (another) panel.toTop();
     options.invalidate();
   };

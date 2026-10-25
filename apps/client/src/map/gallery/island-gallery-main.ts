@@ -65,7 +65,6 @@ await boot(canvas, {
       target,
       (scene) => {
         map = new MapScene(scene, view, { tier, reducedMotion: true });
-        map.update(view);
         map.setNight(night);
         farthest = maxZoomFor(map.bounds, CAMERA.maxDistance);
         const [q, r] = focus ?? [];

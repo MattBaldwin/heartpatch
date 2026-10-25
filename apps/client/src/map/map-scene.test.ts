@@ -792,14 +792,19 @@ describe('Wild Isle on the map (#621 W1-4)', () => {
     expect(OCEAN.markTop).toBeGreaterThan(-0.02);
   });
 
-  it('stands the isles out at sea in the water, and island tiles on the island', () => {
+  it('stands each isle tile out at sea on its own sand skirt', () => {
     const { scene } = build();
-    const meadow = scene.getMeshByName('tiles-meadow') as Mesh;
-    const matrices = meadow.thinInstanceGetWorldMatrices();
-    const ys = matrices.map((m) => m.getTranslation().y);
-    expect(Math.min(...ys)).toBeCloseTo(-OCEAN.sink, 6);
-    // Most meadow tiles stand on the island's top.
-    expect(ys.filter((y) => y === 0).length).toBeGreaterThan(200);
+    const sand = scene.getMeshByName('isle-sand') as Mesh;
+    // Two isles of four tiles, one skirt each, at the tiles' feet.
+    expect(sand.thinInstanceCount).toBe(8);
+    for (const m of sand.thinInstanceGetWorldMatrices()) {
+      expect(m.getTranslation().y).toBeGreaterThanOrEqual(0);
+      expect(m.getTranslation().y).toBeLessThanOrEqual(2 * OCEAN.sandStep + 1e-9);
+    }
+  });
+
+  it('builds no isle sand on a Cozy map', () => {
+    expect(build(testView(4)).scene.getMeshByName('isle-sand')).toBeNull();
   });
 });
 

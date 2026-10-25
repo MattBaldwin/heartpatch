@@ -217,8 +217,6 @@ export const OCEAN = {
   shore: 0.25, // TUNE
   /** What marks an ocean tile (the selection ring) sits at: the island's top, clear of the beach. */
   markTop: 0,
-  /** An isle tile's foot sinks this far under the water, so it stands in the sea. */
-  sink: 0.25, // TUNE
   /** Each isle tile's sand skirt, as a multiple of a tile's size: neighbours' skirts join into a sandbar. */
   isleSand: 1.1, // TUNE
   /** An isle skirt's reach at the water line, as a multiple of its top's. */
