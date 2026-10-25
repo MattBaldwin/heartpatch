@@ -19,6 +19,7 @@ import {
   hearthfireState,
   inSeason,
   isBuildable,
+  buildsOnPatchType,
   isReservedSpot,
   lakeBodies,
   lakesTouching,
@@ -79,6 +80,7 @@ import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from '../house/switch.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
 import { createMapsRepo, type MapRow, type MemberNamingRow } from '../maps/repo.js';
 import { requireMember } from '../maps/members.js';
+import { travelIds } from '../roads/repo.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { crossersOf, mapPatchRules, refreshSupply, supplyFor } from '../territory/supply.js';
 import { wornAccessories } from '../wardrobe/accessories.js';
@@ -182,8 +184,8 @@ const MESSAGES = {
   notKnocked: 'Nothing to fix here, it works just fine! ✨',
   // Wild Isle bridges and ferry docks (#621 W1-5b).
   onRiver: (name: string) => `${/^[aeiou]/i.test(name) ? 'An' : 'A'} ${name} goes over a river 💧`,
-  bridgeFar: 'Build your bridge right next to land that’s joined up to home 🌉',
-  bridgeThere: 'There’s a bridge here already! Every Keeper can cross it 🌉',
+  bridgeFar: "Build your bridge right next to land that's joined up to home 🌉",
+  bridgeThere: "There's a bridge here already! Every Keeper can cross it 🌉",
   needsLake: (name: string) =>
     `${/^[aeiou]/i.test(name) ? 'An' : 'A'} ${name} needs a lake next door 💧`,
   oneDock: 'You already have a dock on this lake! One is plenty ⛵',
@@ -196,11 +198,7 @@ const isBridge = (
   b.kind === 'travel' && b.onWater !== undefined;
 
 /** Ferry dock content ids (#621 W1-5b). */
-const DOCK_IDS = new Set(
-  GAME_DATA.buildings.flatMap((b) =>
-    b.kind === 'travel' && b.role === 'ferry-dock' ? [b.id] : [],
-  ),
-);
+const DOCK_IDS = new Set(travelIds('ferry-dock'));
 
 /**
  * The Heart Seed's level for naming (#306): 1 for everyone until #221 grows
@@ -461,7 +459,10 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     // A bridge (#621 W1-5b) stands on its water, which nobody owns, instead
     // of on my land; `checkCrossing` reads the rest under the tile lock.
     if (isBridge(building)) {
-      const water = outer && outer.ownerUserId === null ? TERRAIN_WATER.get(outer.terrain) : null;
+      const water =
+        outer && outer.ownerUserId === null && outer.communityId === null
+          ? TERRAIN_WATER.get(outer.terrain)
+          : null;
       if (!outer || water !== building.onWater) {
         throw new AppError('FORBIDDEN', MESSAGES.onRiver(building.name));
       }
@@ -545,7 +546,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
    * yet, next to land that's joined up to home (my supplied land, or a
    * bridge my line crosses); a ferry dock on a homestead touching a lake,
    * and, while `ferry.oneDockPerLake`, on no lake one of my docks touches
-   * already. The map's travel rules, for the supply refresh after it.
+   * already.
    */
   async function checkCrossing(
     repo: BuildingsRepo,
@@ -553,11 +554,10 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     mapId: string,
     userId: string,
     building: TravelBuilding,
+    travel: TravelRules,
     tile: HomeTileRow,
     owned: readonly BuildingRow[],
-  ): Promise<TravelRules> {
-    const travel = (await mapPatchRules(tx, mapId))?.travel ?? null;
-    if (!travel) throw new AppError('CONFLICT', MESSAGES.notYet);
+  ): Promise<void> {
     if (building.role === 'bridge') {
       // Anyone's: a river tile is nobody's land (step 8, after the tile).
       if ((await repo.lockOnTiles([tile.id])).length > 0) {
@@ -567,7 +567,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       if (!hexNeighbors(tile).some((n) => supplied.has(hexKey(n)))) {
         throw new AppError('FORBIDDEN', MESSAGES.bridgeFar);
       }
-      return travel;
+      return;
     }
     const bodies = lakeBodies(await createTerritoryRepo(tx).listTiles(mapId));
     const lakes = lakesTouching(bodies, tile);
@@ -578,6 +578,25 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       );
       if (lakes.some((lake) => docked.has(lake))) throw new AppError('CONFLICT', MESSAGES.oneDock);
     }
+  }
+
+  /**
+   * A bridge or ferry dock's patch (#621 W1-5b): only a Wild Isle has
+   * travel rules and lets them be built (`patchTypes`). Waystations wait
+   * for their own lane. Read after membership, so the patch type never
+   * shows to a stranger.
+   */
+  async function travelRulesFor(
+    tx: Executor,
+    mapId: string,
+    building: TravelBuilding,
+  ): Promise<TravelRules> {
+    const rules = await mapPatchRules(tx, mapId);
+    const travel = rules?.travel ?? null;
+    if (!rules || !travel || !buildsOnPatchType(building, rules.patchType)) {
+      throw new AppError('CONFLICT', MESSAGES.notYet);
+    }
+    if (building.role === 'waystation') throw new AppError('CONFLICT', MESSAGES.notYet);
     return travel;
   }
 
@@ -708,14 +727,10 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       const building = requireBuildingData(request.buildingId);
       // Fences go on a tile's edges, through the fences module (#203).
       if (building.kind === 'fence') throw new AppError('CONFLICT', MESSAGES.fenceOnEdge);
-      // A Wild Isle building is built only there (#621: `patchTypes`); a
-      // patch's type never changes, so it's read before the transaction.
-      const patchType = (await mapPatchRules(db, mapId))?.patchType;
-      if (!isBuildable(HOME_BASE_RULES, building, patchType)) {
-        throw new AppError('CONFLICT', MESSAGES.notYet);
-      }
-      // Waystations wait for their own lane (#621).
-      if (building.kind === 'travel' && building.role === 'waystation') {
+      // Bridges and ferry docks (#621 W1-5b) go up only on a Wild Isle,
+      // checked in the transaction once membership is (`checkCrossing`);
+      // they aren't in `buildableKinds`, so no Cozy Build sheet lists them.
+      if (building.kind !== 'travel' && !isBuildable(HOME_BASE_RULES, building)) {
         throw new AppError('CONFLICT', MESSAGES.notYet);
       }
       // A clear that's done but not settled yet finishes first, as before a
@@ -726,6 +741,8 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         user,
         mapId,
         async ({ repo, tx, at, local, timeZone, mapKind, home, outer }) => {
+          const travel =
+            building.kind === 'travel' ? await travelRulesFor(tx, mapId, building) : null;
           if (!inSeason(building, new Set(seasonsOn(at, timeZone)))) {
             const season = SEASON_NAMES.get(building.season ?? '') ?? 'its season';
             throw new AppError('CONFLICT', MESSAGES.outOfSeason(building.name, season));
@@ -752,10 +769,9 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             homestead,
             houseOn(user, mapKind),
           );
-          const travel =
-            building.kind === 'travel'
-              ? await checkCrossing(repo, tx, mapId, user.id, building, tile, owned)
-              : null;
+          if (building.kind === 'travel' && travel) {
+            await checkCrossing(repo, tx, mapId, user.id, building, travel, tile, owned);
+          }
           const same = owned.filter((b) => b.buildingId === building.id);
           const homeIds = new Set(home.map((t) => t.id));
           if (homeIds.has(tile.id)) {

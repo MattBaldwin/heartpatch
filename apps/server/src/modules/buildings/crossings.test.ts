@@ -269,7 +269,7 @@ describe.skipIf(!url)('bridges and ferry docks (needs DATABASE_URL)', () => {
       const far = await build(server, rival, mapId, 'bridge', line[3]!);
       expect(far.statusCode).toBe(403);
       expect(errorOf(far).message).toBe(
-        'Build your bridge right next to land that’s joined up to home 🌉',
+        "Build your bridge right next to land that's joined up to home 🌉",
       );
 
       const built = await build(server, kid, mapId, 'bridge', line[3]!);
@@ -280,7 +280,7 @@ describe.skipIf(!url)('bridges and ferry docks (needs DATABASE_URL)', () => {
       const second = await build(server, rival, mapId, 'bridge', line[3]!);
       expect(second.statusCode).toBe(409);
       expect(errorOf(second).message).toBe(
-        'There’s a bridge here already! Every Keeper can cross it 🌉',
+        "There's a bridge here already! Every Keeper can cross it 🌉",
       );
       // Everyone on the patch sees it on the map, on its river tile nobody owns.
       const view = MapViewSchema.parse(

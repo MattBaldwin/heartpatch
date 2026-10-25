@@ -6,7 +6,7 @@ import type { GameEvent } from '../../db/game-events.js';
 import { buildings, maps, tileRoads, tiles } from '../../db/schema.js';
 
 /** Content ids of the `travel` buildings with this role. */
-const travelIds = (role: 'bridge' | 'ferry-dock') =>
+export const travelIds = (role: 'bridge' | 'ferry-dock') =>
   GAME_DATA.buildings.flatMap((b) => (b.kind === 'travel' && b.role === role ? [b.id] : []));
 /** Bridge content ids (`travel` buildings whose role is `bridge`). */
 const BRIDGE_IDS = travelIds('bridge');

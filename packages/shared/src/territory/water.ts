@@ -41,7 +41,7 @@ export function lakeBodies(tiles: readonly WaterTile[]): Map<HexKey, HexKey> {
 /** The lake bodies a tile touches (`lakeBodies` ids), sorted. */
 export function lakesTouching(bodies: ReadonlyMap<HexKey, HexKey>, hex: Hex): HexKey[] {
   const ids = new Set(hexNeighbors(hex).flatMap((n) => bodies.get(hexKey(n)) ?? []));
-  return [...ids].sort();
+  return [...ids].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
 /**

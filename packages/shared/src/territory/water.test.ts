@@ -122,7 +122,7 @@ describe('ferry reach (Wild Isle, #621 W1-5b)', () => {
       supplyMap(own(tiles, 2, 0, 'rival'), [], [], ME, RULES, [DOCK]).supplied.has('8,1'),
     ).toBe(false);
     // No ferry rules: no ferry.
-    const { ferry: _ferry, ...noFerry } = RULES;
+    const noFerry = { roads: RULES.roads, bridgesShared: RULES.bridgesShared };
     expect(supplyMap(tiles, [], [], ME, noFerry, [DOCK]).supplied.has('8,1')).toBe(false);
   });
 
