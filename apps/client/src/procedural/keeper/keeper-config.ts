@@ -13,13 +13,30 @@ export const KEEPER = {
   /** How far the head sinks into the body, as a fraction of its height. */
   neckSink: 0.12, // TUNE
   /** Shoes, as multiples of limb thickness: width, height, length. */
-  shoe: [1.5, 0.95, 2.1], // TUNE
-  /** Hands, as a multiple of limb thickness. */
-  hand: 1.25, // TUNE
-  /** Arms hang this far out from straight down, degrees. */
-  armSplayDeg: 14, // TUNE
+  shoe: [1.75, 1.05, 2.3], // TUNE
+  /** The thinnest a limb gets, as a fraction of body size, so slim bodies still have toy-chunky limbs (#657). */
+  minLimb: 0.09, // TUNE
+  /** Legs, as a multiple of limb thickness (#657: chunky, so they read under the shorts). */
+  leg: 1.2, // TUNE
+  /** The shorts' legs, as a multiple of limb thickness. */
+  shortsLeg: 1.55, // TUNE
+  /** Arms (#657): chunky and rounded, coming out of short sleeves, hands joined on. */
+  arm: {
+    /** Skin arm thickness, as a multiple of limb thickness. */
+    thick: 1.15, // TUNE
+    /** The sleeve, as a multiple of the arm's thickness. */
+    sleeveThick: 1.28, // TUNE
+    /** The hand, as a multiple of the arm's thickness. */
+    hand: 1.18, // TUNE
+    /** How far a hand sinks into the arm's end, as a fraction of the hand. */
+    handSink: 0.3, // TUNE
+    /** The cuff's length, as a fraction of the arm. */
+    cuff: 0.07, // TUNE
+  },
+  /** Arms hang this far out from straight down, degrees (sine and cosine are in keeper-params.ts). */
+  armSplayDeg: 10, // TUNE
   /** Sleeves cover this much of the arm from the shoulder. */
-  sleeve: 0.45, // TUNE
+  sleeve: 0.4, // TUNE
   /** Face features, as fractions of the head's own size. */
   face: {
     eyeSpread: 0.19, // TUNE: eye centre from the middle, of head width
