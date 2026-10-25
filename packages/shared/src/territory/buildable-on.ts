@@ -35,8 +35,7 @@ export type BuildableProblem =
   | 'one-dock';
 
 export type BuildableResult =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly reason: BuildableProblem };
+  { readonly ok: true } | { readonly ok: false; readonly reason: BuildableProblem };
 
 /** The tile asked about, with what the rules read from it. */
 export interface BuildableTile extends WaterTile {

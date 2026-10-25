@@ -79,10 +79,12 @@ import {
   hexRgb,
   isMuted,
   isOcean,
+  isWaterTile,
   muteRgb,
   tileColor,
   tileJitter,
 } from './map-dressing.js';
+import { bridgeYaw } from '../roads/road-layout.js';
 import { greyTiles, villageSeeds, villageSquares } from '../hollowed/community-model.js';
 import {
   findHomeBases,
@@ -883,8 +885,11 @@ export class MapScene {
       );
     }
     // Fires and habitats (#18), and the warm glow over tiles a lit fire keeps safe.
+    // A bridge (#621) lies along the river's banks: the land tiles say which way.
+    const landKeys = new Set(view.tiles.filter((t) => !isWaterTile(t)).map((t) => hexKey(t)));
     this.placed = mapBuildings(view, HEX_SIZE).map(({ tile, building, at, fills }) => ({
       buildingId: building.buildingId,
+      ...(building.buildingId === 'bridge' ? { yaw: bridgeYaw(tile, landKeys) } : {}),
       level: building.level,
       lit: building.lit,
       // A resource building or the Warehouse napping (#601): unpaid upkeep,
