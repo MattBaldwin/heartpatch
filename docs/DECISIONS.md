@@ -1863,3 +1863,46 @@ _Merges, owner approvals and coordinator calls from 2026-10-25 ~02:25 to ~07:22 
 - **#665 merged on an APPROVE at `be6ffd7`.** The head `295da40` differed only by a `.gitignore` line and main merges (the supervisor diffed it).
 - **#656's landscape sky-only 4-move frame is pre-existing** (reproduced on `eb15770`, before #662), not a #662 regression. Logged.
 - **W1-7 runs as the only migration lane.** W1-5b (no migration) waits for a free lane because it shares `modules/buildings/` with W1-7.
+
+## 2026-10-25 — Owner decisions and coordinator calls (supervisor 18)
+
+_Merges, owner approvals and coordinator calls from 2026-10-25 ~08:03 to ~14:10 UTC._
+
+**Merged**
+- **#674 (Controls B2b):** merged by supervisor 17 during the handoff. Leftovers: `journey-screen.ts` (3 sites) and `audio-settings-view.ts` (1 site) still use `.auth-button`.
+- **#672 (#664):** richer cozy music. CC0 samples, reverb baked into the loops.
+- **#682 (#621 W1-7):** weather: fronts, forecast, knocks, repairs. Migration 0061.
+- **#683 (#621 W1-5b):** bridges and ferry docks.
+- **#679 (#655 C):** the Sell tab.
+- **#676 (#621 W1-4):** the island map.
+- **#678 (#656):** the battle sheet.
+- **#681 (#621 W1-3):** choose Cozy Patch or Wild Isle.
+
+**Owner decisions**
+- **All outstanding screens approved at 13:05Z:** #679, #676, #678 and #681.
+- **#676's triangle budget deviation approved (13:05Z):** 1.4M on iPad and 680k on iPhone, against the plan's 900k and 480k.
+- **#655 D (Gift/Trade/Swap bar) ships for Halloween** (13:49Z).
+- **Owner reminder:** ask ONE question at a time.
+
+**Coordinator calls**
+- **#682 merged on a round-2 APPROVE at `118361e`.** The head `30c21c3` only added a test and two comments (the supervisor diffed it; #665 precedent).
+- **#682's logged calls:**
+  - a repair restarts the cycle (the upkeep-pause rule does not apply);
+  - the storm roll can lag by up to ~1 h;
+  - knock odds are already in the client bundle through the patch-types import (they could move to `data/server/`);
+  - lakes give no flood bonus (`nearWater` is deep and river only);
+  - repair costs are `TUNE:` (the W1-8 sim guard checks them);
+  - Cozy reads do one extra `maps` lookup.
+- **#683 merged on a round-2 APPROVE at `1d294bc`.** The head `bf530bf` only changed a comment. `BuildableKindSchema` was reverted; `travelRulesFor` goes by patch type.
+- **#683's follow-ups:**
+  - a shared `isBuildableOn` (W1-6 adds it client-side; the server switches over after W1-8);
+  - `lostDockOwners` read on Cozy;
+  - dock `needsWater` from data;
+  - full-flow tests for a dock whose tile is captured or gone wild, and a dock touching two lakes;
+  - a TECH_SPEC §7 note on the unlocked neighbour read;
+  - `SKIP LOCKED` crossers' grace.
+- **W1-8 is split.** A is works buildings, production/pace/eats/onlyWhile, placement, settle/upkeep and `sim:wild-isle`. B is pies, `bake-pies`, `CARE_RULES.foods` and the feed `itemId` (care). W1-7 never added `paceWindows`; W1-8A adds them (a plan deviation).
+- **Shared `isBuildableOn`:** W1-6 adds it in `packages/shared/src/territory/` and uses it client-side only. The server switches over in a follow-up after W1-8, which owns `modules/buildings` now.
+- **#382 Wave 2 sheet v1 failed the render-check.** 8 of 9 kinds missed their hook or duplicated a silhouette (Dragofruit was fine) and the haze was yellow. The old lane (406k, $13.33) handed off in a #382 comment. A fresh Sonnet lane reworks it.
+- **#382 may add ~6 additive parts in `packages/shared/src/data/visuals.ts`,** inside the #382 PR: data-only, existing primitives, the existing glow mechanism, a data test, listed in the PR body. A dev-only `?studio` capture flag is fine.
+- **#681 render-check:** v1 FIX (name mismatch, home-indicator crop, 44px link), v2 PASS.
