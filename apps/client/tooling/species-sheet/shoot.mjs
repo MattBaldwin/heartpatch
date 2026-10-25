@@ -63,28 +63,49 @@ async function shoot({ id, device }) {
     viewport: { width: d.width, height: d.height },
     deviceScaleFactor: d.dpr,
   });
-  const page = await ctx.newPage();
-  const url = `${BASE}/roster.html?species=${id}&quality=${TIER}&terrain=${TERRAIN}&time=${TIME}`;
-  await page.goto(url);
-  await page.waitForFunction(() => window.__roster?.ready(), null, { timeout: 120_000 });
-  await page.waitForTimeout(300);
-  const file = `${id}-${device}-${TIER}.png`;
-  await page.screenshot({ path: path.join(OUT, file), clip: d.clip });
-  records.push({
-    id,
-    device,
-    tier: TIER,
-    file,
-    width: d.clip.width,
-    height: d.clip.height,
-    dpr: d.dpr,
-  });
-  console.log('shot', file);
-  await ctx.close();
+  try {
+    const page = await ctx.newPage();
+    const url = `${BASE}/roster.html?species=${id}&quality=${TIER}&terrain=${TERRAIN}&time=${TIME}${process.env.STUDIO ? '&studio' : ''}${process.env.SILHOUETTE ? '&silhouette' : ''}`;
+    await page.goto(url);
+    await page.waitForFunction(() => window.__roster?.ready(), null, { timeout: 120_000 });
+    await page.waitForTimeout(300);
+    const file = `${id}-${device}-${TIER}.png`;
+    await page.screenshot({ path: path.join(OUT, file), clip: d.clip, timeout: 120_000 });
+    records.push({
+      id,
+      device,
+      tier: TIER,
+      file,
+      width: d.clip.width,
+      height: d.clip.height,
+      dpr: d.dpr,
+    });
+    console.log('shot', file);
+  } finally {
+    await ctx.close();
+  }
 }
-for (let i = 0; i < jobs.length; i += CONCURRENCY) {
-  await Promise.all(jobs.slice(i, i + CONCURRENCY).map(shoot));
+
+/** Software rendering is slow under load, so a timed-out frame gets two more tries. */
+async function shootWithRetries(job) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await shoot(job);
+    } catch (err) {
+      if (attempt >= 3) {
+        console.error('failed', job.id, job.device, String(err).split('\n')[0]);
+        return;
+      }
+    }
+  }
 }
+// A small worker pool, so one slow frame doesn't hold up the others.
+const queue = [...jobs];
+await Promise.all(
+  Array.from({ length: CONCURRENCY }, async () => {
+    for (let job = queue.shift(); job; job = queue.shift()) await shootWithRetries(job);
+  }),
+);
 await browser.close();
 const previous = await readFile(path.join(OUT, 'captures.json'), 'utf8').then(JSON.parse, () => []);
 const merged = [...previous.filter((r) => !records.some((n) => n.file === r.file)), ...records];

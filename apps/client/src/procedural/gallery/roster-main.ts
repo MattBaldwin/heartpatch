@@ -22,7 +22,9 @@ setPerfReports(false);
  *
  * Query flags: `?species=puddlepuff` (default the first species),
  * `?terrain=meadow`, `?time=day|dusk|night`, `?quality=`, and `?silhouette`
- * (only the squishies, on white, for silhouette sheets), `?motion` (idle
+ * (only the squishies, on white, for silhouette sheets), `?studio` (fog off and
+ * the backdrop cleared to a flat pale colour, so the squishy's own colours and
+ * shape read without the arena's haze), `?motion` (idle
  * animation on, to check how the vinyl looks while fighters move).
  */
 
@@ -38,6 +40,7 @@ const speciesId = params.get('species') ?? GAME_DATA.species[0]?.id ?? '';
 const terrain = params.get('terrain') ?? 'meadow';
 const timeOfDay = BattleTimeOfDaySchema.safeParse(params.get('time')).data ?? 'day';
 const silhouette = params.has('silhouette');
+const studio = params.has('studio');
 const motion = params.has('motion');
 
 /** The player's-side squishy in every shot (cropped out of the sheet). */
@@ -113,6 +116,14 @@ function frame(): void {
         material.albedoColor = Color3.Black();
         material.clearCoat.isEnabled = false;
       }
+    }
+  }
+  if (stage && battle && studio && !silhouette) {
+    const { scene } = stage;
+    scene.fogEnabled = false;
+    scene.clearColor.set(0.26, 0.24, 0.4, 1);
+    for (const mesh of scene.meshes) {
+      if (!mesh.name.startsWith('squishy-') && mesh.name !== 'arena-ground') mesh.setEnabled(false);
     }
   }
   if (stage && battle) {

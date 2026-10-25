@@ -4,6 +4,7 @@ import { SPAWN_TABLES } from './server/spawn-tables.js';
 import { SPECIES } from './species.js';
 import { WAVE_2_SPECIES } from './species-wave-2.js';
 import { PARTS } from './visuals.js';
+import { PartSchema } from '../schemas/data/visuals.js';
 
 /*
  * Wave 2 of the 500-squishy plan (#382). Schema, move, part and art-rule
@@ -130,5 +131,27 @@ describe('wave 2 (#382)', () => {
       }, 0);
     // TUNE: the heaviest launch kind is 27 part instances; wave 2 stays within 32.
     for (const s of WAVE_2_SPECIES) expect(instances(s.visual.parts), s.id).toBeLessThanOrEqual(32);
+  });
+
+  it('adds eight parts, each valid and worn by at least one wave-2 form', () => {
+    const NEW_PARTS = [
+      'tusks',
+      'mud-puddle',
+      'sapling',
+      'slide-trail',
+      'lure-beads',
+      'shell-gleam',
+      'puff-wings',
+      'curl-tail',
+    ];
+    for (const id of NEW_PARTS) {
+      const part = PARTS.find((p) => p.id === id);
+      expect(part, id).toBeDefined();
+      expect(PartSchema.safeParse(part).success, id).toBe(true);
+      expect(
+        WAVE_2_SPECIES.some((s) => s.visual.parts.includes(id)),
+        `${id} is worn`,
+      ).toBe(true);
+    }
   });
 });
