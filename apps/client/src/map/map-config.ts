@@ -213,6 +213,8 @@ export const OCEAN = {
   sink: 0.25, // TUNE
   /** Each isle tile's sand skirt, as a multiple of a tile's size: neighbours' skirts join into a sandbar. */
   isleSand: 1.35, // TUNE
+  /** Height steps between neighbouring sand skirts (world units), so overlaps never z-fight. */
+  sandStep: 0.006, // TUNE
   /** The sea's glint by day and by night (softer, so it never reads as snow); the lakes' is `AMBIENT.water.glint`. */
   glint: { day: 0.14, night: 0.035 }, // TUNE
 } as const;

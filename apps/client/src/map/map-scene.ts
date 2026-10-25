@@ -1182,11 +1182,13 @@ export class MapScene {
       ),
     );
     mesh.material = this.islandMaterial('isle-sand-mat', OCEAN.beach);
+    // Neighbours' skirts overlap: each stands a hair higher or lower than the
+    // next, so the overlap never shares one depth (it would shimmer).
     setInstances(
       mesh,
       isles.map((t) => {
         const p = hexToWorld(t, HEX_SIZE);
-        return placeAt(p.x, 0, p.z);
+        return placeAt(p.x, ((((t.q - t.r) % 3) + 3) % 3) * OCEAN.sandStep, p.z);
       }),
     );
     mesh.freezeWorldMatrix();
