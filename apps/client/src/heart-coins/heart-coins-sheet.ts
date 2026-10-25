@@ -88,7 +88,7 @@ export function createHeartCoinsSheet(options: HeartCoinsSheetOptions): HeartCoi
   const closeTop = hpClose(HEART_COINS_TEXT.close, 'heart-coins-close-top');
   const close = el(
     'button',
-    { type: 'button', class: 'auth-button auth-button-soft', 'data-testid': 'heart-coins-close' },
+    { type: 'button', class: 'hp-button hp-button-secondary', 'data-testid': 'heart-coins-close' },
     HEART_COINS_TEXT.close,
   );
   // Heart Coins next to Patch Coins, so the two are never mixed up.

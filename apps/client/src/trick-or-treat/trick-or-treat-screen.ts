@@ -394,7 +394,7 @@ export function createTrickOrTreat(options: TrickOrTreatOptions): TrickOrTreat {
       'button',
       {
         type: 'button',
-        class: `auth-button bag-action trick-knock${visited ? ' trick-visited' : ''}`,
+        class: `hp-button hp-button-primary bag-action trick-knock${visited ? ' trick-visited' : ''}`,
         'data-testid': 'trick-or-treat',
       },
       visited ? TRICK_TEXT.visited : working ? TRICK_TEXT.knocking : TRICK_TEXT.knock,

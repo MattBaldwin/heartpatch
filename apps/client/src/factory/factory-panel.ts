@@ -166,7 +166,7 @@ export function createFactoryPanel(deps: FactoryPanelDeps): FactoryPanel {
                 line = '';
                 setMode('stop');
               },
-              { 'data-testid': 'factory-stop', class: 'factory-batch-stop auth-button-small' },
+              { 'data-testid': 'factory-stop', class: 'factory-batch-stop' },
               true,
             ),
         el('span', { class: 'factory-bar', 'aria-hidden': 'true' }, bar),

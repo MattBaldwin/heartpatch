@@ -88,7 +88,7 @@ export function createPatchStatsScreen(options: PatchStatsOptions): PatchStatsSc
   const closeTop = hpClose('Close', 'patch-stats-close-top');
   const close = el(
     'button',
-    { type: 'button', class: 'auth-button auth-button-soft', 'data-testid': 'patch-stats-close' },
+    { type: 'button', class: 'hp-button hp-button-secondary', 'data-testid': 'patch-stats-close' },
     'Close',
   );
   const panel = el(

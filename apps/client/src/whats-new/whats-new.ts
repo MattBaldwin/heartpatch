@@ -134,7 +134,7 @@ export function createWhatsNew(options: WhatsNewOptions): WhatsNew {
   const list = el('div', { class: 'whats-new-list', 'data-testid': 'whats-new-list' });
   const done = el(
     'button',
-    { type: 'button', class: 'auth-button whats-new-done' },
+    { type: 'button', class: 'hp-button hp-button-primary whats-new-done' },
     WHATS_NEW_TEXT.done,
   );
   const card = el(

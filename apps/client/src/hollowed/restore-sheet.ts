@@ -120,7 +120,9 @@ export function createRestoreSheet(options: RestoreSheetOptions): RestoreSheet {
       'button',
       {
         type: onTap ? 'button' : 'submit',
-        class: soft ? 'auth-button auth-button-soft hollowed-soft' : 'auth-button hollowed-primary',
+        class: soft
+          ? 'hp-button hp-button-secondary hollowed-soft'
+          : 'hp-button hp-button-primary hollowed-primary',
         'data-testid': testId,
       },
       label,

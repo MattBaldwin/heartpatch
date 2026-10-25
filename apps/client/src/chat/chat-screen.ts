@@ -115,7 +115,7 @@ export function createChatScreen(options: ChatScreenOptions): ChatScreen {
   const picker = el('div', { class: 'chat-picker' });
   const closeButton = el(
     'button',
-    { type: 'button', class: 'auth-button auth-button-soft', 'data-testid': 'chat-close' },
+    { type: 'button', class: 'hp-button hp-button-secondary', 'data-testid': 'chat-close' },
     CHAT_TEXT.close,
   );
   const sheet = el(

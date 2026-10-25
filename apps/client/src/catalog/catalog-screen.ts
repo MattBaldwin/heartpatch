@@ -50,7 +50,7 @@ export function createCatalogScreen(options: CatalogScreenOptions): CatalogScree
   const problem = el('p', { class: 'auth-error', role: 'alert' });
   const close = el(
     'button',
-    { type: 'button', class: 'auth-button auth-button-soft', 'data-testid': 'catalog-close' },
+    { type: 'button', class: 'hp-button hp-button-secondary', 'data-testid': 'catalog-close' },
     'Close',
   );
   close.addEventListener('click', () => {

@@ -140,7 +140,7 @@ export function createLandScreen(options: LandScreenOptions): LandScreen {
 
   const okButton = el(
     'button',
-    { type: 'button', class: 'auth-button', 'data-testid': 'land-welcome-ok' },
+    { type: 'button', class: 'hp-button hp-button-primary', 'data-testid': 'land-welcome-ok' },
     LAND_TEXT.ok,
   );
   const welcomeLine = el('p', { class: 'land-line' });
@@ -249,7 +249,7 @@ export function createLandScreen(options: LandScreenOptions): LandScreen {
         'button',
         {
           type: 'button',
-          class: 'auth-button auth-button-small',
+          class: 'hp-button hp-button-primary hp-button-small',
           'data-testid': 'land-tile-visit',
         },
         LAND_TEXT.visit,

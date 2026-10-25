@@ -121,6 +121,9 @@
   margin-top: 16px;
 }
 
+/* Left for later (Controls B2b): only the audio settings toggle and the trading
+   journey buttons still use .auth-button*, because their lanes (#653, #655) are
+   reworking those files. Delete this block when they move onto the kit. */
 .auth-button {
   min-height: 52px;
   padding: 12px 20px;
@@ -362,7 +365,7 @@
   cursor: default;
 }
 
-.hp-trays-on .auth-chip-body > .auth-button {
+.hp-trays-on .auth-chip-body > .hp-button {
   min-height: 48px;
 }
 

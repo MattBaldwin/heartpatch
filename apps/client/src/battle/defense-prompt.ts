@@ -75,7 +75,11 @@ export function createDefensePrompt(options: DefensePromptOptions): DefensePromp
   const note = el('p', { class: 'defense-note', role: 'status' });
   const defend = el(
     'button',
-    { type: 'button', class: 'auth-button defense-yes', 'data-testid': 'defense-yes' },
+    {
+      type: 'button',
+      class: 'hp-button hp-button-primary defense-yes',
+      'data-testid': 'defense-yes',
+    },
     DEFENSE_TEXT.defend,
   );
   const notNow = el(
