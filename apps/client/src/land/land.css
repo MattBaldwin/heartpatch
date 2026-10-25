@@ -2,6 +2,7 @@
    and welcome-back card, as drawn in the owner-approved mockup. */
 
 .land-chip[hidden],
+.land-stranded[hidden],
 .land-toast[hidden],
 .land-welcome[hidden],
 .land-mark[hidden] {
@@ -160,4 +161,10 @@
 .land-line-small {
   font-size: 15px;
   font-weight: 600;
+}
+
+/* Wild Isle's cut-off card sits just under the "misses you" chip. */
+.land-stranded {
+  top: calc(env(safe-area-inset-top) + 236px);
+  border-color: #e9a9b4;
 }
