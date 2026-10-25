@@ -87,6 +87,14 @@ export const RESOURCES: Resource[] = [
     description: 'Crunchy sea Salt, dried in the sun at the Salt Pans.',
     kind: 'gathered',
   },
+  // Baked from all three (#621 W1-8b, `bake-pies`): a feed squishies love
+  // more than Treats (`CARE_RULES.foods`).
+  {
+    id: 'pies',
+    name: 'Pies',
+    description: 'Warm, flaky pies of Flour, Fish and Salt. Squishies go wild for these!',
+    kind: 'crafted',
+  },
   {
     id: 'heartdust',
     name: 'Heartdust',
