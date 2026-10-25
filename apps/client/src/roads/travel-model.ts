@@ -58,7 +58,7 @@ export const TRAVEL_TEXT = {
     'not-yet': 'Coming soon!',
     'not-river': 'Bridges go on river tiles.',
     taken: 'There is already something built here!',
-    'too-far': 'A bridge starts from land that is joined to your home. Join it up first!',
+    'too-far': 'A bridge starts from land that is joined to your home. Join that land up first!',
     'not-mine': 'Docks go on your own land.',
     'no-lake': 'A dock needs a lake right next to it.',
     'one-dock': 'You already have a dock on this lake! 🛶',
@@ -203,6 +203,21 @@ export function hasDock(tile: PublicTile, me: string | null): boolean {
 /** The land a dock ferries to (shared `ferryShore`), by water steps. */
 export function ferryReach(view: Pick<MapView, 'tiles'>, dock: Hex): Map<HexKey, number> {
   return ferryShore(view.tiles, dock, TRAVEL_RULES.ferry.range);
+}
+
+/**
+ * The ferry's far shore: the reach without land I already own or have joined to
+ * home (`supplied`), which I can walk to and needs no ferry. Tinting only the
+ * land across the water keeps the picture honest.
+ */
+export function farShoreOnly(
+  reach: ReadonlyMap<HexKey, number>,
+  tiles: readonly PublicTile[],
+  me: string | null,
+  supplied: ReadonlySet<HexKey> | null,
+): Map<HexKey, number> {
+  const mine = new Set(tiles.filter((t) => me !== null && t.ownerUserId === me).map(hexKey));
+  return new Map([...reach].filter(([k]) => !mine.has(k) && !supplied?.has(k)));
 }
 
 /**

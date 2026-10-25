@@ -16,6 +16,7 @@ import {
   bridgesOf,
   dockCards,
   docksOf,
+  farShoreOnly,
   ferryReach,
   hasDock,
   nearestFarShore,
@@ -144,6 +145,19 @@ describe('ferry dock card and reach (#621 W1-6)', () => {
     const reach = ferryReach(view, shore);
     expect(reach.size).toBeGreaterThan(0);
     expect(reach.has(hexKey(shore))).toBe(false);
+  });
+
+  it('leaves my own and joined land out of the far shore', () => {
+    if (!shore) throw new Error('no tile');
+    const other = base.tiles.find((t) => t.ownerUserId !== ME && t.homeSlot === null);
+    if (!other) throw new Error('no other tile');
+    const reach = new Map([
+      [hexKey(shore), 1],
+      [hexKey(other), 2],
+    ]);
+    // `shore` is mine: out. `other` is not mine: in, unless it is joined to home.
+    expect([...farShoreOnly(reach, base.tiles, ME, null).keys()]).toEqual([hexKey(other)]);
+    expect(farShoreOnly(reach, base.tiles, ME, new Set([hexKey(other)])).size).toBe(0);
   });
 
   it('pans to the nearest tile of the far shore, not land already joined to home', () => {

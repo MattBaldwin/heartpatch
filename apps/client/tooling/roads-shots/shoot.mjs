@@ -209,6 +209,30 @@ async function showTile(page, tile, zoom = 0) {
   await settle(page);
 }
 
+/**
+ * The iPad's centred tile panel hides the tile it is about: drag the map (touch-style strokes
+ * that stay in the clear strip left of the panel, each [from x, to x] in CSS px at y = 300) so
+ * the tile ends up to the panel's right. Waits for the camera to hold still.
+ */
+async function panAside(page, strokes) {
+  for (const [x0, x1] of strokes) {
+    await page.mouse.move(x0, 300);
+    await page.mouse.down();
+    await page.mouse.move((x0 + x1) / 2, 300, { steps: 6 });
+    await page.mouse.move(x1, 300, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(800);
+  }
+  let held = '';
+  for (let i = 0; i < 60; i++) {
+    const cur = JSON.stringify(await hook(page, 'camera'));
+    if (cur === held) break;
+    held = cur;
+    await page.waitForTimeout(700);
+  }
+  await settle(page);
+}
+
 /** The cut-off card hides in every shot but its own, so it doesn't cover the map; the cut-off tint stays. */
 const cardHidden = (page, hidden) =>
   page.evaluate((h) => {
@@ -238,10 +262,6 @@ async function frameFacts(page, device, roadTiles) {
           !e.closest('[hidden]')
         );
       };
-      const text = (sel) =>
-        [...document.querySelectorAll(sel)]
-          .filter(visible)
-          .map((e) => e.textContent.trim().replace(/\s+/g, ' '));
       // Anything solid that reaches into the home-indicator zone (canvas excluded).
       const inZone = [...document.querySelectorAll('body *')]
         .filter(
@@ -331,7 +351,10 @@ async function frameFacts(page, device, roadTiles) {
         devs,
         reconnecting,
         ...panelFacts(),
-        sheet: text('[data-testid="build-sheet"]'),
+        // Block by block, so words from neighbouring rows don't run together.
+        sheet: [...document.querySelectorAll('[data-testid="build-sheet"]')]
+          .filter(visible)
+          .map((e) => e.innerText.trim().replace(/\s*\n+\s*/g, ' · ')),
         stranded: [...document.querySelectorAll('[data-testid="stranded-card"]')]
           .filter(visible)
           .map((e) => e.innerText.trim().replace(/\s+/g, ' ')),
@@ -412,9 +435,9 @@ function strandedView(f) {
     : `Some of the cut-off land (${seen} of ${all} tiles) shows in the ${kind}; the rest is out of view.`;
 }
 
-/** Two aqua tiles sit on the road side of the dock: they are my own land, already joined by road. */
+/** Only land across the water is tinted: my own land, and land joined to home by road, is left out. */
 const OWN_AQUA =
-  'The two aqua tiles on the road side of the dock are my own land, already joined to home by road; the far shore is the aqua land across the water.';
+  'Only the land across the water is tinted aqua; my own land, and land already joined to home by road, is not.';
 
 /** The ferry map's far shore: how much of it, and the dock, is not under the panel or buttons. */
 function ferryView(f) {
@@ -487,6 +510,11 @@ async function runDevice(browser, device, statePath, fx) {
   await openMap(page);
   await cardHidden(page, true);
   await showTile(page, s.pathTile, 1);
+  if (device === 'ipad')
+    await panAside(page, [
+      [10, 295],
+      [10, 65],
+    ]);
   await shot(
     page,
     device,
@@ -577,6 +605,11 @@ async function runDevice(browser, device, statePath, fx) {
   await openMap(page);
   await cardHidden(page, true);
   await showTile(page, s.dock, 1);
+  if (device === 'ipad')
+    await panAside(page, [
+      [10, 295],
+      [10, 65],
+    ]);
   await shot(
     page,
     device,
@@ -595,30 +628,12 @@ async function runDevice(browser, device, statePath, fx) {
       prev = cur;
       await page.waitForTimeout(700);
     }
-    if (device === 'ipad') {
-      // The iPad's tile panel sits mid-screen over the dock and the far shore: drag the map
-      // (a touch pan, in two short strokes that stay in the clear strip left of the panel)
-      // so they sit right of the panel instead.
-      for (const [x0, x1] of [
+    // The iPad's tile panel sits mid-screen over the dock and the far shore: pan them to its right.
+    if (device === 'ipad')
+      await panAside(page, [
         [10, 295],
-        [10, 92],
-      ]) {
-        await page.mouse.move(x0, 300);
-        await page.mouse.down();
-        await page.mouse.move((x0 + x1) / 2, 300, { steps: 6 });
-        await page.mouse.move(x1, 300, { steps: 6 });
-        await page.mouse.up();
-        await page.waitForTimeout(800);
-      }
-      let held = '';
-      for (let i = 0; i < 60; i++) {
-        const cur = JSON.stringify(await hook(page, 'camera'));
-        if (cur === held) break;
-        held = cur;
-        await page.waitForTimeout(700);
-      }
-      await settle(page);
-    }
+        [10, 27],
+      ]);
     await shot(
       page,
       device,

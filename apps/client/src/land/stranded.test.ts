@@ -48,7 +48,7 @@ describe('stranded land', () => {
 
   it('says plainly what to do, gentler before the fading starts', () => {
     expect(STRANDED_TEXT.fading).toBe(
-      'These tiles are drifting away! Build a road to bring it home.',
+      'These tiles are drifting away! Build a road to bring them home.',
     );
     expect(STRANDED_TEXT.soon).toMatch(/may drift away soon/);
     expect(STRANDED_TEXT.soon).toMatch(/road/);

@@ -36,6 +36,7 @@ import {
   dockCards,
   ferryReach,
   hasDock,
+  farShoreOnly,
   nearestFarShore,
   supplyOf,
   TRAVEL_SPOT,
@@ -238,7 +239,8 @@ export function createRoads(options: RoadsOptions): Roads {
   }
 
   function showFerry(tile: PublicTile, v: MapView): void {
-    const reach = ferryReach(v, tile);
+    const supplied = supplyFor(v)?.supplied ?? null;
+    const reach = farShoreOnly(ferryReach(v, tile), v.tiles, options.me(), supplied);
     const tiles = v.tiles.filter((t) => reach.has(hexKey(t)));
     if (tiles.length === 0) {
       note = TRAVEL_TEXT.ferryNowhere;
@@ -247,7 +249,7 @@ export function createRoads(options: RoadsOptions): Roads {
     ferry = { dock: { q: tile.q, r: tile.r }, tiles };
     field?.drawFerry(tiles);
     options.invalidate();
-    const target = nearestFarShore(reach, tile, supplyFor(v)?.supplied ?? null);
+    const target = nearestFarShore(reach, tile, supplied);
     // Look at the water between the dock and the far shore, so both are in frame.
     if (target) {
       const line = hexLine(tile, target);
