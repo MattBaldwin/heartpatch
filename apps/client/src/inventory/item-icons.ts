@@ -39,6 +39,7 @@ const ICONS: Readonly<Record<string, string>> = {
   fish: '🐟',
   flour: '🌾',
   salt: '🧂',
+  pies: '🥧', // Baked from all three (W1-8b).
   // Explore tools (#199).
   shovel: TOOL_WORDS.shovel.icon,
   net: TOOL_WORDS.net.icon,
