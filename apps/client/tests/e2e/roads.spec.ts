@@ -33,7 +33,7 @@ test('a Road reaches a claim two tiles away, and taking it up cuts the land off 
   browser,
 }) => {
   // One signup through the Keeper picker, two real showdowns; CI renders in software.
-  test.setTimeout(300_000);
+  test.setTimeout(420_000);
   const page = await newPlayer(browser, uniqueName('road'));
   const lobby = page.getByTestId('lobby');
 
@@ -83,21 +83,23 @@ test('a Road reaches a claim two tiles away, and taking it up cuts the land off 
   const tooFar = await attack();
   expect(tooFar.status).toBe(403);
   expect(tooFar.body.error?.message).toBe("That's past your roads. Lay a path closer first!");
-  const path = await api<{ road: { level: number } }>(page, 'POST', `/maps/${mapId}/roads`, mine);
-  expect(path.status).toBe(201);
-  expect(path.body.road.level).toBe(1);
-  await expect.poll(() => roadsDebug(page), { timeout: 20_000 }).toMatchObject({ roads: 1 });
+  // The Build sheet's road cards: a Path first (one step), then a Road (two).
+  const lay = async (level: number) => {
+    await selectTile(page, mine);
+    await page.getByTestId('tile-build').tap();
+    await page.locator(`[data-build="road-${String(level)}"]`).tap();
+    await page.getByTestId('build-go').tap();
+    await expect(page.getByTestId('tile-build-note')).toBeVisible();
+  };
+  await lay(1);
+  await expect.poll(() => roadsDebug(page)).toMatchObject({ roads: 1 });
+  expect((await api<RoadsView>(page, 'GET', `/maps/${mapId}/roads`)).body.roads).toMatchObject([
+    { q: mine.q, r: mine.r, level: 1 },
+  ]);
   expect((await attack()).status).toBe(403);
 
   // A Road reaches two steps: the claim goes through, and the showdown wins the tile.
-  const road = await api<{ road: { level: number } }>(
-    page,
-    'POST',
-    `/maps/${mapId}/roads/upgrade`,
-    mine,
-  );
-  expect(road.status).toBe(200);
-  expect(road.body.road.level).toBe(2);
+  await lay(2);
   expect((await api<RoadsView>(page, 'GET', `/maps/${mapId}/roads`)).body.roads).toMatchObject([
     { q: mine.q, r: mine.r, level: 2 },
   ]);
@@ -118,9 +120,9 @@ test('a Road reaches a claim two tiles away, and taking it up cuts the land off 
   expect((await strandedDebug(page))?.card).toBe(false);
 
   // Taking the road up cuts the far tile off from home.
-  const removed = await api<{ road: null }>(page, 'POST', `/maps/${mapId}/roads/remove`, mine);
-  expect(removed.status).toBe(200);
-  expect(removed.body.road).toBeNull();
+  await selectTile(page, mine);
+  await page.getByTestId('road-take-up').tap();
+  await page.getByTestId('road-take-up-yes').tap();
   await expect.poll(() => roadsDebug(page)).toMatchObject({ roads: 0 });
   const cut = (await tending()).body.tending.stranded ?? [];
   expect(cut).toMatchObject([{ q: far!.q, r: far!.r }]);
