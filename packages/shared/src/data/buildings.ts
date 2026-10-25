@@ -1,4 +1,5 @@
 import type { Building } from '../schemas/data/buildings.js';
+import { WEATHER_RULES } from './weather.js';
 
 /**
  * Buildings (design doc §13–15). Ids are stored in `buildings` rows: add
@@ -475,11 +476,11 @@ export const BUILDINGS: Building[] = [
     slot: 'ring',
     levels: [{ cost: { timber: 600, stone: 450, glimmer: 20 }, upkeep: 20 }], // TUNE:
   },
-  // Wild Isle (#621). Only on a Wild Isle (`patchTypes`), and not buildable
-  // anywhere until each one's lane puts its kind in
-  // `HOME_BASE_RULES.buildableKinds`. Bridges and ferry docks are the
-  // exception (W1-5b): the server builds them by the map's patch type, not
-  // `buildableKinds`; Waystations are still refused.
+  // Wild Isle (#621). Only on a Wild Isle (`patchTypes`), never through
+  // `HOME_BASE_RULES.buildableKinds` (the client's exhaustive kind names):
+  // the server builds them by the map's patch type (`isBuildableOn`; bridges
+  // and ferry docks since W1-5b, the water works since W1-8). Waystations
+  // are still refused.
   {
     id: 'bridge',
     kind: 'travel',
@@ -532,7 +533,9 @@ export const BUILDINGS: Building[] = [
     maxPerTile: 1, // it fills its tile
     slot: 'ring',
     needsWater: ['river', 'lake'],
-    makes: { resource: 'water', quantity: 2, seconds: 15 * 60 }, // TUNE: a gatherer's pace on a Cozy lake
+    // TUNE: a Cozy lake's yield (2) plus the homestead's +1, so it keeps
+    // level with the Cozy Water Well (works add no +1 of their own, W1-8).
+    makes: { resource: 'water', quantity: 3, seconds: 15 * 60 },
     levels: [
       { cost: { timber: 20, stone: 15 }, pacePercent: 300, storageHours: 24, upkeep: 17 }, // TUNE: as the Cozy well
       { cost: { timber: 40, stone: 30 }, pacePercent: 350, storageHours: 48, upkeep: 20 }, // TUNE:
@@ -549,5 +552,209 @@ export const BUILDINGS: Building[] = [
         upkeep: 23,
       }, // TUNE:
     ],
+  },
+
+  // Wild Isle works (#621 W1-8): homestead buildings that make things by
+  // the water, no squishy needed. Each `makes` is what one cycle gives (no
+  // homestead +1 of its own); levels work as a resource building's, and
+  // upkeep is about a fifth of what a day's output sells for (`pnpm
+  // sim:wild-isle` guards it). Built on a Wild Isle only, by the map's patch
+  // type (`isBuildableOn`), never from `buildableKinds`.
+  {
+    id: 'fishing-pier',
+    kind: 'works',
+    name: 'Fishing Pier',
+    description: 'Catches Fish all by itself. Fish love a foggy day!',
+    patchTypes: ['wild-isle'],
+    placement: 'homestead',
+    maxPerTile: 1, // it fills its tile
+    slot: 'ring',
+    needsWater: ['deep', 'river', 'lake'],
+    makes: { resource: 'fish', quantity: 2, seconds: 30 * 60 }, // TUNE: Ice's pace, two a cycle
+    // The one source of the fog bonus: the weather's own `pierPercent`.
+    weather: { ...WEATHER_RULES.effects.pierPercent },
+    levels: [
+      { cost: { timber: 25, stone: 10 }, pacePercent: 300, storageHours: 24, upkeep: 10 }, // TUNE:
+      { cost: { timber: 45, stone: 25 }, pacePercent: 350, storageHours: 48, upkeep: 11 }, // TUNE:
+      {
+        cost: { timber: 85, stone: 50, glimmer: 4 },
+        pacePercent: 400,
+        storageHours: 72,
+        upkeep: 13,
+      }, // TUNE:
+      {
+        cost: { timber: 125, stone: 80, glimmer: 10 },
+        pacePercent: 400,
+        storageHours: 96,
+        upkeep: 13,
+      }, // TUNE:
+    ],
+  },
+  {
+    id: 'salt-pans',
+    kind: 'works',
+    name: 'Salt Pans',
+    description: 'Dries sea water into crunchy Salt in the sun.',
+    patchTypes: ['wild-isle'],
+    placement: 'homestead',
+    maxPerTile: 1,
+    slot: 'ring',
+    needsWater: ['deep'], // only by the sea
+    makes: { resource: 'salt', quantity: 2, seconds: 30 * 60 }, // TUNE:
+    levels: [
+      { cost: { timber: 20, stone: 15 }, pacePercent: 300, storageHours: 24, upkeep: 10 }, // TUNE:
+      { cost: { timber: 40, stone: 30 }, pacePercent: 350, storageHours: 48, upkeep: 11 }, // TUNE:
+      {
+        cost: { timber: 80, stone: 60, glimmer: 4 },
+        pacePercent: 400,
+        storageHours: 72,
+        upkeep: 13,
+      }, // TUNE:
+      {
+        cost: { timber: 120, stone: 90, glimmer: 10 },
+        pacePercent: 400,
+        storageHours: 96,
+        upkeep: 13,
+      }, // TUNE:
+    ],
+  },
+  {
+    id: 'watermill',
+    kind: 'works',
+    name: 'Watermill',
+    description: 'The river turns its wheel to grind Greens into Flour.',
+    patchTypes: ['wild-isle'],
+    placement: 'homestead',
+    maxPerTile: 1,
+    slot: 'ring',
+    needsWater: ['river'],
+    eats: { greens: 2 }, // TUNE: per cycle, from the bag at the settle
+    makes: { resource: 'flour', quantity: 1, seconds: 15 * 60 }, // TUNE:
+    levels: [
+      { cost: { timber: 20, stone: 15 }, pacePercent: 300, storageHours: 24, upkeep: 14 }, // TUNE:
+      { cost: { timber: 40, stone: 30 }, pacePercent: 350, storageHours: 48, upkeep: 17 }, // TUNE:
+      {
+        cost: { timber: 80, stone: 60, glimmer: 4 },
+        pacePercent: 400,
+        storageHours: 72,
+        upkeep: 19,
+      }, // TUNE:
+      {
+        cost: { timber: 120, stone: 90, glimmer: 10 },
+        pacePercent: 400,
+        storageHours: 96,
+        upkeep: 19,
+      }, // TUNE:
+    ],
+  },
+  {
+    id: 'irrigated-field',
+    kind: 'works',
+    name: 'Irrigated Field',
+    description: 'Grows Greens with water from next door. Fields love the rain!',
+    patchTypes: ['wild-isle'],
+    placement: 'homestead',
+    maxPerTile: 1,
+    slot: 'ring',
+    needsWater: ['deep', 'river', 'lake', 'canal'],
+    makes: { resource: 'greens', quantity: 3, seconds: 15 * 60 }, // TUNE: a homestead meadow's
+    weather: { rain: 150, drought: 50 }, // TUNE:
+    levels: [
+      { cost: { timber: 20, stone: 15 }, pacePercent: 300, storageHours: 24, upkeep: 17 }, // TUNE:
+      { cost: { timber: 40, stone: 30 }, pacePercent: 350, storageHours: 48, upkeep: 20 }, // TUNE:
+      {
+        cost: { timber: 80, stone: 60, glimmer: 4 },
+        pacePercent: 400,
+        storageHours: 72,
+        upkeep: 23,
+      }, // TUNE:
+      {
+        cost: { timber: 120, stone: 90, glimmer: 10 },
+        pacePercent: 400,
+        storageHours: 96,
+        upkeep: 23,
+      }, // TUNE:
+    ],
+  },
+  {
+    id: 'rain-barrel',
+    kind: 'works',
+    name: 'Rain Barrel',
+    description: 'Fills up with Water when it rains.',
+    patchTypes: ['wild-isle'],
+    placement: 'homestead',
+    maxPerTile: 1,
+    slot: 'ring',
+    onlyWhile: 'rain',
+    // TUNE: rain covers a tile only minutes a day on average (`pnpm sim:wild-isle`),
+    // so each rainy minute fills it fast: a downpour's worth.
+    makes: { resource: 'water', quantity: 15, seconds: 3 * 60 },
+    levels: [
+      { cost: { timber: 10, stone: 5 }, pacePercent: 300, storageHours: 24, upkeep: 2 }, // TUNE:
+      { cost: { timber: 20, stone: 10 }, pacePercent: 350, storageHours: 48, upkeep: 2 }, // TUNE:
+      {
+        cost: { timber: 40, stone: 20, glimmer: 2 },
+        pacePercent: 400,
+        storageHours: 72,
+        upkeep: 2,
+      }, // TUNE:
+      {
+        cost: { timber: 60, stone: 30, glimmer: 4 },
+        pacePercent: 400,
+        storageHours: 96,
+        upkeep: 2,
+      }, // TUNE:
+    ],
+  },
+  {
+    // Carries water inland to an Irrigated Field (`canalReach`).
+    id: 'canal',
+    kind: 'canal',
+    name: 'Canal',
+    description: 'Carries water to fields further from the shore.',
+    patchTypes: ['wild-isle'],
+    placement: 'homestead',
+    maxPerTile: 1,
+    slot: 'ring',
+    maxRun: 4, // TUNE: canals in a row from the water
+    levels: [{ cost: { stone: 6, timber: 2 } }], // TUNE: cheap
+  },
+  {
+    id: 'levee',
+    kind: 'shelter',
+    name: 'Levee',
+    description: 'A grassy bank that keeps storms and floods off your buildings by the river.',
+    patchTypes: ['wild-isle'],
+    placement: 'homestead',
+    maxPerTile: 1,
+    slot: 'ring',
+    needsWater: ['river'],
+    protects: { radius: 1, from: ['storm', 'flood'] }, // TUNE:
+    levels: [{ cost: { stone: 30, timber: 10 } }], // TUNE:
+  },
+  {
+    id: 'seawall',
+    kind: 'shelter',
+    name: 'Seawall',
+    description: 'A sturdy stone wall that keeps storms and waves off your buildings by the sea.',
+    patchTypes: ['wild-isle'],
+    placement: 'homestead',
+    maxPerTile: 1,
+    slot: 'ring',
+    needsWater: ['deep'],
+    protects: { radius: 1, from: ['storm', 'flood'] }, // TUNE:
+    levels: [{ cost: { stone: 40, timber: 10 } }], // TUNE:
+  },
+  {
+    // The forecast's vane (W1-7 finds any `vane` kind on land its owner holds).
+    id: 'weather-vane',
+    kind: 'vane',
+    name: 'Weather Vane',
+    description: "Spins in the wind and knows tomorrow's weather!",
+    patchTypes: ['wild-isle'],
+    placement: 'homestead',
+    maxPerTile: 1,
+    slot: 'ring',
+    levels: [{ cost: { timber: 15, glimmer: 2 } }], // TUNE:
   },
 ];

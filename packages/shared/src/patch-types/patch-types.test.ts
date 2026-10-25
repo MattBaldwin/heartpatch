@@ -9,6 +9,7 @@ import { WEATHER_RULES } from '../data/weather.js';
 import { buildsOnPatchType, WILD_ISLE_BUILDING_KINDS } from '../schemas/data/buildings.js';
 import { isBuildable } from '../schemas/data/home-base.js';
 import { isWater } from '../schemas/data/terrains.js';
+import { isBuildableOn } from '../home/water-works.js';
 import { CreateMapRequestSchema } from '../schemas/maps.js';
 import { DEFAULT_PATCH_TYPE, PatchTypeSchema, patchRules } from './index.js';
 
@@ -81,6 +82,16 @@ describe('patch types (#621)', () => {
       'waystation',
       'ferry-dock',
       'river-well',
+      // W1-8's water works.
+      'fishing-pier',
+      'salt-pans',
+      'watermill',
+      'irrigated-field',
+      'rain-barrel',
+      'canal',
+      'levee',
+      'seawall',
+      'weather-vane',
     ]);
     // As if every kind were buildable: the patch type alone still hides them.
     const everyKind = {
@@ -93,8 +104,11 @@ describe('patch types (#621)', () => {
       expect(isBuildable(everyKind, b), b.id).toBe(false);
       expect(isBuildable(everyKind, b, 'cozy'), b.id).toBe(false);
       expect(isBuildable(everyKind, b, 'wild-isle'), b.id).toBe(true);
-      // Not buildable anywhere yet: each kind joins with the lane that builds it.
+      // Never through `buildableKinds`: the server builds them by the map's
+      // patch type (`isBuildableOn`), so the client's kind names stay whole.
       expect(isBuildable(HOME_BASE_RULES, b, 'wild-isle'), b.id).toBe(false);
+      expect(isBuildableOn(HOME_BASE_RULES, b, 'cozy'), b.id).toBe(false);
+      expect(isBuildableOn(HOME_BASE_RULES, b, 'wild-isle'), b.id).toBe(b.id !== 'waystation');
     }
   });
 

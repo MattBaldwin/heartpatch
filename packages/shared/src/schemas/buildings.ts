@@ -120,6 +120,12 @@ export const BuildingProductionSchema = z.object({
    * tomorrow. Optional for an older server.
    */
   seasonEndsAt: z.iso.datetime().nullable().optional(),
+  /**
+   * A Wild Isle works that eats (#621 W1-8, a Watermill's Greens): what each
+   * cycle takes from the bag at the settle; `ready` is what the bag pays
+   * for now. Left out for the rest and by an older server.
+   */
+  eats: ItemCountsSchema.optional(),
 });
 export type BuildingProduction = z.infer<typeof BuildingProductionSchema>;
 
