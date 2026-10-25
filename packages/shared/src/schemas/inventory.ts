@@ -256,8 +256,8 @@ export const SettleResponseSchema = InventoryResponseSchema.extend({
         z.object({
           buildingRowId: z.uuid(),
           buildingId: ContentIdSchema,
-          q: z.number().int(),
-          r: z.number().int(),
+          q: HexSchema.shape.q,
+          r: HexSchema.shape.r,
         }),
       ),
     })

@@ -90,7 +90,11 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
       // Wild Isle weather (#621): the days' plans are stored first, outside
       // the transaction (inserted, never locked). Null on a Cozy Patch.
       const wild = await weatherMap(db, mapId);
-      if (wild) await storeWeatherFor(db, wild, user.id, at);
+      if (wild) {
+        // Only for a member: nothing is written for anyone else.
+        await requireMember(db, user, mapId);
+        await storeWeatherFor(db, wild, user.id, at);
+      }
       const result = await createSettleRepo(db).transaction(async (repo, tx) => {
         const { map } = await requireMember(tx, user, mapId);
         // Lock order (tech spec §7): the member row (one settle at a time per

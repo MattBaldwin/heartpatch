@@ -279,6 +279,8 @@ export interface FrontSummary {
  */
 export function frontSummary(front: WeatherFront, dayStartMs: number): FrontSummary {
   const from = compassOf(front.from);
+  // Hours since the day began, not the wall clock: on the two daylight-saving
+  // days a year the line can be an hour out, which a forecast can live with.
   const mid = (Date.parse(front.startAt) + Date.parse(front.endAt)) / 2;
   const hour = Math.floor((mid - dayStartMs) / HOUR_MS);
   return { kind: front.kind, from, when: partOfDay(hour) };

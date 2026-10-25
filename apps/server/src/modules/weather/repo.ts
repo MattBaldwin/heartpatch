@@ -51,7 +51,7 @@ export interface WeatherRepo {
   /** Runs `fn` in one transaction (the sweep's per-player pass, a dev knock). */
   transaction: <T>(fn: (tx: Transaction) => Promise<T>) => Promise<T>;
   map: (mapId: string) => Promise<WeatherMapRow | null>;
-  /** Every Wild Isle patch with a seed, in id order (the sweep). */
+  /** Every Wild Isle patch, in id order (the sweep). */
   wildMaps: () => Promise<string[]>;
   /** The stored plans for these days (missing days left out). */
   days: (mapId: string, days: readonly LocalDate[]) => Promise<Map<LocalDate, WeatherDay>>;
@@ -114,7 +114,7 @@ export function createWeatherRepo(db: Executor): WeatherRepo {
         await db
           .select({ id: maps.id })
           .from(maps)
-          .where(and(eq(maps.patchType, 'wild-isle'), isNotNull(maps.seed)))
+          .where(eq(maps.patchType, 'wild-isle'))
           .orderBy(asc(maps.id))
       ).map((r) => r.id),
 
