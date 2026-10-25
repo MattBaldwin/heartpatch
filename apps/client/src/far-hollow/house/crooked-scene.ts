@@ -652,13 +652,11 @@ export class CrookedScene {
   /** The floor point under a screen point (CSS pixels from the canvas's top left), or null. */
   floorAt(x: number, y: number): FloorPoint | null {
     const camera = this.#scene.activeCamera;
-    const engine = this.#scene.getEngine();
-    const canvas = engine.getRenderingCanvas();
-    if (!camera || !canvas) return null;
+    if (!camera) return null;
     this.#applyCamera();
-    // Picking works in render pixels.
-    const k = engine.getRenderWidth() / Math.max(1, canvas.getBoundingClientRect().width);
-    const ray = CreatePickingRay(this.#scene, x * k, y * k, null, camera);
+    // CSS pixels, as the other scenes pick: the ray scales them to render pixels itself
+    // (by the hardware scaling level), so scaling here too sent a tap twice as far (#651).
+    const ray = CreatePickingRay(this.#scene, x, y, null, camera);
     if (ray.direction.y >= 0) return null;
     const t = -ray.origin.y / ray.direction.y;
     return { x: ray.origin.x + ray.direction.x * t, z: ray.origin.z + ray.direction.z * t };

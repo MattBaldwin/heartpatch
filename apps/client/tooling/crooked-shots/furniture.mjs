@@ -50,13 +50,13 @@ const SHOTS = [
   { name: 'dining-table', room: 'dining-room', x: -4.4, z: 4.3, walk: true },
   // In the Dining Room's doorway to the Kitchen (its north wall, 0.5 m west of the middle).
   { name: 'doorway', room: 'dining-room', x: -6.2, z: 8.5, walk: false },
-  // South of the table's middle, then a tap on the floor behind it (CSS px, per phone).
+  // South of the table's middle, then a tap on the floor behind it (page CSS px, per phone).
   {
     name: 'tap-round-table',
     room: 'dining-room',
     x: -5.7,
     z: 4.3,
-    tap: { iphone: { x: 170, y: 250 }, se: { x: 156, y: 198 } },
+    tap: { iphone: { x: 200, y: 235 }, se: { x: 190, y: 190 } },
   },
 ];
 
@@ -195,7 +195,7 @@ for (const device of DEVICES) {
     const frames = [s.name];
     if (s.tap) {
       const at = s.tap[device];
-      await page.getByTestId('crooked-ground').tap({ position: at });
+      await page.touchscreen.tap(at.x, at.y);
       await page.waitForTimeout(TAP_MID_MS);
       frames.push(`${s.name}-end`);
     }
