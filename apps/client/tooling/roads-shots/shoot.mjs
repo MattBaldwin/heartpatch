@@ -223,7 +223,7 @@ async function frameFacts(page, device) {
     const w = window.innerWidth;
     const visible = (e) => {
       const b = e.getBoundingClientRect();
-      const s = getComputedStyle(e);
+      const s = window.getComputedStyle(e);
       return (
         b.width > 0 &&
         b.height > 0 &&
@@ -243,7 +243,7 @@ async function frameFacts(page, device) {
           e.id !== 'game' &&
           !/^trays( trays-hinting)?$/.test(e.className) &&
           visible(e) &&
-          getComputedStyle(e).position === 'fixed',
+          window.getComputedStyle(e).position === 'fixed',
       )
       .filter(
         (e) => e.getBoundingClientRect().bottom > h - insets.bottom + 0.5 && insets.bottom > 0,
@@ -260,7 +260,10 @@ async function frameFacts(page, device) {
       inZone,
       devs,
       reconnecting,
-      panel: text('.tile-panel'),
+      panel: [
+        text('.tile-panel-title')[0] ?? '',
+        'buttons: ' + text('.tile-panel button').filter(Boolean).join(', '),
+      ].filter(Boolean),
       sheet: text('[data-testid="build-sheet"]'),
       stranded: text('[data-testid="stranded-card"]'),
       roads: window.__heartpatch.roads?.() ?? null,
@@ -438,7 +441,17 @@ async function runDevice(browser, device, statePath, fx) {
       'dock',
       'far-shore',
       (f) =>
-        `Ferry across pressed: the far shore of the lake is tinted. Panel: ${nodeTexts(f.panel)}.`,
+        `"Ferry across 🛶" pressed on the dock's tile; ${f.roads?.ferry} far-shore tiles are in the ferry tint (the tile panel covers part of the map). Panel: ${nodeTexts(f.panel)}.`,
+    );
+    // The same moment with the panel out of the way (hidden, not closed: closing puts the map back).
+    await page.addStyleTag({ content: '.tile-panel{visibility:hidden!important}' });
+    await shot(
+      page,
+      device,
+      'dock',
+      'far-shore-map',
+      (f) =>
+        `Same moment with the tile panel hidden: ${f.roads?.ferry} far-shore tiles in the ferry tint, the dock on its lake.`,
     );
   }
 

@@ -30,7 +30,9 @@ interface Input {
 
 const input = JSON.parse(process.argv[2] ?? '{}') as Input;
 const base = testWildIsle();
-const fixtureMe = base.members[0]!.user.id;
+const fixtureMember = base.members[0];
+if (!fixtureMember) throw new Error('no member 1');
+const fixtureMe = fixtureMember.user.id;
 const me = input.member.user.id;
 
 const view: MapView = {
@@ -55,12 +57,16 @@ const claim = (h: Hex) => {
   if (plain(t) && t.ownerUserId === null) t.ownerUserId = me;
 };
 const home = view.tiles.filter((t) => t.homeSlot === 0);
-const homeCentre = home.find((t) => hexNeighbors(t).every((n) => tileAt(n)?.homeSlot === 0))!;
+const homeCentre = home.find((t) => hexNeighbors(t).every((n) => tileAt(n)?.homeSlot === 0));
+if (!homeCentre) throw new Error('no home centre');
 const dist = (a: Hex, b: Hex) => hexDistance(a, b);
 
 /** Closest hex of `from` to `to`. */
-const nearest = <T extends Hex>(from: readonly T[], to: Hex): T =>
-  [...from].sort((a, b) => dist(a, to) - dist(b, to) || a.q - b.q || a.r - b.r)[0]!;
+const nearest = <T extends Hex>(from: readonly T[], to: Hex): T => {
+  const first = [...from].sort((a, b) => dist(a, to) - dist(b, to) || a.q - b.q || a.r - b.r)[0];
+  if (!first) throw new Error('nothing to pick from');
+  return first;
+};
 
 // --- The dock: my land beside the wild lake nearest home. ---
 const lakes = view.tiles.filter((t) => t.terrain === 'wild-lake');
@@ -138,8 +144,9 @@ hexLine(homeCentre, dockSpot).forEach((h, i, line) => {
 for (const n of hexNeighbors(homeCentre).slice(0, 2)) road(n, 3);
 
 // --- Two tiles cut off from home, far from every road, bridge and dock. ---
+const bridgeAt = bridgeSpot;
 const supplied = () =>
-  supplyMap(view.tiles, roads, [{ ...bridgeSpot!, ownerUserId: '' }], me, TRAVEL_RULES, [
+  supplyMap(view.tiles, roads, [{ ...bridgeAt, ownerUserId: '' }], me, TRAVEL_RULES, [
     { ...dockSpot, ownerUserId: me },
   ]);
 const shore = ferryShore(view.tiles, dockSpot, TRAVEL_RULES.ferry.range);
@@ -180,8 +187,8 @@ const tending = {
   now: new Date(now).toISOString(),
 };
 const farShore = [...shore.keys()]
-  .map((k) => byKey.get(k)!)
-  .filter((t) => !final.supplied.has(hexKey(t)));
+  .map((k) => byKey.get(k))
+  .filter((t): t is PublicTile => t !== undefined && !final.supplied.has(hexKey(t)));
 
 process.stdout.write(
   JSON.stringify({
