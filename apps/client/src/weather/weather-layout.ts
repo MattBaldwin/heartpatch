@@ -2,6 +2,7 @@ import { frontPath, hexToWorld, type WeatherFront, type WorldPoint } from '@hear
 import { DRIFT_MODE } from '../map/ambient-layout.js';
 import { HEX_SIZE } from '../map/map-config.js';
 import { hash01 } from '../map/map-layout.js';
+import { WEATHER_LOOK } from './weather-config.js';
 
 // Where the weather's clouds, rain and fog go (#621 W1-9). Pure: the same
 // fronts and the same time always give the same spots, and the buffers are
@@ -21,16 +22,7 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 const SQRT3 = Math.sqrt(3);
 /** A front grows in over this share of its life, and fades out over the same. */
 const RAMP = 0.1;
-const CLOUD_HEIGHT = 2.1;
-const FOG_HEIGHT = 0.2;
-const RAIN_FALL = 1.9;
-
-type ColourKey = 'rain' | 'storm';
-/** sRGB, turned linear below. Translucent so the tiles stay visible. */
-const CLOUD_COLOUR: Record<ColourKey, readonly [number, number, number, number]> = {
-  rain: [0.7, 0.69, 0.8, 0.55],
-  storm: [0.541, 0.525, 0.678, 0.72], // #8a86ad
-};
+const { clouds: CLOUDS, fog: FOG, rain: RAIN } = WEATHER_LOOK;
 
 const linear = (c: number): number => Math.pow(c, 2.2);
 
@@ -151,7 +143,7 @@ export function layoutWeather(
     const bulk = front.radius / 3;
     if (front.kind === 'rain' || front.kind === 'storm') {
       const want = PER_FRONT[front.kind];
-      const colour = CLOUD_COLOUR[front.kind];
+      const colour = CLOUDS.colour[front.kind];
       const nClouds = Math.min(
         WEATHER_CAPS.clouds - clouds,
         Math.max(4, Math.round(want.clouds * bulk)),
@@ -163,9 +155,9 @@ export function layoutWeather(
           out.cloudMatrices,
           at,
           centre.x + s.dx,
-          CLOUD_HEIGHT + s.jitter * 0.5,
+          CLOUDS.height + s.jitter * 0.5,
           centre.z + s.dz,
-          (0.9 + s.jitter * 0.6) * grow,
+          (CLOUDS.size + s.jitter * CLOUDS.spread) * grow,
         );
         out.cloudColours.set(
           [linear(colour[0]), linear(colour[1]), linear(colour[2]), colour[3]],
@@ -183,8 +175,8 @@ export function layoutWeather(
       for (let i = 0; i < nRain; i++) {
         const s = spotIn(seed, i, Math.max(1, nRain), front.radius, 20);
         const at = rain++;
-        put(out.rainMatrices, at, centre.x + s.dx, CLOUD_HEIGHT - 0.1, centre.z + s.dz, grow);
-        out.rainAttrs.set([s.jitter, 0.9 + s.jitter * 0.6, RAIN_FALL, 0], at * 4);
+        put(out.rainMatrices, at, centre.x + s.dx, CLOUDS.height - 0.1, centre.z + s.dz, grow);
+        out.rainAttrs.set([s.jitter, 0.9 + s.jitter * 0.6, RAIN.fall, 0], at * 4);
       }
     } else if (front.kind === 'fog') {
       const n = Math.min(WEATHER_CAPS.fog - fog, Math.max(4, Math.round(PER_FRONT.fog.fog * bulk)));
@@ -195,9 +187,9 @@ export function layoutWeather(
           out.fogMatrices,
           at,
           centre.x + s.dx,
-          FOG_HEIGHT + s.jitter * 0.25,
+          FOG.height + s.jitter * 0.25,
           centre.z + s.dz,
-          (1.2 + s.jitter * 0.8) * grow,
+          (FOG.size + s.jitter * FOG.spread) * grow,
         );
         out.fogDrift.set([DRIFT_MODE.float, s.jitter * 6.28, 0.2, 0.1], at * 4);
       }

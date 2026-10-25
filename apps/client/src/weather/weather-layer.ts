@@ -13,6 +13,7 @@ import { merged, painted } from '../map/map-props.js';
 import { attachTerrainPlugin, DRIFT_ATTRIBUTE } from '../map/terrain-plugin.js';
 import type { QualityTier } from '../engine/config.js';
 import { attachRain, RAIN_ATTRIBUTE } from './rain-plugin.js';
+import { WEATHER_LOOK } from './weather-config.js';
 import { WeatherPlacer, PLACE_EVERY_MS } from './weather-placer.js';
 import type { WeatherStore } from './weather-store.js';
 import { createWeatherTint } from './weather-tint.js';
@@ -40,15 +41,20 @@ export interface WeatherLayer extends MapLayer {
   stats(): WeatherStats;
 }
 
-/** Hands the layout's fixed arrays to a mesh once; they are refilled in place. */
+/**
+ * Hands the layout's fixed arrays to a mesh once; they are refilled in place.
+ * The GPU buffers must be updatable (`staticBuffer` false): a static one
+ * ignores `thinInstanceBufferUpdated`, so it would keep the all-zero first
+ * fill and draw nothing.
+ */
 function instanced(
   mesh: Mesh,
   matrices: Float32Array,
   extra: Float32Array,
   extraName: string,
 ): void {
-  mesh.thinInstanceSetBuffer('matrix', matrices, 16, true);
-  mesh.thinInstanceSetBuffer(extraName, extra, 4, true);
+  mesh.thinInstanceSetBuffer('matrix', matrices, 16, false);
+  mesh.thinInstanceSetBuffer(extraName, extra, 4, false);
   mesh.thinInstanceCount = 1;
   mesh.alwaysSelectAsActiveMesh = true;
   mesh.isPickable = false;
@@ -69,39 +75,48 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
 
       const cloudMat = glowMaterial(scene, 'weather-cloud-mat', '#ffffff', true);
       cloudMat.emissiveColor = Color3.White();
+      // Writes depth, so where a cloud's puffs overlap it is drawn once: one
+      // soft shape, never rings of see-through balls.
+      cloudMat.disableDepthWrite = false;
       attachTerrainPlugin(cloudMat, host.clock);
+      // Soft cushions, flattened like the sky's clouds (map-ambient.ts).
+      const puff = (name: string, d: number, x: number, y: number, z: number): Mesh => {
+        const p = CreateSphere(name, { diameter: d, segments: 8 }, scene);
+        p.position.set(x, y, z);
+        p.scaling.y = WEATHER_LOOK.clouds.squash;
+        return painted(p, '#ffffff');
+      };
       const cloud = merged('weather-clouds', [
-        painted(CreateSphere('wc0', { diameter: 1, segments: 8 }, scene), '#ffffff'),
-        painted(CreateSphere('wc1', { diameter: 0.7, segments: 8 }, scene), '#ffffff'),
-        painted(CreateSphere('wc2', { diameter: 0.65, segments: 8 }, scene), '#ffffff'),
+        puff('wc0', 1, 0, 0, 0),
+        puff('wc1', 0.72, 0.5, -0.04, 0.12),
+        puff('wc2', 0.66, -0.46, -0.05, -0.08),
       ]);
       cloud.hasVertexAlpha = true;
       cloud.material = cloudMat;
 
-      const fogMat = glowMaterial(scene, 'weather-fog-mat', '#eceaf5', true);
+      const fogMat = glowMaterial(scene, 'weather-fog-mat', WEATHER_LOOK.fog.colour, true);
+      // The disc is seen from above whichever way its triangles wind.
+      fogMat.backFaceCulling = false;
       attachTerrainPlugin(fogMat, host.clock);
-      const fog = softDisc(scene, 'weather-fog', [
-        [0.3, 0.4],
-        [0.6, 0.2],
-        [0.9, 0],
-      ]);
+      const fog = softDisc(scene, 'weather-fog', WEATHER_LOOK.fog.rings);
       fog.material = fogMat;
 
-      const rainMat = glowMaterial(scene, 'weather-rain-mat', '#d3dcff', true);
-      rainMat.alpha = 0.7;
+      const look = WEATHER_LOOK.rain;
+      const rainMat = glowMaterial(scene, 'weather-rain-mat', look.colour, true);
+      rainMat.alpha = look.alpha;
       rainMat.alphaMode = Constants.ALPHA_COMBINE;
       // GLSL only: without the plugin a streak would just hang there, so it draws none.
       const rainPlugin = attachRain(rainMat, host.clock);
       const rain = CreateCylinder(
         'weather-rain',
-        { height: 0.22, diameter: 0.014, tessellation: 3 },
+        { height: look.height, diameter: look.diameter, tessellation: 3 },
         scene,
       );
       rain.material = rainMat;
 
       const layout = placer.layout;
       instanced(cloud, layout.cloudMatrices, layout.cloudColours, 'color');
-      cloud.thinInstanceSetBuffer(DRIFT_ATTRIBUTE, layout.cloudDrift, 4, true);
+      cloud.thinInstanceSetBuffer(DRIFT_ATTRIBUTE, layout.cloudDrift, 4, false);
       instanced(fog, layout.fogMatrices, layout.fogDrift, DRIFT_ATTRIBUTE);
       instanced(rain, layout.rainMatrices, layout.rainAttrs, RAIN_ATTRIBUTE);
 

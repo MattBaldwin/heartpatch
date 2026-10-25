@@ -77,13 +77,18 @@ await boot(canvas, {
         map.setNight(night);
         if (weatherKind) {
           // The weather layer under a fixed sky, as map-screen would host it (#621).
-          const store = new WeatherStore({
+          const store: WeatherStore = new WeatherStore({
             now: () => Date.now(),
             me: () => view.members[0]?.user.id ?? null,
             api: {
               get: () =>
                 Promise.resolve(
-                  galleryWeather(weatherKind, Date.now(), params.get('vane') === '1'),
+                  galleryWeather(
+                    weatherKind,
+                    Date.now(),
+                    params.get('vane') === '1',
+                    store.home ?? undefined,
+                  ),
                 ),
             },
           });
