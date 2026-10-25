@@ -264,7 +264,14 @@ async function frameFacts(page, device) {
       const box = panelEl.getBoundingClientRect();
       const shown = [];
       const cut = [];
-      for (const e of panelEl.querySelectorAll('.tile-panel-title,.tile-panel-owner,p,button')) {
+      const rows = [...panelEl.querySelectorAll('.tile-panel-title,.tile-panel-owner,p,button')];
+      // Reading order as on screen (CSS can reorder or lay rows side by side).
+      rows.sort((a, b) => {
+        const ra = a.getBoundingClientRect();
+        const rb = b.getBoundingClientRect();
+        return Math.round(ra.top / 4) - Math.round(rb.top / 4) || ra.left - rb.left;
+      });
+      for (const e of rows) {
         if (!visible(e) || e.closest('.tile-panel-details[hidden]')) continue;
         if (e.tagName !== 'BUTTON' && e.querySelector('button')) continue;
         const b = e.getBoundingClientRect();
@@ -288,7 +295,9 @@ async function frameFacts(page, device) {
     const overlaps = [];
     if (card && visible(card)) {
       const c = card.getBoundingClientRect();
-      for (const e of document.querySelectorAll('.trays *, .tray-handle, .top-bar *, .map-hud *')) {
+      for (const e of document.querySelectorAll(
+        '.trays *, .tray-handle, .top-bar *, .map-hud *, .post-flag',
+      )) {
         if (!visible(e)) continue;
         const b = e.getBoundingClientRect();
         if (b.width < 20) continue;
@@ -308,7 +317,16 @@ async function frameFacts(page, device) {
         .filter(visible)
         .map((e) => e.innerText.trim().replace(/\s+/g, ' ')),
       roads: window.__heartpatch.roads?.() ?? null,
-      strandedDebug: window.__heartpatch.stranded?.() ?? null,
+      strandedDebug: (() => {
+        const d = window.__heartpatch.stranded?.();
+        if (!d) return null;
+        // Of the cut-off tiles inside the canvas, which have nothing (card, HUD, button) over their centre.
+        const clear = d.onScreen.filter((p) => {
+          const top = document.elementFromPoint(p.x * window.innerWidth, p.y * window.innerHeight);
+          return top?.tagName === 'CANVAS';
+        }).length;
+        return { grace: d.grace, fading: d.fading, inCanvas: d.onScreen.length, clear };
+      })(),
     };
   }, DEVICES[device].insets);
 }
@@ -344,6 +362,18 @@ async function shot(page, device, name, frame, describe) {
     problems,
   });
   console.log(file, problems.length ? `PROBLEMS ${problems.join('; ')}` : 'ok');
+}
+
+/** What of the cut-off land is really visible, from where its tiles project and what covers them. */
+function strandedView(f) {
+  const d = f.strandedDebug;
+  const all = (d?.grace ?? 0) + (d?.fading ?? 0);
+  const kind = `${d?.fading ? 'fading' : 'grace'} tint`;
+  if (!d?.inCanvas)
+    return `The map around home; the cut-off land (${all} tiles) is off-screen, so none of it shows and "Show me" pans to it.`;
+  if (!d.clear)
+    return `The map around home; the ${all} cut-off tiles are at the top edge but tucked behind the top buttons or the card, so little of them shows, and "Show me" pans to them.`;
+  return `The map with ${d.clear} of ${all} cut-off tiles clearly in view, in the ${kind}.`;
 }
 
 const nodeTexts = (list) => (list.length ? list.join(' / ') : 'nothing');
@@ -505,13 +535,10 @@ async function runDevice(browser, device, statePath, fx) {
   // 5. Stranded land: tint and the "Some land is cut off!" card.
   await openMap(page);
   await until(page, () => window.__heartpatch?.stranded?.()?.card);
-  await shot(
-    page,
-    device,
-    'stranded',
-    'as-it-opens',
-    (f) =>
-      `The map with cut-off land tinted (grace ${f.strandedDebug?.grace}, fading ${f.strandedDebug?.fading} tiles).`,
+  await shot(page, device, 'stranded', 'as-it-opens', (f) =>
+    f.strandedDebug?.onScreen
+      ? `The map with ${f.strandedDebug.onScreen} cut-off tiles in view, tinted (grace ${f.strandedDebug.grace}, fading ${f.strandedDebug.fading} tiles in all).`
+      : `The map around home; the cut-off land (${(f.strandedDebug?.grace ?? 0) + (f.strandedDebug?.fading ?? 0)} tiles) is off-screen, so none of it shows and "Show me" pans to it.`,
   );
   if (!ONLY || ONLY.includes('stranded')) {
     await tapText('stranded-show');
@@ -528,8 +555,7 @@ async function runDevice(browser, device, statePath, fx) {
       device,
       'stranded',
       'whole-card',
-      (f) =>
-        `Show me pressed: the camera is on the cut-off land, tinted (grace ${f.strandedDebug?.grace}, fading ${f.strandedDebug?.fading} tiles).`,
+      (f) => `Show me pressed: the camera panned to the cut-off land. ${strandedView(f)}`,
     );
   }
   await context.close();

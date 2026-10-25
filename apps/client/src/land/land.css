@@ -163,10 +163,13 @@
   font-weight: 600;
 }
 
-/* Wild Isle's cut-off card takes the chip row (short, two lines at most, so it
-   stays clear of the side buttons on a small phone) and drops under the
-   "misses you" chip only when that one shows too. */
+/* Wild Isle's cut-off card sits one row lower than the other chips (short, two
+   lines at most, so it stays clear of the side buttons on a small phone): the
+   village and post flags (map labels) float just under the patch name on the
+   open map, and a chip at the chip row hid half of one. It drops under the
+   "misses you" chip when that one shows too. */
 .land-stranded {
+  top: calc(env(safe-area-inset-top) + 212px);
   border-color: #e9a9b4;
 }
 

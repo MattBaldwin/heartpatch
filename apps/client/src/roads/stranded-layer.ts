@@ -1,5 +1,5 @@
 import { Color3 } from '@babylonjs/core/Maths/math.color';
-import type { Matrix } from '@babylonjs/core/Maths/math.vector';
+import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import type { Scene } from '@babylonjs/core/scene';
@@ -59,7 +59,7 @@ export interface StrandedLayer extends MapLayer {
   /** The gap to show (nearest `from`, else going wild soonest), or null. */
   gap: (from?: Hex | null) => StrandedTile | null;
   /** Tiles drawn by look (the dev hook). */
-  readonly debug: { grace: number; fading: number };
+  readonly debug: { grace: number; fading: number; onScreen: readonly { x: number; y: number }[] };
 }
 
 export function createStrandedLayer(now: () => number = () => Date.now()): StrandedLayer {
@@ -88,6 +88,29 @@ export function createStrandedLayer(now: () => number = () => Date.now()): Stran
       setInstances(pair.fill, matrices, true);
       setInstances(pair.ring, matrices, true);
     }
+  };
+
+  /** Cut-off tiles whose centre is inside the canvas right now, as 0..1 of its width and height (the dev hook). */
+  const onScreen = () => {
+    const camera = scene?.activeCamera;
+    if (!scene || !camera) return [];
+    const engine = scene.getEngine();
+    const w = engine.getRenderWidth();
+    const h = engine.getRenderHeight();
+    const viewport = camera.viewport.toGlobal(w, h);
+    const found: { x: number; y: number }[] = [];
+    for (const t of stranded) {
+      const p = hexToWorld(t, HEX_SIZE);
+      const s = Vector3.Project(
+        new Vector3(p.x, 0, p.z),
+        Matrix.IdentityReadOnly,
+        scene.getTransformMatrix(),
+        viewport,
+      );
+      if (s.z >= 0 && s.z <= 1 && s.x >= 0 && s.x <= w && s.y >= 0 && s.y <= h)
+        found.push({ x: s.x / w, y: s.y / h });
+    }
+    return found;
   };
 
   return {
@@ -133,7 +156,7 @@ export function createStrandedLayer(now: () => number = () => Date.now()): Stran
     },
     gap: (from) => nearestGap(stranded, from),
     get debug() {
-      return { ...drawn };
+      return { ...drawn, onScreen: onScreen() };
     },
   };
 }
