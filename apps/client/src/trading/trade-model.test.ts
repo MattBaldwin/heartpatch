@@ -28,7 +28,10 @@ import {
   shelfLines,
   SHELF_FILTERS,
   SHELF_SORTS,
+  removePick,
+  setItemQuantity,
   stepItem,
+  thingsIn,
   tabBadges,
   togglePick,
   TRADE_TEXT,
@@ -114,6 +117,26 @@ describe('trade model (#271)', () => {
     // Tapping again takes it off, whatever the count.
     expect(togglePick(picks, timber(5))).toEqual([{ kind: 'squishy', squishyId: ID(1) }]);
     expect(lineKey(timber(1))).toBe(lineKey({ kind: 'item', itemId: 'timber', quantity: 4 }));
+  });
+
+  it('removes a pick whatever it is, and sets an item to an exact count within the shelf', () => {
+    const picks = togglePick(togglePick([], squishy(1)), timber(9));
+    expect(removePick(picks, lineKey(timber(1)))).toEqual([{ kind: 'squishy', squishyId: ID(1) }]);
+    expect(removePick(picks, lineKey(squishy(1)))).toEqual([
+      { kind: 'item', itemId: 'timber', quantity: 1 },
+    ]);
+    expect(removePick(picks, 'i:nothing')).toEqual(picks);
+    expect(setItemQuantity(picks, 'timber', 6, 9)[1]).toEqual({
+      kind: 'item',
+      itemId: 'timber',
+      quantity: 6,
+    });
+    // Never past the shelf, never below one (Remove is its own button), whole numbers.
+    expect(setItemQuantity(picks, 'timber', 99, 9)[1]).toMatchObject({ quantity: 9 });
+    expect(setItemQuantity(picks, 'timber', 0, 9)[1]).toMatchObject({ quantity: 1 });
+    expect(setItemQuantity(picks, 'timber', 2.7, 9)[1]).toMatchObject({ quantity: 2 });
+    expect(setItemQuantity(picks, 'stone', 4, 9)).toEqual(picks);
+    expect(thingsIn(setItemQuantity(picks, 'timber', 6, 9))).toBe(7);
   });
 
   it('says why "Send" waits, and builds the request (a gift asks for nothing)', () => {
@@ -209,7 +232,11 @@ describe('trade model (#271)', () => {
 
   it('keeps every line kid-safe', () => {
     const words = Object.values(TRADE_TEXT)
-      .map((v) => (typeof v === 'function' ? v('StarSam' as never) : v))
+      .map((v) =>
+        typeof v === 'function'
+          ? (v as (...args: never[]) => string)('StarSam' as never, 'StarSam' as never)
+          : v,
+      )
       .map((v) => (typeof v === 'string' ? v : Object.values(v).join(' ')))
       .join(' ');
     expect(findAvoidedWords(words)).toEqual([]);
