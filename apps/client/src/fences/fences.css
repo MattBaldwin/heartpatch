@@ -37,7 +37,7 @@
 /* A cost in the label ("Upgrade (10 🌿 Greens, 2 🪵 Timber)") can be wider
    than a phone's panel: the buttons share the row and wrap their words
    instead of running past the card's edge. */
-.fence-actions > .auth-button {
+.fence-actions > .hp-button {
   flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;

@@ -32,13 +32,8 @@ import { lodFor } from '../../procedural/motion.js';
 import { hpBack, hpButton } from '../../ui/button/button.js';
 import { el, messageOf } from '../../ui/dom.js';
 import { farHollowApi, type FarHollowApi } from '../../hollowed/far-hollow-api.js';
-import {
-  chestTarget,
-  helpersFor,
-  keepOffChest,
-  type ChestTarget,
-  type Helper,
-} from './crooked-bonus.js';
+import { chestTarget, helpersFor, type ChestTarget, type Helper } from './crooked-bonus.js';
+import { createDoorLights, doorLightLayout, doorLightPoints } from './crooked-door-light.js';
 import { CrookedBonusFx, type CrookedBonusFxStats } from './crooked-bonus-fx.js';
 import {
   arrivalSpot,
@@ -50,6 +45,7 @@ import {
   farEnd,
   doorState,
   fitShot,
+  focusShot,
   floorBox,
   floorOf,
   floors,
@@ -59,10 +55,12 @@ import {
   roomOf,
   roomStart,
   roomsOn,
-  tapGoal,
   thingPoint,
+  WAKE_LOOK,
+  type CrookedShot,
   type CrookedTarget,
   type FloorPoint,
+  walkStep,
 } from './crooked-plan.js';
 import {
   CrookedScene,
@@ -77,15 +75,10 @@ import {
   type EchoHint,
   type EchoSpot,
 } from './crooked-echoes.js';
+import { houseStep, settle, tapWalk, walkPath } from './crooked-furniture.js';
 import { createPeekaboo, type PeekPhase } from './crooked-peekaboo.js';
 import { createCrookedRelight } from './crooked-relight.js';
-import {
-  atticLines,
-  atticTarget,
-  houseStep,
-  scrapsLeft,
-  type AtticTarget,
-} from './crooked-attic.js';
+import { atticLines, atticTarget, scrapsLeft, type AtticTarget } from './crooked-attic.js';
 import type { PuzzleDebug } from '../../hollowed/puzzle-sheet.js';
 import {
   CROOKED_ATTIC_TEXT as A,
@@ -167,6 +160,15 @@ export interface CrookedDebug {
   readonly dark: boolean;
   readonly tiptoe: boolean;
   readonly keeper: FloorPoint;
+  /** Each woken door's cue on screen (CSS px), over the dark: its foot, height and sparkles. */
+  readonly doorLights: readonly {
+    door: string;
+    power: string;
+    at: FloorPoint;
+    foot: { x: number; y: number };
+    height: number;
+    sparkles: number;
+  }[];
   readonly target: {
     kind: 'thing' | 'door' | 'chest' | 'attic';
     id: string;
@@ -222,6 +224,8 @@ export interface CrookedScreen {
   readonly debug: CrookedDebug;
   /** Dev only (captures, e2e): stands the Keeper at a floor point of the room I'm in. */
   devPlace: (x: number, z: number) => void;
+  /** Dev only (captures): the camera looks at a door of the room I'm in from a fixed shot (the same asleep and woken), for good. */
+  devLook: (doorId: string) => void;
   /** Dev only (captures): stops the peekaboo's clock at `ms` from a catch, or lets it run (`null`). */
   devPeek: (ms: number | null) => void;
   /** Dev only (captures): draws the echoes at server time `ms`, or on the clock again (`null`). */
@@ -298,7 +302,8 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   let frame = 0;
   let lastFrame = 0;
   let stick: { id: number; x0: number; y0: number; x: number; y: number } | null = null;
-  let walk: FloorPoint | null = null;
+  /** A tap-walk's way round the furniture, the next point first. */
+  let walk: FloorPoint[] | null = null;
   let press: { id: number; x: number; y: number; moved: boolean } | null = null;
   let hold: { since: number; timer: ReturnType<typeof setTimeout> } | null = null;
   let darkPaint: DarkPaint | null = null;
@@ -321,6 +326,10 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   /** A catch's view, held until the peekaboo's dark is full (the room changes unseen). */
   let pendingCatch: FarHollowView | null = null;
   let echoTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Eases the camera back to the room after a woken door's look. */
+  let lookTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The door the camera is looking at, while it does. */
+  let lookAt: { door: FloorPoint; shot: CrookedShot; fixed: FloorPoint | null } | null = null;
   let caught: { echo: string; backTo: string } | null = null;
   /** Dev only: the echoes drawn at this server time (captures). */
   let echoesPinned: number | null = null;
@@ -329,6 +338,11 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   const here = () => {
     const h = house();
     return h ? roomOf(h.room) : null;
+  };
+  /** Where the Keeper stands arriving at `p` in `room`: beside any furniture there. */
+  const standIn = (room: CrookedRoom, p: FloorPoint): FloorPoint => {
+    const h = house();
+    return h ? settle(room, h, p) : p;
   };
 
   // ── DOM ───────────────────────────────────────────────────────────────
@@ -440,11 +454,15 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       return [loop.id, mark] as const;
     }),
   );
+  const doorLights = createDoorLights();
+  // Reduced motion keeps the settled glow and drops the sparkles' drift and the burst.
+  doorLights.root.classList.toggle('crooked-door-calm', reducedMotion());
   const overlay = el(
     'div',
     { class: 'crooked', 'data-testid': 'crooked' },
     ground,
     dark,
+    doorLights.root,
     ...marks.values(),
     top,
     tabs,
@@ -670,7 +688,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       mapTap(p);
       return;
     }
-    walk = tapGoal(room, h, keeperAt, p);
+    walk = tapWalk(room, h, keeperAt, p);
     wake();
   }
 
@@ -715,26 +733,31 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
         }
         walking = true;
       } else if (walk) {
-        const dx = walk.x - keeperAt.x;
-        const dz = walk.z - keeperAt.z;
-        const d = Math.hypot(dx, dz);
-        if (d <= 0.05) walk = null;
+        let next = walk[0];
+        // On to the next point once this one's reached.
+        while (next && Math.hypot(next.x - keeperAt.x, next.z - keeperAt.z) <= 0.05) {
+          walk.shift();
+          next = walk[0];
+        }
+        if (!next) walk = null;
         else {
-          const k = Math.min(1, speed / d);
+          const dx = next.x - keeperAt.x;
+          const dz = next.z - keeperAt.z;
+          const k = Math.min(1, speed / Math.hypot(dx, dz));
           want = { x: keeperAt.x + dx * k, z: keeperAt.z + dz * k };
-          heading = yawToward(keeperAt, walk);
+          heading = yawToward(keeperAt, next);
           walking = true;
         }
       }
     }
     let moved = false;
     if (want) {
-      // The walls, the doors and the attic's chest (a walk into it stops beside it).
-      const r = houseStep(room, h, want);
+      // The walls, the doors and the furniture (a walk into it slides along, or stops beside it).
+      const r = houseStep(room, h, keeperAt, want);
       moved = r.at.x !== keeperAt.x || r.at.z !== keeperAt.z;
       // A tap-walk that a wall stopped is done.
       if (walk && !moved) walk = null;
-      keeperAt = keepOffChest(room, r.at);
+      keeperAt = r.at;
       if (r.bumped !== bumped) {
         bumped = r.bumped;
         if (bumped) findTarget(true);
@@ -877,7 +900,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
         if (pendingCatch) view = pendingCatch;
         pendingCatch = null;
         const backTo = roomOf(by.backTo);
-        if (backTo) keeperAt = roomStart(backTo);
+        if (backTo) keeperAt = standIn(backTo, roomStart(backTo));
         yaw = 0;
         enterShown(true);
       },
@@ -989,6 +1012,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   /** What a fix did: the thing put right, maybe a key, maybe the room's bloom and its scrap. */
   function showFix(reply: CrookedFixResponse, room: CrookedRoom, thing: CrookedThing): void {
     apply(reply.view);
+    if (reply.key || reply.bloom) options.cue?.(reply.bloom ? 'room-bloom' : 'key-found');
     if (reply.key) {
       scene3d?.showKey(thingPoint(room, thing));
       cards.push({ kind: 'key', title: T.keyTitle(reply.key.name), line: T.keyLine(thing.name) });
@@ -1150,13 +1174,14 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
           z: end.point.z + end.inward.z * STEP_BACK,
         }
       : null;
-    walk = back;
+    const h = house();
+    walk = back && room && h ? walkPath(room, h, keeperAt, back) : null;
     options.cue?.('pop');
     const woke = () => {
       if (at !== generation) return;
       powering = false;
       apply(reply.view);
-      options.cue?.('twinkle');
+      options.cue?.('door-wake');
       // What the friend did, and where it leads, on a card (the moment's payoff).
       const beyond = room ? farEnd(door, room.id)?.room.name : undefined;
       cards.push({
@@ -1165,6 +1190,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
         line: beyond ? B.wokeLine(beyond) : B.wokeLineAny,
       });
       redraw();
+      if (end) lookAtDoor(end.point);
       renderCard();
     };
     const fx = bonusFx;
@@ -1185,7 +1211,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     apply(reply.view);
     const friend = reply.friend;
     const species = friend ? GAME_DATA.species.find((sp) => sp.id === friend.speciesId) : null;
-    options.cue?.('pop');
+    options.cue?.('chest');
     bonusFx?.openChest(
       room.id,
       friend ? { speciesId: friend.speciesId, instanceId: friend.battleId } : null,
@@ -1211,7 +1237,6 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     const at = generation;
     const show = () => {
       if (at !== generation) return;
-      options.cue?.('twinkle');
       renderCard();
     };
     if (reducedMotion()) show();
@@ -1232,10 +1257,10 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       // Not let through (offline, say): back a step into the room.
       const end = doorEnd(door, from.id);
       if (end)
-        keeperAt = {
+        keeperAt = standIn(from, {
           x: end.point.x + end.inward.x * CROOKED_WALK.arriveIn,
           z: end.point.z + end.inward.z * CROOKED_WALK.arriveIn,
-        };
+        });
       scene3d?.moveKeeper(keeperAt, yaw);
       options.invalidate();
       return;
@@ -1248,7 +1273,9 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     apply(reply.view);
     const now = house();
     if (now) {
-      keeperAt = arrivalSpot(door, now.room) ?? keeperAt;
+      const there = roomOf(now.room);
+      const spot = arrivalSpot(door, now.room);
+      if (there && spot) keeperAt = standIn(there, spot);
       const end = doorEnd(door, now.room);
       if (end) yaw = faceYaw(end.inward.x, end.inward.z);
     }
@@ -1281,7 +1308,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       apply(reply.view);
       const now = house();
       const there = now ? roomOf(now.room) : null;
-      if (there) keeperAt = roomStart(there);
+      if (there) keeperAt = standIn(there, roomStart(there));
       mapShown = false;
       enterShown(true);
     })();
@@ -1344,7 +1371,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     if (!reply) return;
     // The moment starts before the view that shows the chest open.
     scene3d?.openAtticChest();
-    options.cue?.('pop');
+    options.cue?.('chest-big');
     apply(reply.view);
     cards.push({
       kind: 'attic',
@@ -1364,7 +1391,6 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   function showAtticCard(): void {
     if (!atticCardWaiting || (scene3d && !scene3d.atticCardDue())) return;
     atticCardWaiting = false;
-    options.cue?.('twinkle');
     renderCard();
   }
 
@@ -1373,6 +1399,9 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
   function apply(fresh: FarHollowView): void {
     view = fresh;
     if (fresh.house) clock = serverClock(fresh.house.serverTime, Date.now());
+    // A thing put right stands up where it lay: out of it, if I'm standing there.
+    const room = here();
+    if (room) keeperAt = standIn(room, keeperAt);
   }
 
   /** Shows the room I'm in (and its floor), and fits the camera to it. */
@@ -1401,22 +1430,68 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     wake();
   }
 
-  function refit(cut: boolean): void {
+  /** The shot that fits the room (or the floor, on the map) in the free band. */
+  function fitted(): CrookedShot | null {
     const s = scene3d;
     const room = here();
-    if (!s || !room) return;
+    if (!s || !room) return null;
     const w = Math.max(1, window.innerWidth);
     const h = Math.max(1, window.innerHeight);
     const box = mapShown ? floorBox(floor) : room.box;
     const bands = hudBands(h);
     hudTop = mapShown ? 0 : bands.top;
-    const shot = fitShot(
+    return fitShot(
       box,
       { aspect: w / h, fov: s.fov, top: bands.top / h, bottom: bands.bottom / h },
       mapShown ? CROOKED_CAMERA.mapPitch : CROOKED_CAMERA.pitch,
       mapShown ? CROOKED_CAMERA.mapMargin : CROOKED_CAMERA.margin,
     );
-    s.frame(shot, cut);
+  }
+
+  function refit(cut: boolean): void {
+    const shot = fitted();
+    if (!shot || !scene3d) return;
+    if (lookTimer !== null) clearTimeout(lookTimer);
+    lookTimer = null;
+    lookAt = null;
+    scene3d.frame(shot, cut);
+    options.invalidate();
+    wake();
+  }
+
+  /** The look's shot: the door near the middle, the Keeper still in frame (it follows as the Keeper moves). */
+  function lookFrame(): void {
+    if (!lookAt || !scene3d) return;
+    const { door, shot, fixed } = lookAt;
+    if (fixed) {
+      scene3d.frame(focusShot(shot, fixed), false);
+      return;
+    }
+    const k = WAKE_LOOK.towardsKeeper;
+    scene3d.frame(
+      focusShot(shot, {
+        x: door.x + (keeperAt.x - door.x) * k,
+        z: door.z + (keeperAt.z - door.z) * k,
+      }),
+      false,
+    );
+  }
+
+  /** A door just woke: the camera eases in to it (its light is the payoff), then back to the room. */
+  function lookAtDoor(
+    at: FloorPoint,
+    fixed: FloorPoint | null = null,
+    holdMs: number = WAKE_LOOK.holdMs,
+  ): void {
+    const shot = fitted();
+    if (!shot || !scene3d || mapShown || (reducedMotion() && fixed === null)) return;
+    if (lookTimer !== null) clearTimeout(lookTimer);
+    lookAt = { door: at, shot, fixed };
+    lookFrame();
+    lookTimer = setTimeout(() => {
+      lookTimer = null;
+      refit(false);
+    }, holdMs);
     options.invalidate();
     wake();
   }
@@ -1557,8 +1632,39 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
     bubbleText(text);
   };
 
-  /** The lantern's dark: a circle of light round the Keeper in a dark room (the existing DOM layer, #501 G). */
+  /** The woken doors' cues (a glow and sparkles on both sides), over the dark, where each door stands in the wall now. */
+  function renderDoorLights(): void {
+    const s = scene3d;
+    const doors = isOpen && !mapShown && s ? (bonusFx?.wokenDoors() ?? []) : [];
+    doorLights.set(
+      doors.map((door) => {
+        const points = doorLightPoints(door.at, door.inward);
+        const at = (k: keyof typeof points) => s?.screenOf(points[k][0], points[k][1]) ?? null;
+        const layout = doorLightLayout({
+          footLeft: at('footLeft'),
+          footRight: at('footRight'),
+          topLeft: at('topLeft'),
+          topRight: at('topRight'),
+        });
+        return { id: door.id, power: door.power, at: door.at, layout, fresh: door.fresh };
+      }),
+      { width: window.innerWidth, height: window.innerHeight },
+    );
+  }
+
   function renderDark(): void {
+    // The look at a woken door ends once the Keeper walks off: its dark must stay on screen.
+    if (lookAt) {
+      const { door } = lookAt;
+      if (Math.hypot(keeperAt.x - door.x, keeperAt.z - door.z) > WAKE_LOOK.keeperMax) refit(false);
+      else lookFrame();
+    }
+    renderDoorLights();
+    paintDark();
+  }
+
+  /** The lantern's dark: a circle of light round the Keeper in a dark room (the existing DOM layer, #501 G). */
+  function paintDark(): void {
     const s = scene3d;
     const on = isOpen && !mapShown && !roomLit();
     dark.classList.toggle('crooked-dark-on', on);
@@ -1751,7 +1857,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       // The server's clock comes with the view: the echoes drift on it from the first frame.
       apply(fresh);
       const room = roomOf(fresh.house.room) ?? roomOf(CROOKED_HOUSE.start);
-      keeperAt = room ? roomStart(room) : { x: 0, z: 0 };
+      keeperAt = room ? standIn(room, roomStart(room)) : { x: 0, z: 0 };
       yaw = 0;
       floor = floorOf(fresh.house.room);
       mapShown = false;
@@ -1787,10 +1893,12 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
 
   function hide(): void {
     generation += 1;
+    lookAt = null;
     isOpen = false;
     if (frame !== 0) cancelAnimationFrame(frame);
     frame = 0;
     if (noteTimer !== null) clearTimeout(noteTimer);
+    if (lookTimer !== null) clearTimeout(lookTimer);
     noteTimer = null;
     noteText = '';
     endHold();
@@ -1835,12 +1943,21 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
       // An open still waiting on its read never lands on a patch that went away.
       else if (!isOpen && id === null) generation += 1;
     },
+    devLook: (doorId) => {
+      const room = here();
+      const door = CROOKED_HOUSE.doors.find((d) => d.id === doorId);
+      const end = room && door ? doorEnd(door, room.id) : null;
+      if (!end) return;
+      // The door a little off the middle, the Keeper's side of the room in view.
+      const aim = { x: end.point.x + end.inward.x * 0.6, z: end.point.z + end.inward.z * 0.6 };
+      lookAtDoor(end.point, aim, 60 * 60 * 1000);
+    },
     devPlace: (x, z) => {
       const h = house();
       const room = here();
       if (!h || !room || !isOpen) return;
       walk = null;
-      keeperAt = keepOffChest(room, houseStep(room, h, { x, z }).at);
+      keeperAt = settle(room, h, walkStep(room, h, { x, z }).at);
       scene3d?.moveKeeper(keeperAt, yaw);
       findTarget(true);
       options.invalidate();
@@ -1916,6 +2033,7 @@ export function createCrookedScreen(options: CrookedScreenOptions): CrookedScree
           : null,
         powering,
         bonus: bonusFx?.stats ?? null,
+        doorLights: doorLights.debug(),
         echoes: spots.map((p) => ({
           loop: p.loop,
           room: p.room,

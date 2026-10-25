@@ -410,12 +410,16 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   const welcomeStill = el('ul', { class: 'factory-stop-lines' });
   const welcomeOk = el(
     'button',
-    { type: 'button', class: 'auth-button', 'data-testid': 'factory-welcome-ok' },
+    { type: 'button', class: 'hp-button hp-button-primary', 'data-testid': 'factory-welcome-ok' },
     FACTORY_TEXT.ok,
   );
   const welcomeSee = el(
     'button',
-    { type: 'button', class: 'auth-button auth-button-soft', 'data-testid': 'factory-welcome-see' },
+    {
+      type: 'button',
+      class: 'hp-button hp-button-secondary',
+      'data-testid': 'factory-welcome-see',
+    },
     FACTORY_TEXT.seeFactory,
   );
   const welcome = el(
@@ -453,7 +457,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   if (options.devTools) {
     const dev = el(
       'button',
-      { type: 'button', class: 'auth-button auth-button-soft auth-button-small' },
+      { type: 'button', class: 'hp-button hp-button-secondary hp-button-small' },
       TEXT.devGrant,
     );
     dev.addEventListener('click', () => {
@@ -468,7 +472,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       'button',
       {
         type: 'button',
-        class: 'auth-button auth-button-soft auth-button-small',
+        class: 'hp-button hp-button-secondary hp-button-small',
         'data-testid': 'factory-dev-ready',
       },
       TEXT.devFactory,
@@ -910,7 +914,11 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   // ── Drawing ───────────────────────────────────────────────────────────
 
   const button = (label: string, onTap: () => void, extra: Record<string, string> = {}) => {
-    const b = el('button', { type: 'button', class: 'auth-button bag-action', ...extra }, label);
+    const b = el(
+      'button',
+      { type: 'button', class: 'hp-button hp-button-primary bag-action', ...extra },
+      label,
+    );
     b.disabled = working;
     b.addEventListener('click', onTap);
     return b;
@@ -1087,7 +1095,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
                   () => {
                     openFactory(recipe.id);
                   },
-                  { 'data-queue': recipe.id, class: 'auth-button bag-action auth-button-soft' },
+                  { 'data-queue': recipe.id, class: 'hp-button hp-button-secondary bag-action' },
                 ),
               ]
             : [];

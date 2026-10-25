@@ -175,7 +175,7 @@ export function createJobs(options: JobsOptions): Jobs {
             'button',
             {
               type: 'button',
-              class: 'auth-button auth-button-soft auth-button-small',
+              class: 'hp-button hp-button-secondary hp-button-small',
               'data-testid': 'tile-send-gatherer',
             },
             JOBS_TEXT.sendGatherer,
@@ -197,7 +197,7 @@ export function createJobs(options: JobsOptions): Jobs {
         'button',
         {
           type: 'button',
-          class: 'auth-button auth-button-soft auth-button-small',
+          class: 'hp-button hp-button-secondary hp-button-small',
           'data-testid': 'team-open',
         },
         `⚔️ ${JOBS_TEXT.teamButton}`,
@@ -206,7 +206,7 @@ export function createJobs(options: JobsOptions): Jobs {
         'button',
         {
           type: 'button',
-          class: 'auth-button auth-button-soft auth-button-small',
+          class: 'hp-button hp-button-secondary hp-button-small',
           'data-testid': 'jobs-open',
         },
         `🧺 ${JOBS_TEXT.jobsButton}`,

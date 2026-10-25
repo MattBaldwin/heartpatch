@@ -29,6 +29,7 @@ import { listenForTaps } from '../map/tap-detector.js';
 import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
+import { buttonClass } from '../ui/button/button.js';
 import { el, messageOf } from '../ui/dom.js';
 import { rarityDot } from '../ui/rarity/rarity.js';
 import { HOME_SHEET, MOOD_CUES, WANDER } from './home-config.js';
@@ -489,7 +490,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       'button',
       {
         type: 'button',
-        class: `auth-button home-button${soft ? ' auth-button-soft' : ''} ${more}`.trim(),
+        class:
+          `${buttonClass({ variant: soft ? 'secondary' : 'primary' })} home-button ${more}`.trim(),
         ...attrs,
       },
       label,
@@ -1570,8 +1572,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   ) => {
     const look =
       soft === 'small'
-        ? 'auth-button auth-button-small'
-        : `auth-button bag-action${soft ? ' auth-button-soft auth-button-small' : ''}`;
+        ? 'hp-button hp-button-primary hp-button-small'
+        : `${buttonClass({ variant: soft ? 'secondary' : 'primary', small: soft })} bag-action`;
     const b = el(
       'button',
       {
@@ -2075,7 +2077,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           'button',
           {
             type: 'button',
-            class: 'auth-button bag-action tile-action-pair',
+            class: 'hp-button hp-button-primary bag-action tile-action-pair',
             'data-testid': 'tile-home',
           },
           `🏡 ${HOME_TEXT.goHome}`,

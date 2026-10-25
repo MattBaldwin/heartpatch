@@ -337,6 +337,42 @@ describe('keeperParams', () => {
     expect(looks.size).toBe(KEEPER_DATA.faces.length * KEEPER_DATA.bodies.length);
   });
 
+  it('joins chunky arms to the torso and a hand to each arm end, on every body (#657)', () => {
+    for (const body of KEEPER_DATA.bodies) {
+      const p = keeperParams({ ...defaultKeeperConfig(BASES[0]!), body: body.id }, KEEPER_DATA);
+      // Built in order: leg, leg, arm, hand, arm, hand, head.
+      const [, , armL, handL, armR, handR] = piecesOf(p, 'body');
+      const torso = p.sockets.top.size;
+      for (const [arm, hand] of [
+        [armL!, handL!],
+        [armR!, handR!],
+      ] as const) {
+        const id = body.id;
+        // Chunky: at least the thinnest limb, not a slab (thick in both directions).
+        expect(arm.size[0], id).toBeGreaterThanOrEqual(
+          KEEPER.minLimb * KEEPER.height * body.height,
+        );
+        expect(arm.size[2], id).toBe(arm.size[0]);
+        // The hand is at least as wide as the arm and sits inside the arm's reach: joined, not floating.
+        expect(hand.size[0], id).toBeGreaterThan(arm.size[0]);
+        const reach = Math.hypot(hand.at[0] - arm.at[0], hand.at[1] - arm.at[1]);
+        expect(reach, id).toBeLessThan(arm.size[1] / 2 + hand.size[0] / 2);
+        expect(reach, id).toBeGreaterThan(arm.size[1] / 2 - hand.size[0]);
+        // The arm tilts the way the hand is placed: its foot swings out, not in.
+        const foot = arm.at[0] + Math.sin((arm.turn[2] * Math.PI) / 180) * (arm.size[1] / 2);
+        expect(Math.abs(foot), id).toBeGreaterThan(Math.abs(arm.at[0]));
+        // The shoulder is on the torso's side, not out beside it or behind it.
+        const side = Math.sign(arm.at[0]);
+        const top =
+          arm.at[0] - side * Math.abs(Math.sin((arm.turn[2] * Math.PI) / 180)) * (arm.size[1] / 2);
+        expect(Math.abs(top), id).toBeLessThan(torso[0] / 2);
+        expect(Math.abs(arm.at[2]), id).toBeLessThan(torso[2] / 4);
+        // The hand hangs clear of the hips: its middle is outside the shorts' side.
+        expect(Math.abs(hand.at[0]), id).toBeGreaterThan(p.sockets.bottom.size[0] / 2);
+      }
+    }
+  });
+
   it('changes only the head with the face, and the body with the body (#372)', () => {
     const pip = defaultKeeperConfig(BASES[0]!);
     const own = keeperParams(pip, KEEPER_DATA);
@@ -362,7 +398,7 @@ describe('keeperParams', () => {
   // Keeper) is a deliberate one. The e2e test checks the same hash in WebKit.
   it('keeps its build stable', () => {
     expect(keeperHash(keeperParams(GOLDEN_CONFIG, KEEPER_DATA))).toMatchInlineSnapshot(
-      `"4c9ed66e81af00f0cc5379ce835aa96d"`,
+      `"ec7a73d840234fb9963b8cd532ccc762"`,
     );
   });
 });
@@ -614,7 +650,7 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
       }
     }
     expect(lines.length).toBe(120);
-    expect(hashString(lines.join('\n'))).toBe('15c569666292584f11157854a1223e1c');
+    expect(hashString(lines.join('\n'))).toBe('86853c478b31bcf68ad84bb3053adb81');
   });
 
   it('draws worn ids from the catalog, skipping ones this client does not know', () => {

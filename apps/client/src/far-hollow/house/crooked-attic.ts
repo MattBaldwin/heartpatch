@@ -7,7 +7,7 @@ import {
 import type { Part } from '../../explore/kit-mesh.js';
 import { CELLAR_CHESTS } from '../../hollowed/hollowed-config.js';
 import { ball, blk, joyed, ring, tube } from './crooked-kit.js';
-import { CROOKED_WALK, walkStep, type FloorPoint, type WalkResult } from './crooked-plan.js';
+import type { FloorPoint } from './crooked-plan.js';
 import { CROOKED_ATTIC_TEXT as A } from './crooked-text.js';
 
 // The Crooked House's attic (#306 6f, owner decision 4), pure so every case
@@ -23,7 +23,7 @@ export const CROOKED_ATTIC = {
   north: 0.12, // TUNE
   /** The big button names the chest this close, metres (it's big). */
   reach: 2.0, // TUNE
-  /** The chest's half-size on the floor, metres (the cellar's big chest), to walk round. */
+  /** The chest's half-size on the floor, metres (the cellar's big chest), to walk round (`crooked-furniture.ts`). */
   half: { x: 1.0, z: 0.63 },
   /** The lectern with the story page, from the attic's middle (x east, z north). */
   lectern: [-2.1, 1.0] as const, // TUNE
@@ -64,35 +64,6 @@ export function atticTarget(
   return Math.hypot(p.x - at.x, p.z - at.z) <= CROOKED_ATTIC.reach
     ? { kind: 'attic', room, at: p }
     : null;
-}
-
-/** Walking into the big chest stops beside it, as a wall does. */
-export function keepOffAtticChest(room: CrookedRoom, at: FloorPoint): FloorPoint {
-  if (room.kind !== 'attic') return at;
-  const p = atticChestPoint(room);
-  const hx = CROOKED_ATTIC.half.x + CROOKED_WALK.margin;
-  const hz = CROOKED_ATTIC.half.z + CROOKED_WALK.margin;
-  const dx = at.x - p.x;
-  const dz = at.z - p.z;
-  if (Math.abs(dx) >= hx || Math.abs(dz) >= hz) return at;
-  // Out by the nearer side.
-  return hx - Math.abs(dx) < hz - Math.abs(dz)
-    ? { x: p.x + Math.sign(dx || 1) * hx, z: at.z }
-    : { x: at.x, z: p.z + Math.sign(dz || -1) * hz };
-}
-
-/**
- * One step of the walk with the attic's chest solid: the walls and doors'
- * step (`walkStep`), then out of the chest. The walk compares this point, so
- * a walk into the chest stops beside it instead of pressing on every frame.
- */
-export function houseStep(
-  room: CrookedRoom,
-  view: Pick<CrookedHouseView, 'unlocked' | 'bonusOpen' | 'keys'>,
-  to: FloorPoint,
-): WalkResult {
-  const r = walkStep(room, view, to);
-  return { ...r, at: keepOffAtticChest(room, r.at) };
 }
 
 /** The big chest's reward card: one line each for the page, the cloak, the title and the pile. */

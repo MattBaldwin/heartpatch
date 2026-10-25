@@ -291,6 +291,19 @@ export function nearestTarget(
   return best;
 }
 
+/** The crooked thing a tap at `p` picks: the first within `tapPick` of it. */
+export function tappedThing(
+  room: CrookedRoom,
+  view: Pick<CrookedHouseView, 'rooms'>,
+  p: FloorPoint,
+): CrookedThing | null {
+  for (const thing of crookedThings(room, view)) {
+    const t = thingPoint(room, thing);
+    if (Math.hypot(t.x - p.x, t.z - p.z) <= CROOKED_WALK.tapPick) return thing;
+  }
+  return null;
+}
+
 /** A tap on the floor at `p`: a crooked thing near it walks up beside it, else straight there. */
 export function tapGoal(
   room: CrookedRoom,
@@ -298,16 +311,14 @@ export function tapGoal(
   keeper: FloorPoint,
   p: FloorPoint,
 ): FloorPoint {
-  for (const thing of crookedThings(room, view)) {
-    const t = thingPoint(room, thing);
-    if (Math.hypot(t.x - p.x, t.z - p.z) > CROOKED_WALK.tapPick) continue;
-    // Beside it, on the Keeper's side, an arm's length off.
-    const dx = keeper.x - t.x;
-    const dz = keeper.z - t.z;
-    const l = Math.hypot(dx, dz) || 1;
-    return { x: t.x + (dx / l) * 0.9, z: t.z + (dz / l) * 0.9 };
-  }
-  return p;
+  const thing = tappedThing(room, view, p);
+  if (!thing) return p;
+  // Beside it, on the Keeper's side, an arm's length off.
+  const t = thingPoint(room, thing);
+  const dx = keeper.x - t.x;
+  const dz = keeper.z - t.z;
+  const l = Math.hypot(dx, dz) || 1;
+  return { x: t.x + (dx / l) * 0.9, z: t.z + (dz / l) * 0.9 };
 }
 
 /** The room the server says I'm in should be on the floor shown; else the floor it's on. */
@@ -352,6 +363,28 @@ export const CROOKED_CAMERA = {
   /** The far wall's height shows above the floor. */
   wallHeight: 2.3,
 } as const;
+
+/** The look at a door that just woke (#306): how far the camera moves to it, how close it comes, how long it holds. */
+export const WAKE_LOOK = {
+  /** Where the look centres: this share of the way from the door to the Keeper (the door stays near the middle, the Keeper in frame). */
+  towardsKeeper: 0.2, // TUNE
+  /** The fitted distance times this: a closer look. */
+  zoom: 0.9, // TUNE
+  /** Then the camera eases back to the room, ms. */
+  holdMs: 9000, // TUNE
+  /** Or sooner, once the Keeper is further than this from the door, m (the lantern's dark must stay on screen). */
+  keeperMax: 5.5, // TUNE
+} as const;
+
+/** `shot`, brought closer and aimed at the floor point `at`. Pure. */
+export function focusShot(shot: CrookedShot, at: { x: number; z: number }): CrookedShot {
+  const { zoom } = WAKE_LOOK;
+  return {
+    pitch: shot.pitch,
+    distance: shot.distance * zoom,
+    target: { x: at.x, z: at.z },
+  };
+}
 
 /**
  * The shot that fits `box` in the screen's free band: `aspect` is width over

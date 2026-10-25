@@ -1,4 +1,5 @@
 import type { ItemCounts } from '@heartpatch/shared';
+import { buttonClass } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import { iconNode } from '../ui/line-icons.js';
 import {
@@ -49,7 +50,7 @@ const button = (label: string, testId: string, soft: boolean, onTap: () => void)
     'button',
     {
       type: 'button',
-      class: `auth-button bag-action${soft ? ' auth-button-soft' : ''}`,
+      class: `${buttonClass({ variant: soft ? 'secondary' : 'primary' })} bag-action`,
       'data-testid': testId,
     },
     label,

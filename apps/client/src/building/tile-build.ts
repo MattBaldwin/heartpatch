@@ -130,7 +130,7 @@ export function createTileBuild(options: TileBuildOptions): TileBuild {
         'button',
         {
           type: 'button',
-          class: 'auth-button bag-action',
+          class: 'hp-button hp-button-primary bag-action',
           'data-testid': 'tile-build',
         },
         BUILD_TEXT.build,

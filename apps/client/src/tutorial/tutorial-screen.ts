@@ -176,7 +176,7 @@ export function createTutorialScreen(options: TutorialScreenOptions): TutorialSc
   const entryButton = (label: string, testId: string, action: () => Promise<void>) => {
     const node = el(
       'button',
-      { type: 'button', class: 'auth-button auth-button-soft', 'data-testid': testId },
+      { type: 'button', class: 'hp-button hp-button-secondary', 'data-testid': testId },
       label,
     );
     node.addEventListener('click', () => {

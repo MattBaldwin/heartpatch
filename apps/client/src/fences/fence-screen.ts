@@ -12,6 +12,7 @@ import type { TileActions } from '../map/map-screen.js';
 import type { TerritoryScreen } from '../territory/territory-screen.js';
 import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
+import { buttonClass } from '../ui/button/button.js';
 import { el, messageOf } from '../ui/dom.js';
 import { fenceApi, type FenceApi } from './fence-api.js';
 import {
@@ -159,7 +160,7 @@ export function createFenceScreen(options: FenceScreenOptions = {}): FenceScreen
       'button',
       {
         type: 'button',
-        class: `auth-button bag-action${soft ? ' auth-button-soft' : ''}`,
+        class: `${buttonClass({ variant: soft ? 'secondary' : 'primary' })} bag-action`,
         ...extra,
       },
       label,

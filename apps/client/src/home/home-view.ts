@@ -233,6 +233,8 @@ export function landTileOffer(
       (b) =>
         b.placement === 'land' &&
         b.id !== LAND_FIRE.id &&
+        // A Wild Isle Bridge (#621) is `land` too, but never on a Cozy Patch.
+        isBuildable(RULES, b) &&
         inSeason(b, seasons) &&
         Object.keys(shortfall(home.items, buildCost(b))).length === 0,
     ) ?? null;

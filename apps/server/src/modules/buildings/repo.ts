@@ -43,6 +43,8 @@ export interface TargetTileRow extends HomeTileRow {
   homeSlot: number | null;
   /** A grey village's tile, or a won village's ring (#306). */
   communityId: string | null;
+  /** Its terrain: a bridge stands on a river (#621 W1-5b). */
+  terrain: string;
 }
 
 export interface BuildingRow {
@@ -72,6 +74,12 @@ export interface BuildingRow {
   upkeepRank: number | null;
   /** Its owner's homestead flags for the tile (#199), or null when there's no explore row. */
   homestead: { joinedAt: Date | null; pausedAt: Date | null; resumedAt: Date | null } | null;
+  /** Wild Isle (#621): knocked about by a storm at this instant, or null. */
+  damagedAt: Date | null;
+  /** The weather front that knocked it, or null. */
+  damagedBy: string | null;
+  /** Storm fronts ending over its tile by here are rolled for; null reads as `placedAt`. */
+  weatherCheckedThrough: Date | null;
 }
 
 export type NewBuilding = Pick<
@@ -84,6 +92,13 @@ export interface ProductionUpdate {
   producedSince?: Date | null;
   pausedAt?: Date | null;
   upkeepPaidThrough?: string | null;
+}
+
+/** What the weather writes back to a building (#621); fields left out stay. */
+export interface WeatherUpdate {
+  damagedAt?: Date | null;
+  damagedBy?: string | null;
+  weatherCheckedThrough?: Date | null;
 }
 
 export interface HomeSquishyRow {
@@ -279,7 +294,10 @@ export interface BuildingsRepo {
   lockFires: (mapId: string, userId: string) => Promise<BuildingRow[]>;
   /** The player's buildings on this map, by tile then spot. */
   listOwned: (mapId: string, userId: string) => Promise<BuildingRow[]>;
-  /** Every building on the map, on tiles its owner still holds, by tile then spot. */
+  /**
+   * Every building on the map, on tiles its owner still holds (and bridges,
+   * on river tiles nobody owns: #621 W1-5b), by tile then spot.
+   */
   listOnMap: (mapId: string) => Promise<BuildingRow[]>;
   lockBuilding: (buildingRowId: string) => Promise<BuildingRow | null>;
   /**
@@ -291,6 +309,8 @@ export interface BuildingsRepo {
   lockUpkeepBuildings: (mapId: string, userId: string) => Promise<BuildingRow[]>;
   /** Writes a resource building's output count and upkeep state (#601). */
   setProduction: (buildingRowId: string, update: ProductionUpdate) => Promise<void>;
+  /** Writes a building's storm knock and how far its weather is rolled (#621). Lock it first. */
+  setWeather: (buildingRowId: string, update: WeatherUpdate) => Promise<void>;
   /**
    * Sets the upkeep order (#601 Q5): each id's rank (its index), and null
    * for the player's other upkeep buildings. Lock them first (`lockUpkeepBuildings`).
@@ -366,6 +386,9 @@ const buildingColumns = {
     pausedAt: tileExplore.pausedAt,
     resumedAt: tileExplore.resumedAt,
   },
+  damagedAt: buildings.damagedAt,
+  damagedBy: buildings.damagedBy,
+  weatherCheckedThrough: buildings.weatherCheckedThrough,
 };
 
 const squishyColumns = {
@@ -454,6 +477,7 @@ function queries(db: Executor): BuildingsRepo {
           ownerUserId: tiles.ownerUserId,
           homeSlot: tiles.homeSlot,
           communityId: tiles.communityId,
+          terrain: tiles.terrain,
         })
         .from(tiles)
         .where(
@@ -773,7 +797,15 @@ function queries(db: Executor): BuildingsRepo {
     listOnMap: async (mapId) =>
       (
         await selectBuildings()
-          .where(and(eq(buildings.mapId, mapId), eq(tiles.ownerUserId, buildings.ownerUserId)))
+          .where(
+            and(
+              eq(buildings.mapId, mapId),
+              or(
+                eq(tiles.ownerUserId, buildings.ownerUserId),
+                and(isNull(tiles.ownerUserId), eq(buildings.kind, 'travel')),
+              ),
+            ),
+          )
           .orderBy(asc(tiles.q), asc(tiles.r), asc(buildings.spot))
       ).map(toBuilding),
 
@@ -816,6 +848,11 @@ function queries(db: Executor): BuildingsRepo {
       ).map(toBuilding),
 
     setProduction: async (buildingRowId, update) => {
+      if (Object.keys(update).length === 0) return;
+      await db.update(buildings).set(update).where(eq(buildings.id, buildingRowId));
+    },
+
+    setWeather: async (buildingRowId, update) => {
       if (Object.keys(update).length === 0) return;
       await db.update(buildings).set(update).where(eq(buildings.id, buildingRowId));
     },

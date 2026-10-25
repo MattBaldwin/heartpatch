@@ -1,0 +1,172 @@
+/* A woken power door's cue (#654), over the house's dark: a soft glow and a
+   few sparkles on both sides of the doorway, in its power's colour (`--glow`,
+   with a lighter `--hot` middle). Placed by `crooked-door-light.ts`: one
+   composited translate-and-scale carries them all. A door that just woke
+   bursts, then settles. Reduced motion keeps the settled glow and drops the
+   drift and the burst. */
+
+.crooked-door-lights {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  overflow: hidden;
+  contain: strict;
+  pointer-events: none;
+}
+
+.crooked-door-light[hidden] {
+  display: none;
+}
+
+/* One side's glow, in the scaled space of the sparkles (100 = the door's
+   height): a tall soft oval, hot in the middle, standing on the floor. */
+.crooked-door-side-glow {
+  position: absolute;
+  bottom: 0;
+  left: -22px;
+  width: 44px;
+  height: 92px;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--hot) 75%, transparent) 0,
+    color-mix(in srgb, var(--glow) 45%, transparent) 40%,
+    transparent 72%
+  );
+  opacity: 0.85;
+  transform-origin: 50% 100%;
+}
+
+.crooked-door-sparks {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: none;
+}
+
+/* The sparkles' anchor: the door's foot middle, scaled to the door's height. */
+.crooked-door-sparks {
+  width: 0;
+  height: 0;
+}
+
+.crooked-door-lane {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.crooked-door-spark {
+  position: absolute;
+  top: var(--y);
+  left: 0;
+  display: none;
+  width: var(--size, 8px);
+  height: var(--size, 8px);
+  margin: calc(var(--size, 8px) / -2) 0 0 calc(var(--size, 8px) / -2);
+  background: var(--spark);
+  box-shadow: 0 0 6px 1px color-mix(in srgb, var(--spark) 70%, transparent);
+  opacity: 0;
+}
+
+/* Fire's embers: soft round puffs with a hot middle. */
+.crooked-door-spark-puff {
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff3c4 0 25%, var(--spark) 60%);
+}
+
+/* Leaf's little leaves. */
+.crooked-door-spark-leaf {
+  border-radius: 0 100%;
+}
+
+/* Water's droplets, round end down. */
+.crooked-door-spark-drop {
+  border-radius: 50% 0 50% 50%;
+  rotate: -45deg;
+}
+
+/* Light's motes: little four-point stars. */
+.crooked-door-spark-star {
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .crooked-door-lights:not(.crooked-door-calm) .crooked-door-spark:not(.crooked-door-burst) {
+    display: block;
+    animation: crooked-door-drift var(--life, 4s) linear var(--delay, 0s) infinite;
+  }
+
+  .crooked-door-lights:not(.crooked-door-calm) .crooked-door-light-fresh .crooked-door-burst {
+    display: block;
+    animation: crooked-door-puff 1.6s ease-out var(--burst-delay, 0s) both;
+  }
+
+  .crooked-door-light-fresh .crooked-door-side-glow {
+    animation: crooked-door-wake var(--pulse, 2.4s) ease-out;
+  }
+}
+
+/* Up and away, swaying a little, fading in and out (transform and opacity only). */
+@keyframes crooked-door-drift {
+  0% {
+    transform: translate(0, 0) scale(0.6);
+    opacity: 0;
+  }
+
+  15% {
+    opacity: 0.95;
+  }
+
+  50% {
+    transform: translate(var(--sway, 6px), -28px) scale(1);
+  }
+
+  80% {
+    opacity: 0.7;
+  }
+
+  100% {
+    transform: translate(0, -58px) scale(0.7);
+    opacity: 0;
+  }
+}
+
+/* A woken door bursts: the glows swell and brighten, then settle (transform and opacity only). */
+@keyframes crooked-door-wake {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+
+  25% {
+    transform: scale(1.3, 1.35);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+}
+
+/* The burst's puff: sparkles pop out brighter, climb and fade, once (transform and opacity only). */
+@keyframes crooked-door-puff {
+  0% {
+    transform: translate(0, 0) scale(0.3);
+    opacity: 0;
+  }
+
+  20% {
+    transform: translate(calc(var(--sway, 6px) * 0.4), -12px) scale(1.4);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate(var(--sway, 6px), -64px) scale(0.5);
+    opacity: 0;
+  }
+}

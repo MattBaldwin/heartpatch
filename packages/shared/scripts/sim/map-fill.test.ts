@@ -12,6 +12,7 @@ import {
   MAP_FILL_SCENARIOS,
   NO_FADING,
   PART_TIME,
+  WILD_ISLE_FILL_GATE,
   type MapFillScenario,
 } from './map-fill-config.js';
 import { awayTiles, renderMapFill, summariseMapFill } from './map-fill-report.js';
@@ -27,6 +28,17 @@ const scenario = (id: string): MapFillScenario => {
 const KEPT = 19;
 
 describe('runMapFill', () => {
+  it('lets every casual kid on a Wild Isle reach the gate, water and all (#621)', () => {
+    const { tiles, byDay } = WILD_ISLE_FILL_GATE;
+    for (const id of ['wild-casual-6', 'wild-mixed-6']) {
+      const run = runMapFill(scenario(id), FADING_GENTLE, { ...SHORT, days: byDay });
+      const day = run.days[byDay - 1]!;
+      run.scenario.seats.forEach((seat, s) => {
+        if (seat.kid.id === 'casual') expect(day.tiles[s]).toBeGreaterThanOrEqual(tiles);
+      });
+    }
+  });
+
   it('gives the same run for the same config and data', () => {
     const run = () => runMapFill(scenario('engaged-stops'), FADING_GENTLE, SHORT);
     expect(run()).toEqual(run());

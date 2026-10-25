@@ -3,14 +3,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DECISIONS_KEPT,
   DecisionLog,
+  FENCE_GAP_MS,
   FRAME_WINDOW,
   FrameWindow,
   formatReportStatus,
   HITCH_FOLLOW_MS,
   HitchWatch,
 } from './perf-report.js';
-import { REPORT_EVERY_MS } from './slow-trigger.js';
+import { REPORT_EVERY_MS, SLOW_FPS } from './slow-trigger.js';
 import type { QualitySnapshot } from './quality/render-quality.js';
+
+describe('FENCE_GAP_MS', () => {
+  it('fences every frame of a run slow enough to report, and only some of a 30 fps one (#501)', () => {
+    expect(FENCE_GAP_MS).toBeLessThan(1000 / SLOW_FPS);
+    expect(FENCE_GAP_MS).toBeGreaterThan(2 * (1000 / 30));
+  });
+});
 
 describe('FrameWindow', () => {
   it('splits the frame gap from our render time, over the last frames only', () => {

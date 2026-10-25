@@ -70,6 +70,7 @@ import { createTendingRepo } from '../territory/repo.js';
 import { rewildTiles } from '../territory/rewild.js';
 import { createTrickOrTreatRepo } from '../trick-or-treat/repo.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
+import { weatherNotes } from '../weather/service.js';
 import {
   createHollowRepo,
   createHollowTxRepo,
@@ -591,6 +592,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         tileUseNote,
         packedCrowded,
         trickOrTreaters,
+        knocks,
       ] = await Promise.all([
         store.nightsSince(mapId, since, rules.reportNights),
         store.hollowedOf(mapId, user.id),
@@ -605,6 +607,8 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         createBuildingsRepo(db).packedCrowded(mapId, user.id),
         // Yesterday's trick-or-treaters at my home (#515), for the morning note.
         createTrickOrTreatRepo(db).visitorsOn(mapId, user.id, addDays(local.date, -1)),
+        // My buildings storms knocked about lately (Wild Isle #621); null on a Cozy Patch.
+        weatherNotes(db, mapId, user.id, at),
       ]);
       // Until the Hollow Man's first visit to me (first-night grace), a
       // nudge to light a fire while one of mine would sleep in the dark
@@ -732,6 +736,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
           trickOrTreaters.visitors > 0
             ? { day: addDays(local.date, -1), ...trickOrTreaters }
             : null,
+        ...(knocks ? { weatherNotes: knocks } : {}),
         now: at.toISOString(),
       };
     },

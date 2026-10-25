@@ -1807,3 +1807,59 @@ _Owner decisions and screen approvals from 2026-10-24, with coordinator calls in
 - **Island radius is 18.**
 - **Market and Inn** are built simply, in Wave 2. There is no weather knob in Wave 1.
 - **Build order.** The build starts 2026-10-25 00:00 UTC (8 PM ET Oct 24): W1-1 contracts alone, then W1-2 / W1-5a / W1-4. Migrations are serial: 0059 → 0060 → 0061.
+
+## 2026-10-25 — Owner decisions and coordinator calls (supervisor 16)
+
+_Owner decisions and screen approvals from 2026-10-24 evening to 2026-10-25, with coordinator calls inside them._
+
+**Merged**
+- **Sound pass (#653, PR #658).** Sound is hybrid: the big moments (chest crescendo, door wake, evolution, befriend, win, key / room put right) layer short CC0 Kenney recordings with synth; small ticks stay upgraded synth. The chest has two cues: `chest` (bonus room, short build) and `chest-big` (attic, longer build that lands as its lid swings). The owner approved it by ear (v2 and v3 pages).
+- **Wild Isle contracts (#621 W1-1, PR #663).** Migration 0059 is in. Everything sits behind `HP_WILD_ISLE`, which is off by default.
+- **Basket sell contract (#655 A, PR #661).** The legacy one-line sell request stays accepted until part E.
+- **CI (PR #660).** The e2e job timeout is 35 min, and lorebook moved from e2e group 1 to group 4.
+
+**Owner decisions**
+- **#306 woken power doors (supersedes the #650 outline).** The owner rejected the element-coloured outline. A woken door gets a simple soft glow plus sparkles on both sides of the doorway, in the element's colour, with a short burst when it opens and then a gentle settled glow. It is still drawn as a DOM layer over `.crooked-dark`, because the house's darkness is a DOM layer that dims every 3D light. Screens approved v2 (#654, PR #667).
+- **Simpler selling and trading (#655).** The owner approved mockup v4 (https://claude.ai/artifact/Lpd9k38zRDRmmrZeFGLeQg).
+  - A sale is a basket: many lines, one request, one transaction, one Idempotency-Key and one `(sell, saleId)` credit. It is all-or-nothing, never partial-to-cap.
+  - "Sell all spares" sells spare clothing only in Phase 1. It keeps one free copy of each piece, skips anything an open offer names, trims to today's room rarer-first, and always shows the list before selling.
+  - "Sell extra resources" waits for an owner call on what to keep beyond the recipe keep.
+  - Gift gets a confirm sheet. Trade does not, because the receiver's yes is the confirm.
+  - Phase 1 is parts A, B and C. Parts D (the Gift/Trade/Swap bar) and E (legacy removal) can wait. Ask the owner whether D should make Halloween.
+- **Keeper bodies (#657).** Arms come out of sleeves, hands are joined, and legs and shoes are sturdier. Hands may rest against the hips on round bodies, because it reads as a chubby vinyl-toy pose (owner, 2026-10-25, after 3 render-checks failed on the gap).
+- **Music is hybrid (#664).** CC0 sampled instruments (VSCO-2-CE) play the existing score, with fuller arrangement layers and a soft music reverb, and synth as the fallback. The owner approved it by ear on 2026-10-25.
+- **Screens approved, PRs in flight:** #651 Keeper collides with furniture (v3, PR #666; also fixes the house tap double-scale at DPR 2), #652 battle camera (v3, PR #662), Controls B2b (v4: Log out is a quiet secondary pill inset in the name chip).
+- **CC0 sound hosts:** the containers can't reach kenney.nl, opengameart.org or freesound.org. That is an owner to-do under the environment's Network access → Allowed domains, if he wants richer sources. GitHub-hosted CC0 works.
+
+**Coordinator calls**
+- **#652's 5th review round** was allowed, scoped to a type-only change after round 3's APPROVE.
+- **#656 (battle sheet):** the iPhone 15 "Run away in the home-indicator inset" report didn't reproduce on main with insets. Only the iPhone SE 4-move clip was real.
+- **#501 explore freeze:** no repro on main (no per-frame allocation, no drift). The one device-only suspect is a per-frame `clientWaitSync` (a synchronous WebKit GPU IPC). The lane was asked to make it non-blocking only if provably safe.
+- **e2e-fix finding:** `ui/trays` drops `hp-settling` after its 450 ms fallback even while a late slide still runs. The test now waits on `still()`. The product fix (cancel the fallback on `transitionrun`) is a logged follow-up.
+
+## 2026-10-25 — Owner decisions and coordinator calls (supervisor 17)
+
+_Merges, owner approvals and coordinator calls from 2026-10-25 ~02:25 to ~07:22 UTC._
+
+**Merged**
+- **#666 (#651):** the Keeper collides with furniture.
+- **#669:** the supervisor 16 handoff docs.
+- **#662 (#652):** the battle camera.
+- **#668 (#655 B):** the sell basket server.
+- **#670 (#501):** the GPU fence is sampled at most ~10/s (`FENCE_GAP_MS = 0.9 × 1000 / SLOW_FPS`) instead of a blocking wait every frame.
+- **#665 (#657):** Keeper bodies.
+- **#667 (#654):** door sparkle.
+- **#677:** iPad e2e flake fixes.
+- **#671:** Controls D2.
+- **#675 (#621 W1-2):** the map generator, behind `HP_WILD_ISLE`.
+- **#673 (#621 W1-5a):** roads, migration 0060, behind `HP_WILD_ISLE`.
+
+**Owner decisions**
+- **Controls D2 screens v2 approved** (2026-10-25 06:15Z).
+- **Supervisor 16 was archived** on the owner's request after the handoff.
+
+**Coordinator calls**
+- **#677 merged with the `check` aggregator still queued,** because all 14 real jobs were green and it fixed main's red iPad groups. Not a precedent.
+- **#665 merged on an APPROVE at `be6ffd7`.** The head `295da40` differed only by a `.gitignore` line and main merges (the supervisor diffed it).
+- **#656's landscape sky-only 4-move frame is pre-existing** (reproduced on `eb15770`, before #662), not a #662 regression. Logged.
+- **W1-7 runs as the only migration lane.** W1-5b (no migration) waits for a free lane because it shares `modules/buildings/` with W1-7.

@@ -100,7 +100,7 @@
   opacity: 0.8;
 }
 
-.raid-sheet .auth-button[data-testid='raid-done'] {
+.raid-sheet .hp-button[data-testid='raid-done'] {
   width: 100%;
   margin-top: 12px;
 }

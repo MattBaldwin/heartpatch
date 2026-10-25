@@ -1,4 +1,4 @@
-import { GAME_DATA } from '@heartpatch/shared';
+import { GAME_DATA, isWater } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { TERRAIN_LOOKS } from '../map/map-config.js';
 import { ARENA_SPECS, ARENA_STAGE } from './arena-config.js';
@@ -23,8 +23,9 @@ import {
 } from './arena-layout.js';
 
 describe('arenaPlan', () => {
-  it('has an arena and the map look for every terrain in the game data', () => {
-    for (const terrain of GAME_DATA.terrains) {
+  it('has an arena and the map look for every land terrain in the game data', () => {
+    // Nobody battles on water (Wild Isle, #621).
+    for (const terrain of GAME_DATA.terrains.filter((t) => !isWater(t))) {
       const plan = arenaPlan(terrain.id, 'day', 1);
       expect(plan.known, terrain.id).toBe(true);
       expect(ARENA_SPECS[terrain.id]).toBeDefined();

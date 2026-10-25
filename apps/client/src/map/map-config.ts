@@ -92,6 +92,13 @@ export const TERRAIN_LOOKS: Readonly<Record<string, TerrainLook>> = {
   'junipers-gap': look('#e6cdfc', 0.3, { glow: 0.25 }), // TUNE
   // Cleared land (#242): sandy ground drawn with the meadow's tiles.
   clearing: look('#efcf95', 0.22, { meshOf: 'meadow' }), // TUNE
+  // Wild Isle (#621), stand-ins until W1-4 draws the island: its lakes and
+  // rivers with Cozy's lake tiles, the coast as sand on the meadow's tiles,
+  // so none adds a draw call. The ocean has no look: it's never a tile
+  // instance (the island base's water disc, revision 1).
+  'wild-lake': look('#9fd6f5', 0.12, { meshOf: 'lake' }), // TUNE
+  river: look('#9fd6f5', 0.12, { meshOf: 'lake' }), // TUNE
+  coast: look('#f2e2b8', 0.2, { meshOf: 'meadow' }), // TUNE
 };
 
 /** Used for a terrain id this client doesn't know yet. */
@@ -314,6 +321,18 @@ export const TERRAIN_DRESSING: Readonly<Record<string, TerrainDressing>> = {
     ],
     tints: ['#ffffff', '#fff6e0'],
     jitter: { color: 0.03, height: 0.004 },
+  },
+  // Wild Isle's coast (#621): a few stones and tufts on the sand. Water
+  // tiles have no dressing.
+  coast: {
+    count: [1, 3],
+    items: [
+      item('stones', 3, [1.1, 1.4]),
+      item('grass', 2, [0.9, 1.2]),
+      item('reeds', 1, [0.9, 1.1]),
+    ],
+    tints: ['#ffffff', '#fff6e0', '#f8f0dc'],
+    jitter: { color: 0.03, height: 0.006 },
   },
   // A Hollowed village's square (#306): the kind's broken building stands in
   // the middle (`HOLLOWED_SQUARE`) with ruins round it. Stand-ins from props

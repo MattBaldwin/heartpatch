@@ -65,12 +65,12 @@ export function createTreatCard(options: TreatCardOptions): TreatCardView {
   const detail = el('p', { class: 'treat-detail', 'data-testid': 'treat-detail' });
   const primary = el('button', {
     type: 'button',
-    class: 'auth-button',
+    class: 'hp-button hp-button-primary',
     'data-testid': 'treat-primary',
   });
   const later = el(
     'button',
-    { type: 'button', class: 'auth-button auth-button-soft', 'data-testid': 'treat-later' },
+    { type: 'button', class: 'hp-button hp-button-secondary', 'data-testid': 'treat-later' },
     CARD_TEXT.later,
   );
   const buttons = el('div', { class: 'treat-buttons' }, primary, later);

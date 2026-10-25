@@ -414,6 +414,27 @@
       "when": 1792779754372,
       "tag": "0058_far_hollow_relight",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1792886624825,
+      "tag": "0059_wild_isle_patch_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1792895454843,
+      "tag": "0060_wild_isle_roads",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1792911331305,
+      "tag": "0061_wild_isle_weather",
+      "breakpoints": true
     }
   ]
 }

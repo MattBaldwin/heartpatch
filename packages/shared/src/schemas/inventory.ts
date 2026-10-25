@@ -36,7 +36,10 @@ export const ItemChangeReasonSchema = z.enum([
   'upgrade',
   /** A potion drunk in battle (#214), ledgered against the battle. */
   'battle-item',
-  /** Mending a fence segment (#203), ledgered against the segment. */
+  /**
+   * Mending a fence segment (#203), ledgered against the segment; fixing a
+   * building a storm knocked about (Wild Isle #621), against the building.
+   */
   'repair',
   /** Exploring your land (#199): finds, and the wear on the tool a search used. */
   'explore',
@@ -74,6 +77,12 @@ export const ItemChangeReasonSchema = z.enum([
   'village-gift',
   /** What a resource building made (#601), banked by a settle or its take-down, against its row. */
   'produced',
+  /** What a Wild Isle works building ate from the bag each cycle (#621, a Watermill's Greens), against its row. */
+  'works-eat',
+  /** Laying or raising a road (Wild Isle #621), ledgered against its `tile_roads` row. */
+  'road',
+  /** What comes back when a road comes up (Wild Isle #621), against the same row. */
+  'road-refund',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 
@@ -235,6 +244,23 @@ export const SettleResponseSchema = InventoryResponseSchema.extend({
         items: ItemCountsSchema,
       }),
     )
+    .optional(),
+  /**
+   * Wild Isle (#621): buildings of mine a storm knocked about since the last
+   * settle (they stop working until fixed). Left out on a Cozy Patch and by
+   * an older server.
+   */
+  weather: z
+    .object({
+      knocked: z.array(
+        z.object({
+          buildingRowId: z.uuid(),
+          buildingId: ContentIdSchema,
+          q: HexSchema.shape.q,
+          r: HexSchema.shape.r,
+        }),
+      ),
+    })
     .optional(),
   nextAt: z.iso.datetime().nullable(),
 });

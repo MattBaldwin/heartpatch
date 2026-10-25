@@ -146,9 +146,10 @@ jobs:
     # Room for the image pull and setup (about 1 min) and the slowest group's
     # tests, with slack for a slow runner and a retry or two. #246 balanced the
     # groups at about 10 min, but by 2026-10-23 ipad-webkit group 2 took 26-28.5
-    # min and timed out at 30 with every test passed (#631). 40 is a stopgap
-    # until the groups are rebalanced from fresh timings.
-    timeout-minutes: 40 # TUNE: back toward 30 after the rebalance
+    # min and timed out at 30 with every test passed (#631). After #647's
+    # rebalance the slowest job seen in 9 runs (2026-10-24) took 29.2 min in
+    # all (ipad-webkit group 6, 27.9 min of tests), so 35 leaves ~6 min slack.
+    timeout-minutes: 35 # TUNE: lower again after group 6 is lightened
     strategy:
       fail-fast: false
       matrix:

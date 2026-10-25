@@ -410,6 +410,7 @@ export const BUILDINGS: Building[] = [
     kind: 'resource',
     name: 'Greenhouse',
     description: 'Grows Greens all by itself, much faster than a squishy!',
+    weatherproof: true, // Wild Isle (#621, owner answer Q4): storms never knock it
     placement: 'homestead',
     maxPerTile: 1, // it fills its tile
     slot: 'ring',
@@ -473,5 +474,80 @@ export const BUILDINGS: Building[] = [
     maxPerTile: 1,
     slot: 'ring',
     levels: [{ cost: { timber: 600, stone: 450, glimmer: 20 }, upkeep: 20 }], // TUNE:
+  },
+  // Wild Isle (#621). Only on a Wild Isle (`patchTypes`), and not buildable
+  // anywhere until each one's lane puts its kind in
+  // `HOME_BASE_RULES.buildableKinds`. Bridges and ferry docks are the
+  // exception (W1-5b): the server builds them by the map's patch type, not
+  // `buildableKinds`; Waystations are still refused.
+  {
+    id: 'bridge',
+    kind: 'travel',
+    role: 'bridge',
+    name: 'Bridge',
+    description: 'Hop across the river! Every Keeper on the patch can use it.',
+    patchTypes: ['wild-isle'],
+    placement: 'land', // it stands on a river tile (`onWater`), not owned land
+    onWater: 'river',
+    maxPerTile: 1,
+    slot: 'ring',
+    levels: [{ cost: { timber: 30, stone: 20 } }], // TUNE:
+  },
+  {
+    id: 'waystation',
+    kind: 'travel',
+    role: 'waystation',
+    name: 'Waystation',
+    description: 'A cozy stop that keeps far-off land joined up to home.',
+    patchTypes: ['wild-isle'],
+    placement: 'homestead',
+    maxPerTile: 1,
+    slot: 'ring',
+    reach: 3, // TUNE:
+    levels: [{ cost: { timber: 40, stone: 30 } }], // TUNE:
+  },
+  {
+    id: 'ferry-dock',
+    kind: 'travel',
+    role: 'ferry-dock',
+    name: 'Ferry Dock',
+    description: 'Reach the far shore of this lake.',
+    patchTypes: ['wild-isle'],
+    placement: 'homestead',
+    needsWater: ['lake'],
+    maxPerTile: 1,
+    slot: 'ring',
+    levels: [{ cost: { timber: 40, stone: 10 } }], // TUNE:
+  },
+  {
+    // Wild Isle's Water Well (revision 1, owner answer Q1): lakes there are
+    // water, so it draws from a river or lake next door. Cozy's `water-well`
+    // is unchanged and never fits on Wild Isle (no lake land).
+    id: 'river-well',
+    kind: 'works',
+    name: 'Water Well',
+    description: 'Draws Water from the river.',
+    patchTypes: ['wild-isle'],
+    placement: 'homestead',
+    maxPerTile: 1, // it fills its tile
+    slot: 'ring',
+    needsWater: ['river', 'lake'],
+    makes: { resource: 'water', quantity: 2, seconds: 15 * 60 }, // TUNE: a gatherer's pace on a Cozy lake
+    levels: [
+      { cost: { timber: 20, stone: 15 }, pacePercent: 300, storageHours: 24, upkeep: 17 }, // TUNE: as the Cozy well
+      { cost: { timber: 40, stone: 30 }, pacePercent: 350, storageHours: 48, upkeep: 20 }, // TUNE:
+      {
+        cost: { timber: 80, stone: 60, glimmer: 4 },
+        pacePercent: 400,
+        storageHours: 72,
+        upkeep: 23,
+      }, // TUNE:
+      {
+        cost: { timber: 120, stone: 90, glimmer: 10 },
+        pacePercent: 400,
+        storageHours: 96,
+        upkeep: 23,
+      }, // TUNE:
+    ],
   },
 ];

@@ -52,6 +52,23 @@ describe.skipIf(!url)('schema constraints (needs DATABASE_URL)', () => {
     await expect(newUser('ghosttoast')).rejects.toThrow();
   });
 
+  it('makes every patch cozy unless told otherwise, with no isles (#621)', async () => {
+    const cozyId = await newMap();
+    const [cozy] = await db.select().from(maps).where(eq(maps.id, cozyId));
+    expect(cozy!.patchType).toBe('cozy');
+    const [wild] = await db
+      .insert(maps)
+      .values({ kind: 'multiplayer', name: 'Wild Isle', timeZone: 'UTC', patchType: 'wild-isle' })
+      .returning();
+    expect(wild!.patchType).toBe('wild-isle');
+    const [tile] = await db
+      .insert(tiles)
+      .values({ mapId: wild!.id, q: 0, r: 0, terrain: 'meadow' })
+      .returning();
+    expect(tile!.isle).toBeNull();
+    await db.insert(tiles).values({ mapId: wild!.id, q: 9, r: 9, terrain: 'coast', isle: 1 });
+  });
+
   it('allows one owner per map', async () => {
     const mapId = await newMap();
     const [a, b] = [await newUser(), await newUser()];

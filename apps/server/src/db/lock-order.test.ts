@@ -34,7 +34,9 @@ import { createGatheringService } from '../modules/gathering/service.js';
 import { createHeartCoinsRepo } from '../modules/heart-coins/repo.js';
 import { creditHeartCoins } from '../modules/heart-coins/service.js';
 import { createSettleService } from '../modules/settle/service.js';
+import { createWeatherService } from '../modules/weather/service.js';
 import { makeHomestead } from '../../tests/homestead.js';
+import { frontIdThat, makeWildIsle, putPlan, stormOver } from '../../tests/weather.js';
 import { createAccountHelpersRepo } from '../modules/account-helpers/repo.js';
 import { createHollowConsumer } from '../modules/hollow/consumer.js';
 import { createHouseRepo } from '../modules/house/repo.js';
@@ -51,6 +53,8 @@ import { createMilestonesService, milestoneRewardId } from '../modules/milestone
 import { createMapsService } from '../modules/maps/service.js';
 import { createStartersService } from '../modules/starters/service.js';
 import { createTerritoryService, createTileBattlePort } from '../modules/territory/service.js';
+import { createRoadsRepo } from '../modules/roads/repo.js';
+import { createTendingRepo } from '../modules/territory/repo.js';
 import { createTradesService } from '../modules/trades/service.js';
 import { createTutorialConsumer } from '../modules/tutorial/consumer.js';
 import { createTutorialRepo } from '../modules/tutorial/repo.js';
@@ -58,6 +62,7 @@ import { createTutorialService } from '../modules/tutorial/service.js';
 import { setDevDropChance } from '../modules/wardrobe/drops.js';
 import { createWardrobeService, grantClothing } from '../modules/wardrobe/service.js';
 import { AppError } from '../lib/errors.js';
+import { createPostSellRepo } from '../modules/post-sell/repo.js';
 import { createJobsRepo } from '../jobs/repo.js';
 import { runConsumer } from '../jobs/consumers.js';
 import { appendGameEvent } from './game-events.js';
@@ -77,6 +82,8 @@ import {
   fenceSegments,
   gameEvents,
   tileExplore,
+  tileRoads,
+  tileTending,
   gatherJobs,
   heartCoinLedger,
   houseGifts,
@@ -200,6 +207,45 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     await nightfallAgainst(ids, () =>
       unplanned((tx) => createBattlesRepo(tx).lockSquishies([...ids].reverse())),
     );
+  });
+
+  it('a basket locks pieces across items in id order, then bag rows, then the balance (post-sell `lockPieces`, #655 step 10b)', async () => {
+    const { userId } = await patch();
+    // Two items' pieces interleaved in id order, stored highest id first.
+    const ids = [randomUUID(), randomUUID(), randomUUID()].sort();
+    const itemOf = (i: number) => (i === 1 ? 'pom-pom-beanie' : 'flower-crown');
+    await db
+      .insert(clothingOwned)
+      .values(
+        ids.map((id, i) => ({ id, userId, itemId: itemOf(i), source: 'dev-grant' })).reverse(),
+      );
+    const lockPiece = (tx: Transaction, id: string) =>
+      tx
+        .select({ id: clothingOwned.id })
+        .from(clothingOwned)
+        .where(eq(clothingOwned.id, id))
+        .for('update');
+    let locked: string[] = [];
+    let running: Promise<unknown> | undefined;
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '10s'`);
+      await lockPiece(tx, ids[0]!);
+      const pid = await backendPid(tx);
+      running = unplanned(async (sale) => {
+        const rows = await createPostSellRepo(sale).lockPieces(userId, [
+          'pom-pom-beanie',
+          'flower-crown',
+        ]);
+        locked = rows.map((r) => r.id);
+      });
+      await waitUntilBlockedBy(db, pid);
+      for (const id of ids.slice(1)) await lockPiece(tx, id);
+    });
+    await running;
+    // One statement across both items, in id order, not item by item. The
+    // bag rows (11) and the balance (12b) after it are checked in
+    // `post-sell.test.ts`'s lock order block.
+    expect(locked).toEqual(ids);
   });
 
   it("locks a habitat's residents in id order before moving them out (buildings `moveOutAll`)", async () => {
@@ -1216,6 +1262,244 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     expect((await heartRows(mapId, kid.id)).filter((r) => r.source === 'upkeep')).toHaveLength(2);
   });
 
+  /**
+   * `hutSetup` on a Wild Isle (#621 W1-7): a storm sat over the hut until
+   * five minutes ago, and its seeded roll knocks the hut about.
+   */
+  async function stormyHutSetup(prefix: string) {
+    const setup = await hutSetup(prefix);
+    const seed = await makeWildIsle(db, setup.mapId);
+    const [hut] = await db
+      .select({ id: buildings.id, tileId: buildings.tileId })
+      .from(buildings)
+      .where(and(eq(buildings.mapId, setup.mapId), eq(buildings.ownerUserId, setup.kid.id)));
+    const [tile] = await db
+      .select({ q: tiles.q, r: tiles.r })
+      .from(tiles)
+      .where(eq(tiles.id, hut!.tileId));
+    const now = Date.now();
+    await db
+      .update(buildings)
+      .set({ weatherCheckedThrough: new Date(now - 30 * 60_000) })
+      .where(eq(buildings.id, hut!.id));
+    const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+    // The day the last look fell on, if it was yesterday, is calm.
+    await putPlan(db, setup.mapId, day(now - 30 * 60_000), []);
+    await putPlan(db, setup.mapId, day(now), [
+      stormOver(
+        frontIdThat(true, seed, hut!.id),
+        tile!,
+        new Date(now - 25 * 60_000),
+        new Date(now - 5 * 60_000),
+      ),
+    ]);
+    const lockHut = (tx: Transaction) =>
+      tx
+        .select({ id: buildings.id })
+        .from(buildings)
+        .where(eq(buildings.id, hut!.id))
+        .for('update');
+    const lockTimber = (tx: Transaction) =>
+      tx
+        .select({ itemId: inventories.itemId })
+        .from(inventories)
+        .where(
+          and(
+            eq(inventories.mapId, setup.mapId),
+            eq(inventories.userId, setup.kid.id),
+            eq(inventories.itemId, 'timber'),
+          ),
+        )
+        .for('update');
+    const knocks = async () =>
+      (
+        await db
+          .select({ id: gameEvents.seq })
+          .from(gameEvents)
+          .where(and(eq(gameEvents.mapId, setup.mapId), eq(gameEvents.type, 'building.knocked')))
+      ).length;
+    return {
+      ...setup,
+      hutId: hut!.id,
+      lockHut,
+      lockTimber,
+      knocks,
+      weather: createWeatherService({ db }),
+    };
+  }
+
+  it('takes the member row before the buildings (weather `sweep`, #621 step 2 then 8)', async () => {
+    const { kid, mapId, lockHut, knocks, weather } = await stormyHutSetup('sweep-member');
+    await holdThen(
+      (tx) => createMapsRepo(tx).lockMember(mapId, kid.id),
+      () => weather.sweep(mapId),
+      lockHut,
+    );
+    expect(await knocks()).toBe(1);
+  });
+
+  it('rolls a storm under the building lock and appends its knock last (weather `sweep`, #621 step 8 then 13)', async () => {
+    const { mapId, lockHut, knocks, weather } = await stormyHutSetup('sweep-maps');
+    await holdThen(
+      lockHut,
+      () => weather.sweep(mapId),
+      (tx) => lockMapRow(tx, mapId),
+    );
+    expect(await knocks()).toBe(1);
+  });
+
+  it('runs a sweep and a settle one at a time on the member row, knocking once (weather `sweep`, settle, #621)', async () => {
+    const { kid, mapId, settle, knocks, weather } = await stormyHutSetup('sweep-settle');
+    let running: Promise<unknown>[] = [];
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '10s'`);
+      await createMapsRepo(tx).lockMember(mapId, kid.id);
+      const pid = await backendPid(tx);
+      running = [weather.sweep(mapId), settle.settle(kid, mapId)];
+      await waitUntilBlockedBy(db, pid);
+    });
+    await Promise.all(running);
+    expect(await knocks()).toBe(1);
+  });
+
+  it("takes a fix's building before its inventory rows (buildings `repair`, #621 step 8 then 11)", async () => {
+    const { kid, mapId, hutId, lockHut, lockTimber, weather } = await stormyHutSetup('fixer');
+    await weather.sweep(mapId);
+    await withTransaction(db, (tx) =>
+      grantItems(tx, { mapId, userId: kid.id }, { timber: 10, stone: 10 }, 'dev-grant'),
+    );
+    await holdThen(
+      lockHut,
+      () => createBuildingsService({ db }).repair(kid, mapId, hutId),
+      lockTimber,
+    );
+    const [row] = await db.select().from(buildings).where(eq(buildings.id, hutId));
+    expect(row!.damagedAt).toBe(null);
+  });
+
+  it("spends a fix's cost and charges its mornings before its events (buildings `repair`, #621 step 11 then 12b then 13)", async () => {
+    const { kid, mapId, hutId, lockTimber, weather } = await stormyHutSetup('fix-payer');
+    await weather.sweep(mapId);
+    await withTransaction(db, (tx) =>
+      grantItems(tx, { mapId, userId: kid.id }, { timber: 10, stone: 10 }, 'dev-grant'),
+    );
+    const repair = () => createBuildingsService({ db }).repair(kid, mapId, hutId);
+    await holdThen(lockTimber, repair, (tx) => lockHeart(tx, mapId, kid.id));
+    expect((await heartRows(mapId, kid.id)).filter((r) => r.source === 'upkeep')).toHaveLength(2);
+  });
+
+  /**
+   * A Wild Isle (#621 W1-5b) with a river across the kid's line out of home
+   * at (3), their land at (2), cut-off land of theirs at (4) with its
+   * tending row, and Timber and Stone for a bridge.
+   */
+  async function bridgeSetup(prefix: string) {
+    const kid = await player(prefix);
+    const map = await createMapsService({
+      db,
+      tutorialRequired: false,
+      keeperRequired: false,
+    }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
+    await makeWildIsle(db, map.id);
+    const all = await db.select().from(tiles).where(eq(tiles.mapId, map.id));
+    const at = new Map(all.map((t) => [hexKey(t), t]));
+    const home = all.filter((t) => t.ownerUserId === kid.id && t.homeSlot !== null);
+    const homeKeys = new Set(home.map(hexKey));
+    const seed = home.find((t) => hexNeighbors(t).every((n) => homeKeys.has(hexKey(n))))!;
+    const line = hexNeighbors(seed)
+      .map((n) =>
+        [0, 1, 2, 3, 4].map((k) =>
+          at.get(hexKey({ q: seed.q + (n.q - seed.q) * k, r: seed.r + (n.r - seed.r) * k })),
+        ),
+      )
+      .find((l) =>
+        l.every(
+          (t, k) =>
+            t !== undefined &&
+            (k <= 1 ||
+              (t.ownerUserId === null &&
+                t.homeSlot === null &&
+                t.communityId === null &&
+                t.terrain !== 'trading-post')),
+        ),
+      )!
+      .map((t) => t!);
+    const [river, far] = [line[3]!, line[4]!];
+    await db
+      .update(tiles)
+      .set({ terrain: 'river', nodeResource: null })
+      .where(eq(tiles.id, river.id));
+    await db
+      .update(tiles)
+      .set({ ownerUserId: kid.id })
+      .where(inArray(tiles.id, [line[2]!.id, far.id]));
+    await db
+      .insert(tileTending)
+      .values([line[2]!, far].map((t) => ({ tileId: t.id, mapId: map.id, tendedAt: new Date() })));
+    await withTransaction(db, (tx) =>
+      grantItems(tx, { mapId: map.id, userId: kid.id }, { timber: 100, stone: 100 }, 'dev-grant'),
+    );
+    const lockTimber = (tx: Transaction) =>
+      tx
+        .select({ itemId: inventories.itemId })
+        .from(inventories)
+        .where(
+          and(
+            eq(inventories.mapId, map.id),
+            eq(inventories.userId, kid.id),
+            eq(inventories.itemId, 'timber'),
+          ),
+        )
+        .for('update');
+    const service = createBuildingsService({ db });
+    const place = () =>
+      service.place(kid, map.id, { buildingId: 'bridge', q: river.q, r: river.r, spot: 1 });
+    const bridge = async () =>
+      (
+        await db.select({ id: buildings.id }).from(buildings).where(eq(buildings.tileId, river.id))
+      )[0] ?? null;
+    return { kid, mapId: map.id, river, far, lockTimber, service, place, bridge };
+  }
+
+  it('takes the river tile before the bag (buildings `place` a bridge, #621 W1-5b step 6 then 11)', async () => {
+    const { river, lockTimber, place, bridge } = await bridgeSetup('bridger');
+    await holdThen(
+      (tx) => tx.select({ id: tiles.id }).from(tiles).where(eq(tiles.id, river.id)).for('update'),
+      place,
+      lockTimber,
+    );
+    expect(await bridge()).not.toBeNull();
+  });
+
+  it("takes a bridge's row before the bag on the way down (buildings `remove`, #621 W1-5b step 8 then 11)", async () => {
+    const { kid, mapId, lockTimber, service, place, bridge } = await bridgeSetup('unbridger');
+    await place();
+    const row = (await bridge())!;
+    await holdThen(
+      (tx) =>
+        tx
+          .select({ id: buildings.id })
+          .from(buildings)
+          .where(eq(buildings.id, row.id))
+          .for('update'),
+      () => service.remove(kid, mapId, row.id),
+      lockTimber,
+    );
+    expect(await bridge()).toBeNull();
+  });
+
+  it("never waits on a supply line's tending row (buildings `place` and `remove` a bridge, #621 W1-5b)", async () => {
+    const { kid, mapId, far, service, place, bridge } = await bridgeSetup('bridge-skipper');
+    await db.transaction(async (tx) => {
+      // Held as nightfall's pass would: the bridge goes up and down past it.
+      await tx.select().from(tileTending).where(eq(tileTending.tileId, far.id)).for('update');
+      await place();
+      const row = (await bridge())!;
+      await service.remove(kid, mapId, row.id);
+    });
+    expect(await bridge()).toBeNull();
+  });
+
   it('picks a starter while the member is leaving, one at a time on the member row (starters `pick`, maps `leave`)', async () => {
     const owner = await player('owner');
     const kid = await player('picker');
@@ -1981,6 +2265,57 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       ).map((f) => f.id);
     });
     expect(locked).toEqual(fenceIds);
+  });
+
+  it('locks the roads on lost land in tile id order (roads `lockOnTiles`, #621 step 6b)', async () => {
+    const { mapId, userId, tileIds } = await fires();
+    await db
+      .insert(tileRoads)
+      .values(
+        [...tileIds].reverse().map((tileId) => ({ tileId, mapId, ownerUserId: userId, level: 1 })),
+      );
+    const lockRoadRow = (tx: Transaction, id: string) =>
+      tx
+        .select({ id: tileRoads.tileId })
+        .from(tileRoads)
+        .where(eq(tileRoads.tileId, id))
+        .for('update');
+    let locked: string[] = [];
+    await rowsAgainst(lockRoadRow, tileIds, async () => {
+      locked = (
+        await unplanned((tx) => createRoadsRepo(tx).lockOnTiles([...tileIds].reverse()))
+      ).map((r) => r.tileId);
+    });
+    expect(locked).toEqual(tileIds);
+  });
+
+  it("locks a supply line's tending rows in tile id order (territory `lockForSupply`, #621 step 6)", async () => {
+    const { mapId, tileIds } = await fires();
+    await db
+      .insert(tileTending)
+      .values([...tileIds].reverse().map((tileId) => ({ tileId, mapId, tendedAt: new Date() })));
+    const lockTendingRow = (tx: Transaction, id: string) =>
+      tx
+        .select({ id: tileTending.tileId })
+        .from(tileTending)
+        .where(eq(tileTending.tileId, id))
+        .for('update');
+    let locked: string[] = [];
+    // Nightfall's own pass waits for the rows, in tile id order.
+    await rowsAgainst(lockTendingRow, tileIds, async () => {
+      locked = await unplanned((tx) =>
+        createTendingRepo(tx).lockForSupply([...tileIds].reverse(), false),
+      );
+    });
+    expect(locked).toEqual(tileIds);
+    // A capture or road command never waits: it passes over a row held elsewhere.
+    await db.transaction(async (tx) => {
+      await lockTendingRow(tx, tileIds[1]!);
+      const skipped = await unplanned((inner) =>
+        createTendingRepo(inner).lockForSupply([...tileIds].reverse(), true),
+      );
+      expect(skipped).toEqual([tileIds[0], tileIds[2]]);
+    });
   });
 
   it("locks players' explored rows in (user, tile) order (explore `lockExplored`, #199)", async () => {

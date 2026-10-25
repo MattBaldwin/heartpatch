@@ -34,6 +34,9 @@ const id = () =>
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
 export const mapKind = pgEnum('map_kind', ['multiplayer', 'tutorial']);
+// A patch's type (#621), chosen when it's made and never changed. Every rule
+// that differs reads it through shared `patchRules`; existing patches are cozy.
+export const patchType = pgEnum('patch_type', ['cozy', 'wild-isle']);
 export const mapMemberRole = pgEnum('map_member_role', ['owner', 'member']);
 /** Removed players are archived by status, never deleted (tech spec §4). */
 export const mapMemberStatus = pgEnum('map_member_status', ['active', 'removed']);
@@ -326,6 +329,9 @@ export const maps = pgTable(
     // The patch owner's friendly-battle switch (#29): off, nobody can ask
     // "Battle me?" on this patch. Live land defense follows the PvP mode instead.
     friendlyChallenges: boolean('friendly_challenges').notNull().default(true),
+    // Cozy Patch or Wild Isle (#621): fixed at creation; `HP_WILD_ISLE` gates
+    // making a Wild Isle.
+    patchType: patchType('patch_type').notNull().default('cozy'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
@@ -418,6 +424,9 @@ export const tiles = pgTable(
     communityId: uuid('community_id').references((): AnyPgColumn => communities.id, {
       onDelete: 'set null',
     }),
+    // Which offshore isle (#621, Wild Isle) this tile is part of, numbered
+    // from 1 by the generator; null on the main island and on every cozy tile.
+    isle: smallint('isle'),
   },
   (t) => [
     unique('tiles_map_id_q_r_key').on(t.mapId, t.q, t.r),
@@ -477,6 +486,15 @@ export const buildings = pgTable(
     // The kid's own upkeep order (#601 owner decision Q5): lower pays first.
     // Null: the default order (highest level, then oldest, Warehouse last).
     upkeepRank: smallint('upkeep_rank'),
+    // Wild Isle (#621): a storm knocked it about at this instant (inside the
+    // front's minutes over its tile); it works again once fixed. Null: fine.
+    damagedAt: timestamptz('damaged_at'),
+    // The weather front that knocked it (`WeatherFront.id`), or null.
+    damagedBy: text('damaged_by'),
+    // Storm fronts whose minutes over its tile ended by here have been
+    // rolled for (seeded, so rolling again changes nothing). Null reads as
+    // `placed_at`.
+    weatherCheckedThrough: timestamptz('weather_checked_through'),
   },
   (t) => [
     foreignKey({
@@ -1319,6 +1337,11 @@ export const tileTending = pgTable(
     // When its owner claimed it (#277): a tile claimed since the last
     // nightfall is safe on its first night. Null: held before this column.
     claimedAt: timestamptz('claimed_at'),
+    // Wild Isle (#621): cut off from its owner's home (no supply line, shared
+    // `supplyMap`) since then; it fades from then and can go wild
+    // `TRAVEL_RULES.stranded.afterHours` later. A lost bridge's grace can put
+    // it ahead of now. Null: supplied (always, on a Cozy Patch).
+    strandedSince: timestamptz('stranded_since'),
   },
   (t) => [
     index('tile_tending_map_id_idx').on(t.mapId),
@@ -1326,6 +1349,59 @@ export const tileTending = pgTable(
       'tile_tending_wild_set',
       sql`(${t.wildNight} is null) = (${t.wildFromUserId} is null) and (${t.wildNight} is null) = (${t.wildAt} is null)`,
     ),
+  ],
+);
+
+// Wild Isle weather (#621): each map-local day's plan, stored the first time
+// anyone needs it (`ON CONFLICT DO NOTHING`), so a retune of `WEATHER_RULES`
+// never rewrites a day kids already saw. `fronts` is `WeatherFront[]`
+// (validated on read). Inserted, never locked (tech spec §7); the
+// `weather.retention` job deletes days older than `WEATHER_RULES.retentionDays`.
+export const weatherDays = pgTable(
+  'weather_days',
+  {
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    day: date('day', { mode: 'string' }).notNull(),
+    // The kind of day it rolled (`WeatherKind`): a dry spell or a clear day
+    // can have no fronts, and the forecast still says which.
+    kind: text('kind').notNull(),
+    fronts: jsonb('fronts').notNull(),
+    plannedAt: timestamptz('planned_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.mapId, t.day] })],
+);
+
+/**
+ * Wild Isle roads (#621): a tile attribute, not a building, so a road and a
+ * building share a tile. Level 1 is a Path, 2 a Road, 3 a Paved road
+ * (`TRAVEL_RULES.roads`). Owner-only (owner answer Q3): it counts only while
+ * its owner holds the tile, and comes down with half back when the tile is
+ * captured or goes wild; a leaver's row is ignored until the tile is laid
+ * again. Locked at step 6b (tech spec §7), after `tile_explore`.
+ */
+export const tileRoads = pgTable(
+  'tile_roads',
+  {
+    tileId: uuid('tile_id')
+      .primaryKey()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    mapId: uuid('map_id').notNull(),
+    ownerUserId: uuid('owner_user_id').notNull(),
+    level: smallint('level').notNull(),
+    builtAt: timestamptz('built_at').notNull().defaultNow(),
+  },
+  (t) => [
+    // Laying one takes the member row first (step 2), so this key's share
+    // lock is never taken after a tile lock.
+    foreignKey({
+      name: 'tile_roads_owner_member_fk',
+      columns: [t.mapId, t.ownerUserId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    index('tile_roads_map_id_owner_user_id_idx').on(t.mapId, t.ownerUserId),
+    check('tile_roads_level', sql`${t.level} between 1 and 3`),
   ],
 );
 

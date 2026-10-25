@@ -189,19 +189,39 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 14, 2026-10-24):** main `f5cbf09` (#641), migrations through 0058. Phase 1 due Oct 31; Halloween's 2026 window runs to Nov 9. DECISIONS is current through "2026-10-24 — Owner decisions and coordinator calls (supervisor 14)". Merged under supervisor 14: #647, #646, #641.
-- **Lanes in flight** (report to supervisor 14 or its successor; each lane subscribes to its own PR; a new supervisor sends each its session id first):
-  - **#306 door glow + bubble** `session_01CxhiQ3oYabvTKwn7wD2PQM` (Sonnet, branch `issue-306-door-glow`): owner screens required.
-  - **Battle safe areas** `session_01Y6HVnjXqD9YFS1rPkzhzPH` (Sonnet, branch `fix-battle-safe-areas`): the Heart Charm tip and "Run away" clip on iPhone 15/SE. Owner screens required.
-  - **Wild Isle planner** `session_01PdqoGSArLRgVrdshJnaZvq` (Fable, idle): keep it for plan questions during Wave 1.
-  - In-flight lanes' folders are off-limits to the others. Tell a lane when a folder frees up after a merge.
+- **State (supervisor 17 handoff, 2026-10-25 ~07:22 UTC):** main `4790019` (#673), migrations through 0060. Phase 1 is due Oct 31. DECISIONS is current through "2026-10-25 — Owner decisions and coordinator calls (supervisor 17)". Supervisor 17 is `session_012Qmyafu7VYabWthhQmx6z4` (lineage depth 1, started fresh by the owner). Supervisor 16 was archived on the owner's request. Merged under supervisor 17: #666, #669, #662, #668, #670, #665, #667, #677, #671, #675, #673. The lineage restarts at depth 1, so supervisor 18 is only needed near 400k context.
+- **Lanes in flight.** **The new supervisor's first job:** send each lane its session id with "report to me from now on (not @parent, not supervisor 17)" and confirm each switch (§8).
+
+| Lane | Session | Model | State at handoff |
+|---|---|---|---|
+| #655 C Sell tab | session_01Wd2hitQnDBXxWwjDa8NP4d | Opus | PR #679, reviewer APPROVE + CI green on aec858b. Waiting only on owner screens https://claude.ai/artifact/7boi7q3BP85hbenMoZPCbq (render-check PASS). Then ask the owner whether #655 D (Gift/Trade/Swap bar) is Halloween. |
+| #656 battle sheet | session_01A4ki5ZK3QfXiyAttzyssbP | Sonnet | PR #678, APPROVE on head, CI running. Owner screens v5 https://claude.ai/artifact/HeZquvWz4pxtYmYxGQdv5v (render-check PASS) not yet shown. |
+| #621 W1-4 island map | session_015MjtcmZYTvxc3Wmp8xYHZw | Opus | PR #676, CI re-running after an ipad-webkit 6 fix, reviewer round 2 pending. Owner screens v7 https://claude.ai/artifact/KY79Sje1cRjyyucz7LqSXm (PASS) not yet approved. |
+| Controls B2b | session_01Q3gaJyyf3ZTWfdnMxThnpS | Sonnet | PR #674, owner-approved v4, APPROVE on head, CI queued. `hollowed-cellar.spec:70` (walkTo the big chest) failed once on iPhone 2; it may be main-side after #651's furniture bump. Watch it. |
+| #664 music | session_0111CwPFcW65bLs6K7UZ8Dy9 | Opus | PR #672, owner-approved by ear, APPROVE on head. CI red on ipad-webkit 6 (its own: rare-reveal fetches); the lane is fixing it (packed notes into one file). |
+| #382 squishy Wave 2 | session_01StqxPaD94zxAurY2S1VYPz | Sonnet | Rendering the 72-frame species sheet. Past cap: if it needs a re-shoot, it posts a Lane handoff instead. |
+| #621 W1-3 lobby (Cozy or Wild Isle create) | session_01UACZbzdWpbCZCsyQXZVdtJ | Opus | Started 06:44. Owner screens needed. |
+| #621 W1-7 weather (migration 0061, big) | session_01XXiW2XoBp4FKs7SXH9WdwM | Opus | Started 06:44. The only migration lane. Opus + Fable reviewers. |
+| Wild Isle planner | session_01PdqoGSArLRgVrdshJnaZvq | Fable | Idle. Archive after Wave 1 lands. |
+
 - **Queue (start in this order as lanes free up):**
-  1. **Wild Isle Wave 1** at 8 PM ET Oct 24 (the supervisor's one-shot reminder; a new supervisor recreates it).
-  2. **Controls B2b:** `.auth-button*`, about 60 call sites.
-  3. **Controls D "Left for later"** (from PR #637's body): home, heart-coins, the roster and team two-column pass, and the chat strip.
-  4. **Coordinator CI change:** e2e job timeout 40 → 35 (the slowest group measured 24.9 min on #647), plus refreshed `E2E_GROUPS` minute comments including far-hollow-bonus.
-  5. **#501 frame-rate check** (still open after #562).
-  6. **Logged nits:** the What's new date wraps on iPhone SE (no-wrap the date); the `isPlural` heuristic in `crooked-text.ts`; the 6e/6f nits (a long `changes/` line, a `nearest()` comment over 100 chars, a tap-walk into a bonus chest that keeps pressing); the Water echo near the iPhone 15 home indicator.
+  1. #621 W1-5b bridges and ferry docks (no migration). It owns `checkSpot` in `modules/buildings/service.ts` and the new `packages/shared/src/territory/water.ts`, and needs `supply.ts` / `reach.ts` edits. It shares `modules/buildings/` with W1-7, so expect a small merge. Handoff: #621 comment 6394386220.
+  2. Wild Isle: W1-6 after W1-5b; W1-8 and W1-9 after W1-7; then W1-10 and W1-11 per plan §6 and revision 1. `coast` still needs spawn/guardian tables (#382's lane) before Wild Isle creation opens.
+  3. #655 D/E per the owner's answer.
+  4. **Logged nits:**
+     - the What's new date wraps on SE
+     - `isPlural` in crooked-text.ts
+     - the 6e/6f nits
+     - the Water echo near the home indicator
+     - room-name pills truncate ("Dining Roo…", "Conservato…")
+     - disabled Feed looks enabled in close-up
+     - the trays `hp-settling` fallback (the e2e-fix finding)
+     - re-measure the E2E_GROUPS medians after a few runs; group 6 iPad is the tightest
+     - #656's finding: on the landscape phone, the 4-move (Splashmallow) battle shows sky only (no arena or fighters). It is pre-existing on `eb15770` (before #662), maybe a capture-rig limit; it needs a look
+     - the trays settle fallback can fire mid-slide (listed above)
+     - TECH_SPEC §7 "Selling to the post" is stale after #668 (a Docs follow-up)
+  5. **Owner to-dos:** optionally allow kenney.nl, opengameart.org and freesound.org (Network access → Allowed domains). Optionally delete the stale remote branch `chore-ci-e2e-timeout` (auto mode blocks the coordinator from deleting it).
+- **Sweep helper:** the supervisor's sweep script checked, for each open PR, the head SHA, check-run counts, a reviewer APPROVE comment naming the head, and `git merge-tree --write-tree origin/main <head>`. Recreate it in your scratchpad.
 - **Watch:** `lobby.spec.ts:9` (owner/friend join) hit its 120 s timeout twice on one ipad-webkit group 5 run on PR #644, then passed. If it recurs, it gets a robustness fix.
 - **Filed, no lane yet:** #341 (Forest Chihuahua, Phase 2), #319 and #320 (Phase 2).
 - **Check-in (owner, 2026-10-23):** a supervisor sweep every ~20 min while lanes are active, via a self-bound trigger (arm your own and delete your predecessor's). The owner asked for active supervision: sweep GitHub for open PRs (no PR subscriptions, §5), merge on the gates, nudge stuck lanes, and start the next queued lane.
@@ -235,6 +255,25 @@ The supervisor keeps this list current. Remove items as they land.
   - Server hardening: shared `lib/rate-limit.ts`, a loose global per-IP limit, helmet/CSP or a note that Caddy sets the headers.
   - The avoided-words scan over error messages.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
+- **Lessons (2026-10-25, supervisor 17):**
+  - **Container restarts closed the owner's AskUserQuestion about ten times in four hours.** Re-ask at once with the artifact opened, and keep the queue of screens in the sweep prompt so it survives restarts.
+  - **The auto-mode classifier blocks deleting another session's scheduled task.** Ask that session to delete its own (supervisor 16 did).
+  - **The classifier also had a ~15-minute outage** (no verdict). Schedule a retry with `send_later` instead of hammering.
+  - **CI runners backed up for over an hour with 8+ PRs open;** the `check` aggregator job queued long after all real jobs were green. #677 merged on its 14 green jobs because it fixed main's red iPad groups (stated in the verdict). Other PRs wait for `check`.
+  - **Lanes at lineage depth 8 cannot use `send_later`,** so they have no safety-net check-ins of their own. The supervisor's sweep is the only safety net.
+  - **Use a Sonnet helper to summarize plan comments into brief facts.** The W1-3 / W1-5b / W1-7 summary cost little and kept the supervisor's context down.
+  - **A red e2e can be a runner failure** (docker pull "unknown blob" before any test ran, on #678). Read the log before blaming a test.
+  - **Costs:** #651 $29.66 (533k context, flagged), #652 $32.69 (611k, flagged), #655 B $9.29, #657 $10.12, #501 $12.47, #654 $11.81, e2e-fix $14.32, D2 $9.26, W1-2 $13.99, W1-5a $24.52 (393k, flagged); supervisor 17 about $5 at 300k.
+- **Lessons (2026-10-25, supervisor 16):**
+  - **When a visual fails 3+ render-checks on the same core problem, take it to the owner with a different approach** instead of iterating. #306 needed six "light the room" rounds. The #657 hands question was settled in one owner answer.
+  - **A long foreground check can hide a coordinator message for an hour,** so lanes run long checks in the background.
+  - **Lanes past ~300k context cost the most.** #652 reached $28 and #651 $25, mostly from re-shoots and review rounds at 400–565k. Move screen re-shoots to a fresh lane once a lane passes about 300k.
+  - **The supervisor's context grows fast with 12+ lanes.** Supervisor 16 hit 429k in 4 hours. Use a helper subagent for status tables, keep render-checks in helpers, and check your own context every few sweeps.
+  - **Owner approvals from AskUserQuestion get closed by container restarts** (twice tonight). Re-ask at once, with the artifact opened in the same response.
+  - **CI is the bottleneck with 7+ PRs open.** Jobs queue for 20+ minutes. Batch merges when they clear.
+  - **A remote branch name can already exist from months ago.** `chore-ci-e2e-timeout` did, and PR #659 opened against the stale branch. Check `git ls-remote` before reusing a branch name.
+  - **Render-check helpers can't always save the artifact file.** Tell them to write the returned content verbatim, never to hand-type a copy.
+  - **Costs tonight:** #653 $12.25, #655 A $7.34, W1-1 $18.52, #655 planner $15.99, supervisor 16 ~$36 at 429k.
 - **Lessons (2026-10-24, supervisor 14):**
   - **Playwright's fake clock starves Babylon rendering.** `page.clock.install()` fakes rAF, so each fake 16 ms costs a whole SwiftShader frame: portraits took 156 s, and the Water picker faces never drew. Shoot "asleep" and picker frames without the fake clock (6e3's finding).
   - **Render-checks caught real bugs every round:** a room pill truncated with no ellipsis, "The flames needs", the battle tip in the home-indicator area, a different random state between phones, captions describing things not on screen, and swapped titles on the artifact page. Keep checking every round, including page-only changes.

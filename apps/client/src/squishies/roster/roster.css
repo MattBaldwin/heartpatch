@@ -513,3 +513,35 @@ body:has(.roster-sheet:not([hidden]))
   ) {
   visibility: hidden;
 }
+
+/* A phone on its side (controls D2, ../../ui/breakpoints.ts): two squishies a
+   line, a smaller picture, and the sheet clear of the bottom inset, so more
+   than one row shows. */
+@media (max-height: 520px) and (min-width: 640px) {
+  .roster-sheet {
+    max-width: 780px;
+    max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 84px);
+  }
+
+  .roster-head-bar {
+    padding-top: 8px;
+  }
+
+  .roster-list {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+
+  /* An open row takes the whole width, so its column leaves no hole. */
+  .roster-open {
+    grid-column: 1 / -1;
+  }
+
+  .roster-portrait {
+    --portrait: 64px;
+  }
+
+  .roster-head {
+    min-height: 64px;
+  }
+}

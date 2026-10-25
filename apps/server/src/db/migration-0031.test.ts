@@ -57,10 +57,12 @@ describe.skipIf(!url)('migration 0031 on an existing patch (#204, needs DATABASE
   const snapshot = async () => {
     const rows = await client!.db.execute(
       `select json_build_object(
-         'tiles', (select json_agg(to_jsonb(t) - 'community_id' order by t.id) from tiles t),
+         'tiles', (select json_agg(to_jsonb(t) - array['community_id', 'isle'] order by t.id) from tiles t),
          'members', (select json_agg(to_jsonb(m) - array['home_name', 'home_named_at_level',
            'caught_count', 'kinds_built'] order by m.user_id) from map_members m),
-         'buildings', (select json_agg(to_jsonb(b) - 'produced_since' - 'paused_at' - 'upkeep_paid_through' - 'upkeep_rank' order by b.id) from buildings b),
+         'buildings', (select json_agg(to_jsonb(b) - array['produced_since', 'paused_at',
+           'upkeep_paid_through', 'upkeep_rank', 'damaged_at', 'damaged_by',
+           'weather_checked_through'] order by b.id) from buildings b),
          'attacks', (select json_agg(to_jsonb(a) - array['part', 'follows_attack_id',
            'fence_segment_id', 'fence_building_id', 'fence_hp_before', 'fence_max_hp',
            'fence_hp_after', 'lost_fences'] order by a.id) from tile_attacks a)

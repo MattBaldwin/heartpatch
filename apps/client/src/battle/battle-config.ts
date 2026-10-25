@@ -17,6 +17,13 @@ export const FIGHTER = {
   /** Extra scale on the squishies (a close-up, like the gallery's). */
   scale: 2.7, // TUNE
   /**
+   * Big squishies are drawn a little smaller in battle (#652), so the camera
+   * never backs off to fit them: above `knee` (battle units, hat included)
+   * only `keep` of the extra height stays, and nobody stands taller than
+   * `maxHeight`. Most species (about 5 or less) are drawn as they are.
+   */
+  tall: { knee: 5, keep: 0.25, maxHeight: 5.6 }, // TUNE
+  /**
    * Three-quarter facing: each face turns between "at the other fighter" (1)
    * and "at the camera" (0), so both faces always show.
    */
@@ -102,12 +109,39 @@ export const CHOREO = {
   reduced: { size: 0.45, reach: 0.35 }, // TUNE
 } as const;
 
+/** The battle camera's tunables (`BATTLE_CAMERA`, where each one is described). */
+export interface BattleCameraConfig {
+  pitch: number;
+  yaw: number;
+  fov: number;
+  minZ: number;
+  maxZ: number;
+  aim: { readonly x: number; readonly y: number; readonly z: number };
+  feetY: number;
+  fitHalfWidth: number;
+  fitHeight: number;
+  rimMargin: number;
+  minDistance: number;
+  maxDistance: number;
+  narrowSheetFrom: number;
+  hitPush: number;
+  followPush: number;
+  koPush: number;
+  shake: number;
+  roll: number;
+  focusShift: number;
+  follow: number;
+  shakeHz: number;
+  shakeDecay: number;
+  beatDecay: number;
+}
+
 /**
  * Lantern Hour's camera (owner decision 2026-10-05): low, swung a little to
  * the player's side, framing the fight into the safe region between the
  * HUD's pills and its bottom sheet. Angles in radians, distances in world units.
  */
-export const BATTLE_CAMERA = {
+export const BATTLE_CAMERA: Readonly<BattleCameraConfig> = {
   /** Tilt down from the horizon. */
   pitch: (11 * Math.PI) / 180, // TUNE
   /** Swing around the fight (0 looks along +z). */
@@ -122,6 +156,17 @@ export const BATTLE_CAMERA = {
   /** The fight's box that must always fit in the safe region: half width and height. */
   fitHalfWidth: 3.9, // TUNE
   fitHeight: 3.6, // TUNE
+  /**
+   * The arena's reach (#652, `arenaReach`): the lowest row of the stage stays
+   * `rimMargin` inside the ground's rim (room for the lean and a shake).
+   * `minDistance` and `maxDistance` only bound it (a row that never meets the
+   * ground has no reach of its own).
+   */
+  rimMargin: 2, // TUNE
+  minDistance: 10, // TUNE
+  maxDistance: 90, // TUNE
+  /** From this window width (CSS px) the sheet is a centred card (battle.css), so the screen's bottom shows. */
+  narrowSheetFrom: 900,
   /** Camera beats (B): push-in on a hit (fraction of distance), shake (world units), dutch roll (radians). */
   hitPush: 0.1, // TUNE
   followPush: 0.04, // TUNE
@@ -137,7 +182,7 @@ export const BATTLE_CAMERA = {
   shakeDecay: 9, // TUNE
   /** How fast a push-in and a beat decay back, per second. */
   beatDecay: 2.4, // TUNE
-} as const;
+};
 
 /**
  * A potion's sparkle shield (#214): a soft lavender bubble over the squishy

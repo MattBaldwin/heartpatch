@@ -387,7 +387,11 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   const note = el('p', { class: 'battle-entry-note', role: 'status' });
   const enter = el(
     'button',
-    { type: 'button', class: 'auth-button battle-entry', 'data-testid': 'battle-entry' },
+    {
+      type: 'button',
+      class: 'hp-button hp-button-primary battle-entry',
+      'data-testid': 'battle-entry',
+    },
     'Find a squishy',
   );
   const entry = el('div', { class: 'battle-entry-box' }, enter, note);
@@ -399,7 +403,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       'button',
       {
         type: 'button',
-        class: 'auth-button auth-button-soft auth-button-small',
+        class: 'hp-button hp-button-secondary hp-button-small',
         'data-testid': 'catalog-open',
       },
       'Catalog',
@@ -481,7 +485,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       'button',
       {
         type: 'button',
-        class: 'auth-button auth-button-soft auth-button-small',
+        class: 'hp-button hp-button-secondary hp-button-small',
         'data-testid': 'battle-dev-grant',
       },
       'Dev: new squishy',
@@ -497,7 +501,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       'button',
       {
         type: 'button',
-        class: 'auth-button auth-button-soft auth-button-small',
+        class: 'hp-button hp-button-secondary hp-button-small',
         'data-testid': 'battle-dev-fight',
       },
       'Dev: pick a fight',

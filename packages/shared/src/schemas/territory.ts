@@ -108,6 +108,19 @@ export const WentWildTileSchema = z.object({
 export type WentWildTile = z.infer<typeof WentWildTileSchema>;
 
 /**
+ * Wild Isle (#621): a tile of mine cut off from home (no supply line), fading
+ * from `since` (a lost bridge's grace can put it ahead), wild from `wildAt`
+ * unless I join it up again.
+ */
+export const StrandedTileSchema = z.object({
+  q: HexSchema.shape.q,
+  r: HexSchema.shape.r,
+  since: z.iso.datetime(),
+  wildAt: z.iso.datetime(),
+});
+export type StrandedTile = z.infer<typeof StrandedTileSchema>;
+
+/**
  * `GET /maps/:mapId/territory/tending` and `POST /maps/:mapId/territory/visit`
  * (Visit tends all my land at once): my land that misses me and what went
  * wild lately.
@@ -116,6 +129,8 @@ export const LandTendingSchema = z.object({
   missing: z.array(MissingTileSchema),
   /** Tiles that went wild from me in the last few nights. */
   wentWild: z.array(WentWildTileSchema),
+  /** Wild Isle (#621): my land cut off from home. Unset on a Cozy Patch. */
+  stranded: z.array(StrandedTileSchema).optional(),
   /** When some land will next start to miss me (the client looks again then); null with no land that can fade. */
   nextMissesYouAt: z.iso.datetime().nullable(),
   /** The server's clock. */

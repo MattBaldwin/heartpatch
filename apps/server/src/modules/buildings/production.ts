@@ -66,6 +66,20 @@ export function upkeepOf(row: Pick<BuildingRow, 'buildingId' | 'level'>): number
 export const homesteadPauseOf = (row: Pick<BuildingRow, 'homestead'>): WorkPause | null =>
   row.homestead ? workPauseOf(row.homestead) : null;
 
+/**
+ * Where a building's output stops (epoch ms), or null while it works: the
+ * morning it paused for upkeep (#601) or the instant a storm knocked it
+ * about (Wild Isle #621), whichever came first.
+ */
+export function stoppedAtMs(row: Pick<BuildingRow, 'pausedAt' | 'damagedAt'>): number | null {
+  const stops = [row.pausedAt, row.damagedAt].flatMap((d) => (d ? [d.getTime()] : []));
+  return stops.length === 0 ? null : Math.min(...stops);
+}
+
+/** Knocked about by a storm at or before this instant (Wild Isle #621)? */
+export const knockedAt = (row: Pick<BuildingRow, 'damagedAt'>, instantMs: number): boolean =>
+  row.damagedAt !== null && row.damagedAt.getTime() <= instantMs;
+
 /** The player's Warehouse among their buildings, or null. */
 export const warehouseIn = (rows: readonly BuildingRow[]): BuildingRow | null =>
   rows.find((r) => r.kind === 'warehouse') ?? null;
@@ -82,7 +96,7 @@ export function deliveryOf(
   if (!warehouse || row.level < RESOURCE_BUILDING_RULES.warehouseDeliversFromLevel) return [];
   return warehouseWindows({
     placedAtMs: warehouse.placedAt.getTime(),
-    pausedAtMs: warehouse.pausedAt?.getTime() ?? null,
+    pausedAtMs: stoppedAtMs(warehouse),
     homesteadPause: homesteadPauseOf(warehouse),
   });
 }
@@ -128,7 +142,7 @@ export function productionAt(
     {
       sinceMs: row.producedSince.getTime(),
       nowMs: at.getTime(),
-      pausedAtMs: row.pausedAt?.getTime() ?? null,
+      pausedAtMs: stoppedAtMs(row),
       cycleSeconds,
       maxCycles: storage,
       homesteadPause,
@@ -210,7 +224,7 @@ export function warehouseView(row: BuildingRow, at: Date): MyBuilding['warehouse
     delivering: deliveringAt(
       warehouseWindows({
         placedAtMs: row.placedAt.getTime(),
-        pausedAtMs: row.pausedAt?.getTime() ?? null,
+        pausedAtMs: stoppedAtMs(row),
         homesteadPause: cut,
       }),
       now,
@@ -241,13 +255,15 @@ export function nextMorningAt(at: Date, morningMinute: number, timeZone: string)
 
 /**
  * Could an upkeep building work at that morning's instant (owner decision
- * Q4)? Not while its homestead is cut off from home, and a resource
- * building not while its resource is out of season (a Pumpkin Barn after
- * Halloween). Only a building that can work pays.
+ * Q4)? Not while its homestead is cut off from home, not while a storm has
+ * it knocked about (Wild Isle #621), and a resource building not while its
+ * resource is out of season (a Pumpkin Barn after Halloween). Only a
+ * building that can work pays.
  */
 export function canWorkAt(row: BuildingRow, instant: Date, timeZone: string): boolean {
   const pause = homesteadPauseOf(row);
   const t = instant.getTime();
+  if (knockedAt(row, t)) return false;
   if (pause && pause.fromMs <= t && (pause.toMs === null || t < pause.toMs)) return false;
   const building = BUILDING_DATA.get(row.buildingId);
   if (building?.kind !== 'resource') return true;
