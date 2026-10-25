@@ -9,15 +9,25 @@ const updatesHeld = (page: Page) => hook<boolean>(page, 'updatesHeld');
 test('owner makes a patch, a friend joins with the code, owner approves and resets', async ({
   browser,
 }) => {
-  // Two signups, each through the Keeper picker's 3D preview (#42); CI renders
-  // in software. A pass takes about a minute on iPad WebKit (58.6 s on #224's
-  // CI), and a group's first tests also pay for the first shader compiles.
-  test.setTimeout(120_000);
+  // Two signups, each through the Keeper picker's 3D preview (#42), then a
+  // reload that boots the game a third time; CI renders in software. About
+  // 1.2 min on iPad WebKit next to light specs, but next to house.spec's
+  // build test both tries ran out 120 s at a different step each time
+  // (2026-10-25), so the limit is 150 s, like #195's below.
+  test.setTimeout(150_000);
   const ownerName = uniqueName('own');
   const friendName = uniqueName('pal');
 
+  // Both sign up at once: the friend needs nothing from the owner until the
+  // code, and the signups are most of the test. In a local Chromium with its
+  // CPU throttled 6x, that took the run from past 120 s down to 85 s; on CI's
+  // shared cores it saves less.
+  const [owner, friend] = await Promise.all([
+    newPlayer(browser, ownerName),
+    newPlayer(browser, friendName),
+  ]);
+
   // The owner makes a patch and gets a code.
-  const owner = await newPlayer(browser, ownerName);
   const ownerLobby = owner.getByTestId('lobby');
   await expect(ownerLobby).toContainText('No patches yet');
   await ownerLobby.getByRole('button', { name: 'Make a patch' }).tap();
@@ -28,7 +38,6 @@ test('owner makes a patch, a friend joins with the code, owner approves and rese
   expect(code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
 
   // A friend asks to join with it.
-  const friend = await newPlayer(browser, friendName);
   const friendLobby = friend.getByTestId('lobby');
   await friendLobby.getByRole('button', { name: 'Join with a code' }).tap();
   await friendLobby.getByLabel('Invite code').fill(code.toLowerCase());

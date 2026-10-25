@@ -53,6 +53,19 @@ describe('SELL_RULES (#601 PR 3)', () => {
     ]);
   });
 
+  it('buys Pies for a bit more than the Flour, Fish and Salt a bake uses (#621 W1-8b)', () => {
+    expect(SELL_RULES.items['pies']).toEqual({ lot: 1, coins: 1 });
+    const bake = GAME_DATA.recipes.find((r) => r.id === 'bake-pies')!;
+    const inputs = Object.entries(bake.inputs).reduce((sum, [id, n]) => {
+      const { lot, coins } = SELL_RULES.items[id]!;
+      return sum + (coins * n) / lot;
+    }, 0);
+    const pies = itemSalePrice(SELL_RULES, 'pies', bake.output.quantity)!;
+    expect(pies).toBeGreaterThan(inputs);
+    // …but never a coin farm: a bake is still well under a day's cap.
+    expect(pies).toBeLessThan(CAP);
+  });
+
   it('prices every clothing rarity', () => {
     expect(checkSellRules({ ...SELL_RULES, clothing: { common: 1 } }, [], CAP)).not.toEqual([]);
   });

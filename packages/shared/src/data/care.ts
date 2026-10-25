@@ -18,6 +18,13 @@ export const CARE_RULES: CareRules = {
     { id: 'calm', atLeast: 10, line: 'Calm and content.' },
     { id: 'cuddly', atLeast: 0, line: 'Could use a cuddle!' },
   ],
+  // What a feed can be paid with (#621 W1-8b), as a percent of its contentment.
+  // Treats are the plain feed; Pies come only from Wild Isle works' Flour,
+  // Fish and Salt, so they're worth more.
+  foods: {
+    treats: 100, // the feed as it's always been
+    pies: 150, // TUNE: owner answer Q5 (#621 plan §8)
+  },
 };
 
 /** Levels, XP and the care × habitat multiplier (design doc §7–8). Checked by `checkGrowthRules`. */

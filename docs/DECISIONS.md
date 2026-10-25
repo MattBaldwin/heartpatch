@@ -1906,3 +1906,35 @@ _Merges, owner approvals and coordinator calls from 2026-10-25 ~08:03 to ~14:10 
 - **#382 Wave 2 sheet v1 failed the render-check.** 8 of 9 kinds missed their hook or duplicated a silhouette (Dragofruit was fine) and the haze was yellow. The old lane (406k, $13.33) handed off in #382 comment 6397202673. A fresh Sonnet lane reworks it.
 - **#382 may add ~6 additive parts in `packages/shared/src/data/visuals.ts`,** inside the #382 PR: data-only, existing primitives, the existing glow mechanism, a data test, listed in the PR body. A dev-only `?studio` capture flag is fine.
 - **#681 render-check:** v1 FIX (name mismatch, home-indicator crop, 44px link), v2 PASS.
+
+## 2026-10-25 — Owner decisions and coordinator calls (supervisor 19)
+
+_Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor 19 (`session_011PCmEwUJ3VqaBHuzHe222J`) took over from supervisor 18 at 14:55Z._
+
+**Merged**
+- **#684 (#621 W1-8A):** water works and the food chain. Opus + Fable APPROVE; the head was a clean main merge.
+- **#687:** supervisor 18 handoff docs.
+- **#688 (#655 D):** the Gift and Trade bar and the Swap bar.
+- **#689 (#621 W1-8b):** pies, `bake-pies`, `CARE_RULES.foods`, and the optional feed `itemId`. Opus + Fable round 1, then a fresh Opus APPROVE in round 2.
+
+**Owner decisions (#382 Wave 2)**
+- **Shinybeet** gets a data-only beetle-shell body, then one last tweak: a taller dome, a smaller, lower head, and studs in a line. If it still fails, it is auto-swapped for the strongest of the other 19 kinds, with no more rounds.
+  - **Outcome:** the last tweak still read as a tortoise close to Shellnap, so the lane auto-swapped Shinybeet for **Quackle → Bubbleduck → Soapduke** (a rubber duck that blows bubbles; water; common/common/uncommon; lake spawn table). The beetle-shell body and shell-gleam part were removed and a `duck-bill` part was added.
+- **Oinkle** drops the mud puddle.
+- **Fluffasus** gets stacked-lobe cloud wings (render-check PASS).
+- **Cubbun** gets hug arms.
+  - **Owner, 15:24Z:** "Get rid of the tree for Cubbun." The tree (tree-stump and tree-top) is removed, and the hug arms are re-seated to hug Cubbun's own tummy, because the mirrored far arm pointed sideways with no trunk to hold.
+- **Coordinator call:** #382 may add more than the ~6 parts first allowed (16 at sheet v6: the duck, bubble and tail parts added, and the two tree parts removed). They're all data-only, built from existing primitives, with a data test, and listed in the PR body.
+
+**Owner decisions (other)**
+- **Standing rule:** serve owner decisions one at a time.
+- **Standing rule (owner, ~16:20Z):** when the owner is needed (a decision, or screens ready to approve after the supervisor's render-check passes), send a push notification (`PushNotification`, one line, leading with the action). Only then; no routine-progress pushes.
+- **#689 (#621 W1-8b) merged with main's red e2e group (owner, ~16:35Z, option A).** The auto-mode classifier blocked the first merge attempt because the aggregate `check` was red. The owner chose to merge rather than wait for a fully green run. The only real failure was `lobby.spec.ts:9`, which is red on main too and owned by a Fix lane.
+- **#688 (#655 D) screens approved (v9, ~15:52Z).** The supervisor's independent render-check took four rounds (v2, v5, v6, v9) before it passed.
+- **Retired supervisors archived (owner, ~16:05Z):** supervisors 18 and 17 were archived at the owner's request. Supervisors 10–16 were already archived.
+
+**Coordinator calls**
+- **Lanes handed off for size:** the #382 Wave 2b lane reached about 670k context ($25.71) and its notes drifted from its renders. A fresh Sonnet lane (2c) took over from #382 comment 6399726332 with the v6 fix list.
+- **Costs:** the W1-8A lane cost $43.85 (245k context; flagged), and the #655 D lane cost $12.04.
+- **#382 Oinkle curl tail:** it failed three render-checks (handle, raspberry), so it fell back to a short stub tail.
+- **`isBuildableOn` naming (supersedes supervisor 18's "Shared `isBuildableOn`" call):** main's `isBuildableOn` (W1-8A, buildings) checks whether a building is allowed on a patch type. W1-6's shared tile check for bridges and docks is `travelBuildCheck`. These are different questions, not a duplicate. The "server switches over after W1-8" follow-up now means the server adopts `travelBuildCheck` for bridge and dock placement.

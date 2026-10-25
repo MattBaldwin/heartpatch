@@ -112,8 +112,13 @@ const url = inject('testDatabaseUrl');
  * the next squishy too. In id order the command holds nothing yet, so both
  * finish; out of order it would hold the higher one and Postgres would report
  * a deadlock.
+ *
+ * The timeout outlasts the held transactions' 10 s `lock_timeout` plus
+ * `waitUntilBlockedBy`'s 5 s, so a wrong order fails with Postgres's own error
+ * (40P01 or 55P03), not a bare test timeout. Most tests also set up a patch
+ * first: about 0.5 s alone, past 5 s on a busy CI runner.
  */
-describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
+describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_000 }, () => {
   let client: DbClient;
   let db: Database;
   let counter = 0;

@@ -46,6 +46,7 @@ export const TRADE_VALUES: TradeValues = {
     fish: 5, // TUNE: Wild Isle (#621 W1-8)
     flour: 6, // TUNE: two Greens and a mill's work
     salt: 5, // TUNE:
+    pies: 8, // TUNE: a third of 2 Flour, 1 Fish and 1 Salt, plus the baking
     heartdust: 15, // TUNE:
     treats: 6, // TUNE:
     pumpkins: 8, // TUNE:
@@ -107,6 +108,7 @@ export const SELL_RULES: SellRules = {
     fish: { lot: 3, coins: 1 }, // TUNE:
     flour: { lot: 2, coins: 1 }, // TUNE: more than the two Greens it's ground from
     salt: { lot: 3, coins: 1 }, // TUNE:
+    pies: { lot: 1, coins: 1 }, // TUNE: a bake's 3 beat its Flour, Fish and Salt's ~2
     emberwood: { lot: 3, coins: 1 }, // TUNE:
     pumpkins: { lot: 3, coins: 1 }, // TUNE:
     glimmer: { lot: 1, coins: 2 }, // TUNE:

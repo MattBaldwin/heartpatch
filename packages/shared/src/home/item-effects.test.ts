@@ -114,12 +114,18 @@ describe('itemEffects (#241)', () => {
   });
 
   it('says which Wild Isle works make Fish, Flour and Salt, and leaves Water and Greens as they were (#621 W1-8)', () => {
-    expect(itemEffects('fish')).toEqual([{ kind: 'made-at', buildings: ['fishing-pier'] }]);
-    expect(itemEffects('flour')).toEqual([{ kind: 'made-at', buildings: ['watermill'] }]);
-    expect(itemEffects('salt')).toEqual([{ kind: 'made-at', buildings: ['salt-pans'] }]);
+    const pies = { kind: 'recipes', recipes: ['bake-pies'] };
+    expect(itemEffects('fish')).toEqual([pies, { kind: 'made-at', buildings: ['fishing-pier'] }]);
+    expect(itemEffects('flour')).toEqual([pies, { kind: 'made-at', buildings: ['watermill'] }]);
+    expect(itemEffects('salt')).toEqual([pies, { kind: 'made-at', buildings: ['salt-pans'] }]);
     for (const id of ['water', 'greens']) {
       expect(itemEffects(id), id).not.toContainEqual(expect.objectContaining({ kind: 'made-at' }));
     }
+  });
+
+  it('says Pies feed a squishy, like Treats (#621 W1-8b)', () => {
+    expect(itemEffects('pies')).toEqual([{ kind: 'care', actions: ['feed'] }]);
+    expect(itemEffects('treats')).toContainEqual({ kind: 'care', actions: ['feed'] });
   });
 
   it('calls a seasonal thing with no use yet a keepsake', () => {

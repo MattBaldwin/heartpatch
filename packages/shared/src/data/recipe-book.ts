@@ -126,6 +126,11 @@ export const RECIPE_BOOK: RecipeBookData = {
       page: 'building:ice-wall',
       line: 'Get Ice from the mountains (a squishy gatherer chips it) or freeze Water, plus some Stone, and this page opens!',
     },
+    // Wild Isle (#621 W1-8b): its works make all three.
+    {
+      page: 'recipe:bake-pies',
+      line: 'Wild Isle works make Flour, Fish and Salt. Collect all three, and this page opens!',
+    },
     // Rekindled (#306 PR 5): sealed by finds only a grey village gives.
     {
       page: 'recipe:joy-lantern',
