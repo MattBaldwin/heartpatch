@@ -135,7 +135,10 @@ test('a found page sparkles in the Bag, opens in the Lorebook and is read', asyn
 
   // "Open Lorebook" on a found card opens the book at that page. Found while
   // the map is open, it shows on the next map open: back to the patch list
-  // and in again (no reload, see the top).
+  // and in again (no reload, see the top). The first open's second look (5 s
+  // on) must be done first, or it shows the card here, over the Bag.
+  await expect.poll(async () => (await loreState(page))?.checking, slow).toBe(0);
+  expect((await loreState(page))?.showing).toBeNull();
   await api(page, 'POST', '/lore/dev/find', { pageId: 'two-watchful-dogs' });
   await bag.getByRole('button', { name: 'Close' }).tap();
   await expect(bag).toBeHidden();
