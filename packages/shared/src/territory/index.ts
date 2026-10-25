@@ -2,7 +2,7 @@ import { hexKey, hexNeighbors, type Hex } from '../hex/index.js';
 import type { TerritoryRules } from '../schemas/data/territory.js';
 import type { PvpMode } from '../schemas/maps.js';
 import type { SquishyState } from '../schemas/squishies.js';
-import { isTradingPost } from './reach.js';
+import { isTradingPost, isWaterTerrain, type Supply } from './reach.js';
 
 // Territory rules (design doc §11, decisions B and C), shared so the server
 // decides and the client explains with the same logic. Pure: the server
@@ -36,26 +36,41 @@ export interface TerritoryTile extends Hex {
  * - `trading-post`: a trading post, shared and never owned (#269).
  * - `hollowed`: a grey Hollowed village tile, won by restoring it (#306); a
  *   restored one is ordinary land (PR 4), and a won ring is `home` first.
+ * - `water`: a Wild Isle's ocean, river or lake (#621), never land.
  * - `mine`: it's already theirs.
- * - `too-far`: not next to their land (outposts come in Phase 2).
+ * - `too-far`: not next to their land (outposts come in Phase 2). With a
+ *   Wild Isle's `supply` (#621): not next to land joined to their home (or a
+ *   bridge they cross), and not in a road's reach.
  * - `pvp-off`: another player's land, and the map's PvP mode is Off.
+ *
+ * A Cozy Patch passes no `supply` and has no water: the rules are exactly
+ * what they were before Wild Isles.
  */
 export type AttackTargetProblem =
-  'home' | 'trading-post' | 'hollowed' | 'mine' | 'too-far' | 'pvp-off';
+  'home' | 'trading-post' | 'hollowed' | 'water' | 'mine' | 'too-far' | 'pvp-off';
 
 export function attackTargetProblem(
   target: TerritoryTile,
   tiles: readonly TerritoryTile[],
   userId: string,
   pvpMode: PvpMode,
+  supply?: Supply,
 ): AttackTargetProblem | null {
   if (target.homeSlot !== null) return 'home';
   if (target.terrain !== undefined && isTradingPost({ terrain: target.terrain }))
     return 'trading-post';
   if ((target.communityId ?? null) !== null && target.restored !== true) return 'hollowed';
+  if (target.terrain !== undefined && isWaterTerrain(target.terrain)) return 'water';
   if (target.ownerUserId === userId) return 'mine';
-  const mine = new Set(tiles.filter((t) => t.ownerUserId === userId).map(hexKey));
-  if (!hexNeighbors(target).some((n) => mine.has(hexKey(n)))) return 'too-far';
+  if (supply) {
+    const near =
+      supply.reach.has(hexKey(target)) ||
+      hexNeighbors(target).some((n) => supply.supplied.has(hexKey(n)));
+    if (!near) return 'too-far';
+  } else {
+    const mine = new Set(tiles.filter((t) => t.ownerUserId === userId).map(hexKey));
+    if (!hexNeighbors(target).some((n) => mine.has(hexKey(n)))) return 'too-far';
+  }
   if (target.ownerUserId !== null && pvpMode === 'off') return 'pvp-off';
   return null;
 }
@@ -115,3 +130,4 @@ export * from './fences.js';
 export * from './reach.js';
 export * from './journeys.js';
 export * from './watch-level.js';
+export * from './roads.js';

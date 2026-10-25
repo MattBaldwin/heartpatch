@@ -93,6 +93,14 @@ const LATER_COLUMNS: readonly (readonly [table: string, column: string, type: st
   ['buildings', 'upkeep_paid_through', 'date'],
   ['buildings', 'upkeep_rank', 'smallint'],
 ];
+/**
+ * Tables later migrations add that the pack-up reads (a gatherer's job joins
+ * Wild Isle's `tile_roads`, #621 migration 0060): made like `LATER_COLUMNS`,
+ * dropped after the pack-up for their migration to make for real.
+ */
+const LATER_TABLES: readonly (readonly [table: string, columns: string])[] = [
+  ['tile_roads', 'tile_id uuid primary key, map_id uuid, owner_user_id uuid, level smallint'],
+];
 /** Tables of `LATER_COLUMNS` the pack-up reads: their columns are dropped after it. */
 const PACK_READS: ReadonlySet<string> = new Set(['buildings']);
 const START = '2026-10-02T12:00:00Z';
@@ -134,6 +142,9 @@ describe.skipIf(!url)('migration B: crowded tiles packed up (#295, needs DATABAS
     for (const [table, column, type] of LATER_COLUMNS) {
       await db.execute(`alter table "${table}" add column "${column}" ${type}`);
     }
+    for (const [table, columns] of LATER_TABLES) {
+      await db.execute(`create table "${table}" (${columns})`);
+    }
     laterColumns = true;
   });
   afterEach(async () => {
@@ -160,6 +171,7 @@ describe.skipIf(!url)('migration B: crowded tiles packed up (#295, needs DATABAS
       if (PACK_READS.has(table))
         await d.execute(`alter table "${table}" drop column if exists "${column}"`);
     }
+    for (const [table] of LATER_TABLES) await d.execute(`drop table if exists "${table}"`);
   };
 
   /** The migrate step, as `pnpm db:migrate` runs it. */

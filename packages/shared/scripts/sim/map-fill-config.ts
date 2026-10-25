@@ -1,5 +1,6 @@
 import { TERRITORY_RULES } from '../../src/data/territory.js';
 import type { TerritoryRules } from '../../src/schemas/data/territory.js';
+import type { PatchType } from '../../src/patch-types/index.js';
 import type { PvpMode } from '../../src/schemas/maps.js';
 
 /**
@@ -68,6 +69,8 @@ export interface MapFillScenario {
   /** Map seats (`MAP_GEN.layouts`); empty seats' home rings are never claimed. */
   readonly mapSeats: number;
   readonly seats: readonly Seat[];
+  /** Which generator (#621); absent: a Cozy Patch. */
+  readonly patchType?: PatchType;
 }
 
 export const ENGAGED: MapFillKid = {
@@ -208,4 +211,26 @@ export const MAP_FILL_SCENARIOS: readonly MapFillScenario[] = [
     mapSeats: 4,
     seats: [playing(ENGAGED), playing(CASUAL), playing(PART_TIME), stopping(CASUAL)],
   },
+  // Wild Isle (#621, plan §2): water is a wall until roads, bridges and
+  // ferries (W1-5a/5b), so this is the slowest a kid fills a Wild Isle.
+  {
+    id: 'wild-casual-6',
+    title: '6 casual kids, a 6-seat Wild Isle',
+    mapSeats: 6,
+    seats: Array.from({ length: 6 }, () => playing(CASUAL)),
+    patchType: 'wild-isle',
+  },
+  {
+    id: 'wild-mixed-6',
+    title: '6 kids (2 engaged, 2 casual, 2 part-time), a 6-seat Wild Isle',
+    mapSeats: 6,
+    seats: [ENGAGED, ENGAGED, CASUAL, CASUAL, PART_TIME, PART_TIME].map(playing),
+    patchType: 'wild-isle',
+  },
 ];
+
+/**
+ * The Wild Isle gate (#621, plan §2): every casual kid on a full Wild Isle
+ * holds at least this many tiles by `byDay`.
+ */
+export const WILD_ISLE_FILL_GATE = { tiles: 40, byDay: 14 } as const; // TUNE:

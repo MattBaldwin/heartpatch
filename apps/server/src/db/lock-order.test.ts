@@ -51,6 +51,8 @@ import { createMilestonesService, milestoneRewardId } from '../modules/milestone
 import { createMapsService } from '../modules/maps/service.js';
 import { createStartersService } from '../modules/starters/service.js';
 import { createTerritoryService, createTileBattlePort } from '../modules/territory/service.js';
+import { createRoadsRepo } from '../modules/roads/repo.js';
+import { createTendingRepo } from '../modules/territory/repo.js';
 import { createTradesService } from '../modules/trades/service.js';
 import { createTutorialConsumer } from '../modules/tutorial/consumer.js';
 import { createTutorialRepo } from '../modules/tutorial/repo.js';
@@ -78,6 +80,8 @@ import {
   fenceSegments,
   gameEvents,
   tileExplore,
+  tileRoads,
+  tileTending,
   gatherJobs,
   heartCoinLedger,
   houseGifts,
@@ -2021,6 +2025,57 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       ).map((f) => f.id);
     });
     expect(locked).toEqual(fenceIds);
+  });
+
+  it('locks the roads on lost land in tile id order (roads `lockOnTiles`, #621 step 6b)', async () => {
+    const { mapId, userId, tileIds } = await fires();
+    await db
+      .insert(tileRoads)
+      .values(
+        [...tileIds].reverse().map((tileId) => ({ tileId, mapId, ownerUserId: userId, level: 1 })),
+      );
+    const lockRoadRow = (tx: Transaction, id: string) =>
+      tx
+        .select({ id: tileRoads.tileId })
+        .from(tileRoads)
+        .where(eq(tileRoads.tileId, id))
+        .for('update');
+    let locked: string[] = [];
+    await rowsAgainst(lockRoadRow, tileIds, async () => {
+      locked = (
+        await unplanned((tx) => createRoadsRepo(tx).lockOnTiles([...tileIds].reverse()))
+      ).map((r) => r.tileId);
+    });
+    expect(locked).toEqual(tileIds);
+  });
+
+  it("locks a supply line's tending rows in tile id order (territory `lockForSupply`, #621 step 6)", async () => {
+    const { mapId, tileIds } = await fires();
+    await db
+      .insert(tileTending)
+      .values([...tileIds].reverse().map((tileId) => ({ tileId, mapId, tendedAt: new Date() })));
+    const lockTendingRow = (tx: Transaction, id: string) =>
+      tx
+        .select({ id: tileTending.tileId })
+        .from(tileTending)
+        .where(eq(tileTending.tileId, id))
+        .for('update');
+    let locked: string[] = [];
+    // Nightfall's own pass waits for the rows, in tile id order.
+    await rowsAgainst(lockTendingRow, tileIds, async () => {
+      locked = await unplanned((tx) =>
+        createTendingRepo(tx).lockForSupply([...tileIds].reverse(), false),
+      );
+    });
+    expect(locked).toEqual(tileIds);
+    // A capture or road command never waits: it passes over a row held elsewhere.
+    await db.transaction(async (tx) => {
+      await lockTendingRow(tx, tileIds[1]!);
+      const skipped = await unplanned((inner) =>
+        createTendingRepo(inner).lockForSupply([...tileIds].reverse(), true),
+      );
+      expect(skipped).toEqual([tileIds[0], tileIds[2]]);
+    });
   });
 
   it("locks players' explored rows in (user, tile) order (explore `lockExplored`, #199)", async () => {

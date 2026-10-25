@@ -2,9 +2,12 @@ export * from './home-ring.js';
 export * from './extra-nodes.js';
 export * from './trading-posts.js';
 export * from './communities.js';
+export * from './wild-isle.js';
 import { extraNodes } from './extra-nodes.js';
 import { placeCommunities, type CellarKeyRange, type PlacedCommunity } from './communities.js';
 import { placeTradingPosts } from './trading-posts.js';
+import { generateWildIsle } from './wild-isle.js';
+import type { PatchType } from '../patch-types/patch-type.js';
 import { TRADING_POST_TERRAIN } from '../territory/reach.js';
 
 import {
@@ -41,6 +44,11 @@ export interface MapTile {
    * from the secret spawn tables. `null` on home tiles.
    */
   readonly guardianStrength: number | null;
+  /**
+   * Wild Isle (#621): which offshore isle (1 up) the tile stands on, stored
+   * as `tiles.isle`. Absent on the main island and on every Cozy Patch.
+   */
+  readonly isle?: number;
 }
 
 export interface GeneratedMap {
@@ -77,6 +85,8 @@ export interface GenerateMapOptions {
    * (a client preview) the villages have no key tile.
    */
   readonly cellarKeys?: CellarKeyRange;
+  /** Which generator (#621): `cozy` (the default) is today's, unchanged. */
+  readonly patchType?: PatchType;
 }
 
 /** The map size for a player count, or a `RangeError` if none is configured. */
@@ -151,6 +161,7 @@ function fairestRotations(
  * holding it could predict every tile's guardians and spawns.
  */
 export function generateMap(data: MapGenData, options: GenerateMapOptions): GeneratedMap {
+  if (options.patchType === 'wild-isle') return generateWildIsle(data, options);
   const map = generateMapBeforePosts(data, options);
   // Trading posts (#269): the last pass, with its own seed, so every pass
   // before it stays as it was. A post's tile keeps no node and no guardians.

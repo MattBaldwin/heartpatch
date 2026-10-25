@@ -407,3 +407,64 @@
     display: none;
   }
 }
+
+/* A phone on its side (controls D2, ../../ui/breakpoints.ts): the team sheet
+   is two columns, the title, slots and Save on the left and the squishies on
+   the right, which scroll on their own. */
+@media (max-height: 520px) and (min-width: 640px) {
+  .jobs-sheet:not([hidden]):has(> .team-list) {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    grid-template-rows: auto auto auto auto minmax(0, 1fr);
+    column-gap: 16px;
+    max-width: 640px;
+    height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 84px);
+    padding-block: 10px;
+    overflow: hidden;
+  }
+
+  .jobs-sheet:has(> .team-list) > * {
+    grid-column: 1;
+  }
+
+  .jobs-sheet:has(> .team-list) > .tile-panel-head {
+    grid-row: 1;
+  }
+
+  .jobs-sheet:has(> .team-list) > .jobs-small {
+    grid-row: 2;
+    margin: 2px 0;
+  }
+
+  .jobs-sheet:has(> .team-list) > .team-slots {
+    grid-row: 3;
+    margin: 6px 0;
+  }
+
+  .jobs-sheet:has(> .team-list) > .jobs-note {
+    grid-row: 4;
+    margin: 2px 0;
+  }
+
+  .jobs-sheet:has(> .team-list) > .auth-button {
+    grid-row: 5;
+    align-self: start;
+  }
+
+  .jobs-sheet:has(> .team-list) > .team-list {
+    grid-column: 2;
+    grid-row: 1 / -1;
+    min-height: 0;
+    padding-right: 4px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .team-slot {
+    min-height: 60px;
+  }
+
+  .team-candidate {
+    margin: 0 0 6px;
+  }
+}

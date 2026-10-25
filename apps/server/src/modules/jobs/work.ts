@@ -4,7 +4,9 @@ import {
   gameplayOverrides,
   homesteadQuantity,
   JOB_RULES,
+  roadSpeedPercent,
   trainingProgressAround,
+  TRAVEL_RULES,
   workCycleSeconds,
   workProgressAround,
   workSource,
@@ -63,7 +65,16 @@ export function workAt(row: JobRow, map: JobMap, at: Date, justTaken = false) {
     homesteadOf(homestead) === 'joined'
       ? { ...found, quantity: homesteadQuantity(found.quantity, EXPLORE_RULES) }
       : found;
-  const speedPercent = workSpeedPercent(traitsOf(row.squishy), source.resource, JOB_RULES);
+  // A road of its owner's on the tile (Wild Isle #621) quickens it. Read at
+  // the instant like the homestead bonus: a road laid mid-gather counts for
+  // the whole unbanked stretch.
+  const road = roadSpeedPercent(row.workTile.roadLevel ?? null, TRAVEL_RULES);
+  const speedPercent = workSpeedPercent(
+    traitsOf(row.squishy),
+    source.resource,
+    JOB_RULES,
+    road === null ? [] : [road],
+  );
   const cycleSeconds = workCycleSeconds(
     source.seconds,
     speedPercent,

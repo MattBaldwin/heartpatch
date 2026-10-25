@@ -3,9 +3,14 @@ import { TERRITORY_RULES } from '../data/territory.js';
 import { checkTerritoryRules } from '../schemas/data/territory.js';
 import {
   canFade,
+  clockFadePercent,
+  clockMood,
+  fadeClock,
   fadePercent,
   landMood,
   missesYouAt,
+  strandedClock,
+  tendingClock,
   tilesGoingWild,
   wildFrom,
   wildPerNight,
@@ -118,5 +123,76 @@ describe('tilesGoingWild', () => {
 
   it('takes nothing from a tended patch', () => {
     expect(tilesGoingWild([t(5, 0, 'me', 1)], seeds, NOW, 3, RULES)).toEqual([]);
+  });
+});
+
+describe('stranded land (Wild Isle, #621)', () => {
+  const STRANDED = { afterHours: 36, graceHoursAfterBridgeLoss: 12 };
+  const hoursAgo = (hours: number) => new Date(NOW.getTime() - hours * 60 * 60 * 1000);
+  const seeds = new Map([['me', { q: 0, r: 0 }]]);
+  const t = (q: number, days: number, strandedSince: Date | null = null): TendingTile => ({
+    q,
+    r: 0,
+    ownerUserId: 'me',
+    homeSlot: null,
+    tendedAt: daysAgo(days),
+    strandedSince,
+  });
+
+  it('fades at once and goes wild `afterHours` later', () => {
+    const clock = strandedClock(hoursAgo(0), STRANDED);
+    expect(clock.stranded).toBe(true);
+    expect(clockMood(clock, NOW)).toBe('misses-you');
+    expect(clockMood(strandedClock(hoursAgo(35.9), STRANDED), NOW)).toBe('misses-you');
+    expect(clockMood(strandedClock(hoursAgo(36), STRANDED), NOW)).toBe('going-wild');
+    expect(clockFadePercent(strandedClock(hoursAgo(18), STRANDED), NOW)).toBe(50);
+  });
+
+  it('a lost bridge’s grace keeps it happy until stranding starts', () => {
+    const since = new Date(NOW.getTime() + STRANDED.graceHoursAfterBridgeLoss * 3_600_000);
+    expect(clockMood(strandedClock(since, STRANDED), NOW)).toBe('happy');
+  });
+
+  it('fades by whichever clock ends first', () => {
+    // Untended 7 days (wild in 1 day) and stranded 1 hour (wild in 35 h): tending wins.
+    const tending = fadeClock(daysAgo(7), hoursAgo(1), RULES, STRANDED);
+    expect(tending.stranded).toBe(false);
+    // Tended yesterday, stranded 30 h ago (wild in 6 h): stranded wins.
+    const cutOff = fadeClock(daysAgo(1), hoursAgo(30), RULES, STRANDED);
+    expect(cutOff.stranded).toBe(true);
+    expect(clockMood(cutOff, NOW)).toBe('misses-you');
+    // No stranded rules (a Cozy Patch) or not stranded: the tending clock.
+    expect(fadeClock(daysAgo(1), hoursAgo(30), RULES, null)).toEqual(
+      tendingClock(daysAgo(1), RULES),
+    );
+    expect(fadeClock(daysAgo(1), null, RULES, STRANDED)).toEqual(tendingClock(daysAgo(1), RULES));
+  });
+
+  it('keeps landMood and fadePercent what they were', () => {
+    for (const days of [0, 4.99, 5, 6.5, 7.99, 8, 9]) {
+      const clock = tendingClock(daysAgo(days), RULES);
+      expect(clockMood(clock, NOW)).toBe(landMood(daysAgo(days), NOW, RULES));
+      expect(clockFadePercent(clock, NOW)).toBe(fadePercent(daysAgo(days), NOW, RULES));
+    }
+  });
+
+  it('picks stranded land with untended land under the same cap, farthest first', () => {
+    const tiles = [
+      t(3, 9), // untended, distance 3
+      t(5, 1, hoursAgo(40)), // stranded long enough, distance 5
+      t(6, 1, hoursAgo(10)), // stranded, not long enough
+      t(4, 1, hoursAgo(50)), // stranded, distance 4
+      t(2, 1, hoursAgo(50)), // the kept ring never strands
+    ];
+    const going = tilesGoingWild(tiles, seeds, NOW, 2, RULES, STRANDED);
+    expect(going.map((g) => g.q)).toEqual([5, 4]);
+    expect(tilesGoingWild(tiles, seeds, NOW, 5, RULES, STRANDED).map((g) => g.q)).toEqual([
+      5, 4, 3,
+    ]);
+  });
+
+  it('never strands on a Cozy Patch (no stranded rules)', () => {
+    const tiles = [t(5, 1, hoursAgo(400)), t(4, 1, hoursAgo(400))];
+    expect(tilesGoingWild(tiles, seeds, NOW, 3, RULES)).toEqual([]);
   });
 });
