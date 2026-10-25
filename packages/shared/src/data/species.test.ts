@@ -343,5 +343,7 @@ describe('balance intent (design doc §5), played with the real engine', () => {
     // TUNE: rarer squishies win a little more often, but nobody is strictly best.
     const outliers = rates.filter((r) => r.rate < 0.25 || r.rate > 0.75);
     expect(outliers).toEqual([]);
-  });
+    // Every pair plays 30 real battles, and wave 2's nine bases joined the field, so this
+    // took ~5s under CI's coverage instrumentation (the default timeout).
+  }, 30_000);
 });
