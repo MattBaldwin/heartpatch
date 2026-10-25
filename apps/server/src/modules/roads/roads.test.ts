@@ -358,8 +358,16 @@ describe.skipIf(!url)('roads, reach and supply (needs DATABASE_URL)', () => {
     expect(await strandedOf(line[5]!.id)).toBeNull();
     expect(await eventsOf(mapId, 'tile.supplied')).toHaveLength(1);
 
-    // Taken up again: cut off, and past `afterHours` it goes wild at nightfall.
+    // Taken up again: cut off, and past `afterHours` it goes wild at nightfall,
+    // a road on it too (half back).
     expect((await road(server, kid, mapId, line[2]!, '/remove')).statusCode).toBe(200);
+    await db.insert(tileRoads).values({
+      tileId: line[5]!.id,
+      mapId,
+      ownerUserId: kid.id,
+      level: 1,
+      builtAt: clock,
+    });
     clock.setTime(wildAt.getTime() + HOUR_MS);
     const land = createLandTending({ db, clock: () => clock });
     expect(await land.nightfall(mapId, localDate(clock, ZONE))).toEqual({ wild: 2 });
@@ -370,6 +378,18 @@ describe.skipIf(!url)('roads, reach and supply (needs DATABASE_URL)', () => {
       userId: kid.id,
       cause: 'stranded',
     });
+    const lost = (await eventsOf(mapId, 'road.removed')).map((e) =>
+      parseGameEventPayload('road.removed', e.payload),
+    );
+    const wildRefund = roadRefund(1, TRAVEL_RULES, HOME_BASE_RULES);
+    expect(lost.at(-1)).toMatchObject({ userId: kid.id, lost: 'wild', refund: wildRefund });
+    const takenUp = roadRefund(2, TRAVEL_RULES, HOME_BASE_RULES);
+    const both: Record<string, number> = { ...takenUp };
+    for (const [id, n] of Object.entries(wildRefund)) both[id] = (both[id] ?? 0) + n;
+    expect(await ledgerOf(mapId, kid.id, 'road-refund')).toEqual(both);
+    expect(await db.query.tileRoads.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) })).toEqual(
+      [],
+    );
   });
 
   it('claims along a road’s reach, and never water', async () => {
@@ -420,6 +440,8 @@ describe.skipIf(!url)('roads, reach and supply (needs DATABASE_URL)', () => {
     clock.setTime(clock.getTime() + (TERRITORY_RULES.newPlayerShieldHours + 1) * HOUR_MS);
     const line = await lineFrom(mapId, kid);
     await own(mapId, line[2]!, rival.id);
+    // The rival's land past it, joined to theirs only through (2) once it's won.
+    await own(mapId, line[3]!, rival.id);
     // The rival's road there (laid as their own command would, on their land).
     await db.insert(tileRoads).values({
       tileId: line[2]!.id,
@@ -458,6 +480,15 @@ describe.skipIf(!url)('roads, reach and supply (needs DATABASE_URL)', () => {
       userId: rival.id,
       lost: 'captured',
       refund,
+    });
+    // The capture cut the rival's land beyond off from their home.
+    expect(await strandedOf(line[3]!.id)).not.toBeNull();
+    const stranded = (await eventsOf(mapId, 'tile.stranded')).map((e) =>
+      parseGameEventPayload('tile.stranded', e.payload),
+    );
+    expect(stranded).toContainEqual({
+      userId: rival.id,
+      tiles: [{ q: line[3]!.q, r: line[3]!.r }],
     });
   });
 

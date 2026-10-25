@@ -304,6 +304,8 @@ function queries(db: Executor): SquishyJobsRepo {
         and(
           eq(tileRoads.tileId, squishies.workTileId),
           eq(tileRoads.ownerUserId, squishies.ownerUserId),
+          // A road counts only while its owner holds the tile (`listLive`).
+          eq(tileRoads.ownerUserId, workTile.ownerUserId),
         ),
       )
       .leftJoin(tileDefenders, eq(tileDefenders.squishyId, squishies.id))

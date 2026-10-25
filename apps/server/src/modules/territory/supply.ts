@@ -13,7 +13,7 @@ import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { createRoadsRepo } from '../roads/repo.js';
-import { createTendingRepo, createTerritoryRepo } from './repo.js';
+import { createTendingRepo, createTerritoryRepo, type TendingTileRow } from './repo.js';
 
 /*
  * The supply line home on a Wild Isle (#621): land cut off from its owner's
@@ -45,6 +45,21 @@ export async function mapPatchRules(tx: Executor, mapId: string): Promise<PatchR
   return patchType === null ? null : patchRules(patchType);
 }
 
+/**
+ * What every supply line on the map is worked out from: the tiles, live roads
+ * and bridges. The one loader, so `supplyFor` and `refreshSupply` can't drift
+ * (W1-5b adds its crossings here).
+ */
+async function supplyInputs(tx: Executor, mapId: string) {
+  const roads = createRoadsRepo(tx);
+  const [tiles, live, bridges] = await Promise.all([
+    createTerritoryRepo(tx).listTiles(mapId),
+    roads.listLive(mapId),
+    roads.bridges(mapId),
+  ]);
+  return { tiles, live, bridges };
+}
+
 /** A player's supply line home on a Wild Isle, read in `tx`. */
 export async function supplyFor(
   tx: Executor,
@@ -52,12 +67,7 @@ export async function supplyFor(
   userId: string,
   travel: TravelRules,
 ): Promise<Supply> {
-  const roads = createRoadsRepo(tx);
-  const [tiles, live, bridges] = await Promise.all([
-    createTerritoryRepo(tx).listTiles(mapId),
-    roads.listLive(mapId),
-    roads.bridges(mapId),
-  ]);
+  const { tiles, live, bridges } = await supplyInputs(tx, mapId);
   return supplyMap(tiles, live, bridges, userId, travel);
 }
 
@@ -96,18 +106,20 @@ export async function refreshSupply(
   const players = [...new Set(userIds)].sort();
   if (players.length === 0) return [];
   const tending = createTendingRepo(tx);
-  const roads = createRoadsRepo(tx);
-  const [tiles, live, bridges, homes] = await Promise.all([
-    createTerritoryRepo(tx).listTiles(mapId),
-    roads.listLive(mapId),
-    roads.bridges(mapId),
+  // Read before any lock: a road laid between this read and the locks below
+  // can leave a tile marked a night early or late; its clock is fresh, so it
+  // never goes wild for it, and the next nightfall's pass puts it right.
+  const [{ tiles, live, bridges }, homes] = await Promise.all([
+    supplyInputs(tx, mapId),
     createSquishyJobsRepo(tx).homeTiles(mapId),
   ]);
   const seeds = heartSeeds(homes);
   const since = options.lostCrossing
     ? new Date(at.getTime() + travel.stranded.graceHoursAfterBridgeLoss * HOUR_MS)
     : at;
-  const events: NewGameEvent[] = [];
+  // Every player's changes first, then one lock over all their rows in tile
+  // id order (a waiting pass must never lock player by player).
+  const changes: { userId: string; cut: TendingTileRow[]; joined: TendingTileRow[] }[] = [];
   for (const userId of players) {
     const { supplied } = supplyMap(tiles, live, bridges, userId, travel);
     const seed = seeds.get(userId) ?? null;
@@ -119,13 +131,18 @@ export async function refreshSupply(
     const joined = outer.filter(
       (t) => (t.strandedSince ?? null) !== null && supplied.has(hexKey(t)),
     );
-    if (cut.length + joined.length === 0) continue;
-    const held = new Set(
-      await tending.lockForSupply(
-        [...cut, ...joined].map((t) => t.id),
-        !options.wait,
-      ),
-    );
+    if (cut.length + joined.length > 0) changes.push({ userId, cut, joined });
+  }
+  if (changes.length === 0) return [];
+  const held = new Set(
+    await tending.lockForSupply(
+      changes.flatMap((c) => [...c.cut, ...c.joined]).map((t) => t.id),
+      !options.wait,
+    ),
+  );
+  const events: NewGameEvent[] = [];
+  const place = ({ q, r }: Hex) => ({ q, r });
+  for (const { userId, cut, joined } of changes) {
     const stranded = cut.filter((t) => held.has(t.id));
     const resupplied = joined.filter((t) => held.has(t.id));
     await tending.strand(
@@ -133,7 +150,6 @@ export async function refreshSupply(
       since,
     );
     await tending.unstrand(resupplied.map((t) => t.id));
-    const place = ({ q, r }: Hex) => ({ q, r });
     if (stranded.length > 0) {
       events.push({
         mapId,
