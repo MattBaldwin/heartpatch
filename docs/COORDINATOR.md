@@ -189,7 +189,7 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 19 handoff, 2026-10-25 ~18:00 UTC):** main `14686fd` (#691). Phase 1 is due Oct 31. DECISIONS is current through "2026-10-25 — Owner decisions and coordinator calls (supervisor 19)". Supervisor 19 is `session_011PCmEwUJ3VqaBHuzHe222J` (lineage depth 2). It took over from supervisor 18 at 14:55Z. Merged under supervisor 19: #688, #689, #690, #691 (#684 and #687 just before). Supervisors 17 and 18 are archived (owner).
+- **State (supervisor 19 handoff, 2026-10-25 ~18:00 UTC):** main `14686fd` (#691), migrations through 0061. Phase 1 is due Oct 31. DECISIONS is current through "2026-10-25 — Owner decisions and coordinator calls (supervisor 19)". Supervisor 19 is `session_011PCmEwUJ3VqaBHuzHe222J` (lineage depth 2). It took over from supervisor 18 at 14:55Z. Merged under supervisor 19: #688, #689, #690, #691 (#684 and #687 just before). Supervisors 17 and 18 are archived (owner).
 - **Lanes in flight.** **The new supervisor's first job:** send each lane its session id with "report to me from now on (not @parent, not supervisor 19)" and confirm each switch (§8).
 
 | Lane | Session | Model | State at handoff |
@@ -197,16 +197,16 @@ The supervisor keeps this list current. Remove items as they land.
 | #621 W1-6 roads client | session_01G9J962SoXT9vA6nTummNTm | Sonnet | PR #685 draft (`bbf51a9`). The supervisor's render-check was FIX (8 items: a dock panel says "ferry can take you here" while standing on it; 4 filled primaries; stranded tiles look like home; no can't-build frame; path vs road levels; captions and copy). Fixing, then review round 2. Shared tile check renamed `travelBuildCheck`. It must say in the PR body why there's no `changes/` entry. |
 | #621 W1-9 weather client | session_014d39xXqoB95bjJnNZcn3QH | Sonnet | PR #686 (`8d81418`); only `lobby.spec.ts:9` is red (main-wide, not its). Fixing UI bugs, then re-shoot, screens, review. |
 | #382 Wave 2d | session_01XvTkhMzo8Ncw6Cv2rrv9Lw | Sonnet | Branch `issue-382-wave-2`, sheet v8+ (artifact Y1aUbo2qTGEvHD8mECXTH6). The v7 fix list is done; three small items are in progress. **Waiting on two owner decisions, asked one at a time:** (1) the bears' hug, A = arms wrap a big red heart held to the chest (recommended), B = a dark-brown ring around the belly (asked 16:53Z, re-pushed 17:53Z); (2) then the Soapduke ruff, A = a collar of 8–10 white spheres wider than the head (recommended), B = a tall foam-bubble crown. Relay each answer. Then ONE independent render-check of the whole sheet, then the owner, then the PR. |
-| Fix: lobby.spec friend login | session_01HV1KoKFHZSUMD8pq4LDYmP | Opus | `lobby.spec.ts:9` (ipad-webkit 2) is red on main at 95d6998 and f48edb9 and on #686/#689. Root cause, then a robustness fix. It was idle without a PR at 17:53Z and was nudged. |
+| Fix: lobby.spec friend login | session_01HV1KoKFHZSUMD8pq4LDYmP | Opus | `lobby.spec.ts:9` (ipad-webkit 2) is red on main at 95d6998 and f48edb9 and on #686/#689. Root cause, then a robustness fix. PR #692 (`f6106df`) is open with a reviewer APPROVE; CI is running. |
 | Wild Isle planner | session_01PdqoGSArLRgVrdshJnaZvq | Fable | Idle. Archive after Wave 1 is done and merged (owner, 2026-10-25). |
 
 - **Queue (start in this order as lanes free up):**
   1. W1-10 and W1-11 per plan §6 and revision 1. `coast` still needs spawn/guardian tables (#382's lane area) before Wild Isle creation opens.
-  3. #655 E (Chore: drop the legacy one-line sell request) one release after C.
-  4. The server adopts W1-6's `travelBuildCheck` for bridge and dock placement once #685 merges (DECISIONS, supervisor 19).
-  5. **Layout polish lane (seen in #688 and #685 render-checks, pre-existing):** the iPhone SE paw button overlaps "My patches" (serious: taps are ambiguous); on iPad the tile panel covers the Wild Isle pill; phone bottom panels clip their lower rows; a "Log out" chip shows behind the Build sheet; the dark-spots pills show through. Also `house.spec.ts:611` showed as flaky on #689.
-  6. Leftover `.auth-button` sites (B2b handoff on #674).
-  7. **Logged nits:**
+  2. #655 E (Chore: drop the legacy one-line sell request) one release after C.
+  3. The server adopts W1-6's `travelBuildCheck` for bridge and dock placement once #685 merges (DECISIONS, supervisor 19).
+  4. **Layout polish lane (seen in #688 and #685 render-checks, pre-existing):** the iPhone SE paw button overlaps "My patches" (serious: taps are ambiguous); on iPad the tile panel covers the Wild Isle pill; phone bottom panels clip their lower rows; a "Log out" chip shows behind the Build sheet; the dark-spots pills show through. Also `house.spec.ts:611` showed as flaky on #689.
+  5. Leftover `.auth-button` sites (B2b handoff on #674).
+  6. **Logged nits:**
      - the What's new date wraps on SE
      - `isPlural` in crooked-text.ts
      - the 6e/6f nits
@@ -219,9 +219,8 @@ The supervisor keeps this list current. Remove items as they land.
      - #681: the patch card shows two filled primary buttons (pre-existing)
      - TECH_SPEC §7 "Selling to the post" is stale after #668 (a Docs follow-up)
      - #682 and #683 follow-ups are in DECISIONS (supervisor 18)
-  8. **Owner to-dos:** optionally allow kenney.nl, opengameart.org and freesound.org (Network access → Allowed domains). Optionally delete the stale remote branch `chore-ci-e2e-timeout` (auto mode blocks the coordinator from deleting it).
+  7. **Owner to-dos:** optionally allow kenney.nl, opengameart.org and freesound.org (Network access → Allowed domains). Optionally delete the stale remote branch `chore-ci-e2e-timeout` (auto mode blocks the coordinator from deleting it).
 - **Sweep helper:** the supervisor's sweep script checked, for each open PR, the head SHA, check-run counts, a reviewer APPROVE comment naming the head, and `git merge-tree --write-tree origin/main <head>`. Recreate it in your scratchpad.
-- **Watch:** `lobby.spec.ts:9` (owner/friend join) hit its 120 s timeout twice on one ipad-webkit group 5 run on PR #644, then passed. If it recurs, it gets a robustness fix.
 - **Filed, no lane yet:** #341 (Forest Chihuahua, Phase 2), #319 and #320 (Phase 2).
 - **Check-in (owner, 2026-10-23):** a supervisor sweep every ~20 min while lanes are active, via a self-bound trigger (arm your own and delete your predecessor's). The owner asked for active supervision: sweep GitHub for open PRs (no PR subscriptions, §5), merge on the gates, nudge stuck lanes, and start the next queued lane.
 - **Owner working style (supervisor 5 handoff):** explain the technical reasons; ask ONE question at a time with the recommended option first; open screenshots and mockups as they arrive; say when something is testable locally (DEPLOY.md §9). Opus 5.5 builds and reviews code, Sonnet 5.5 writes and reviews docs; Fable only when the owner explicitly asks, for a periodic end-to-end review (§6). Nothing visual is built without an owner-approved mockup or captures first. **Show the screens before asking (2026-10-11, relayed by the coordinator):** always send the owner the images, or open the artifact, before asking him to choose or approve. Never ask an approval question with only a link. **Features must be felt (2026-10-11, relayed by the coordinator):** a feature needs visible feedback, not just correct text, and the home must be personal and personalizable. **Squishies are the most important visual part (2026-10-11, relayed by the coordinator):** every new kind needs a unique, memorable hook and a distinct silhouette, with a creative brief and a duplication check before building. Quality beats dates: ship fewer great kinds rather than more weak ones.
