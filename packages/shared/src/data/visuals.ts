@@ -2221,16 +2221,16 @@ export const PARTS: Part[] = [
     sink: 0.25,
     jitter: 0.03,
   },
-  // A big white ruff of suds spheres in a ring wider than the head, sticking out past the neck from the front.
+  // A white ruff of nine suds spheres round the neck, wider than the head and open at the front so the bill stays clear.
   {
     id: 'suds-ruff',
     slot: 'mane',
     shape: 'ellipsoid',
-    size: [0.72, 0.72, 0.72],
+    size: [0.5, 0.5, 0.5],
     color: 'white',
-    layout: { kind: 'ring', count: 10, spread: 180 },
-    around: 180,
-    up: -40,
+    layout: { kind: 'ring', count: 9, spread: 110 },
+    around: 145,
+    up: -19,
     tilt: -10,
     sink: 0,
     jitter: 0.06,
