@@ -49,8 +49,9 @@ export function toPublicBuilding(row: BuildingRow, local: MapLocalTime): PublicB
     spot: row.spot,
     lit: radius === null ? null : hearthfireState(row.fuelledThrough, local, HOME_BASE_RULES).lit,
     safeRadius: radius,
-    // Napping for unpaid upkeep (#601): resource buildings and the Warehouse only.
-    ...(row.kind === 'resource' || row.kind === 'warehouse'
+    // Napping for unpaid upkeep (#601): resource buildings, the Warehouse
+    // and Wild Isle works (#621 W1-8) only.
+    ...(row.kind === 'resource' || row.kind === 'warehouse' || row.kind === 'works'
       ? { paused: row.pausedAt !== null }
       : {}),
     // Knocked about by a storm (Wild Isle #621): only ever set there.

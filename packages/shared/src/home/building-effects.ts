@@ -1,8 +1,15 @@
-import type { Building, ResourceBuildingRules } from '../schemas/data/buildings.js';
+import type {
+  Building,
+  NeedsWaterSchema,
+  ResourceBuildingRules,
+} from '../schemas/data/buildings.js';
 import type { ElementId, FeelingId } from '../schemas/data/elements.js';
 import type { ExploreRules } from '../schemas/data/explore.js';
 import type { JobRules } from '../schemas/data/jobs.js';
-import { productionCycleSeconds, productionSource } from './production.js';
+import type { WeatherKind } from '../schemas/data/weather.js';
+import type { ItemCounts } from '../gathering/index.js';
+import type { z } from 'zod';
+import { productionCycleSeconds, productionSource, worksSource } from './production.js';
 
 // What a building does (#207), worked out from its data alone, so a new
 // building gets its build-menu chips without engine code (CLAUDE.md rule 5).
@@ -66,7 +73,8 @@ export function buildingEffects(building: Building, level = 1): BuildingEffect[]
     case 'shelter':
     case 'vane':
     case 'travel':
-      // Wild Isle kinds (#621): their rows come with the lanes that build them.
+      // Wild Isle kinds (#621): `wildIsleEffects` (and a works' output,
+      // `economyEffects`), kept apart so an older build menu stays exhaustive.
       return [];
   }
 }
@@ -123,9 +131,13 @@ export function economyEffects(
       { kind: 'delivers', fromLevel: rules.resourceBuildings.warehouseDeliversFromLevel, upkeep },
     ];
   }
-  if (building.kind !== 'resource') return [];
+  if (building.kind !== 'resource' && building.kind !== 'works') return [];
   const row = levelRow(building.levels, level);
-  const source = productionSource(building, rules.jobs, rules.explore);
+  // A Wild Isle works (#621 W1-8): its own `makes`, at 100 % pace.
+  const source =
+    building.kind === 'works'
+      ? worksSource(building)
+      : productionSource(building, rules.jobs, rules.explore);
   if (!source) return [];
   const cycle = productionCycleSeconds(source.seconds, row, rules.jobs);
   return [
@@ -137,4 +149,68 @@ export function economyEffects(
       upkeep: row.upkeep,
     },
   ];
+}
+
+/**
+ * What a Wild Isle building does besides making things (#621 W1-8), for its
+ * build card. Its own union, like `EconomyEffect` was, so the client words
+ * these before any older chip switch sees one.
+ */
+export type WildIsleEffect =
+  /** It only stands next to one of these (an edge-to-edge neighbour). */
+  | { readonly kind: 'needs-water'; readonly water: readonly z.infer<typeof NeedsWaterSchema>[] }
+  /** It takes these from the bag each cycle (a Watermill's Greens). */
+  | { readonly kind: 'eats'; readonly items: Readonly<ItemCounts> }
+  /** Its pace under a front of each kind, as a whole percent. */
+  | {
+      readonly kind: 'weather';
+      readonly percent: Readonly<Partial<Record<WeatherKind, number>>>;
+    }
+  /** It only works under a front of this kind (the Rain Barrel). */
+  | { readonly kind: 'only-while'; readonly weather: WeatherKind }
+  /** A Canal: carries water this many canals inland. */
+  | { readonly kind: 'carries-water'; readonly maxRun: number }
+  /** A Levee or Seawall: buildings this many tiles around are kept from these. */
+  | {
+      readonly kind: 'shelters';
+      readonly radius: number;
+      readonly from: readonly ('storm' | 'flood')[];
+    }
+  /** The Weather Vane: its owner sees tomorrow's fronts in full. */
+  | { readonly kind: 'forecast' }
+  /** A storm never knocks it, and its pace ignores the weather (the Greenhouse). */
+  | { readonly kind: 'weatherproof' };
+
+/** What a Wild Isle building does (#621 W1-8), in the order a card shows it; `[]` for the rest. */
+export function wildIsleEffects(building: Building): WildIsleEffect[] {
+  const out: WildIsleEffect[] = [];
+  if ('needsWater' in building && building.needsWater) {
+    out.push({ kind: 'needs-water', water: building.needsWater });
+  }
+  switch (building.kind) {
+    case 'works':
+      if (building.eats) out.push({ kind: 'eats', items: building.eats });
+      if (building.weather && Object.keys(building.weather).length > 0) {
+        out.push({ kind: 'weather', percent: building.weather });
+      }
+      if (building.onlyWhile) out.push({ kind: 'only-while', weather: building.onlyWhile });
+      break;
+    case 'canal':
+      out.push({ kind: 'carries-water', maxRun: building.maxRun });
+      break;
+    case 'shelter':
+      out.push({
+        kind: 'shelters',
+        radius: building.protects.radius,
+        from: building.protects.from,
+      });
+      break;
+    case 'vane':
+      out.push({ kind: 'forecast' });
+      break;
+    default:
+      break;
+  }
+  if (building.weatherproof === true) out.push({ kind: 'weatherproof' });
+  return out;
 }

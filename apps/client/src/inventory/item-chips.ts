@@ -79,6 +79,9 @@ export function itemChip(effect: ItemEffect): ItemChip {
       return chip(`🤗 Care: ${effect.actions.map((a) => CARE_NAMES.get(a) ?? a).join(' · ')}`);
     case 'keepsake':
       return chip(`🎀 A ${SEASON_NAMES.get(effect.season) ?? effect.season} keepsake`);
+    case 'made-at':
+      // Wild Isle's water works (#621 W1-8): "Made at a Watermill".
+      return chip(`🌊 Made at ${few(effect.buildings.map((b) => article(building(b))))}`);
   }
 }
 
