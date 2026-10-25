@@ -196,9 +196,9 @@
   align-items: center;
   gap: 10px;
   max-width: calc(100vw - 32px);
-  /* Room for the Log out button's lip, and a gap on its right so the pill
-     button sits inside the pill chip. */
-  padding: 5px 8px 8px 14px;
+  /* Same 52px height as before; the 5px below holds the Log out button's 3px
+     lip, and the 8px on its right sits the pill button inside the pill chip. */
+  padding: 3px 8px 5px 14px;
   border-radius: 999px;
   background: rgb(255 255 255 / 85%);
   font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
