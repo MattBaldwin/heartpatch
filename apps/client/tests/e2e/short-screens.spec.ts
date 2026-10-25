@@ -284,10 +284,13 @@ test('a busy tile’s five buttons fit a phone on its side (#264)', async ({ bro
     for (const id of ['tile-home', 'tile-explore']) {
       const oneLine = await panel.getByTestId(id).evaluate((b) => {
         const lineHeight = parseFloat(getComputedStyle(b).lineHeight) || 24;
-        const pad =
-          parseFloat(getComputedStyle(b).paddingTop) +
-          parseFloat(getComputedStyle(b).paddingBottom);
-        return b.scrollWidth <= b.clientWidth && b.clientHeight - pad < lineHeight * 1.6;
+        // The label's own height, not the button's: the kit's min-height
+        // makes a one-line button taller than its text.
+        const label = document.createRange();
+        label.selectNodeContents(b);
+        return (
+          b.scrollWidth <= b.clientWidth && label.getBoundingClientRect().height < lineHeight * 1.6
+        );
       });
       expect(oneLine, `${id} on one line`).toBe(true);
     }
