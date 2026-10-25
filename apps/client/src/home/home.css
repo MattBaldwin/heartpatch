@@ -777,3 +777,64 @@
   font-size: 13px;
   line-height: 1.25;
 }
+
+/* A phone on its side (controls D2, ../ui/breakpoints.ts): the title card and
+   the bottom card shrink so the home base stays in view. The peek bar is one
+   wide row of buttons instead of two, and an opened sheet stops under the
+   title card. (The dev stats badge sits under the title card and behind the
+   sheet, out of the way.) */
+@media (max-height: 520px) and (min-width: 640px) {
+  .home-top {
+    padding: 6px 16px;
+    border-radius: 16px;
+  }
+
+  .home-title {
+    font-size: 18px;
+  }
+
+  .home-fire {
+    margin-top: 0;
+    font-size: 14px;
+  }
+
+  .home-sheet {
+    max-width: 640px;
+    /* Stops under the title card (its top is 68px down, about 56px tall). */
+    max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 148px);
+    padding: 12px 14px 10px;
+  }
+
+  .home-row {
+    margin-top: 6px;
+  }
+
+  .home-row > .home-button {
+    min-height: 44px;
+  }
+
+  /* The peek bar's shortcuts (Squishies, Jobs & team) and its Build row
+     (house, Build, Back to map) share one line. */
+  .home-sheet-peek .home-body {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .home-sheet-peek .home-body > .home-row {
+    flex: 3 1 0;
+    min-width: 0;
+    gap: 6px;
+  }
+
+  .home-sheet-peek .home-body > .home-peek-row {
+    flex: 2 1 0;
+    flex-wrap: nowrap;
+  }
+
+  .home-peek-row > .home-button {
+    min-width: 0;
+    padding-inline: 8px;
+    font-size: 15px;
+  }
+}
