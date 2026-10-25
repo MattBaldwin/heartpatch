@@ -1,4 +1,6 @@
-import { MUSIC, VOICE_STYLES, type VoiceStyle } from './audio-config.js';
+import musicNotesUrl from './samples/music-notes.m4a?url&no-inline';
+import { MUSIC_NOTES, MUSIC_NOTES_LEAD_S } from './music-notes.js';
+import { VOICE_STYLES, type VoiceStyle } from './audio-config.js';
 import type { Note } from './music-score.js';
 import { decode, fetchBytes, type FetchBytes } from './samples.js';
 
@@ -25,32 +27,16 @@ export const INSTRUMENT_IDS: readonly InstrumentId[] = [
 ];
 
 /**
- * Each instrument's files, by the note they sound (`cs3` is C♯3; C4 = MIDI
- * 60). The shaker has no pitch: its files are two shakes, picked in turn.
- * Always real files (`no-inline`, like `samples.ts`): the CSP's
- * `connect-src` blocks fetching a `data:` URL.
+ * Every note lives in one file (`tooling/music-notes/pack.mjs`): one
+ * download and one decode, not 44, so the music never crowds out the game's
+ * own requests or ties up the decoder. Always a real file (`no-inline`, like
+ * `samples.ts`): the CSP's `connect-src` blocks fetching a `data:` URL.
  */
-const FILES: Readonly<Record<InstrumentId, readonly string[]>> = {
-  piano: ['c3', 'g3', 'c4', 'g4', 'c5', 'g5', 'c6'],
-  glock: ['g5', 'c6', 'g6', 'c7'],
-  marimba: ['g3', 'f4', 'c5', 'g5', 'b5'],
-  harp: ['c3', 'g3', 'd4', 'a4', 'e5', 'b5'],
-  strings: ['d3', 'f3', 'a3', 'c4', 'f4', 'a4', 'c5', 'e5'],
-  bass: ['a2', 'cs3', 'e3', 'gs3'],
-  pizz: ['g3', 'd4', 'a4', 'e5'],
-  flute: ['c5', 'e5', 'a5', 'c6'],
-  shaker: ['1', '2'],
-};
-
-const URLS = import.meta.glob<string>('./samples/music/*.m4a', {
-  query: '?url&no-inline',
-  import: 'default',
-  eager: true,
-});
+export const MUSIC_NOTES_URL = musicNotesUrl;
 
 const LETTERS: Readonly<Record<string, number>> = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
 
-/** `cs3` → 49. Unpitched names (`1`) → their index from 0. */
+/** `cs3` → 49. Unpitched names (the shaker's `1`, `2`) → their index from 0. */
 export function noteMidi(name: string): number {
   const match = /^([a-g])(s?)(\d)$/.exec(name);
   if (!match) return Number(name) - 1;
@@ -58,26 +44,14 @@ export function noteMidi(name: string): number {
   return (LETTERS[letter] ?? 0) + (sharp ? 1 : 0) + (Number(octave) + 1) * 12;
 }
 
-export interface InstrumentFile {
-  readonly instrument: InstrumentId;
-  readonly url: string;
+export interface InstrumentNote {
   /** The note it sounds (MIDI), or its index for the shaker. */
   readonly midi: number;
-}
-
-export const INSTRUMENT_FILES: readonly InstrumentFile[] = INSTRUMENT_IDS.flatMap((instrument) =>
-  FILES[instrument].map((name) => {
-    const url = URLS[`./samples/music/${instrument}-${name}.m4a`];
-    if (!url) throw new Error(`missing music sample ${instrument}-${name}`);
-    return { instrument, url, midi: noteMidi(name) };
-  }),
-);
-
-export interface InstrumentNote {
-  readonly midi: number;
+  /** The whole file of notes; this one is a slice of it. */
   readonly buffer: AudioBuffer;
-  /** Seconds of encoder lead-in silence to skip, so every note lands on its beat. */
+  /** Where the note starts in `buffer`, and how long it runs, in seconds. */
   readonly offset: number;
+  readonly length: number;
 }
 
 /** Each instrument's loaded notes, low to high. */
@@ -111,46 +85,45 @@ export function pickNote(
 /** Where the sound starts: the first sample above a whisper, less 2 ms. */
 export function leadIn(buffer: AudioBuffer): number {
   const data = buffer.getChannelData(0);
-  const limit = Math.min(data.length, Math.round(buffer.sampleRate * 0.25));
+  const limit = Math.min(data.length, Math.round(buffer.sampleRate * 0.5));
   for (let i = 0; i < limit; i += 1) {
     if (Math.abs(data[i] ?? 0) > 0.002) return Math.max(0, i / buffer.sampleRate - 0.002);
   }
   return 0;
 }
 
+/** A decoder's extra lead-in is never more than this (AAC primes ~0.1 s at 22 kHz). */
+const MAX_SHIFT_S = 0.25;
+
+/** Slices the decoded file into each instrument's notes, low to high. */
+export function sliceNotes(buffer: AudioBuffer): InstrumentBank {
+  const found = leadIn(buffer) - MUSIC_NOTES_LEAD_S;
+  const shift = Math.abs(found) <= MAX_SHIFT_S ? found : 0;
+  const bank = new Map<InstrumentId, InstrumentNote[]>();
+  for (const [instrument, name, start, length] of MUSIC_NOTES) {
+    const notes = bank.get(instrument) ?? [];
+    notes.push({ midi: noteMidi(name), buffer, offset: start + shift, length });
+    bank.set(instrument, notes);
+  }
+  for (const notes of bank.values()) notes.sort((a, b) => a.midi - b.midi);
+  return bank;
+}
+
 /**
- * Loads and decodes every note, resolving with the whole bank only once all
- * have settled, so a loop never renders from half the notes (a lone note
- * stretched octaves to cover the rest). A note that fails is left out (its
- * neighbours stretch a little to cover it; an instrument with none plays its
- * synth stand-in). Never rejects.
- *
- * Only `parallel` notes load at a time: 44 at once would take every
- * connection the browser allows the host (six over HTTP/1.1), and the
- * game's own requests (signing in, the lobby) would wait behind the music.
+ * Loads and decodes the notes, resolving with the whole bank at once, so a
+ * loop never renders from half of it; empty if the file can't be had
+ * (offline on a first visit), and every voice plays its synth stand-in.
+ * Never rejects.
  */
 export async function loadInstruments(
   ctx: BaseAudioContext,
   fetcher: FetchBytes = fetchBytes,
-  parallel: number = MUSIC.loadParallel,
 ): Promise<InstrumentBank> {
-  const bank = new Map<InstrumentId, InstrumentNote[]>();
-  let next = 0;
-  const worker = async () => {
-    for (let file = INSTRUMENT_FILES[next++]; file; file = INSTRUMENT_FILES[next++]) {
-      try {
-        const buffer = await decode(ctx, await fetcher(file.url));
-        const notes = bank.get(file.instrument) ?? [];
-        notes.push({ midi: file.midi, buffer, offset: leadIn(buffer) });
-        bank.set(file.instrument, notes);
-      } catch {
-        // Offline or undecodable: the synth stands in.
-      }
-    }
-  };
-  await Promise.all(Array.from({ length: Math.max(1, parallel) }, worker));
-  for (const notes of bank.values()) notes.sort((a, b) => a.midi - b.midi);
-  return bank;
+  try {
+    return sliceNotes(await decode(ctx, await fetcher(MUSIC_NOTES_URL)));
+  } catch {
+    return new Map();
+  }
 }
 
 /** Each voice's own level and tone (`VOICE_STYLES`): gain, then its lowpass, into `out`. */
@@ -191,9 +164,9 @@ export function playSampled(
   const out = buses.get(note.voice);
   const picked = pickNote(bank, style.instrument, note.midi);
   if (!picked || !out) return false;
-  const { buffer, offset } = picked.note;
+  const { buffer, offset, length } = picked.note;
   const at = note.beat * spb;
-  const ends = at + (buffer.duration - offset) / picked.rate;
+  const ends = at + length / picked.rate;
   const release = at + note.beats * spb + style.ring;
   const source = ctx.createBufferSource();
   source.buffer = buffer;

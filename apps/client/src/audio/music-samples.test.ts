@@ -1,51 +1,52 @@
 import { describe, expect, it } from 'vitest';
 import { VOICE_STYLES } from './audio-config.js';
+import { MUSIC_NOTES, MUSIC_NOTES_LEAD_S } from './music-notes.js';
 import {
-  INSTRUMENT_FILES,
   INSTRUMENT_IDS,
   leadIn,
   loadInstruments,
+  MUSIC_NOTES_URL,
   noteMidi,
   pickNote,
+  sliceNotes,
   type InstrumentId,
   type InstrumentNote,
 } from './music-samples.js';
 import { SCORES } from './music-score.js';
 
-/** A stand-in context: decodes bytes into a tagged buffer, or fails on 'bad'. */
-const fakeCtx = (bad: ReadonlySet<string> = new Set()) =>
+const RATE = 1000;
+
+/** A decoded file whose first sound starts `extra` seconds later than the packed one's. */
+const fakeFile = (extra = 0): AudioBuffer => {
+  const data = new Float32Array(RATE);
+  data[Math.round((MUSIC_NOTES_LEAD_S + 0.002 + extra) * RATE)] = 0.5;
+  return { duration: 110, sampleRate: RATE, getChannelData: () => data } as unknown as AudioBuffer;
+};
+
+/** A stand-in context that decodes anything into `fakeFile()`, or fails. */
+const fakeCtx = (fails = false) =>
   ({
     decodeAudioData: (
-      bytes: ArrayBuffer,
+      _bytes: ArrayBuffer,
       ok: (b: AudioBuffer) => void,
       fail: (e: Error) => void,
     ): Promise<AudioBuffer> => {
-      const tag = new TextDecoder().decode(bytes);
-      if (bad.has(tag)) {
+      if (fails) {
         fail(new Error('undecodable'));
         return Promise.reject(new Error('undecodable'));
       }
-      const data = new Float32Array(100);
-      data[10] = 0.5;
-      const buffer = {
-        duration: 1,
-        sampleRate: 1000,
-        tag,
-        getChannelData: () => data,
-      } as unknown as AudioBuffer;
+      const buffer = fakeFile();
       ok(buffer);
       return Promise.resolve(buffer);
     },
   }) as unknown as BaseAudioContext;
 
-const fetchTagged =
-  (missing: ReadonlySet<string> = new Set()) =>
-  (url: string) => {
-    if (missing.has(url)) return Promise.reject(new Error('offline'));
-    return Promise.resolve(new TextEncoder().encode(url).buffer);
-  };
-
-const note = (midi: number): InstrumentNote => ({ midi, buffer: {} as AudioBuffer, offset: 0 });
+const note = (midi: number): InstrumentNote => ({
+  midi,
+  buffer: {} as AudioBuffer,
+  offset: 0,
+  length: 1,
+});
 
 describe('music instruments (#664)', () => {
   it('names notes the MIDI way (C4 = 60)', () => {
@@ -56,11 +57,16 @@ describe('music instruments (#664)', () => {
     expect(noteMidi('2')).toBe(1);
   });
 
-  it('ships an AAC file for every note (the folder and its budget: tooling/music-capture)', () => {
-    expect(INSTRUMENT_FILES).toHaveLength(44);
-    for (const file of INSTRUMENT_FILES) {
-      expect(file.url).toMatch(new RegExp(`${file.instrument}-[a-z0-9]+[^/]*\\.m4a`));
+  it('packs 44 notes, every instrument, in order and without overlaps', () => {
+    expect(MUSIC_NOTES).toHaveLength(44);
+    expect(new Set(MUSIC_NOTES.map(([instrument]) => instrument))).toEqual(new Set(INSTRUMENT_IDS));
+    let end = 0;
+    for (const [, , start, length] of MUSIC_NOTES) {
+      expect(start).toBeGreaterThan(end);
+      expect(length).toBeGreaterThan(0.1);
+      end = start + length;
     }
+    expect(MUSIC_NOTES_URL).toMatch(/music-notes[^/]*\.m4a/);
   });
 
   it('gives every score voice an instrument with notes, in range of what it plays', () => {
@@ -71,8 +77,8 @@ describe('music instruments (#664)', () => {
       for (const n of score.notes) {
         const { instrument } = VOICE_STYLES[n.voice];
         if (instrument === 'shaker') continue;
-        const pitches = INSTRUMENT_FILES.filter((f) => f.instrument === instrument).map(
-          (f) => f.midi,
+        const pitches = MUSIC_NOTES.filter(([i]) => i === instrument).map(([, name]) =>
+          noteMidi(name),
         );
         const nearest = Math.min(...pitches.map((p) => Math.abs(p - n.midi)));
         // Stretched further than this, a real instrument starts to sound odd.
@@ -106,60 +112,41 @@ describe('music instruments (#664)', () => {
     expect(leadIn(buffer)).toBeCloseTo(0.198);
   });
 
-  it('loads every note, low to high per instrument', async () => {
-    const bank = await loadInstruments(fakeCtx(), fetchTagged());
+  it('slices every note from the one file, low to high per instrument', () => {
+    const bank = sliceNotes(fakeFile());
     expect([...bank.keys()].sort()).toEqual([...INSTRUMENT_IDS].sort());
+    let count = 0;
     for (const notes of bank.values()) {
       const pitches = notes.map((n) => n.midi);
       expect(pitches).toEqual([...pitches].sort((a, b) => a - b));
+      count += notes.length;
     }
-    expect(bank.get('piano')?.[0]?.offset).toBeCloseTo(0.008);
+    expect(count).toBe(44);
+    const [, , start, length] = MUSIC_NOTES[0];
+    const first = bank.get('piano')?.[0];
+    expect(first?.offset).toBeCloseTo(start);
+    expect(first?.length).toBe(length);
   });
 
-  it('leaves out notes that fail, without rejecting', async () => {
-    const piano = INSTRUMENT_FILES.filter((f) => f.instrument === 'piano');
-    const harp = INSTRUMENT_FILES.filter((f) => f.instrument === 'harp');
-    const bank = await loadInstruments(
-      fakeCtx(new Set(harp.map((f) => f.url))),
-      fetchTagged(new Set([piano[0]?.url ?? ''])),
-    );
-    expect(bank.has('harp')).toBe(false);
-    expect(bank.get('piano')).toHaveLength(piano.length - 1);
+  it('shifts every note when a decoder keeps the encoder lead-in', () => {
+    const late = sliceNotes(fakeFile(0.1));
+    expect(late.get('piano')?.[0]?.offset).toBeCloseTo(MUSIC_NOTES[0][2] + 0.1, 2);
   });
 
-  it('downloads only a couple of notes at a time, leaving connections for the game', async () => {
-    let inFlight = 0;
-    let most = 0;
-    const fetcher = async (url: string) => {
-      inFlight += 1;
-      most = Math.max(most, inFlight);
-      await new Promise((resolve) => setTimeout(resolve, 1));
-      inFlight -= 1;
-      return fetchTagged()(url);
-    };
-    const bank = await loadInstruments(fakeCtx(), fetcher, 2);
-    expect(most).toBe(2);
+  it('loads with one download, and hands over the whole bank', async () => {
+    const urls: string[] = [];
+    const bank = await loadInstruments(fakeCtx(), (url) => {
+      urls.push(url);
+      return Promise.resolve(new ArrayBuffer(8));
+    });
+    expect(urls).toEqual([MUSIC_NOTES_URL]);
     expect([...bank.values()].reduce((n, notes) => n + notes.length, 0)).toBe(44);
   });
 
-  it('hands over no notes until every one has settled (a loop never hears half a bank)', async () => {
-    const last = INSTRUMENT_FILES[INSTRUMENT_FILES.length - 1]?.url;
-    let release = () => {};
-    const slow = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const fetcher = async (url: string) => {
-      if (url === last) await slow;
-      return fetchTagged()(url);
-    };
-    let bank: unknown = null;
-    const loading = loadInstruments(fakeCtx(), fetcher).then((b) => {
-      bank = b;
-    });
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(bank).toBeNull();
-    release();
-    await loading;
-    expect(bank).toBeInstanceOf(Map);
+  it('hands over an empty bank (the synth plays) when the file fails, without rejecting', async () => {
+    const offline = await loadInstruments(fakeCtx(), () => Promise.reject(new Error('offline')));
+    expect(offline.size).toBe(0);
+    const garbled = await loadInstruments(fakeCtx(true), () => Promise.resolve(new ArrayBuffer(8)));
+    expect(garbled.size).toBe(0);
   });
 });
