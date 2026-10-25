@@ -213,7 +213,8 @@ export function testWildIsle(players = 6, extra = 30): MapView {
   }
   for (const path of rivers) for (const t of path) water(t, 'river');
   // A pond part way down the first river.
-  const pond = rivers[0]?.[Math.floor((rivers[0]?.length ?? 0) * 0.4)];
+  const first = rivers.at(0);
+  const pond = first ? first[Math.floor(first.length * 0.4)] : undefined;
   if (pond) {
     for (const h of hexNeighbors(pond)) {
       const t = byKey.get(hexKey(h));

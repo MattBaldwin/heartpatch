@@ -770,8 +770,12 @@ describe('Wild Isle on the map (#621 W1-4)', () => {
 
   it('dresses the coast with shells and driftwood', () => {
     const { scene } = build();
-    expect(scene.getMeshByName('shell')?.thinInstanceCount ?? 0).toBeGreaterThan(20);
-    expect(scene.getMeshByName('driftwood')?.thinInstanceCount ?? 0).toBeGreaterThan(5);
+    expect((scene.getMeshByName('shell') as Mesh | null)?.thinInstanceCount ?? 0).toBeGreaterThan(
+      20,
+    );
+    expect(
+      (scene.getMeshByName('driftwood') as Mesh | null)?.thinInstanceCount ?? 0,
+    ).toBeGreaterThan(5);
   });
 
   it('picks an ocean tile and rings it on the water', () => {

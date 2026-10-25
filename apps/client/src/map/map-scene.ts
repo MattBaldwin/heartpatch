@@ -483,6 +483,8 @@ export class MapScene {
   private readonly seasons: readonly string[];
   /** Wild Isle's isles (#621): tiles out at sea, off the island, that stand in the water. */
   private isles: ReadonlySet<HexKey> = new Set();
+  /** The sea's glint strength (Wild Isle, #621): softer at night. */
+  private readonly seaGlint: { value: number } = { value: OCEAN.glint.day };
 
   constructor(scene: Scene, view: MapView, options: MapSceneOptions = {}) {
     this.scene = scene;
@@ -774,6 +776,7 @@ export class MapScene {
   setNight(night: boolean): void {
     if (night === this.night) return;
     this.night = night;
+    this.seaGlint.value = night ? OCEAN.glint.night : OCEAN.glint.day;
     this.borders.setNight(night ? BORDER.night : 0);
     this.applyAmbient();
   }
@@ -1097,21 +1100,16 @@ export class MapScene {
           radius,
           [
             { scale: 1, y: top },
-            { scale: 1 + 0.18 / radius, y: top - 0.12 },
-            { scale: 1 + 0.3 / radius, y: -ISLAND.thickness },
+            { scale: 1 + 0.25 / radius, y: top - 0.05 },
+            { scale: 1 + 0.55 / radius, y: OCEAN.level - 0.03 },
+            { scale: 1 + 0.7 / radius, y: -ISLAND.thickness },
           ],
           { corner: 0.12, segments: 6, centre: { y: top } },
         ),
       );
       // Turned 30° to the land's hexagon (corners east and west).
       mesh.rotation.y = Math.PI / 6;
-      const mat = vinyl(this.scene, `${name}-mat`, { ...FALLBACK_LOOK, color, roughness: 0.85 });
-      const rgb = hexRgb(color);
-      const soft = muteRgb(rgb);
-      mat.albedoColor = new Color3(
-        ...rgb.map((v, i) => toLinear(v + ((soft[i] ?? v) - v) * MUTED.island)),
-      );
-      mesh.material = mat;
+      mesh.material = this.islandMaterial(`${name}-mat`, color);
       mesh.freezeWorldMatrix();
       return mesh;
     };
@@ -1142,10 +1140,56 @@ export class MapScene {
       roughness: 0.2,
       clearCoat: true,
     });
-    attachTerrainPlugin(mat, this.clock, { water: true });
+    attachTerrainPlugin(mat, this.clock, { water: true, glint: this.seaGlint });
     sea.material = mat;
     sea.freezeWorldMatrix();
+    this.buildIsleSand(tiles);
     return outer;
+  }
+
+  /** Island ground (grass, beach, an isle's sand), softened like wild land part way, since nobody owns it. */
+  private islandMaterial(name: string, color: string): PBRMaterial {
+    const mat = vinyl(this.scene, name, { ...FALLBACK_LOOK, color, roughness: 0.85 });
+    const rgb = hexRgb(color);
+    const soft = muteRgb(rgb);
+    mat.albedoColor = new Color3(
+      ...rgb.map((v, i) => toLinear(v + ((soft[i] ?? v) - v) * MUTED.island)),
+    );
+    return mat;
+  }
+
+  /**
+   * A low sand skirt under each isle tile out at sea (#621), so an isle sits
+   * on its own sandbar in the shallows instead of tiles adrift. One mesh,
+   * one instance a tile; none on a map without isles.
+   */
+  private buildIsleSand(tiles: readonly PublicTile[]): void {
+    const isles = tiles.filter((t) => this.isles.has(hexKey(t)));
+    if (isles.length === 0) return;
+    const r = HEX_SIZE * OCEAN.isleSand;
+    const top = OCEAN.level + 0.035;
+    const mesh = meshFrom(
+      this.scene,
+      'isle-sand',
+      loftRoundedHex(
+        r,
+        [
+          { scale: 1, y: top },
+          { scale: 1.12, y: OCEAN.level - 0.03 },
+          { scale: 1.2, y: OCEAN.level - 0.2 },
+        ],
+        { corner: 0.5, segments: 4, centre: { y: top } },
+      ),
+    );
+    mesh.material = this.islandMaterial('isle-sand-mat', OCEAN.beach);
+    setInstances(
+      mesh,
+      isles.map((t) => {
+        const p = hexToWorld(t, HEX_SIZE);
+        return placeAt(p.x, 0, p.z);
+      }),
+    );
+    mesh.freezeWorldMatrix();
   }
 
   /**

@@ -196,12 +196,12 @@ export const ISLAND = { color: '#a9d897', margin: 1.2, thickness: 0.6 } as const
  * beach. Isles out at sea stand in the water on their own. sRGB.
  */
 export const OCEAN = {
-  shallow: '#9adcf2', // TUNE
+  shallow: '#b2e9f2', // TUNE
   deep: '#6cb4e4', // TUNE
   /** Water level (world units): just under the island's top, so its rim pokes out as a beach. */
   level: -0.06, // TUNE
   /** How far the water reaches past the outermost ocean tile, world units. */
-  reach: 3, // TUNE
+  reach: 10, // TUNE: far enough that the farthest zoom sees sea, not sky, past the island
   /** World units from the island's edge over which the shallows deepen. */
   shallows: 3.5, // TUNE
   /** Ring steps in the disc (more: a smoother shallow-to-deep blend). */
@@ -211,8 +211,10 @@ export const OCEAN = {
   margin: 0.3, // TUNE
   /** An isle tile's foot sinks this far under the water, so it stands in the sea. */
   sink: 0.25, // TUNE
-  /** The glint's strength on the open sea (the lake tiles' is `AMBIENT`'s). */
-  glint: 0.35, // TUNE
+  /** Each isle tile's sand skirt, as a multiple of a tile's size: neighbours' skirts join into a sandbar. */
+  isleSand: 1.35, // TUNE
+  /** The sea's glint by day and by night (softer, so it never reads as snow); the lakes' is `AMBIENT.water.glint`. */
+  glint: { day: 0.14, night: 0.035 }, // TUNE
 } as const;
 
 // ---------------------------------------------------------------------------

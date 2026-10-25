@@ -124,7 +124,9 @@ describe('seaDisc (Wild Isle, #621)', () => {
     expect(at(0)).toEqual([0.4, 0.8, 0.9, 1]);
     expect(at(shape.segments)).toEqual([0.4, 0.8, 0.9, 1]); // the shore
     const last = arrays.positions.length / 3 - 1;
-    at(last).forEach((v, i) => expect(v).toBeCloseTo([0.1, 0.4, 0.8, 1][i]!, 9));
+    at(last).forEach((v, i) => {
+      expect(v).toBeCloseTo([0.1, 0.4, 0.8, 1][i]!, 9);
+    });
     let r = 0;
     for (let v = 0; v <= last; v++) {
       r = Math.max(r, Math.hypot(arrays.positions[v * 3]!, arrays.positions[v * 3 + 2]!));
