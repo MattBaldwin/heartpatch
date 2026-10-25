@@ -76,8 +76,6 @@ export interface MapRow {
   /** The owner's friendly-battle switch (#29). */
   friendlyChallenges: boolean;
   maxPlayers: number;
-  /** Cozy Patch or Wild Isle (#621), chosen at creation and never changed. */
-  patchType: PatchType;
   /** The last event seq committed for this map (`maps.event_seq`). */
   eventSeq: number;
 }
@@ -238,6 +236,12 @@ export interface MapsRepo {
   }) => Promise<{ id: string; pvpMode: PvpMode }>;
   insertTiles: (mapId: string, rows: readonly NewTile[]) => Promise<void>;
   findMap: (mapId: string) => Promise<MapRow | null>;
+  /**
+   * Cozy Patch or Wild Isle (#621), chosen at creation and never changed.
+   * Its own read, not a `findMap` column: boot code migrations (crowded
+   * tiles) call `findMap` on a schema from before migration 0059.
+   */
+  patchTypeOf: (mapId: string) => Promise<PatchType>;
   /** True if the mode changed. */
   setPvpMode: (mapId: string, pvpMode: PvpMode) => Promise<boolean>;
   /** Sorted by `q`, then `r`. */
@@ -528,12 +532,20 @@ function queries(db: Executor): MapsRepo {
           tradingEnabled: maps.tradingEnabled,
           friendlyChallenges: maps.friendlyChallenges,
           maxPlayers: maps.maxPlayers,
-          patchType: maps.patchType,
           eventSeq: maps.eventSeq,
         })
         .from(maps)
         .where(eq(maps.id, mapId));
       return row ?? null;
+    },
+
+    patchTypeOf: async (mapId) => {
+      const [row] = await db
+        .select({ patchType: maps.patchType })
+        .from(maps)
+        .where(eq(maps.id, mapId));
+      if (!row) throw new Error(`patchTypeOf: no map ${mapId}`);
+      return row.patchType;
     },
 
     setPvpMode: async (mapId, pvpMode) => {

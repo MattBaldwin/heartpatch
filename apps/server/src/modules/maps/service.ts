@@ -288,9 +288,10 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
 
   const detail = async (user: PublicUser, mapId: string): Promise<MapDetail> => {
     const { map, role } = await requireMember(db, user, mapId, PATCHES);
-    const [members, starter] = await Promise.all([
+    const [members, starter, patchType] = await Promise.all([
       store.listMembers(mapId),
       starterPick(db, mapId, user.id),
+      store.patchTypeOf(mapId),
     ]);
     let admin: MapDetail['admin'] = null;
     if (role === 'owner') {
@@ -312,7 +313,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       pvpMode: map.pvpMode,
       tradingEnabled: map.tradingEnabled,
       friendlyChallenges: map.friendlyChallenges,
-      patchType: map.patchType,
+      patchType,
       role,
       maxPlayers: map.maxPlayers,
       members: members.map(toMember),
@@ -540,19 +541,21 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       return store.snapshot(async (repo, tx) => {
         const map = await requireViewer(tx, user, mapId);
         const at = now();
-        const [members, tiles, buildings, fences, seed, explored, seen] = await Promise.all([
-          repo.listMembers(mapId),
-          repo.listTiles(mapId),
-          // Fires and habitats (#18), with `lit` as of now.
-          listPublicBuildings(tx, mapId, at, map.timeZone),
-          // Fence segments on edges (#203), with their energy.
-          listPublicFences(tx, mapId),
-          createTerritoryRepo(tx).mapSeed(mapId),
-          // Land its owner has fully explored, and their homesteads (#199).
-          createExploreRepo(tx).listOwnersExplored(mapId),
-          // Species this viewer has met, to mask gatherers' looks (#602).
-          createSpawnsRepo(tx).listSeen(mapId, user.id),
-        ]);
+        const [members, tiles, buildings, fences, seed, explored, seen, patchType] =
+          await Promise.all([
+            repo.listMembers(mapId),
+            repo.listTiles(mapId),
+            // Fires and habitats (#18), with `lit` as of now.
+            listPublicBuildings(tx, mapId, at, map.timeZone),
+            // Fence segments on edges (#203), with their energy.
+            listPublicFences(tx, mapId),
+            createTerritoryRepo(tx).mapSeed(mapId),
+            // Land its owner has fully explored, and their homesteads (#199).
+            createExploreRepo(tx).listOwnersExplored(mapId),
+            // Species this viewer has met, to mask gatherers' looks (#602).
+            createSpawnsRepo(tx).listSeen(mapId, user.id),
+            repo.patchTypeOf(mapId),
+          ]);
         const met = new Set(seen.map((row) => row.speciesId));
         // Trading posts (#269), named by their place in (q, r) order.
         const posts = tradingPostLabels(tiles, GAME_DATA.mapGen.tradingPosts);
@@ -582,7 +585,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
             timeZone: map.timeZone,
             pvpMode: map.pvpMode,
             maxPlayers: map.maxPlayers,
-            patchType: map.patchType,
+            patchType,
           },
           members: members.map(toMember),
           tiles: tiles.map((tile) =>
