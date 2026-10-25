@@ -112,8 +112,13 @@ const url = inject('testDatabaseUrl');
  * the next squishy too. In id order the command holds nothing yet, so both
  * finish; out of order it would hold the higher one and Postgres would report
  * a deadlock.
+ *
+ * The timeout outlasts the held transactions' 10 s `lock_timeout` plus
+ * `waitUntilBlockedBy`'s 5 s, so a wrong order fails with Postgres's own error
+ * (40P01 or 55P03), not a bare test timeout. Most tests also set up a patch
+ * first: about 0.5 s alone, past 5 s on a busy CI runner.
  */
-describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
+describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_000 }, () => {
   let client: DbClient;
   let db: Database;
   let counter = 0;
@@ -1260,6 +1265,48 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       (tx) => lockHeart(tx, mapId, kid.id),
     );
     expect((await heartRows(mapId, kid.id)).filter((r) => r.source === 'upkeep')).toHaveLength(2);
+  });
+
+  it("takes a Watermill's Greens with the settle's grant rows, before the balance (settle, #621 W1-8 step 11 then 12b)", async () => {
+    const { kid, mapId, settle } = await hutSetup('mill-eater');
+    await makeWildIsle(db, mapId);
+    // The hut's row becomes a Watermill with an hour's grinding waiting.
+    await db
+      .update(buildings)
+      .set({ buildingId: 'watermill', kind: 'works' })
+      .where(and(eq(buildings.mapId, mapId), eq(buildings.ownerUserId, kid.id)));
+    await withTransaction(db, (tx) =>
+      grantItems(tx, { mapId, userId: kid.id }, { greens: 20 }, 'dev-grant'),
+    );
+    await holdThen(
+      (tx) =>
+        tx
+          .select({ itemId: inventories.itemId })
+          .from(inventories)
+          .where(
+            and(
+              eq(inventories.mapId, mapId),
+              eq(inventories.userId, kid.id),
+              eq(inventories.itemId, 'greens'),
+            ),
+          )
+          .for('update'),
+      () => settle.settle(kid, mapId),
+      (tx) => lockHeart(tx, mapId, kid.id),
+    );
+    expect((await heartRows(mapId, kid.id)).filter((r) => r.source === 'upkeep')).toHaveLength(2);
+    const [greens] = await db
+      .select({ quantity: inventories.quantity })
+      .from(inventories)
+      .where(
+        and(
+          eq(inventories.mapId, mapId),
+          eq(inventories.userId, kid.id),
+          eq(inventories.itemId, 'greens'),
+        ),
+      );
+    // An hour at level 1 is 6 cycles of 2 Greens.
+    expect(greens?.quantity).toBe(8);
   });
 
   /**

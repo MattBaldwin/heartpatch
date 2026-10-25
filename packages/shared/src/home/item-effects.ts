@@ -1,5 +1,6 @@
 import { GAME_DATA } from '../data/index.js';
 import type { BuildingPlacement } from '../schemas/data/buildings.js';
+import { CARE_RULES } from '../data/care.js';
 import { CLEARING_RULES } from '../data/clearing.js';
 import { HOME_BASE_RULES } from '../data/home-base.js';
 import type { ClearToolId } from '../schemas/data/clearing.js';
@@ -7,6 +8,7 @@ import type { ToolId } from '../schemas/data/explore.js';
 import { isBuildable } from '../schemas/data/home-base.js';
 import type { GameData } from '../schemas/data/game-data.js';
 import { isAvailableRecipe } from '../schemas/data/recipes.js';
+import { fedWith } from '../care/contentment.js';
 import { buildingEffects, type BuildingEffect } from './building-effects.js';
 
 // What a bag item is for (#241), worked out from its data alone like
@@ -52,7 +54,9 @@ export type ItemEffect =
   /** Care actions that use it. */
   | { readonly kind: 'care'; readonly actions: readonly string[] }
   /** A seasonal thing with no use yet: a keepsake. */
-  | { readonly kind: 'keepsake'; readonly season: string };
+  | { readonly kind: 'keepsake'; readonly season: string }
+  /** Wild Isle works that make it by themselves (#621 W1-8: a Fishing Pier's Fish). */
+  | { readonly kind: 'made-at'; readonly buildings: readonly string[] };
 
 type ItemData = Pick<GameData, 'resources' | 'recipes' | 'buildings' | 'careActions'>;
 
@@ -121,8 +125,20 @@ export function itemEffects(resourceId: string, data: ItemData = GAME_DATA): Ite
   const recipes = data.recipes.filter((r) => isAvailableRecipe(r) && (r.inputs[item.id] ?? 0) > 0);
   if (recipes.length > 0) effects.push({ kind: 'recipes', recipes: recipes.map((r) => r.id) });
 
-  const care = data.careActions.filter((c) => (c.cost?.[item.id] ?? 0) > 0);
+  // Its own cost, or a food (#621 W1-8b: Pies) that can pay for it instead.
+  const care = data.careActions.filter(
+    (c) => (c.cost?.[item.id] ?? 0) > 0 || fedWith(c, item.id, CARE_RULES) !== null,
+  );
   if (care.length > 0) effects.push({ kind: 'care', actions: care.map((c) => c.id) });
+
+  // Wild Isle works (#621 W1-8) that make it, for an item with nothing else
+  // to say but the recipes it goes into (Fish, Flour and Salt: Pies): Water
+  // and Greens keep today's chips, so a Cozy Patch's Bag reads as before.
+  const works = data.buildings.filter((b) => b.kind === 'works' && b.makes.resource === item.id);
+  const onlyRecipes = !effects.some((e) => e.kind !== 'recipes');
+  if (onlyRecipes && works.length > 0) {
+    effects.push({ kind: 'made-at', buildings: works.map((b) => b.id) });
+  }
 
   if (effects.length === 0 && item.season) effects.push({ kind: 'keepsake', season: item.season });
   return effects;

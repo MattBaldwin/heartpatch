@@ -394,15 +394,49 @@ async function expectSheetFits(
 }
 
 const SHEET_CASES = [
-  { name: '', bench: false, noCharms: false },
-  { name: ' with a Swap button', bench: true, noCharms: false },
-  { name: ' with no Heart Charms (the craft tip shows)', bench: false, noCharms: true },
+  { name: '', bench: false, noCharms: false, fourMoves: false },
+  { name: ' with a Swap button', bench: true, noCharms: false, fourMoves: false },
+  {
+    name: ' with no Heart Charms (the craft tip shows)',
+    bench: false,
+    noCharms: true,
+    fourMoves: false,
+  },
+  { name: ' with four moves and a Swap button', bench: true, noCharms: false, fourMoves: true },
 ] as const;
 
-for (const { name, bench, noCharms } of SHEET_CASES) {
+/**
+ * Puts a squishy that knows four moves (a Splashmallow) at the front of the
+ * team, so the next fight's pick is the biggest the sheet has to fit (#656).
+ */
+async function leadWithFourMoves(page: Page, mapId: string): Promise<void> {
+  const granted = await api<{ squishy: { id: string } }>(
+    page,
+    'POST',
+    `/maps/${mapId}/dev/squishies`,
+    {
+      speciesId: 'splashmallow',
+      level: 30,
+    },
+  );
+  expect(granted.status).toBe(201);
+  const care = await api<{ squishies: { id: string }[] }>(page, 'GET', `/maps/${mapId}/care`);
+  const others = care.body.squishies
+    .map((s) => s.id)
+    .filter((id) => id !== granted.body.squishy.id);
+  const team = await api(page, 'POST', `/maps/${mapId}/team`, {
+    squishyIds: [granted.body.squishy.id, ...others.slice(0, 1)],
+  });
+  expect(team.status).toBe(200);
+}
+
+for (const { name, bench, noCharms, fourMoves } of SHEET_CASES) {
   test(`a plain wild battle's controls fit small phones${name}`, async ({ browser }) => {
     test.setTimeout(240_000); // a map build and a battle; CI renders in software
-    const page = await newPlayer(browser, uniqueName(bench ? 'sheetsw' : 'sheetfit'));
+    const page = await newPlayer(
+      browser,
+      uniqueName(fourMoves ? 'sheet4' : bench ? 'sheetsw' : 'sheetfit'),
+    );
     await holdResizes(page);
     if (noCharms) {
       // The bag as it is once the starter's 3 are spent: the count the HUD reads.
@@ -422,9 +456,11 @@ for (const { name, bench, noCharms } of SHEET_CASES) {
       await realTap(await trayButton(page, 'battle-dev-grant'));
       await expect(page.locator('.battle-entry-note')).toContainText('joined you');
     }
+    if (fourMoves) await leadWithFourMoves(page, (await hook<{ id: string }>(page, 'map'))!.id);
     await realTap(await trayButton(page, 'battle-dev-fight'));
     await expect(page.getByTestId('battle-hud')).toBeVisible();
     await settled(page);
+    if (fourMoves) await expect(page.getByTestId('battle-move')).toHaveCount(4);
     if (noCharms) {
       await expect(page.getByTestId('battle-capture-hint')).toContainText('No Heart Charms!');
       // A tap on the tip puts it away; a tap on the dimmed button brings it back,
@@ -450,6 +486,77 @@ for (const { name, bench, noCharms } of SHEET_CASES) {
       await page.setViewportSize({ width: screen.width, height: screen.height });
       await freshResize(page);
       await expectSheetFits(page, screen.name, screen.inset, noCharms);
+    }
+  });
+}
+
+// The camera frames the fight above the sheet, so a sheet that grew and shrank
+// as a turn played moved the fight with it (#656). Landscape phones and a
+// 320 px phone are where the controls leaving changed the sheet the most.
+const TURN_SCREENS: readonly { name: string; width: number; height: number }[] = [
+  { name: 'iPhone landscape', width: 844, height: 390 },
+  { name: 'a 320 px phone', width: 320, height: 568 },
+];
+
+for (const screen of TURN_SCREENS) {
+  test(`the battle sheet keeps its height while a turn plays on ${screen.name}`, async ({
+    browser,
+  }) => {
+    test.setTimeout(240_000); // a map build and a battle; CI renders in software
+    const page = await newPlayer(browser, uniqueName('sheetturn'));
+    await holdResizes(page);
+    const lobby = page.getByTestId('lobby');
+    await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+    await lobby.getByLabel('Patch name').fill('Turn Patch');
+    await lobby.getByRole('button', { name: 'Make it!' }).tap();
+    await visitPatch(lobby);
+    await realTap(await trayButton(page, 'battle-dev-grant'));
+    await expect(page.locator('.battle-entry-note')).toContainText('joined you');
+    await leadWithFourMoves(page, (await hook<{ id: string }>(page, 'map'))!.id);
+    await realTap(await trayButton(page, 'battle-dev-fight'));
+    await expect(page.getByTestId('battle-hud')).toBeVisible();
+    const first = await settled(page);
+    await page.setViewportSize({ width: screen.width, height: screen.height });
+    await freshResize(page);
+    await still(page, '[data-testid="battle-sheet"]');
+
+    // The sheet's height on every frame, with the controls' mode at the time.
+    await page.evaluate(() => {
+      const sheet = document.querySelector<HTMLElement>('[data-testid="battle-sheet"]')!;
+      const samples: { mode: string; height: number }[] = [];
+      const tick = () => {
+        samples.push({
+          mode: sheet.dataset['mode'] ?? '',
+          height: sheet.getBoundingClientRect().height,
+        });
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      (window as unknown as { sheetSamples: typeof samples }).sheetSamples = samples;
+    });
+    const pick = (await page.getByTestId('battle-sheet').boundingBox())!.height;
+    // Bubble Bath heals: the wild squishy survives, so the fight goes on to the next pick.
+    await realTap(page.getByTestId('battle-move').filter({ hasText: 'Bubble Bath' }));
+    await expect
+      .poll(async () => (await battleState(page))?.turn, { timeout: 30_000 })
+      .toBeGreaterThan(first.turn);
+    await settled(page);
+    await expect(page.getByTestId('battle-move')).toHaveCount(4);
+
+    // While the turn plays ("waiting" for the server, "hidden" for the log) the
+    // sheet is as tall as the pick was. The next pick's own words may wrap
+    // differently, so the frames after the turn are not compared.
+    const samples = await page.evaluate(
+      () =>
+        (window as unknown as { sheetSamples: { mode: string; height: number }[] }).sheetSamples,
+    );
+    const turn = samples.filter((sample) => sample.mode === 'waiting' || sample.mode === 'hidden');
+    expect(turn.length, 'frames drawn while the turn played').toBeGreaterThan(0);
+    for (const sample of turn) {
+      expect(
+        Math.abs(sample.height - pick),
+        `${sample.mode} at ${String(sample.height)}`,
+      ).toBeLessThan(1);
     }
   });
 }

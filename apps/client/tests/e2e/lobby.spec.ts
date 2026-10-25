@@ -9,15 +9,25 @@ const updatesHeld = (page: Page) => hook<boolean>(page, 'updatesHeld');
 test('owner makes a patch, a friend joins with the code, owner approves and resets', async ({
   browser,
 }) => {
-  // Two signups, each through the Keeper picker's 3D preview (#42); CI renders
-  // in software. A pass takes about a minute on iPad WebKit (58.6 s on #224's
-  // CI), and a group's first tests also pay for the first shader compiles.
-  test.setTimeout(120_000);
+  // Two signups, each through the Keeper picker's 3D preview (#42), then a
+  // reload that boots the game a third time; CI renders in software. About
+  // 1.2 min on iPad WebKit next to light specs, but next to house.spec's
+  // build test both tries ran out 120 s at a different step each time
+  // (2026-10-25), so the limit is 150 s, like #195's below.
+  test.setTimeout(150_000);
   const ownerName = uniqueName('own');
   const friendName = uniqueName('pal');
 
+  // Both sign up at once: the friend needs nothing from the owner until the
+  // code, and the signups are most of the test. In a local Chromium with its
+  // CPU throttled 6x, that took the run from past 120 s down to 85 s; on CI's
+  // shared cores it saves less.
+  const [owner, friend] = await Promise.all([
+    newPlayer(browser, ownerName),
+    newPlayer(browser, friendName),
+  ]);
+
   // The owner makes a patch and gets a code.
-  const owner = await newPlayer(browser, ownerName);
   const ownerLobby = owner.getByTestId('lobby');
   await expect(ownerLobby).toContainText('No patches yet');
   await ownerLobby.getByRole('button', { name: 'Make a patch' }).tap();
@@ -28,7 +38,6 @@ test('owner makes a patch, a friend joins with the code, owner approves and rese
   expect(code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
 
   // A friend asks to join with it.
-  const friend = await newPlayer(browser, friendName);
   const friendLobby = friend.getByTestId('lobby');
   await friendLobby.getByRole('button', { name: 'Join with a code' }).tap();
   await friendLobby.getByLabel('Invite code').fill(code.toLowerCase());
@@ -229,5 +238,68 @@ test('looking around the world has a big way back to the patch list (#212)', asy
   await lobby.getByRole('button', { name: 'Look around the world' }).tap();
   await expect(lobby).toBeHidden();
   await expect(back).toBeHidden();
+  await page.context().close();
+});
+
+test('makes a Wild Isle when the switch lets them, and hides the card when not (#621)', async ({
+  browser,
+}) => {
+  test.setTimeout(90_000); // one signup through the Keeper picker; CI renders in software
+  const page = await newPlayer(browser, uniqueName('isle'));
+  const lobby = page.getByTestId('lobby');
+  const kinds = lobby.getByTestId('lobby-patch-types');
+  const cozy = kinds.getByTestId('lobby-patch-type-cozy');
+  const wild = kinds.getByTestId('lobby-patch-type-wild-isle');
+
+  // The switch off for this player: the server's list leaves the choice out
+  // (as house.spec.ts stands in a home reply). Only the Cozy card shows.
+  await page.route(/\/api\/v1\/maps$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const response = await route.fetch();
+    const json = (await response.json()) as Record<string, unknown>;
+    delete json['canMakeWildIsle'];
+    return route.fulfill({ response, json });
+  });
+  await page.reload();
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await expect(cozy).toHaveAttribute('aria-checked', 'true');
+  await expect(wild).toHaveCount(0);
+  await page.unroute(/\/api\/v1\/maps$/);
+
+  // The switch on (the e2e server's HP_WILD_ISLE): both cards, Cozy picked.
+  await lobby.getByRole('button', { name: 'Back to my patches' }).tap();
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await expect(wild).toBeVisible();
+  await expect(cozy).toHaveAttribute('aria-checked', 'true');
+  await expect(wild).toHaveAttribute('aria-checked', 'false');
+  await wild.tap();
+  await expect(wild).toHaveAttribute('aria-checked', 'true');
+  await expect(wild.locator('.lobby-choice-picked')).toHaveText('✓ Picked');
+  await expect(cozy).toHaveAttribute('aria-checked', 'false');
+  // The name hint follows the pick.
+  await expect(lobby.locator('#lobby-create .auth-hint')).toHaveText(/Seashell Cove/);
+
+  await lobby.getByLabel('Patch name').fill('Splash Cove');
+  const made = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && /\/api\/v1\/maps$/.test(r.url()),
+  );
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  const created = await made;
+  expect(created.status()).toBe(201);
+  expect(created.request().postDataJSON()).toMatchObject({ patchType: 'wild-isle' });
+  expect(((await created.json()) as { map: { patchType?: string } }).map.patchType).toBe(
+    'wild-isle',
+  );
+
+  // Its card and its row in the list wear the 🌊 chip.
+  await expect(lobby.getByRole('heading', { name: 'Splash Cove' })).toBeVisible();
+  await expect(lobby.getByTestId('lobby-wild-chip')).toHaveText('🌊 Wild Isle');
+  await lobby.getByRole('button', { name: 'Back to my patches' }).tap();
+  const row = lobby.getByRole('button', { name: /Splash Cove/ });
+  await expect(row.getByTestId('lobby-wild-chip')).toBeVisible();
+  const list = await page.request.get('/api/v1/maps');
+  expect(((await list.json()) as { maps: { patchType?: string }[] }).maps).toMatchObject([
+    { patchType: 'wild-isle' },
+  ]);
   await page.context().close();
 });

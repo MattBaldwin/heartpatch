@@ -4,6 +4,7 @@ import { HOME_BASE_RULES } from '../data/home-base.js';
 import { isBuildable } from '../schemas/data/home-base.js';
 import { GAME_DATA } from '../data/index.js';
 import { itemEffects } from './item-effects.js';
+import { isBuildableOn } from './water-works.js';
 
 const resource = (id: string) => {
   const r = GAME_DATA.resources.find((x) => x.id === id);
@@ -96,8 +97,11 @@ describe('itemEffects (#241)', () => {
   });
 
   it("names no building a player can't build yet (the Warehouse's gate opened in #601 PR 9)", () => {
+    // A Wild Isle building counts as buildable where it stands (#621 W1-8).
     const gated = new Set(
-      BUILDINGS.filter((b) => !isBuildable(HOME_BASE_RULES, b)).map((b) => b.id),
+      BUILDINGS.filter(
+        (b) => !isBuildable(HOME_BASE_RULES, b) && !isBuildableOn(HOME_BASE_RULES, b, 'wild-isle'),
+      ).map((b) => b.id),
     );
     expect(gated.has('warehouse') || gated.has('woodcutters-hut')).toBe(false);
     for (const { id } of GAME_DATA.resources) {
@@ -107,6 +111,21 @@ describe('itemEffects (#241)', () => {
         for (const b of named) expect(gated.has(b), `${id} names ${b}`).toBe(false);
       }
     }
+  });
+
+  it('says which Wild Isle works make Fish, Flour and Salt, and leaves Water and Greens as they were (#621 W1-8)', () => {
+    const pies = { kind: 'recipes', recipes: ['bake-pies'] };
+    expect(itemEffects('fish')).toEqual([pies, { kind: 'made-at', buildings: ['fishing-pier'] }]);
+    expect(itemEffects('flour')).toEqual([pies, { kind: 'made-at', buildings: ['watermill'] }]);
+    expect(itemEffects('salt')).toEqual([pies, { kind: 'made-at', buildings: ['salt-pans'] }]);
+    for (const id of ['water', 'greens']) {
+      expect(itemEffects(id), id).not.toContainEqual(expect.objectContaining({ kind: 'made-at' }));
+    }
+  });
+
+  it('says Pies feed a squishy, like Treats (#621 W1-8b)', () => {
+    expect(itemEffects('pies')).toEqual([{ kind: 'care', actions: ['feed'] }]);
+    expect(itemEffects('treats')).toContainEqual({ kind: 'care', actions: ['feed'] });
   });
 
   it('calls a seasonal thing with no use yet a keepsake', () => {

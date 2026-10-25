@@ -65,6 +65,36 @@ export const RESOURCES: Resource[] = [
     kind: 'gathered',
     gather: { seconds: 30 * 60, quantity: 2 }, // TUNE: like Emberwood
   },
+  // Wild Isle (#621 W1-8): the water works' makes. Fish come from the coast
+  // (a squishy can fish by hand; a Fishing Pier is the real way), Salt from
+  // the Salt Pans, Flour from a Watermill grinding Greens.
+  {
+    id: 'fish',
+    name: 'Fish',
+    description: 'Wiggly, shiny fish from the coast. A Fishing Pier catches lots!',
+    kind: 'gathered',
+    gather: { seconds: 30 * 60, quantity: 2 }, // TUNE: like Ice
+  },
+  {
+    id: 'flour',
+    name: 'Flour',
+    description: 'Soft, powdery Flour, ground from Greens by a Watermill.',
+    kind: 'crafted',
+  },
+  {
+    id: 'salt',
+    name: 'Salt',
+    description: 'Crunchy sea Salt, dried in the sun at the Salt Pans.',
+    kind: 'gathered',
+  },
+  // Baked from all three (#621 W1-8b, `bake-pies`): a feed squishies love
+  // more than Treats (`CARE_RULES.foods`).
+  {
+    id: 'pies',
+    name: 'Pies',
+    description: 'Warm, flaky pies of Flour, Fish and Salt. Squishies go wild for these!',
+    kind: 'crafted',
+  },
   {
     id: 'heartdust',
     name: 'Heartdust',

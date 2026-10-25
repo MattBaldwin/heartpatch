@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ContentIdSchema } from './common.js';
 import { formatDataIssues } from './issues.js';
 
 // Care, contentment and growth rules (design doc §7–8, DECISIONS G). Data, so
@@ -50,6 +51,13 @@ export const CareRulesSchema = z
     moods: z
       .array(z.strictObject({ id: MoodIdSchema, atLeast: percent, line: z.string().min(1) }))
       .min(1),
+    /**
+     * What a squishy can be fed (#621 W1-8b): item id → percent of a feeding
+     * action's contentment. A care action whose cost is one food can be paid
+     * with any other food, one for one (`POST …/care` `itemId`). Optional:
+     * left out, care is paid only with its own cost.
+     */
+    foods: z.record(ContentIdSchema, z.number().int().min(1).max(1000)).optional(),
   })
   .superRefine((rules, ctx) => {
     if (rules.baselineContentment >= rules.maxContentment) {

@@ -2,11 +2,11 @@ import {
   GLIMMER_SWAP,
   type GlimmerSwapView,
   type MapView,
-  type SellResponse,
+  type SellBasketResponse,
+  type SellLine,
   type SellView,
   type TradeTip,
   type PublicUser,
-  type TradeKind,
   type TradeLine,
   type TradeLineView,
   type TradeOfferView,
@@ -21,9 +21,17 @@ import { hpButton, hpClose } from '../ui/button/button.js';
 import { el, messageOf } from '../ui/dom.js';
 import { glimmerSwapApi, type GlimmerSwapApi } from './glimmer-swap-api.js';
 import { hoursToReset, SWAP_TEXT, swapCards, swapsLeft } from './glimmer-swap-model.js';
+import { postConfirm, postSheet } from './post-confirm.js';
 import { sellApi, type SellApi } from './sell-api.js';
-import { clampLots, sellRequest, sellRows, type SellPick } from './sell-model.js';
-import { sellTab } from './sell-tab.js';
+import {
+  basketLines,
+  clampBasket,
+  sellRequest,
+  sellRows,
+  stepLine,
+  type SellBasket,
+} from './sell-model.js';
+import { sellTab, type MeterParts, type SellConfirm } from './sell-tab.js';
 import { tradeApi, type TradeApi } from './trade-api.js';
 import {
   fitName,
@@ -40,12 +48,15 @@ import {
   pickedViews,
   POST_TABS,
   postChip,
+  removePick,
   sendProblem,
+  setItemQuantity,
   SHELF_FILTERS,
   SHELF_SORTS,
   shelfLines,
   stepItem,
   tabBadges,
+  thingsIn,
   togglePick,
   TRADE_TEXT,
   tradeEventForMe,
@@ -109,13 +120,16 @@ export interface PostDebug {
   readonly sorts: Readonly<Record<Side, ShelfSort>>;
   /** The Glimmer swap (#523): today's swaps and the resource waiting on its confirm. */
   readonly swap: { readonly today: number; readonly picked: string | null } | null;
-  /** The Sell tab (#601 PR 4): today's 💛 from selling, the pick on its confirm, the last sale. */
+  /** The Sell tab (#601 PR 4, #655): today's 💛 from selling, the basket, its confirm, the last sale. */
   readonly sell: {
     readonly soldToday: number;
+    readonly cap: number;
     readonly rows: number;
-    readonly picked: string | null;
-    readonly lots: number;
-    readonly sold: SellResponse['sold'] | null;
+    /** The basket's lines in row order, as the request would send them. */
+    readonly lines: SellLine[];
+    readonly confirm: SellConfirm | null;
+    readonly barNote: string;
+    readonly sold: SellBasketResponse['sold'] | null;
   } | null;
 }
 
@@ -147,10 +161,18 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   let swapPick: string | null = null;
   /** What I could sell here (#601 PR 4), loaded when the Sell tab opens. */
   let sell: SellView | null = null;
-  /** The stack or piece waiting on "Sell 10 Timber for 2 💛?", and how many lots. */
-  let sellPick: SellPick | null = null;
+  /** What's picked to sell, row by row (#655). */
+  let sellBasket: SellBasket = new Map();
+  /** The confirm sheet that's up, if any. */
+  let sellConfirm: SellConfirm | null = null;
+  /** A refusal or failed read for the Sell tab's bar (never the top note, #655). */
+  let sellNote = '';
+  /** The cap meter as last drawn, so it slides to the next. */
+  let sellMeter: MeterParts | null = null;
   /** The last sale, for the tab's "Yay!" card. */
-  let sold: SellResponse['sold'] | null = null;
+  let sold: SellBasketResponse['sold'] | null = null;
+  /** The next draw brings the "Yay!" card into view (once, right after a sale). */
+  let showSold = false;
   const shelves = new Map<string, TradeShelf>();
   let mate: string | null = null;
   let give: TradeLine[] = [];
@@ -164,6 +186,10 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   /** Making my own offer while offers to me wait (they come first, #305). */
   let composing = false;
   let working = false;
+  /** The "Send this gift?" sheet is up (#655). */
+  let giftConfirm = false;
+  /** The Gift tab's "Who's it for?" sheet is up. */
+  let matePicker = false;
   let note = '';
   /** Bumped by every open, close and user change, so a late reply is dropped. */
   let generation = 0;
@@ -275,36 +301,49 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     }
   }
 
+  /** Reads the Sell tab again; the basket is kept to what the fresh view can sell. */
   async function loadSell(): Promise<void> {
     const at = generation;
     if (!mapView) return;
     try {
       const view = await sells.view(mapView.map.id);
-      if (at === generation) sell = view;
+      if (at === generation) {
+        sell = view;
+        sellBasket = clampBasket(view, sellBasket);
+      }
     } catch (err) {
-      if (at === generation) note = messageOf(err);
+      if (at === generation) sellNote = messageOf(err);
     }
     if (at === generation) render();
   }
 
-  /** One sale at this post: one transaction on the server, keyed so a retry never sells twice. No undo. */
-  async function sellCommand(pick: SellPick): Promise<void> {
-    if (working || !post) return;
+  /**
+   * One basket at this post (#655): every line in one transaction on the
+   * server, or none, keyed (one key per tap, reused on the one offline retry)
+   * so a retry never sells twice. No undo: the confirm sheet came first.
+   */
+  async function sellCommand(lines: SellLine[], from: SellConfirm): Promise<void> {
+    if (working || !post || lines.length === 0) return;
     const gen = generation;
     const stillHere = () => gen === generation;
+    const request = sellRequest(lines, at());
     working = true;
-    note = '';
+    sellNote = '';
     render();
     try {
       const res = await sendCommand(
         sendDeps,
-        (key) => sells.sell(mapId(), sellRequest(pick, at()), key),
+        (key) => sells.sell(mapId(), request, key),
         stillHere,
       );
       if (res && stillHere()) {
         sell = res.sell;
         sold = res.sold;
-        sellPick = null;
+        showSold = true;
+        // The stepper basket is what sold; after ✨ Sell all spares, what I'd
+        // picked stays, kept to what's left.
+        sellBasket = from === 'basket' ? new Map() : clampBasket(res.sell, sellBasket);
+        sellConfirm = null;
         // My shelf on the Trade and Gift tabs reads again: the sale took from it.
         const my = me();
         if (my !== null) void load({ shelves: [my] });
@@ -312,10 +351,11 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       }
     } catch (err) {
       if (stillHere()) {
-        // Refused (today's cap from another device, a recipe opened, an offer
-        // named the spare): drop the pick and show what the server sees now.
-        note = messageOf(err);
-        sellPick = null;
+        // Refused, nothing moved (today's room from another device, a recipe
+        // opened, an offer named a spare): say so in the bar, read what the
+        // server sees now, and keep the basket to it, so one more tap sells.
+        sellNote = messageOf(err);
+        sellConfirm = null;
         void loadSell();
       }
     } finally {
@@ -340,6 +380,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     const stillHere = () => at === generation;
     working = true;
     note = '';
+    giftConfirm = false;
     render();
     try {
       const view = await sendCommand(sendDeps, send, stillHere);
@@ -348,6 +389,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         give = [];
         want = [];
         noteId = null;
+        menu = null;
         note = done ?? '';
       }
     } catch (err) {
@@ -366,12 +408,13 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   const button = (
     label: string,
     testId: string,
-    kind: 'primary' | 'secondary' | 'gold',
+    kind: 'primary' | 'secondary' | 'gold' | 'quiet',
     onClick: () => void,
     disabled = false,
   ) => {
     // Gold is the secondary look with the post's own gold tokens (trading.css).
-    const b = hpButton(label, { variant: kind === 'primary' ? 'primary' : 'secondary', testId });
+    const variant = kind === 'gold' ? 'secondary' : kind;
+    const b = hpButton(label, { variant, testId });
     if (kind === 'gold') b.classList.add('post-gold');
     b.disabled = disabled || working;
     b.addEventListener('click', onClick);
@@ -451,7 +494,12 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
               'div',
               { class: 'post-stepper' },
               button('−', `step-down-${line.itemId}`, 'secondary', step(-1), pick.quantity <= 1),
-              el('span', { class: 'post-tiny' }, `×${String(pick.quantity)}`),
+              el(
+                'span',
+                { class: 'post-step-n', 'data-testid': `step-n-${line.itemId}` },
+                el('b', {}, String(pick.quantity)),
+                el('small', {}, TRADE_TEXT.ofShelf(line.quantity)),
+              ),
               button(
                 '+',
                 `step-up-${line.itemId}`,
@@ -462,54 +510,77 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
             ),
           );
         }
-        return slot(line, {
+        const drawn = slot(line, {
           picked: pick !== undefined,
           onTap: () => {
             setPicks(togglePick(picks, line));
+            menu = null;
             render();
           },
           extra,
         });
+        // A picked stack takes its column's full width, so − N + has real 44 pt buttons.
+        if (extra.length > 0) drawn.classList.add('post-slot-wide');
+        return drawn;
       }),
     );
   }
 
-  function mateRow(label: string): HTMLElement {
-    const list = mates();
-    if (list.length === 0) return el('p', { class: 'post-tiny' }, TRADE_TEXT.noMates);
-    return el(
-      'div',
-      { class: 'post-section' },
-      el('b', { class: 'post-small' }, label),
-      el(
-        'div',
-        { class: 'post-mates', role: 'radiogroup', 'aria-label': label },
-        ...list.map((u) => {
-          const on = u.id === mate;
-          const b = el(
-            'button',
-            {
-              type: 'button',
-              class: `post-mate${on ? ' on' : ''}`,
-              role: 'radio',
-              'aria-checked': on ? 'true' : 'false',
-              'data-testid': 'post-mate',
-              'data-user': u.id,
-            },
-            el('span', { class: 'post-face', 'aria-hidden': 'true' }, u.username.slice(0, 1)),
-            el('span', { class: 'post-mate-name' }, u.username),
-          );
-          b.addEventListener('click', () => {
-            if (mate === u.id) return;
-            mate = u.id;
-            want = [];
-            render();
-            if (!shelves.has(u.id)) void load({ shelves: [u.id] });
-          });
-          return b;
-        }),
-      ),
-    );
+  /** "Who's it for? 🎁": a small sheet over the list; one tap picks and closes (#655). */
+  function matePickerSheet(): HTMLElement {
+    const done = () => {
+      matePicker = false;
+      render();
+      body.querySelector<HTMLElement>('[data-testid="post-to-chip"]')?.focus();
+    };
+    return postSheet({
+      title: TRADE_TEXT.whoFor,
+      testId: 'post-mate-picker',
+      closeLabel: TRADE_TEXT.close,
+      onClose: done,
+      content: [
+        el(
+          'div',
+          { class: 'post-mate-list', role: 'radiogroup', 'aria-label': TRADE_TEXT.whoFor },
+          ...mates().map((u) => {
+            const on = u.id === mate;
+            const slotNo = slotOf(u.id);
+            const b = el(
+              'button',
+              {
+                type: 'button',
+                class: `post-mate-row${on ? ' on' : ''}`,
+                role: 'radio',
+                'aria-checked': on ? 'true' : 'false',
+                'data-testid': 'post-mate',
+                'data-user': u.id,
+              },
+              ...(slotNo !== null
+                ? [slotIcon(slotNo)]
+                : [
+                    el(
+                      'span',
+                      { class: 'post-face', 'aria-hidden': 'true' },
+                      u.username.slice(0, 1),
+                    ),
+                  ]),
+              el('span', { class: 'post-mate-row-name' }, u.username),
+              ...(on ? [el('span', { 'aria-hidden': 'true' }, '✓')] : []),
+            );
+            b.addEventListener('click', () => {
+              if (mate !== u.id) {
+                mate = u.id;
+                want = [];
+                if (!shelves.has(u.id)) void load({ shelves: [u.id] });
+              }
+              done();
+            });
+            return b;
+          }),
+        ),
+        el('p', { class: 'post-confirm-note' }, TRADE_TEXT.whoForHint),
+      ],
+    });
   }
 
   function notes(): HTMLElement {
@@ -596,21 +667,19 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     );
   }
 
-  function sendButton(kind: TradeKind, top: readonly Node[] = []): HTMLElement[] {
+  /** The Trade tab's bar: the offer strip and "Send offer", which needs no confirm (the other player's yes is the confirm). */
+  function sendButton(top: readonly Node[] = []): HTMLElement[] {
     const to = mate;
-    const problem = sendProblem(kind, give, want);
+    const problem = sendProblem('trade', give, want);
     const name = to === null ? '' : nameOf(to);
     const b = button(
-      kind === 'gift' ? TRADE_TEXT.sendGift : TRADE_TEXT.sendOffer,
-      kind === 'gift' ? 'post-send-gift' : 'post-send',
+      TRADE_TEXT.sendOffer,
+      'post-send',
       'primary',
       () => {
         if (to === null) return;
-        const request = offerRequest(at(), kind, to, give, want, noteId);
-        void command(
-          (key) => api.send(mapId(), request, key),
-          kind === 'gift' ? TRADE_TEXT.giftSent(name) : TRADE_TEXT.sent(name),
-        );
+        const request = offerRequest(at(), 'trade', to, give, want, noteId);
+        void command((key) => api.send(mapId(), request, key), TRADE_TEXT.sent(name));
       },
       to === null || problem !== null || passOver(),
     );
@@ -619,15 +688,125 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         ? ''
         : problem && (give.length > 0 || want.length > 0)
           ? problem
-          : kind === 'gift'
-            ? TRADE_TEXT.giftWaits(name)
-            : TRADE_TEXT.waitsSafely(name);
+          : TRADE_TEXT.waitsSafely(name);
     // Stuck to the sheet's bottom, so "Send" (and what I picked) is on screen
     // while picking (style guide §3); the hint scrolls, to keep the bar short.
     return [
-      el('div', { class: 'post-send-bar' }, ...top, b),
+      el(
+        'div',
+        { class: 'post-send-bar', 'data-testid': 'post-trade-bar' },
+        ...pickPopover(),
+        ...top,
+        b,
+      ),
       el('p', { class: 'post-tiny center', 'data-testid': 'post-send-hint' }, hint),
     ];
+  }
+
+  /**
+   * The Gift tab's sticky bar (#655): who it's for ("To: Mia ▾"), what's
+   * picked (tap a pick to change it), and Send gift, which asks first.
+   */
+  function giftBar(): HTMLElement[] {
+    const to = mate;
+    const name = to === null ? '' : nameOf(to);
+    const my = me();
+    const picked = pickedViews(give, my === null ? undefined : shelves.get(my));
+    const problem = sendProblem('gift', give, []);
+    const chipWords = [
+      el('span', { class: 'post-face theirs small', 'aria-hidden': 'true' }, name.slice(0, 1)),
+      el('span', { class: 'post-to-name' }, TRADE_TEXT.toChip(name)),
+    ];
+    const toChip = el(
+      'button',
+      {
+        type: 'button',
+        class: 'post-to-chip',
+        'aria-haspopup': 'dialog',
+        'data-testid': 'post-to-chip',
+      },
+      ...chipWords,
+      el('span', { 'aria-hidden': 'true' }, '▾'),
+    );
+    toChip.disabled = working;
+    toChip.addEventListener('click', () => {
+      menu = null;
+      matePicker = true;
+      render();
+    });
+    const send = button(
+      TRADE_TEXT.sendGift,
+      'post-send-gift',
+      'primary',
+      () => {
+        menu = null;
+        giftConfirm = true;
+        render();
+      },
+      to === null || problem !== null || passOver(),
+    );
+    const strip = el(
+      'div',
+      { class: 'post-picks', 'data-testid': 'post-gift-picks' },
+      ...(picked.length === 0
+        ? [el('span', { class: 'post-tiny' }, TRADE_TEXT.giftPickFirst)]
+        : picked.map((l) => miniTile(l, 'mine', onTile))),
+    );
+    return [
+      el(
+        'div',
+        { class: 'post-send-bar post-gift-bar', 'data-testid': 'post-gift-bar' },
+        ...pickPopover(),
+        el('div', { class: 'post-gift-top' }, toChip, strip),
+        el(
+          'div',
+          { class: 'post-gift-act' },
+          el(
+            'span',
+            { class: 'post-gift-sum post-fit', 'data-testid': 'post-gift-sum' },
+            picked.length === 0 ? '' : TRADE_TEXT.giftCount(thingsIn(give), name),
+          ),
+          send,
+        ),
+      ),
+      ...(problem !== null && give.length > 0
+        ? [el('p', { class: 'post-tiny center', 'data-testid': 'post-send-hint' }, problem)]
+        : []),
+    ];
+  }
+
+  /** "Send this gift? 🎁": exactly what goes, to whom, before it leaves. */
+  function giftConfirmSheet(): HTMLElement | null {
+    const to = mate;
+    const my = me();
+    if (to === null || my === null) return null;
+    const name = nameOf(to);
+    const picked = pickedViews(give, shelves.get(my));
+    return postConfirm({
+      title: TRADE_TEXT.giftConfirmTitle,
+      testId: 'post-gift-confirm',
+      lines: [
+        { icon: '💌', text: TRADE_TEXT.giftConfirmTo(name) },
+        ...picked.map((l) => {
+          const look = lineLook(l);
+          return { icon: look.icon || '🧸', text: look.name };
+        }),
+      ],
+      note: TRADE_TEXT.giftConfirmNote(name),
+      yes: TRADE_TEXT.sendYes,
+      no: TRADE_TEXT.notNow,
+      button,
+      onYes: () => {
+        const request = offerRequest(at(), 'gift', to, give, [], noteId);
+        void command((key) => api.send(mapId(), request, key), TRADE_TEXT.giftSent(name));
+      },
+      onNo: () => {
+        giftConfirm = false;
+        render();
+        body.querySelector<HTMLElement>('[data-testid="post-send-gift"]')?.focus();
+      },
+      yesDisabled: passOver(),
+    });
   }
 
   // ---- the split view (#305) ----------------------------------------------
@@ -835,6 +1014,120 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     );
   }
 
+  /** A pick as a little picture; tappable (44 pt) when it can be changed (#655). */
+  function miniTile(
+    line: TradeLineView,
+    side: Side,
+    onTile?: (side: Side, line: TradeLineView) => void,
+  ): HTMLElement {
+    const look = lineLook(line);
+    const parts = [
+      picture(line),
+      ...(line.kind === 'item' ? [el('b', {}, `×${String(line.quantity)}`)] : []),
+    ];
+    if (!onTile) {
+      return el('span', { class: 'post-mini', role: 'img', 'aria-label': look.name }, ...parts);
+    }
+    const open = menu === popId(side, line);
+    const tile = el(
+      'button',
+      {
+        type: 'button',
+        class: `post-mini tap${open ? ' open' : ''}`,
+        'aria-label': `${look.name}. ${TRADE_TEXT.changePick}`,
+        'aria-expanded': open ? 'true' : 'false',
+        'data-menu': 'pick',
+        'data-testid': 'post-pick',
+        'data-key': lineKey(line),
+      },
+      ...parts,
+    );
+    tile.disabled = working;
+    tile.addEventListener('click', () => {
+      onTile(side, line);
+    });
+    return tile;
+  }
+
+  const popId = (side: Side, line: TradeLineView | TradeLine) => `pick:${side}:${lineKey(line)}`;
+
+  /** A tile was tapped: its little popover opens above the bar, or shuts if it was open. */
+  const onTile = (side: Side, line: TradeLineView) => {
+    const id = popId(side, line);
+    menu = menu === id ? null : id;
+    render();
+  };
+
+  /** The tapped pick's popover: − N + for an item, and Remove (#655). */
+  function pickPopover(): HTMLElement[] {
+    if (menu === null || !menu.startsWith('pick:')) return [];
+    const [, side, ...rest] = menu.split(':');
+    const key = rest.join(':');
+    if (side !== 'mine' && side !== 'theirs') return [];
+    const owner = side === 'mine' ? me() : mate;
+    const picks = side === 'mine' ? give : want;
+    const setPicks = (next: TradeLine[]) => {
+      if (side === 'mine') give = next;
+      else want = next;
+    };
+    const pick = picks.find((p) => lineKey(p) === key);
+    const view = pick && pickedViews([pick], owner === null ? undefined : shelves.get(owner))[0];
+    const shelfLine =
+      owner === null || !pick
+        ? undefined
+        : shelves.get(owner)?.items.find((l) => lineKey(l) === key);
+    if (!pick || !view) return [];
+    const look = lineLook(view);
+    const stepper =
+      pick.kind === 'item' && shelfLine?.kind === 'item' && shelfLine.quantity > 1
+        ? (() => {
+            const max = shelfLine.quantity;
+            const set = (q: number) => () => {
+              setPicks(setItemQuantity(picks, pick.itemId, q, max));
+              render();
+            };
+            return [
+              el(
+                'div',
+                { class: 'post-stepper' },
+                button('−', 'pop-down', 'secondary', set(pick.quantity - 1), pick.quantity <= 1),
+                el(
+                  'span',
+                  { class: 'post-step-n', 'data-testid': 'pop-count' },
+                  el('b', {}, String(pick.quantity)),
+                  el('small', {}, TRADE_TEXT.ofShelf(max)),
+                ),
+                button('+', 'pop-up', 'secondary', set(pick.quantity + 1), pick.quantity >= max),
+              ),
+            ];
+          })()
+        : [];
+    return [
+      el(
+        'div',
+        {
+          class: `post-strip-pop ${side}`,
+          role: 'group',
+          'aria-label': look.name,
+          'data-menu': 'pick',
+          'data-testid': 'post-strip-pop',
+        },
+        el(
+          'span',
+          { class: 'post-pop-who' },
+          picture(view),
+          el('b', { class: 'post-fit' }, look.name),
+        ),
+        ...stepper,
+        button(TRADE_TEXT.remove, 'pop-remove', 'quiet', () => {
+          setPicks(removePick(picks, key));
+          menu = null;
+          render();
+        }),
+      ),
+    ];
+  }
+
   /**
    * The offer strip (#305): what I give (mint) and what I get (lilac), each
    * with its hearts, and the fairness meter. `mini` draws little pictures
@@ -846,6 +1139,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     look: MeterLook,
     mateName: string,
     draw: 'mini' | 'full',
+    onTile?: (side: Side, line: TradeLineView) => void,
   ): HTMLElement {
     const half = (side: Side, lines: readonly TradeLineView[], n: number) => {
       const things =
@@ -859,15 +1153,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
             ]
           : draw === 'full'
             ? [el('div', { class: 'post-grid rows' }, ...lines.map((l) => slot(l)))]
-            : lines.map((l) => {
-                const look = lineLook(l);
-                return el(
-                  'span',
-                  { class: 'post-mini', role: 'img', 'aria-label': look.name },
-                  picture(l),
-                  ...(l.kind === 'item' ? [el('b', {}, `×${String(l.quantity)}`)] : []),
-                );
-              });
+            : lines.map((l) => miniTile(l, side, onTile));
       return el(
         'div',
         { class: `post-half ${side}`, 'data-testid': `post-half-${side}` },
@@ -1032,16 +1318,29 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         column('theirs', 'post-want', TRADE_TEXT.nothingTheyHave),
       ),
       // Always on screen with "Send offer", both directions (#305), even before a pick.
-      ...sendButton('trade', [
-        offerStrip(picked.give, picked.get, picked.look, mate === null ? '' : nameOf(mate), 'mini'),
+      ...sendButton([
+        offerStrip(
+          picked.give,
+          picked.get,
+          picked.look,
+          mate === null ? '' : nameOf(mate),
+          'mini',
+          onTile,
+        ),
       ]),
       ...offersFromMe(view, my, 'trade').map(outgoing),
     ];
   }
 
   function giftTab(view: TradesView, my: string): Node[] {
+    if (mates().length === 0) {
+      // Nobody to give to: a sheet can't stay up (the ticker would stay paused).
+      giftConfirm = false;
+      matePicker = false;
+      return [el('p', { class: 'post-tiny' }, TRADE_TEXT.noMates)];
+    }
+    const sheet = giftConfirm ? giftConfirmSheet() : matePicker ? matePickerSheet() : null;
     return [
-      mateRow(TRADE_TEXT.giftTo),
       notes(),
       el(
         'div',
@@ -1049,8 +1348,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         el('b', { class: 'post-small' }, TRADE_TEXT.pickGift),
         column('mine', 'post-gift-pick', TRADE_TEXT.nothingToGive),
       ),
-      ...sendButton('gift'),
+      ...giftBar(),
       ...offersFromMe(view, my, 'gift').map(outgoing),
+      ...(sheet ? [sheet] : []),
     ];
   }
 
@@ -1091,33 +1391,6 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         ),
       );
     }
-    if (swapPick !== null && !capped) {
-      const itemId = swapPick;
-      parts.push(
-        el(
-          'div',
-          { class: 'post-card post-swap-confirm', 'data-testid': 'post-swap-confirm' },
-          el('b', {}, SWAP_TEXT.confirm(itemId, rules)),
-          el(
-            'div',
-            { class: 'post-row' },
-            button(SWAP_TEXT.no, 'post-swap-no', 'secondary', () => {
-              swapPick = null;
-              render();
-            }),
-            button(
-              SWAP_TEXT.yes,
-              'post-swap-yes',
-              'primary',
-              () => {
-                void swapCommand(itemId);
-              },
-              passOver(),
-            ),
-          ),
-        ),
-      );
-    }
     parts.push(
       el(
         'div',
@@ -1137,11 +1410,16 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
               el('div', { class: 'post-small' }, SWAP_TEXT.have(card.have)),
             ),
             button(
-              card.have >= rules.give || capped ? SWAP_TEXT.swap : SWAP_TEXT.need(rules.give),
+              card.itemId === swapPick
+                ? TRADE_TEXT.swapPicked
+                : card.have >= rules.give || capped
+                  ? TRADE_TEXT.swapPickIt
+                  : SWAP_TEXT.need(rules.give),
               `post-swap-${card.itemId}`,
               'gold',
               () => {
-                swapPick = card.itemId;
+                // Tap again to change your mind.
+                swapPick = swapPick === card.itemId ? null : card.itemId;
                 note = '';
                 render();
               },
@@ -1149,6 +1427,49 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
             ),
           ),
         ),
+      ),
+    );
+    // The bar: what this swap is, how many are left today, and Swap (#655).
+    const picked = swapPick !== null && !capped ? swapPick : null;
+    const left = Math.floor(swapsLeft(view, rules) / rules.get);
+    const doIt = button(
+      SWAP_TEXT.swap,
+      'post-swap-yes',
+      'primary',
+      () => {
+        if (picked !== null) void swapCommand(picked);
+      },
+      picked === null || passOver(),
+    );
+    parts.push(
+      el(
+        'div',
+        { class: 'post-send-bar post-swap-bar', 'data-testid': 'post-swap-bar' },
+        ...(note
+          ? [
+              el(
+                'p',
+                { class: 'post-bar-note', role: 'alert', 'data-testid': 'post-swap-note' },
+                note,
+              ),
+            ]
+          : []),
+        el(
+          'div',
+          { class: 'post-bar-sum' },
+          el(
+            'b',
+            { 'data-testid': 'post-swap-sum' },
+            picked === null
+              ? TRADE_TEXT.swapPickFirst
+              : TRADE_TEXT.swapLine(
+                  `${String(rules.give)} ${swapCards(view, rules).find((c) => c.itemId === picked)?.name ?? picked}`,
+                  rules.get,
+                ),
+          ),
+          el('span', { class: 'post-tiny' }, TRADE_TEXT.swapsLeft(left)),
+        ),
+        doIt,
       ),
     );
     return parts;
@@ -1278,7 +1599,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           if (tab === t) return;
           tab = t;
           swapPick = null;
-          sellPick = null;
+          sellBasket = new Map();
+          sellConfirm = null;
+          sellNote = '';
           sold = null;
           if (t === 'swap') void loadSwap();
           if (t === 'sell') void loadSell();
@@ -1287,6 +1610,8 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           noteId = null;
           note = '';
           menu = null;
+          giftConfirm = false;
+          matePicker = false;
           render();
         });
         return b;
@@ -1300,11 +1625,59 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         trades?.tradingEnabled === false && tab !== 'swap' && tab !== 'sell'
         ? TRADE_TEXT.tradingOff
         : '';
-    status.textContent = note || banner;
+    // The Swap tab shows its own note in its bar, where the kid is looking.
+    status.textContent = (tab === 'swap' ? '' : note) || banner;
     status.hidden = status.textContent === '';
 
     if (!trades) {
       body.replaceChildren(el('p', { class: 'post-tiny' }, '…'));
+      return;
+    }
+    if (tab === 'sell') {
+      const drawn = sellTab(
+        {
+          view: sell,
+          basket: sellBasket,
+          confirm: sellConfirm,
+          sold,
+          barNote: sellNote,
+          passOver: passOver(),
+          nowMs: now(),
+          meterFrom: sellMeter,
+        },
+        {
+          button,
+          onStep: (row, delta) => {
+            if (!sell) return;
+            sellBasket = stepLine(sell, sellBasket, row, sellRows(sell), delta);
+            sold = null;
+            sellNote = '';
+            render();
+          },
+          onConfirm: (which) => {
+            sellConfirm = which;
+            sold = null;
+            sellNote = '';
+            render();
+            body.querySelector<HTMLElement>('[data-testid="post-sell-confirm-yes"]')?.focus();
+          },
+          onCancel: () => {
+            sellConfirm = null;
+            render();
+          },
+          onSell: (lines) => {
+            if (sellConfirm) void sellCommand(lines, sellConfirm);
+          },
+        },
+      );
+      sellMeter = drawn.meter;
+      body.replaceChildren(...drawn.nodes);
+      fitNames(body);
+      // A sale's "Yay!" card is at the top of the list: bring it into view, once.
+      if (showSold && !working) {
+        showSold = false;
+        body.querySelector('[data-testid="post-sell-done"]')?.scrollIntoView({ block: 'nearest' });
+      }
       return;
     }
     const parts =
@@ -1314,34 +1687,18 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           ? giftTab(trades, my)
           : tab === 'mailbox'
             ? mailboxTab(trades)
-            : tab === 'swap'
-              ? swapTab()
-              : sellTab(
-                  { view: sell, pick: sellPick, sold, passOver: passOver(), nowMs: now() },
-                  {
-                    button,
-                    onPick: (row) => {
-                      sellPick = { kind: row.kind, itemId: row.itemId, lots: 1 };
-                      sold = null;
-                      note = '';
-                      render();
-                    },
-                    onLots: (lots) => {
-                      const row = sell && sellRows(sell).find((r) => r.itemId === sellPick?.itemId);
-                      if (sellPick && row) sellPick = { ...sellPick, lots: clampLots(lots, row) };
-                      render();
-                    },
-                    onCancel: () => {
-                      sellPick = null;
-                      render();
-                    },
-                    onSell: (pick) => {
-                      void sellCommand(pick);
-                    },
-                  },
-                );
+            : swapTab();
     body.replaceChildren(...parts);
     fitNames(body);
+    // A sheet that's up keeps the keyboard on itself, even after a redraw.
+    if (tab === 'gift' && !body.contains(document.activeElement)) {
+      const first = giftConfirm
+        ? body.querySelector<HTMLElement>('[data-testid="post-gift-confirm-yes"]')
+        : matePicker
+          ? body.querySelector<HTMLElement>('.post-mate-row')
+          : null;
+      first?.focus();
+    }
   }
 
   /** Shrinks each name until its longest word fits its box whole (owner, #271). */
@@ -1383,7 +1740,10 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   /** Counts the visit pass down, only while a pass's post is open. */
   function syncTicker(on: boolean): void {
     if (on && ticker === undefined) {
-      ticker = window.setInterval(render, 15_000);
+      // Not while a confirm sheet is up: a redraw would take its focus.
+      ticker = window.setInterval(() => {
+        if (sellConfirm === null && !giftConfirm && !matePicker) render();
+      }, 15_000);
     } else if (!on && ticker !== undefined) {
       window.clearInterval(ticker);
       ticker = undefined;
@@ -1402,11 +1762,16 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     filters = { mine: 'all', theirs: 'all' };
     sorts = { mine: 'name', theirs: 'name' };
     menu = null;
+    giftConfirm = false;
+    matePicker = false;
     composing = false;
     swap = null;
     swapPick = null;
     sell = null;
-    sellPick = null;
+    sellBasket = new Map();
+    sellConfirm = null;
+    sellNote = '';
+    sellMeter = null;
     sold = null;
   }
 
@@ -1476,9 +1841,11 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         sell: sell
           ? {
               soldToday: sell.soldToday,
+              cap: sell.cap,
               rows: sellRows(sell).length,
-              picked: sellPick?.itemId ?? null,
-              lots: sellPick?.lots ?? 0,
+              lines: basketLines(sellBasket, sellRows(sell)),
+              confirm: sellConfirm,
+              barNote: sellNote,
               sold,
             }
           : null,

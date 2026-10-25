@@ -210,6 +210,8 @@ export interface TerrainPluginOptions {
   readonly water?: boolean;
   /** A grey village tile (#306 2a): its drain and joy discs. */
   readonly drain?: HollowedDrain;
+  /** Water whose glint strength changes (Wild Isle's sea, dimmer at night, #621); else the lake's. */
+  readonly glint?: { value: number };
 }
 
 /** Attaches the terrain plugin to `material` under GLSL; null under WebGPU (WGSL). */
@@ -227,6 +229,7 @@ export class TerrainPlugin extends MaterialPluginBase {
   private readonly clock: TerrainClock;
   private readonly water: boolean;
   private readonly drain: HollowedDrain | null;
+  private readonly glint: { value: number } | null;
   private readonly muteTint = Color3.FromHexString(MUTED.tint).toLinearSpace();
 
   constructor(material: Material, clock: TerrainClock, options: TerrainPluginOptions = {}) {
@@ -239,6 +242,7 @@ export class TerrainPlugin extends MaterialPluginBase {
     this.clock = clock;
     this.water = options.water === true;
     this.drain = options.drain ?? null;
+    this.glint = options.glint ?? null;
     this._enable(true);
   }
 
@@ -297,7 +301,11 @@ export class TerrainPlugin extends MaterialPluginBase {
   override bindForSubMesh(uniformBuffer: UniformBuffer): void {
     uniformBuffer.updateFloat('terrainTime', this.clock.time);
     uniformBuffer.updateFloat2('terrainMuteMix', MUTED.wash, MUTED.shade);
-    uniformBuffer.updateFloat2('terrainWater', AMBIENT.water.bob, AMBIENT.water.glint);
+    uniformBuffer.updateFloat2(
+      'terrainWater',
+      AMBIENT.water.bob,
+      this.glint?.value ?? AMBIENT.water.glint,
+    );
     const t = this.muteTint;
     uniformBuffer.updateFloat4('terrainMute', t.r, t.g, t.b, MUTED.saturation);
     const d = this.drain;

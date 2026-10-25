@@ -359,6 +359,8 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
       'recipe:joy-lantern',
       'recipe:heart-tea',
       'building:joy-lantern',
+      // Pies (#621 W1-8b): sealed by Wild Isle works' Flour, Fish and Salt.
+      'recipe:bake-pies',
     ]);
     expect(await book(server, kid)).toEqual(
       recipeBookPages()

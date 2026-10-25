@@ -118,6 +118,20 @@ describe('unlocking pages', () => {
     expect(sealedHint('recipe:heart-charm')).toBeNull();
   });
 
+  it('seals the Pies page until Flour, Fish and Salt from Wild Isle works are in (#621 W1-8b)', () => {
+    expect(page('recipe:bake-pies')).toMatchObject({
+      ingredients: { flour: 2, fish: 1, salt: 1 },
+      seconds: 120,
+      output: { kind: 'item', resource: 'pies', quantity: 3 },
+    });
+    expect(unlocked(['flour', 'fish']).has('recipe:bake-pies')).toBe(false);
+    expect(unlocked(['flour', 'fish', 'salt']).has('recipe:bake-pies')).toBe(true);
+    expect(sealedHint('recipe:bake-pies')).toContain('Wild Isle works');
+    // Every ingredient says where to find it: a Wild Isle work makes each one.
+    for (const id of ['flour', 'fish', 'salt']) expect(whereToFind(id).madeAt, id).not.toEqual([]);
+    expect(whereToFind('pies')).toMatchObject({ madeBy: ['bake-pies'], madeAt: [] });
+  });
+
   it('opens a page the first time its last missing ingredient is collected', () => {
     expect(unlocked(['emberwood']).has('recipe:pumpkin-treats')).toBe(false);
     expect(unlocked(['emberwood', 'pumpkins']).has('recipe:pumpkin-treats')).toBe(true);
@@ -182,7 +196,8 @@ describe('whereToFind', () => {
         where.terrains.length > 0 ||
         where.homeRing ||
         where.bonusFrom.length > 0 ||
-        where.madeBy.length > 0;
+        where.madeBy.length > 0 ||
+        where.madeAt.length > 0;
       // Heartdust comes from rescues and seasonal extras from events: no node, bonus or recipe yet.
       // Things only a hidden recipe makes aren't anywhere yet either. The
       // Rekindled finds turn up only in Hollowed villages (#306 PR 5).
@@ -206,6 +221,7 @@ describe('whereToFind', () => {
       homeRing: true,
       bonusFrom: [],
       madeBy: [],
+      madeAt: [],
       season: null,
     });
     expect(whereToFind('witch-dust')).toEqual({
@@ -214,6 +230,7 @@ describe('whereToFind', () => {
       homeRing: false,
       bonusFrom: ['emberwood', 'pumpkins'],
       madeBy: [],
+      madeAt: [],
       season: 'halloween',
     });
     expect(whereToFind('treats')).toMatchObject({
@@ -231,6 +248,17 @@ describe('whereToFind', () => {
       terrains: ['forest'],
       gatheredOn: ['meadow'],
     });
+    // Wild Isle (#621 W1-8): Fish on the coast and at a pier; Flour and Salt
+    // only from their works.
+    expect(whereToFind('fish')).toMatchObject({
+      terrains: [],
+      gatheredOn: ['coast'],
+      madeBy: [],
+      madeAt: ['fishing-pier'],
+    });
+    expect(whereToFind('flour')).toMatchObject({ gatheredOn: [], madeAt: ['watermill'] });
+    expect(whereToFind('salt')).toMatchObject({ gatheredOn: [], madeAt: ['salt-pans'] });
+    expect(whereToFind('water').madeAt).toEqual(['river-well', 'rain-barrel']);
     expect(whereToFind('jack-o-lantern-hearthfire')).toMatchObject({
       madeBy: ['jack-o-lantern-hearthfire'],
     });
@@ -247,6 +275,7 @@ describe('whereToFind', () => {
       homeRing: false,
       bonusFrom: [],
       madeBy: [],
+      madeAt: [],
       season: null,
     });
   });

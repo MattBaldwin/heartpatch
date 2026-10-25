@@ -4,6 +4,7 @@ import {
   CARE_RULES,
   careCoins,
   careGain,
+  fedWith,
   careHeartCoins,
   evolvingMeter,
   GAME_DATA,
@@ -114,17 +115,22 @@ const MESSAGES = {
   inHollow: 'That squishy is in the Hollow right now. Rescue them first!',
   inTrade: 'That squishy is waiting at a trading post right now. 📬',
   tooSoon: (name: string) => `${name} needs a tiny moment. Try again soon!`,
+  notFood: "Squishies can't eat that. Try Treats!",
 } as const;
 
 export interface CareService {
   /** My active squishies on this map, as their care sheets show them. */
   list: (user: PublicUser, mapId: string) => Promise<CareListResponse>;
-  /** One care action (feed, pet or play) on one of my squishies. */
+  /**
+   * One care action (feed, pet or play) on one of my squishies. `itemId`
+   * (#621 W1-8b) pays a feed with another food, Pies; left out, its own cost.
+   */
   care: (
     user: PublicUser,
     mapId: string,
     squishyId: string,
     actionId: string,
+    itemId?: string,
   ) => Promise<CareResponse>;
   /** The owner saw a squishy's evolution celebrated. */
   seen: (user: PublicUser, mapId: string, squishyId: string) => Promise<CareListResponse>;
@@ -479,9 +485,15 @@ export function createCareService(options: CareServiceOptions): CareService {
       return careView(store, db, mapId, user.id, now());
     },
 
-    care: async (user, mapId, squishyId, actionId) => {
+    care: async (user, mapId, squishyId, actionId, itemId) => {
       const action = CARE_ACTIONS.get(actionId);
       if (!action) throw new AppError('VALIDATION_FAILED', MESSAGES.unknownAction);
+      // A chosen food changes only how much it gives and what it costs; the
+      // debounce, falloff and coin cap below are the same (#376). The bag
+      // decides who can pay, not the patch type.
+      const food = itemId === undefined ? null : fedWith(action, itemId, CARE_RULES);
+      if (itemId !== undefined && !food) throw new AppError('VALIDATION_FAILED', MESSAGES.notFood);
+      const fed = food ? { ...action, contentment: food.contentment, cost: food.cost } : action;
       const at = now();
       const reply = await store.transaction(async (repo, tx) => {
         await requireMember(tx, user, mapId);
@@ -497,7 +509,7 @@ export function createCareService(options: CareServiceOptions): CareService {
 
         const day = await accountDay(tx, user.id, at);
         const today = (await repo.countCareOn([row.id], day)).get(row.id) ?? 0;
-        const gain = careGain(action, today, CARE_RULES);
+        const gain = careGain(fed, today, CARE_RULES);
         const coins = careCoins(gain, await repo.coinsOn(user.id, day), CARE_RULES);
         // On what its job left it with (#376), capped at full.
         const before = await contentmentFor(tx, mapId, row.id, at);
@@ -516,9 +528,10 @@ export function createCareService(options: CareServiceOptions): CareService {
           coins,
           caredAt: at,
         });
-        // Feeding costs Treats, ledgered against this care action. Short: CONFLICT, nothing changes.
-        if (action.cost) {
-          await consumeItems(tx, { mapId, userId: user.id }, action.cost, 'care', careId);
+        // Feeding costs Treats (or the chosen food), ledgered against this care
+        // action. Short: CONFLICT, nothing changes. Still step 11 (tech spec §7).
+        if (fed.cost) {
+          await consumeItems(tx, { mapId, userId: user.id }, fed.cost, 'care', careId);
         }
         // Pays out exactly what the care log records (#45), once per action.
         // After the inventory rows and before the event (tech spec §7).

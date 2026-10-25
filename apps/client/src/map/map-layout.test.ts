@@ -3,11 +3,12 @@ import {
   HEX_DIRECTIONS,
   generateMap,
   hexDistance,
+  hexKey,
   hexToWorld,
   type PublicTile,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { HEX_SIZE, TERRAIN_LOOKS } from './map-config.js';
+import { HEX_SIZE, OCEAN, TERRAIN_LOOKS } from './map-config.js';
 import {
   findHomeBases,
   hash01,
@@ -17,8 +18,12 @@ import {
   slotsByUser,
   tintSlot,
   maxZoomFor,
+  beachRadius,
+  hexIslandRadius,
+  hexReach,
+  islandTiles,
 } from './map-layout.js';
-import { member, testView, userId } from './test-view.js';
+import { member, testView, testWildIsle, userId } from './test-view.js';
 
 describe('findHomeBases', () => {
   it("finds every slot's Heart Seed: the middle of its 7-tile ring", () => {
@@ -168,5 +173,67 @@ describe('maxZoomFor (#318)', () => {
     expect(maxZoomFor(r16, 38)).toBeCloseTo((38 * 16) / 12, 5);
     // A small map never zooms in tighter than the camera allows anyway.
     expect(maxZoomFor({ minX: -1, maxX: 1, minZ: -1, maxZ: 1 }, 38)).toBe(38);
+  });
+});
+
+describe('the Wild Isle island (#621)', () => {
+  const view = testWildIsle();
+  const ocean = (t: PublicTile) => t.terrain === 'ocean';
+
+  it('is every tile on a Cozy map', () => {
+    const cozy = testView(1);
+    expect(islandTiles(cozy.tiles, ocean).size).toBe(cozy.tiles.length);
+  });
+
+  it('holds the land, rivers and lakes joined to the middle, and not the isles at sea', () => {
+    const island = islandTiles(view.tiles, ocean);
+    const land = view.tiles.filter((t) => !ocean(t));
+    const isles = land.filter((t) => !island.has(hexKey(t)));
+    expect(isles).toHaveLength(8); // two isles of four
+    for (const t of isles) expect(hexDistance(t, { q: 0, r: 0 })).toBe(18);
+    expect(
+      view.tiles.filter((t) => t.terrain === 'river').every((t) => island.has(hexKey(t))),
+    ).toBe(true);
+  });
+
+  it('sizes the island’s hexagon to hold every corner of its tiles', () => {
+    const island = islandTiles(view.tiles, ocean);
+    const tiles = view.tiles.filter((t) => island.has(hexKey(t)));
+    const r = hexIslandRadius(tiles, HEX_SIZE);
+    const apothem = r * (Math.sqrt(3) / 2);
+    for (const t of tiles) {
+      const p = hexToWorld(t, HEX_SIZE);
+      for (let k = 0; k < 6; k++) {
+        const a = ((30 + 60 * k) * Math.PI) / 180;
+        expect(p.x * Math.cos(a) + p.z * Math.sin(a) + HEX_SIZE).toBeLessThanOrEqual(
+          apothem + 1e-9,
+        );
+      }
+    }
+    // Snug: no bigger than the land's corner tiles need.
+    expect(r).toBeLessThan(hexIslandRadius(view.tiles, HEX_SIZE));
+  });
+
+  it('keeps the beach off the sea: every ocean tile’s middle is past the sand', () => {
+    const island = islandTiles(view.tiles, ocean);
+    const edge = beachRadius(view.tiles.filter((t) => island.has(hexKey(t)))) * (Math.sqrt(3) / 2);
+    const sea = view.tiles.filter(ocean);
+    expect(sea.length).toBeGreaterThan(150);
+    for (const t of sea) expect(hexReach(hexToWorld(t, HEX_SIZE))).toBeGreaterThan(edge);
+  });
+
+  it('leaves open water between an isle’s sandbar and the beach, so it reads as out of reach', () => {
+    const island = islandTiles(view.tiles, ocean);
+    const cos30 = Math.sqrt(3) / 2;
+    const tiles = view.tiles.filter((t) => island.has(hexKey(t)));
+    // Where the beach meets the water line, along the land's edge normals.
+    const beach = beachRadius(tiles) * cos30 + OCEAN.shore * cos30;
+    const isles = view.tiles.filter((t) => !ocean(t) && !island.has(hexKey(t)));
+    expect(isles.length).toBeGreaterThan(0);
+    for (const t of isles) {
+      const skirt =
+        hexReach(hexToWorld(t, HEX_SIZE)) - HEX_SIZE * OCEAN.isleSand * OCEAN.isleSandWater;
+      expect(skirt - beach).toBeGreaterThan(0.15);
+    }
   });
 });

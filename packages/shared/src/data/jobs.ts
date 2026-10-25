@@ -27,6 +27,9 @@ export const JOB_RULES: JobRules = {
     { terrain: 'mountains', resource: 'ice', quantity: 1, seconds: 20 * 60 },
     { terrain: 'lake', resource: 'water', quantity: 2, seconds: 15 * 60 }, // TUNE:
     { terrain: 'pumpkin-fields', resource: 'pumpkins', quantity: 1, seconds: 20 * 60 }, // TUNE:
+    // Wild Isle (#621 W1-8): a squishy can fish the coast by hand; a Fishing
+    // Pier is the real way, as a resource building is for the land.
+    { terrain: 'coast', resource: 'fish', quantity: 1, seconds: 30 * 60 }, // TUNE:
   ],
   // TUNE: who is quick at what. Element side first, then feeling.
   affinities: [
@@ -60,6 +63,9 @@ export const JOB_RULES: JobRules = {
       feelings: [],
       seasons: ['thanksgiving'],
     },
+    // Wild Isle (#621 W1-8): no Fish row yet. The job board's hints read
+    // every row on every patch, so one would show Fish on a Cozy Patch,
+    // which has no coast; it waits for patch-aware hints.
   ],
   maxGatherHints: 2, // TUNE:
   // TUNE: owner decision 2026-10-06: at most a day of Training Grounds XP

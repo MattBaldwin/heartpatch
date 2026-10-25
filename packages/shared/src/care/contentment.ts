@@ -146,6 +146,37 @@ export function careGain(
   };
 }
 
+/** A care action paid with a chosen food: what it gives before the day's falloff, and what it costs. */
+export interface FedWith {
+  /** The action's contentment at this food's percent, before diminishing returns. */
+  readonly contentment: number;
+  /** The action's cost, paid in this food, one for one. */
+  readonly cost: Readonly<Record<string, number>>;
+}
+
+/**
+ * A care action paid with `itemId` instead of its own food (#621 W1-8b: Pies
+ * for a feed): its contentment at the food's `CARE_RULES.foods` percent,
+ * floored, and its cost in that food. Null when `itemId` isn't a food or the
+ * action isn't paid with exactly one food. Diminishing returns, the debounce
+ * and the coin cap then apply as usual (`careGain` on the result).
+ */
+export function fedWith(
+  action: Pick<CareAction, 'contentment' | 'cost'>,
+  itemId: string,
+  rules: Pick<CareRules, 'foods'>,
+): FedWith | null {
+  const foods = rules.foods ?? {};
+  const percent = foods[itemId];
+  const paid = Object.entries(action.cost ?? {});
+  const only = paid.length === 1 ? paid[0] : undefined;
+  if (percent === undefined || only === undefined || foods[only[0]] === undefined) return null;
+  return {
+    contentment: Math.floor((action.contentment * percent) / 100),
+    cost: { [itemId]: only[1] },
+  };
+}
+
 /** Contentment after a care action at `now` that adds `gain`, capped at full. */
 export function contentmentAfterCare(
   state: CareState,

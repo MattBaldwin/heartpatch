@@ -26,7 +26,7 @@ import { greyTiles, hollowedTileInfo } from '../hollowed/community-model.js';
 import { HEX_SIZE } from './map-config.js';
 import { mapApi } from './map-api.js';
 import { AmbientDriver } from './ambient-driver.js';
-import { isHalloween, seasonsOn } from './map-dressing.js';
+import { isHalloween, isWaterTile, seasonsOn } from './map-dressing.js';
 import { mountMapLegend } from './map-legend.js';
 import { createPatchStatsScreen } from './patch-stats-screen.js';
 import type { BuildAreaView } from './build-area.js';
@@ -40,6 +40,7 @@ import { listenForTaps } from './tap-detector.js';
 import { seedName } from '../home/home-name-view.js';
 import { describeTile } from './tile-info.js';
 import { mountTilePanel } from './tile-panel.js';
+import { emptyTileActions } from './tile-actions.js';
 import { wildMarkers } from './wild-markers.js';
 import './map.css';
 
@@ -395,7 +396,12 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
         seedName(state.view, tile),
       ),
     );
-    options.tileActions?.show(panel.actions, tile, state.view);
+    // Water (Wild Isle, #621) can't be claimed or explored. (W1-5b/W1-6: a
+    // bridge or dock action on a river or lake tile goes through here.)
+    if (isWaterTile(tile)) {
+      options.tileActions?.hide();
+      emptyTileActions(panel.actions);
+    } else options.tileActions?.show(panel.actions, tile, state.view);
     if (another) panel.toTop();
     options.invalidate();
   };

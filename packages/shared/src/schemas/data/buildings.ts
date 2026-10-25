@@ -320,12 +320,12 @@ export function buildsOnPatchType(
   return building.patchTypes === undefined || building.patchTypes.includes(patchType);
 }
 
-/** The buildings that pay Heart Coin upkeep each morning (#601). */
-export type UpkeepBuilding = ResourceBuilding | WarehouseBuilding;
+/** The buildings that pay Heart Coin upkeep each morning (#601; Wild Isle works, #621 W1-8). */
+export type UpkeepBuilding = ResourceBuilding | WarehouseBuilding | WorksBuilding;
 
-/** Does this building pay a morning upkeep? (A resource building or the Warehouse.) */
+/** Does this building pay a morning upkeep? (A resource building, the Warehouse or a Wild Isle works.) */
 export function paysUpkeep(building: Building): building is UpkeepBuilding {
-  return building.kind === 'resource' || building.kind === 'warehouse';
+  return building.kind === 'resource' || building.kind === 'warehouse' || building.kind === 'works';
 }
 
 /**
@@ -363,9 +363,9 @@ export function checkResourceBuildings(
   const terrains = new Set<string>();
   let warehouses = 0;
   for (const b of buildings) {
-    // Wild Isle works (#621) level up like resource buildings; W1-8 makes
-    // them pay upkeep (`paysUpkeep`) when it builds their settle.
-    if (!paysUpkeep(b) && b.kind !== 'works') continue;
+    // Wild Isle works (#621 W1-8) level up and pay upkeep like resource
+    // buildings, with no terrain to work.
+    if (!paysUpkeep(b)) continue;
     if (b.placement !== 'homestead' || b.maxPerTile !== 1 || b.slot !== 'ring') {
       report([b.id], 'a homestead building that fills its tile (placement, maxPerTile 1, ring)');
     }

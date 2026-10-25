@@ -31,6 +31,17 @@ export const RECIPES: Recipe[] = [
     craftSeconds: 30 * 60, // TUNE:
     fasterWith: { element: 'frost', percent: 50 }, // TUNE:
   },
+  // Wild Isle (#621 W1-8b): Flour, Fish and Salt come only from its works,
+  // so Pies are a Wild Isle feed (`CARE_RULES.foods`).
+  {
+    id: 'bake-pies',
+    name: 'Pies',
+    description:
+      'Bake Flour, Fish and a pinch of Salt into warm pies. Squishies go wild for these!',
+    inputs: { flour: 2, fish: 1, salt: 1 }, // TUNE: owner answer Q5 (#621 plan §8)
+    output: { resource: 'pies', quantity: 3 }, // TUNE:
+    craftSeconds: 2 * 60, // TUNE:
+  },
   // Battle potions (#214): farm Treats plus something gathered. Year-round
   // inputs, so a potion never needs a season.
   {

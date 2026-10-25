@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CARE_ACTIONS } from '../data/care-actions.js';
 import { CARE_RULES, GROWTH_RULES } from '../data/care.js';
+import { GAME_DATA } from '../data/index.js';
 import { SPECIES } from '../data/species.js';
 import { findAvoidedWords } from '../data/avoided-words.js';
 import { HOUSE_DATA } from '../data/house.js';
@@ -10,6 +11,7 @@ import {
   careCoins,
   careGain,
   contentmentAfterCare,
+  fedWith,
   contentmentAt,
   heldMs,
   moodFor,
@@ -84,6 +86,59 @@ describe('care and growth data', () => {
 
   it('uses no avoided words in mood lines', () => {
     expect(findAvoidedWords(CARE_RULES.moods.map((m) => m.line).join(' '))).toEqual([]);
+  });
+});
+
+describe('fedWith (#621 W1-8b)', () => {
+  const feed = CARE_ACTIONS.find((a) => a.id === 'feed')!;
+
+  it('feeds only things in the bag that are food, Treats as the plain feed', () => {
+    const resources = new Set(GAME_DATA.resources.map((r) => r.id));
+    for (const food of Object.keys(CARE_RULES.foods ?? {}))
+      expect(resources.has(food), food).toBe(true);
+    expect(CARE_RULES.foods).toMatchObject({ treats: 100, pies: 150 });
+    expect(feed.cost).toEqual({ treats: 1 });
+  });
+
+  it('gives a food its percent of the action, paid one for one in that food', () => {
+    expect(fedWith(feed, 'pies', CARE_RULES)).toEqual({ contentment: 30, cost: { pies: 1 } });
+    expect(fedWith(feed, 'treats', CARE_RULES)).toEqual({
+      contentment: feed.contentment,
+      cost: feed.cost,
+    });
+    expect(fedWith({ contentment: 7, cost: { treats: 2 } }, 'pies', CARE_RULES)).toEqual({
+      contentment: 10,
+      cost: { pies: 2 },
+    });
+  });
+
+  it("won't pay with a non-food, or for care that isn't paid in one food", () => {
+    expect(fedWith(feed, 'timber', CARE_RULES)).toBeNull();
+    expect(fedWith(feed, 'pies', { foods: undefined })).toBeNull();
+    for (const id of ['pet', 'play', 'heart-snack', 'heart-tea']) {
+      expect(
+        fedWith(
+          CARE_ACTIONS.find((a) => a.id === id)!,
+          'pies',
+          CARE_RULES,
+        ),
+        id,
+      ).toBeNull();
+    }
+    expect(
+      fedWith({ contentment: 20, cost: { treats: 1, pies: 1 } }, 'pies', CARE_RULES),
+    ).toBeNull();
+  });
+
+  it('then falls off through the day like any feed', () => {
+    const pie = { ...feed, ...fedWith(feed, 'pies', CARE_RULES)! };
+    expect([0, 3, 4, 9].map((n) => careGain(pie, n, CARE_RULES).contentment)).toEqual([
+      30, 15, 7, 3,
+    ]);
+  });
+
+  it('rejects a food worth nothing', () => {
+    expect(checkCareRules({ ...CARE_RULES, foods: { pies: 0 } }).join('\n')).toContain('foods');
   });
 });
 

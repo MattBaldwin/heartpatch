@@ -124,8 +124,15 @@ export const CareListResponseSchema = z.object({
 });
 export type CareListResponse = z.infer<typeof CareListResponseSchema>;
 
-/** `POST /maps/:mapId/squishies/:squishyId/care`. */
-export const CareRequestSchema = z.strictObject({ action: ContentIdSchema });
+/**
+ * `POST /maps/:mapId/squishies/:squishyId/care`. `itemId` (#621 W1-8b) pays a
+ * feed with another food (`CARE_RULES.foods`: Pies); left out, the action's
+ * own cost (Treats).
+ */
+export const CareRequestSchema = z.strictObject({
+  action: ContentIdSchema,
+  itemId: ContentIdSchema.optional(),
+});
 export type CareRequest = z.infer<typeof CareRequestSchema>;
 
 /** What one care action did. */
