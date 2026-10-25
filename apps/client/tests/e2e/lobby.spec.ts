@@ -267,6 +267,8 @@ test('makes a Wild Isle when the switch lets them, and hides the card when not (
   await expect(wild).toHaveAttribute('aria-checked', 'true');
   await expect(wild.locator('.lobby-choice-picked')).toHaveText('✓ Picked');
   await expect(cozy).toHaveAttribute('aria-checked', 'false');
+  // The name hint follows the pick.
+  await expect(lobby.locator('#lobby-create .auth-hint')).toHaveText(/Seashell Cove/);
 
   await lobby.getByLabel('Patch name').fill('Splash Cove');
   const made = page.waitForResponse(

@@ -442,7 +442,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     title: string;
     subtitle: string;
     label: string;
-    hint: string;
+    hint: string | Node;
     input: Record<string, string>;
     /** Shown under the field (the patch type cards, #621). */
     extra?: Node[];
@@ -511,7 +511,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
    * card is there only while `wildIsleOffered`; `addWild` puts it in later
    * when the answer arrives after the form is up.
    */
-  function patchTypeCards(offerWild: boolean) {
+  function patchTypeCards(offerWild: boolean, onPick: (type: PatchType) => void) {
     let picked: PatchType = 'cozy';
     const group = el('div', {
       class: 'lobby-choices lobby-patch-types',
@@ -554,6 +554,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       card.addEventListener('click', () => {
         picked = choice.type;
         mark();
+        onPick(picked);
       });
       cards.push({ type: choice.type, card, label });
       group.append(card);
@@ -569,7 +570,11 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
   }
 
   function showCreate(): void {
-    const kinds = patchTypeCards(wildIsleOffered(canMakeWildIsle));
+    // The name hint follows the picked card (Cozy first).
+    const nameHint = document.createTextNode(PATCH_TYPE_CHOICES[0]?.nameHint ?? '');
+    const kinds = patchTypeCards(wildIsleOffered(canMakeWildIsle), (type) => {
+      nameHint.textContent = PATCH_TYPE_CHOICES.find((c) => c.type === type)?.nameHint ?? '';
+    });
     if (canMakeWildIsle === undefined) {
       // Opened before any list loaded (the tutorial's graduation): ask now.
       void lobbyApi
@@ -585,7 +590,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       title: 'Make a patch',
       subtitle: `Your own corner of the world, for up to ${String(MAP_MAX_PLAYERS)} Keepers.`,
       label: 'Patch name',
-      hint: 'Something cozy, like "Pumpkin Meadow".',
+      hint: nameHint,
       input: { type: 'text', maxlength: '24', autocomplete: 'off' },
       extra: [kinds.node],
       submitLabel: 'Make it!',

@@ -9,13 +9,22 @@ export const PATCH_TYPE_CHOICES: readonly {
   icon: string;
   label: string;
   hint: string;
+  /** The name field's hint while this card is picked. */
+  nameHint: string;
 }[] = [
-  { type: 'cozy', icon: '🌳', label: 'Cozy Patch', hint: 'Gentle land, perfect to start.' },
+  {
+    type: 'cozy',
+    icon: '🌳',
+    label: 'Cozy Patch',
+    hint: 'Gentle land, perfect to start.',
+    nameHint: 'Something cozy, like "Pumpkin Meadow".',
+  },
   {
     type: 'wild-isle',
     icon: '🌊',
     label: 'Wild Isle',
     hint: 'Rivers, storms and the sea. For brave Keepers!',
+    nameHint: 'Something splashy, like "Seashell Cove".',
   },
 ];
 

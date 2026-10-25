@@ -301,6 +301,7 @@
 /* The 🌊 chip on a Wild Isle's row and card. */
 .lobby-badge-wild {
   background: #d8eef8;
+  font-weight: 600;
   color: #1f5a78;
 }
 

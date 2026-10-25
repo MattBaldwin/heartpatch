@@ -25,7 +25,7 @@ describe('patch types on "Make a patch" (#621)', () => {
 
   it('keeps its words kind and short', () => {
     for (const choice of PATCH_TYPE_CHOICES) {
-      expect(findAvoidedWords(`${choice.label} ${choice.hint}`)).toEqual([]);
+      expect(findAvoidedWords(`${choice.label} ${choice.hint} ${choice.nameHint}`)).toEqual([]);
       expect(choice.hint.split(' ').length).toBeLessThanOrEqual(10);
     }
     expect(WILD_ISLE_CHIP).toContain('🌊');
