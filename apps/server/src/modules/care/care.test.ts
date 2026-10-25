@@ -404,6 +404,109 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
       ]);
     });
 
+    it('feeds Pies for half as much again, one Pie at a time, through the same falloff (#621 W1-8b)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const id = await squishy(mapId, kid);
+      const feed = (itemId: string) =>
+        call(server, 'POST', `/maps/${mapId}/squishies/${id}/care`, kid, {
+          action: 'feed',
+          itemId,
+        });
+
+      // Short of Pies: CONFLICT, and nothing changes (Treats in the bag don't pay).
+      await give(mapId, kid, { treats: 5 });
+      const short = await feed('pies');
+      expect(short.statusCode).toBe(409);
+      expect(errorOf(short).message).toContain('Pies');
+      expect(await one(server, kid, mapId, id)).toMatchObject({ contentment: 0, caredToday: 0 });
+
+      await give(mapId, kid, { pies: 5 });
+      const results = [];
+      for (let i = 0; i < 4; i++) {
+        later();
+        const res = await feed('pies');
+        expect(res.statusCode, res.body).toBe(200);
+        results.push(CareResponseSchema.parse(res.json()));
+      }
+      // 150 % of the feed's 20, then the 4th of the day at half, coins as ever.
+      expect(
+        results.map((r) => [r.result.contentmentGained, r.result.full, r.result.coins]),
+      ).toEqual([
+        [30, true, 1],
+        [30, true, 1],
+        [30, true, 1],
+        [15, false, 0],
+      ]);
+      expect(results[0]!.result.action).toBe('feed');
+      expect(results.at(-1)!.items).toMatchObject({ pies: 1, treats: 5 });
+      // Still the debounce: a feed is a feed, whichever food.
+      const tooSoon = await feed('treats');
+      expect(tooSoon.statusCode).toBe(409);
+
+      const ledger = await db.query.resourceLedger.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.reason, 'care')),
+      });
+      expect(ledger).toHaveLength(4);
+      expect(ledger.every((l) => l.itemId === 'pies' && l.delta === -1)).toBe(true);
+      const events = (await eventsOf(mapId)).filter((e) => e.type === 'squishy.cared');
+      expect(events[0]!.payload).toMatchObject({ action: 'feed', gained: 30 });
+    });
+
+    it('feeds Treats exactly as before when no food is chosen, or Treats are (#621 W1-8b)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const [plain, chosen] = [await squishy(mapId, kid), await squishy(mapId, kid)];
+      await give(mapId, kid, { treats: 2, pies: 2 });
+      const before = await cared(server, kid, mapId, plain, 'feed');
+      const res = await call(server, 'POST', `/maps/${mapId}/squishies/${chosen}/care`, kid, {
+        action: 'feed',
+        itemId: 'treats',
+      });
+      expect(res.statusCode, res.body).toBe(200);
+      const after = CareResponseSchema.parse(res.json());
+      expect(before.result).toEqual({
+        action: 'feed',
+        squishyId: plain,
+        contentmentGained: 20,
+        full: true,
+        coins: 1,
+      });
+      expect(after.result).toEqual({ ...before.result, squishyId: chosen });
+      // Pies stay in the bag unless asked for.
+      expect(after.items['treats'] ?? 0).toBe(0);
+      expect(after.items['pies']).toBe(2);
+    });
+
+    it("won't take a food it can't eat, or a food for care that isn't paid in food", async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const id = await squishy(mapId, kid);
+      await give(mapId, kid, { timber: 3, heartdust: 3, pies: 3 });
+      const tries = [
+        { action: 'feed', itemId: 'timber' }, // not a food
+        { action: 'feed', itemId: 'no-such-thing' }, // not anything
+        { action: 'pet', itemId: 'pies' }, // a pet costs nothing
+        { action: 'heart-snack', itemId: 'pies' }, // paid in Heartdust, not food
+      ];
+      for (const body of tries) {
+        const res = await call(server, 'POST', `/maps/${mapId}/squishies/${id}/care`, kid, body);
+        expect(res.statusCode, JSON.stringify(body)).toBe(400);
+        expect(errorOf(res)).toMatchObject({ code: 'VALIDATION_FAILED' });
+      }
+      const bad = await call(server, 'POST', `/maps/${mapId}/squishies/${id}/care`, kid, {
+        action: 'feed',
+        itemId: 'Not An Id!',
+      });
+      expect(bad.statusCode).toBe(400);
+      expect(await one(server, kid, mapId, id)).toMatchObject({ contentment: 0, caredToday: 0 });
+      const after = await list(server, kid, mapId);
+      expect(after.items).toMatchObject({ timber: 3, heartdust: 3, pies: 3 });
+    });
+
     it('gives a Heart Snack in full for 3 Heartdust, outside the day and with no coins', async () => {
       const server = await start();
       const kid = await player();
