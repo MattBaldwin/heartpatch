@@ -235,7 +235,7 @@ The supervisor keeps this list current. Remove items as they land.
   - reporting with the fallback trigger;
   - neither sessions nor the supervisor can re-run CI (403), so a flaky test gets a robustness fix in the PR, never a skip;
   - e2e players must pick a Keeper (`HP_KEEPER_REQUIRED`).
-  - **every brief carries a CONTEXT BUDGET block:** read only the Lane handoff; helper subagents return summaries under 300 words; keep your own context under ~150k.
+  - **Every brief carries a CONTEXT BUDGET block** (supervisor 18, after three lanes blew the 200k cap by reading the #621 plan): read only the Lane handoff; helper subagents return summaries under 300 words; keep your own context under ~150k.
   - Name tables exactly as TECH_SPEC §4's core table list. #17 cost a mid-flight rename because a brief invented names.
 - **Merge order and churn:**
   - Every PR adds a migration, so later PRs regenerate theirs after each merge.

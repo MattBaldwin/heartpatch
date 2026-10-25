@@ -1903,6 +1903,6 @@ _Merges, owner approvals and coordinator calls from 2026-10-25 ~08:03 to ~14:10 
   - `SKIP LOCKED` crossers' grace.
 - **W1-8 is split.** A is works buildings, production/pace/eats/onlyWhile, placement, settle/upkeep and `sim:wild-isle`. B is pies, `bake-pies`, `CARE_RULES.foods` and the feed `itemId` (care). W1-7 never added `paceWindows`; W1-8A adds them (a plan deviation).
 - **Shared `isBuildableOn`:** W1-6 adds it in `packages/shared/src/territory/` and uses it client-side only. The server switches over in a follow-up after W1-8, which owns `modules/buildings` now.
-- **#382 Wave 2 sheet v1 failed the render-check.** 8 of 9 kinds missed their hook or duplicated a silhouette (Dragofruit was fine) and the haze was yellow. The old lane (406k, $13.33) handed off in a #382 comment. A fresh Sonnet lane reworks it.
+- **#382 Wave 2 sheet v1 failed the render-check.** 8 of 9 kinds missed their hook or duplicated a silhouette (Dragofruit was fine) and the haze was yellow. The old lane (406k, $13.33) handed off in #382 comment 6397202673. A fresh Sonnet lane reworks it.
 - **#382 may add ~6 additive parts in `packages/shared/src/data/visuals.ts`,** inside the #382 PR: data-only, existing primitives, the existing glow mechanism, a data test, listed in the PR body. A dev-only `?studio` capture flag is fine.
 - **#681 render-check:** v1 FIX (name mismatch, home-indicator crop, 44px link), v2 PASS.
