@@ -11,6 +11,7 @@ import { SERVER_GAME_DATA } from './server/index.js';
 import { SPAWN_TABLES } from './server/spawn-tables.js';
 import { MOVES, SPECIES } from './species.js';
 import { WAVE_1_SPECIES } from './species-wave-1.js';
+import { WAVE_2_SPECIES } from './species-wave-2.js';
 import { TRADING_POST_TERRAIN } from '../territory/reach.js';
 import { isWater } from '../schemas/data/terrains.js';
 
@@ -23,12 +24,11 @@ import { isWater } from '../schemas/data/terrains.js';
 const byId = new Map(SPECIES.map((s) => [s.id, s]));
 const evolvedIds = new Set(SPECIES.flatMap((s) => s.evolutions.map((e) => e.into)));
 /**
- * Wave-1 kinds (#382): their first forms, measured apart from the launch
- * lines. Their kids and teens (#443) are evolved forms like any other.
+ * Wave-1 and wave-2 kinds (#382): their first forms, measured apart from the
+ * launch lines. Their kids and teens (#443) are evolved forms like any other.
  */
-const standalone = SPECIES.filter(
-  (s) => !evolvedIds.has(s.id) && WAVE_1_SPECIES.some((w) => w.id === s.id),
-);
+const waveIds = new Set([...WAVE_1_SPECIES, ...WAVE_2_SPECIES].map((w) => w.id));
+const standalone = SPECIES.filter((s) => !evolvedIds.has(s.id) && waveIds.has(s.id));
 const standaloneIds = new Set(standalone.map((s) => s.id));
 /** Base forms: the first squishy of each launch line. */
 const bases = SPECIES.filter((s) => !evolvedIds.has(s.id) && !standaloneIds.has(s.id));
@@ -331,8 +331,8 @@ describe('balance intent (design doc §5), played with the real engine', () => {
 
   it('has no base form that wins (or loses) nearly every 1v1', () => {
     // Launch lines are measured against the launch lines, as ever (a roster of
-    // more small kinds shouldn't make its epic look unbeatable). Wave-1 kinds
-    // (#382) are measured against everyone, so none of them is a pushover or a bully.
+    // more small kinds shouldn't make its epic look unbeatable). Wave-1 and wave-2
+    // kinds (#382) are measured against everyone, so none of them is a pushover or a bully.
     const everyBase = [...bases, ...standalone];
     const rates = everyBase.map((a) => {
       const field = standaloneIds.has(a.id) ? everyBase : bases;
@@ -343,5 +343,7 @@ describe('balance intent (design doc §5), played with the real engine', () => {
     // TUNE: rarer squishies win a little more often, but nobody is strictly best.
     const outliers = rates.filter((r) => r.rate < 0.25 || r.rate > 0.75);
     expect(outliers).toEqual([]);
-  });
+    // Every pair plays 30 real battles, and wave 2's nine bases joined the field, so this
+    // took ~5s under CI's coverage instrumentation (the default timeout).
+  }, 30_000);
 });
