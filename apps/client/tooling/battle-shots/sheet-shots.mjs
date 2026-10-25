@@ -42,7 +42,7 @@ const DEVICES = [
     width: 852,
     height: 393,
     inset: { top: 0, bottom: 21, left: 59, right: 59 },
-    turn: true,
+    turn: process.env.NOTURN !== '1',
   },
 ];
 
