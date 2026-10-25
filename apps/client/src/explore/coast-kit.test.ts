@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { BIOME_EXTRAS, buildBiomeSpot, overridesSpot } from './biome-dressing.js';
 import { BIOME_LOOKS } from './biome-looks.js';
 import { COAST_LOOK, SEA, shoreRadius } from './coast-config.js';
-import { COAST_SPOTS } from './coast-kit.js';
+import { COAST_SPOTS, logPoint } from './coast-kit.js';
+import { cylinder } from './land-kit.js';
 import { hexReach, landField } from './land-shape.js';
 import { LAND_LIGHT } from './land-config.js';
 import { landLayout, type LayoutInput } from './land-layout.js';
@@ -118,6 +119,50 @@ describe('coast spots', () => {
     const scene = new Scene(engine);
     for (const [name, layer] of Object.entries(BIOME_EXTRAS['coast']!.layers)) {
       expect(layer.build(scene).getTotalVertices(), name).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('log ends', () => {
+  // Bake a real tilted cylinder and find the middle of its end ring along the axis.
+  it('puts a cap on the log’s own end, however the log is yawed', () => {
+    for (const yaw of [0, 0.35, -0.6, 2.1]) {
+      const log = {
+        length: 1.5,
+        top: 0.34,
+        bottom: 0.4,
+        at: [0.3, 0.2, -0.1] as [number, number, number],
+        tilt: [0, yaw, Math.PI / 2] as [number, number, number],
+      };
+      const part = cylinder(log.length, log.top, log.bottom, 8, log.at, log.tilt);
+      part.bakeCurrentTransformIntoVertices();
+      const pos = part.data.positions ?? [];
+      const axis = { x: -Math.cos(yaw), z: Math.sin(yaw) }; // the log's top-ward direction
+      for (const [t, sign] of [
+        [0.5, -1],
+        [-0.5, 1],
+      ] as const) {
+        const reach = pos.length / 3;
+        let n = 0;
+        const lo = [Infinity, Infinity, Infinity];
+        const hi = [-Infinity, -Infinity, -Infinity];
+        for (let i = 0; i < reach; i++) {
+          const along =
+            ((pos[i * 3] ?? 0) - log.at[0]) * axis.x + ((pos[i * 3 + 2] ?? 0) - log.at[2]) * axis.z;
+          if (Math.abs(along - sign * (log.length / 2)) > 1e-4) continue;
+          n++;
+          for (let k = 0; k < 3; k++) {
+            lo[k] = Math.min(lo[k] ?? 0, pos[i * 3 + k] ?? 0);
+            hi[k] = Math.max(hi[k] ?? 0, pos[i * 3 + k] ?? 0);
+          }
+        }
+        expect(n).toBeGreaterThan(0);
+        const end = logPoint(log, t).at;
+        for (let k = 0; k < 3; k++)
+          expect(end[k]).toBeCloseTo(((lo[k] ?? 0) + (hi[k] ?? 0)) / 2, 3);
+      }
+      expect(logPoint(log, 0.5).diameter).toBeCloseTo(log.bottom, 6);
+      expect(logPoint(log, -0.5).diameter).toBeCloseTo(log.top, 6);
     }
   });
 });

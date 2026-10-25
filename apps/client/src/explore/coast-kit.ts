@@ -2,6 +2,7 @@ import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import { SEA, shoreRadius } from './coast-config.js';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
+import { Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import { kitMesh, merged, Part } from './kit-mesh.js';
 import { cylinder, flat, shaded, sphere } from './land-kit.js';
@@ -177,15 +178,22 @@ export function buildDriftLog(scene: Scene): Mesh {
 }
 
 function driftLog(): Part {
+  const log: LogShape = {
+    length: 1.6,
+    top: 0.3,
+    bottom: 0.34,
+    at: [0, 0.17, 0],
+    tilt: [0, 0, Math.PI / 2],
+  };
   return merged([
     shaded(
-      cylinder(1.6, 0.3, 0.34, 8, [0, 0.17, 0], [0, 0, Math.PI / 2]),
+      cylinder(log.length, log.top, log.bottom, 8, log.at, log.tilt),
       '#a8957a',
       '#e2d3b9',
       0,
       0.34,
     ),
-    flat(cylinder(0.02, 0.24, 0.24, 8, [0.81, 0.17, 0], [0, 0, Math.PI / 2]), '#efe2c8'),
+    logCap(log, 'bottom', '#efe2c8'),
     shaded(
       cylinder(0.4, 0.07, 0.12, 5, [-0.2, 0.42, 0.05], [0.5, 0, 0.2]),
       '#a8957a',
@@ -331,25 +339,75 @@ function buildShells(scene: Scene): SpotShape {
   return { mesh, glint: 0.4 };
 }
 
+/** A log's size and pose, as `cylinder` takes them: diameters, a position and a tilt. */
+interface LogShape {
+  length: number;
+  top: number;
+  bottom: number;
+  at: [number, number, number];
+  tilt: [number, number, number];
+}
+
+/**
+ * A point `t` along a log's axis (-0.5 = its top end, 0.5 = its bottom end),
+ * rotated with the log's own tilt, and the log's diameter there. End caps and
+ * rope hang off this, so they follow the log however it is yawed.
+ */
+export function logPoint(
+  log: LogShape,
+  t: number,
+): { at: [number, number, number]; diameter: number } {
+  const turn = Quaternion.RotationYawPitchRoll(log.tilt[1], log.tilt[0], log.tilt[2]);
+  const offset = new Vector3(0, -t * log.length, 0).rotateByQuaternionToRef(turn, new Vector3());
+  return {
+    at: [log.at[0] + offset.x, log.at[1] + offset.y, log.at[2] + offset.z],
+    diameter: log.top + (log.bottom - log.top) * (t + 0.5),
+  };
+}
+
+/** A pale disc closing a log's `end`, a hair outside it and a bit narrower. */
+function logCap(log: LogShape, end: 'top' | 'bottom', color: string): Part {
+  const { at, diameter } = logPoint(
+    log,
+    end === 'top' ? -0.5 - 0.01 / log.length : 0.5 + 0.01 / log.length,
+  );
+  return flat(cylinder(0.02, diameter * 0.8, diameter * 0.8, 8, at, log.tilt), color);
+}
+
 /** Driftwood: two bleached logs crossed, with a knotted branch and a bit of rope. */
 function buildDriftwood(scene: Scene): SpotShape {
-  const mesh = kitMesh(scene, 'coast-spot-driftwood', () =>
-    merged([
+  const mesh = kitMesh(scene, 'coast-spot-driftwood', () => {
+    const lower: LogShape = {
+      length: 1.5,
+      top: 0.34,
+      bottom: 0.4,
+      at: [0, 0.2, 0],
+      tilt: [0, 0.35, Math.PI / 2],
+    };
+    const upper: LogShape = {
+      length: 1.1,
+      top: 0.26,
+      bottom: 0.3,
+      at: [0.1, 0.46, 0.05],
+      tilt: [0, -0.6, Math.PI / 2],
+    };
+    const rope = logPoint(upper, 0.1);
+    return merged([
       shaded(
-        cylinder(1.5, 0.34, 0.4, 8, [0, 0.2, 0], [0, 0.35, Math.PI / 2]),
+        cylinder(lower.length, lower.top, lower.bottom, 8, lower.at, lower.tilt),
         '#a8957a',
         '#e5d6bb',
         0,
         0.4,
       ),
       shaded(
-        cylinder(1.1, 0.26, 0.3, 8, [0.1, 0.46, 0.05], [0, -0.6, Math.PI / 2]),
+        cylinder(upper.length, upper.top, upper.bottom, 8, upper.at, upper.tilt),
         '#b6a387',
         '#eadcc2',
         0.3,
         0.6,
       ),
-      flat(cylinder(0.02, 0.3, 0.3, 8, [0.64, 0.2, 0.22], [0, 0.35, Math.PI / 2]), '#f1e5cd'),
+      logCap(lower, 'bottom', '#f1e5cd'),
       shaded(
         cylinder(0.5, 0.07, 0.14, 5, [-0.3, 0.52, -0.12], [0.6, 0, 0.3]),
         '#a8957a',
@@ -357,10 +415,13 @@ function buildDriftwood(scene: Scene): SpotShape {
         0.35,
         0.8,
       ),
-      // A loop of rope round the top log.
-      flat(cylinder(0.05, 0.4, 0.4, 8, [0.1, 0.47, 0.05], [0, -0.6, Math.PI / 2]), '#c8a46a'),
-    ]),
-  );
+      // A loop of rope round the top log, a bit wider than the log there.
+      flat(
+        cylinder(0.05, rope.diameter * 1.3, rope.diameter * 1.3, 8, rope.at, upper.tilt),
+        '#c8a46a',
+      ),
+    ]);
+  });
   return { mesh, glint: 0.6 };
 }
 
