@@ -153,7 +153,7 @@ export function sellTab(state: SellTabState, deps: SellTabDeps): SellTabParts {
       parts.push(
         el(
           'div',
-          { class: 'post-swap-list', 'data-testid': 'post-sell-rows' },
+          { class: 'post-swap-list post-sell-list', 'data-testid': 'post-sell-rows' },
           ...items.map(rowCard),
         ),
       );
@@ -168,7 +168,7 @@ export function sellTab(state: SellTabState, deps: SellTabDeps): SellTabParts {
         ),
         el(
           'div',
-          { class: 'post-swap-list', 'data-testid': 'post-sell-clothing' },
+          { class: 'post-swap-list post-sell-list', 'data-testid': 'post-sell-clothing' },
           ...pieces.map(rowCard),
         ),
       );

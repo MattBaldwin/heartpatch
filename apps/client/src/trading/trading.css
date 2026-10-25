@@ -1252,8 +1252,19 @@ button.post-col-head {
   font-weight: 700;
 }
 
-.post-sell-line span,
-.post-sell-keep {
+/* A row's words never widen the list: the stepper keeps its room. */
+.post-sell-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* iPad: two columns of rows, as the Swap tab. */
+@media (min-width: 700px) {
+  .post-sell-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.post-sell-line span {
   white-space: nowrap;
 }
 
