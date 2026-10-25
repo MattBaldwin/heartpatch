@@ -496,6 +496,8 @@ test('a real tap on the weather chip opens the Forecast sheet, and the top bar f
 }) => {
   test.setTimeout(180_000); // one signup through the Keeper picker, 40 s of rain; CI renders in software
   const page = await newPlayer(browser, uniqueName('sky'));
+  // The high tier, pinned: software rendering would drop to low (no rain) on its own.
+  await page.goto('/?tier=high');
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByTestId('lobby-patch-type-wild-isle').tap();
