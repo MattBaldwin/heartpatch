@@ -358,7 +358,7 @@ export function createRoads(options: RoadsOptions): Roads {
             else showFerry(tile, v);
             render();
           },
-          true,
+          false,
         ),
       );
     }

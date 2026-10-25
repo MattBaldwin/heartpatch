@@ -275,9 +275,11 @@ async function frameFacts(page, device) {
               : `${e.textContent.trim().replace(/\s+/g, ' ') || e.getAttribute('aria-label')} button`
             : e.textContent.trim().replace(/\s+/g, ' ');
         if (!label) continue;
-        (b.top >= box.top - 1 && b.bottom <= box.bottom + 1 && b.bottom <= h ? shown : cut).push(
-          label,
-        );
+        const edge = Math.min(box.bottom, h) + 1;
+        if (b.top >= box.top - 1 && b.bottom <= edge) shown.push(label);
+        else if (b.top < edge - 1 && b.bottom > box.top + 1)
+          shown.push(`${label} (partly cut off at the bottom of the panel)`);
+        else cut.push(label);
       }
       return { panel: shown, panelCut: cut };
     }
