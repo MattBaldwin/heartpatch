@@ -1850,7 +1850,7 @@ export const PARTS: Part[] = [
     sink: 0.3,
     jitter: 0.06,
   },
-  // #382 wave 2: nine parts so a tusk, a puddle, a curly tail, a chest bib, a tree top, a little tree, a slide trail, a lure and a
+  // #382 wave 2: nine parts so a tusk, a puddle, a curly tail, a chest bib, a tree top, hug arms, stacked wing lobes, a little tree, a slide trail, a lure and a
   // gleam can be the silhouette instead of a small add-on. All existing primitives (no
   // client geometry code); a species' `glow` lights them like any other part.
   // A pair of tusks curling up from the snout (`fangs` only points down).
@@ -1867,20 +1867,6 @@ export const PARTS: Part[] = [
     splay: 32,
     sink: 0.4,
     jitter: 0.05,
-  },
-  // A splash of mud round the feet: a ring of flat blobs flaring out from under the body.
-  {
-    id: 'mud-puddle',
-    slot: 'spikes',
-    shape: 'ellipsoid',
-    size: [1.4, 0.14, 1.4],
-    color: 'detail',
-    layout: { kind: 'ring', count: 5, spread: 180 },
-    around: 0,
-    up: -68,
-    tilt: -35,
-    sink: 0.3,
-    jitter: 0.2,
   },
   // The brown trunk of a little tree standing beside the belly, for a cub to hug.
   {
@@ -1945,10 +1931,10 @@ export const PARTS: Part[] = [
     size: [0.9, 1.1, 0.25],
     color: 'accent',
     layout: pair,
-    around: 90,
-    up: 20,
-    tilt: -10,
-    splay: 45,
+    around: 95,
+    up: 25,
+    tilt: 35,
+    splay: 65,
     sink: 0.3,
     jitter: 0.05,
   },
@@ -1992,6 +1978,50 @@ export const PARTS: Part[] = [
     tilt: 80,
     sink: 0.2,
     jitter: 0.03,
+  },
+  // A cub's arms reaching across the front to hug whatever stands there (paired arms point out to the sides).
+  {
+    id: 'hug-arms',
+    slot: 'arms',
+    shape: 'capsule',
+    size: [0.2, 0.7, 0.2],
+    color: 'primary',
+    layout: pair,
+    around: 70,
+    up: -5,
+    tilt: -5,
+    splay: -75,
+    sink: 0.25,
+    jitter: 0.04,
+  },
+  // Second and third feather lobes of a cloud wing, stacked below the main lobe.
+  {
+    id: 'wing-lobe-mid',
+    slot: 'arms',
+    shape: 'teardrop',
+    size: [0.7, 0.9, 0.22],
+    color: 'accent',
+    layout: pair,
+    around: 95,
+    up: 8,
+    tilt: -20,
+    splay: 60,
+    sink: 0.3,
+    jitter: 0.05,
+  },
+  {
+    id: 'wing-lobe-low',
+    slot: 'spikes',
+    shape: 'teardrop',
+    size: [0.5, 0.7, 0.2],
+    color: 'accent',
+    layout: pair,
+    around: 98,
+    up: -8,
+    tilt: -50,
+    splay: 60,
+    sink: 0.3,
+    jitter: 0.05,
   },
 ];
 
