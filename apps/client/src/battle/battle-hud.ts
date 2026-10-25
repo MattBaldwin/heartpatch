@@ -229,6 +229,51 @@ export function watchLayout(
   };
 }
 
+/**
+ * The height (px) the sheet is held to as the controls change from `previous`
+ * to `next`, or null for none. A turn playing is "waiting" (the server's
+ * answer) then "hidden" (the log): the sheet takes the height its pick had
+ * when the turn starts, keeps it from one to the other, and lets go at the
+ * next pick, "Who comes out?" or the result (#656). `height` is the sheet's
+ * height now, `held` what it is held to already.
+ */
+export function sheetHold(
+  previous: ControlMode['type'] | undefined,
+  next: ControlMode['type'],
+  height: number,
+  held: number | null,
+): number | null {
+  const turn = (type: ControlMode['type'] | undefined) => type === 'waiting' || type === 'hidden';
+  if (!turn(next)) return null;
+  if (turn(previous)) return held;
+  return height > 0 ? height : null;
+}
+
+/**
+ * `sheetHold` with its own memory: feed it each control change and the sheet's
+ * height, get the height to hold. `release` forgets everything, for the moments
+ * the controls leave without a change of their own (the result card, a hidden
+ * or reopened HUD, a resize), so one battle's hold never carries into the next.
+ */
+export function createSheetHold(): {
+  next: (mode: ControlMode['type'], height: number) => number | null;
+  release: () => void;
+} {
+  let previous: ControlMode['type'] | undefined;
+  let held: number | null = null;
+  return {
+    next: (mode, height) => {
+      held = sheetHold(previous, mode, height, held);
+      previous = mode;
+      return held;
+    },
+    release: () => {
+      previous = undefined;
+      held = null;
+    },
+  };
+}
+
 export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): BattleHud {
   const plate = (side: 'mine' | 'theirs') => {
     const name = el('span', { class: 'battle-plate-name' });
@@ -506,7 +551,27 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   /** The "ⓘ More" view of the move buttons (#565): each one adds its own words and chances. */
   let moreMoves = false;
 
+  // While a turn plays ("waiting" for the server, then "hidden" for the log) the
+  // sheet keeps the height it had when the turn started: the controls leave, the
+  // sheet stays, and the camera, which frames the fight above the sheet, has
+  // nothing to chase (#656). That is the height measured as the turn began, so
+  // it is the real one for this screen, whether the turn started from the pick
+  // or from Swap's or the potions' view. The hold ends at the next pick, "Who
+  // comes out?", the result card, a hidden HUD and a resize (the next turn
+  // measures again).
+  const hold = createSheetHold();
+  const holdHeight = (mode: ControlMode): void => {
+    const held = hold.next(mode.type, sheet.getBoundingClientRect().height);
+    sheet.style.minHeight = held === null ? '' : `${String(held)}px`;
+  };
+  const releaseHold = () => {
+    hold.release();
+    sheet.style.minHeight = '';
+  };
+  window.addEventListener('resize', releaseHold);
+
   const setControls = (mode: ControlMode): void => {
+    holdHeight(mode);
     controls.replaceChildren();
     let tipText = '';
     // Back from the potion picker: the caption returns.
@@ -747,6 +812,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     hide: () => {
       undress?.();
       undress = null;
+      releaseHold();
       hud.hidden = true;
       result.hidden = true;
     },
@@ -848,6 +914,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       );
       result.hidden = false;
       controls.hidden = true;
+      releaseHold();
       if (info.cheer) {
         undress = dressResult(result, hearts, info.cheer.info, {
           reducedMotion: info.cheer.reducedMotion,
@@ -862,6 +929,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     hideResult: () => {
       undress?.();
       undress = null;
+      releaseHold();
       result.hidden = true;
     },
     refuseKeepGoing: (text, ok) => {
@@ -899,6 +967,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       return !hud.hidden;
     },
     dispose: () => {
+      window.removeEventListener('resize', releaseHold);
       stopWatching();
       stopWatchingSheet();
       for (const p of Object.values(plates)) window.clearTimeout(p.timer);
