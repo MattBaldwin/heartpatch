@@ -23,18 +23,20 @@ export const KEEPER = {
   /** Arms (#657): chunky and rounded, coming out of short sleeves, hands joined on. */
   arm: {
     /** Skin arm thickness, as a multiple of limb thickness. */
-    thick: 1.15, // TUNE
-    /** The sleeve, as a multiple of the arm's thickness. */
-    sleeveThick: 1.28, // TUNE
+    thick: 1.35, // TUNE
+    /** The sleeve, as a multiple of the arm's thickness: wider, so the arm comes out of it. */
+    sleeveThick: 1.3, // TUNE
     /** The hand, as a multiple of the arm's thickness. */
-    hand: 1.18, // TUNE
+    hand: 1.15, // TUNE
     /** How far a hand sinks into the arm's end, as a fraction of the hand. */
-    handSink: 0.3, // TUNE
-    /** The cuff's length, as a fraction of the arm. */
-    cuff: 0.07, // TUNE
+    handSink: 0.25, // TUNE
+    /** The torso's half width at the shoulder when it is a squarish capsule, of its full half width. */
+    squareHalf: 0.97, // TUNE
+    /** A hand stays this far (of its own size) outside the shorts' side. */
+    handClear: 0.45, // TUNE
+    /** How far out the arm hangs, as the sine of its angle: least, most (about 10° to 30°). */
+    splay: [0.17, 0.5], // TUNE
   },
-  /** Arms hang this far out from straight down, degrees (sine and cosine are in keeper-params.ts). */
-  armSplayDeg: 10, // TUNE
   /** Sleeves cover this much of the arm from the shoulder. */
   sleeve: 0.4, // TUNE
   /** Face features, as fractions of the head's own size. */

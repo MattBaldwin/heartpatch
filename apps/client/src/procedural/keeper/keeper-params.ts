@@ -339,45 +339,43 @@ export function keeperParams(
     );
   }
 
-  // Arms come out of short sleeves on the shirt and hang down and a little
-  // out (sin and cos of KEEPER.armSplayDeg), with a hand joined on each end.
+  // Arms come out of short sleeves on the shirt and hang down and out, with a
+  // hand joined on each end. How far out depends on the body: the hands must
+  // clear the shorts (a wide body splays its arms more), or they sink into the hips.
   const armLength = b.arms * s;
-  const out = 0.1736; // sin 10°
-  const down = 0.9848; // cos 10°
   const arm = KEEPER.arm;
   const armT = t * arm.thick;
   const handT = armT * arm.hand;
-  // The shoulder sits on the torso's side at its height: the ellipsoid's half
-  // width there, so the sleeve grows out of the shirt instead of hanging behind it.
+  // The shoulder sits on the torso's side at its height (a squarish capsule torso is
+  // wider there than an ellipsoid), so the sleeve grows out of the shirt.
   const shoulderY = hipY + th * 0.8;
   const up = (shoulderY - torsoY) / (torso[1] / 2);
-  const half = (torso[0] / 2) * Math.sqrt(1 - up * up);
+  const half = (torso[0] / 2) * (round >= 0.6 ? Math.sqrt(1 - up * up) : arm.squareHalf);
+  const reach = armLength * (1 - (handT * arm.handSink) / armLength);
+  const clear = shorts[0] / 2 + handT * arm.handClear - half;
+  const wanted = clear / reach;
+  const out = wanted < arm.splay[0] ? arm.splay[0] : wanted > arm.splay[1] ? arm.splay[1] : wanted;
+  const down = Math.sqrt(1 - out * out);
+  // asin(out) in degrees, by its series (no trigonometry, so every engine agrees).
+  const splayDeg = (out + (out * out * out) / 6 + (3 * out * out * out * out * out) / 40) * 57.2958;
   const hands: Vec3[] = [];
   const armMids: PieceSocket['anchors'][number][] = [];
   for (const side of [-1, 1]) {
-    const shoulder: Vec3 = [side * (half - armT * 0.05), shoulderY, 0];
+    const shoulder: Vec3 = [side * half, shoulderY, 0];
     const along = (k: number): Vec3 =>
       add(shoulder, [side * out * armLength * k, -down * armLength * k, 0]);
-    const roll = -side * KEEPER.armSplayDeg;
+    const roll = -side * splayDeg;
     armMids.push({ at: along(0.5), roll, sin: -side * out, cos: down });
     piece('body', 'capsule', along(0.5), [armT, armLength, armT], skin, [0, 0, roll]);
     const sleeve = KEEPER.sleeve;
     const sleeveT = armT * arm.sleeveThick;
-    // A round shoulder, then the sleeve, then a trim cuff at its hem.
+    // A round shoulder, then the sleeve the arm comes out of.
     piece('outfit', 'ellipsoid', shoulder, [sleeveT, sleeveT, sleeveT], top);
     piece('outfit', 'capsule', along(sleeve / 2), [sleeveT, armLength * sleeve, sleeveT], top, [
       0,
       0,
       roll,
     ]);
-    piece(
-      'outfit',
-      'capsule',
-      along(sleeve * 0.82),
-      [sleeveT * 1.04, armLength * arm.cuff, sleeveT * 1.04],
-      trim,
-      [0, 0, roll],
-    );
     // The hand sinks into the arm's end, so it is part of the arm.
     const hand = along(1 - (handT * arm.handSink) / armLength);
     hands.push(hand);

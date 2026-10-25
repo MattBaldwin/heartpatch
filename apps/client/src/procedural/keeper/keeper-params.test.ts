@@ -364,6 +364,8 @@ describe('keeperParams', () => {
           arm.at[0] - side * Math.abs(Math.sin((arm.turn[2] * Math.PI) / 180)) * (arm.size[1] / 2);
         expect(Math.abs(top), id).toBeLessThan(torso[0] / 2);
         expect(Math.abs(arm.at[2]), id).toBeLessThan(torso[2] / 4);
+        // The hand hangs clear of the hips: its middle is outside the shorts' side.
+        expect(Math.abs(hand.at[0]), id).toBeGreaterThan(p.sockets.bottom.size[0] / 2);
       }
     }
   });
@@ -393,7 +395,7 @@ describe('keeperParams', () => {
   // Keeper) is a deliberate one. The e2e test checks the same hash in WebKit.
   it('keeps its build stable', () => {
     expect(keeperHash(keeperParams(GOLDEN_CONFIG, KEEPER_DATA))).toMatchInlineSnapshot(
-      `"5f5660efb66d70a725a7515090143780"`,
+      `"ff911705ad459edf7682147df5e9b9ac"`,
     );
   });
 });
@@ -645,7 +647,7 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
       }
     }
     expect(lines.length).toBe(120);
-    expect(hashString(lines.join('\n'))).toBe('3f6c22cc031cc0ce75350d6d366d5b8c');
+    expect(hashString(lines.join('\n'))).toBe('75bde971189de56f5fb2a21d528703dc');
   });
 
   it('draws worn ids from the catalog, skipping ones this client does not know', () => {
