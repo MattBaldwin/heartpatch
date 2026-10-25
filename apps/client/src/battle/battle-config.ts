@@ -109,12 +109,39 @@ export const CHOREO = {
   reduced: { size: 0.45, reach: 0.35 }, // TUNE
 } as const;
 
+/** The battle camera's tunables (`BATTLE_CAMERA`, where each one is described). */
+export interface BattleCameraConfig {
+  pitch: number;
+  yaw: number;
+  fov: number;
+  minZ: number;
+  maxZ: number;
+  aim: { readonly x: number; readonly y: number; readonly z: number };
+  feetY: number;
+  fitHalfWidth: number;
+  fitHeight: number;
+  rimMargin: number;
+  minDistance: number;
+  maxDistance: number;
+  narrowSheetFrom: number;
+  hitPush: number;
+  followPush: number;
+  koPush: number;
+  shake: number;
+  roll: number;
+  focusShift: number;
+  follow: number;
+  shakeHz: number;
+  shakeDecay: number;
+  beatDecay: number;
+}
+
 /**
  * Lantern Hour's camera (owner decision 2026-10-05): low, swung a little to
  * the player's side, framing the fight into the safe region between the
  * HUD's pills and its bottom sheet. Angles in radians, distances in world units.
  */
-export const BATTLE_CAMERA = {
+export const BATTLE_CAMERA: Readonly<BattleCameraConfig> = {
   /** Tilt down from the horizon. */
   pitch: (11 * Math.PI) / 180, // TUNE
   /** Swing around the fight (0 looks along +z). */
@@ -155,7 +182,7 @@ export const BATTLE_CAMERA = {
   shakeDecay: 9, // TUNE
   /** How fast a push-in and a beat decay back, per second. */
   beatDecay: 2.4, // TUNE
-} as const;
+};
 
 /**
  * A potion's sparkle shield (#214): a soft lavender bubble over the squishy
