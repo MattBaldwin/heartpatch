@@ -1906,3 +1906,18 @@ _Merges, owner approvals and coordinator calls from 2026-10-25 ~08:03 to ~14:10 
 - **#382 Wave 2 sheet v1 failed the render-check.** 8 of 9 kinds missed their hook or duplicated a silhouette (Dragofruit was fine) and the haze was yellow. The old lane (406k, $13.33) handed off in #382 comment 6397202673. A fresh Sonnet lane reworks it.
 - **#382 may add ~6 additive parts in `packages/shared/src/data/visuals.ts`,** inside the #382 PR: data-only, existing primitives, the existing glow mechanism, a data test, listed in the PR body. A dev-only `?studio` capture flag is fine.
 - **#681 render-check:** v1 FIX (name mismatch, home-indicator crop, 44px link), v2 PASS.
+
+## 2026-10-25 — Owner decisions and coordinator calls (supervisor 19)
+
+_Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor 19 (`session_011PCmEwUJ3VqaBHuzHe222J`) took over from supervisor 18 at 14:55Z._
+
+**Merged**
+- **#684 (#621 W1-8A):** water works and the food chain. Opus + Fable APPROVE; the head was a clean main merge.
+- **#687:** supervisor 18 handoff docs.
+
+**Owner decisions (#382 Wave 2)**
+- **Shinybeet** gets a data-only beetle-shell body, then one last tweak: a taller dome, a smaller, lower head, and studs in a line. If it still fails, it is auto-swapped for the strongest of the other 19 kinds, with no more rounds.
+- **Oinkle** drops the mud puddle.
+- **Fluffasus** gets stacked-lobe cloud wings (render-check PASS).
+- **Cubbun** gets hug arms.
+- **Standing rule:** serve owner decisions one at a time.
