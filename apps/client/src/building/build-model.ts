@@ -22,6 +22,8 @@ export interface BuildCard {
   readonly blocked: string | null;
   /** Something to make first (the Jack-o'-Lantern): the sheet offers the recipe book. */
   readonly craft: string | null;
+  /** The sheet's top line while this card is picked (single-spot cards); the default says "right in the middle". */
+  readonly hint?: string;
 }
 
 /**

@@ -279,6 +279,26 @@ describe('Wild Isle tiles (#621 plan §8)', () => {
     expect(info('ocean').owner).toBe('Just waves out here. Nothing to claim!');
     expect(info('river').owner).toBe('Too deep to wade. A bridge would do it!');
     expect(info('wild-lake').owner).toBe('Deep and sparkly. A ferry could cross it!');
+    // With a bridge on it, the river says so.
+    const bridged = describeTile(
+      tile({
+        terrain: 'river',
+        buildings: [
+          {
+            id: '0190a8c4-0000-7000-8000-d00000000002',
+            buildingId: 'bridge',
+            kind: 'travel',
+            level: 1,
+            spot: 1,
+            lit: null,
+            safeRadius: null,
+          },
+        ],
+      }),
+      lookup,
+      userId(1),
+    );
+    expect(bridged.owner).toBe('A bridge crosses here. Hop across! 🪵');
     for (const terrain of ['ocean', 'river', 'wild-lake']) {
       const w = info(terrain);
       expect(w.resource, terrain).toBeNull();

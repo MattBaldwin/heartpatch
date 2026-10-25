@@ -81,3 +81,31 @@ describe('resource building models (#601 PR 7)', () => {
     expect(scene.meshes.length - before).toBeLessThanOrEqual(2);
   });
 });
+
+describe('Wild Isle travel models (#621 W1-6)', () => {
+  const engine = new NullEngine({
+    renderWidth: 390,
+    renderHeight: 844,
+    textureSize: 1,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  it('builds a bridge that lies along +x and a dock with a lamp, not the plain box', () => {
+    const scene = new Scene(engine);
+    const plain = buildBuildingModel(scene, 'mystery', 'plain', 1).body;
+    const bridge = buildBuildingModel(scene, 'bridge', 'plain', 1);
+    const dock = buildBuildingModel(scene, 'ferry-dock', 'plain', 1);
+    expect(bridge.body.getTotalVertices()).toBeGreaterThan(plain.getTotalVertices());
+    expect(dock.body.getTotalVertices()).toBeGreaterThan(plain.getTotalVertices());
+    // The lamps glow.
+    expect(bridge.glow).not.toBeNull();
+    expect(dock.glow).not.toBeNull();
+    // Longer than wide, so the map can turn it bank to bank.
+    const size = bridge.body.getBoundingInfo().boundingBox.extendSize;
+    expect(size.x).toBeGreaterThan(size.z * 2);
+  });
+});

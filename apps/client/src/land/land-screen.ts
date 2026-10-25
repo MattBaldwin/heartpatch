@@ -57,6 +57,8 @@ export interface LandScreenOptions {
    * it before his strike lands at 7:30).
    */
   toldElsewhere?: (tile: WentWildTile) => boolean;
+  /** Wild Isle (#621): told my cut-off land each time the tending is taken (the card and the map tint). */
+  onStranded?: (stranded: LandTending['stranded']) => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -211,6 +213,7 @@ export function createLandScreen(options: LandScreenOptions): LandScreen {
   function render(): void {
     const open = mapId !== null && tending !== null;
     chip.hidden = !open || (tending?.missing.length ?? 0) === 0;
+    options.onStranded?.(open ? tending?.stranded : undefined);
     visitButton.disabled = working;
     const told = options.toldElsewhere;
     const mine =

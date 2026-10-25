@@ -154,7 +154,7 @@ export function createTileBuild(options: TileBuildOptions): TileBuild {
         ? picked.length === 0
           ? BUILD_TEXT.pickAnEdge
           : BUILD_TEXT.tapEdges
-        : BUILD_TEXT.centre,
+        : (card?.hint ?? BUILD_TEXT.centre),
       allEdges: edgeCard ? { all: picked.length === open_.length } : null,
       working,
       note,

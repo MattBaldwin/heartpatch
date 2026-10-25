@@ -122,7 +122,17 @@ export async function claimLand(page: Page, mapId: string): Promise<{ q: number;
   await findTile(page, 'claim');
   const [q, r] = (await mapState(page))!.selected!.split(',').map(Number) as [number, number];
   await page.getByTestId('tile-claim').tap();
+  await playClaimBattle(page);
+  return { q, r };
+}
 
+/**
+ * Plays the claim's showdown out from the open Battle sheet (big moves, a
+ * replacement when one faints) and closes the care celebration the winner's
+ * level-up brings (`evolves`: false once the squishy has grown up). The
+ * tile's claim button has been tapped already.
+ */
+export async function playClaimBattle(page: Page, evolves = true): Promise<void> {
   const hud = page.getByTestId('battle-hud');
   await expect(hud).toBeVisible({ timeout: 30_000 });
   for (let i = 0; i < 60; i++) {
@@ -143,9 +153,9 @@ export async function claimLand(page: Page, mapId: string): Promise<{ q: number;
   await expect(hud).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
   // The strong squishy grows up from the battle's XP (#19): say yay and close.
+  if (!evolves) return;
   await expect(page.getByTestId('care-celebrate')).toBeVisible({ timeout: 30_000 });
   await page.getByTestId('care-yay').tap();
   await page.getByTestId('care-close').tap();
   await expect(page.getByTestId('care')).toBeHidden();
-  return { q, r };
 }
