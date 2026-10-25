@@ -1,4 +1,4 @@
-import { GAME_DATA, hexToWorld, type PublicTile } from '@heartpatch/shared';
+import { GAME_DATA, hexToWorld, isWater, type PublicTile } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { HEX_SIZE, HOLLOWED_SQUARE, TERRAIN_DRESSING, TERRAIN_LOOKS } from './map-config.js';
 import {
@@ -30,11 +30,22 @@ function saturation([r, g, b]: readonly number[]): number {
 }
 
 describe('terrain dressing data', () => {
-  it('dresses every terrain in the game data, and gives each a look', () => {
-    for (const terrain of GAME_DATA.terrains) {
+  it('dresses every land terrain in the game data, and gives each a look', () => {
+    // Water (Wild Isle, #621) is bare: lakes and rivers borrow the lake's
+    // tiles and the ocean is never a tile instance.
+    for (const terrain of GAME_DATA.terrains.filter((t) => !isWater(t))) {
       expect(TERRAIN_DRESSING[terrain.id], terrain.id).toBeDefined();
       expect(TERRAIN_LOOKS[terrain.id], terrain.id).toBeDefined();
       expect(dressingOf(terrain.id).items.length, terrain.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('draws Wild Isle water with the lake’s tiles, and has no ocean tiles (#621)', () => {
+    expect(TERRAIN_LOOKS['wild-lake']?.meshOf).toBe('lake');
+    expect(TERRAIN_LOOKS['river']?.meshOf).toBe('lake');
+    expect(TERRAIN_LOOKS['ocean']).toBeUndefined();
+    for (const terrain of GAME_DATA.terrains.filter(isWater)) {
+      expect(TERRAIN_DRESSING[terrain.id], terrain.id).toBeUndefined();
     }
   });
 

@@ -65,6 +65,22 @@ const ConfigSchema = z.object({
         .map((name) => name.trim().toLowerCase())
         .filter((name) => name.length > 0),
     ),
+  // Wild Isle (#621) feature switch: `off` refuses `wild-isle` patches for
+  // everyone (creating one is FORBIDDEN and the lobby hides the choice),
+  // `testers` lets only `HP_WILD_ISLE_TESTERS` make one, `on` every player.
+  // Off until the coordinator's `Chore: Wild Isle on` (W1-12).
+  HP_WILD_ISLE: z.enum(['off', 'testers', 'on']).default('off'),
+  // Usernames who can make a Wild Isle while `HP_WILD_ISLE=testers`,
+  // comma-separated (case doesn't matter), as `HP_HOUSE_TESTERS`.
+  HP_WILD_ISLE_TESTERS: z
+    .string()
+    .default('')
+    .transform((list) =>
+      list
+        .split(',')
+        .map((name) => name.trim().toLowerCase())
+        .filter((name) => name.length > 0),
+    ),
   // Branching evolution (#32): the secret salt evolution rolls are seeded
   // with, so a player who knows a squishy's id can't work out its roll.
   // Required in production; development and tests fall back to a fixed dev
