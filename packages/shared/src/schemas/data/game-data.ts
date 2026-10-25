@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BuildingSchema, buildsAtHome } from './buildings.js';
+import { BuildingSchema, buildsAtHome, WILD_ISLE_BUILDING_KINDS } from './buildings.js';
 import { CareActionSchema } from './care-actions.js';
 import { ElementIdSchema, ElementSchema, FeelingIdSchema, FeelingSchema } from './elements.js';
 import { MapGenSettingsSchema } from './map-gen.js';
@@ -221,6 +221,23 @@ export const GameDataSchema = z
       // Fences, and only fences, stand on edges (#203, #204).
       if ((b.slot === 'edge') !== (b.kind === 'fence')) {
         report(['buildings', i, 'slot'], `"${b.id}": fences go on edges, and only fences`);
+      }
+      // Wild Isle kinds (#621) are never on a Cozy Patch's Build sheet.
+      if (
+        (WILD_ISLE_BUILDING_KINDS as readonly string[]).includes(b.kind) &&
+        (b.patchTypes?.length !== 1 || b.patchTypes[0] !== 'wild-isle')
+      ) {
+        report(['buildings', i, 'patchTypes'], `"${b.id}" is a Wild Isle building: ['wild-isle']`);
+      }
+      if (b.kind === 'works') {
+        checkRef(
+          resources,
+          'resource',
+          b.makes.resource,
+          ['buildings', i, 'makes', 'resource'],
+          report,
+        );
+        if (b.eats) checkCost(resources, b.eats, ['buildings', i, 'eats'], report);
       }
     });
 

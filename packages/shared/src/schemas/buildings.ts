@@ -20,7 +20,8 @@ export const BuildingSpotSchema = z.number().int().min(0).max(6);
 /**
  * Kinds of `buildings` row. Fences (#203) are segments on edges, in their own
  * rows. `resource` and `warehouse` (#601) parse ahead of any row of them: none
- * can be built until their kind joins `HOME_BASE_RULES.buildableKinds`.
+ * can be built until their kind joins `HOME_BASE_RULES.buildableKinds`. The
+ * Wild Isle kinds (#621) do the same, and only ever stand on a Wild Isle.
  */
 export const BuildingKindSchema = z.enum([
   'hearthfire',
@@ -29,6 +30,11 @@ export const BuildingKindSchema = z.enum([
   'factory',
   'resource',
   'warehouse',
+  'works',
+  'canal',
+  'shelter',
+  'vane',
+  'travel',
 ]);
 export type BuildingRowKind = z.infer<typeof BuildingKindSchema>;
 

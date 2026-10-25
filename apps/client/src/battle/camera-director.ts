@@ -1,4 +1,5 @@
-import { BATTLE_CAMERA } from './battle-config.js';
+import { ARENA_STAGE } from './arena-config.js';
+import { BATTLE_CAMERA, FIGHTER, type BattleCameraConfig } from './battle-config.js';
 import type { CameraCue } from './choreography.js';
 
 // Lantern Hour's camera (owner decision 2026-10-05): a fixed rig (pitch,
@@ -20,6 +21,12 @@ export interface Point3 {
 export interface SafeRegion {
   readonly top: number;
   readonly bottom: number;
+  /**
+   * The lowest row of the screen where the stage shows (#652): `bottom` (the
+   * default) when the opaque sheet spans the screen, 1 when it's a card with
+   * the screen's bottom corners showing beside it.
+   */
+  readonly floor?: number;
 }
 
 /** Something that must stay on screen: a ground point with a radius and a height above it. */
@@ -42,15 +49,40 @@ export interface CameraShot {
 }
 
 /**
+ * The scale a squishy is drawn at in battle, from its height at scale 1
+ * (#652): the close-up scale, less for a tall one (`FIGHTER.tall`), so a big
+ * squishy still looks big but never pushes the camera back.
+ */
+export function battleScale(
+  height: number,
+  config: {
+    readonly scale: number;
+    readonly tall: { readonly knee: number; readonly keep: number; readonly maxHeight: number };
+  } = FIGHTER,
+): number {
+  const tall = height * config.scale;
+  const { knee, keep, maxHeight } = config.tall;
+  if (!(tall > knee)) return config.scale;
+  const drawn = Math.min(maxHeight, knee + (tall - knee) * keep);
+  return (config.scale * drawn) / tall;
+}
+
+/**
  * How far back the camera sits so the fight's box and every fit point fit
  * the safe region: sideways within the screen (with a margin), upwards within
  * the headroom under the pills, each judged at its own depth along the view.
+ * The fight's box backs off no further than the arena reaches (`arenaReach`,
+ * #652), but the fighters always fit: nothing covers them on any screen
+ * (#142). On a portrait phone the reach is far beyond what any fight needs;
+ * there `battleScale` and the ground's size keep the camera over the arena
+ * (camera-director.test.ts), and the reach binds only where the ground shows
+ * to the screen's bottom (a wide iPad).
  */
 export function frameDistance(
   aspect: number,
   safe: SafeRegion,
   fit: readonly FitPoint[],
-  config = BATTLE_CAMERA,
+  config: BattleCameraConfig = BATTLE_CAMERA,
 ): { distance: number; shift: number } {
   const tan = Math.tan(config.fov / 2);
   const feetY = Math.min(config.feetY, safe.bottom - 0.08);
@@ -59,7 +91,8 @@ export function frameDistance(
   const ys = Math.sin(config.yaw);
   const cp = Math.cos(config.pitch);
   const wide = tan * Math.max(0.3, aspect);
-  let distance = Math.max(config.fitHeight / (tan * headroom), config.fitHalfWidth / (wide * 0.95));
+  const box = Math.max(config.fitHeight / (tan * headroom), config.fitHalfWidth / (wide * 0.95));
+  let distance = 0;
   for (const f of fit) {
     const dx = f.x - config.aim.x;
     const dz = f.z - config.aim.z;
@@ -69,7 +102,54 @@ export function frameDistance(
     distance = Math.max(distance, across / (wide * 0.94) + along);
     distance = Math.max(distance, f.h / (tan * headroom) + along);
   }
-  return { distance, shift: 1 - 2 * feetY };
+  const shift = 1 - 2 * feetY;
+  const reach = arenaReach(aspect, safe.floor ?? safe.bottom, shift, config);
+  return { distance: Math.max(distance, Math.min(box, reach)), shift };
+}
+
+/**
+ * How far back the camera may sit before the picture looks past the ground's
+ * rim (#652). The lowest row of the stage that shows (`floor`, a fraction of
+ * the screen height: the opaque sheet's top edge, or the screen's bottom
+ * beside a narrow sheet); its two ends, cast down onto the ground (y = 0) through the lens shift, must land
+ * `rimMargin` inside the disc. Each end's ground point moves in a straight
+ * line as the camera backs off, so the limit is one quadratic per end.
+ */
+export function arenaReach(
+  aspect: number,
+  floor: number,
+  shift: number,
+  config: BattleCameraConfig = BATTLE_CAMERA,
+  groundRadius: number = ARENA_STAGE.groundRadius,
+): number {
+  const tan = Math.tan(config.fov / 2);
+  const sp = Math.sin(config.pitch);
+  const cp = Math.cos(config.pitch);
+  const sy = Math.sin(config.yaw);
+  const cy = Math.cos(config.yaw);
+  const limit = Math.max(1, groundRadius - config.rimMargin);
+  // The row's rays: forward + across · right + (v − shift) · tan · up.
+  const b = (1 - 2 * floor - shift) * tan;
+  const dy = -sp + b * cp;
+  // A row that never comes down to the ground can't see the rim.
+  if (dy >= -1e-6) return config.maxDistance;
+  let reach = config.maxDistance;
+  for (const side of [-1, 1]) {
+    const a = side * tan * Math.max(0.3, aspect);
+    const dx = sy * cp + a * cy + b * sy * sp;
+    const dz = cy * cp - a * sy + b * cy * sp;
+    // Ground point = aim − aim.y · D / Dy + d · (−forward − sin(pitch) · D / Dy).
+    const ox = config.aim.x - (config.aim.y * dx) / dy;
+    const oz = config.aim.z - (config.aim.y * dz) / dy;
+    const vx = -sy * cp - (sp * dx) / dy;
+    const vz = -cy * cp - (sp * dz) / dy;
+    // |o + d · v| = limit, the far root.
+    const qa = vx * vx + vz * vz;
+    const qb = 2 * (ox * vx + oz * vz);
+    const qc = ox * ox + oz * oz - limit * limit;
+    reach = Math.min(reach, (-qb + Math.sqrt(Math.max(0, qb * qb - 4 * qa * qc))) / (2 * qa));
+  }
+  return Math.max(config.minDistance, reach);
 }
 
 const NO_SHAKE = { x: 0, y: 0 } as const;
@@ -78,7 +158,7 @@ const NO_SHAKE = { x: 0, y: 0 } as const;
 export function shakeOffset(
   amount: number,
   age: number,
-  config = BATTLE_CAMERA,
+  config: BattleCameraConfig = BATTLE_CAMERA,
 ): { x: number; y: number } {
   if (amount <= 0 || age < 0) return NO_SHAKE;
   const t = age / 1000;
@@ -89,7 +169,7 @@ export function shakeOffset(
 }
 
 export class CameraDirector {
-  readonly #config: typeof BATTLE_CAMERA;
+  readonly #config: BattleCameraConfig;
   readonly #reduced: boolean;
   /** Where each fighter stands (ground points), to lean towards. */
   readonly #homes: Readonly<Record<'a' | 'b', { x: number; z: number }>>;
@@ -112,7 +192,7 @@ export class CameraDirector {
   constructor(
     homes: Readonly<Record<'a' | 'b', { x: number; z: number }>>,
     reduced: boolean,
-    config = BATTLE_CAMERA,
+    config: BattleCameraConfig = BATTLE_CAMERA,
   ) {
     this.#homes = homes;
     this.#reduced = reduced;
