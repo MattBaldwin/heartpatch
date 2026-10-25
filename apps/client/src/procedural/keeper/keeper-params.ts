@@ -364,7 +364,7 @@ export function keeperParams(
     const shoulder: Vec3 = [side * half, shoulderY, 0];
     const along = (k: number): Vec3 =>
       add(shoulder, [side * out * armLength * k, -down * armLength * k, 0]);
-    const roll = -side * splayDeg;
+    const roll = side * splayDeg; // Babylon turns the other way: a positive roll swings the arm's foot towards +x
     armMids.push({ at: along(0.5), roll, sin: -side * out, cos: down });
     piece('body', 'capsule', along(0.5), [armT, armLength, armT], skin, [0, 0, roll]);
     const sleeve = KEEPER.sleeve;

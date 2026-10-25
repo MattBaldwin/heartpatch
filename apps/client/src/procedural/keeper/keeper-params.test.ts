@@ -358,6 +358,9 @@ describe('keeperParams', () => {
         const reach = Math.hypot(hand.at[0] - arm.at[0], hand.at[1] - arm.at[1]);
         expect(reach, id).toBeLessThan(arm.size[1] / 2 + hand.size[0] / 2);
         expect(reach, id).toBeGreaterThan(arm.size[1] / 2 - hand.size[0]);
+        // The arm tilts the way the hand is placed: its foot swings out, not in.
+        const foot = arm.at[0] + Math.sin((arm.turn[2] * Math.PI) / 180) * (arm.size[1] / 2);
+        expect(Math.abs(foot), id).toBeGreaterThan(Math.abs(arm.at[0]));
         // The shoulder is on the torso's side, not out beside it or behind it.
         const side = Math.sign(arm.at[0]);
         const top =
@@ -395,7 +398,7 @@ describe('keeperParams', () => {
   // Keeper) is a deliberate one. The e2e test checks the same hash in WebKit.
   it('keeps its build stable', () => {
     expect(keeperHash(keeperParams(GOLDEN_CONFIG, KEEPER_DATA))).toMatchInlineSnapshot(
-      `"ff911705ad459edf7682147df5e9b9ac"`,
+      `"b29726f984956d6fcf8384bf301f8548"`,
     );
   });
 });
@@ -647,7 +650,7 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
       }
     }
     expect(lines.length).toBe(120);
-    expect(hashString(lines.join('\n'))).toBe('75bde971189de56f5fb2a21d528703dc');
+    expect(hashString(lines.join('\n'))).toBe('c7871b1f0a0888da55db6cc07dd598ee');
   });
 
   it('draws worn ids from the catalog, skipping ones this client does not know', () => {
