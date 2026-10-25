@@ -235,12 +235,13 @@ const clear = (ctx: ExtrasContext, g: Growth, gap: number): boolean =>
   !ctx.colliders.some((k) => (g.x - k.x) ** 2 + (g.z - k.z) ** 2 < (k.r + gap) ** 2);
 
 function coastPlace(ctx: ExtrasContext): Readonly<Record<string, readonly Growth[]>> {
-  // Palms on the sand's back diagonals, so the camera never stands beside one
-  // (its trunk would sit off the screen's edge, with the fronds hanging in).
+  // Palms across the middle of the back, so a trunk stays in view whatever the
+  // phone's width (off to the side, a trunk could leave the frame while its
+  // fronds hung in, which read as floating).
   const palms = [
-    ...ring(ctx, 2, 0.98, 1.04, [0.9, 1.15], [25, 65]),
-    ...ring(ctx, 2, 0.98, 1.04, [0.9, 1.15], [115, 155]),
-    ...ring(ctx, 1, 0.98, 1.04, [0.8, 1.0], [80, 100]),
+    ...ring(ctx, 1, 0.98, 1.04, [0.9, 1.15], [68, 82]),
+    ...ring(ctx, 1, 0.98, 1.04, [0.9, 1.15], [98, 112]),
+    ...ring(ctx, 1, 0.98, 1.04, [0.8, 1.0], [84, 96]),
   ];
   for (const p of palms) ctx.shade(p.x, p.z, 0.9 * p.scale, 3 * p.scale);
   // Sea rocks standing in the surf, a few on the sand's rim.
