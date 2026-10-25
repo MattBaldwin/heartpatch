@@ -64,6 +64,9 @@ export interface RoadsDebug {
   readonly roads: number;
   readonly loaded: boolean;
   readonly ferry: number;
+  /** The far-shore tiles shown, and the dock they were reached from (dev tooling). */
+  readonly ferryTiles: readonly Hex[];
+  readonly ferryDock: Hex | null;
   /** Roads drawn per level (1–3), or null before the map is up. */
   readonly drawn: readonly number[] | null;
 }
@@ -416,6 +419,8 @@ export function createRoads(options: RoadsOptions): Roads {
         roads: feed.roads.length,
         loaded: feed.loaded,
         ferry: ferry?.tiles.length ?? 0,
+        ferryTiles: ferry?.tiles.map((t) => ({ q: t.q, r: t.r })) ?? [],
+        ferryDock: ferry?.dock ?? null,
         drawn: field ? field.debug.roads.slice() : null,
       };
     },

@@ -102,6 +102,7 @@ import {
   type PublicUser,
 } from '@heartpatch/shared';
 import { HEX_SIZE } from './map/map-config.js';
+import { hexOutlineOnScreen } from './map/map-scene.js';
 import { createPortraits } from './procedural/portraits.js';
 import { createRosterSheet } from './squishies/roster/roster-sheet.js';
 import { heroLodFor } from './procedural/motion.js';
@@ -2101,6 +2102,7 @@ if (import.meta.env.DEV) {
     renderer: () => stage?.renderer.kind ?? null,
     quality: () => stage?.quality.snapshot ?? null,
     camera: () => stage?.camera.state ?? null,
+    outlines: (hexes) => hexes.map((h) => (stage ? hexOutlineOnScreen(stage.scene, h) : [])),
     draws: () => stage?.draws ?? 0,
     idle: () => stage?.idle ?? false,
     invalidate: () => stage?.invalidate(),

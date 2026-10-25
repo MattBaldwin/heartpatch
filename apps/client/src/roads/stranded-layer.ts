@@ -12,6 +12,7 @@ import {
   type StrandedTile,
 } from '@heartpatch/shared';
 import { dashedHexRing } from '../hollow/dark-land.js';
+import { hexOutlineOnScreen } from '../map/map-scene.js';
 import { splitStranded, nearestGap } from '../land/stranded-text.js';
 import type { MeshArrays } from '../map/hex-mesh.js';
 import { HEX_SIZE } from '../map/map-config.js';
@@ -59,7 +60,13 @@ export interface StrandedLayer extends MapLayer {
   /** The gap to show (nearest `from`, else going wild soonest), or null. */
   gap: (from?: Hex | null) => StrandedTile | null;
   /** Tiles drawn by look (the dev hook). */
-  readonly debug: { grace: number; fading: number; onScreen: readonly { x: number; y: number }[] };
+  readonly debug: {
+    grace: number;
+    fading: number;
+    onScreen: readonly { x: number; y: number }[];
+    /** Every cut-off tile's centre then six corners, in CSS pixels (outside the canvas is off-screen). */
+    outlines: readonly (readonly { x: number; y: number }[])[];
+  };
 }
 
 export function createStrandedLayer(now: () => number = () => Date.now()): StrandedLayer {
@@ -113,6 +120,12 @@ export function createStrandedLayer(now: () => number = () => Date.now()): Stran
     return found;
   };
 
+  /** Each cut-off tile's centre and six corners on screen, in CSS pixels (the dev hook). */
+  const outlines = () => {
+    const sc = scene;
+    return sc ? stranded.map((t) => hexOutlineOnScreen(sc, t)) : [];
+  };
+
   return {
     attach: (next, nextView) => {
       scene = next;
@@ -156,7 +169,7 @@ export function createStrandedLayer(now: () => number = () => Date.now()): Stran
     },
     gap: (from) => nearestGap(stranded, from),
     get debug() {
-      return { ...drawn, onScreen: onScreen() };
+      return { ...drawn, onScreen: onScreen(), outlines: outlines() };
     },
   };
 }

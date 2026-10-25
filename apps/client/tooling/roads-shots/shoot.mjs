@@ -290,6 +290,15 @@ async function frameFacts(page, device) {
       }
       return { panel: shown, panelCut: cut };
     }
+    // One tile's centre and six corners (CSS px): how much of it can be seen, with nothing
+    // (card, panel, HUD, button) over the map there. 'full', 'partly' or 'hidden'.
+    function classify(points) {
+      const seen = points.filter((p) => {
+        if (p.x < 0 || p.y < 0 || p.x > w || p.y > h) return false;
+        return document.elementFromPoint(p.x, p.y)?.tagName === 'CANVAS';
+      }).length;
+      return seen === points.length ? 'full' : seen > 0 ? 'partly' : 'hidden';
+    }
     // Does the cut-off card sit under a side button?
     const card = document.querySelector('[data-testid="stranded-card"]');
     const overlaps = [];
@@ -320,12 +329,13 @@ async function frameFacts(page, device) {
       strandedDebug: (() => {
         const d = window.__heartpatch.stranded?.();
         if (!d) return null;
-        // Of the cut-off tiles inside the canvas, which have nothing (card, HUD, button) over their centre.
-        const clear = d.onScreen.filter((p) => {
-          const top = document.elementFromPoint(p.x * window.innerWidth, p.y * window.innerHeight);
-          return top?.tagName === 'CANVAS';
-        }).length;
-        return { grace: d.grace, fading: d.fading, inCanvas: d.onScreen.length, clear };
+        return { grace: d.grace, fading: d.fading, tiles: d.outlines.map(classify) };
+      })(),
+      ferryView: (() => {
+        const r = window.__heartpatch.roads?.();
+        if (!r?.ferryDock) return null;
+        const [dock, ...far] = window.__heartpatch.outlines([r.ferryDock, ...r.ferryTiles]);
+        return { dock: classify(dock), far: far.map(classify) };
       })(),
     };
   }, DEVICES[device].insets);
@@ -364,16 +374,35 @@ async function shot(page, device, name, frame, describe) {
   console.log(file, problems.length ? `PROBLEMS ${problems.join('; ')}` : 'ok');
 }
 
-/** What of the cut-off land is really visible, from where its tiles project and what covers them. */
+const count = (list, kind) => list.filter((k) => k === kind).length;
+
+/** What of the cut-off land is really visible: per tile, all of it, some of it, or none. */
 function strandedView(f) {
-  const d = f.strandedDebug;
-  const all = (d?.grace ?? 0) + (d?.fading ?? 0);
-  const kind = `${d?.fading ? 'fading' : 'grace'} tint`;
-  if (!d?.inCanvas)
+  const tiles = f.strandedDebug?.tiles ?? [];
+  const all = tiles.length;
+  const full = count(tiles, 'full');
+  const partly = count(tiles, 'partly');
+  const kind = `${f.strandedDebug?.fading ? 'fading' : 'grace'} tint`;
+  if (!full && !partly)
     return `The map around home; the cut-off land (${all} tiles) is off-screen, so none of it shows and "Show me" pans to it.`;
-  if (!d.clear)
-    return `The map around home; the ${all} cut-off tiles are at the top edge but tucked behind the top buttons or the card, so little of them shows, and "Show me" pans to them.`;
-  return `The map with ${d.clear} of ${all} cut-off tiles clearly in view, in the ${kind}.`;
+  if (!full)
+    return `The map around home; a little of the cut-off land (${partly} of ${all} tiles) shows at the edge, partly tucked behind the buttons or card, and "Show me" pans to it.`;
+  return `The map with ${full} of ${all} cut-off tiles fully in view${partly ? ` and ${partly} partly` : ''}, in the ${kind}.`;
+}
+
+/** The ferry map's far shore: how much of it, and the dock, is not under the panel or buttons. */
+function ferryView(f) {
+  const v = f.ferryView;
+  if (!v) return 'No ferry map is showing.';
+  const total = v.far.length;
+  const shown = v.far.filter((k) => k !== 'hidden').length;
+  const dock =
+    v.dock === 'hidden'
+      ? 'the dock is covered'
+      : `the dock shows${v.dock === 'partly' ? ' (partly)' : ''}`;
+  if (!shown)
+    return `The ferry map is on (${total} far-shore tiles in the aqua tint), but the tile panel covers the far shore and ${v.dock === 'hidden' ? 'the dock' : 'most of the dock'}; see the next frame.`;
+  return `The ferry map is showing: ${shown} of ${total} far-shore tiles in the aqua tint with a pale rim in view (${count(v.far, 'full')} fully), ${dock}.`;
 }
 
 const nodeTexts = (list) => (list.length ? list.join(' / ') : 'nothing');
@@ -517,8 +546,7 @@ async function runDevice(browser, device, statePath, fx) {
       device,
       'dock',
       'far-shore',
-      (f) =>
-        `The ferry map is showing: ${f.roads?.ferry} far-shore tiles in a bright aqua tint with a pale rim, the dock between. Panel rows in view: ${nodeTexts(f.panel)}.`,
+      (f) => `${ferryView(f)} Panel rows in view: ${nodeTexts(f.panel)}.`,
     );
     // The same moment with the panel out of the way (hidden, not closed: closing puts the map back).
     await page.addStyleTag({ content: '.tile-panel{visibility:hidden!important}' });
@@ -527,19 +555,14 @@ async function runDevice(browser, device, statePath, fx) {
       device,
       'dock',
       'far-shore-map',
-      (f) =>
-        `Same moment with the tile panel hidden: ${f.roads?.ferry} far-shore tiles in the aqua ferry tint, the dock on its lake.`,
+      (f) => `Same moment with the tile panel hidden. ${ferryView(f)}`,
     );
   }
 
   // 5. Stranded land: tint and the "Some land is cut off!" card.
   await openMap(page);
   await until(page, () => window.__heartpatch?.stranded?.()?.card);
-  await shot(page, device, 'stranded', 'as-it-opens', (f) =>
-    f.strandedDebug?.onScreen
-      ? `The map with ${f.strandedDebug.onScreen} cut-off tiles in view, tinted (grace ${f.strandedDebug.grace}, fading ${f.strandedDebug.fading} tiles in all).`
-      : `The map around home; the cut-off land (${(f.strandedDebug?.grace ?? 0) + (f.strandedDebug?.fading ?? 0)} tiles) is off-screen, so none of it shows and "Show me" pans to it.`,
-  );
+  await shot(page, device, 'stranded', 'as-it-opens', strandedView);
   if (!ONLY || ONLY.includes('stranded')) {
     await tapText('stranded-show');
     await page.waitForTimeout(1500);

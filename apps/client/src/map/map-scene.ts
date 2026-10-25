@@ -1808,6 +1808,35 @@ export function tileScreenRectOf(scene: Scene, tile: PublicTile): ScreenRect | n
   return tileScreenRect(scene, tile, lookOf(tile).height);
 }
 
+/**
+ * A tile's centre then its six corners on screen (CSS pixels, at ground height), even when
+ * they fall outside the canvas or behind the camera (those come back far off). For the dev
+ * hooks that tell which parts of a tile can really be seen.
+ */
+export function hexOutlineOnScreen(scene: Scene, h: Hex): { x: number; y: number }[] {
+  const camera = scene.activeCamera;
+  const canvas = scene.getEngine().getRenderingCanvas();
+  if (!camera || !canvas) return [];
+  const box = canvas.getBoundingClientRect();
+  const viewport = camera.viewport.toGlobal(box.width, box.height);
+  const transform = camera.getTransformationMatrix();
+  const c = hexToWorld(h, HEX_SIZE);
+  const spots = [{ x: c.x, z: c.z }];
+  for (let i = 0; i < 6; i++) {
+    const a = (Math.PI / 180) * (60 * i - 30);
+    spots.push({ x: c.x + TILE_RADIUS * Math.cos(a), z: c.z + TILE_RADIUS * Math.sin(a) });
+  }
+  return spots.map((q) => {
+    const s = Vector3.Project(
+      new Vector3(q.x, 0, q.z),
+      Matrix.IdentityReadOnly,
+      transform,
+      viewport,
+    );
+    return s.z < 0 || s.z > 1 ? { x: -1e6, y: -1e6 } : { x: box.left + s.x, y: box.top + s.y };
+  });
+}
+
 /** Scratch vectors for `tileScreenRect`, which runs every drawn frame while followed. */
 const RIM = new Vector3();
 const PROJECTED = new Vector3();

@@ -121,6 +121,8 @@ declare global {
       roads?(): RoadsDebug;
       /** Cut-off land drawn by look, and whether the "Some land is cut off!" card shows (#621). */
       stranded?(): { grace: number; fading: number; card: boolean };
+      /** Each hex's centre and six corners on screen, in CSS pixels (dev tooling). */
+      outlines?(hexes: readonly { q: number; r: number }[]): { x: number; y: number }[][];
       /** The night, the morning report, squishies in the Hollow and his visits (#21), or null. */
       hollow?(): HollowDebug | null;
       /** Land that misses you (owner decision 2026-10-06). */
