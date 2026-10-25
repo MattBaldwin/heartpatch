@@ -1928,6 +1928,8 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 **Owner decisions (other)**
 - **#688 (#655 D) screens approved (v9, ~15:52Z).** The supervisor's independent render-check took four rounds (v2, v5, v6, v9) before it passed.
 
+- **Retired supervisors archived (owner, ~16:05Z):** supervisors 18 and 17 were archived at the owner's request. Supervisors 10–16 were already archived.
+
 **Coordinator calls**
 - **Lanes handed off for size:** the #382 Wave 2b lane reached about 670k context ($25.71) and its notes drifted from its renders. A fresh Sonnet lane (2c) took over from #382 comment 6399726332 with the v6 fix list. The W1-8A lane cost $43.85 (245k).
 - **#382 Oinkle curl tail:** it failed three render-checks (handle, raspberry), so it fell back to a short stub tail.
