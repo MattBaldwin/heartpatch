@@ -172,3 +172,13 @@
   stroke: #fff;
   stroke-width: 0.1;
 }
+
+/* Fix it beside its cost chips (#621, weather/knocked-view.ts). */
+.weather-fix-row {
+  align-items: center;
+  margin-top: 6px;
+}
+
+.weather-fix-row > .home-needs {
+  margin-top: 0;
+}

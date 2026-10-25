@@ -70,6 +70,7 @@ import {
   type ReachTile,
 } from './home-view.js';
 import { FIX_TEXT, repairOffer } from '../weather/repair-offer.js';
+import { bringKnockedIntoView, fixRow } from '../weather/knocked-view.js';
 import { homeTileLines } from './home-tile-info.js';
 import { createHomeNameSheet } from './home-name-sheet.js';
 import {
@@ -344,6 +345,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   let moods: { mapId: string; moods: ReadonlyMap<string, WorkMood> } | null = null;
   let lastTier: QualityTier | null = null;
   let panel: { container: HTMLElement; tile: PublicTile; view: MapView } | null = null;
+  /** The tile whose panel was opened on its knocked building's card (#621). */
+  let knockShownFor: string | null = null;
   /** The name card's refusal (the server's words, or the name rules'), shown in the card. */
   let nameError: string | null = null;
   /** My home ring's terrains, read from the map as home opens (the name card's ideas). */
@@ -1897,8 +1900,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                 { class: 'home-card-note', 'data-testid': `tile-${prefix}-knocked` },
                 FIX_TEXT.knocked(buildingName(b.buildingId)),
               ),
-              needRow(fix.needs),
-              tileRow(fixButton()),
+              fixRow(needRow(fix.needs), fixButton()),
             ]
           : []),
         ...lines,
@@ -2079,6 +2081,16 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     if (mine && tile.homeSlot === null) {
       if (!home) void loadForPanel();
       container.replaceChildren(...landTileNodes(tile));
+      // A storm knocked a building here (#621): open on its Fix it card, once
+      // per opening (my own scrolling after that is left alone).
+      const key = `${String(tile.q)},${String(tile.r)}`;
+      if (knockShownFor !== key) {
+        requestAnimationFrame(() => {
+          if (panel?.container === container && bringKnockedIntoView(container)) {
+            knockShownFor = key;
+          }
+        });
+      }
       return;
     }
     const lines = homeTileLines(tile, me);
@@ -2271,6 +2283,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           tileMode = 'card';
           tileTarget = 'fire';
           tileNote = '';
+          knockShownFor = null;
           // Sprout's Factory tip shows once: not again on the next card.
           tipFor = null;
           // Read my fires and bag afresh for a tile of mine out on my land.
@@ -2282,6 +2295,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       },
       hide: () => {
         tipFor = null;
+        knockShownFor = null;
         panel?.container.replaceChildren();
         if (panel) setPanelFocus(panel.container, 'home-fire', false);
         panel = null;
