@@ -3,8 +3,8 @@ import { GUARDIAN_RULES } from './server/guardian-rules.js';
 import { SPAWN_TABLES } from './server/spawn-tables.js';
 import { SPECIES } from './species.js';
 import { WAVE_2_SPECIES } from './species-wave-2.js';
-import { PARTS } from './visuals.js';
-import { PartSchema } from '../schemas/data/visuals.js';
+import { BODIES, PARTS } from './visuals.js';
+import { BodySchema, PartSchema } from '../schemas/data/visuals.js';
 
 /*
  * Wave 2 of the 500-squishy plan (#382). Schema, move, part and art-rule
@@ -154,6 +154,16 @@ describe('wave 2 (#382)', () => {
         WAVE_2_SPECIES.some((s) => s.visual.parts.includes(id)),
         `${id} is worn`,
       ).toBe(true);
+    }
+  });
+
+  it('adds a beetle body (two wing-cases and a seam), valid and worn by the Shinybeet line', () => {
+    const body = BODIES.find((b) => b.id === 'beetle-shell');
+    expect(body).toBeDefined();
+    expect(BodySchema.safeParse(body).success).toBe(true);
+    const line = ['shinybeet', 'gleambeet', 'gleamhorn'];
+    for (const id of line) {
+      expect(WAVE_2_SPECIES.find((s) => s.id === id)!.visual.body, id).toBe('beetle-shell');
     }
   });
 });

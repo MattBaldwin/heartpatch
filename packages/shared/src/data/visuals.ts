@@ -215,6 +215,20 @@ export const BODIES: Body[] = [
     bottomFlat: 0.25,
     jitter: 0.03,
   },
+  // #382 wave 2: a beetle's carapace. `cleft` runs a seam front to back along the top, so two
+  // domed wing-cases sit either side of it; the head is a separate small body in front.
+  {
+    id: 'beetle-shell',
+    width: 1.25,
+    height: 1.05,
+    depth: 1.5,
+    squareness: 0.15,
+    taper: 0.15,
+    peak: 0,
+    bottomFlat: 0.35,
+    cleft: { depth: 0.3, tip: 0 },
+    jitter: 0.04,
+  },
 ];
 
 const single = { kind: 'single' } as const;
@@ -1918,8 +1932,8 @@ export const PARTS: Part[] = [
     size: [0.1, 0.45, 0.03],
     color: 'white',
     layout: single,
-    around: 52,
-    up: 58,
+    around: 75,
+    up: 62,
     sink: 0.5,
     jitter: 0.03,
   },
