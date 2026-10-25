@@ -189,38 +189,38 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 17 handoff, 2026-10-25 ~07:22 UTC):** main `4790019` (#673), migrations through 0060. Phase 1 is due Oct 31. DECISIONS is current through "2026-10-25 — Owner decisions and coordinator calls (supervisor 17)". Supervisor 17 is `session_012Qmyafu7VYabWthhQmx6z4` (lineage depth 1, started fresh by the owner). Supervisor 16 was archived on the owner's request. Merged under supervisor 17: #666, #669, #662, #668, #670, #665, #667, #677, #671, #675, #673. The lineage restarts at depth 1, so supervisor 18 is only needed near 400k context.
-- **Lanes in flight.** **The new supervisor's first job:** send each lane its session id with "report to me from now on (not @parent, not supervisor 17)" and confirm each switch (§8).
+- **State (supervisor 18 handoff, 2026-10-25 ~14:10 UTC):** main `f48edb9` (#681), migrations through 0061. Phase 1 is due Oct 31. DECISIONS is current through "2026-10-25 — Owner decisions and coordinator calls (supervisor 18)". Supervisor 18 is `session_01UZPidAHd9f2apgGePXErkk` (lineage depth 1). It took over from supervisor 17 (`session_012Qmyafu7VYabWthhQmx6z4`) at 08:03Z. Merged under supervisor 18: #674, #672, #682, #683, #679, #676, #678, #681.
+- **Lanes in flight.** **The new supervisor's first job:** send each lane its session id with "report to me from now on (not @parent, not supervisor 18)" and confirm each switch (§8).
 
 | Lane | Session | Model | State at handoff |
 |---|---|---|---|
-| #655 C Sell tab | session_01Wd2hitQnDBXxWwjDa8NP4d | Opus | PR #679, reviewer APPROVE + CI green on aec858b. Waiting only on owner screens https://claude.ai/artifact/7boi7q3BP85hbenMoZPCbq (render-check PASS). Then ask the owner whether #655 D (Gift/Trade/Swap bar) is Halloween. |
-| #656 battle sheet | session_01A4ki5ZK3QfXiyAttzyssbP | Sonnet | PR #678, APPROVE on head, CI running. Owner screens v5 https://claude.ai/artifact/HeZquvWz4pxtYmYxGQdv5v (render-check PASS) not yet shown. |
-| #621 W1-4 island map | session_015MjtcmZYTvxc3Wmp8xYHZw | Opus | PR #676, CI re-running after an ipad-webkit 6 fix, reviewer round 2 pending. Owner screens v7 https://claude.ai/artifact/KY79Sje1cRjyyucz7LqSXm (PASS) not yet approved. |
-| Controls B2b | session_01Q3gaJyyf3ZTWfdnMxThnpS | Sonnet | PR #674, owner-approved v4, APPROVE on head, CI queued. `hollowed-cellar.spec:70` (walkTo the big chest) failed once on iPhone 2; it may be main-side after #651's furniture bump. Watch it. |
-| #664 music | session_0111CwPFcW65bLs6K7UZ8Dy9 | Opus | PR #672, owner-approved by ear, APPROVE on head. CI red on ipad-webkit 6 (its own: rare-reveal fetches); the lane is fixing it (packed notes into one file). |
-| #382 squishy Wave 2 | session_01StqxPaD94zxAurY2S1VYPz | Sonnet | Rendering the 72-frame species sheet. Past cap: if it needs a re-shoot, it posts a Lane handoff instead. |
-| #621 W1-3 lobby (Cozy or Wild Isle create) | session_01UACZbzdWpbCZCsyQXZVdtJ | Opus | Started 06:44. Owner screens needed. |
-| #621 W1-7 weather (migration 0061, big) | session_01XXiW2XoBp4FKs7SXH9WdwM | Opus | Started 06:44. The only migration lane. Opus + Fable reviewers. |
+| #621 W1-8A water works | session_011HrgMgSAiB9sEE3XMVBqWz | Opus | PR #684, CI red on `f0e37e6` (ipad-webkit 2), fixing. APPROVE comment on the head. Big: verify Opus + Fable round 1, sim guards, lock order and TECH_SPEC §7. Then W1-8b (pies/care) in a fresh lane from its handoff. |
+| #621 W1-6 roads client | session_01G9J962SoXT9vA6nTummNTm | Sonnet | PR #685 draft (`d218b69`); screens and review pending. Adds shared `isBuildableOn`. |
+| #621 W1-9 weather client screens | session_014d39xXqoB95bjJnNZcn3QH | Sonnet | PR #686, code done (`0d8e4bd`); shooting owner screens and the review loop. Handoff: #621 comment 6398626223. |
+| #382 Wave 2b rework | session_01EB2ZpxQGSu4mqmiUthTTL8 | Sonnet | Branch `issue-382-wave-2`; silhouette rework and re-shoot. Sheet v2 after its own render-check, then the supervisor's render-check, then the owner. PR after owner approval. |
+| #655 D Gift/Trade/Swap bar | session_01F8dj49o9dZzs9Rh9iwRUb5 | Sonnet | Started 13:49 from the #655 handoff comment 6398012087. Owner screens needed. |
 | Wild Isle planner | session_01PdqoGSArLRgVrdshJnaZvq | Fable | Idle. Archive after Wave 1 lands. |
 
 - **Queue (start in this order as lanes free up):**
-  1. #621 W1-5b bridges and ferry docks (no migration). It owns `checkSpot` in `modules/buildings/service.ts` and the new `packages/shared/src/territory/water.ts`, and needs `supply.ts` / `reach.ts` edits. It shares `modules/buildings/` with W1-7, so expect a small merge. Handoff: #621 comment 6394386220.
-  2. Wild Isle: W1-6 after W1-5b; W1-8 and W1-9 after W1-7; then W1-10 and W1-11 per plan §6 and revision 1. `coast` still needs spawn/guardian tables (#382's lane) before Wild Isle creation opens.
-  3. #655 D/E per the owner's answer.
-  4. **Logged nits:**
+  1. W1-8b pies/care after #684 merges. Big, and care is sensitive: Opus + Fable.
+  2. W1-10 and W1-11 per plan §6 and revision 1. `coast` still needs spawn/guardian tables (#382's lane area) before Wild Isle creation opens.
+  3. #655 E (Chore: drop the legacy one-line sell request) one release after C.
+  4. The server switches to the shared `isBuildableOn` after W1-8.
+  5. Leftover `.auth-button` sites (B2b handoff on #674).
+  6. **Logged nits:**
      - the What's new date wraps on SE
      - `isPlural` in crooked-text.ts
      - the 6e/6f nits
      - the Water echo near the home indicator
      - room-name pills truncate ("Dining Roo…", "Conservato…")
      - disabled Feed looks enabled in close-up
-     - the trays `hp-settling` fallback (the e2e-fix finding)
+     - the trays `hp-settling` fallback (the e2e-fix finding); it can fire mid-slide
      - re-measure the E2E_GROUPS medians after a few runs; group 6 iPad is the tightest
-     - #656's finding: on the landscape phone, the 4-move (Splashmallow) battle shows sky only (no arena or fighters). It is pre-existing on `eb15770` (before #662), maybe a capture-rig limit; it needs a look
-     - the trays settle fallback can fire mid-slide (listed above)
+     - #678: on the landscape phone, the 4-move (Splashmallow) battle shows sky only (no arena or fighters). It is pre-existing on `eb15770` (before #662), maybe a capture-rig limit; it needs a look
+     - #681: the patch card shows two filled primary buttons (pre-existing)
      - TECH_SPEC §7 "Selling to the post" is stale after #668 (a Docs follow-up)
-  5. **Owner to-dos:** optionally allow kenney.nl, opengameart.org and freesound.org (Network access → Allowed domains). Optionally delete the stale remote branch `chore-ci-e2e-timeout` (auto mode blocks the coordinator from deleting it).
+     - #682 and #683 follow-ups are in DECISIONS (supervisor 18)
+  7. **Owner to-dos:** optionally allow kenney.nl, opengameart.org and freesound.org (Network access → Allowed domains). Optionally delete the stale remote branch `chore-ci-e2e-timeout` (auto mode blocks the coordinator from deleting it).
 - **Sweep helper:** the supervisor's sweep script checked, for each open PR, the head SHA, check-run counts, a reviewer APPROVE comment naming the head, and `git merge-tree --write-tree origin/main <head>`. Recreate it in your scratchpad.
 - **Watch:** `lobby.spec.ts:9` (owner/friend join) hit its 120 s timeout twice on one ipad-webkit group 5 run on PR #644, then passed. If it recurs, it gets a robustness fix.
 - **Filed, no lane yet:** #341 (Forest Chihuahua, Phase 2), #319 and #320 (Phase 2).
@@ -235,6 +235,7 @@ The supervisor keeps this list current. Remove items as they land.
   - reporting with the fallback trigger;
   - neither sessions nor the supervisor can re-run CI (403), so a flaky test gets a robustness fix in the PR, never a skip;
   - e2e players must pick a Keeper (`HP_KEEPER_REQUIRED`).
+  - **Every brief carries a CONTEXT BUDGET block** (supervisor 18, after three lanes blew the 200k cap by reading the #621 plan): read only the Lane handoff; helper subagents return summaries under 300 words; keep your own context under ~150k.
   - Name tables exactly as TECH_SPEC §4's core table list. #17 cost a mid-flight rename because a brief invented names.
 - **Merge order and churn:**
   - Every PR adds a migration, so later PRs regenerate theirs after each merge.
@@ -255,6 +256,13 @@ The supervisor keeps this list current. Remove items as they land.
   - Server hardening: shared `lib/rate-limit.ts`, a loose global per-IP limit, helmet/CSP or a note that Caddy sets the headers.
   - The avoided-words scan over error messages.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
+- **Lessons (2026-10-25, supervisor 18):**
+  - **AskUserQuestion was closed by container restarts about 8 times in 5 hours and never answered.** Asking in plain text worked: the owner answered in chat. Keep it to ONE question per message, with the artifact opened and its URL inline.
+  - **Lanes that read the #621 plan comments directly blew the 200k cap in minutes** (W1-6 hit 190k in 6 min; W1-9 hit 240k). Briefs now carry a CONTEXT BUDGET block (see Briefs).
+  - **Split visual lanes once past ~200k:** code first, then screens and review in a fresh lane. W1-9 did this, and it was cheap on Sonnet ($1.41 and $3.72).
+  - **A lane idle for hours with unpushed commits risks losing work to container reclaim** (#382 at 60/72 frames). Tell it to push the branch (no PR) at once.
+  - **Render-check the first species sheet before it reaches the owner.** It caught 8 of 9 weak kinds.
+  - **Costs:** #672 $34.46, #682 $35.07, #676 $51.98 (554k context), #655 C $26.43 (all flagged); #683 $16.69, #681 $18.95, #678 $10.65, B2b $11.93, #382 old lane $13.33, W1-6 first lane $1.41, W1-9 lanes $3.72 and a bit; supervisor 18 about $9 at 327k.
 - **Lessons (2026-10-25, supervisor 17):**
   - **Container restarts closed the owner's AskUserQuestion about ten times in four hours.** Re-ask at once with the artifact opened, and keep the queue of screens in the sweep prompt so it survives restarts.
   - **The auto-mode classifier blocks deleting another session's scheduled task.** Ask that session to delete its own (supervisor 16 did).
