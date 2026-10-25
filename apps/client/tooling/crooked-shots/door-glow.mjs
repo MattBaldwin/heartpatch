@@ -35,9 +35,9 @@ const ONLY_POWERS = process.env.POWERS ? new Set(process.env.POWERS.split(',')) 
 const AWAY = Number(process.env.AWAY ?? 1.8);
 /** After the wake card is dismissed, real ms before the "just woken" shot (the pulse runs 2.4 s from the wake). */
 const AFTER_WAKE = Number(process.env.AFTER_WAKE ?? 300);
-/** Real ms between the "just woken" shot and the "a moment later" one, so the sparkles' drift shows. */
 /** The wake burst is held this far (ms) into its animation for the "just woken" shot: software rendering is too slow to catch it live. */
 const BURST_AT = Number(process.env.BURST_AT ?? 700);
+/** Real ms between the "just woken" shot and the "a moment later" one, so the sparkles' drift shows. */
 const LATER = Number(process.env.LATER ?? 1400);
 /** The echoes' clock, pinned (ms), so both phones show them at the same places. */
 const ECHOES_AT = Number(process.env.ECHOES_AT ?? 0);
