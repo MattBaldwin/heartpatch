@@ -35,6 +35,11 @@ body:has(.tile-panel:not([hidden])) .hollow-report {
   display: none;
 }
 
+/* Nor do the night's chips show faintly through it. */
+body:has(.tile-panel:not([hidden])) .night-chips {
+  visibility: hidden;
+}
+
 /* A short phone held upright (an iPhone SE): a morning card with a storm
    line reaches up past the side trays' handles (centred at 55%), so they
    step aside while it's open instead of showing half a label. */
