@@ -1,10 +1,9 @@
-/* A woken power door's cue (#306), over the house's dark: a soft bright
-   outline of the door in its power's colour (`--glow`, with a lighter `--hot`
-   rim), and the power's sparkles drifting up from it. Placed by
-   `crooked-door-light.ts`: the outline is an upright doorway round the door,
-   one SVG path redrawn only when the door moves; the sparkles move by
-   composited transforms. Reduced motion keeps the outline
-   and drops the drift and the pulse. */
+/* A woken power door's cue (#654), over the house's dark: a soft glow and a
+   few sparkles on both sides of the doorway, in its power's colour (`--glow`,
+   with a lighter `--hot` middle). Placed by `crooked-door-light.ts`: one
+   composited translate-and-scale carries them all. A door that just woke
+   bursts, then settles. Reduced motion keeps the settled glow and drops the
+   drift and the burst. */
 
 .crooked-door-lights {
   position: fixed;
@@ -19,44 +18,23 @@
   display: none;
 }
 
-/* The outline: one SVG over the whole screen, one path drawn four times
-   (a soft fill, a wide blurred halo, a blurred glow and a hot rim), so the
-   line is even all the way round, with no brighter joins. */
-.crooked-door-outline {
+/* One side's glow, in the scaled space of the sparkles (100 = the door's
+   height): a tall soft oval, hot in the middle, standing on the floor. */
+.crooked-door-side-glow {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  pointer-events: none;
-}
-
-.crooked-door-outline path {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.crooked-door-outline .crooked-door-fill {
-  fill: var(--glow);
-  fill-opacity: 0.12;
-}
-
-.crooked-door-halo {
-  stroke: var(--glow);
-  stroke-width: 12px;
-  stroke-opacity: 0.5;
-}
-
-.crooked-door-glow {
-  stroke: var(--glow);
-  stroke-width: 5px;
-  stroke-opacity: 0.9;
-}
-
-.crooked-door-rim {
-  stroke: var(--hot);
-  stroke-width: 2.5px;
+  bottom: 0;
+  left: -22px;
+  width: 44px;
+  height: 92px;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--hot) 75%, transparent) 0,
+    color-mix(in srgb, var(--glow) 45%, transparent) 40%,
+    transparent 72%
+  );
+  opacity: 0.85;
+  transform-origin: 50% 100%;
 }
 
 .crooked-door-sparks {
@@ -117,12 +95,17 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .crooked-door-lights:not(.crooked-door-calm) .crooked-door-spark {
+  .crooked-door-lights:not(.crooked-door-calm) .crooked-door-spark:not(.crooked-door-burst) {
     display: block;
     animation: crooked-door-drift var(--life, 4s) linear var(--delay, 0s) infinite;
   }
 
-  .crooked-door-light-fresh .crooked-door-outline {
+  .crooked-door-lights:not(.crooked-door-calm) .crooked-door-light-fresh .crooked-door-burst {
+    display: block;
+    animation: crooked-door-puff 1.6s ease-out var(--burst-delay, 0s) both;
+  }
+
+  .crooked-door-light-fresh .crooked-door-side-glow {
     animation: crooked-door-wake var(--pulse, 2.4s) ease-out;
   }
 }
@@ -152,20 +135,38 @@
   }
 }
 
-/* A woken door flares twice, then settles (opacity only). */
+/* A woken door bursts: the glows swell and brighten, then settle (transform and opacity only). */
 @keyframes crooked-door-wake {
-  0%,
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+
+  25% {
+    transform: scale(1.3, 1.35);
+    opacity: 1;
+  }
+
   100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+}
+
+/* The burst's puff: sparkles pop out brighter, climb and fade, once (transform and opacity only). */
+@keyframes crooked-door-puff {
+  0% {
+    transform: translate(0, 0) scale(0.3);
+    opacity: 0;
+  }
+
+  20% {
+    transform: translate(calc(var(--sway, 6px) * 0.4), -12px) scale(1.4);
     opacity: 1;
   }
 
-  20%,
-  60% {
-    opacity: 0.45;
-  }
-
-  40%,
-  80% {
-    opacity: 1;
+  100% {
+    transform: translate(var(--sway, 6px), -64px) scale(0.5);
+    opacity: 0;
   }
 }

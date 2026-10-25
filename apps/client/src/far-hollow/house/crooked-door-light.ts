@@ -5,35 +5,31 @@ import { WOKEN_LIGHT } from './crooked-bonus-kit.js';
 
 import './crooked-door-light.css';
 
-const SVG = 'http://www.w3.org/2000/svg';
-
-// A woken power door's cue (#306, owner 2026-10-24): a soft bright outline of
-// the doorway in its power's colour, with the power's sparkles (embers,
-// leaves, droplets, motes) drifting up from it. The house's dark is a DOM
+// A woken power door's cue (#654, owner 2026-10-24): once a squishy has
+// opened a power door, a soft glow and a few sparkles on both sides of the
+// doorway in its power's colour (no outline round the door). The sparkles are
+// the power's own (embers, leaves, droplets, motes). The house's dark is a DOM
 // layer over the whole 3D view, so the cue is drawn over it, like the echoes'
 // eyes, at the door's own place in the wall. A frame only moves nodes with
-// transforms, bar the outline: an upright doorway fitted round the door's
-// projected corners (a side wall's door, seen edge-on from above, stays a
-// slim door, not a crack), drawn as one continuous SVG path so its glow is
-// even all round (its `d` is only rewritten when the door moves on screen);
-// the sparkles ride one translate-and-scale per door. Pure maths here; the
-// screen projects the points.
+// transforms: the doorway's box is fitted round the door's projected corners
+// (a side wall's door, seen edge-on from above, stays a slim door, not a
+// crack), and one translate-and-scale per door carries the two glows and the
+// sparkles. Pure maths here; the screen projects the points.
 
 /** The door's cue, metres, px and counts. */
 export const DOOR_LIGHT = {
-  /** The outline's height and half width: just round the door slab (2.0 × 1.3). */
+  /** The doorway's height and half width: just round the door slab (2.0 × 1.3), so the two sides sit beside it. */
   doorway: { height: 2.15, half: 0.72 },
-  /** How far in front of the wall the outline sits, so the slab never pokes through. */
+  /** How far in front of the wall the cue sits, so the slab never pokes through. */
   lift: 0.1,
-  /** The outline is never narrower than this share of its height on screen (a side wall's door is edge-on). */
+  /** The doorway is never narrower than this share of its height on screen (a side wall's door is edge-on). */
   slim: 0.36,
-  /** The outline's rounded top corners, and how soft its glow is (a blur), px. */
-  round: 12,
-  blur: 3,
-  /** The wake pulse: how long it lasts, s. */
+  /** How far out from each doorpost a side's glow and sparkles sit, as a share of the doorway's width. */
+  side: 0.56,
+  /** The wake burst: how long the glows flare before they settle, s. */
   pulse: { seconds: 2.4 },
-  /** Sparkles a door, and how long one takes to drift up, s (each a little different). */
-  sparkles: { count: 6, seconds: 4.2 },
+  /** Sparkles a door (split over its two sides), and how long one takes to drift up, s (each a little different). */
+  sparkles: { count: 8, seconds: 4.2 },
   /** A door this far (px) past the screen's edge is hidden, so its sparkles stop. */
   offscreen: 40,
 } as const; // TUNE: all of them
@@ -65,7 +61,7 @@ export interface Box {
   readonly height: number;
 }
 
-/** A door's cue on screen: the doorway's box, and the sparkles' anchor (its foot middle) and scale (its height). */
+/** A door's cue on screen: the doorway's box, and the cue's anchor (its foot middle) and scale (its height). */
 export interface DoorLightLayout {
   readonly box: Box;
   readonly foot: Pt;
@@ -109,25 +105,6 @@ export function doorLightLayout(p: DoorPoints): DoorLightLayout | null {
   };
 }
 
-/**
- * The doorway's outline as one SVG path: up the left side, round the top
- * corners, down the right side, open at the floor. `closed` shuts it along
- * the floor, for the soft fill inside. Pure.
- */
-export function outlinePath(box: Box, closed = false): string {
-  const r = Math.max(0, Math.min(DOOR_LIGHT.round, box.width / 2, box.height));
-  const n = (v: number) => String(Math.round(v * 10) / 10);
-  const left = box.left;
-  const right = box.left + box.width;
-  const top = box.top;
-  const foot = box.top + box.height;
-  const arc = `A${n(r)} ${n(r)} 0 0 1`;
-  return (
-    `M${n(left)} ${n(foot)}V${n(top + r)}${arc} ${n(left + r)} ${n(top)}` +
-    `H${n(right - r)}${arc} ${n(right)} ${n(top + r)}V${n(foot)}${closed ? 'Z' : ''}`
-  );
-}
-
 /** True when a door's cue is well clear of the screen, so it is hidden and its sparkles stop. */
 export function offScreen(
   layout: DoorLightLayout,
@@ -138,12 +115,12 @@ export function offScreen(
   return left + width < -m || left > view.width + m || top + height < -m || top > view.height + m;
 }
 
-/** A power's colours: its outline glow, and a hotter middle. */
+/** A power's colours: its glow, and a hotter middle. */
 export function doorLightColours(power: string): { glow: string; hot: string } {
   return WOKEN_LIGHT[power] ?? { glow: '#ffffff', hot: '#ffffff' };
 }
 
-/** One sparkle: where it starts across the door and up it (shares), when, how long, how far it sways, its size and colour. */
+/** One sparkle: where it starts across the doorway (shares of its width, from its middle) and up it (share of its height), when, how long, how far it sways, its size and colour. */
 export interface Sparkle {
   readonly x: number;
   readonly y: number;
@@ -161,8 +138,8 @@ export function sparkleShape(power: string): string {
 
 /**
  * A door's sparkles, spread evenly (no randomness, so every door and every
- * capture looks the same): they start along the outline's sides and top and
- * are staggered so only a few are up at once. Pure.
+ * capture looks the same): they start beside the two doorposts, alternating
+ * sides, and are staggered so only a few are up at once. Pure.
  */
 export function sparkles(power: string): Sparkle[] {
   const count = Math.min(Math.max(0, Math.floor(DOOR_LIGHT.sparkles.count)), MAX_SPARKLES);
@@ -170,11 +147,11 @@ export function sparkles(power: string): Sparkle[] {
   const colours = [hot, glow, (ELEMENT_FX[power] ?? elementFx(null)).colors[0]];
   const base = DOOR_LIGHT.sparkles.seconds;
   return Array.from({ length: count }, (_, i) => {
-    // The golden ratio spreads them round the outline without bunching.
+    // The golden ratio spreads them up and about the posts without bunching.
     const t = (i * 0.618034) % 1;
-    const side = i % 3; // left side, top, right side in turn
-    const x = side === 0 ? -0.5 : side === 2 ? 0.5 : t - 0.5;
-    const y = side === 1 ? 1 : 0.25 + t * 0.7;
+    const left = i % 2 === 0;
+    const x = (left ? -1 : 1) * (DOOR_LIGHT.side + t * 0.2);
+    const y = 0.1 + t * 0.7;
     const seconds = base * (0.85 + ((i * 0.37) % 0.3));
     return {
       x,
@@ -190,10 +167,10 @@ export function sparkles(power: string): Sparkle[] {
 
 interface Light {
   readonly root: HTMLElement;
-  /** The outline's paths: the soft fill, then the glow and rim strokes (all one shape). */
-  readonly paths: readonly SVGPathElement[];
   readonly sparks: HTMLElement;
-  /** Each sparkle's lane (moved across the doorway's width) and its share of that width. */
+  /** The two glows, left then right: they flare when the door wakes. */
+  readonly glows: readonly HTMLElement[];
+  /** Each glow's and sparkle's lane (moved across the doorway's width) and its share of that width. */
   readonly lanes: readonly { node: HTMLElement; share: number }[];
   /** The last layout written, so a still door costs nothing. */
   key: string;
@@ -242,37 +219,17 @@ export function createDoorLights(): DoorLights {
       for (const door of doors) {
         let light = lights.get(door.id);
         if (!light) {
-          const svg = document.createElementNS(SVG, 'svg');
-          svg.setAttribute('class', 'crooked-door-outline');
-          // A soft blur for the halo and glow, bounded by the path (cheap: it only re-rasters when the door moves).
-          const blur = `crooked-door-blur-${door.id}`;
-          const defs = document.createElementNS(SVG, 'defs');
-          const filter = document.createElementNS(SVG, 'filter');
-          for (const [k, v] of [
-            ['id', blur],
-            ['x', '-60%'],
-            ['y', '-20%'],
-            ['width', '220%'],
-            ['height', '140%'],
-          ] as const) {
-            filter.setAttribute(k, v);
-          }
-          const gauss = document.createElementNS(SVG, 'feGaussianBlur');
-          gauss.setAttribute('stdDeviation', String(DOOR_LIGHT.blur));
-          filter.append(gauss);
-          defs.append(filter);
-          svg.append(defs);
-          const paths = ['fill', 'halo', 'glow', 'rim'].map((name) => {
-            const path = document.createElementNS(SVG, 'path');
-            path.setAttribute('class', `crooked-door-${name}`);
-            if (name === 'halo' || name === 'glow') path.setAttribute('filter', `url(#${blur})`);
-            svg.append(path);
-            return path;
-          });
-          const outline = svg;
           const sparks = el('div', { class: 'crooked-door-sparks' });
           const shape = sparkleShape(door.power);
           const lanes: { node: HTMLElement; share: number }[] = [];
+          // A soft glow beside each doorpost, in a lane of its own.
+          const glows = [-1, 1].map((side) => {
+            const glow = el('span', { class: 'crooked-door-side-glow' });
+            const lane = el('span', { class: 'crooked-door-lane' }, glow);
+            lanes.push({ node: lane, share: side * DOOR_LIGHT.side });
+            sparks.append(lane);
+            return glow;
+          });
           for (const s of sparkles(door.power)) {
             const bit = el('span', { class: `crooked-door-spark crooked-door-spark-${shape}` });
             bit.style.setProperty('--y', `${r1(-s.y * PIECE)}px`);
@@ -286,28 +243,42 @@ export function createDoorLights(): DoorLights {
             lanes.push({ node: lane, share: s.x });
             sparks.append(lane);
           }
+          // The wake burst: a puff of the same sparkles, shown only while the door is fresh (CSS).
+          sparkles(door.power).forEach((s, i) => {
+            const bit = el('span', {
+              class: `crooked-door-spark crooked-door-burst crooked-door-spark-${shape}`,
+            });
+            bit.style.setProperty('--y', `${r1(-s.y * PIECE * 0.5)}px`);
+            // Outward from the doorway, so the burst stays beside it.
+            bit.style.setProperty('--sway', `${r1(Math.abs(s.sway) * 2 * Math.sign(s.x))}px`);
+            bit.style.setProperty('--size', `${r1(s.size * 1.3)}px`);
+            bit.style.setProperty('--burst-delay', `${r1(i * 0.06)}s`);
+            bit.style.setProperty('--spark', s.colour);
+            const lane = el('span', { class: 'crooked-door-lane' }, bit);
+            lanes.push({ node: lane, share: s.x });
+            sparks.append(lane);
+          });
           const node = el(
             'div',
             { class: 'crooked-door-light', 'data-testid': `crooked-door-light-${door.id}` },
-            outline,
             sparks,
           );
           const { glow, hot } = doorLightColours(door.power);
           node.style.setProperty('--glow', glow);
           node.style.setProperty('--hot', hot);
           node.style.setProperty('--pulse', `${String(DOOR_LIGHT.pulse.seconds)}s`);
-          light = { root: node, paths, sparks, lanes, key: '' };
+          light = { root: node, sparks, glows, lanes, key: '' };
           lights.set(door.id, light);
           root.append(node);
-          // A door that woke just now pulses and settles (CSS; never under reduced motion).
+          // A door that woke just now bursts and settles (CSS; never under reduced motion).
           if (door.fresh) {
             node.classList.add('crooked-door-light-fresh');
             // Once only: a door shown again after scrolling off doesn't flare again.
             const settle = () => {
               node.classList.remove('crooked-door-light-fresh');
             };
-            outline.addEventListener('animationend', settle, { once: true });
-            outline.addEventListener('animationcancel', settle, { once: true });
+            glows[0]?.addEventListener('animationend', settle, { once: true });
+            glows[0]?.addEventListener('animationcancel', settle, { once: true });
           }
         }
         // Off screen, the door is hidden: display none stops its sparkles' animations.
@@ -319,16 +290,11 @@ export function createDoorLights(): DoorLights {
         }
         placed.set(door.id, { power: door.power, at: door.at, layout: door.layout });
         const { box, foot, height } = door.layout;
-        const open = outlinePath(box);
         const scale = Math.round((height / PIECE) * 100) / 100;
         const sparks = `translate(${r1(foot.x)}px, ${r1(foot.y)}px) scale(${String(scale)})`;
-        const key = `${open}|${sparks}`;
+        const key = `${r1(box.width)}|${sparks}`;
         if (key === light.key) continue;
         light.key = key;
-        const shut = outlinePath(box, true);
-        light.paths.forEach((path, i) => {
-          path.setAttribute('d', i === 0 ? shut : open);
-        });
         light.sparks.style.transform = sparks;
         // The lanes sit inside the scaled anchor: their place across is the doorway's width over that scale.
         const across = box.width / Math.max(scale, 0.01);
@@ -344,7 +310,9 @@ export function createDoorLights(): DoorLights {
         at: p.at,
         foot: p.layout.foot,
         height: p.layout.height,
-        sparkles: lights.get(door)?.sparks.childElementCount ?? 0,
+        sparkles:
+          lights.get(door)?.sparks.querySelectorAll('.crooked-door-spark:not(.crooked-door-burst)')
+            .length ?? 0,
       })),
   };
 }
