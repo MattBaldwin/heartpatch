@@ -49,7 +49,7 @@ export function galleryWeather(
             },
           ],
         }
-      : { summary: 'Rain from the east in the afternoon' },
+      : { summary: 'Rain from the east tomorrow afternoon ☔' },
     serverTime: new Date(nowMs).toISOString(),
   };
 }

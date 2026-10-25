@@ -1,7 +1,7 @@
 import { hpClose } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import { islandMap } from './island-map.js';
-import { forecastPage, WEATHER_EMOJI, WEATHER_TEXT } from './weather-model.js';
+import { forecastPage, WEATHER_TEXT } from './weather-model.js';
 import type { WeatherStore } from './weather-store.js';
 import './weather.css';
 
@@ -77,11 +77,8 @@ export function createForecastSheet(root: HTMLElement, store: WeatherStore): For
     parts.push(el('h3', {}, WEATHER_TEXT.tomorrowHead));
     if (page.tomorrow.summary !== null) {
       parts.push(
-        el(
-          'p',
-          { 'data-testid': 'weather-tomorrow' },
-          `${WEATHER_EMOJI.clear} ${page.tomorrow.summary}`,
-        ),
+        // The server's line ends with its own emoji (shared `forecastLine`).
+        el('p', { 'data-testid': 'weather-tomorrow' }, page.tomorrow.summary),
         el(
           'p',
           { class: 'weather-sheet-note', 'data-testid': 'weather-no-vane' },
