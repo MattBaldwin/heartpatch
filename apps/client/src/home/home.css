@@ -781,8 +781,8 @@
 /* A phone on its side (controls D2, ../ui/breakpoints.ts): the title card and
    the bottom card shrink so the home base stays in view. The peek bar is one
    wide row of buttons instead of two, and an opened sheet stops under the
-   title card. (The dev stats badge sits under the title card and behind the
-   sheet, out of the way.) */
+   title card. (The dev stats badge, which sits under the title card, no longer
+   runs over the shorter bottom card; an opened sheet sits above it.) */
 @media (max-height: 520px) and (min-width: 640px) {
   .home-top {
     padding: 6px 16px;

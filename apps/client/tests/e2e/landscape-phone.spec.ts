@@ -170,7 +170,7 @@ test('home, the roster, the team, chat and the heart pill fit a phone on its sid
         'the map heart pill',
       );
 
-      // Chat: low on the screen with no gap under it, the squishes to say on its right.
+      // Chat: low on the screen with no gap under it, the things to say on its right.
       await page.getByTestId('chat-open').tap();
       await expect(page.getByTestId('chat')).toBeVisible();
       const [chat] = await allBoxes(page, '.chat-sheet');
@@ -217,7 +217,12 @@ test('home, the roster, the team, chat and the heart pill fit a phone on its sid
       expect(bar!.b - bar!.t, 'the peek bar stays short').toBeLessThanOrEqual(size.height * 0.34);
       const [squishies] = await allBoxes(page, '[data-testid="home-squishies"]');
       const [back] = await allBoxes(page, '[data-testid="home-back"]');
-      expect(Math.abs(squishies!.t - back!.t), 'the shortcuts share a line').toBeLessThan(2);
+      // Buttons of different heights centre on one line, so compare centres, not tops.
+      const middle = (b: Box) => (b.t + b.b) / 2;
+      expect(
+        Math.abs(middle(squishies!) - middle(back!)),
+        'the shortcuts share a line',
+      ).toBeLessThan(2);
       await expectReachable(sheet.getByTestId('home-back'), 'Back to map');
       await sheet.getByTestId('home-handle').tap();
       await expect(sheet.getByTestId('home-handle')).toHaveAttribute('aria-expanded', 'true');
