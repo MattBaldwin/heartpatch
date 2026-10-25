@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { scanPlayerFacingText } from '../data/avoided-words.js';
 import { EXPLORE_RULES } from '../data/explore.js';
 import { GAME_DATA } from '../data/index.js';
+import { isWater } from '../schemas/data/terrains.js';
 import { HEX_DIRECTIONS, hexToWorld, hexSpiral, hex } from '../hex/index.js';
 import { hashString } from '../rng/index.js';
 import {
@@ -95,12 +96,15 @@ describe('explore rules data', () => {
     expect(checkExploreRules(tooMany, GAME_DATA)).not.toEqual([]);
   });
 
-  it('lets you explore every terrain but Juniper’s Gap, trading posts and cleared land (owner decision 2026-10-07, #269, #242)', () => {
+  it('lets you explore every land terrain but Juniper’s Gap, trading posts and cleared land (owner decision 2026-10-07, #269, #242)', () => {
     const explorable = GAME_DATA.terrains
       .map((t) => t.id)
       .filter((id) => isExplorable(id, EXPLORE_RULES));
     expect(explorable.sort()).toEqual(
       GAME_DATA.terrains
+        // Water is never land (Wild Isle, #621); the coast's explore kit
+        // comes with W1-11.
+        .filter((t) => !isWater(t) && t.id !== 'coast')
         .map((t) => t.id)
         // Nobody owns a trading post (#269), so nobody explores one. Cleared
         // land (#242) was a homestead, explored already, before it was cleared.

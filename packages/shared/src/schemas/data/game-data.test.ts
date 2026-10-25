@@ -23,6 +23,56 @@ describe('checkGameData', () => {
     expect(checkGameData(withFixtures())).toEqual([]);
   });
 
+  it('keeps Wild Isle water off the land and its buildings off Cozy Patches (#621)', () => {
+    const at = (id: string) => (d: GameData) => d.terrains.find((t) => t.id === id)!;
+    expect(problemsAfter((d) => (at('river')(d).weight = 3)).join('\n')).toMatch(
+      /water terrain is only placed on purpose/,
+    );
+    expect(
+      problemsAfter((d) => {
+        at('ocean')(d).nodeChance = 10;
+        at('ocean')(d).nodeResources = ['timber'];
+      }).join('\n'),
+    ).toMatch(/water terrain/);
+    expect(
+      problemsAfter(
+        (d) => (at('wild-lake')(d).extraNodes = [{ resource: 'water', chance: 100 }]),
+      ).join('\n'),
+    ).toMatch(/water terrain/);
+
+    const building = (id: string) => (d: GameData) => d.buildings.find((b) => b.id === id)!;
+    expect(problemsAfter((d) => delete building('bridge')(d).patchTypes).join('\n')).toMatch(
+      /"bridge" is a Wild Isle building/,
+    );
+    expect(
+      problemsAfter((d) => (building('river-well')(d).patchTypes = ['cozy', 'wild-isle'])).join(
+        '\n',
+      ),
+    ).toMatch(/"river-well" is a Wild Isle building/);
+    expect(
+      problemsAfter((d) => {
+        const well = building('river-well')(d);
+        if (well.kind !== 'works') throw new Error('no River Well');
+        well.makes.resource = 'moonbeams';
+        well.eats = { stardust: 1 };
+      }).join('\n'),
+    ).toMatch(/unknown resource "moonbeams"[\s\S]*unknown resource "stardust"/);
+    expect(
+      problemsAfter((d) => {
+        const bridge = building('bridge')(d);
+        if (bridge.kind !== 'travel') throw new Error('no Bridge');
+        delete bridge.onWater;
+      }).join('\n'),
+    ).toMatch(/only a bridge, stands on water/);
+    expect(
+      problemsAfter((d) => {
+        const dock = building('ferry-dock')(d);
+        if (dock.kind !== 'travel') throw new Error('no Ferry Dock');
+        dock.reach = 2;
+      }).join('\n'),
+    ).toMatch(/only a waystation, has a reach/);
+  });
+
   it('keeps battle potions to crafted things with a real effect (#214)', () => {
     const potions = GAME_DATA.resources.filter((r) => r.battleEffect);
     expect(potions.map((r) => r.id)).toEqual(['brave-brew', 'cozy-cocoa', 'hearty-soup']);

@@ -61,6 +61,13 @@ export function buildingEffects(building: Building, level = 1): BuildingEffect[]
     case 'warehouse':
       // Their effects need the job rules: `economyEffects`.
       return [];
+    case 'works':
+    case 'canal':
+    case 'shelter':
+    case 'vane':
+    case 'travel':
+      // Wild Isle kinds (#621): their rows come with the lanes that build them.
+      return [];
   }
 }
 

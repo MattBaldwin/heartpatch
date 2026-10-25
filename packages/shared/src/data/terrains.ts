@@ -94,4 +94,45 @@ export const TERRAINS: Terrain[] = [
     nodeChance: 100, // TUNE: the richest land
     nodeResources: ['glimmer', 'emberwood', 'stone', 'timber'],
   },
+  // Wild Isle (#621): only its generator places these, never on a Cozy Patch.
+  // The three water kinds are never land (`isWater`): no claim, yield, node,
+  // guardian, spawn or explore, and only a `travel` building stands on one.
+  {
+    id: 'ocean',
+    name: 'Ocean',
+    description: 'Just waves out here. Nothing to claim!',
+    weight: 0,
+    nodeChance: 0,
+    nodeResources: [],
+    water: 'deep',
+  },
+  {
+    id: 'river',
+    name: 'River',
+    description: 'Too deep to wade. A bridge would do it!',
+    weight: 0,
+    nodeChance: 0,
+    nodeResources: [],
+    water: 'river',
+  },
+  {
+    // A Wild Isle lake is water (owner answer Q1, 2026-10-24); Cozy's `lake`
+    // above stays claimable land. Players see "Lake" on both.
+    id: 'wild-lake',
+    name: 'Lake',
+    description: 'Deep and sparkly. A ferry could cross it!',
+    weight: 0,
+    nodeChance: 0,
+    nodeResources: [],
+    water: 'lake',
+  },
+  {
+    // Claimable beach land ringing the island, placed by the generator.
+    id: 'coast',
+    name: 'Coast',
+    description: 'Sand, salt and seabirds. Piers love it here.',
+    weight: 0,
+    nodeChance: 0,
+    nodeResources: [],
+  },
 ];

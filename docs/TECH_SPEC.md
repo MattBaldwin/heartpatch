@@ -400,6 +400,8 @@ Add anything else only with a one-line justification in the PR.
 | `HP_TUTORIAL_REQUIRED` | `false` | defaults to `false` when unset; when `false`, new accounts can create/join maps without finishing the tutorial. Production sets `true` (owner decision 2026-10-04, `infra/compose/.env.prod.example`) |
 | `HP_HOUSE` | `off` | the Keeper's house (#381): `off` hides it from everyone (house routes `NOT_FOUND`, no `HomeResponse.house`), `testers` shows it only to `HP_HOUSE_TESTERS`, `on` to everyone. Logged at boot (mode and tester count) |
 | `HP_HOUSE_TESTERS` | empty | comma-separated usernames (case-insensitive) who see the house while `HP_HOUSE=testers`. Set on the server only, never in the repo |
+| `HP_WILD_ISLE` | `off` | Wild Isle patches (#621): `off` refuses `patchType: 'wild-isle'` on create (`FORBIDDEN`) and leaves `MyMapsResponse.canMakeWildIsle` out, `testers` lets only `HP_WILD_ISLE_TESTERS` make one, `on` everyone. Existing Wild Isles keep playing whatever it says |
+| `HP_WILD_ISLE_TESTERS` | empty | comma-separated usernames (case-insensitive) who can make a Wild Isle while `HP_WILD_ISLE=testers`. Set on the server only, never in the repo |
 | `HP_KEEPER_REQUIRED` | `true` | defaults to `true`; creating or joining a map needs a Keeper (#42), so other players always see who's who. `false` only for testing |
 
 Parsed and validated by `apps/server/src/config.ts` (zod); the server refuses to start on invalid config. Keep `.env.example` current.

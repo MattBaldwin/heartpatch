@@ -4,6 +4,7 @@ import { CARE_ACTIONS } from './care-actions.js';
 import { MAP_GEN } from './map-gen.js';
 import { MOVES, SPECIES } from './species.js';
 import { SEASONS } from './seasons.js';
+import { isWater } from '../schemas/data/terrains.js';
 import { TERRAINS } from './terrains.js';
 import { GUARDIAN_RULES } from './server/guardian-rules.js';
 import { RESCUE_GUARDIANS } from './server/rescue-guardians.js';
@@ -67,7 +68,7 @@ describe('decisions encoded in data (docs/DECISIONS.md)', () => {
     ]);
   });
 
-  it('has the design doc terrain set plus trading posts (#269), cleared land (#242) and the Gap', () => {
+  it('has the design doc terrain set plus trading posts (#269), cleared land (#242), the Gap and Wild Isle (#621)', () => {
     expect(TERRAINS.map((t) => t.id)).toEqual([
       'meadow',
       'forest',
@@ -79,7 +80,13 @@ describe('decisions encoded in data (docs/DECISIONS.md)', () => {
       'trading-post',
       'clearing',
       'junipers-gap',
+      // Wild Isle (#621), appended so Cozy's order never moves.
+      'ocean',
+      'river',
+      'wild-lake',
+      'coast',
     ]);
+    expect(TERRAINS.filter(isWater).map((t) => t.id)).toEqual(['ocean', 'river', 'wild-lake']);
   });
 
   it('guarantees Timber, Stone, Emberwood, a farm plot and the seasonal nodes in every home ring', () => {

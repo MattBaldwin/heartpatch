@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
+import { PatchTypeSchema } from '../patch-types/patch-type.js';
 import { PublicUserSchema, RECOVERY_CODE_ALPHABET } from './auth.js';
 import { HomeNameSchema, PublicBuildingSchema } from './buildings.js';
 import { CommunityViewSchema } from './communities.js';
@@ -84,6 +85,11 @@ export const CreateMapRequestSchema = z.object({
   name: MapNameSchema,
   /** IANA zone for nightfall and daily resets; the client sends the device's. */
   timeZone: TimeZoneSchema,
+  /**
+   * Cozy Patch (left out) or Wild Isle (#621). A Wild Isle is FORBIDDEN while
+   * `HP_WILD_ISLE` is off for the player (`MyMapsResponse.canMakeWildIsle`).
+   */
+  patchType: PatchTypeSchema.optional(),
 });
 export type CreateMapRequest = z.infer<typeof CreateMapRequestSchema>;
 
@@ -167,6 +173,8 @@ export const MapSummarySchema = z.object({
   memberCount: z.number().int(),
   maxPlayers: z.number().int(),
   pvpMode: PvpModeSchema,
+  /** Cozy Patch or Wild Isle (#621). Optional so older servers' lists parse (read as cozy). */
+  patchType: PatchTypeSchema.optional(),
   /** Join requests waiting for an answer (#144): the owner's to see; 0 for everyone else. */
   pendingRequests: z.number().int().nonnegative(),
 });
@@ -185,6 +193,11 @@ export type MyJoinRequest = z.infer<typeof MyJoinRequestSchema>;
 export const MyMapsResponseSchema = z.object({
   maps: z.array(MapSummarySchema),
   requests: z.array(MyJoinRequestSchema),
+  /**
+   * Whether the create form offers a Wild Isle to this player (#621,
+   * `HP_WILD_ISLE`). Left out (older servers, the switch off) hides it.
+   */
+  canMakeWildIsle: z.boolean().optional(),
 });
 export type MyMapsResponse = z.infer<typeof MyMapsResponseSchema>;
 
@@ -201,6 +214,8 @@ export const MapDetailSchema = z.object({
   tradingEnabled: z.boolean().optional(),
   /** Friendly battles are on (#29, the owner's switch). Optional so older servers' details parse. */
   friendlyChallenges: z.boolean().optional(),
+  /** Cozy Patch or Wild Isle (#621). Optional so older servers' details parse (read as cozy). */
+  patchType: PatchTypeSchema.optional(),
   role: MapRoleSchema,
   maxPlayers: z.number().int(),
   members: z.array(MapMemberSchema),
@@ -421,6 +436,8 @@ export const MapViewSchema = z.object({
     timeZone: z.string(),
     pvpMode: PvpModeSchema,
     maxPlayers: z.number().int(),
+    /** Cozy Patch or Wild Isle (#621). Optional so older servers' views parse (read as cozy). */
+    patchType: PatchTypeSchema.optional(),
   }),
   members: z.array(MapMemberSchema),
   /** Every tile, sorted by `q` then `r`. */

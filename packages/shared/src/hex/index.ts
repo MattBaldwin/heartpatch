@@ -131,6 +131,39 @@ export function hexBfs(starts: readonly Hex[], canEnter: (h: Hex) => boolean): M
   return distances;
 }
 
+/**
+ * The hexes on the straight line from `a` to `b`, both included
+ * (`hexDistance(a, b) + 1` hexes, each a neighbour of the one before): a
+ * cube lerp rounded to the nearest hex at each step. Integer-only, so every
+ * JS engine draws the same line (rivers and weather fronts, #621): the
+ * cube coordinates are scaled by `10 × distance` and nudged by `(+1, +1, −2)`
+ * (the usual tiny epsilon, small enough not to change any other rounding) so
+ * no point ever lands exactly between two hexes.
+ */
+export function hexLine(a: Hex, b: Hex): Hex[] {
+  const n = hexDistance(a, b);
+  if (n === 0) return [a];
+  const d = 10 * n;
+  const line: Hex[] = [];
+  for (let i = 0; i <= n; i++) {
+    const x = 10 * (a.q * n + (b.q - a.q) * i) + 1;
+    const y = 10 * (a.r * n + (b.r - a.r) * i) + 1;
+    const z = 10 * (-(a.q + a.r) * n - (b.q + b.r - a.q - a.r) * i) - 2;
+    // Nearest whole number to x / d; the nudge means it's never a tie.
+    let rq = Math.floor((2 * x + d) / (2 * d));
+    let rr = Math.floor((2 * y + d) / (2 * d));
+    const rs = Math.floor((2 * z + d) / (2 * d));
+    const dq = Math.abs(rq * d - x);
+    const dr = Math.abs(rr * d - y);
+    const ds = Math.abs(rs * d - z);
+    // As `hexRound`: fix the coordinate that moved most so q + r + s = 0.
+    if (dq > dr && dq > ds) rq = -rr - rs;
+    else if (dr > ds) rr = -rq - rs;
+    line.push(hex(rq, rr));
+  }
+  return line;
+}
+
 /** A point on the ground plane in world units: `x` is east, `z` is north. */
 export interface WorldPoint {
   readonly x: number;

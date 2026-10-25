@@ -8,6 +8,9 @@ import {
 import { ElementIdSchema, FeelingIdSchema } from './elements.js';
 import { formatDataIssues, type Report } from './issues.js';
 import type { JobRules } from './jobs.js';
+import { WaterKindSchema } from './terrains.js';
+import { WeatherKindSchema } from './weather.js';
+import { PatchTypeSchema, type PatchType } from '../../patch-types/patch-type.js';
 
 /** Each upgrade level's cost; level 1 is the build cost (design doc §13). */
 const levels = <T extends z.ZodRawShape>(shape: T) =>
@@ -53,6 +56,14 @@ const buildingBase = {
    * down per item). Defaults to `HOME_BASE_RULES.removeRefundPercent`.
    */
   refundPercent: z.number().int().min(0).max(100).optional(),
+  /**
+   * The patch types it can be built on (#621); left out, every type. Every
+   * Wild Isle kind lists `['wild-isle']` (`checkGameData`), so Cozy Build
+   * sheets never show one (`isBuildable`).
+   */
+  patchTypes: z.array(PatchTypeSchema).min(1).optional(),
+  /** A storm never knocks it and its own pace ignores the weather (Wild Isle, #621; the Greenhouse, owner answer Q4). */
+  weatherproof: z.literal(true).optional(),
 };
 
 /**
@@ -156,6 +167,107 @@ export const WarehouseBuildingSchema = z.strictObject({
   levels: levels({ upkeep }),
 });
 
+/** Water a Wild Isle building can need next door: a water terrain's kind, or a Canal. */
+export const NeedsWaterSchema = z.enum([...WaterKindSchema.options, 'canal']);
+
+/**
+ * A Wild Isle works building (#621): a homestead building that makes
+ * `makes.quantity` of `makes.resource` every `makes.seconds` (at 100 %
+ * pace), eating `eats` from its owner's bag each cycle. `needsWater`: it
+ * only stands next to one of these. `weather`: its pace under a front of
+ * that kind (left out: 100 %). `onlyWhile`: it only works under a front of
+ * that kind (the Rain Barrel). Levels work as a resource building's.
+ */
+export const WorksBuildingSchema = z.strictObject({
+  ...buildingBase,
+  kind: z.literal('works'),
+  makes: z.strictObject({
+    resource: ContentIdSchema,
+    quantity: z.number().int().min(1).max(100),
+    seconds: z
+      .number()
+      .int()
+      .min(60)
+      .max(24 * 3600),
+  }),
+  eats: ResourceCostSchema.optional(),
+  needsWater: z.array(NeedsWaterSchema).min(1).optional(),
+  weather: z.partialRecord(WeatherKindSchema, z.number().int().min(0).max(1000)).optional(),
+  onlyWhile: WeatherKindSchema.exclude(['clear']).optional(),
+  levels: levels({
+    pacePercent: z.number().int().min(100).max(1000),
+    storageHours: z.number().int().min(1).max(240),
+    upkeep,
+  }),
+});
+
+/**
+ * A Wild Isle Canal (#621): makes nothing, but counts as water for an
+ * Irrigated Field next to it while it touches water or another canal, up to
+ * `maxRun` canals from the water (shared `canalReach`).
+ */
+export const CanalBuildingSchema = z.strictObject({
+  ...buildingBase,
+  kind: z.literal('canal'),
+  maxRun: z.number().int().min(1).max(12),
+  levels: levels({}),
+});
+
+/**
+ * A Wild Isle shelter (#621): the Levee by a river, the Seawall on the
+ * coast. Buildings within `protects.radius` tiles are never knocked by what
+ * it shelters `from` (a storm, or the flood bonus next to water).
+ */
+export const ShelterBuildingSchema = z.strictObject({
+  ...buildingBase,
+  kind: z.literal('shelter'),
+  protects: z.strictObject({
+    radius: z.number().int().min(0).max(3),
+    from: z.array(z.enum(['storm', 'flood'])).min(1),
+  }),
+  needsWater: z.array(NeedsWaterSchema).min(1).optional(),
+  levels: levels({}),
+});
+
+/** The Weather Vane (Wild Isle, #621): its owner sees tomorrow's fronts in full. */
+export const VaneBuildingSchema = z.strictObject({
+  ...buildingBase,
+  kind: z.literal('vane'),
+  levels: levels({}),
+});
+
+/**
+ * A Wild Isle travel building (#621). `role`:
+ * - `bridge`: stands on a water tile of kind `onWater` (a river) and joins
+ *   the land either side; every patch-mate may cross it
+ *   (`TRAVEL_RULES.bridgesShared`).
+ * - `waystation`: on a homestead; a supply anchor whose land within `reach`
+ *   tiles counts as reached.
+ * - `ferry-dock`: on a homestead next to a Wild Isle lake (`needsWater`);
+ *   reaches the far shore within `TRAVEL_RULES.ferry.range` water steps.
+ */
+export const TravelBuildingSchema = z
+  .strictObject({
+    ...buildingBase,
+    kind: z.literal('travel'),
+    role: z.enum(['bridge', 'waystation', 'ferry-dock']),
+    /** The water it stands on (a bridge), instead of its owner's land. */
+    onWater: WaterKindSchema.optional(),
+    /** Water it needs next door (a ferry dock). */
+    needsWater: z.array(NeedsWaterSchema).min(1).optional(),
+    /** Tiles around it that count as reached (a waystation). */
+    reach: z.number().int().min(1).max(6).optional(),
+    levels: levels({}),
+  })
+  .refine((b) => (b.role === 'bridge') === (b.onWater !== undefined), {
+    message: 'a bridge, and only a bridge, stands on water (onWater)',
+    path: ['onWater'],
+  })
+  .refine((b) => (b.role === 'waystation') === (b.reach !== undefined), {
+    message: 'a waystation, and only a waystation, has a reach',
+    path: ['reach'],
+  });
+
 export const BuildingSchema = z.discriminatedUnion('kind', [
   HearthfireBuildingSchema,
   HabitatBuildingSchema,
@@ -164,6 +276,11 @@ export const BuildingSchema = z.discriminatedUnion('kind', [
   FactoryBuildingSchema,
   ResourceBuildingSchema,
   WarehouseBuildingSchema,
+  WorksBuildingSchema,
+  CanalBuildingSchema,
+  ShelterBuildingSchema,
+  VaneBuildingSchema,
+  TravelBuildingSchema,
 ]);
 export type Building = z.infer<typeof BuildingSchema>;
 export type BuildingKind = Building['kind'];
@@ -180,6 +297,22 @@ export type FenceBuilding = z.infer<typeof FenceBuildingSchema>;
 export type ResourceBuilding = z.infer<typeof ResourceBuildingSchema>;
 export type ResourceBuildingLevel = ResourceBuilding['levels'][number];
 export type WarehouseBuilding = z.infer<typeof WarehouseBuildingSchema>;
+export type WorksBuilding = z.infer<typeof WorksBuildingSchema>;
+export type CanalBuilding = z.infer<typeof CanalBuildingSchema>;
+export type ShelterBuilding = z.infer<typeof ShelterBuildingSchema>;
+export type VaneBuilding = z.infer<typeof VaneBuildingSchema>;
+export type TravelBuilding = z.infer<typeof TravelBuildingSchema>;
+
+/** The Wild Isle building kinds (#621): each lists `patchTypes: ['wild-isle']` (`checkGameData`). */
+export const WILD_ISLE_BUILDING_KINDS = ['works', 'canal', 'shelter', 'vane', 'travel'] as const;
+
+/** Can this building be built on a patch of this type? (Its `patchTypes`, if it lists any.) */
+export function buildsOnPatchType(
+  building: Pick<Building, 'patchTypes'>,
+  patchType: PatchType,
+): boolean {
+  return building.patchTypes === undefined || building.patchTypes.includes(patchType);
+}
 
 /** The buildings that pay Heart Coin upkeep each morning (#601). */
 export type UpkeepBuilding = ResourceBuilding | WarehouseBuilding;

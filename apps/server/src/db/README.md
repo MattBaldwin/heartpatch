@@ -175,6 +175,7 @@ Family signup codes (migration 0026, #195).
 | `max_players` | smallint, default 6 | Seats; the map is generated with this many home slots. Checked 1–6 (#318; older patches keep 4) |
 | `pvp_mode` | enum `pvp_mode`, default `gentle` | `on` \| `gentle` \| `off` (design doc §11, decision B); the owner changes it |
 | `seed` | text, null | Map generator seed (`crypto.randomBytes`). **Server-only**: never in a response schema (tech spec §8). Null for hand-authored maps |
+| `patch_type` | enum `patch_type`, default `cozy` | `cozy` \| `wild-isle` (#621, migration 0059): chosen at creation, never changed; every older patch is `cozy`. Rules that differ read shared `patchRules` |
 | `created_at` | timestamptz | |
 
 ### `map_members`
@@ -206,6 +207,7 @@ The players-per-map limit (up to 6; older patches keep 4, #318) is a game rule, 
 | `guardian_strength` | smallint, null | Wild guardian strength on neutral tiles. Server-only (not in `PublicTileSchema`) |
 | `home_slot` | smallint, null | Set on a home base's 7 tiles: whose slot it is. Home tiles are never captured |
 | `community_id` | uuid → communities, null | The Hollowed Community this is a village tile of (#306); `on delete set null`. Indexed |
+| `isle` | smallint, null | Which offshore isle this tile is part of (Wild Isle #621, migration 0059), numbered from 1 by the generator; null on the main island and on every cozy tile |
 
 Tiles are written once, from `generateMap`, when the map is created.
 
