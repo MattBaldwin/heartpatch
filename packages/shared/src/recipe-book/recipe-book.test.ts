@@ -118,6 +118,20 @@ describe('unlocking pages', () => {
     expect(sealedHint('recipe:heart-charm')).toBeNull();
   });
 
+  it('seals the Pies page until Flour, Fish and Salt from Wild Isle works are in (#621 W1-8b)', () => {
+    expect(page('recipe:bake-pies')).toMatchObject({
+      ingredients: { flour: 2, fish: 1, salt: 1 },
+      seconds: 120,
+      output: { kind: 'item', resource: 'pies', quantity: 3 },
+    });
+    expect(unlocked(['flour', 'fish']).has('recipe:bake-pies')).toBe(false);
+    expect(unlocked(['flour', 'fish', 'salt']).has('recipe:bake-pies')).toBe(true);
+    expect(sealedHint('recipe:bake-pies')).toContain('Wild Isle works');
+    // Every ingredient says where to find it: a Wild Isle work makes each one.
+    for (const id of ['flour', 'fish', 'salt']) expect(whereToFind(id).madeAt, id).not.toEqual([]);
+    expect(whereToFind('pies')).toMatchObject({ madeBy: ['bake-pies'], madeAt: [] });
+  });
+
   it('opens a page the first time its last missing ingredient is collected', () => {
     expect(unlocked(['emberwood']).has('recipe:pumpkin-treats')).toBe(false);
     expect(unlocked(['emberwood', 'pumpkins']).has('recipe:pumpkin-treats')).toBe(true);

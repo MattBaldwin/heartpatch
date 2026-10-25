@@ -58,6 +58,7 @@ export const careRoutes =
           request.params.mapId,
           request.params.squishyId,
           request.body.action,
+          request.body.itemId,
         ),
     );
 
