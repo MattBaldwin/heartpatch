@@ -34,7 +34,7 @@ def cropframe(i,dev,q=84):
     x0=max(0,xs.min()-m); x1=min(col.width,xs.max()+m)
     y0=max(0,ys.min()-m); y1=min(col.height,ys.max()+m)
     # keep a floor strip under the squishy so its shadow shows
-    y1=min(col.height,y1+m//2)
+    y1=min(col.height,y1+m)
     w=x1-x0; h=y1-y0
     minw=int(col.width*0.45)
     if w<minw: c=(x0+x1)//2; x0=max(0,min(col.width-minw,c-minw//2)); x1=x0+minw; w=minw
