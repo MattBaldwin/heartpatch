@@ -102,9 +102,8 @@ describe('explore rules data', () => {
       .filter((id) => isExplorable(id, EXPLORE_RULES));
     expect(explorable.sort()).toEqual(
       GAME_DATA.terrains
-        // Water is never land (Wild Isle, #621); the coast's explore kit
-        // comes with W1-11.
-        .filter((t) => !isWater(t) && t.id !== 'coast')
+        // Water is never land (Wild Isle, #621).
+        .filter((t) => !isWater(t))
         .map((t) => t.id)
         // Nobody owns a trading post (#269), so nobody explores one. Cleared
         // land (#242) was a homestead, explored already, before it was cleared.
@@ -125,6 +124,7 @@ describe('explore rules data', () => {
       lake: ['net'],
       hills: ['lantern'], // #335: the cave
       mountains: ['rope'], // #335: the trail
+      coast: ['shovel', 'net'], // #621 W1-11: hands, the Shovel and the Snorkel
     });
     expect(exploreNeeds('junipers-gap', EXPLORE_RULES)).toEqual([]);
   });
@@ -152,6 +152,25 @@ describe('explore rules data', () => {
       SearchSpotKindSchema.safeParse({ id: 'x', name: 'X', tool: null, interaction: 'swim' })
         .success,
     ).toBe(false);
+  });
+
+  it('gives the coast hands, the Shovel and the Snorkel, with the lake’s gestures (#621 W1-11)', () => {
+    const coast = EXPLORE_RULES.terrains.find((t) => t.terrain === 'coast');
+    expect(coast?.layout).toBeUndefined();
+    const kinds = (coast?.kinds ?? []).map((k) =>
+      EXPLORE_RULES.spotKinds.find((s) => s.id === k.kind),
+    );
+    expect(kinds.map((k) => [k?.id, k?.tool, k?.interaction])).toEqual([
+      ['shells', null, 'lift'],
+      ['driftwood', null, 'lift'],
+      ['crab-hole', 'shovel', 'dig'],
+      ['tide-pool', 'net', 'dive'],
+      ['kelp-bed', 'net', 'part'],
+    ]);
+    // Every tile of it has all three: hands, the Shovel and the Snorkel.
+    const tools = new Set(kinds.map((k) => k?.tool ?? null));
+    expect(tools).toEqual(new Set([null, 'shovel', 'net']));
+    expect(exploreNeeds('coast', EXPLORE_RULES)).toEqual(['shovel', 'net']);
   });
 
   it('keeps avoided words out of every name', () => {

@@ -82,6 +82,8 @@ const HAND_ICONS: Readonly<Record<string, string>> = {
   'pumpkin-row': '🎃',
   'hollow-log': 'log',
   rock: 'rock',
+  shells: '🐚',
+  driftwood: 'log',
   cairn: 'rock',
   'glow-mushrooms': '🍄',
 };
@@ -91,6 +93,13 @@ const HAND_VERBS: Readonly<Partial<Record<SpotInteraction, string>>> = {
   shake: 'Shake',
   stack: 'Stack',
   pick: 'Boop',
+};
+
+/** Spots whose gesture says its own thing (#621: the kelp bed parts kelp, not reeds). */
+export const KIND_PLAY_TEXT: Readonly<
+  Record<string, { icon: string; hint: string; easy: string; note?: string }>
+> = {
+  'kelp-bed': { icon: 'snorkel', hint: 'Swipe the kelp apart!', easy: 'tap to part it' },
 };
 
 /** What each tool gesture says and shows (boards b, d, e, f, g; style guide §6). */

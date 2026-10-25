@@ -29,6 +29,14 @@ export const EXPLORE_RULES: ExploreRules = {
     { id: 'snow-drift', name: 'Snow drift', tool: 'rope', interaction: 'poke' },
     { id: 'cairn', name: 'Cairn', tool: null, interaction: 'stack' },
     { id: 'glow-mushrooms', name: 'Glow mushrooms', tool: null, interaction: 'pick' },
+    // Wild Isle (#621 W1-11): the coast. Shells and driftwood by hand, crab
+    // holes with the Shovel, tide pools and kelp beds with the Snorkel. The
+    // gestures are the lake's and the meadow's own, so no new interaction.
+    { id: 'shells', name: 'Shell pile', tool: null, interaction: 'lift' },
+    { id: 'driftwood', name: 'Driftwood', tool: null, interaction: 'lift' },
+    { id: 'crab-hole', name: 'Crab hole', tool: 'shovel', interaction: 'dig' },
+    { id: 'tide-pool', name: 'Tide pool', tool: 'net', interaction: 'dive' },
+    { id: 'kelp-bed', name: 'Kelp bed', tool: 'net', interaction: 'part' },
   ],
   // TUNE: owner decision 2026-10-06 ("a Shovel lasts 20 digs"); the rest are guesses.
   tools: [
@@ -42,7 +50,8 @@ export const EXPLORE_RULES: ExploreRules = {
   ],
   // Tools per terrain (owner decisions 2026-10-07): meadows, forests and
   // pumpkin fields want hands and a Shovel; lakes a Snorkel; hills and mountains
-  // a Walking Stick and a Lantern (#335: the Net and Rope, renamed). Juniper's Gap can't be explored in Phase 1.
+  // a Walking Stick and a Lantern (#335: the Net and Rope, renamed); the coast (#621)
+  // hands, a Shovel and a Snorkel. Juniper's Gap can't be explored in Phase 1.
   // TUNE: the kits' weights and spot counts.
   terrains: [
     {
@@ -112,6 +121,19 @@ export const EXPLORE_RULES: ExploreRules = {
         { kind: 'ledge', weight: 4 },
         { kind: 'snow-drift', weight: 1 },
         { kind: 'cairn', weight: 2 },
+      ],
+      spots: { min: 8, max: 12 },
+    },
+    {
+      // Wild Isle (#621 W1-11): the beach ringing the island. A new terrain,
+      // so no saved progress to keep: it starts on the rules' layout.
+      terrain: 'coast',
+      kinds: [
+        { kind: 'shells', weight: 3 },
+        { kind: 'driftwood', weight: 2 },
+        { kind: 'crab-hole', weight: 4 },
+        { kind: 'tide-pool', weight: 3 },
+        { kind: 'kelp-bed', weight: 2 },
       ],
       spots: { min: 8, max: 12 },
     },

@@ -1,0 +1,442 @@
+import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import type { Scene } from '@babylonjs/core/scene';
+import { SEA, shoreRadius } from './coast-config.js';
+import { kitMesh, merged, type Part } from './kit-mesh.js';
+import { cylinder, flat, shaded, sphere } from './land-kit.js';
+import type { ExtrasContext, Growth } from './land-layout.js';
+import type { SpotShape } from './trail-kit.js';
+import type { LandOptions } from './explore-land.js';
+
+// The coast's shapes (#621 W1-11), on the meadow's kit: the same vinyl-toy
+// primitives, vertex-coloured from a darker foot to a sunlit top (art bible
+// §4), one merged mesh each. The sea and its foam are layers placed once; the
+// palms, rocks and shells dress the sand; the five search spots are drawn at
+// world size. Placement is pure and seeded, like the trail's and the cave's.
+
+type Layers = NonNullable<LandOptions['extras']>;
+
+/** A small deterministic spread (golden-angle ring), so the foam is the same on every device. */
+const spread = (i: number): number => (i * 0.61803398875) % 1;
+
+/** The open sea and its pale shallows, flat discs under the sand's edge. */
+export function buildSea(scene: Scene): Mesh {
+  return kitMesh(scene, 'coast-sea', () => {
+    const rs = shoreRadius();
+    return merged([
+      flat(cylinder(0.02, SEA.radius * 2, SEA.radius * 2, 40, [0, SEA.level - 0.02, 0]), SEA.deep),
+      flat(
+        cylinder(0.02, (rs + SEA.shallowReach) * 2, (rs + SEA.shallowReach) * 2, 40, [
+          0,
+          SEA.level - 0.005,
+          0,
+        ]),
+        SEA.shallows,
+      ),
+    ]);
+  });
+}
+
+/** The surf line: a lapping band of soft foam blobs round the shoreline (hidden where the sand is higher). */
+export function buildFoam(scene: Scene): Mesh {
+  return kitMesh(scene, 'coast-foam', () => {
+    const rs = shoreRadius();
+    const parts: Part[] = [];
+    const n = 90;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + spread(i) * 0.05;
+      const r = rs + SEA.foamBand.from + spread(i * 7 + 3) * (SEA.foamBand.to - SEA.foamBand.from);
+      const d = 0.22 + spread(i * 5 + 1) * 0.36;
+      parts.push(
+        flat(
+          sphere(d, 6, [Math.cos(a) * r, SEA.level + 0.02, Math.sin(a) * r], [1.5, 0.16, 1]),
+          SEA.foam,
+        ),
+      );
+    }
+    return merged(parts);
+  });
+}
+
+/** A palm: a leaning trunk in segments and a crown of drooping fronds. */
+export function buildPalm(scene: Scene): Mesh {
+  return kitMesh(scene, 'coast-palms', () => {
+    const parts: Part[] = [];
+    const segments = 5;
+    let x = 0;
+    for (let i = 0; i < segments; i++) {
+      const y = 0.26 + i * 0.5;
+      x += 0.07;
+      parts.push(
+        shaded(
+          cylinder(0.56, 0.2 - i * 0.015, 0.25 - i * 0.015, 7, [x, y, 0], [0, 0, -0.14]),
+          '#8a6a4a',
+          '#c19a6b',
+          y - 0.28,
+          y + 0.28,
+        ),
+      );
+    }
+    const top: [number, number, number] = [x + 0.04, segments * 0.5 + 0.1, 0];
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2;
+      // Turned about its own middle before it is painted, so it points out from the crown.
+      const frond = sphere(
+        1.25,
+        5,
+        [top[0] + Math.cos(a) * 0.5, top[1] - 0.12, Math.sin(a) * 0.5],
+        [1, 0.14, 0.34],
+      );
+      frond.rotation.y = -a;
+      parts.push(shaded(frond, '#4f9a58', '#8fd47a', top[1] - 0.3, top[1] + 0.1));
+    }
+    parts.push(flat(sphere(0.2, 4, [top[0] - 0.08, top[1] - 0.1, 0.08]), '#6b4a2b'));
+    parts.push(flat(sphere(0.2, 4, [top[0] + 0.1, top[1] - 0.14, -0.06]), '#6b4a2b'));
+    return merged(parts);
+  });
+}
+
+/** Sea rocks: smooth pale stone with a wet, dark foot and a few pinky barnacle specks. */
+export function buildSeaRocks(scene: Scene): Mesh {
+  return kitMesh(scene, 'coast-rocks', () =>
+    merged([
+      shaded(sphere(1.0, 6, [0, 0.22, 0], [1.2, 0.62, 1]), '#6f6a6c', '#cfc6bd', 0, 0.6),
+      shaded(sphere(0.6, 5, [0.55, 0.14, 0.25], [1.1, 0.7, 1]), '#6c6769', '#c7beb5', 0, 0.35),
+      shaded(sphere(0.4, 4, [-0.5, 0.1, -0.2], [1, 0.7, 1.1]), '#75706f', '#d3cabf', 0, 0.25),
+      flat(sphere(0.1, 3, [0.12, 0.5, 0.18], [1, 0.5, 1]), '#f4d7d0'),
+      flat(sphere(0.08, 3, [-0.18, 0.46, -0.1], [1, 0.5, 1]), '#f4d7d0'),
+    ]),
+  );
+}
+
+/** A log washed up and left to bleach, with a knot and a stub of branch. */
+export function buildDriftLog(scene: Scene): Mesh {
+  return kitMesh(scene, 'coast-driftlogs', driftLog);
+}
+
+function driftLog(): Part {
+  return merged([
+    shaded(
+      cylinder(1.6, 0.3, 0.34, 8, [0, 0.17, 0], [0, 0, Math.PI / 2]),
+      '#a8957a',
+      '#e2d3b9',
+      0,
+      0.34,
+    ),
+    flat(cylinder(0.02, 0.24, 0.24, 8, [0.81, 0.17, 0], [0, 0, Math.PI / 2]), '#efe2c8'),
+    shaded(
+      cylinder(0.4, 0.07, 0.12, 5, [-0.2, 0.42, 0.05], [0.5, 0, 0.2]),
+      '#a8957a',
+      '#d9c9ad',
+      0.3,
+      0.6,
+    ),
+  ]);
+}
+
+/** A tiny shell: a cream or pink flattened bead, scattered over the sand. */
+export function buildShellBits(scene: Scene): Mesh {
+  return kitMesh(scene, 'coast-shell-bits', () =>
+    merged([
+      shaded(sphere(0.16, 4, [0, 0.03, 0], [1.1, 0.4, 1]), '#f2b6c4', '#ffe3e8', 0, 0.08),
+      shaded(sphere(0.12, 4, [0.18, 0.025, 0.08], [1.2, 0.4, 1]), '#f3d9b8', '#fff4e2', 0, 0.06),
+      shaded(sphere(0.1, 3, [-0.12, 0.02, 0.12], [1.1, 0.4, 1]), '#d9e7ef', '#f7fcff', 0, 0.05),
+    ]),
+  );
+}
+
+/** `count` places in a ring `from`…`to` tile-sizes out within a bearing range. */
+function ring(
+  ctx: ExtrasContext,
+  count: number,
+  from: number,
+  to: number,
+  scale: [number, number],
+  bearing: [number, number],
+): Growth[] {
+  const out: Growth[] = [];
+  const between = (lo: number, hi: number) => lo + ctx.rand() * (hi - lo);
+  for (let tries = 0; out.length < count && tries < count * 40; tries++) {
+    const angle = (between(bearing[0], bearing[1]) * Math.PI) / 180;
+    const d = between(ctx.size * from, ctx.size * to);
+    const x = Math.cos(angle) * d;
+    const z = Math.sin(angle) * d;
+    // The camera looks towards +z: nothing tall stands between it and the tile.
+    if (z < -ctx.size * 0.5 && Math.abs(x) < ctx.size * 1.5) continue;
+    out.push({ x, z, yaw: ctx.rand() * Math.PI * 2, scale: between(scale[0], scale[1]) });
+  }
+  return out;
+}
+
+/** Whether a place is clear of every spot's collider by `gap` more. */
+const clear = (ctx: ExtrasContext, g: Growth, gap: number): boolean =>
+  !ctx.colliders.some((k) => (g.x - k.x) ** 2 + (g.z - k.z) ** 2 < (k.r + gap) ** 2);
+
+function coastPlace(ctx: ExtrasContext): Readonly<Record<string, readonly Growth[]>> {
+  // Palms on the sand's rim to the sides, not across the back where the sea shows.
+  const palms = [
+    ...ring(ctx, 2, 0.98, 1.04, [0.9, 1.15], [-10, 30]),
+    ...ring(ctx, 2, 0.98, 1.04, [0.9, 1.15], [150, 190]),
+    ...ring(ctx, 1, 0.98, 1.04, [0.8, 1.0], [60, 120]),
+  ];
+  for (const p of palms) ctx.shade(p.x, p.z, 0.9 * p.scale, 3 * p.scale);
+  // Sea rocks standing in the surf, a few on the sand's rim.
+  const rocks = [
+    ...ring(ctx, 5, 1.05, 1.22, [0.7, 1.3], [0, 180]),
+    ...ring(ctx, 3, 0.96, 1.02, [0.5, 0.8], [0, 180]),
+  ];
+  for (const r of rocks) ctx.shade(r.x, r.z, 0.9 * r.scale, 0.6 * r.scale);
+  // Driftwood on the sand round the rim, off the spots.
+  const logs = ring(ctx, 4, 0.8, 0.98, [0.8, 1.2], [0, 360]).filter((g) => clear(ctx, g, 0.9));
+  for (const l of logs) ctx.shade(l.x, l.z, 0.7 * l.scale, 0.3 * l.scale);
+  // Shells scattered on the sand inside the tile, never on a spot.
+  const shells = ring(ctx, 36, 0.1, 0.9, [0.8, 1.3], [0, 360]).filter((g) => clear(ctx, g, 0.35));
+  // The sea and its foam: one place each, at the middle (they are built round it).
+  const middle = [{ x: 0, z: 0, yaw: 0, scale: 1 }];
+  return {
+    sea: middle,
+    foam: middle,
+    palms,
+    'sea-rocks': rocks,
+    'drift-logs': logs,
+    'shell-bits': shells,
+  };
+}
+
+/** The coast's own layers, in the shape `ExploreLand` takes. */
+export const COAST_EXTRAS: Layers = {
+  place: coastPlace,
+  layers: {
+    sea: { build: buildSea },
+    foam: { build: buildFoam },
+    palms: { build: buildPalm, sway: 0.02 }, // TUNE: a gentle sea breeze
+    'sea-rocks': { build: buildSeaRocks },
+    'drift-logs': { build: buildDriftLog },
+    'shell-bits': { build: buildShellBits },
+  },
+};
+
+// ── The five search spots, world size, foot at the origin ─────────────
+
+/** A shell pile: a ridged scallop, a spiral conch and a sand dollar. */
+function buildShells(scene: Scene): SpotShape {
+  const mesh = kitMesh(scene, 'coast-spot-shells', () => {
+    const parts: Part[] = [
+      shaded(sphere(0.9, 7, [0, 0.0, 0], [1.1, 0.22, 1]), '#e3cf9f', '#f4e6bf', -0.05, 0.12),
+      // The scallop: a flattened fan with ridges.
+      shaded(
+        sphere(0.62, 6, [-0.1, 0.17, 0.05], [1.1, 0.34, 0.9]),
+        '#f0a3b6',
+        '#ffd9e1',
+        0.08,
+        0.3,
+      ),
+    ];
+    for (let i = -2; i <= 2; i++) {
+      parts.push(
+        flat(
+          cylinder(
+            0.5,
+            0.02,
+            0.05,
+            4,
+            [-0.1 + i * 0.1, 0.27, 0.05 - Math.abs(i) * 0.02],
+            [0.9, 0, -i * 0.22],
+          ),
+          '#f7bfcc',
+        ),
+      );
+    }
+    // The conch: a rounded cone with a pink lip.
+    parts.push(
+      shaded(
+        cylinder(0.5, 0.08, 0.36, 7, [0.38, 0.22, -0.12], [0.4, 0.5, 0.9]),
+        '#e4a77a',
+        '#fbe0c2',
+        0.0,
+        0.5,
+      ),
+    );
+    parts.push(flat(sphere(0.2, 4, [0.52, 0.13, -0.05], [1.2, 0.7, 1]), '#f59fb0'));
+    // A sand dollar.
+    parts.push(
+      shaded(sphere(0.36, 6, [0.05, 0.05, -0.38], [1, 0.22, 1]), '#e9ddc4', '#fbf4e4', 0.0, 0.1),
+    );
+    return merged(parts);
+  });
+  return { mesh, glint: 0.7 };
+}
+
+/** Driftwood: two bleached logs crossed, with a knotted branch and a bit of rope. */
+function buildDriftwood(scene: Scene): SpotShape {
+  const mesh = kitMesh(scene, 'coast-spot-driftwood', () =>
+    merged([
+      shaded(
+        cylinder(1.5, 0.34, 0.4, 8, [0, 0.2, 0], [0, 0.35, Math.PI / 2]),
+        '#a8957a',
+        '#e5d6bb',
+        0,
+        0.4,
+      ),
+      shaded(
+        cylinder(1.1, 0.26, 0.3, 8, [0.1, 0.46, 0.05], [0, -0.6, Math.PI / 2]),
+        '#b6a387',
+        '#eadcc2',
+        0.3,
+        0.6,
+      ),
+      flat(cylinder(0.02, 0.3, 0.3, 8, [0.64, 0.2, 0.22], [0, 0.35, Math.PI / 2]), '#f1e5cd'),
+      shaded(
+        cylinder(0.5, 0.07, 0.14, 5, [-0.3, 0.52, -0.12], [0.6, 0, 0.3]),
+        '#a8957a',
+        '#dccdb1',
+        0.35,
+        0.8,
+      ),
+      // A loop of rope round the top log.
+      flat(cylinder(0.05, 0.4, 0.4, 8, [0.1, 0.47, 0.05], [0, -0.6, Math.PI / 2]), '#c8a46a'),
+    ]),
+  );
+  return { mesh, glint: 0.85 };
+}
+
+/** A crab hole: a dug-out mound with a dark hole, and a little crab peeking out. */
+function buildCrabHole(scene: Scene): SpotShape {
+  const mesh = kitMesh(scene, 'coast-spot-crab-hole', () => {
+    const parts: Part[] = [
+      shaded(sphere(1.0, 7, [0, 0.0, 0], [1.1, 0.34, 1]), '#d8bd86', '#f0dca8', -0.05, 0.2),
+      flat(sphere(0.34, 5, [0, 0.14, 0], [1.1, 0.3, 1]), '#5a4630'),
+    ];
+    // Sand pushed out of the hole in little clumps.
+    for (const [x, z, d] of [
+      [0.34, 0.2, 0.16],
+      [-0.32, 0.18, 0.14],
+      [0.06, -0.36, 0.15],
+      [-0.18, 0.36, 0.12],
+    ] as const) {
+      parts.push(
+        shaded(sphere(d, 4, [x, 0.12, z], [1.1, 0.6, 1]), '#d2b67e', '#f2e0b0', 0.05, 0.2),
+      );
+    }
+    // The crab, beside the hole: a round red body, two eye stalks and two claws.
+    parts.push(
+      shaded(sphere(0.26, 5, [0.46, 0.2, -0.1], [1.3, 0.7, 1]), '#e8543f', '#ff8a6b', 0.1, 0.34),
+    );
+    for (const side of [-1, 1] as const) {
+      parts.push(
+        flat(cylinder(0.12, 0.025, 0.025, 4, [0.55, 0.38, -0.1 + side * 0.06]), '#e8543f'),
+      );
+      parts.push(flat(sphere(0.07, 3, [0.55, 0.45, -0.1 + side * 0.06]), '#ffffff'));
+      parts.push(flat(sphere(0.035, 3, [0.58, 0.45, -0.1 + side * 0.06]), '#2a2030'));
+      parts.push(
+        shaded(
+          sphere(0.16, 4, [0.46, 0.22, -0.1 + side * 0.24], [1, 0.8, 0.9]),
+          '#e8543f',
+          '#ff8a6b',
+          0.1,
+          0.3,
+        ),
+      );
+    }
+    return merged(parts);
+  });
+  return { mesh, glint: 0.65 };
+}
+
+/** A tide pool: a ring of dark, wet rocks round clear turquoise water, with a starfish. */
+function buildTidePool(scene: Scene): SpotShape {
+  const mesh = kitMesh(scene, 'coast-spot-tide-pool', () => {
+    const parts: Part[] = [
+      shaded(sphere(1.5, 8, [0, -0.03, 0], [1, 0.1, 1]), '#d8bd86', '#ecd9a6', -0.05, 0.05),
+      flat(cylinder(0.04, 0.95, 0.95, 14, [0, 0.07, 0]), '#5fd0d8'),
+      flat(cylinder(0.03, 0.6, 0.6, 12, [0.05, 0.095, 0]), '#8fe8e6'),
+    ];
+    const rocks = 9;
+    for (let i = 0; i < rocks; i++) {
+      const a = (i / rocks) * Math.PI * 2;
+      const d = 0.26 + spread(i * 3 + 2) * 0.16;
+      parts.push(
+        shaded(
+          sphere(d, 5, [Math.cos(a) * 0.52, d * 0.22, Math.sin(a) * 0.52], [1.2, 0.7, 1]),
+          '#575257',
+          '#a8a0a2',
+          0,
+          d * 0.5,
+        ),
+      );
+    }
+    // A pink starfish on the pool's floor, and a bubble or two.
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      const arm = sphere(
+        0.3,
+        4,
+        [0.1 + Math.cos(a) * 0.14, 0.115, -0.1 + Math.sin(a) * 0.14],
+        [1.2, 0.18, 0.4],
+      );
+      arm.rotation.y = -a;
+      parts.push(flat(arm, '#ff8fa8'));
+    }
+    parts.push(flat(sphere(0.18, 4, [0.1, 0.13, -0.1], [1, 0.4, 1]), '#ff7a96'));
+    parts.push(flat(sphere(0.1, 4, [-0.3, 0.2, 0.2]), '#e6fbff'));
+    parts.push(flat(sphere(0.07, 4, [-0.22, 0.34, 0.24]), '#e6fbff'));
+    return merged(parts);
+  });
+  return { mesh, glint: 0.75 };
+}
+
+/** A kelp bed: tall, ribboned fronds with little float bulbs, rooted on a wet rock. */
+function buildKelpBed(scene: Scene): SpotShape {
+  const mesh = kitMesh(scene, 'coast-spot-kelp-bed', () => {
+    const parts: Part[] = [
+      shaded(sphere(0.9, 6, [0, 0.0, 0], [1.1, 0.3, 1]), '#b9a679', '#e0cf9e', -0.05, 0.12),
+      shaded(sphere(0.5, 5, [0.1, 0.12, 0], [1.1, 0.7, 1]), '#565154', '#9a9294', 0, 0.3),
+    ];
+    const fronds = 9;
+    for (let i = 0; i < fronds; i++) {
+      const a = (i / fronds) * Math.PI * 2 + 0.3;
+      const h = 1.1 + (i % 3) * 0.28;
+      const lean = 0.12 + (i % 2) * 0.12;
+      const x = Math.cos(a) * (0.12 + lean * h * 0.5);
+      const z = Math.sin(a) * (0.12 + lean * h * 0.5);
+      parts.push(
+        shaded(
+          cylinder(
+            h,
+            0.03,
+            0.1,
+            5,
+            [x, h / 2 + 0.05, z],
+            [Math.sin(a) * lean, 0, -Math.cos(a) * lean],
+          ),
+          '#4e7a3c',
+          i % 2 ? '#a7c46a' : '#8fb85c',
+          0,
+          h,
+        ),
+      );
+      if (i % 3 === 0) {
+        parts.push(
+          flat(
+            sphere(0.12, 4, [
+              Math.cos(a) * (0.12 + lean * h),
+              h * 0.8,
+              Math.sin(a) * (0.12 + lean * h),
+            ]),
+            '#c7a43e',
+          ),
+        );
+      }
+    }
+    return merged(parts);
+  });
+  return { mesh, glint: 1.5 };
+}
+
+/** The coast's search spots, drawn in the kit's style (`biome-dressing.ts` adds them to the biome spots). */
+export const COAST_SPOTS: Readonly<Record<string, (scene: Scene) => SpotShape>> = {
+  shells: buildShells,
+  driftwood: buildDriftwood,
+  'crab-hole': buildCrabHole,
+  'tide-pool': buildTidePool,
+  'kelp-bed': buildKelpBed,
+};
