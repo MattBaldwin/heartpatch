@@ -44,3 +44,19 @@ export const WeatherViewSchema = z.object({
   serverTime: z.iso.datetime(),
 });
 export type WeatherView = z.infer<typeof WeatherViewSchema>;
+
+/**
+ * `POST /maps/:mapId/dev/weather` (dev/test only, plan §9): today's plan
+ * becomes one front of `kind` sitting over my Heart Seed from `at` (default
+ * now) for `hours`, for screenshots and tests.
+ */
+export const DevWeatherRequestSchema = z.strictObject({
+  kind: WeatherKindSchema.exclude(['clear']),
+  at: z.iso.datetime().optional(),
+  hours: z.number().int().min(1).max(12).default(2),
+});
+export type DevWeatherRequest = z.infer<typeof DevWeatherRequestSchema>;
+
+/** `POST /maps/:mapId/dev/knock` (dev/test only): a storm knocks one of my buildings about now. */
+export const DevKnockRequestSchema = z.strictObject({ buildingId: z.uuid() });
+export type DevKnockRequest = z.infer<typeof DevKnockRequestSchema>;

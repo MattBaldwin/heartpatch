@@ -41,6 +41,8 @@ import { squishyJobsRoutes } from './modules/jobs/routes.js';
 import { factoryRoutes } from './modules/factory/routes.js';
 import { createFactoryService } from './modules/factory/service.js';
 import { createSettleService } from './modules/settle/service.js';
+import { weatherRoutes } from './modules/weather/routes.js';
+import { createWeatherService } from './modules/weather/service.js';
 import { settleRoutes } from './modules/settle/routes.js';
 import { createSquishyJobsService } from './modules/jobs/service.js';
 import { hollowRoutes } from './modules/hollow/routes.js';
@@ -431,6 +433,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           roadsRoutes(createRoadsService({ db, clock, ...publish }), {
             hooks: authHooks,
             idempotency,
+          }),
+        );
+        // Wild Isle weather (#621): the forecast, and storms that knock buildings about.
+        await api.register(
+          weatherRoutes(createWeatherService({ db, clock, ...publish }), {
+            hooks: authHooks,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
         // Exploring my land (#199).

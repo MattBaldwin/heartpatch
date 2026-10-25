@@ -179,7 +179,9 @@ export async function resumeUpkeep(
   at: Date,
 ): Promise<{ rows: BuildingRow[]; events: NewGameEvent[] }> {
   if (balance === null) return { rows: [...rows], events: [] };
-  const paused = inChargeOrder(rows.filter((r) => r.pausedAt !== null));
+  // A building a storm knocked about (Wild Isle #621) makes nothing until
+  // it's fixed, so it waits its turn behind the ones that can work.
+  const paused = inChargeOrder(rows.filter((r) => r.pausedAt !== null && r.damagedAt === null));
   const woken = planResume(
     balance,
     paused.map((row) => ({ id: row.id, upkeep: upkeepOf(row) ?? 0 })),
