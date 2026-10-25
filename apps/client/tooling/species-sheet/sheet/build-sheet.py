@@ -9,7 +9,7 @@ iou=json.load(open(R+'/iou.json'))
 LINES=[
  ('Slipwaddle','Penguin that slides on its tummy',['slipwaddle','sledwaddle','blizzwaddle']),
  ('Oinkle','Piglet with a curly tail (the teen grows tusks)',['oinkle','snortle','tuskoink']),
- ('Cubbun','Bear cub that hugs its own tummy',['cubbun','brambun','grizzbun']),
+ ('Cubbun','Bear cub that hugs its heart',['cubbun','brambun','grizzbun']),
  ('Spudsy','Potato with one tiny sprout',['spudsy','tatertot','hashbrawn']),
  ('Cloudlamb','Sheep made of actual cloud',['cloudlamb','cumulamb','fluffasus']),
  ('Glimbug','Firefly who lights the way',['glimbug','glimmerbug','beaconfly']),
