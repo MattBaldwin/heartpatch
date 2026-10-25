@@ -1836,7 +1836,7 @@ export const PARTS: Part[] = [
     sink: 0.3,
     jitter: 0.06,
   },
-  // #382 wave 2: seventeen parts so a tusk, a curly tail, a chest bib, a little tree, hug arms, a slide
+  // #382 wave 2: fifteen parts so a tusk, a curly tail, a chest bib, hug arms, a slide
   // trail, a lure and a stacked wing can be the silhouette instead of a small add-on. All existing
   // primitives (no client geometry code); a species' `glow` lights them like any other part.
   // A pair of tusks curling up from the snout (`fangs` only points down).
@@ -1853,20 +1853,6 @@ export const PARTS: Part[] = [
     splay: 32,
     sink: 0.4,
     jitter: 0.05,
-  },
-  // The brown trunk of a little tree standing beside the belly, for a cub to hug.
-  {
-    id: 'tree-stump',
-    slot: 'back',
-    shape: 'capsule',
-    size: [0.4, 0.55, 0.4],
-    color: 'detail',
-    layout: single,
-    around: 45,
-    up: -45,
-    tilt: 85,
-    sink: 0.3,
-    jitter: 0.03,
   },
   // A zigzag wake of ice on the ground behind a sliding penguin.
   {
@@ -1938,32 +1924,18 @@ export const PARTS: Part[] = [
     sink: 0.45,
     jitter: 0.03,
   },
-  // The green top of a little tree, sitting on a stump.
-  {
-    id: 'tree-top',
-    slot: 'spikes',
-    shape: 'cone',
-    size: [0.6, 1.1, 0.6],
-    color: 'secondary',
-    layout: single,
-    around: 50,
-    up: -8,
-    tilt: 80,
-    sink: 0.2,
-    jitter: 0.03,
-  },
-  // A cub's arms reaching across the front to hug whatever stands there (paired arms point out to the sides).
+  // A cub's two forearms folded across its own tummy for a self-hug.
   {
     id: 'hug-arms',
     slot: 'arms',
     shape: 'capsule',
-    size: [0.2, 0.7, 0.2],
+    size: [0.2, 0.55, 0.2],
     color: 'primary',
     layout: pair,
-    around: 70,
-    up: -5,
-    tilt: -5,
-    splay: -75,
+    around: 25,
+    up: -20,
+    tilt: -10,
+    splay: -60,
     sink: 0.25,
     jitter: 0.04,
   },
