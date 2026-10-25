@@ -456,7 +456,9 @@ const weatherLayer = createWeatherLayer({
 });
 const knockedMarks = createKnockedMarks(tileMarks, () => signedIn?.id ?? null);
 const forecastSheet = createForecastSheet(document.body, weatherStore);
-const weatherChip = createWeatherChip(weatherStore, () => forecastSheet.open());
+const weatherChip = createWeatherChip(weatherStore, () => {
+  forecastSheet.open();
+});
 const jobs = createJobs({
   root: document.body,
   marks: tileMarks,

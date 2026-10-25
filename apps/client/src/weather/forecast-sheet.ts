@@ -114,7 +114,9 @@ export function createForecastSheet(root: HTMLElement, store: WeatherStore): For
       node.hidden = true;
     },
   };
-  closeButton.addEventListener('click', () => sheet.close());
+  closeButton.addEventListener('click', () => {
+    sheet.close();
+  });
   node.addEventListener('click', (e) => {
     if (e.target === node) sheet.close();
   });

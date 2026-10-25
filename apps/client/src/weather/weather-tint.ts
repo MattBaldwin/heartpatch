@@ -26,6 +26,8 @@ export function createWeatherTint(root: HTMLElement): WeatherTint {
     set: (kind) => {
       node.dataset['kind'] = kind;
     },
-    remove: () => node.remove(),
+    remove: () => {
+      node.remove();
+    },
   };
 }

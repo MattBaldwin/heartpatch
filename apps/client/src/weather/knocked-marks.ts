@@ -22,5 +22,10 @@ export function createKnockedMarks(marks: TileMarks, me: () => string | null): M
       knockedTiles(view, me()).map((tile) => ({ tile, kind: 'knocked' as const })),
     );
   };
-  return { attach: (_scene, view) => show(view), update: show };
+  return {
+    attach: (_scene, view) => {
+      show(view);
+    },
+    update: show,
+  };
 }

@@ -40,6 +40,14 @@ describe('frontPosition', () => {
   });
 });
 
+describe('frontPosition on one hex', () => {
+  it('stays put for a front whose from and to are the same', () => {
+    const f = front({ from: { q: 2, r: -1 }, to: { q: 2, r: -1 } });
+    const home = hexToWorld({ q: 2, r: -1 }, HEX_SIZE);
+    expect(frontPosition(f, START + HOUR)).toEqual(home);
+  });
+});
+
 describe('frontScale', () => {
   it('ramps over the first and last tenth of the life', () => {
     expect(frontScale(front(), START + 1)).toBeLessThan(0.01);

@@ -34,7 +34,7 @@ varying float vWeatherFade;
 `;
 
 const FRAGMENT_BEFORE_FOG = /* glsl */ `
-finalColor.a *= vWeatherFade;
+color.a *= vWeatherFade;
 `;
 
 export class RainPlugin extends MaterialPluginBase {

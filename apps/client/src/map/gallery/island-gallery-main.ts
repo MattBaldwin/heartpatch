@@ -12,7 +12,11 @@ import { maxZoomFor } from '../map-layout.js';
 import { MapScene, type MapSceneStats } from '../map-scene.js';
 import { testPatch, testWildIsle } from '../test-view.js';
 import { galleryWeather, galleryWeatherKind } from '../../weather/gallery-weather.js';
-import { createWeatherLayer, type WeatherLayer, type WeatherStats } from '../../weather/weather-layer.js';
+import {
+  createWeatherLayer,
+  type WeatherLayer,
+  type WeatherStats,
+} from '../../weather/weather-layer.js';
 import { WeatherStore } from '../../weather/weather-store.js';
 import '../../styles.css';
 
@@ -76,7 +80,12 @@ await boot(canvas, {
           const store = new WeatherStore({
             now: () => Date.now(),
             me: () => view.members[0]?.user.id ?? null,
-            api: { get: () => Promise.resolve(galleryWeather(weatherKind, Date.now(), params.get('vane') === '1')) },
+            api: {
+              get: () =>
+                Promise.resolve(
+                  galleryWeather(weatherKind, Date.now(), params.get('vane') === '1'),
+                ),
+            },
           });
           const host = map;
           weather = createWeatherLayer({ store, tier: () => stage?.quality.snapshot.tier ?? tier });

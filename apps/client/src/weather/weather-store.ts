@@ -84,8 +84,12 @@ export class WeatherStore implements Weather {
   /** Starts the stale check; the returned stop is for the scene's disposal. */
   start(): () => void {
     this.stop();
-    this.timer = setInterval(() => this.refreshIfStale(), 30_000);
-    return () => this.stop();
+    this.timer = setInterval(() => {
+      this.refreshIfStale();
+    }, 30_000);
+    return () => {
+      this.stop();
+    };
   }
 
   private stop(): void {

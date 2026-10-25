@@ -72,10 +72,14 @@ export function frontPosition(front: WeatherFront, nowMs: number): WorldPoint | 
   const path = frontPath(front);
   const last = path.length - 1;
   const at = ((nowMs - start) / (end - start)) * last;
-  const i = Math.min(last - 1, Math.max(0, Math.floor(at)));
-  const a = hexToWorld(path[i]!, HEX_SIZE);
-  if (last < 1) return a;
-  const b = hexToWorld(path[i + 1]!, HEX_SIZE);
+  const i = Math.max(0, Math.min(last - 1, Math.floor(at)));
+  const from = path[i];
+  if (!from) return null;
+  const a = hexToWorld(from, HEX_SIZE);
+  const to = path[i + 1];
+  // A front that stays on one hex has nowhere to step.
+  if (!to) return a;
+  const b = hexToWorld(to, HEX_SIZE);
   const t = at - i;
   return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
 }

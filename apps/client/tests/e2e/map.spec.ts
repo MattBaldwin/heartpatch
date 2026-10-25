@@ -59,7 +59,13 @@ type IslandHooks = Window & {
   __islandMap?: {
     ready: () => boolean;
     stats: () => MapDebug | null;
-    weather: () => { clouds: number; rain: number; fog: number; mode: string; placed: number } | null;
+    weather: () => {
+      clouds: number;
+      rain: number;
+      fog: number;
+      mode: string;
+      placed: number;
+    } | null;
     clock: () => number | null;
   };
 };
