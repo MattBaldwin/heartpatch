@@ -85,6 +85,11 @@ export const EXPLORE_VIEW = {
     'crab-hole': 0.045,
     'tide-pool': 0.07,
     'kelp-bed': 0.045,
+    // Wild Isle's river bank (#621 W1-13): an eddy's pool is nearly the pond's width.
+    'mossy-log': 0.05,
+    'pebble-bar': 0.05,
+    eddy: 0.06,
+    cattails: 0.046,
     // The cellar's chests (#306): a chest is about 1.15 across, the big one 2.
     chest: 0.072,
     'big-chest': 0.13,

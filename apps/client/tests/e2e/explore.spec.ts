@@ -876,3 +876,71 @@ test('enters a coast tile on dry sand, with its shells, crab holes and Snorkel p
     await page.context().close();
   }
 });
+
+/** The river bank's four spot kinds and the tool each wants (#621 W1-13), cycled over a stubbed tile. */
+const RIVER_SPOTS = [
+  { kind: 'mossy-log', tool: null },
+  { kind: 'pebble-bar', tool: 'shovel' },
+  { kind: 'eddy', tool: 'net' },
+  { kind: 'cattails', tool: 'net' },
+] as const;
+
+test('enters a river tile on its dry bank, with its mossy logs, pebble bars and Snorkel eddies (#621 W1-13)', async ({
+  browser,
+}) => {
+  test.setTimeout(240_000); // one scene build; CI renders in software
+  const page = await newPlayer(browser, uniqueName('river'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  // The Wild Isle is off by default (`HP_WILD_ISLE`), so a new patch has no
+  // river: explore its Heart Seed tile as one. Only the client's look changes;
+  // nothing is searched, so the server's own spots are never contradicted.
+  await page.route('**/maps/*/explore?*', async (route) => {
+    const res = await route.fetch();
+    const body = (await res.json()) as {
+      terrain: string;
+      spots: { kind: string; tool: string | null }[];
+    };
+    body.terrain = 'river';
+    body.spots.forEach((s, i) => Object.assign(s, RIVER_SPOTS[i % RIVER_SPOTS.length]));
+    await route.fulfill({ response: res, json: body });
+  });
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Riverbend Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await slowExpect(lobby).toBeHidden();
+  await expect.poll(async () => (await mapState(page))?.tiles, slow).toBe(817);
+  await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  const box = (await page.locator('#game').boundingBox())!;
+  const explore = page.getByTestId('tile-explore');
+  await expect(async () => {
+    if ((await mapState(page))?.selected == null) {
+      await tapCanvas(page, box.x + box.width / 2, box.y + box.height / 2);
+    }
+    await expect(explore).toBeVisible({ timeout: 5_000 });
+  }).toPass(slow);
+  await explore.tap();
+
+  try {
+    await expect.poll(async () => (await exploreState(page))?.scene?.keeper, slow).toBe(true);
+    const state = (await exploreState(page))!;
+    expect(state.tile?.terrain).toBe('river');
+    // Hands, the Shovel and the Snorkel, all on one bank.
+    expect(new Set(state.spots.map((s) => s.tool))).toEqual(new Set([null, 'shovel', 'net']));
+    expect(state.spots.map((s) => s.kind).every((k) => RIVER_SPOTS.some((c) => c.kind === k))).toBe(
+      true,
+    );
+    const scene = state.scene!;
+    // The bank is walked on, not swum: the lake's underwater look is only the lake's.
+    expect(scene.sky.underwater).toBe(false);
+    expect(scene.spots).toBe(state.spots.length);
+    expect(scene.created.meshes).toBeLessThanOrEqual(BUILD_MESH_CEILING);
+    expect(scene.land).not.toBeNull();
+    await keeperStill(page);
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+});

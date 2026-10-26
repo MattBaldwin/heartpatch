@@ -37,6 +37,13 @@ export const EXPLORE_RULES: ExploreRules = {
     { id: 'crab-hole', name: 'Crab hole', tool: 'shovel', interaction: 'dig' },
     { id: 'tide-pool', name: 'Tide pool', tool: 'net', interaction: 'dive' },
     { id: 'kelp-bed', name: 'Kelp bed', tool: 'net', interaction: 'part' },
+    // Wild Isle (#621 W1-13): the river bank. A mossy log to peek under by
+    // hand, a pebble bar to dig with the Shovel, and a swirly eddy and a
+    // cattail bed with the Snorkel. Same gestures again, so no new interaction.
+    { id: 'mossy-log', name: 'Mossy log', tool: null, interaction: 'lift' },
+    { id: 'pebble-bar', name: 'Pebble bar', tool: 'shovel', interaction: 'dig' },
+    { id: 'eddy', name: 'Swirly eddy', tool: 'net', interaction: 'dive' },
+    { id: 'cattails', name: 'Cattail bed', tool: 'net', interaction: 'part' },
   ],
   // TUNE: owner decision 2026-10-06 ("a Shovel lasts 20 digs"); the rest are guesses.
   tools: [
@@ -50,8 +57,8 @@ export const EXPLORE_RULES: ExploreRules = {
   ],
   // Tools per terrain (owner decisions 2026-10-07): meadows, forests and
   // pumpkin fields want hands and a Shovel; lakes a Snorkel; hills and mountains
-  // a Walking Stick and a Lantern (#335: the Net and Rope, renamed); the coast (#621)
-  // hands, a Shovel and a Snorkel. Juniper's Gap can't be explored in Phase 1.
+  // a Walking Stick and a Lantern (#335: the Net and Rope, renamed); the coast and
+  // the river bank (#621) hands, a Shovel and a Snorkel. Juniper's Gap can't be explored in Phase 1.
   // TUNE: the kits' weights and spot counts.
   terrains: [
     {
@@ -134,6 +141,18 @@ export const EXPLORE_RULES: ExploreRules = {
         { kind: 'crab-hole', weight: 4 },
         { kind: 'tide-pool', weight: 3 },
         { kind: 'kelp-bed', weight: 2 },
+      ],
+      spots: { min: 8, max: 12 },
+    },
+    {
+      // Wild Isle (#621 W1-13): a river tile is explored as its bank, with the
+      // water flowing round it. A new layout, so no saved progress to keep.
+      terrain: 'river',
+      kinds: [
+        { kind: 'mossy-log', weight: 3 },
+        { kind: 'pebble-bar', weight: 4 },
+        { kind: 'eddy', weight: 3 },
+        { kind: 'cattails', weight: 3 },
       ],
       spots: { min: 8, max: 12 },
     },

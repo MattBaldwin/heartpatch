@@ -102,8 +102,9 @@ describe('explore rules data', () => {
       .filter((id) => isExplorable(id, EXPLORE_RULES));
     expect(explorable.sort()).toEqual(
       GAME_DATA.terrains
-        // Water is never land (Wild Isle, #621).
-        .filter((t) => !isWater(t))
+        // Water is never land (Wild Isle, #621), but a river tile is explored
+        // as its bank (#621 W1-13).
+        .filter((t) => !isWater(t) || t.id === 'river')
         .map((t) => t.id)
         // Nobody owns a trading post (#269), so nobody explores one. Cleared
         // land (#242) was a homestead, explored already, before it was cleared.
@@ -125,6 +126,7 @@ describe('explore rules data', () => {
       hills: ['lantern'], // #335: the cave
       mountains: ['rope'], // #335: the trail
       coast: ['shovel', 'net'], // #621 W1-11: hands, the Shovel and the Snorkel
+      river: ['shovel', 'net'], // #621 W1-13: the same three on the river bank
     });
     expect(exploreNeeds('junipers-gap', EXPLORE_RULES)).toEqual([]);
   });
@@ -152,6 +154,21 @@ describe('explore rules data', () => {
       SearchSpotKindSchema.safeParse({ id: 'x', name: 'X', tool: null, interaction: 'swim' })
         .success,
     ).toBe(false);
+  });
+
+  it('gives the river bank hands, the Shovel and the Snorkel, with existing gestures (#621 W1-13)', () => {
+    const river = EXPLORE_RULES.terrains.find((t) => t.terrain === 'river');
+    expect(river?.layout).toBeUndefined();
+    const kinds = (river?.kinds ?? []).map((k) =>
+      EXPLORE_RULES.spotKinds.find((s) => s.id === k.kind),
+    );
+    expect(kinds.map((k) => [k?.id, k?.tool, k?.interaction])).toEqual([
+      ['mossy-log', null, 'lift'],
+      ['pebble-bar', 'shovel', 'dig'],
+      ['eddy', 'net', 'dive'],
+      ['cattails', 'net', 'part'],
+    ]);
+    expect(exploreNeeds('river', EXPLORE_RULES)).toEqual(['shovel', 'net']);
   });
 
   it('gives the coast hands, the Shovel and the Snorkel, with the lake’s gestures (#621 W1-11)', () => {

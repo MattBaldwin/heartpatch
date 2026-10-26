@@ -11,6 +11,7 @@ import {
   buildWallRock,
 } from './cave-kit.js';
 import { COAST_EXTRAS, COAST_SPOTS } from './coast-kit.js';
+import { RIVER_EXTRAS, RIVER_SPOTS } from './river-kit.js';
 import { cylinder, shaded, sphere } from './land-kit.js';
 import type { ExtrasContext, Growth } from './land-layout.js';
 import { buildCairn, buildLookout, buildSnowDrift, type SpotShape } from './trail-kit.js';
@@ -117,6 +118,8 @@ export const BIOME_EXTRAS: Readonly<Record<string, NonNullable<LandOptions['extr
   },
   // Wild Isle (#621 W1-11): the sea, its foam, palms, rocks and shells.
   coast: COAST_EXTRAS,
+  // Wild Isle (#621 W1-13): the river round the bank, its far bank, crossings and reeds.
+  river: RIVER_EXTRAS,
   // A Hollow's hidden cellar (#306): its walls, candles and stair.
   cellar: CELLAR_EXTRAS,
 };
@@ -129,6 +132,8 @@ const SPOTS: Readonly<Record<string, (scene: Scene) => SpotShape>> = {
   'glow-mushrooms': buildGlowMushroomSpot,
   // The coast's shells, driftwood, crab holes, tide pools and kelp beds (#621 W1-11).
   ...COAST_SPOTS,
+  // The river bank's mossy logs, pebble bars, eddies and cattails (#621 W1-13).
+  ...RIVER_SPOTS,
   // The cellar's chests (#306).
   ...CELLAR_SPOTS,
 };
