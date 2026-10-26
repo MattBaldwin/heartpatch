@@ -130,16 +130,15 @@ export const LEVEL_SCALE = [
 /**
  * How far a Wild Isle homestead building reaches from its tile's middle
  * (owner 2026-10-26: works fill their tile like the buildings already
- * there). Reach is the farthest its level-1 body gets along x or z, in model
- * units. The map draws a homestead's building at `HEX_SIZE ×
- * MAP_OUTER_BUILDING_SCALE` (1.15), so a drawn tile's inner radius is
- * 0.95 × cos 30° / 1.15 ≈ 0.72 model units. The resource buildings reach
- * 0.42–0.52 (the Greenhouse 0.33, the Warehouse 0.66): about two thirds of
- * it. A model past `max` shrinks as a whole, so its look stays; one short of
- * `min` widens along x and z only, so it doesn't grow tall. `maxTop` caps
- * its level-4 reach the same way (the biggest resource building's is 0.91).
+ * there): its body's farthest point, any way round, in model units. The map
+ * draws a homestead's building at `HEX_SIZE × MAP_OUTER_BUILDING_SCALE`
+ * (1.15), so a drawn tile's inner radius is 0.95 × cos 30° / 1.15 ≈ 0.72
+ * model units and its corners 0.83. At level 1 the resource buildings reach
+ * 0.48–0.60 (the Greenhouse 0.43, the Warehouse 0.75). A model past `max`
+ * shrinks as a whole, so its look stays; one short of `min` widens along x
+ * and z. `maxTop` caps its level-4 reach the same way (theirs 0.66–0.86).
  */
-export const TILE_FOOTPRINT = { min: 0.45, max: 0.62, maxTop: 0.9 } as const; // TUNE
+export const TILE_FOOTPRINT = { min: 0.5, max: 0.62, maxTop: 0.8 } as const; // TUNE
 
 /** How strongly glowing parts (flames, a lit grin) shine. */
 export const GLOW = 1.1; // TUNE

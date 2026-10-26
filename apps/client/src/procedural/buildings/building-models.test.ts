@@ -6,7 +6,12 @@ import { Scene } from '@babylonjs/core/scene';
 import { GAME_DATA } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BUILDING_COLORS, LEVEL_SCALE, TILE_FOOTPRINT } from './building-config.js';
-import { buildBuildingModel, levelScale, WILD_HOMESTEAD } from './building-models.js';
+import {
+  buildBuildingModel,
+  footprintReach,
+  levelScale,
+  WILD_HOMESTEAD,
+} from './building-models.js';
 
 const RESOURCE = GAME_DATA.buildings.filter((b) => b.kind === 'resource').map((b) => b.id);
 
@@ -225,17 +230,9 @@ describe('Wild Isle works models (#621 W1-10)', () => {
   });
 
   it('fills its tile like the buildings already in the game (owner 2026-10-26)', () => {
-    // Reach: how far the body gets from the tile's middle along x or z.
     const scene = new Scene(engine);
-    const reach = (id: string, level: number) => {
-      const { minimum, maximum } = buildBuildingModel(
-        scene,
-        id,
-        'plain',
-        level,
-      ).body.getBoundingInfo().boundingBox;
-      return Math.max(-minimum.x, maximum.x, -minimum.z, maximum.z);
-    };
+    const reach = (id: string, level: number) =>
+      footprintReach(buildBuildingModel(scene, id, 'plain', level).body);
     const kinds = ['habitat', 'training-grounds', 'factory', 'resource', 'warehouse'];
     const existing = GAME_DATA.buildings.filter((b) => kinds.includes(b.kind)).map((b) => b.id);
     expect([...WILD_HOMESTEAD].sort()).toEqual([...WILD].sort());

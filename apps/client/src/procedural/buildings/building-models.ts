@@ -77,17 +77,26 @@ export function buildBuildingModel(
 /** Each fitted building's footprint scale, worked out once from its level-1 and -4 bodies. */
 const fits = new Map<string, number>();
 
+/** How far a model's body gets from its tile's middle, any way round (`TILE_FOOTPRINT`). */
+export function footprintReach(body: Mesh): number {
+  const p = body.getVerticesData(VertexBuffer.PositionKind) ?? [];
+  let reach = 0;
+  for (let i = 0; i < p.length; i += 3) {
+    reach = Math.max(reach, Math.hypot(p[i] ?? 0, p[i + 2] ?? 0));
+  }
+  return reach;
+}
+
 /** How much to scale a building so its reach lands inside `TILE_FOOTPRINT`. */
 function footprintFit(scene: Scene, buildingId: string): number {
   const known = fits.get(buildingId);
   if (known !== undefined) return known;
-  /** How far its body gets from the tile's middle along x or z. */
   const reach = (level: number) => {
     const { body, glow } = buildModel(scene, buildingId, 'plain', level, 1);
-    const { minimum, maximum } = body.getBoundingInfo().boundingBox;
+    const r = footprintReach(body);
     body.dispose();
     glow?.dispose();
-    return Math.max(-minimum.x, maximum.x, -minimum.z, maximum.z);
+    return r;
   };
   const first = reach(1);
   const fit = Math.min(
@@ -1137,7 +1146,7 @@ function buildModel(
       // bobber, and a bucket of caught fish by a lamp. No boat: that's the
       // Ferry Dock. L2: a little tackle shed. L3: a second rod and a net on
       // poles. L4: a tall lamp post with a pennant.
-      part(body, cylinder(0.04, 0.8, 0.8, 20), C.water, [0, 0.06, -0.18], [1.1, 1, 0.7]);
+      part(body, cylinder(0.04, 0.8, 0.8, 20), C.water, [0, 0.06, -0.12], [1.45, 1, 1.05]);
       part(body, box(0.34, 0.05, 0.84), C.post, [0, 0.14, -0.08]);
       for (let i = 0; i < 7; i++) {
         part(body, box(0.36, 0.014, 0.02), C.log, [0, 0.17, -0.44 + i * 0.12]);
@@ -1413,7 +1422,7 @@ function buildModel(
         part(body, cylinder(0.01, 0.38 * s, 0.38 * s, 16), C.water, [x, y + 0.646 * s, z]);
       };
       // A round flagstone it all stands on, so it fills its tile like the rest.
-      part(body, cylinder(0.03, 0.84, 0.88, 12), C.wellStone, [0, 0.015, -0.08]);
+      part(body, cylinder(0.07, 0.96, 1.0, 12), C.wellStone, [0, 0.035, -0.08]);
       barrelAt(0, 0, 0, 1);
       // Raindrops falling into the funnel.
       for (const [x, y, z] of [
@@ -1437,8 +1446,8 @@ function buildModel(
       part(body, cylinder(0.06, 0.06, 0.05, 10), C.brass, [0, 0.11, tapZ - 0.11]);
       part(body, box(0.1, 0.03, 0.03), C.brass, [0, 0.21, tapZ - 0.06]);
       part(body, box(0.03, 0.05, 0.03), C.brass, [0, 0.19, tapZ - 0.06]);
-      part(body, box(0.03, 0.05, 0.03), C.water, [0, 0.065, tapZ - 0.11]);
-      part(body, cylinder(0.02, 0.24, 0.24, 14), C.water, [0, 0.03, tapZ - 0.13], [1.2, 1, 0.8]);
+      part(body, box(0.03, 0.03, 0.03), C.water, [0, 0.095, tapZ - 0.11]);
+      part(body, cylinder(0.02, 0.24, 0.24, 14), C.water, [0, 0.075, tapZ - 0.13], [1.2, 1, 0.8]);
       part(body, cylinder(0.42, 0.03, 0.03, 6), C.post, [0.34, 0.21, -0.2]);
       part(windowList, sphere(0.08, 8), lampColor, [0.34, 0.46, -0.2]);
       if (l >= 2) barrelAt(-0.36, 0, 0.12, 0.8);
@@ -1636,7 +1645,7 @@ function buildModel(
     case 'waystation': {
       // A cozy roadside stop: a peaked roof on four posts over a bench, a
       // signpost with two arrows and a lamp, on a flagstone. One level.
-      part(body, box(1.0, 0.03, 0.62), C.wellStone, [0.16, 0.015, -0.08]);
+      part(body, box(0.92, 0.07, 0.6), C.wellStone, [0.12, 0.035, -0.08]);
       for (const [x, z] of [
         [-0.28, -0.2],
         [0.28, -0.2],
