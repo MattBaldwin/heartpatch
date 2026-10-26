@@ -11,6 +11,13 @@ import { HEX_SIZE } from '../map-config.js';
 import { maxZoomFor } from '../map-layout.js';
 import { MapScene, type MapSceneStats } from '../map-scene.js';
 import { testPatch, testWildIsle } from '../test-view.js';
+import { galleryWeather, galleryWeatherKind } from '../../weather/gallery-weather.js';
+import {
+  createWeatherLayer,
+  type WeatherLayer,
+  type WeatherStats,
+} from '../../weather/weather-layer.js';
+import { WeatherStore } from '../../weather/weather-store.js';
 import '../../styles.css';
 
 // A dev gallery never signs in: its perf reports would only be refused (401).
@@ -42,10 +49,12 @@ const night = params.get('night') === '1';
 const far = params.get('far') === '1';
 const focus = params.get('focus')?.split(',').map(Number) ?? null;
 const distance = Number(params.get('dist')) || null;
+const weatherKind = galleryWeatherKind(params.get('weather'));
 
 const view: MapView = patch === 'cozy' ? testPatch() : testWildIsle();
 
 let stage: Stage | null = null;
+let weather: WeatherLayer | null = null;
 let map: MapScene | null = null;
 
 await boot(canvas, {
@@ -66,6 +75,31 @@ await boot(canvas, {
       (scene) => {
         map = new MapScene(scene, view, { tier, reducedMotion: true });
         map.setNight(night);
+        if (weatherKind) {
+          // The weather layer under a fixed sky, as map-screen would host it (#621).
+          const store: WeatherStore = new WeatherStore({
+            now: () => Date.now(),
+            me: () => view.members[0]?.user.id ?? null,
+            api: {
+              get: () =>
+                Promise.resolve(
+                  galleryWeather(
+                    weatherKind,
+                    Date.now(),
+                    params.get('vane') === '1',
+                    store.home ?? undefined,
+                  ),
+                ),
+            },
+          });
+          const host = map;
+          weather = createWeatherLayer({ store, tier: () => stage?.quality.snapshot.tier ?? tier });
+          weather.attach(scene, view, {
+            clock: host.terrainClock,
+            mode: () => host.ambientMode,
+            invalidate: () => stage?.invalidate(),
+          });
+        }
         farthest = maxZoomFor(map.bounds, CAMERA.maxDistance);
         const [q, r] = focus ?? [];
         const start =
@@ -108,6 +142,10 @@ declare global {
       ready: () => boolean;
       stats: () => MapSceneStats | null;
       tier: () => string | null;
+      /** The weather layer's counts (#621); null without `?weather=`. */
+      weather: () => WeatherStats | null;
+      /** The terrain clock: it stands still under reduced motion. */
+      clock: () => number | null;
     };
   }
 }
@@ -116,4 +154,6 @@ window.__islandMap = {
   ready: () => (stage?.draws ?? 0) > 0 && stage?.scene.isReady() === true,
   stats: () => map?.stats ?? null,
   tier: () => stage?.quality.snapshot.tier ?? null,
+  weather: () => weather?.stats() ?? null,
+  clock: () => map?.terrainClock.time ?? null,
 };

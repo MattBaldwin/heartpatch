@@ -1,0 +1,213 @@
+/* Wild Isle weather (#621): the sky wash and the top-bar chip. */
+.weather-tint {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  background: transparent;
+  transition: opacity 1.5s ease;
+}
+
+.weather-tint[data-kind='rain'] {
+  opacity: 1;
+  background: rgb(98 112 160 / 16%);
+}
+
+.weather-tint[data-kind='storm'] {
+  opacity: 1;
+  /* Only a faint cool wash: the storm's dimming is the scene's own light
+     (weather-layer.ts), so nothing over the canvas mutes the clouds' gold edge. */
+  background: rgb(60 70 100 / 6%);
+}
+
+.weather-tint[data-kind='fog'] {
+  opacity: 1;
+  background: rgb(240 238 248 / 26%);
+}
+
+.weather-tint[data-kind='drought'] {
+  opacity: 1;
+  background: rgb(255 176 96 / 16%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weather-tint {
+    transition: none;
+  }
+}
+
+/* At the end of the patch-name card's row, like the 💛 pill: over the
+   legend's whole-row tap (::before), and tappable though the HUD is not. */
+.weather-chip {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  border: 2px solid rgb(255 255 255 / 85%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 70%);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  pointer-events: auto;
+}
+
+/* 44pt to the finger, 32 to the eye. */
+.weather-chip::after {
+  content: '';
+  position: absolute;
+  inset: -8px -4px;
+}
+
+.weather-chip[hidden],
+.weather-sheet[hidden] {
+  display: none;
+}
+
+.weather-chip:focus-visible {
+  outline: 3px solid #b8487a;
+  outline-offset: 3px;
+}
+
+.weather-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: var(--weather-sheet-top, calc(env(safe-area-inset-top) + 64px))
+    calc(env(safe-area-inset-right) + 12px) calc(env(safe-area-inset-bottom) + 12px)
+    calc(env(safe-area-inset-left) + 12px);
+  /* A clear backdrop: it only catches the tap that closes the sheet. The Me chip
+     stays above every sheet on purpose (#47), so a dim here would leave it bright. */
+  background: transparent;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #3b3560;
+}
+
+.weather-sheet-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  max-height: 100%;
+  width: min(100%, 460px);
+}
+
+.weather-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.weather-sheet-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  text-align: left;
+}
+
+.weather-sheet-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.weather-sheet-scroll h3 {
+  margin: 6px 0 0;
+  font-size: 15px;
+}
+
+.weather-sheet-scroll p {
+  margin: 0;
+}
+
+.weather-sheet-now {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.weather-sheet-note {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.weather-sheet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.weather-map {
+  /* Never squeezed by the scrolling column: the sheet scrolls instead. */
+  flex: none;
+  align-self: center;
+  width: min(100%, 300px);
+  height: auto;
+  border-radius: 16px;
+}
+
+.weather-map-tile {
+  stroke: rgb(255 255 255 / 45%);
+  stroke-width: 0.08;
+  stroke-linejoin: round;
+}
+
+.weather-map-path {
+  stroke: #3b3560;
+  stroke-width: 0.06;
+  stroke-dasharray: 0.2 0.18;
+  opacity: 0.5;
+}
+
+.weather-map-label {
+  fill: #2e2850;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 0.12em;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.weather-map-home {
+  fill: #e0508a;
+  stroke: #fff;
+  stroke-width: 0.1;
+}
+
+/* Fix it beside its cost chips (#621, weather/knocked-view.ts). */
+.weather-fix-row {
+  align-items: center;
+  margin-top: 6px;
+}
+
+.weather-fix-row > .home-needs {
+  margin-top: 0;
+}
+
+/* With the Forecast sheet up the trays and night pills would peek out around
+   its clear backdrop; hide them (not removed, so nothing re-lays out). */
+.weather-sheet-open .trays,
+.weather-sheet-open .dark-moon,
+.weather-sheet-open .night-chips,
+.weather-sheet-open .hollow-hint,
+.weather-sheet-open .hollow-open,
+.weather-sheet-open .hollow-open-badge {
+  visibility: hidden;
+}

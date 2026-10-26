@@ -29,6 +29,26 @@
   color: #3d2f5c;
 }
 
+/* The morning card and a tile's panel never stack (#621): while a panel is
+   open the card steps aside, and comes back when it closes. */
+body:has(.tile-panel:not([hidden])) .hollow-report {
+  display: none;
+}
+
+/* Nor do the night's chips show faintly through it. */
+body:has(.tile-panel:not([hidden])) .night-chips {
+  visibility: hidden;
+}
+
+/* A short phone held upright (an iPhone SE): a morning card with a storm
+   line reaches up past the side trays' handles (centred at 55%), so they
+   step aside while it's open instead of showing half a label. */
+@media (orientation: portrait) and (max-height: 740px) {
+  body:has(.hollow-report:not([hidden])) .tray-handle {
+    visibility: hidden;
+  }
+}
+
 .hollow-title {
   margin: 0 0 8px;
   font-size: 20px;
@@ -171,6 +191,15 @@
   width: max-content;
   max-width: calc(100vw - 32px);
   pointer-events: none;
+}
+
+/* Upright on a screen with a home indicator (812pt and taller), at least
+   34pt clear of the bottom edge even where env() reads 0, as the tile panel
+   is (#621). A home-button phone (667pt) has none and keeps env() alone. // TUNE: */
+@media (orientation: portrait) and (min-height: 740px) {
+  .night-chips {
+    bottom: calc(max(env(safe-area-inset-bottom), 22px) + 12px);
+  }
 }
 
 .night-chip {

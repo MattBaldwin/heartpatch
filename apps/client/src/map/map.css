@@ -176,6 +176,19 @@
   overscroll-behavior: contain;
 }
 
+/* Upright on a screen tall enough to have a home indicator (every iPhone
+   with one is 812pt or taller), at least 34pt clear of the bottom edge even
+   where env() reads 0, so its last buttons never sit in the indicator's
+   swipe zone (#621). A home-button phone (an iPhone SE, 667pt) has no
+   indicator and no height to spare: it keeps env() alone, as does a phone
+   on its side, so all its panel's controls fit (#264). // TUNE: */
+@media (orientation: portrait) and (min-height: 740px) {
+  .tile-panel {
+    bottom: calc(max(env(safe-area-inset-bottom), 22px) + 12px);
+    max-height: calc(45dvh - 62px - max(env(safe-area-inset-bottom), 22px));
+  }
+}
+
 /* Wide enough that the panel (470px at most, centred) clears both handles
    (96px each, ui/trays) beside it: it only has to stay under the corner
    buttons (56px from the top), so a phone on its side shows "Go home"
@@ -183,6 +196,14 @@
 @media (min-width: 662px) {
   .tile-panel {
     max-height: calc(100dvh - 76px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+}
+
+@media (min-width: 662px) and (orientation: portrait) and (min-height: 740px) {
+  .tile-panel {
+    max-height: calc(
+      100dvh - 76px - env(safe-area-inset-top) - max(env(safe-area-inset-bottom), 22px)
+    );
   }
 }
 
