@@ -166,31 +166,34 @@ const BANK_SEGMENTS = 120;
  */
 const BANK_PUFFS: readonly (readonly [number, number, number, number, number])[] = [
   ...Array.from({ length: BANK.puffs }, (_, i) => {
-    const u = Math.sqrt((i + 0.5) / BANK.puffs) * 0.82;
+    const u = Math.sqrt((i + 0.5) / BANK.puffs) * 0.85;
     const a = i * Math.PI * (3 - Math.sqrt(5)) + hash01(i, 7, 91) * 0.5;
     const r = (BANK.size + hash01(i, 3, 92) * BANK.spread) * (1 - 0.35 * u * u);
     const top = BANK.thick * Math.sqrt(Math.max(0, 1 - u * u));
     return [
       r,
       Math.cos(a) * u * BANK.wide,
-      top * (0.7 + hash01(i, 5, 93) * 0.3),
+      top * (0.85 + hash01(i, 5, 93) * 0.35),
       Math.sin(a) * u * BANK.deep,
       BANK.squash,
     ] as const;
   }),
-  // Round the far side and the ends only (from just south of east, over the
-  // north, to just south of west): the near side stays a straight wall over
-  // the flat belly, so the camera sees the belly's hard edge.
+  // Along the far side and both ends only, on the slab's own outline: the
+  // near side stays a straight wall over the flat belly, so the camera sees
+  // the belly's hard edge.
   ...Array.from({ length: BANK.rim }, (_, i) => {
-    const a = -0.35 + ((i + hash01(i, 11, 94) * 0.4) / BANK.rim) * (Math.PI + 0.7);
+    // 0 to 1 along the outline: up the west end, across the far side, down the east end.
+    const t = (i + 0.5 + (hash01(i, 11, 94) - 0.5) * 0.4) / BANK.rim;
+    const end = BANK.deep * 1.4;
+    const along = t * (BANK.wide * 2 + end * 2);
+    const [x, z] =
+      along < end
+        ? [-BANK.wide, -BANK.deep * 0.4 + along]
+        : along < end + BANK.wide * 2
+          ? [-BANK.wide + (along - end), BANK.deep]
+          : [BANK.wide, BANK.deep - (along - end - BANK.wide * 2)];
     const r = BANK.rimSize * (0.8 + hash01(i, 13, 95) * 0.4);
-    return [
-      r,
-      Math.cos(a) * BANK.wide * 0.94,
-      BANK.thick * 0.35,
-      Math.sin(a) * BANK.deep * 0.92,
-      BANK.squash,
-    ] as const;
+    return [r, x * 0.97, BANK.thick * 0.45, z * 0.97, BANK.squash] as const;
   }),
 ];
 

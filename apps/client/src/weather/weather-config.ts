@@ -61,15 +61,15 @@ export const WEATHER_LOOK = {
       /** How high the belly hangs over the tiles. */
       belly: 1.75,
       /** Puffs heaped along the top: how many, a puff's radius (base plus up to `spread`), and their squash. */
-      puffs: 22,
-      size: 0.5,
+      puffs: 16,
+      size: 0.55,
       spread: 0.3,
       squash: 0.75,
       /** Puffs round the rim, bulging past the slab: how many and how big. */
-      rim: 16,
-      rimSize: 0.45,
+      rim: 11,
+      rimSize: 0.72,
       /** How softly the puffs melt into the slab and each other. */
-      blend: 0.32,
+      blend: 0.18,
     },
     /**
      * A storm's lower deck: a flat, see-through, darker slab hanging `drop`
@@ -77,7 +77,7 @@ export const WEATHER_LOOK = {
      * half-depth towards the camera, so it shows under the bank's near
      * edge. // TUNE:
      */
-    deck: { drop: 0.35, grow: 1.2, near: 0.6, colour: [0.16, 0.18, 0.24] as const, alpha: 0.75 },
+    deck: { drop: 0.35, grow: 1.2, near: 0.85, colour: [0.16, 0.18, 0.24] as const, alpha: 0.7 },
     /** The soft shadow a cloud casts on the tiles: its colour, height, and its alpha by kind. // TUNE: */
     shadow: {
       /** sRGB, like the cloud colours. */
@@ -97,7 +97,7 @@ export const WEATHER_LOOK = {
   /** A storm's rain is heavier and falls at a slant. // TUNE: */
   storm: {
     /** Streak size against plain rain, and how far across it drifts per unit it falls. */
-    thick: 1.7,
+    thick: 1.2,
     long: 1.6,
     slant: 0.6,
     /**
