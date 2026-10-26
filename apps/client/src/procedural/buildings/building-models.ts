@@ -1161,13 +1161,13 @@ export function buildBuildingModel(
         part(body, cylinder(0.1, 0, 0.13, 10), C.salt, [x - 0.17, 0.18, z + 0.18]);
       }
       // The heap: a tall, rounded white cone, and the rake leaning on it
-      // (its head with six tines on the clay in front, its handle up the heap).
+      // (its head with six tines on the clay in front, its handle against the heap's side).
       part(body, cylinder(0.3, 0.06, 0.34, 14), C.salt, [0.47, 0.21, 0.22]);
       part(body, sphere(0.1, 8), C.salt, [0.47, 0.36, 0.22]);
-      part(body, box(0.035, 0.5, 0.035), C.post, [0.44, 0.3, -0.02], [1, 1, 1], [0.6, 0, 0]);
-      part(body, box(0.26, 0.045, 0.05), C.post, [0.44, 0.12, -0.15]);
+      part(body, box(0.035, 0.4, 0.035), C.post, [0.33, 0.25, -0.08], [1, 1, 1], [0.6, 0, 0]);
+      part(body, box(0.24, 0.045, 0.05), C.post, [0.33, 0.12, -0.2]);
       for (let i = 0; i < 6; i++) {
-        part(body, box(0.03, 0.08, 0.03), C.post, [0.33 + i * 0.044, 0.08, -0.17]);
+        part(body, box(0.035, 0.11, 0.035), C.post, [0.22 + i * 0.044, 0.08, -0.22]);
       }
       part(body, cylinder(0.26, 0.12, 0.15, 10), C.parcel, [0.56, 0.19, -0.34]);
       part(body, cylinder(0.42, 0.03, 0.03, 6), C.post, [-0.5, 0.27, 0.42]);
@@ -1375,20 +1375,20 @@ export function buildBuildingModel(
       }
       // The tap on the front (-z, facing the camera): a fat spout, a cross
       // handle and a ribbon of water down into a puddle.
-      const tapZ = -0.24;
+      const tapZ = -0.22;
       part(
         body,
-        cylinder(0.24, 0.13, 0.13, 10),
+        cylinder(0.14, 0.07, 0.07, 10),
         C.brass,
-        [0, 0.15, tapZ - 0.03],
+        [0, 0.14, tapZ - 0.05],
         [1, 1, 1],
         [Math.PI / 2, 0, 0],
       );
-      part(body, cylinder(0.12, 0.15, 0.11, 10), C.brass, [0, 0.09, tapZ - 0.14]);
-      part(body, box(0.14, 0.04, 0.04), C.brass, [0, 0.27, tapZ - 0.05]);
-      part(body, box(0.05, 0.1, 0.05), C.brass, [0, 0.24, tapZ - 0.05]);
-      part(body, box(0.045, 0.06, 0.045), C.water, [0, 0.05, tapZ - 0.11]);
-      part(body, cylinder(0.02, 0.28, 0.28, 14), C.water, [0, 0.03, tapZ - 0.14], [1.2, 1, 0.8]);
+      part(body, cylinder(0.06, 0.06, 0.05, 10), C.brass, [0, 0.11, tapZ - 0.11]);
+      part(body, box(0.1, 0.03, 0.03), C.brass, [0, 0.21, tapZ - 0.06]);
+      part(body, box(0.03, 0.05, 0.03), C.brass, [0, 0.19, tapZ - 0.06]);
+      part(body, box(0.03, 0.05, 0.03), C.water, [0, 0.065, tapZ - 0.11]);
+      part(body, cylinder(0.02, 0.24, 0.24, 14), C.water, [0, 0.03, tapZ - 0.13], [1.2, 1, 0.8]);
       part(body, cylinder(0.42, 0.03, 0.03, 6), C.post, [0.34, 0.21, -0.2]);
       part(windowList, sphere(0.08, 8), lampColor, [0.34, 0.46, -0.2]);
       if (l >= 2) barrelAt(-0.36, 0, 0.12, 0.8);
@@ -1444,7 +1444,7 @@ export function buildBuildingModel(
         [0.12, 0.3],
         [0.54, 0.05],
       ];
-      part(body, box(1.3, 0.06, 0.26), C.water, [0, 0.06, -0.68]);
+      part(body, box(1.3, 0.03, 0.26), C.water, [0, 0.055, -0.68]);
       part(body, prism(bank, 1.26, 0.72), C.soil, [0, 0, 0]);
       part(
         body,
@@ -1479,77 +1479,75 @@ export function buildBuildingModel(
       break;
     }
     case 'seawall': {
-      // A sturdy sea wall: a tall face of chunky grey-blue stone blocks with
-      // dark mortar gaps, rising from the water and curving out over it at
-      // the top like a breaking wave (a wave-return lip), with a white splash
-      // bursting against its foot and a lamp. Turned a little so the curl's
-      // profile shows at its end. One level.
+      // A long, low sea wall of grey-blue stone rising straight out of the
+      // water: block courses with dark mortar lines on its face and its end,
+      // one smooth coping along the top, and its sea face (-z) curving out
+      // over the water like a breaking wave (a thin wave-return lip), with
+      // flat rings of foam where the water meets it and a lamp. Turned a
+      // little so the curl's profile shows at its end. One level.
       const start = mark();
-      part(body, box(1.3, 0.06, 0.46), C.water, [0, 0.06, -0.42]);
-      // The wall's body in profile: a straight back, a flat top, and a sea
-      // face that rises straight, then follows the curl's outer edge.
-      const c = { z: -0.42, y: 0.38 };
-      const [rIn, rOut] = [0.22, 0.3];
+      const length = 1.3;
+      part(body, box(length + 0.04, 0.03, 0.44), C.water, [0, 0.055, -0.4]);
+      // The wall in profile: a straight back, a flat top, and a sea face
+      // that rises straight, then follows the curl's outer edge.
+      const c = { z: -0.38, y: 0.3 };
+      const [rIn, rOut] = [0.2, 0.25];
       const arc = (t: number, r: number): [number, number] => [
         c.z + Math.cos(t) * r,
         c.y + Math.sin(t) * r,
       ];
-      const curl = Math.PI * 0.85;
-      const steps = 7;
+      const top = c.y + rOut;
       const outer: [number, number][] = [];
       for (let i = 0; i <= 4; i++) outer.push(arc((i / 4) * (Math.PI / 2), rOut));
       part(
         body,
-        prism([[0.18, 0.68], [0.18, 0.04], [-0.2, 0.04], [-0.2, c.y], ...outer], 1.22),
-        C.mortar,
+        prism([[0.16, top], [0.16, 0.04], [-0.18, 0.04], [-0.18, c.y], ...outer], length),
+        C.seaStone,
         [0, 0, 0],
       );
-      // The blocks on the sea face, below the curl, in offset courses.
-      const stones = [C.seaStone, C.seaStoneLight, C.seaStoneDark];
-      for (let row = 0; row < 2; row++) {
-        const shift = row ? 0.15 : 0;
-        for (let i = -1; i < 4; i++) {
-          const x0 = Math.max(-0.6, -0.6 + shift + i * 0.3 + 0.025);
-          const x1 = Math.min(0.6, -0.6 + shift + (i + 1) * 0.3 - 0.025);
-          if (x1 - x0 < 0.05) continue;
-          part(body, box(x1 - x0, 0.15, 0.06), stones[(row + i + 3) % 3] ?? C.seaStone, [
-            (x0 + x1) / 2,
-            0.13 + row * 0.18,
-            -0.21,
-          ]);
+      // Mortar lines: courses along the face and both ends, joints offset.
+      for (const y of [0.15, 0.27]) {
+        part(body, box(length + 0.01, 0.018, 0.02), C.mortar, [0, y, -0.185]);
+        for (const x of [-length / 2, length / 2]) {
+          part(body, box(0.02, 0.018, 0.34), C.mortar, [x, y, -0.01]);
         }
       }
-      // The top: a course of capstones.
-      for (let i = 0; i < 4; i++) {
-        part(body, box(0.27, 0.06, 0.46), stones[i % 3] ?? C.seaStone, [
-          -0.45 + i * 0.3,
-          0.71,
-          -0.06,
-        ]);
+      for (let i = 0; i < 9; i++) {
+        const x = -0.6 + i * 0.15;
+        const y = i % 2 ? 0.09 : 0.21;
+        part(body, box(0.018, 0.11, 0.02), C.mortar, [x, y, -0.185]);
       }
-      // The curl itself: a band of light stone from the face out and down.
+      // The coping: one smooth stone along the top.
+      part(body, box(length + 0.02, 0.05, 0.62), C.seaStoneLight, [0, top + 0.02, -0.15]);
+      // The curl: a thin band from the face out and down over the water.
+      const curl = Math.PI * 0.85;
+      const steps = 7;
       for (let i = 0; i < steps; i++) {
         const t0 = (i / steps) * curl;
         const t1 = ((i + 1) / steps) * curl;
         part(
           body,
-          prism([arc(t0, rIn), arc(t0, rOut), arc(t1, rOut), arc(t1, rIn)], 1.24),
+          prism([arc(t0, rIn), arc(t0, rOut), arc(t1, rOut), arc(t1, rIn)], length + 0.02),
           i % 2 ? C.seaStoneLight : C.seaStone,
           [0, 0, 0],
         );
       }
-      // The splash: foam bursting up off the water against the face.
-      for (const [x, y, z, d] of [
-        [-0.24, 0.1, -0.3, 0.22],
-        [-0.12, 0.2, -0.3, 0.16],
-        [-0.32, 0.26, -0.34, 0.13],
-        [0.3, 0.1, -0.3, 0.16],
-        [0.38, 0.2, -0.33, 0.1],
+      // The foam: flat rings on the water at the wall's foot.
+      for (const [x, d] of [
+        [-0.38, 0.22],
+        [-0.05, 0.16],
+        [0.3, 0.2],
       ] as const) {
-        part(body, sphere(d, 8), C.foam, [x, y, z]);
+        part(
+          body,
+          CreateTorus(`${name}-foam`, { diameter: d, thickness: 0.04, tessellation: 12 }, scene),
+          C.foam,
+          [x, 0.075, -0.26],
+          [1.4, 0.5, 0.7],
+        );
       }
-      part(body, cylinder(0.3, 0.03, 0.03, 6), C.post, [0.5, 0.88, 0.08]);
-      part(windowList, sphere(0.08, 8), lampColor, [0.5, 1.05, 0.08]);
+      part(body, cylinder(0.3, 0.03, 0.03, 6), C.post, [0.52, top + 0.2, 0.06]);
+      part(windowList, sphere(0.08, 8), lampColor, [0.52, top + 0.37, 0.06]);
       turnSince(start, 0.6);
       break;
     }
