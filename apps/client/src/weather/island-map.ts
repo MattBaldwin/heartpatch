@@ -13,8 +13,8 @@ const KIND_NAME: Readonly<Record<string, string>> = {
   fog: 'Fog',
   drought: 'Dry',
 };
-/** Label size, in the map's own units (a tile is `HEX_SIZE` across). // TUNE */
-const LABEL = 0.85;
+/** Label size as a share of the map's width, so it reads the same on any island size. // TUNE */
+const LABEL_SHARE = 0.055;
 const KIND_FILL: Readonly<Record<string, string>> = {
   rain: '#7f8fc9',
   storm: '#5a5190',
@@ -114,12 +114,14 @@ export function islandMap(
     );
   }
   // Each front says what it is, over its middle, so no front is an unlabeled smudge.
+  const LABEL = box * 2 * LABEL_SHARE;
   for (const f of fronts) {
     const at = frontPosition(f, nowMs);
     const centre = at ?? hexToWorld(f.from, HEX_SIZE);
     const label = svg('text', {
       x: centre.x,
-      y: -centre.z + LABEL * 0.35,
+      // Above the middle, so my home's dot never covers a letter.
+      y: -centre.z - LABEL * 0.55,
       class: 'weather-map-label',
       'font-size': LABEL,
       'text-anchor': 'middle',

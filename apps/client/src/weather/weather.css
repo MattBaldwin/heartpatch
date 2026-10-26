@@ -154,6 +154,8 @@
 }
 
 .weather-map {
+  /* Never squeezed by the scrolling column: the sheet scrolls instead. */
+  flex: none;
   align-self: center;
   width: min(100%, 300px);
   height: auto;
@@ -178,7 +180,7 @@
   font-weight: 800;
   paint-order: stroke;
   stroke: #fff;
-  stroke-width: 0.18;
+  stroke-width: 0.12em;
   stroke-linejoin: round;
   pointer-events: none;
 }
@@ -203,6 +205,7 @@
    its clear backdrop; hide them (not removed, so nothing re-lays out). */
 .weather-sheet-open .trays,
 .weather-sheet-open .dark-moon,
+.weather-sheet-open .night-chips,
 .weather-sheet-open .hollow-hint,
 .weather-sheet-open .hollow-open,
 .weather-sheet-open .hollow-open-badge {
