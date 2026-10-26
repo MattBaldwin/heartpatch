@@ -1972,3 +1972,36 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 - **Explore terrain `band` (#701, shared contract):** `ExploreTerrain` gets an optional per-terrain `band` (for example `{ from: 'back', depth: 0.5 }`), which the shared `searchSpots` uses so river spots land on the bank. Conditions: it is optional, and behaviour is identical when it is absent (a golden test on the existing terrains' spot lists); it is pure and shared by the server and client; only river uses it, with river's `layout` bumped.
 - **#702:** main's red roads e2e was fixed by porting #686's test change on its own, rather than waiting on #686's owner screen approval. It merged with `tutorial.spec.ts:218` (ipad-webkit 6) red as runner load: the test is untouched and failed on #686 and #694 too. This is a one-off, not a precedent: the merge-gate exception still needs the check red on main too, or a fix lane that owns it.
 - **Supervisor-run reviews:** when a lane stops at its cap with only review left, the supervisor runs the fresh `reviewer` itself and posts the verdict, instead of starting a lane just for review (#686, #701).
+
+## 2026-10-26 — Owner decisions and coordinator calls (supervisor 23)
+
+**Owner decisions**
+- **Seawall (#698): option C**, a harbour wall with a red-and-white beacon, bollard and mooring ring (options page https://claude.ai/artifact/N7mcCcuCWYZSjVjoRtZcjS).
+- **#686 storm screens v6: option A.** Merge now, with one follow-up PR for the known notes:
+  - 🌙 marks over the bank;
+  - the bank seam and streaks;
+  - the iPad Mailbox pill;
+  - the half-attached layer on throw;
+  - the mid-session HemisphericLight;
+  - a night re-basing test;
+  - the rain cap on iPad 9th gen.
+- **Works buildings fill their tile like the buildings already in the game (#698).**
+  - **How it's measured:** each Wild Isle homestead building is fitted to `TILE_FOOTPRINT` (`building-config.ts`), measured as the radial reach of every mesh at L1 and L4. Too big: it shrinks uniformly. Too small: it widens in x/z only.
+  - **Hex-edge cap:** no part of any mesh may cross a hex edge. A unit test checks the band and the cap.
+  - **Why v3 looked small:** v3's gallery drew works at about a third of a tile. The gallery's `&fill=1` and `?show=compare` modes now show map size.
+- **#698 works screens v4 approved.**
+
+**Coordinator calls**
+- **Optional explore halo per land look (#701).** `LandLook.halo` (client-only) lets a biome tint and fade the next-spot halo.
+  - The river sets a wet-sand tone at alpha 0.25, dusk-tinted, with `alphaIndex = -1`, so the halo draws under the river water instead of over it. That was the cause of the cream ovals.
+  - Every other biome keeps the old cream halo at 0.6.
+- **Explore terrain `band` without a layout bump (#701).** `river` isn't on main yet, so supervisor 22's "bump river's layout" condition doesn't apply. The other conditions stand.
+- **Works production fields (W1-10c).** `production.weather?: 'faster'|'slower'|'same'|'waiting'` and `production.short?: ItemCounts` are additive and optional, works only, and computed on the server. The client never derives them from the bag or the forecast. Not a big feature.
+- **WebKit e2e waits.** Three specs flaked on iPhone/iPad WebKit because `#game[data-ready]` marks the engine, not the map: two older ones #698 didn't otherwise touch, and #698's own new `works.spec.ts`. Each got a test-only fix:
+  - `hollowed-cellar.spec.ts` closes the late "yay" card;
+  - `works.spec.ts` waits for the live map hook;
+  - `territory.spec.ts` uses a 60 s first poll.
+
+  A shared `waitForLiveMap` e2e helper is queued as a Chore.
+- **Lane cost stops count helper subagents.** One river lane reached $25 because its background helper kept running after the stop. Briefs now give a budget "helpers included" and require `TaskStop` on helpers at the stop. The supervisor interrupts (`interrupt_session`) a lane that runs past its stop.
+- **Cheap diagnosis before another shoot.** After two paid re-shoot rounds fail to find a visual bug's cause, the supervisor runs a read-only code investigation before briefing another shoot. For #701 this found the halo after three shoot rounds had guessed wrong.
