@@ -1360,9 +1360,9 @@ export function buildBuildingModel(
           );
         }
         // The funnel: wider than the barrel, so it reads from above.
-        part(body, cylinder(0.22 * s, 0.58 * s, 0.18 * s, 12), C.hoop, [x, y + 0.54 * s, z]);
+        part(body, cylinder(0.2 * s, 0.44 * s, 0.18 * s, 12), C.hoop, [x, y + 0.54 * s, z]);
         // The water just above the funnel's lid (level with it, they flicker).
-        part(body, cylinder(0.01, 0.5 * s, 0.5 * s, 16), C.water, [x, y + 0.656 * s, z]);
+        part(body, cylinder(0.01, 0.38 * s, 0.38 * s, 16), C.water, [x, y + 0.646 * s, z]);
       };
       barrelAt(0, 0, 0, 1);
       // Raindrops falling into the funnel.
@@ -1449,7 +1449,7 @@ export function buildBuildingModel(
       part(
         body,
         prism(
-          bank.map(([z, y]) => [z * 1.02, y + 0.012]),
+          bank.map(([z, y]) => [z * 1.04, y + 0.02]),
           1.0,
           0.8,
         ),
@@ -1479,56 +1479,62 @@ export function buildBuildingModel(
       break;
     }
     case 'seawall': {
-      // A long, low sea wall of grey-blue stone rising straight out of the
-      // water: block courses with dark mortar lines on its face and its end,
-      // one smooth coping along the top, and its sea face (-z) curving out
-      // over the water like a breaking wave (a thin wave-return lip), with
-      // flat rings of foam where the water meets it and a lamp. Turned a
-      // little so the curl's profile shows at its end. One level.
+      // A tall, thin sea wall of grey-blue stone rising straight out of the
+      // water: block courses with dark mortar lines on its face and its ends,
+      // a thin coping strip along the top, and its sea face (-z) sweeping out
+      // over the water in a smooth curl like a breaking wave (a wave-return
+      // lip), with flat rings of foam where the water meets it and a lamp.
+      // A third as deep as it is tall, and turned a little so the curl's
+      // profile shows at its end. One level.
       const start = mark();
       const length = 1.3;
-      part(body, box(length + 0.04, 0.03, 0.44), C.water, [0, 0.055, -0.4]);
+      const face = -0.14;
+      part(body, box(length + 0.04, 0.03, 0.46), C.water, [0, 0.055, face - 0.23]);
       // The wall in profile: a straight back, a flat top, and a sea face
       // that rises straight, then follows the curl's outer edge.
-      const c = { z: -0.38, y: 0.3 };
-      const [rIn, rOut] = [0.2, 0.25];
+      const [rIn, rOut] = [0.12, 0.17];
+      const c = { z: face - rIn, y: 0.5 };
       const arc = (t: number, r: number): [number, number] => [
         c.z + Math.cos(t) * r,
         c.y + Math.sin(t) * r,
       ];
       const top = c.y + rOut;
       const outer: [number, number][] = [];
-      for (let i = 0; i <= 4; i++) outer.push(arc((i / 4) * (Math.PI / 2), rOut));
+      for (let i = 0; i <= 6; i++) outer.push(arc((i / 6) * (Math.PI / 2), rOut));
       part(
         body,
-        prism([[0.16, top], [0.16, 0.04], [-0.18, 0.04], [-0.18, c.y], ...outer], length),
+        prism([[0.08, top], [0.08, 0.04], [face, 0.04], [face, c.y], ...outer], length),
         C.seaStone,
         [0, 0, 0],
       );
       // Mortar lines: courses along the face and both ends, joints offset.
-      for (const y of [0.15, 0.27]) {
-        part(body, box(length + 0.01, 0.018, 0.02), C.mortar, [0, y, -0.185]);
+      const courses = [0.16, 0.28, 0.4];
+      for (const y of courses) {
+        part(body, box(length + 0.01, 0.018, 0.02), C.mortar, [0, y, face - 0.005]);
         for (const x of [-length / 2, length / 2]) {
-          part(body, box(0.02, 0.018, 0.34), C.mortar, [x, y, -0.01]);
+          part(body, box(0.02, 0.018, 0.22), C.mortar, [x, y, -0.03]);
         }
       }
-      for (let i = 0; i < 9; i++) {
-        const x = -0.6 + i * 0.15;
-        const y = i % 2 ? 0.09 : 0.21;
-        part(body, box(0.018, 0.11, 0.02), C.mortar, [x, y, -0.185]);
+      for (let row = 0; row <= courses.length; row++) {
+        const y0 = row ? (courses[row - 1] ?? 0) : 0.04;
+        const y1 = courses[row] ?? c.y;
+        for (let i = 0; i < 4; i++) {
+          const x = -0.48 + i * 0.32 + (row % 2) * 0.16;
+          part(body, box(0.018, y1 - y0, 0.02), C.mortar, [x, (y0 + y1) / 2, face - 0.005]);
+        }
       }
-      // The coping: one smooth stone along the top.
-      part(body, box(length + 0.02, 0.05, 0.62), C.seaStoneLight, [0, top + 0.02, -0.15]);
-      // The curl: a thin band from the face out and down over the water.
-      const curl = Math.PI * 0.85;
-      const steps = 7;
+      // The coping: a thin strip of light stone along the top.
+      part(body, box(length + 0.02, 0.03, 0.24), C.seaStoneLight, [0, top + 0.015, -0.04]);
+      // The curl: a smooth band from the face out and over the water.
+      const curl = Math.PI * 0.9;
+      const steps = 12;
       for (let i = 0; i < steps; i++) {
         const t0 = (i / steps) * curl;
         const t1 = ((i + 1) / steps) * curl;
         part(
           body,
           prism([arc(t0, rIn), arc(t0, rOut), arc(t1, rOut), arc(t1, rIn)], length + 0.02),
-          i % 2 ? C.seaStoneLight : C.seaStone,
+          C.seaStoneLight,
           [0, 0, 0],
         );
       }
@@ -1542,12 +1548,12 @@ export function buildBuildingModel(
           body,
           CreateTorus(`${name}-foam`, { diameter: d, thickness: 0.04, tessellation: 12 }, scene),
           C.foam,
-          [x, 0.075, -0.26],
+          [x, 0.075, face - 0.1],
           [1.4, 0.5, 0.7],
         );
       }
-      part(body, cylinder(0.3, 0.03, 0.03, 6), C.post, [0.52, top + 0.2, 0.06]);
-      part(windowList, sphere(0.08, 8), lampColor, [0.52, top + 0.37, 0.06]);
+      part(body, cylinder(0.3, 0.03, 0.03, 6), C.post, [0.52, top + 0.18, -0.02]);
+      part(windowList, sphere(0.08, 8), lampColor, [0.52, top + 0.35, -0.02]);
       turnSince(start, 0.6);
       break;
     }
