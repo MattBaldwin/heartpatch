@@ -345,6 +345,34 @@ describe('MapState', () => {
     expect(state.apply(event('building.paused', { userId: userId(1) }, 5))).toBe('resync');
   });
 
+  it('shows a storm knock and its fix on the building (#621)', () => {
+    const state = new MapState(testView(1));
+    const tile = state.view.tiles.find((t) => t.homeSlot === null)!;
+    const hut = {
+      id: '0190a8c4-0000-7000-8000-000000000202',
+      buildingId: 'woodcutters-hut',
+      kind: 'resource',
+      level: 1,
+      spot: 1,
+      lit: null,
+      safeRadius: null,
+    };
+    state.apply(
+      event(
+        'building.placed',
+        { userId: userId(1), building: { ...hut, q: tile.q, r: tile.r } },
+        2,
+      ),
+    );
+    const at = { userId: userId(1), buildingRowId: hut.id, q: tile.q, r: tile.r };
+    const knockedOf = () => state.tileAt(hexKey(tile))!.buildings[0]?.knocked;
+    expect(state.apply(event('building.knocked', at, 3))).toBe('redraw');
+    expect(knockedOf()).toBe(true);
+    expect(state.apply(event('building.repaired', at, 4))).toBe('redraw');
+    expect(knockedOf()).toBe(false);
+    expect(state.apply(event('building.knocked', { userId: userId(1) }, 5))).toBe('resync');
+  });
+
   it('applies fence events to the tile they stand on (#203)', () => {
     const state = new MapState(testView(1));
     const tile = state.view.tiles.find((t) => t.homeSlot === null)!;

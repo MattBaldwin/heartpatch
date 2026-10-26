@@ -56,7 +56,18 @@ const WILD_BUDGET = {
 
 /** The dev island page's hook (src/map/gallery/island-gallery-main.ts). */
 type IslandHooks = Window & {
-  __islandMap?: { ready: () => boolean; stats: () => MapDebug | null };
+  __islandMap?: {
+    ready: () => boolean;
+    stats: () => MapDebug | null;
+    weather: () => {
+      clouds: number;
+      rain: number;
+      fog: number;
+      mode: string;
+      placed: number;
+    } | null;
+    clock: () => number | null;
+  };
 };
 
 function mapState(page: Page): Promise<MapDebug | null> {
@@ -418,4 +429,137 @@ test('keeps a Wild Isle in its draw-call and triangle budget, up close and zoome
   });
   expect(far.drawCalls).toBeLessThanOrEqual(near.drawCalls);
   expect(far.activeTriangles).toBeLessThanOrEqual(WILD_BUDGET.farTriangles);
+});
+
+test('draws a Wild Isle storm inside the draw-call budget; low keeps a lighter storm rain; reduced motion holds still (#621)', async ({
+  page,
+}) => {
+  test.setTimeout(150_000); // shader compiles; CI renders in software
+  const look = async (query: string) => {
+    await page.goto(`/island.html?${query}`);
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const hook = (window as IslandHooks).__islandMap;
+            return hook?.ready() === true ? (hook.weather()?.placed ?? 0) : 0;
+          }),
+        { timeout: 60_000 },
+      )
+      .toBeGreaterThan(0);
+    return page.evaluate(() => {
+      const hook = (window as IslandHooks).__islandMap;
+      return { stats: hook?.stats() ?? null, weather: hook?.weather() ?? null };
+    });
+  };
+
+  // High tier, a storm: clouds and rain, still inside the Wild Isle budget (5 weather draw calls: clouds, shadows, rain, bolts, fog; plus the glow pass round the bolts).
+  const storm = await look('tier=high&patch=wild&weather=storm');
+  expect(storm.weather?.clouds).toBeGreaterThan(0);
+  expect(storm.weather?.rain).toBeGreaterThan(0);
+  expect(storm.stats?.drawCalls).toBeLessThanOrEqual(WILD_BUDGET.drawCalls);
+
+  // Fog draws fog only.
+  const fog = await look('tier=high&patch=wild&weather=fog');
+  expect(fog.weather?.fog).toBeGreaterThan(0);
+  expect(fog.weather?.rain).toBe(0);
+  expect(fog.stats?.drawCalls).toBeLessThanOrEqual(WILD_BUDGET.drawCalls);
+
+  // The low tier drops plain rain but a storm keeps a lighter one: fewer streaks than the high tier.
+  const low = await look('tier=low&patch=wild&weather=storm');
+  expect(low.weather?.mode).toBe('off');
+  expect(low.weather?.clouds).toBeGreaterThan(0);
+  expect(low.weather?.rain).toBeGreaterThan(0);
+  expect(low.weather?.rain).toBeLessThan(storm.weather?.rain ?? 0);
+  const lowRain = await look('tier=low&patch=wild&weather=rain');
+  expect(lowRain.weather?.rain).toBe(0);
+
+  // Reduced motion (the gallery's setting) holds the weather still: the clock never moves.
+  await look('tier=high&patch=wild&weather=storm');
+  const before = await page.evaluate(() => (window as IslandHooks).__islandMap?.clock() ?? null);
+  await page.waitForTimeout(1500);
+  const after = await page.evaluate(() => (window as IslandHooks).__islandMap?.clock() ?? null);
+  expect(storm.weather?.mode).toBe('still');
+  expect(after).toBe(before);
+
+  // A cozy patch has no weather layer at all.
+  await page.goto('/island.html?tier=high&patch=cozy&weather=storm');
+  await expect
+    .poll(() => page.evaluate(() => (window as IslandHooks).__islandMap?.ready() === true), {
+      timeout: 60_000,
+    })
+    .toBe(true);
+  expect(
+    await page.evaluate(() => (window as IslandHooks).__islandMap?.weather()?.placed ?? 0),
+  ).toBe(0);
+});
+
+test('a real tap on the weather chip opens the Forecast sheet, and the top bar fits a 375pt phone (#621)', async ({
+  browser,
+}) => {
+  test.setTimeout(180_000); // one signup through the Keeper picker, 40 s of rain; CI renders in software
+  const page = await newPlayer(browser, uniqueName('sky'));
+  // The high tier, pinned: software rendering would drop to low (no rain) on its own.
+  await page.goto('/?tier=high');
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByTestId('lobby-patch-type-wild-isle').tap();
+  await lobby.getByLabel('Patch name').fill('Drizzle Cove');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(lobby).toBeHidden();
+
+  const chip = page.getByTestId('weather-chip');
+  await expect(chip).toBeVisible({ timeout: 30_000 });
+  // Nothing lies over the chip (the HUD is pointer-events: none, the legend's
+  // whole-row tap sits under it): the finger lands on the chip itself.
+  const hit = await chip.evaluate((node) => {
+    const r = node.getBoundingClientRect();
+    const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return top !== null && node.contains(top);
+  });
+  expect(hit).toBe(true);
+  // Rain over my home, an hour in (the server's clock), read when the sheet opens.
+  const mapId = (await mapState(page))!.id;
+  const sky = await page.request.get(`/api/v1/maps/${mapId}/weather`);
+  const serverTime = Date.parse(((await sky.json()) as { serverTime: string }).serverTime);
+  const rained = await page.request.post(`/api/v1/maps/${mapId}/dev/weather`, {
+    data: { kind: 'rain', hours: 6, at: new Date(serverTime - 3_600_000).toISOString() },
+    headers: { 'x-requested-with': 'heartpatch' },
+  });
+  expect(rained.ok()).toBe(true);
+  const opened = Date.now();
+  // A real click (no force, no dispatched event): the sheet opens, the legend stays shut.
+  await chip.click();
+  await expect(page.getByTestId('weather-sheet')).toBeVisible();
+  await expect(page.getByTestId('map-legend-button')).not.toHaveAttribute('aria-expanded', 'true');
+  await page.getByTestId('weather-close').click();
+  await expect(page.getByTestId('weather-sheet')).toBeHidden();
+
+  // The rain keeps falling for the whole front: a slow (software-rendered)
+  // device's ambient goes off a few seconds in, and the streaks hold still
+  // then rather than vanish (#621 round 3).
+  const rain = () =>
+    page.evaluate(
+      () =>
+        (
+          window as Window & { __heartpatch?: { weather?: () => { rain: number } } }
+        ).__heartpatch?.weather?.().rain ?? 0,
+    );
+  await expect.poll(rain, { timeout: 30_000 }).toBeGreaterThan(0);
+  for (const at of [15_000, 40_000]) {
+    await expect.poll(() => Date.now() - opened, { timeout: 60_000 }).toBeGreaterThan(at);
+    expect(await rain(), `rain ${String(at / 1000)}s in`).toBeGreaterThan(0);
+  }
+
+  // iPhone SE width: "My patches" ends before the 🐾 button begins.
+  await page.setViewportSize({ width: 375, height: 667 });
+  const gap = await page.evaluate(() => {
+    const patches = document.querySelector('.lobby-open')?.getBoundingClientRect();
+    const paw = document.querySelector('.squishies-open-map')?.getBoundingClientRect();
+    return patches && paw ? paw.left - patches.right : null;
+  });
+  expect(gap).not.toBeNull();
+  expect(gap!).toBeGreaterThanOrEqual(4);
+  await page.context().close();
 });

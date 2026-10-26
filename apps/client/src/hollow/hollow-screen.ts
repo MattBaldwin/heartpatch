@@ -42,6 +42,7 @@ import {
   STAGES,
   stageNights,
   upkeepPausedLine,
+  weatherNotesLine,
 } from './night-text.js';
 import type { UpkeepPaused } from '../heart-coins/heart-coins.js';
 import type { BeatKind, Narration } from './show-timeline.js';
@@ -184,6 +185,8 @@ const watchedKey = (userId: string, mapId: string) => `heartpatch.hollow.show.${
 /** The last night whose dark-land nudge was answered on this device (#277). */
 const nudgeKey = (userId: string, mapId: string) => `heartpatch.hollow.nudge.${userId}.${mapId}`;
 /** The last morning whose upkeep pauses were told (#601 PR 9). */
+const weatherKey = (userId: string, mapId: string) =>
+  `heartpatch.hollow.weather-knocks.${userId}.${mapId}`;
 const upkeepKey = (userId: string, mapId: string) =>
   `heartpatch.hollow.upkeep-paused.${userId}.${mapId}`;
 /** The live show's prowl: he strikes this long after nightfall. */
@@ -440,6 +443,12 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       ? { ...paused, at: paused.morning }
       : null;
   }, upkeepKey);
+  // Once per device per storm: the newest knock's time is its mark (#621).
+  const weatherNote = oneTimeNote((s) => {
+    const notes = s.weatherNotes ?? [];
+    const newest = notes[0];
+    return newest ? { notes, at: newest.at } : null;
+  }, weatherKey);
   const markSeen = (night: string): void => {
     if (!user || !mapId) return;
     try {
@@ -765,6 +774,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       ? `${upkeep.at}:${upkeep.buildings.map((b) => b.buildingId).join(',')}`
       : null;
     const upkeepLine = upkeep ? upkeepPausedLine(upkeep.buildings) : null;
+    const stormLine = weatherNotesLine(weatherNote.note()?.notes ?? []);
     renderChips();
     reportBox.hidden =
       !on ||
@@ -774,7 +784,8 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         tidyLines.length === 0 &&
         !crowded &&
         !treated &&
-        !upkeepLine) ||
+        !upkeepLine &&
+        !stormLine) ||
       visitPlaying ||
       show.playing ||
       strengthOpen ||
@@ -796,6 +807,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         ...(crowded ? [...HOLLOW_TEXT.packedCrowded, describeItems(crowded.refund)] : []),
         ...(treated ? trickOrTreatLines(treated) : []),
         ...(upkeepLine ? [upkeepLine] : []),
+        ...(stormLine ? [stormLine] : []),
       ];
       const waiting = report.flatMap((r) => r.taken.filter((t) => t.inHollow));
       const rescueFirst = waiting[0];
@@ -967,6 +979,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     crowdedNote.markSeen();
     trickNote.markSeen();
     upkeepNote.markSeen();
+    weatherNote.markSeen();
     report = [];
     render();
   }

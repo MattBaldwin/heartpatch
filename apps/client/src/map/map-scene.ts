@@ -752,6 +752,11 @@ export class MapScene {
     return this.mode;
   }
 
+  /** The one terrain clock, for a layer drawn over the map (Wild Isle weather, #621). */
+  get terrainClock(): TerrainClock {
+    return this.clock;
+  }
+
   /**
    * Moves ambient time to `now` (wall-clock ms). True if the map should draw
    * a frame for it (ambient life is live); the caller paces these.

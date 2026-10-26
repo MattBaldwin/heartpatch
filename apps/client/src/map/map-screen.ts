@@ -26,6 +26,8 @@ import { greyTiles, hollowedTileInfo } from '../hollowed/community-model.js';
 import { HEX_SIZE } from './map-config.js';
 import { mapApi } from './map-api.js';
 import { AmbientDriver } from './ambient-driver.js';
+import type { AmbientMode } from './ambient-layout.js';
+import type { TerrainClock } from './terrain-plugin.js';
 import { isHalloween, isWaterTile, seasonsOn } from './map-dressing.js';
 import { mountMapLegend } from './map-legend.js';
 import { createPatchStatsScreen } from './patch-stats-screen.js';
@@ -94,14 +96,25 @@ export interface MapScreenOptions {
   };
 }
 
+/** What a map layer can read of the map it is drawn over. */
+export interface MapLayerHost {
+  /** The one terrain clock; it only moves while ambient life is `live`. */
+  readonly clock: TerrainClock;
+  /** How ambient life runs now: `live`, `still` (reduced motion) or `off` (low tier, slow device, WebGPU). */
+  readonly mode: () => AmbientMode;
+  /** Draws a few frames after a change (`Stage.invalidate`). */
+  readonly invalidate: () => void;
+}
+
 /** A feature that adds to the map's scene (#21: night lighting and the Hollow Man). */
 export interface MapLayer {
   /**
    * The map was built into a fresh `scene` (on open, and again after a
    * GPU-loss rebuild). Disposed with the scene; `scene.onDisposeObservable`
-   * says when.
+   * says when. `host` is what a layer that moves with the terrain reads
+   * (Wild Isle weather, #621).
    */
-  attach: (scene: Scene, view: MapView) => void;
+  attach: (scene: Scene, view: MapView, host?: MapLayerHost) => void;
   /** The map redrew from a newer view (a live event, or a resync's refetch). */
   update?: (view: MapView) => void;
 }
@@ -487,7 +500,20 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       ambient.stop();
       onStage = false;
     });
-    for (const layer of options.layers ?? []) layer.attach(scene, drawn);
+    const host: MapLayerHost = {
+      clock: built.terrainClock,
+      mode: () => built.ambientMode,
+      invalidate: options.invalidate,
+    };
+    for (const layer of options.layers ?? []) {
+      // One layer that fails to attach (a decorative one, say the weather)
+      // must not stop the map opening, nor the layers after it.
+      try {
+        layer.attach(scene, drawn, host);
+      } catch (err) {
+        console.error('A map layer could not attach', err);
+      }
+    }
     if (selected) built.select(selected);
     built.showBuildArea(buildArea?.view ?? null);
     const unregister = options.targets?.register('resource-node', () =>
