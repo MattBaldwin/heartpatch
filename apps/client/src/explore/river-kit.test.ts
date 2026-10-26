@@ -9,7 +9,7 @@ import { insideTile } from './explore-view.js';
 import { bankReach, hexReach, landField, type LandSpot } from './land-shape.js';
 import { LAND_LIGHT } from './land-config.js';
 import { landLayout, type LayoutInput } from './land-layout.js';
-import { BANK, bankRadius, farBankRadius, RIVER, RIVER_LOOK } from './river-config.js';
+import { BANK, bankRadius, farBankRadius, REED_CLEAR, RIVER, RIVER_LOOK } from './river-config.js';
 import { farBankHeight, RIVER_SPOTS } from './river-kit.js';
 
 const SIZE = 7;
@@ -79,6 +79,22 @@ describe('river look', () => {
     }
     const rs = bankRadius();
     expect(hexReach({ x: 0, z: rs }, SIZE)).toBeGreaterThan(1);
+  });
+
+  it('never lets the meadow dip to the water, on any tile', () => {
+    // A rise near the middle (where the meadow is levelled to 0) used to sink
+    // the rest of the meadow under the water's surface, so it showed through.
+    for (let seed = 1; seed <= 120; seed++) {
+      const land = landField(RIVER_LOOK.shape, seed * 7919, SIZE, START);
+      for (const p of walkable) {
+        const { x, z } = world(p);
+        if (bankReach({ x, z }, SIZE) >= BANK.shore) continue;
+        if (Math.hypot(x, z) > RIVER_LOOK.shape.edge - 0.2) continue;
+        expect(land.height(x, z) - RIVER.level, `seed ${String(seed)}`).toBeGreaterThanOrEqual(
+          BANK.dry - 1e-9,
+        );
+      }
+    }
   });
 
   it('pads each spot on the bank to its kind and leaves one on the meadow alone', () => {
@@ -171,6 +187,17 @@ describe('river dressing', () => {
           expect(e).toBeLessThan(to);
           expect(insideTile({ x: g.x / SIZE, z: g.z / SIZE }, 0)).toBe(true);
           for (const k of colliders) expect(Math.hypot(g.x - k.x, g.z - k.z)).toBeGreaterThan(k.r);
+          // Reeds stand well off each spot, and off the strip from it towards
+          // the camera (-z), where the Keeper stands to search: none hides it.
+          if (list === reeds) {
+            for (const k of colliders) {
+              for (let back = 0; back <= REED_CLEAR.front; back += 0.05) {
+                expect(Math.hypot(g.x - k.x, g.z - (k.z - back))).toBeGreaterThanOrEqual(
+                  k.r + REED_CLEAR.gap - 1e-9,
+                );
+              }
+            }
+          }
           if (jetty) {
             const t = Math.min(
               jetty.length,

@@ -10,7 +10,7 @@ import type { SpotShape } from './trail-kit.js';
 import type { LandOptions } from './explore-land.js';
 import { EXPLORE_VIEW } from './explore-config.js';
 import { bankReach } from './land-shape.js';
-import { BANK, bankRadius, CROSSINGS, farBankRadius, RIVER } from './river-config.js';
+import { BANK, bankRadius, CROSSINGS, farBankRadius, REED_CLEAR, RIVER } from './river-config.js';
 
 // The river bank's shapes (#621 W1-13), on the meadow's kit like the coast's:
 // the same vinyl-toy primitives, vertex-coloured from a darker foot to a
@@ -194,6 +194,10 @@ export function buildRiver(scene: Scene): Mesh {
     return merged([part]);
   });
   mesh.hasVertexAlpha = true;
+  // First of the see-through layers: the lantern's halo and the mist, which
+  // sit over it, are sorted by distance and would otherwise draw first and be
+  // washed out by the water drawn over them.
+  mesh.alphaIndex = 0;
   return mesh;
 }
 
@@ -753,36 +757,58 @@ export function buildLantern(scene: Scene): Mesh {
   });
 }
 
-/** The lantern's soft halo once it's lit: shells of warm light, fainter outwards. */
+/**
+ * The lantern's soft halo once it's lit: nested shells of warm light, fainter
+ * outwards, so it glows brightest round the glass and fades out about three
+ * times the lantern's size, in many small steps so no shell's edge shows.
+ * Drawn after the water (`buildRiver`), without writing depth, so the shells
+ * add up softly.
+ */
 export function buildLanternHalo(scene: Scene): Mesh {
   const mesh = kitMesh(scene, 'river-lantern-halo', () => {
     const { lamp } = lanternPost();
     return merged(
       (
         [
-          [0.55, 0.32],
-          [0.95, 0.16],
-          [1.5, 0.07],
+          [0.3, 0.12],
+          [0.38, 0.1],
+          [0.46, 0.09],
+          [0.54, 0.08],
+          [0.62, 0.07],
+          [0.7, 0.05],
+          [0.78, 0.04],
         ] as const
-      ).map(([d, alpha]) => faded(flat(sphere(d, 6, lamp), '#ffd27a'), alpha)), // TUNE
+      ).map(([d, alpha]) => faded(flat(sphere(d, 8, lamp), '#ffd27a'), alpha)), // TUNE
     );
   });
   mesh.hasVertexAlpha = true;
   return mesh;
 }
 
-/** Wisps of mist lying low on the water at dusk (lightly spooky): wide, flat and faint. */
+/**
+ * Wisps of mist lying low on the water at dusk (lightly spooky): wide, flat
+ * and faint, each a few stacked discs, smaller and fainter upwards, so its
+ * edge fades out instead of ending hard. Out over the shallows' far side and
+ * the deep, clear of the shore and the spots' pads.
+ */
 export function buildMist(scene: Scene): Mesh {
   const mesh = kitMesh(scene, 'river-mist', () => {
     const rs = bankRadius();
     const rf = farBankRadius();
     const parts: Part[] = [];
     for (let i = 0; i < 14; i++) {
-      const a = rad(5 + spread(i * 3 + 2) * 170);
-      const r = rs - 1.2 + spread(i * 7 + 1) * (rf - rs + 1.5);
-      const d = 2.2 + spread(i * 11) * 1.8;
-      const y = RIVER.level + 0.12 + spread(i * 5) * 0.12;
-      parts.push(faded(flat(sphere(d, 6, polar(r, a, y), [1.6, 0.06, 1]), '#d6d0ff'), 0.16)); // TUNE
+      const a = rad(20 + spread(i * 3 + 2) * 140);
+      const r = rs - 0.4 + spread(i * 7 + 1) * (rf - rs + 0.4);
+      const d = 1.6 + spread(i * 11) * 1.2;
+      const y = RIVER.level + 0.16 + spread(i * 5) * 0.1;
+      for (const [k, alpha] of [
+        [1, 0.1],
+        [0.72, 0.09],
+        [0.45, 0.08],
+      ] as const) {
+        const at = polar(r, a, y + (1 - k) * 0.05);
+        parts.push(faded(flat(sphere(d * k, 6, at, [1.6, 0.02, 1]), '#d6d0ff'), alpha)); // TUNE
+      }
     }
     return merged(parts);
   });
@@ -807,11 +833,24 @@ export function buildBankRocks(scene: Scene): Mesh {
   );
 }
 
-/** Whether a place is clear of every spot's collider by `gap` more. */
-const clear = (ctx: ExtrasContext, x: number, z: number, gap: number): boolean =>
-  !ctx.colliders.some((k) => (x - k.x) ** 2 + (z - k.z) ** 2 < (k.r + gap) ** 2);
+/**
+ * Whether a place is clear of every spot's collider by `gap` more, all the
+ * way along `front` towards the camera (-z) too: the Keeper stands round a
+ * spot to search, and the camera looks over its shoulder, so anything tall
+ * in that strip would hide it.
+ */
+function clear(ctx: ExtrasContext, x: number, z: number, gap: number, front: number): boolean {
+  return !ctx.colliders.some((k) => {
+    const dz = z - Math.min(k.z, Math.max(k.z - front, z));
+    return Math.hypot(x - k.x, dz) < k.r + gap;
+  });
+}
 
-/** `count` places on the bank between `from` and `to` of the way to its back edges (`bankReach`), clear of the spots and the jetty. */
+/**
+ * `count` places on the bank between `from` and `to` of the way to its back
+ * edges (`bankReach`), `gap` apart and clear of the spots (`clear`) and the
+ * jetty.
+ */
 function onBank(
   ctx: ExtrasContext,
   count: number,
@@ -819,6 +858,7 @@ function onBank(
   to: number,
   scale: [number, number],
   gap: number,
+  spots: { readonly gap: number; readonly front: number } = { gap, front: gap },
 ): Growth[] {
   const jetty = ctx.land.bank?.jetty ?? null;
   const offJetty = (x: number, z: number) => {
@@ -834,12 +874,12 @@ function onBank(
   const out: Growth[] = [];
   const between = (lo: number, hi: number) => lo + ctx.rand() * (hi - lo);
   const half = ctx.size * 0.866;
-  for (let tries = 0; out.length < count && tries < count * 60; tries++) {
+  for (let tries = 0; out.length < count && tries < count * 200; tries++) {
     const x = between(-half, half);
     const z = between(0, ctx.size);
     const e = bankReach({ x, z }, ctx.size);
     if (e < from || e > to || Math.abs(x) > half - 0.3) continue;
-    if (!clear(ctx, x, z, gap) || !offJetty(x, z)) continue;
+    if (!clear(ctx, x, z, spots.gap, spots.front) || !offJetty(x, z)) continue;
     if (out.some((g) => Math.hypot(g.x - x, g.z - z) < gap * 1.6)) continue;
     out.push({ x, z, yaw: ctx.rand() * Math.PI * 2, scale: between(scale[0], scale[1]) });
   }
@@ -848,7 +888,16 @@ function onBank(
 
 function riverPlace(ctx: ExtrasContext): Readonly<Record<string, readonly Growth[]>> {
   // Reeds growing in the shallows just past the waterline, off the spots and the jetty.
-  const reeds = onBank(ctx, 10, BANK.water + 0.03, BANK.water + 0.17, [0.75, 1.05], 0.5);
+  // They stand well off the camera's side of each spot, so none hides the Keeper searching there.
+  const reeds = onBank(
+    ctx,
+    10,
+    BANK.water + 0.03,
+    BANK.water + 0.17,
+    [0.75, 1.05],
+    0.5,
+    REED_CLEAR,
+  );
   for (const g of reeds) ctx.shade(g.x, g.z, 0.4 * g.scale, 1 * g.scale);
   // A few mossy rocks on the pebbly shore.
   const rocks = onBank(ctx, 4, BANK.shore + 0.02, BANK.water - 0.03, [0.6, 0.9], 0.6);
@@ -880,7 +929,7 @@ export const RIVER_EXTRAS: Layers = {
     ripples: { build: buildRipples },
     'river-rocks': { build: buildRiverRocks },
     'far-bank': { build: buildFarBank },
-    mist: { build: buildMist, glow: 0.7, darkOnly: true }, // TUNE: faint, lavender
+    mist: { build: buildMist, glow: 0.9, darkOnly: true }, // TUNE: faint, lavender
     jetty: { build: buildJetty },
     lantern: { build: buildLantern, glow: 1.1, dusk: 2.6 }, // TUNE: a warm dot by day, bright at dusk
     'lantern-halo': { build: buildLanternHalo, glow: 1.4, darkOnly: true }, // TUNE
@@ -1011,9 +1060,34 @@ function buildPebbleBar(scene: Scene): SpotShape {
 const surface = (kind: string): number => -(BANK.pads[kind] ?? 0);
 
 /**
+ * A little orange fish lying flat in the water at `at`, swimming along
+ * `heading` (radians, from +x towards +z): a plump body, a fanned tail and a
+ * dark eye, all low, so from the camera it reads as a fish seen from above.
+ */
+function fish(at: Vec3, heading: number): Part[] {
+  const [x, y, z] = at;
+  const dx = Math.cos(heading);
+  const dz = Math.sin(heading);
+  // Babylon's yaw turns +x towards -z.
+  const yaw = -heading;
+  const body = sphere(0.3, 5, [x, y, z], [1, 0.2, 0.46]);
+  body.rotation.y = yaw;
+  const tail = sphere(0.16, 4, [x - dx * 0.19, y, z - dz * 0.19], [0.55, 0.12, 1]);
+  tail.rotation.y = yaw;
+  return [
+    shaded(body, '#d9582a', '#ff9a4d', y - 0.03, y + 0.03),
+    shaded(tail, '#e8743a', '#ffb067', y - 0.02, y + 0.02),
+    flat(
+      sphere(0.045, 3, [x + dx * 0.09 - dz * 0.05, y + 0.025, z + dz * 0.09 + dx * 0.05]),
+      '#2b2230',
+    ),
+  ];
+}
+
+/**
  * A swirly eddy out in the shallows: a darker, deeper swirl on the water's
  * surface, its ripples curling in a spiral, smooth stones breaking the
- * surface round it, a fish fin and a lily pad.
+ * surface round it, a little orange fish circling in it and a lily pad.
  */
 function buildEddy(scene: Scene): SpotShape {
   const mesh = kitMesh(scene, 'river-spot-eddy', () => {
@@ -1057,13 +1131,7 @@ function buildEddy(scene: Scene): SpotShape {
       );
     }
     parts.push(
-      shaded(
-        sphere(0.3, 4, [0.16, y + 0.1, 0.1], [0.12, 1, 0.7]),
-        '#ffb067',
-        '#d9582a',
-        y,
-        y + 0.24,
-      ),
+      ...fish([0.2, y + 0.03, 0.12], 2.1),
       shaded(
         cylinder(0.02, 0.3, 0.3, 10, [-0.34, y + 0.02, -0.22]),
         '#3f8a44',

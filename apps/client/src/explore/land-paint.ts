@@ -154,7 +154,7 @@ export function paintGround(input: PaintInput): Uint8Array {
         const sandy = land.bank.shore(x, z);
         if (sandy > 0) {
           const under = land.bank.level - land.height(x, z);
-          const pebble = 0.9 + 0.1 * valueNoise(x * 7, z * 7, seed + 33);
+          const pebble = 0.95 + 0.05 * valueNoise(x * 9, z * 9, seed + 33); // TUNE: a fine, gentle grain
           const t: Rgb = [
             bankColours.sand[0] * pebble,
             bankColours.sand[1] * pebble,

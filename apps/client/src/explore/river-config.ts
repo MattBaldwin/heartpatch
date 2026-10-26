@@ -35,6 +35,7 @@ export const BANK: LandBank = {
   level: LEVEL,
   floor: 0.22, // TUNE: the shallows' depth: a paddle, not a swim
   bottom: 2.6, // TUNE
+  dry: 0.1, // TUNE: the meadow's lowest dip, over the water's surface
   // Each spot on the bank sits where it belongs: the eddy and the cattails
   // out in the shallows, the pebble bar a spit just out of the water, the
   // mossy log on the wet sand at the water's edge.
@@ -48,6 +49,13 @@ export const BANK: LandBank = {
     deck: 0.26, // TUNE
   },
 };
+
+/**
+ * How far the near bank's reeds stand off each spot, world units past its
+ * collider (`gap`), all along a strip `front` long from it towards the
+ * camera, where the Keeper stands to search and a clump would hide it.
+ */
+export const REED_CLEAR = { gap: 0.9, front: 1.4 } as const; // TUNE
 
 const SHAPE: LandShape = {
   // A soft, mostly level meadow: the water's surface is fixed, so the grass

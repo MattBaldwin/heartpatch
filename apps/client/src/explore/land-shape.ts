@@ -177,7 +177,7 @@ export function landField(
   };
 
   if (!shape.bank) return { height: raw, stand: raw, bank: null, pathX, pathMask, rises };
-  return { ...banked(shape.bank, raw, size, spots), pathX, pathMask, rises };
+  return { ...banked(shape.bank, raw, size, spots, edge), pathX, pathMask, rises };
 }
 
 const ease = (a: number, b: number, x: number): number => {
@@ -189,14 +189,25 @@ const ease = (a: number, b: number, x: number): number => {
  * A bank's ground: the meadow (levelled so its middle is at 0, where the
  * river's layers are placed) eased down through the bank's bands, each spot
  * on the bank padded to its kind's height, and the jetty's deck to stand on.
+ * Its dips below the middle ease off before they reach the water (`dry`), up
+ * to where it falls away past `edge`.
  */
 function banked(
   bank: LandBank,
   raw: (x: number, z: number) => number,
   size: number,
   spots: readonly LandSpot[],
+  edge: number,
 ): Pick<LandField, 'height' | 'stand' | 'bank'> {
   const base = raw(0, 0);
+  // Above the middle the meadow is as it rolls; below it, it eases (smoothly)
+  // towards `dry` over the water and never past it.
+  const sag = -(bank.level + bank.dry);
+  const dry = (h: number, x: number, z: number): number => {
+    if (h >= 0 || sag <= 0) return h;
+    const eased = -sag * (1 - Math.exp(h / sag));
+    return h + (eased - h) * (1 - ease(edge - 0.2, edge + 0.4, Math.hypot(x, z)));
+  };
   const reach = (x: number, z: number) => bankReach({ x, z }, size);
   // Only spots on the bank are padded; one out on the meadow keeps the grass.
   const pads = spots.flatMap((s) => {
@@ -205,7 +216,7 @@ function banked(
     return lift === undefined || on === 0 ? [] : [{ x: s.x, z: s.z, y: bank.level + lift, on }];
   });
   const height = (x: number, z: number): number => {
-    let h = raw(x, z) - base;
+    let h = dry(raw(x, z) - base, x, z);
     const e = reach(x, z);
     if (e > bank.shore) {
       h += (bank.level - h) * ease(bank.shore, bank.water, e);

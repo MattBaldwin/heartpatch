@@ -78,6 +78,12 @@ export interface LandBank {
   readonly floor: number;
   readonly bottom: number;
   /**
+   * How far over the water the meadow inside the tile always stays: where its
+   * rolls dip below the middle they ease off towards this, so the water never
+   * shows through the grass (#621).
+   */
+  readonly dry: number;
+  /**
    * The ground under a spot of these kinds on the bank, as a height above the
    * water (negative: under it), so each one sits where it belongs: a pool
    * dipped into the shallows, a pebble spit just out of the water. It eases

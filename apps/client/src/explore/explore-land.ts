@@ -293,14 +293,18 @@ export class ExploreLand {
     // A biome's own layers (`LandOptions.extras`), after the shared ones.
     for (const [name, layer] of Object.entries(options.extras?.layers ?? {})) {
       let material: Material = landMat;
+      const mesh = layer.build(scene);
       if (layer.glow !== undefined) {
         const lit = glow(scene, `land-${name}-glow-mat`, '#ffffff', layer.glow);
+        // Soft see-through light (a halo's shells, wisps of mist) blends over
+        // itself and what's behind it rather than hiding it.
+        if (mesh.hasVertexAlpha) lit.disableDepthWrite = true;
         if (layer.dusk !== undefined) {
           this.#lit.push({ mat: lit, color: Color3.White(), day: layer.glow, dark: layer.dusk });
         }
         material = lit;
       }
-      this.#grow(name, layer.build(scene), L.extras[name] ?? [], material, {
+      this.#grow(name, mesh, L.extras[name] ?? [], material, {
         ...(layer.sway !== undefined ? { sway: layer.sway } : {}),
         ...(layer.thins !== undefined ? { thins: layer.thins } : {}),
         ...(layer.darkOnly ? { darkOnly: true } : {}),
