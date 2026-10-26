@@ -19,6 +19,8 @@ interface ViewTile {
   buildings: { buildingId: string }[];
 }
 
+const mapState = (page: Parameters<typeof hook>[0]) =>
+  hook<{ id: string; live: string | null }>(page, 'map');
 const tileBuild = (page: Parameters<typeof hook>[0]) =>
   hook<{ cards: string[]; mode: string | null }>(page, 'tileBuild');
 
@@ -72,6 +74,12 @@ test('a Fishing Pier goes up on a homestead by the water; a works with no water 
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  // `data-ready` is the engine, not the map: on a slow WebKit the patch can
+  // still be building (each poll of the pick then runs long), so wait until
+  // the map is drawn and caught up live before picking the tile.
+  await expect
+    .poll(() => mapState(page), { timeout: 60_000 })
+    .toMatchObject({ id: mapId, live: 'live' });
 
   await selectTile(page, at);
   await page.getByTestId('tile-build').tap();
