@@ -108,7 +108,12 @@ function footprintFit(scene: Scene, buildingId: string): number {
   if (known !== undefined) return known;
   const reach = (level: number) => {
     const { body, glow } = buildModel(scene, buildingId, 'plain', level, 1);
-    const r = [footprintReach(body), footprintEdgeReach(body)] as const;
+    // Every part counts, the glowing ones too.
+    const parts = glow ? [body, glow] : [body];
+    const r = [
+      Math.max(...parts.map(footprintReach)),
+      Math.max(...parts.map(footprintEdgeReach)),
+    ] as const;
     body.dispose();
     glow?.dispose();
     return r;
@@ -852,7 +857,8 @@ function buildModel(
       // the same well on a river-side base: a ribbon of stream behind it,
       // pebbles and reeds on the bank.
       if (buildingId === 'river-well') {
-        part(body, box(1.1, 0.04, 0.26), C.water, [0, 0.06, 0.46]);
+        // Short of the tile's bevelled rim, so it never reads as on the seam.
+        part(body, box(0.8, 0.04, 0.2), C.water, [0, 0.06, 0.4]);
         part(body, cylinder(0.08, 0.9, 0.96, 18), C.bank, [0, 0.04, 0], [1, 1, 0.8]);
         for (const x of [-0.42, -0.1, 0.3, 0.5]) {
           part(body, sphere(0.09, 8), C.rock, [x, 0.1, 0.32], [1, 0.6, 1]);

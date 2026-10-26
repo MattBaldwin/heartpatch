@@ -267,10 +267,13 @@ describe('Wild Isle works models (#621 W1-10)', () => {
     expect(TILE_FOOTPRINT.edge).toBeLessThanOrEqual(inner);
     for (const id of WILD) {
       for (const level of [3, 4]) {
-        const { body } = buildBuildingModel(scene, id, 'plain', level);
-        expect(footprintEdgeReach(body), `${id} L${String(level)}`).toBeLessThanOrEqual(
-          TILE_FOOTPRINT.edge + 1e-6,
-        );
+        // Every mesh, flat ground pieces and glowing parts included.
+        const { body, glow } = buildBuildingModel(scene, id, 'plain', level);
+        for (const mesh of glow ? [body, glow] : [body]) {
+          expect(footprintEdgeReach(mesh), `${id} L${String(level)}`).toBeLessThanOrEqual(
+            TILE_FOOTPRINT.edge + 1e-6,
+          );
+        }
       }
     }
   });
