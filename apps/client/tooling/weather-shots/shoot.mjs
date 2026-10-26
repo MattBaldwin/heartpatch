@@ -349,9 +349,18 @@ function frameFacts(page, insets) {
         !e.closest('[hidden]')
       );
     };
+    // On screen, not only laid out: a line scrolled out of the sheet's own scroll area is not in the picture.
+    const shown = (e) => {
+      if (!visible(e)) return false;
+      const port = e.closest('.weather-sheet-scroll');
+      if (!port) return true;
+      const b = e.getBoundingClientRect();
+      const p = port.getBoundingClientRect();
+      return b.top >= p.top - 1 && b.bottom <= p.bottom + 1;
+    };
     const text = (sel) =>
       [...document.querySelectorAll(sel)]
-        .filter(visible)
+        .filter(shown)
         .map((e) => e.innerText.trim().replace(/\s*\n+\s*/g, ' · '));
     const listUnder = (head) => {
       const h3 = [...document.querySelectorAll('.weather-sheet h3')].find(
@@ -360,7 +369,7 @@ function frameFacts(page, insets) {
       const next = h3?.nextElementSibling;
       if (!next || !visible(next)) return [];
       return [...next.querySelectorAll('[data-testid="weather-front"]')]
-        .filter(visible)
+        .filter(shown)
         .map((e) => e.innerText.trim());
     };
     // Panel text that is really on screen: lines cut by the viewport are named, not quoted whole.
