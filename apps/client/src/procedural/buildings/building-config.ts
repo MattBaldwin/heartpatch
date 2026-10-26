@@ -97,20 +97,13 @@ export const BUILDING_COLORS = {
   hoop: '#8a96a8', // TUNE: the Rain Barrel's hoops, the vane's metal
   barrel: '#c98e62', // TUNE
   bank: '#8fd17e', // TUNE: the Levee's grassy bank
-  wall: '#cfc6d9', // TUNE: the Seawall's blocks
-  wallDark: '#aea4bd', // TUNE
-  shell: '#ffc9d6', // TUNE: a seashell on the wall
   clay: '#d9a07c', // TUNE: the Salt Pans' clay rims
-  plank: '#c99a6e', // TUNE: the Levee's plank edge
   stave: '#a8734f', // TUNE: the lines between the Rain Barrel's staves
-  seaStone: '#97adc0', // TUNE: the Seawall's grey-blue blocks
-  seaStoneLight: '#b6c8d8', // TUNE
-  seaStoneDark: '#7b93a9', // TUNE
   riverStone: '#a89c90', // TUNE: the Levee's rounded grey-brown stones
+  seaStone: '#97adc0', // TUNE: the Seawall's grey-blue blocks
   mortar: '#5f6b7d', // TUNE: the dark lines between them
   foam: '#eef8ff', // TUNE: the Seawall's splash, a soft blue-white
-  waveDeep: '#4a95d4', // TUNE: the Seawall wave's deep body (option A)
-  beaconRed: '#e8584f', // TUNE: the Seawall beacon's stripes (option C)
+  beaconRed: '#e8584f', // TUNE: the Seawall beacon's stripes
   beaconWhite: '#f6f0f4', // TUNE
   brass: '#e6b85c', // TUNE: the Rain Barrel's tap
   napZ: '#e4dcff', // TUNE: the lilac "z z" over a napping works

@@ -9,8 +9,8 @@
 // whose water suits it (the server judges), keeping the first inland one
 // empty for the Build sheet. Every device (iPhone 15, iPhone SE, iPad) then
 // signs in as that player at tier `high` and its own DPR. Shots, per device:
-// `gallery-works`, `gallery-works-asleep`, `gallery-wild`, `gallery-well`
-// (the River Well at levels 1–4), `build-sheet` (a held-back card picked, its
+// `gallery-works`, `gallery-works-asleep`, `zoom-seawall` (the Seawall at map
+// zoom), `gallery-wild`, `gallery-well` (the River Well at levels 1–4), `build-sheet` (a held-back card picked, its
 // reason showing) and `homestead` (the pier standing on its homestead).
 // No dev badge, no "(dev)" buttons. Env: DEVICES, PW_CHROMIUM_EXECUTABLE.
 import { chromium } from '@playwright/test';
@@ -83,17 +83,6 @@ const hourIn = (zone) =>
 const DAY_ZONE = ZONES.reduce((best, z) =>
   Math.abs(hourIn(z) - 13) < Math.abs(hourIn(best) - 13) ? z : best,
 );
-/**
- * The Seawall's look while the owner chooses (#621 W1-10b2): unset skips
- * the Seawall frames, `options` shoots only looks A, B and C (an iPhone SE
- * close-up and a map frame each), `a`/`b`/`c` shoots everything with that look.
- */
-const SEAWALL = process.env.SEAWALL ?? '';
-const LOOKS = {
-  a: 'A, wave-curl wall',
-  b: 'B, stepped breakwater',
-  c: 'C, harbour wall and beacon',
-};
 const WANT = (process.env.DEVICES ?? Object.keys(DEVICES).join(',')).split(',');
 /** What each homestead gets, first fit wins (the server says which water suits). */
 const TRY = ['fishing-pier', 'watermill', 'salt-pans', 'river-well', 'irrigated-field'];
@@ -356,9 +345,6 @@ for (const key of WANT) {
         if (/\(dev\)/i.test(b.textContent)) b.hidden = true;
     }).observe(document, { childList: true, subtree: true, characterData: true });
   });
-  // The Seawall look to build, for the map as well as the gallery.
-  if (/^[abc]$/.test(SEAWALL))
-    await context.addInitScript((pick) => (window.__hpSeawall = pick), SEAWALL);
   const page = await context.newPage();
   // The device's safe areas (the notch and home indicator), as roads-shots does.
   const cdp = await context.newCDPSession(page);
@@ -392,25 +378,13 @@ for (const key of WANT) {
     const tier = await page.evaluate(() => window.__buildingGallery?.quality()?.tier ?? null);
     await shot(id, caption, { tier });
   };
-  if (SEAWALL === 'options') {
-    for (const [look, words] of Object.entries(LOOKS)) {
-      if (key === 'iphone-se')
-        await gallery(
-          `show=solo:seawall&focus=0,-1&dist=8&seawall=${look}`,
-          `close-seawall-${look}`,
-          `Buildings gallery close-up: Seawall option ${words}, level 1`,
-        );
-      // At map zoom on the home-base scene: no homestead reliably lands on
-      // the coast in a dev run, so this stands in for a map frame.
-      await gallery(
-        `show=solo:seawall&focus=0,-1&dist=${d.dist}&seawall=${look}`,
-        `zoom-seawall-${look}`,
-        `Buildings gallery at map zoom (dist ${d.dist}): Seawall option ${words}, level 1`,
-      );
-    }
-    await context.close();
-    continue;
-  }
+  // The Seawall at map zoom on the home-base scene: no homestead reliably
+  // lands on the coast in a dev run, so this stands in for a map frame.
+  await gallery(
+    `show=solo:seawall&focus=0,-1&dist=${d.dist}`,
+    'zoom-seawall',
+    `Buildings gallery at map zoom (dist ${d.dist}): the Seawall, level 1`,
+  );
   await gallery(
     `show=works&dist=${d.dist}`,
     'gallery-works',
@@ -438,7 +412,6 @@ for (const key of WANT) {
   );
   if (key === 'iphone-se') {
     for (const id of CLOSE) {
-      if (id === 'seawall' && !SEAWALL) continue;
       await gallery(
         `show=solo:${id}&focus=0,-1&dist=8`,
         `close-${id}`,
@@ -484,7 +457,6 @@ for (const key of WANT) {
       'the Irrigated Field on a homestead the server let it build on (it needs water next door)',
   };
   for (const [id, words] of Object.entries(WHERE)) {
-    if (id === 'seawall' && !SEAWALL) continue;
     const b = state.built.find((x) => x.id === id);
     if (!b) {
       console.log('  no map shot for', id, '(no homestead fit it this run)');

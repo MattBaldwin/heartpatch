@@ -1,5 +1,5 @@
 import { Color3 } from '@babylonjs/core/Maths/math.color';
-import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
 import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder';
@@ -30,17 +30,6 @@ export interface BuildingModel {
  * `plain` while it works and `out` while it naps (#601); one look for the rest.
  */
 export type BuildingLook = 'lit' | 'out' | 'plain';
-
-/**
- * TEMP (#621 W1-10b2): which candidate Seawall look to build, `a`, `b` or
- * `c`, from `?seawall=` (or `window.__hpSeawall`, for a map shot) so the
- * owner can choose. Goes once they pick.
- */
-function seawallOption(): 'a' | 'b' | 'c' {
-  const g = globalThis as { __hpSeawall?: string; location?: { search: string } };
-  const v = new URLSearchParams(g.location?.search ?? '').get('seawall') ?? g.__hpSeawall;
-  return v === 'b' || v === 'c' ? v : 'a';
-}
 
 /** The model key for a building, its look and its level (each level has its own model). */
 export function modelKey(buildingId: string, look: BuildingLook, level = 1): string {
@@ -1491,11 +1480,11 @@ export function buildBuildingModel(
       break;
     }
     case 'seawall': {
-      // TEMP (#621 W1-10b2): three candidate looks for the owner to choose
-      // from (`seawallOption()`); the two not picked go once they do. Each
-      // stands in the water on the sea side (-z) with foam at its foot and a
-      // lamp, turned a little so its end profile shows. One level.
-      const option = seawallOption();
+      // A straight harbour quay wall standing in the water on the sea side
+      // (-z), with foam at its foot, a red-and-white striped beacon on one
+      // end with its lamp on top, a bollard on the crown and an iron mooring
+      // ring on its sea face. Turned a little so its end profile shows. One
+      // level.
       const start = mark();
       const length = 1.3;
       part(body, box(length + 0.04, 0.03, 0.72), C.water, [0, 0.055, -0.26]);
@@ -1535,196 +1524,40 @@ export function buildBuildingModel(
           );
         }
       };
-      let lamp: [number, number, number];
-      if (option === 'a') {
-        // A. A plain wall throwing a big wave back out to sea: a crescent of
-        // water rising from its foot and curling over towards the camera to a
-        // white lip, built as short prism segments, with spray up the face.
-        const face = -0.12;
-        const top = 0.66;
-        stoneWall(face, 0.12, top, length);
-        // The swell the wave rises from.
-        part(
-          body,
-          prism(
-            [
-              [-0.62, 0.05],
-              [-0.5, 0.11],
-              [face, 0.11],
-              [face, 0.05],
-            ],
-            1.0,
-          ),
-          C.water,
-          [0, 0, 0],
-        );
-        const curl = { z: -0.38, y: 0.34 };
-        const from = 4.26;
-        const to = -0.6;
-        const steps = 12;
-        const ring = (i: number) => {
-          const t = i / steps;
-          const a = from + (to - from) * t;
-          const r = 0.3 - 0.2 * t;
-          const thick = 0.14 - 0.11 * t;
-          return {
-            out: [curl.z - Math.cos(a) * r, curl.y + Math.sin(a) * r] as [number, number],
-            in: [curl.z - Math.cos(a) * (r - thick), curl.y + Math.sin(a) * (r - thick)] as [
-              number,
-              number,
-            ],
-          };
-        };
-        for (let i = 0; i < steps; i++) {
-          const p = ring(i);
-          const q = ring(i + 1);
-          part(
-            body,
-            prism([p.out, q.out, q.in, p.in], 0.8, 0.9),
-            i >= steps - 3 ? C.foam : i < steps / 2 ? C.waveDeep : C.water,
-            [0, 0, 0],
-          );
-        }
-        for (const [x, y, z, d] of [
-          [-0.3, 0.56, -0.17, 0.1],
-          [0.0, 0.62, -0.16, 0.12],
-          [0.28, 0.57, -0.17, 0.1],
-          [-0.14, 0.72, -0.15, 0.07],
-          [0.16, 0.74, -0.15, 0.08],
-          [-0.47, 0.16, -0.5, 0.09],
-          [0.45, 0.16, -0.5, 0.09],
-          [-0.3, 0.37, -0.5, 0.08],
-          [-0.1, 0.38, -0.51, 0.09],
-          [0.1, 0.37, -0.5, 0.08],
-          [0.3, 0.38, -0.51, 0.08],
-        ] as const) {
-          part(body, sphere(d, 6), C.foam, [x, y, z]);
-        }
-        foam([
-          [-0.4, -0.58, 0.2],
-          [0.36, -0.56, 0.18],
+      const face = -0.1;
+      const back = 0.16;
+      const top = 0.44;
+      stoneWall(face, back, top, length);
+      const stripes = 5;
+      for (let i = 0; i < stripes; i++) {
+        const h = 0.1;
+        const d0 = 0.26 - i * 0.025;
+        part(body, cylinder(h, d0 - 0.025, d0, 14), i % 2 ? C.beaconWhite : C.beaconRed, [
+          -0.46,
+          top + h / 2 + i * h,
+          0.03,
         ]);
-        lamp = [0.56, top, 0.02];
-      } else if (option === 'b') {
-        // B. A low stepped breakwater: three courses of stone stepping down
-        // into the sea, each a little sloped, with boulders and two
-        // four-legged tetrapods at the foot. Nothing overhangs.
-        const tiers = [
-          { front: -0.02, back: 0.26, top: 0.36, color: C.seaStoneLight },
-          { front: -0.22, back: -0.02, top: 0.25, color: C.seaStone },
-          { front: -0.42, back: -0.22, top: 0.15, color: C.seaStoneDark },
-        ];
-        for (const t of tiers) {
-          part(
-            body,
-            prism(
-              [
-                [t.back, 0.04],
-                [t.back, t.top],
-                [t.front + 0.04, t.top],
-                [t.front, t.top - 0.05],
-                [t.front, 0.04],
-              ],
-              length,
-              0.96,
-            ),
-            t.color,
-            [0, 0, 0],
-          );
-          for (let i = 0; i < 4; i++) {
-            const x = -0.48 + i * 0.32 + (tiers.indexOf(t) % 2) * 0.16;
-            part(body, box(0.018, 0.016, t.back - t.front - 0.04), C.mortar, [
-              x,
-              t.top + 0.002,
-              (t.front + t.back) / 2 + 0.02,
-            ]);
-          }
-        }
-        for (const [x, z, d] of [
-          [-0.5, -0.5, 0.17],
-          [-0.18, -0.52, 0.13],
-          [0.36, -0.5, 0.16],
-          [0.52, -0.46, 0.11],
-        ] as const) {
-          part(body, sphere(d, 8), C.riverStone, [x, 0.09, z], [1.2, 0.8, 1]);
-        }
-        // Tetrapods: four stubby legs from one centre, along a tetrahedron's corners.
-        for (const [x, z, spin] of [
-          [-0.34, -0.5, 0.4],
-          [0.12, -0.52, 1.3],
-        ] as const) {
-          for (const [rx, rz] of [
-            [0, 0],
-            [1.91, 0],
-            [1.91, (2 * Math.PI) / 3],
-            [1.91, (4 * Math.PI) / 3],
-          ] as const) {
-            const dir = Vector3.TransformNormal(
-              Vector3.Up(),
-              Matrix.RotationYawPitchRoll(spin + rz, rx, 0),
-            ).scale(0.07);
-            part(
-              body,
-              cylinder(0.14, 0.035, 0.06, 8),
-              C.seaStoneLight,
-              [x + dir.x, 0.14 + dir.y, z + dir.z],
-              [1, 1, 1],
-              [rx, spin + rz, 0],
-            );
-          }
-        }
-        foam([
-          [-0.3, -0.62, 0.2],
-          [0.26, -0.62, 0.18],
-        ]);
-        lamp = [0.5, 0.36, 0.14];
-      } else {
-        // C. A straight harbour quay wall with a red-and-white striped beacon
-        // on one end, a bollard and an iron mooring ring on its sea face.
-        const face = -0.1;
-        const back = 0.16;
-        const top = 0.44;
-        stoneWall(face, back, top, length);
-        const stripes = 5;
-        for (let i = 0; i < stripes; i++) {
-          const h = 0.1;
-          const d0 = 0.26 - i * 0.025;
-          part(body, cylinder(h, d0 - 0.025, d0, 14), i % 2 ? C.beaconWhite : C.beaconRed, [
-            -0.46,
-            top + h / 2 + i * h,
-            0.03,
-          ]);
-        }
-        const crown = top + stripes * 0.1;
-        part(body, cylinder(0.02, 0.2, 0.2, 14), C.hoop, [-0.46, crown + 0.01, 0.03]);
-        part(body, cylinder(0.12, 0, 0.17, 14), C.beaconRed, [-0.46, crown + 0.23, 0.03]);
-        part(body, cylinder(0.11, 0.008, 0.008, 4), C.hoop, [-0.46, crown + 0.07, 0.03]);
-        part(body, cylinder(0.08, 0.06, 0.07, 10), C.hoop, [0.24, top + 0.04, 0.03]);
-        part(body, cylinder(0.025, 0.1, 0.1, 10), C.hoop, [0.24, top + 0.09, 0.03]);
-        part(
-          body,
-          CreateTorus(
-            `${name}-ring`,
-            { diameter: 0.12, thickness: 0.025, tessellation: 14 },
-            scene,
-          ),
-          C.hoop,
-          [0.24, top - 0.12, face - 0.015],
-          [1, 1, 1],
-          [Math.PI / 2, 0, 0],
-        );
-        foam([
-          [-0.38, face - 0.12, 0.22],
-          [-0.05, face - 0.12, 0.16],
-          [0.3, face - 0.12, 0.2],
-        ]);
-        lamp = [-0.46, crown + 0.1, 0.03];
       }
-      if (option !== 'c') {
-        part(body, cylinder(0.3, 0.03, 0.03, 6), C.post, [lamp[0], lamp[1] + 0.15, lamp[2]]);
-        lamp = [lamp[0], lamp[1] + 0.33, lamp[2]];
-      }
-      part(windowList, sphere(option === 'c' ? 0.13 : 0.08, 8), lampColor, lamp);
+      const crown = top + stripes * 0.1;
+      part(body, cylinder(0.02, 0.2, 0.2, 14), C.hoop, [-0.46, crown + 0.01, 0.03]);
+      part(body, cylinder(0.12, 0, 0.17, 14), C.beaconRed, [-0.46, crown + 0.23, 0.03]);
+      part(body, cylinder(0.11, 0.008, 0.008, 4), C.hoop, [-0.46, crown + 0.07, 0.03]);
+      part(body, cylinder(0.08, 0.06, 0.07, 10), C.hoop, [0.24, top + 0.04, 0.03]);
+      part(body, cylinder(0.025, 0.1, 0.1, 10), C.hoop, [0.24, top + 0.09, 0.03]);
+      part(
+        body,
+        CreateTorus(`${name}-ring`, { diameter: 0.12, thickness: 0.025, tessellation: 14 }, scene),
+        C.hoop,
+        [0.24, top - 0.12, face - 0.015],
+        [1, 1, 1],
+        [Math.PI / 2, 0, 0],
+      );
+      foam([
+        [-0.38, face - 0.12, 0.22],
+        [-0.05, face - 0.12, 0.16],
+        [0.3, face - 0.12, 0.2],
+      ]);
+      part(windowList, sphere(0.13, 8), lampColor, [-0.46, crown + 0.1, 0.03]);
       turnSince(start, 0.6);
       break;
     }
