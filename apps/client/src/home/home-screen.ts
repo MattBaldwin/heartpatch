@@ -101,6 +101,7 @@ import {
   resourceCard,
   resourceHere,
 } from '../resource-buildings/resource-model.js';
+import { WORKS_TEXT, worksBuildCards } from '../works/works-model.js';
 import './home.css';
 
 // The home base (#18, design doc §13–14): a Home button over the map opens
@@ -2136,7 +2137,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
    * takes the whole tile.
    */
   const buildSource: BuildSource = {
-    cards: (tile) => {
+    cards: (tile, view) => {
       if (!home || !user || tile.ownerUserId !== user.id || tile.homeSlot !== null) return [];
       const card = (b: Building, effect: string): BuildCard => ({
         id: b.id,
@@ -2190,6 +2191,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         ]),
         // The Warehouse goes on any land, so it waits at the end of the row.
         ...(store ? [store] : []),
+        // A Wild Isle's works, canal, shelters and vane (#621 W1-10).
+        ...worksBuildCards(tile, view, user.id),
       ];
     },
     build: async (card, tile) => {
@@ -2205,6 +2208,11 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         user && resourceBuildCards(tile, current, user.id).find((c) => c.id === card.id);
       const store = user ? warehouseBuildCard(tile, current, user.id) : null;
       const isStore = store?.id === card.id;
+      const mapView = options.mapView?.() ?? null;
+      const works =
+        user && mapView
+          ? worksBuildCards(tile, mapView, user.id).find((c) => c.id === card.id)
+          : undefined;
       const spot = isGrounds
         ? grounds.spot
         : isFactory
@@ -2213,7 +2221,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             ? producing.spot
             : isStore
               ? store.spot
-              : 0;
+              : works
+                ? works.spot
+                : 0;
       try {
         const next = await sendCommand(
           sendDeps,
@@ -2232,7 +2242,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
               ? RESOURCE_TEXT.built(producing.name)
               : isStore
                 ? WAREHOUSE_TEXT.built
-                : HOME_TEXT.fireBuilt;
+                : works
+                  ? WORKS_TEXT.built(works.name)
+                  : HOME_TEXT.fireBuilt;
       } catch (err) {
         if (at === generation && err instanceof ApiRequestError && err.code === 'CONFLICT') {
           home = null;

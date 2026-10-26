@@ -78,6 +78,27 @@ export function buildingIcon(buildingId: string): string {
     // The Warehouse (#601 PR 9): it delivers to your bag.
     case 'warehouse':
       return '📦';
+    // Wild Isle (#621 W1-10): the works, canal, shelters and vane.
+    case 'river-well':
+      return '💧';
+    case 'fishing-pier':
+      return '🎣';
+    case 'salt-pans':
+      return '🧂';
+    case 'watermill':
+      return '🌾';
+    case 'irrigated-field':
+      return '🌱';
+    case 'rain-barrel':
+      return '🛢️';
+    case 'canal':
+      return '🏞️';
+    case 'levee':
+      return '🌿';
+    case 'seawall':
+      return '🌊';
+    case 'weather-vane':
+      return '🧭';
     default:
       return '🏠';
   }

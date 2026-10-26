@@ -13,7 +13,7 @@ import { pickInitialTier } from '../../engine/quality/tiers.js';
 import { mountStage, type Stage } from '../../engine/stage.js';
 import { lodFor } from '../../procedural/motion.js';
 import { NIGHT_LOOK } from '../../hollow/hollow-config.js';
-import { HOME_VIEW } from '../home-config.js';
+import { HOME_VIEW, MAP_OUTER_BUILDING_SCALE } from '../home-config.js';
 import { HomeScene } from '../home-scene.js';
 import '../../styles.css';
 
@@ -30,7 +30,13 @@ setPerfReports(false);
  * and 2), `training1`, `training2` (Training Grounds with two squishies
  * practicing), `ring` (habitats filling ring tiles, #589), `lanterns` (every
  * kind of fire: a Hearthfire, a Jack-o'-Lantern and a Joy Lantern, #306 PR 5),
- * `res:<id>` (a resource building at levels 1–4, `&asleep=1` napping, #601).
+ * `res:<id>` (a resource building at levels 1–4, `&asleep=1` napping, #601),
+ * `works` (the six Wild Isle works, `&asleep=1` napping), `wild` (the
+ * canal, shelters, vane and waystation, #621 W1-10) and `solo:<id>` (one
+ * building on tile 0,-1 at `&level=` (default 1), `&asleep=1` napping, for
+ * a close-up with `&focus=0,-1`), and `compare` (resource buildings beside
+ * works, #621 W1-10). `&fill=1` draws every building but a fire filling its
+ * tile at the map's homestead size (`MAP_OUTER_BUILDING_SCALE`).
  * `&night=1` lights any layout as the map at night (the Hollow layer's
  * `NIGHT_LOOK`), to judge glowing windows after dark.
  * Every shot uses one camera: `?pitch=` (degrees, default 42,
@@ -51,6 +57,7 @@ const pitch = ((Number(params.get('pitch')) || 42) * Math.PI) / 180;
 const distance = Number(params.get('dist')) || 18;
 const focus = params.get('focus')?.split(',').map(Number) ?? null;
 const night = params.get('night') === '1';
+const fill = params.get('fill') === '1';
 
 const NOW = '2026-10-12T18:00:00.000Z';
 const ids = (n: number) => `0190a000-0000-7000-8000-${String(n).padStart(12, '0')}`;
@@ -114,6 +121,25 @@ function squishy(
     job: where.trainingId ? 'training' : 'resting',
     accessory: null,
     houseRoomId: null,
+  };
+}
+
+/** A sample output for a resource building or works; `asleep`: paused for upkeep (its napping look). */
+function production(asleep: boolean): NonNullable<MyBuilding['production']> {
+  return {
+    resource: 'stone',
+    perCycle: 3,
+    cycleSeconds: 600,
+    ready: {},
+    cycles: 0,
+    maxCycles: 144,
+    full: false,
+    nextReadyAt: null,
+    upkeep: 17,
+    paidThrough: null,
+    pausedAt: asleep ? NOW : null,
+    upkeepRank: null,
+    delivering: false,
   };
 }
 
@@ -190,12 +216,39 @@ function layout(): Pick<HomeResponse, 'buildings' | 'squishies'> {
       ],
     };
   }
+  // Wild Isle (#621 W1-10): the six works side by side on the home patch
+  // (`works`), and the canal, both shelters, the vane and the waystation
+  // (`wild`). `res:<id>` shows a works at levels 1–4 too.
+  if (show === 'works' || show === 'wild' || show === 'compare') {
+    const ids =
+      show === 'works'
+        ? ['fishing-pier', 'salt-pans', 'watermill', 'irrigated-field', 'rain-barrel', 'river-well']
+        : show === 'wild'
+          ? ['canal', 'levee', 'seawall', 'weather-vane', 'waystation']
+          : // Each works next to a resource building already in the game.
+            [
+              'woodcutters-hut',
+              'fishing-pier',
+              'ember-kiln',
+              'seawall',
+              'pumpkin-barn',
+              'watermill',
+            ];
+    const at = TILES.filter((t) => !t.heartSeed);
+    return {
+      buildings: ids.map((id, i) =>
+        building(id, at[i] ?? { q: 0, r: 0 }, 1, {
+          production: production(params.get('asleep') === '1'),
+        }),
+      ),
+      squishies: [squishy('puddlepuff')],
+    };
+  }
   // A resource building at levels 1–4 (#601 PR 7): `?show=res:stone-quarry`,
   // `&asleep=1` for its napping look.
   const resource = /^res:([a-z-]+)$/.exec(show);
   if (resource?.[1]) {
     const id = resource[1];
-    const asleep = params.get('asleep') === '1';
     const at = [
       { q: 0, r: -1 },
       { q: 1, r: -1 },
@@ -204,32 +257,38 @@ function layout(): Pick<HomeResponse, 'buildings' | 'squishies'> {
     ];
     return {
       buildings: at.map((tile, i) =>
-        building(id, tile, i + 1, {
-          production: {
-            resource: 'stone',
-            perCycle: 3,
-            cycleSeconds: 600,
-            ready: {},
-            cycles: 0,
-            maxCycles: 144,
-            full: false,
-            nextReadyAt: null,
-            upkeep: 17,
-            paidThrough: null,
-            pausedAt: asleep ? NOW : null,
-            upkeepRank: null,
-            delivering: false,
-          },
-        }),
+        building(id, tile, i + 1, { production: production(params.get('asleep') === '1') }),
       ),
+      squishies: [squishy('puddlepuff')],
+    };
+  }
+  const solo = /^solo:([a-z-]+)$/.exec(show);
+  if (solo?.[1]) {
+    const level = Number(params.get('level')) || 1;
+    return {
+      buildings: [
+        building(solo[1], { q: 0, r: -1 }, level, {
+          production: production(params.get('asleep') === '1'),
+        }),
+      ],
       squishies: [squishy('puddlepuff')],
     };
   }
   throw new Error(`unknown ?show=${show}`);
 }
 
+const wildLayout =
+  show === 'works' ||
+  show === 'wild' ||
+  show === 'compare' ||
+  fill ||
+  show.startsWith('solo:') ||
+  GAME_DATA.buildings.some((b) => b.kind === 'works' && show === `res:${b.id}`);
+
 const home: HomeResponse = {
-  tiles: TILES,
+  // The Wild Isle layouts (a works at its levels, any close-up, any filled tile) keep resource nodes
+  // off their tiles, so no tree or rock stands in a building.
+  tiles: wildLayout ? TILES.map((t) => ({ ...t, nodeResource: null })) : TILES,
   ...layout(),
   speciesDefs: [],
   items: {},
@@ -260,6 +319,7 @@ await boot(canvas, {
           registry: visualRegistry(GAME_DATA),
           lod: lodFor('closeUp', tier),
           keeper: null,
+          fillTiles: fill,
         });
         return homeScene.content;
       },
@@ -299,7 +359,12 @@ function sizes(): Record<string, { width: number; height: number }> {
     const isSquishy = mesh.name.startsWith('squishy-');
     if (!isBuilding && !isSquishy) continue;
     const { minimum, maximum } = mesh.getBoundingInfo().boundingBox;
-    const scale = isBuilding ? HOME_VIEW.buildingScale : HOME_VIEW.squishyScale;
+    const kind = GAME_DATA.buildings.find((b) => b.id === mesh.name.split(':')[0])?.kind;
+    const scale = !isBuilding
+      ? HOME_VIEW.squishyScale
+      : fill && kind !== 'hearthfire'
+        ? HOME_VIEW.hexSize * MAP_OUTER_BUILDING_SCALE
+        : HOME_VIEW.buildingScale;
     out[mesh.name] = {
       width: Math.max(maximum.x - minimum.x, maximum.z - minimum.z) * scale,
       height: (maximum.y - minimum.y) * scale,

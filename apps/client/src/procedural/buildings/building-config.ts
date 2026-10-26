@@ -85,7 +85,33 @@ export const BUILDING_COLORS = {
   parcel: '#e8b27a', // TUNE: cardboard parcels
   ribbon: '#ff7aa8', // TUNE: their pink ribbons, and the sign's heart
   crateMint: '#9fe3c8', // TUNE
+  // Wild Isle works (#621 W1-10): toys by the water.
+  fish: '#ffab6b', // TUNE: a caught fish, peachy orange
+  fishAlt: '#8fc7ff', // TUNE: a blue one
+  salt: '#e6e0ea', // TUNE: salt heaps, off-white so they don't bloom
+  brine: '#bfe9f2', // TUNE: the pans' shallow sea water
+  soil: '#a8775a', // TUNE: the field's tilled earth
+  wheel: '#d49a6a', // TUNE: the Watermill's wheel
+  millWall: '#fde6c8', // TUNE: its creamy walls
+  millRoof: '#7fb7c9', // TUNE: its blue-green roof
+  hoop: '#8a96a8', // TUNE: the Rain Barrel's hoops, the vane's metal
+  barrel: '#c98e62', // TUNE
+  bank: '#8fd17e', // TUNE: the Levee's grassy bank
+  clay: '#d9a07c', // TUNE: the Salt Pans' clay rims
+  stave: '#a8734f', // TUNE: the lines between the Rain Barrel's staves
+  riverStone: '#a89c90', // TUNE: the Levee's rounded grey-brown stones
+  seaStone: '#97adc0', // TUNE: the Seawall's grey-blue blocks
+  mortar: '#5f6b7d', // TUNE: the dark lines between them
+  foam: '#eef8ff', // TUNE: the Seawall's splash, a soft blue-white
+  beaconRed: '#e8584f', // TUNE: the Seawall beacon's stripes
+  beaconWhite: '#f6f0f4', // TUNE
+  brass: '#e6b85c', // TUNE: the Rain Barrel's tap
+  napZ: '#e4dcff', // TUNE: the lilac "z z" over a napping works
+  napDusk: '#6f6a8f', // TUNE: what a napping works' colours dim towards
 } as const;
+
+/** TUNE: how far a napping works' colours dim towards `napDusk` (0 none, 1 all). */
+export const NAP_DIM = 0.5;
 
 /**
  * How much bigger each building level stands (owner decision 2026-10-06:
@@ -100,6 +126,20 @@ export const LEVEL_SCALE = [
   // Level 4 (#601 PR 7): resource buildings go one step further.
   { across: 1.2, up: 1.85 },
 ] as const; // TUNE
+
+/**
+ * How far a Wild Isle homestead building reaches from its tile's middle
+ * (owner 2026-10-26: works fill their tile like the buildings already
+ * there): its body's farthest point, any way round, in model units. The map
+ * draws a homestead's building at `HEX_SIZE × MAP_OUTER_BUILDING_SCALE`
+ * (1.15), so a drawn tile's inner radius is 0.95 × cos 30° / 1.15 ≈ 0.72
+ * model units and its corners 0.83. At level 1 the resource buildings reach
+ * 0.48–0.60 (the Greenhouse 0.43, the Warehouse 0.75). A model past `max`
+ * shrinks as a whole, so its look stays; one short of `min` widens along x
+ * and z. `maxTop` caps its level-4 reach the same way (theirs 0.66–0.86),
+ * and `edge` keeps every level-4 part inside the drawn tile's flat edges.
+ */
+export const TILE_FOOTPRINT = { min: 0.5, max: 0.62, maxTop: 0.8, edge: 0.71 } as const; // TUNE
 
 /** How strongly glowing parts (flames, a lit grin) shine. */
 export const GLOW = 1.1; // TUNE

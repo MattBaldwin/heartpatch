@@ -109,8 +109,10 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  // `data-ready` marks the engine, not the map: under WebKit load the
+  // territory state lands after the default 5 s poll, so give it room.
   await expect
-    .poll(() => territoryState(page))
+    .poll(() => territoryState(page), { timeout: 60_000 })
     .toMatchObject({ attemptsLeft: TERRITORY_RULES.attemptsPerDay, onWatch: 0 });
 
   // A strong squishy from the dev route, next to their level-1 starter.

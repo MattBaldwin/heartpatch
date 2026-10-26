@@ -1,9 +1,18 @@
+import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
+import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { GAME_DATA } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
-import { LEVEL_SCALE } from './building-config.js';
-import { buildBuildingModel, levelScale } from './building-models.js';
+import { BUILDING_COLORS, LEVEL_SCALE, TILE_FOOTPRINT } from './building-config.js';
+import {
+  buildBuildingModel,
+  footprintEdgeReach,
+  footprintReach,
+  levelScale,
+  WILD_HOMESTEAD,
+} from './building-models.js';
 
 const RESOURCE = GAME_DATA.buildings.filter((b) => b.kind === 'resource').map((b) => b.id);
 
@@ -107,5 +116,177 @@ describe('Wild Isle travel models (#621 W1-6)', () => {
     // Longer than wide, so the map can turn it bank to bank.
     const size = bridge.body.getBoundingInfo().boundingBox.extendSize;
     expect(size.x).toBeGreaterThan(size.z * 2);
+  });
+});
+
+describe('Wild Isle works models (#621 W1-10)', () => {
+  const engine = new NullEngine({
+    renderWidth: 390,
+    renderHeight: 844,
+    textureSize: 1,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  /** Every Wild Isle building that stands on a homestead spot (bridges sit on rivers). */
+  const WILD = GAME_DATA.buildings
+    .filter(
+      (b) => b.patchTypes?.includes('wild-isle') && b.id !== 'bridge' && b.id !== 'ferry-dock',
+    )
+    .map((b) => b.id);
+  const WORKS = GAME_DATA.buildings.filter((b) => b.kind === 'works').map((b) => b.id);
+  /** TUNE: about the Greenhouse's; a homestead shows a handful at once. */
+  const TRIANGLE_CAP = 6000;
+
+  const triangles = (m: { body: Mesh; glow: Mesh | null }) =>
+    (m.body.getTotalIndices() + (m.glow?.getTotalIndices() ?? 0)) / 3;
+
+  it('has its own model for each, not the plain marker', () => {
+    const scene = new Scene(engine);
+    const marker = buildBuildingModel(
+      scene,
+      'no-such-building',
+      'plain',
+      1,
+    ).body.getTotalVertices();
+    expect(WILD).toHaveLength(11);
+    for (const id of WILD) {
+      expect(buildBuildingModel(scene, id, 'plain', 1).body.getTotalVertices(), id).toBeGreaterThan(
+        marker,
+      );
+    }
+  });
+
+  it('gives every one its own shape (no two the same size and part count)', () => {
+    const scene = new Scene(engine);
+    const shapes = new Map<string, string>();
+    for (const id of [...WILD, 'water-well']) {
+      const { body } = buildBuildingModel(scene, id, 'plain', 1);
+      const e = body.getBoundingInfo().boundingBox.extendSize;
+      const shape = [body.getTotalVertices(), e.x, e.y, e.z].map((n) => n.toFixed(2)).join(',');
+      expect(shapes.get(shape), `${id} looks like ${shapes.get(shape) ?? ''}`).toBeUndefined();
+      shapes.set(shape, id);
+    }
+  });
+
+  it('adds detail at every level of a works, L1 to L4, and stands taller', () => {
+    const scene = new Scene(engine);
+    expect(WORKS).toHaveLength(6);
+    for (const id of WORKS) {
+      let last = { parts: 0, height: 0 };
+      for (const l of [1, 2, 3, 4]) {
+        const m = buildBuildingModel(scene, id, 'plain', l);
+        const now = {
+          parts: m.body.getTotalVertices() + (m.glow?.getTotalVertices() ?? 0),
+          height: m.body.getBoundingInfo().boundingBox.maximum.y,
+        };
+        expect(now.parts, `${id} L${String(l)}`).toBeGreaterThan(last.parts);
+        expect(now.height, `${id} L${String(l)}`).toBeGreaterThan(last.height);
+        last = now;
+      }
+    }
+  });
+
+  it('lights its lamp while it works and goes dark while it naps', () => {
+    const scene = new Scene(engine);
+    for (const id of WILD.filter((i) => i !== 'canal' && i !== 'levee')) {
+      expect(buildBuildingModel(scene, id, 'plain', 1).glow, id).not.toBeNull();
+      // A napping works' only glow is its lilac "z z"; the rest go fully dark.
+      const out = buildBuildingModel(scene, id, 'out', 1).glow;
+      if (!WORKS.includes(id)) {
+        expect(out, id).toBeNull();
+        continue;
+      }
+      const colors = out?.getVerticesData(VertexBuffer.ColorKind) ?? [];
+      const z = Color3.FromHexString(BUILDING_COLORS.napZ).toLinearSpace();
+      expect(colors.length, id).toBeGreaterThan(0);
+      for (let i = 0; i < colors.length; i += 4) {
+        expect(colors[i], id).toBeCloseTo(z.r, 4);
+        expect(colors[i + 2], id).toBeCloseTo(z.b, 4);
+      }
+    }
+  });
+
+  it('dims a napping works and floats its "z z" above its top, at every level', () => {
+    const scene = new Scene(engine);
+    for (const id of WORKS) {
+      for (const l of [1, 4]) {
+        const awake = buildBuildingModel(scene, id, 'plain', l).body;
+        const { body, glow } = buildBuildingModel(scene, id, 'out', l);
+        const brightness = (m: Mesh) => {
+          const c = m.getVerticesData(VertexBuffer.ColorKind) ?? [];
+          let sum = 0;
+          for (let i = 0; i < c.length; i += 4)
+            sum += (c[i] ?? 0) + (c[i + 1] ?? 0) + (c[i + 2] ?? 0);
+          return sum / Math.max(1, c.length / 4);
+        };
+        expect(brightness(body), `${id} L${String(l)}`).toBeLessThan(brightness(awake) * 0.9);
+        const top = body.getBoundingInfo().boundingBox.maximum.y;
+        expect(glow?.getBoundingInfo().boundingBox.minimum.y ?? 0, id).toBeGreaterThan(top);
+      }
+    }
+  });
+
+  it('fills its tile like the buildings already in the game (owner 2026-10-26)', () => {
+    const scene = new Scene(engine);
+    const reach = (id: string, level: number) =>
+      footprintReach(buildBuildingModel(scene, id, 'plain', level).body);
+    const kinds = ['habitat', 'training-grounds', 'factory', 'resource', 'warehouse'];
+    const existing = GAME_DATA.buildings.filter((b) => kinds.includes(b.kind)).map((b) => b.id);
+    expect([...WILD_HOMESTEAD].sort()).toEqual([...WILD].sort());
+    for (const level of [1, 4]) {
+      const band = existing.map((id) => reach(id, level));
+      const [low, high] = [Math.min(...band), Math.max(...band)];
+      if (level === 1) {
+        // The target sits inside the band the existing buildings span.
+        expect(TILE_FOOTPRINT.min).toBeGreaterThanOrEqual(low);
+        expect(TILE_FOOTPRINT.max).toBeLessThanOrEqual(high);
+      } else {
+        expect(TILE_FOOTPRINT.maxTop).toBeLessThanOrEqual(high);
+      }
+      for (const id of WILD) {
+        const r = reach(id, level);
+        expect(r, `${id} L${String(level)}`).toBeGreaterThanOrEqual(
+          level === 1 ? TILE_FOOTPRINT.min - 0.005 : low,
+        );
+        expect(r, `${id} L${String(level)}`).toBeLessThanOrEqual(
+          level === 1 ? TILE_FOOTPRINT.max + 0.005 : Math.min(high, TILE_FOOTPRINT.maxTop + 0.005),
+        );
+      }
+    }
+  });
+
+  it('keeps every part inside its tile at levels 3 and 4 (supervisor, v4 screens)', () => {
+    // The River Well's L4 tower once stood on the next tile east: its plain
+    // reach was inside the corners, but past the flat edge.
+    const scene = new Scene(engine);
+    const inner = (0.95 * Math.cos(Math.PI / 6)) / 1.15;
+    expect(TILE_FOOTPRINT.edge).toBeLessThanOrEqual(inner);
+    for (const id of WILD) {
+      for (const level of [3, 4]) {
+        // Every mesh, flat ground pieces and glowing parts included.
+        const { body, glow } = buildBuildingModel(scene, id, 'plain', level);
+        for (const mesh of glow ? [body, glow] : [body]) {
+          expect(footprintEdgeReach(mesh), `${id} L${String(level)}`).toBeLessThanOrEqual(
+            TILE_FOOTPRINT.edge + 1e-6,
+          );
+        }
+      }
+    }
+  });
+
+  it('stays one or two meshes and under the triangle cap at its biggest', () => {
+    // Level 4 for the works; one-level buildings (the Seawall, the Canal…) add no
+    // detail past L1, so their count is the same.
+    const scene = new Scene(engine);
+    for (const id of WILD) {
+      const before = scene.meshes.length;
+      const m = buildBuildingModel(scene, id, 'plain', 4);
+      expect(scene.meshes.length - before, id).toBeLessThanOrEqual(2);
+      expect(triangles(m), id).toBeLessThanOrEqual(TRIANGLE_CAP);
+    }
   });
 });

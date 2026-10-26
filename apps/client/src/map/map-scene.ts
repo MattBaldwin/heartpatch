@@ -900,7 +900,10 @@ export class MapScene {
       // A resource building or the Warehouse napping (#601): unpaid upkeep,
       // its homestead cut off, or out of season (a Pumpkin Barn after Halloween).
       asleep:
-        (building.kind === 'resource' || building.kind === 'warehouse') &&
+        // A Wild Isle works naps the same way (#621 W1-10).
+        (building.kind === 'resource' ||
+          building.kind === 'warehouse' ||
+          building.kind === 'works') &&
         (building.paused === true ||
           tile.homestead === 'paused' ||
           outOfSeason(building.buildingId, this.seasons)),

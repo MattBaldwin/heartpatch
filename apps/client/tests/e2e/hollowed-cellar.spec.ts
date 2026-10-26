@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
-import { nearestFirst, walkTo } from './explore-walk.js';
+import { nearestFirst, walkTo, waypoint } from './explore-walk.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
@@ -220,10 +220,18 @@ test('hunts a won Hollow’s cellar key by its treasure map, opens the cellar an
   // Its lid popped open here.
   expect((await exploreState(page))?.scene?.cellar).toMatchObject({ open: 1, moments: 1 });
   const yay = page.getByTestId('explore-yay');
-  if (await yay.isVisible()) await yay.tap();
 
   // The big chest waits until every little one is open.
   const big = inside.spots.at(-1)!;
+  // On a slow runner the "yay" card can land after a one-off check and cover
+  // the ground, so walking finds nothing to tap: close it whenever it shows,
+  // until the ground on the way to the big chest takes a tap again.
+  await expect
+    .poll(async () => {
+      if (await yay.isVisible()) await yay.tap();
+      return (await waypoint(page, big)) !== null;
+    }, slow)
+    .toBe(true);
   expect(await walkTo(page, big.index)).toBe(true);
   await slowExpect(action).toHaveText(/Open/);
   await action.tap();
