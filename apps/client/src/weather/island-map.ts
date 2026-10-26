@@ -14,7 +14,7 @@ const KIND_NAME: Readonly<Record<string, string>> = {
   drought: 'Dry',
 };
 /** Label size, in the map's own units (a tile is `HEX_SIZE` across). // TUNE */
-const LABEL = 0.5;
+const LABEL = 0.85;
 const KIND_FILL: Readonly<Record<string, string>> = {
   rain: '#7f8fc9',
   storm: '#5a5190',

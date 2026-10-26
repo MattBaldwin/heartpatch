@@ -417,6 +417,7 @@ function frameFacts(page, insets) {
       tomorrowLines: listUnder('Tomorrow'),
       tomorrow: text('[data-testid="weather-tomorrow"], [data-testid="weather-no-vane"]'),
       sheetHeads: text('.weather-sheet h3'),
+      sheetNotes: text('.weather-sheet-note'),
       mapPicture:
         sheet && visible(sheet)
           ? (sheet.querySelector(
@@ -544,7 +545,7 @@ async function runDevice(browser, device, statePath, fx) {
         weather: 'rain',
         tier: 'high',
         describe: (f) =>
-          `The Forecast sheet open over the map${vane ? ', with a Weather Vane standing' : ', no Weather Vane'}. Right now: "${list(f.now)}". Today: ${list(f.fronts)}. Tomorrow: ${list(vane ? f.tomorrowLines : f.tomorrow)}.`,
+          `The Forecast sheet open over the map${vane ? ', with a Weather Vane standing' : ', no Weather Vane'}. Right now: "${list(f.now)}". Today: ${list(f.fronts)}. Tomorrow: ${list(vane ? f.tomorrowLines : f.tomorrow)}. Notes at the bottom: ${list(f.sheetNotes)}. A small island map shows the fronts, each labelled.`,
       });
     });
   await sheet('forecast-no-vane', false);

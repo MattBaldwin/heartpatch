@@ -178,7 +178,7 @@
   font-weight: 800;
   paint-order: stroke;
   stroke: #fff;
-  stroke-width: 0.1;
+  stroke-width: 0.18;
   stroke-linejoin: round;
   pointer-events: none;
 }
@@ -202,6 +202,7 @@
 /* With the Forecast sheet up the trays and night pills would peek out around
    its clear backdrop; hide them (not removed, so nothing re-lays out). */
 .weather-sheet-open .trays,
+.weather-sheet-open .dark-moon,
 .weather-sheet-open .hollow-hint,
 .weather-sheet-open .hollow-open,
 .weather-sheet-open .hollow-open-badge {
