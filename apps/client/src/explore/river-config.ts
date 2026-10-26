@@ -137,6 +137,8 @@ export const RIVER_LOOK: LandLook = {
     bank: { sand: '#cdbb98', wet: '#9a8a6c', bed: '#c9b48a' }, // TUNE: pebbly sand, wet sand, the shallows' bed
   },
   shape: SHAPE,
+  // A soft wet-sand glow: the cream one painted a flat oval over the water at dusk.
+  halo: { color: '#e6dcc2', alpha: 0.25 }, // TUNE
   growth: {
     tufts: { inside: 1.1, outside: 0.9 }, // TUNE: long bank grass
     flowers: { inside: 0.08, outside: 0.2 }, // TUNE: buttercups and forget-me-nots

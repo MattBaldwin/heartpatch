@@ -5,13 +5,13 @@ import { EXPLORE_RULES, searchSpots } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BIOME_EXTRAS, buildBiomeSpot, overridesSpot } from './biome-dressing.js';
 import { BIOME_LOOKS } from './biome-looks.js';
-import { EXPLORE_VIEW } from './explore-config.js';
+import { EXPLORE_VIEW, haloStyle } from './explore-config.js';
 import { insideTile } from './explore-view.js';
 import { bankReach, hexReach, landField, type LandSpot } from './land-shape.js';
-import { LAND_LIGHT } from './land-config.js';
+import { LAND_LIGHT, LAND_LOOKS } from './land-config.js';
 import { landLayout, type LayoutInput } from './land-layout.js';
 import { BANK, bankRadius, farBankRadius, REED_CLEAR, RIVER, RIVER_LOOK } from './river-config.js';
-import { buildMist, farBankHeight, RIVER_SPOTS } from './river-kit.js';
+import { buildMist, buildRiver, farBankHeight, RIVER_SPOTS } from './river-kit.js';
 
 const SIZE = 7;
 const START = { x: 0, z: -2.94 };
@@ -318,5 +318,30 @@ describe('river spots on the bank (#621 W1-13)', () => {
         );
       }
     }
+  });
+});
+
+describe('the halo under the spot in front (#621 W1-13)', () => {
+  it('draws before the river water, so the water tints it, and is soft and dusk-tinted', () => {
+    const scene = new Scene(engine);
+    const water = buildRiver(scene);
+    const halo = haloStyle(RIVER_LOOK);
+    expect(halo.alphaIndex).toBeDefined();
+    expect(halo.alphaIndex!).toBeLessThan(water.alphaIndex);
+    expect(halo.alpha).toBe(0.25);
+    expect(halo.color).not.toBe('#fffbe0');
+    expect(halo.tinted).toBe(true);
+  });
+
+  it('keeps the cream default for every other biome', () => {
+    for (const terrain of ['meadow', 'coast', 'hills', 'mountains']) {
+      const look = LAND_LOOKS[terrain] ?? BIOME_LOOKS[terrain];
+      expect(haloStyle(look)).toEqual({
+        color: '#fffbe0',
+        alpha: EXPLORE_VIEW.halo.alpha,
+        tinted: false,
+      });
+    }
+    expect(haloStyle(undefined).alphaIndex).toBeUndefined();
   });
 });

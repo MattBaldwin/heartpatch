@@ -138,6 +138,12 @@ export interface LandLook {
   readonly palette: LandPalette;
   readonly shape: LandShape;
   readonly growth: LandGrowth;
+  /**
+   * The soft halo under the spot in front, where the default cream would
+   * glare (#621 W1-13): over water it draws first, so the water tints it,
+   * and it takes the time of day's ground tint. Unset: the cream default.
+   */
+  readonly halo?: { readonly color: string; readonly alpha: number };
 }
 
 /**

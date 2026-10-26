@@ -1,5 +1,6 @@
 import { Material } from '@babylonjs/core/Materials/material';
 import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
 import { CreatePickingRay } from '@babylonjs/core/Culling/ray.core';
@@ -101,6 +102,7 @@ import {
   EXPLORE_UNDERWATER,
   EXPLORE_TOOL,
   EXPLORE_VIEW,
+  haloStyle,
 } from './explore-config.js';
 import {
   createHop,
@@ -383,6 +385,8 @@ export class ExploreScene implements AmbientTarget {
   /** Each open spot's glint's x, as last drawn (redrawn only when one moves). */
   #glintNudge: number[] = [];
   readonly #halo: Mesh;
+  /** The halo's own colour, when its biome tints it with the time of day. */
+  #haloTint: { readonly mat: StandardMaterial; readonly base: Color3 } | null = null;
   readonly #tools: Record<ToolId, Mesh>;
   readonly #colliders: Collider[];
   readonly #buildings: BuildingField;
@@ -634,9 +638,14 @@ export class ExploreScene implements AmbientTarget {
       return halo.bakeCurrentTransformIntoVertices();
     });
     this.#halo.alwaysSelectAsActiveMesh = false;
+    const halo = haloStyle(landLook);
     const haloMat = overlayMaterial(scene, 'explore-halo-mat');
-    haloMat.emissiveColor = linear('#fffbe0');
-    haloMat.alpha = EXPLORE_VIEW.halo.alpha;
+    haloMat.emissiveColor = linear(halo.color);
+    haloMat.alpha = halo.alpha;
+    // Over the river it draws before the water, so the water tints it, and
+    // takes the dusk like the ground (#621 W1-13).
+    if (halo.alphaIndex !== undefined) this.#halo.alphaIndex = halo.alphaIndex;
+    if (halo.tinted) this.#haloTint = { mat: haloMat, base: haloMat.emissiveColor.clone() };
     this.#halo.material = haloMat;
     this.#halo.isPickable = false;
     this.#halo.setEnabled(false);
@@ -1319,10 +1328,11 @@ export class ExploreScene implements AmbientTarget {
     this.#water?.setSky(look);
   }
 
-  /** The ground and decor take the time of day's tint; spots and glints don't. */
+  /** The ground and decor (and a biome's own halo) take the time of day's tint; spots and glints don't. */
   #tintGround(look: SkyLook): void {
     const tint = Color3.FromHexString(look.groundTint);
     for (const g of this.#ground) g.mat.albedoColor = g.base.multiply(tint);
+    if (this.#haloTint) this.#haloTint.mat.emissiveColor = this.#haloTint.base.multiply(tint);
   }
 
   /** The held tool at the Keeper's hand, following its position and heading. */
