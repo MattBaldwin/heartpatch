@@ -25,12 +25,12 @@ describe('explore find tables', () => {
     ];
     expect(checkExploreFinds(broken, GAME_DATA, EXPLORE_RULES, pages)).toEqual(
       expect.arrayContaining([
-        'finds[12]: unknown spot kind "puddle"',
-        'finds[13]: unknown terrain "moon"',
-        'finds[13].finds[0]: unknown item "gold"',
-        'finds[14].finds[0]: "pumpkins" can\'t be found exploring',
-        'finds[15].finds[0]: "shovel" can\'t be found exploring',
-        'finds[16].finds[0]: unknown lore page "no-such-page"',
+        'finds[17]: unknown spot kind "puddle"',
+        'finds[18]: unknown terrain "moon"',
+        'finds[18].finds[0]: unknown item "gold"',
+        'finds[19].finds[0]: "pumpkins" can\'t be found exploring',
+        'finds[20].finds[0]: "shovel" can\'t be found exploring',
+        'finds[21].finds[0]: unknown lore page "no-such-page"',
         'spot kind "cave" has no find table',
       ]),
     );
@@ -39,6 +39,39 @@ describe('explore find tables', () => {
   it('refuse a find that is items and a page at once', () => {
     const both = [{ kind: 'rock', finds: [{ weight: 1, items: { stone: 1 }, lore: 'x' }] }];
     expect(checkExploreFinds(both, GAME_DATA, EXPLORE_RULES, pages)).not.toEqual([]);
+  });
+});
+
+describe('coast find tables (#621 W1-11)', () => {
+  const coast = EXPLORE_RULES.terrains.find((t) => t.terrain === 'coast');
+
+  it('has a table with positive weights for every coast spot', () => {
+    expect(coast?.kinds.length).toBeGreaterThan(0);
+    for (const { kind } of coast?.kinds ?? []) {
+      const table = exploreFindTable(EXPLORE_FINDS, kind, 'coast');
+      expect(table, kind).toBeDefined();
+      for (const f of table?.finds ?? []) expect(f.weight, kind).toBeGreaterThan(0);
+    }
+  });
+
+  it('turns up fish from the Snorkel spots and the Shovel’s crab hole, and stays small', () => {
+    for (const kind of ['tide-pool', 'kelp-bed', 'crab-hole']) {
+      const table = exploreFindTable(EXPLORE_FINDS, kind, 'coast');
+      expect(
+        table?.finds.some((f) => (f.items?.['fish'] ?? 0) > 0),
+        kind,
+      ).toBe(true);
+      // A find is small next to a gather (a node gives 2–5 a gather, #199).
+      for (const f of table?.finds ?? []) {
+        for (const n of Object.values(f.items ?? {})) expect(n, kind).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+
+  it('keeps its odds server-side: the public rules carry only names and tools', () => {
+    const publicRules = JSON.stringify(EXPLORE_RULES);
+    expect(publicRules).not.toContain('fish');
+    expect(publicRules).not.toContain('heartdust');
   });
 });
 

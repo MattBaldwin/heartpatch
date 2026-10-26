@@ -79,6 +79,12 @@ export const EXPLORE_VIEW = {
     reeds: 0.04,
     ledge: 0.046,
     cave: 0.046,
+    // Wild Isle's coast (#621 W1-11): a tide pool is as wide as the pond.
+    shells: 0.045,
+    driftwood: 0.046,
+    'crab-hole': 0.045,
+    'tide-pool': 0.07,
+    'kelp-bed': 0.045,
     // The cellar's chests (#306): a chest is about 1.15 across, the big one 2.
     chest: 0.072,
     'big-chest': 0.13,

@@ -61,6 +61,7 @@ import {
   TOOL_ICONS,
   toolRecipeRows,
   HANDS_ICON,
+  KIND_PLAY_TEXT,
   PLAY_TEXT,
   xpLines,
   restLine,
@@ -1335,7 +1336,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
 
   /** Builds a gesture's overlay once (boards b, d, e, f, g). */
   function buildPlay(kind: SpotInteraction, spot: PublicSearchSpot): void {
-    const text = cellarOf && isChest(spot) ? chestPlayText(spot) : PLAY_TEXT[kind];
+    const text =
+      cellarOf && isChest(spot)
+        ? chestPlayText(spot)
+        : (KIND_PLAY_TEXT[spot.kind] ?? PLAY_TEXT[kind]);
     play.dataset['kind'] = kind;
     playDots = el('span', { class: 'explore-dots' });
     const playChip = el(

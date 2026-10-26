@@ -1,4 +1,5 @@
 import { CELLAR_LOOK } from '../hollowed/cellar-look.js';
+import { COAST_LOOK } from './coast-config.js';
 import type { LandLook } from './land-config.js';
 
 /**
@@ -79,6 +80,8 @@ export const BIOME_LOOKS: Readonly<Record<string, LandLook>> = {
       fireflies: 40, // TUNE: the cave's glow motes
     },
   },
+  // Wild Isle (#621 W1-11): a sandy beach ringed by the sea.
+  coast: COAST_LOOK,
   // A Hollow's hidden cellar (#306): a stone vault, its own look.
   cellar: CELLAR_LOOK,
 };

@@ -139,11 +139,11 @@ describe('colliders', () => {
 
   it('leaves room for the Keeper between two land spots `minGap` apart', () => {
     // The widest pair of land spots that can sit side by side; the pond is
-    // wider, and the flood fill below checks every spot stays reachable. A
+    // wider (as is the coast's tide pool), and the flood fill below checks every spot stays reachable. A
     // cellar's chests stand in their own row, not by `minGap` (#306).
     const widest = Math.max(
       ...Object.entries(EXPLORE_VIEW.spotRadius)
-        .filter(([kind]) => !['pond', 'chest', 'big-chest'].includes(kind))
+        .filter(([kind]) => !['pond', 'tide-pool', 'chest', 'big-chest'].includes(kind))
         .map(([, r]) => r),
     );
     expect(2 * widest + 2 * EXPLORE_VIEW.keeperRadius).toBeLessThan(EXPLORE_RULES.placement.minGap);
