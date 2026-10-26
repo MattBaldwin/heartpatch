@@ -1938,3 +1938,27 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 - **Costs:** the W1-8A lane cost $43.85 (245k context; flagged), and the #655 D lane cost $12.04.
 - **#382 Oinkle curl tail:** it failed three render-checks (handle, raspberry), so it fell back to a short stub tail.
 - **`isBuildableOn` naming (supersedes supervisor 18's "Shared `isBuildableOn`" call):** main's `isBuildableOn` (W1-8A, buildings) checks whether a building is allowed on a patch type. W1-6's shared tile check for bridges and docks is `travelBuildCheck`. These are different questions, not a duplicate. The "server switches over after W1-8" follow-up now means the server adopts `travelBuildCheck` for bridge and dock placement.
+
+## 2026-10-25 — Owner decisions and coordinator calls (supervisor 20)
+
+**Owner decisions**
+- **#382 heart hug and ruff (option A for both):** the bears get a heart hug (both arms wrap a red heart, paws meet at the front), and Soapduke gets a ruff (a ring of white spheres). Sheet v25 approved ~20:00Z. In the 3/4 camera the ruff is wider than the head on one side only; accepted after four rounds.
+- **#685 screens approved (v6, ~20:40Z).** Its `farShoreOnly` fixes the ferry tint on the player's own land.
+- **Cost stop (owner, ~21:45Z):** a $20 cost stop per lane, whatever its context (COORDINATOR §2; PR #696).
+
+**Coordinator calls**
+- **#382 close-set eyes:** `close-happy-eyes`, `close-oval-eyes` and `close-spooky-eyes` are additive `ART_RULES.feelingFaces` options.
+- **Coast spawn and guardian tables** come after #382, in a small data-only follow-up. W1-11 does not touch #382's files.
+
+## 2026-10-26 — Owner decisions and coordinator calls (supervisor 21)
+
+**Owner decisions**
+- **#694 coast screens approved (v6, ~00:25Z).**
+- **River explore kit (option B):** it stays in Wild Isle Wave 1 as W1-13, a client explore biome like W1-11 (#621 comment 6405734745).
+- **Storm finish (option A):** the W1-9g storm moves to an Opus lane after 3 render-check FIX rounds on Sonnet lanes.
+
+**Coordinator calls**
+- **"Water Well" stays** as the building's name (the data name, from an earlier owner answer).
+- **`tutorial.spec.ts:218` timeout on #686 and #694** was runner load: main and the next heads were green, so no code change.
+- **The W1-10 feed card frame** is shot in #698 only if it renders on main without care-lane changes; otherwise it is a follow-up.
+- **The works tile card** waits for #686 and ships as W1-10c.
