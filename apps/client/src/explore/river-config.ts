@@ -39,7 +39,7 @@ export const BANK: LandBank = {
   // Each spot on the bank sits where it belongs: the eddy and the cattails
   // out in the shallows, the pebble bar a spit just out of the water, the
   // mossy log on the wet sand at the water's edge.
-  pads: { eddy: -0.24, cattails: -0.14, 'pebble-bar': 0.05, 'mossy-log': 0.07 }, // TUNE
+  pads: { eddy: -0.24, cattails: -0.14, 'pebble-bar': 0.05, 'mossy-log': 0.02 }, // TUNE: the log's sand stays wet, not a dry pale disc
   padReach: 1.15, // TUNE
   jetty: {
     bearings: [68, 112, 52, 128, 84, 96], // TUNE: back-right first

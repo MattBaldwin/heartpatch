@@ -807,7 +807,7 @@ export function buildMist(scene: Scene): Mesh {
         [0.45, 0.14],
       ] as const) {
         const at = polar(r, a, y + (1 - k) * 0.05);
-        parts.push(faded(flat(sphere(d * k, 6, at, [1.6, 0.02, 1]), '#d6d0ff'), alpha)); // TUNE
+        parts.push(faded(flat(sphere(d * k, 12, at, [1.6, 0.02, 1]), '#d6d0ff'), alpha)); // TUNE
       }
     }
     return merged(parts);
