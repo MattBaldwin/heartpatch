@@ -97,6 +97,18 @@ describe('river look', () => {
     }
   });
 
+  it('keeps the meadow grass, not shore, however low it rolls, on any tile', () => {
+    // Shore by height alone painted the meadow's dips sandy and bare.
+    for (let seed = 1; seed <= 120; seed++) {
+      const land = landField(RIVER_LOOK.shape, seed * 7919, SIZE, START);
+      for (const p of walkable) {
+        const { x, z } = world(p);
+        if (bankReach({ x, z }, SIZE) >= BANK.shore - 0.15) continue;
+        expect(land.bank!.shore(x, z), `seed ${String(seed)}`).toBe(0);
+      }
+    }
+  });
+
   it('pads each spot on the bank to its kind and leaves one on the meadow alone', () => {
     const bare = landField(RIVER_LOOK.shape, 42, SIZE, START);
     const land = landField(RIVER_LOOK.shape, 42, SIZE, START, SPOTS);

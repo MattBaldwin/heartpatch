@@ -180,6 +180,9 @@ export function landField(
   return { ...banked(shape.bank, raw, size, spots, edge), pathX, pathMask, rises };
 }
 
+/** How far in from the shore's start (`bankReach`) low ground can still be shore. */
+const LOW_SHORE = 0.12; // TUNE
+
 const ease = (a: number, b: number, x: number): number => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
@@ -206,7 +209,7 @@ function banked(
   const dry = (h: number, x: number, z: number): number => {
     if (h >= 0 || sag <= 0) return h;
     const eased = -sag * (1 - Math.exp(h / sag));
-    return h + (eased - h) * (1 - ease(edge - 0.2, edge + 0.4, Math.hypot(x, z)));
+    return h + (eased - h) * (1 - ease(edge - 0.2, edge + 0.4, Math.hypot(x, z))); // TUNE: the fade past the edge
   };
   const reach = (x: number, z: number) => bankReach({ x, z }, size);
   // Only spots on the bank are padded; one out on the meadow keeps the grass.
@@ -241,11 +244,16 @@ function banked(
     const aside = -dx * Math.sin(jetty.angle) + dz * Math.cos(jetty.angle);
     return along >= 0 && along <= jetty.length && Math.abs(aside) <= half ? Math.max(h, deck) : h;
   };
-  const shore = (x: number, z: number): number =>
-    Math.max(
-      ease(bank.shore - 0.04, bank.water - 0.02, reach(x, z)),
-      1 - ease(bank.level + 0.06, bank.level + 0.16, height(x, z)),
+  // Low ground is shore too (a spot's pad, the wet sand round it), but only
+  // near the bank: out on the meadow a dip stays grass however low it rolls.
+  const shore = (x: number, z: number): number => {
+    const e = reach(x, z);
+    return Math.max(
+      ease(bank.shore - 0.04, bank.water - 0.02, e),
+      (1 - ease(bank.level + 0.06, bank.level + 0.16, height(x, z))) *
+        ease(bank.shore - LOW_SHORE, bank.shore, e),
     );
+  };
   return { height, stand, bank: { level: bank.level, shore, jetty } };
 }
 

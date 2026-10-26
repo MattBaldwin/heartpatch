@@ -848,8 +848,8 @@ function clear(ctx: ExtrasContext, x: number, z: number, gap: number, front: num
 
 /**
  * `count` places on the bank between `from` and `to` of the way to its back
- * edges (`bankReach`), `gap` apart and clear of the spots (`clear`) and the
- * jetty.
+ * edges (`bankReach`), `gap` apart and clear of the spots (`clear`, by `gap`
+ * unless `spots` says otherwise) and the jetty.
  */
 function onBank(
   ctx: ExtrasContext,
@@ -858,7 +858,7 @@ function onBank(
   to: number,
   scale: [number, number],
   gap: number,
-  spots: { readonly gap: number; readonly front: number } = { gap, front: gap },
+  spots: { readonly gap: number; readonly front: number } = { gap, front: 0 },
 ): Growth[] {
   const jetty = ctx.land.bank?.jetty ?? null;
   const offJetty = (x: number, z: number) => {
