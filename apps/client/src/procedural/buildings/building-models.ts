@@ -87,21 +87,38 @@ export function footprintReach(body: Mesh): number {
   return reach;
 }
 
+/**
+ * How far a model's body gets towards its pointy-top tile's nearest flat
+ * edge (normals at 0°, ±60°): past `TILE_FOOTPRINT.edge` it stands on the
+ * next tile, even where its plain reach is still inside the corners.
+ */
+export function footprintEdgeReach(body: Mesh): number {
+  const p = body.getVerticesData(VertexBuffer.PositionKind) ?? [];
+  let reach = 0;
+  for (let i = 0; i < p.length; i += 3) {
+    const [x, z] = [Math.abs(p[i] ?? 0), Math.abs(p[i + 2] ?? 0)];
+    reach = Math.max(reach, x, x / 2 + (z * Math.sqrt(3)) / 2);
+  }
+  return reach;
+}
+
 /** How much to scale a building so its reach lands inside `TILE_FOOTPRINT`. */
 function footprintFit(scene: Scene, buildingId: string): number {
   const known = fits.get(buildingId);
   if (known !== undefined) return known;
   const reach = (level: number) => {
     const { body, glow } = buildModel(scene, buildingId, 'plain', level, 1);
-    const r = footprintReach(body);
+    const r = [footprintReach(body), footprintEdgeReach(body)] as const;
     body.dispose();
     glow?.dispose();
     return r;
   };
-  const first = reach(1);
+  const [first] = reach(1);
+  const [top, topEdge] = reach(LEVEL_SCALE.length);
   const fit = Math.min(
     Math.min(Math.max(first, TILE_FOOTPRINT.min), TILE_FOOTPRINT.max) / first,
-    TILE_FOOTPRINT.maxTop / reach(LEVEL_SCALE.length),
+    TILE_FOOTPRINT.maxTop / top,
+    TILE_FOOTPRINT.edge / topEdge,
   );
   fits.set(buildingId, fit);
   return fit;
@@ -875,9 +892,10 @@ function buildModel(
         part(body, cylinder(0.12, 0.12, 0.09, 10), C.bucket, [-0.4, 0.06, 0.24]);
       }
       if (l >= 4) {
-        // The River Well's tower stands beside the well, clear of its roof
-        // (behind it, its cap clipped into the roof).
-        const [tx, tz] = buildingId === 'river-well' ? [0.72, -0.04] : [0.46, 0.27];
+        // The River Well's tower stands at the well's front corner, clear of
+        // its roof and trough and inside the tile (the Water Well's stands
+        // behind it, its cap clipped into the roof).
+        const [tx, tz] = buildingId === 'river-well' ? [0.5, -0.42] : [0.46, 0.27];
         for (const [x, z] of [
           [tx - 0.08, tz - 0.05],
           [tx + 0.08, tz - 0.05],

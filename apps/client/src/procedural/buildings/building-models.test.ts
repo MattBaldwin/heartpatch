@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { BUILDING_COLORS, LEVEL_SCALE, TILE_FOOTPRINT } from './building-config.js';
 import {
   buildBuildingModel,
+  footprintEdgeReach,
   footprintReach,
   levelScale,
   WILD_HOMESTEAD,
@@ -253,6 +254,22 @@ describe('Wild Isle works models (#621 W1-10)', () => {
         );
         expect(r, `${id} L${String(level)}`).toBeLessThanOrEqual(
           level === 1 ? TILE_FOOTPRINT.max + 0.005 : Math.min(high, TILE_FOOTPRINT.maxTop + 0.005),
+        );
+      }
+    }
+  });
+
+  it('keeps every part inside its tile at levels 3 and 4 (supervisor, v4 screens)', () => {
+    // The River Well's L4 tower once stood on the next tile east: its plain
+    // reach was inside the corners, but past the flat edge.
+    const scene = new Scene(engine);
+    const inner = (0.95 * Math.cos(Math.PI / 6)) / 1.15;
+    expect(TILE_FOOTPRINT.edge).toBeLessThanOrEqual(inner);
+    for (const id of WILD) {
+      for (const level of [3, 4]) {
+        const { body } = buildBuildingModel(scene, id, 'plain', level);
+        expect(footprintEdgeReach(body), `${id} L${String(level)}`).toBeLessThanOrEqual(
+          TILE_FOOTPRINT.edge + 1e-6,
         );
       }
     }

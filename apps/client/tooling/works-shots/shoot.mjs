@@ -34,7 +34,9 @@ const DEVICES = {
     height: 852,
     dpr: 3,
     dist: 34,
-    wellDist: 28,
+    // Its tall, narrow screen crops a gallery row's outer tiles at `dist`.
+    rowDist: 42,
+    wellDist: 34,
     insets: { top: 59, bottom: 34, left: 0, right: 0 },
   },
   'iphone-se': {
@@ -403,22 +405,22 @@ for (const key of WANT) {
     `Buildings gallery at map zoom (dist ${d.dist}): the Seawall, level 1, filling its tile at map size`,
   );
   await gallery(
-    `show=works&fill=1&dist=${d.dist}`,
+    `show=works&fill=1&dist=${d.rowDist ?? d.dist}`,
     'gallery-works',
     'Buildings gallery at map size: Fishing Pier, Salt Pans, Watermill, Irrigated Field, Rain Barrel and Water Well (River Well) at level 1, lamps lit, each filling its tile',
   );
   await gallery(
-    `show=compare&fill=1&dist=${d.dist}`,
+    `show=compare&fill=1&dist=${d.rowDist ?? d.dist}`,
     'gallery-compare',
     'Buildings gallery at map size: Woodcutter’s Hut, Ember Kiln and Pumpkin Barn (already in the game) beside the Fishing Pier, Seawall and Watermill, level 1, each filling its tile',
   );
   await gallery(
-    `show=works&asleep=1&fill=1&dist=${d.dist}`,
+    `show=works&asleep=1&fill=1&dist=${d.rowDist ?? d.dist}`,
     'gallery-works-asleep',
     'Buildings gallery at map size: the same six works napping, lamps dark',
   );
   await gallery(
-    `show=wild&fill=1&dist=${d.dist}`,
+    `show=wild&fill=1&dist=${d.rowDist ?? d.dist}`,
     'gallery-wild',
     'Buildings gallery at map size: Canal, Levee, Seawall, Weather Vane and Waystation, each filling its tile',
   );

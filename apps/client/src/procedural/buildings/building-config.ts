@@ -136,9 +136,10 @@ export const LEVEL_SCALE = [
  * model units and its corners 0.83. At level 1 the resource buildings reach
  * 0.48–0.60 (the Greenhouse 0.43, the Warehouse 0.75). A model past `max`
  * shrinks as a whole, so its look stays; one short of `min` widens along x
- * and z. `maxTop` caps its level-4 reach the same way (theirs 0.66–0.86).
+ * and z. `maxTop` caps its level-4 reach the same way (theirs 0.66–0.86),
+ * and `edge` keeps every level-4 part inside the drawn tile's flat edges.
  */
-export const TILE_FOOTPRINT = { min: 0.5, max: 0.62, maxTop: 0.8 } as const; // TUNE
+export const TILE_FOOTPRINT = { min: 0.5, max: 0.62, maxTop: 0.8, edge: 0.71 } as const; // TUNE
 
 /** How strongly glowing parts (flames, a lit grin) shine. */
 export const GLOW = 1.1; // TUNE
