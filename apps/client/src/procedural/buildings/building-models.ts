@@ -689,10 +689,23 @@ export function buildBuildingModel(
       }
       break;
     }
-    case 'water-well': {
+    case 'water-well':
+    case 'river-well': {
       // A round stone well with water inside, a little roof on two posts and
       // a bucket on its rope, by a lamp. L2: a trough. L3: a bench and a second bucket.
-      // L4: a little water tower.
+      // L4: a little water tower. Wild Isle's River Well (#621 revision 1) is
+      // the same well on a river-side base: a ribbon of stream behind it,
+      // pebbles and reeds on the bank.
+      if (buildingId === 'river-well') {
+        part(body, box(1.1, 0.04, 0.26), C.water, [0, 0.06, 0.46]);
+        part(body, cylinder(0.08, 0.9, 0.96, 18), C.bank, [0, 0.04, 0], [1, 1, 0.8]);
+        for (const x of [-0.42, -0.1, 0.3, 0.5]) {
+          part(body, sphere(0.09, 8), C.rock, [x, 0.1, 0.32], [1, 0.6, 1]);
+        }
+        for (const x of [0.36, 0.42, 0.48]) {
+          part(body, cylinder(0.26, 0.015, 0.02, 5), C.leafDark, [x, 0.13, 0.28]);
+        }
+      }
       part(body, cylinder(0.3, 0.56, 0.6, 20), C.wellStone, [0, 0.15, 0]);
       part(body, cylinder(0.04, 0.44, 0.44, 20), C.water, [0, 0.29, 0]);
       for (const x of [-0.26, 0.26]) part(body, box(0.05, 0.5, 0.05), C.post, [x, 0.5, 0]);
@@ -984,6 +997,355 @@ export function buildBuildingModel(
       );
       part(body, cylinder(0.42, 0.03, 0.03, 6), C.post, [-0.54, 0.21, 0.06]);
       part(windowList, sphere(0.09, 8), lampColor, [-0.54, 0.46, 0.06]);
+      break;
+    }
+    case 'fishing-pier': {
+      // Wild Isle works (#621 W1-10): a short plank pier out over a puddle
+      // of water, a tall fishing rod bent over it with its line and a red
+      // bobber, and a bucket of caught fish by a lamp. No boat: that's the
+      // Ferry Dock. L2: a little tackle shed. L3: a second rod and a net on
+      // poles. L4: a tall lamp post with a pennant.
+      part(body, cylinder(0.04, 0.8, 0.8, 20), C.water, [0, 0.06, -0.18], [1.1, 1, 0.7]);
+      part(body, box(0.34, 0.05, 0.84), C.post, [0, 0.14, -0.08]);
+      for (let i = 0; i < 7; i++) {
+        part(body, box(0.36, 0.014, 0.02), C.log, [0, 0.17, -0.44 + i * 0.12]);
+      }
+      for (const x of [-0.15, 0.15]) {
+        for (const z of [-0.46, -0.1]) {
+          part(body, cylinder(0.26, 0.06, 0.06, 8), C.log, [x, 0.13, z]);
+        }
+      }
+      // The rod: a long pole leaning out over the water, its line and bobber.
+      part(body, cylinder(0.9, 0.02, 0.035, 6), C.log, [0.12, 0.5, -0.26], [1, 1, 1], [-0.7, 0, 0]);
+      part(body, cylinder(0.36, 0.006, 0.006, 4), C.matTrim, [0.12, 0.6, -0.64]);
+      part(body, sphere(0.07, 8), C.target, [0.12, 0.42, -0.64]);
+      // The bucket of fish and the lamp.
+      part(body, cylinder(0.14, 0.16, 0.13, 12), C.bucket, [-0.08, 0.24, 0.2]);
+      part(body, sphere(0.1, 8), C.fish, [-0.1, 0.33, 0.2], [1.6, 0.6, 0.7], [0, 0, 0.5]);
+      part(body, sphere(0.09, 8), C.fishAlt, [-0.04, 0.34, 0.22], [1.6, 0.6, 0.7], [0, 0.8, -0.4]);
+      part(body, cylinder(0.42, 0.03, 0.03, 6), C.post, [-0.15, 0.36, -0.46]);
+      part(windowList, sphere(0.08, 8), lampColor, [-0.15, 0.6, -0.46]);
+      if (l >= 2) {
+        part(body, box(0.3, 0.26, 0.26), C.storeTrim, [0.32, 0.13, 0.3]);
+        part(body, box(0.36, 0.04, 0.32), C.millRoof, [0.32, 0.29, 0.3], [1, 1, 1], [0, 0, 0.2]);
+        part(windowList, box(0.1, 0.08, 0.02), windowColor, [0.32, 0.16, 0.16]);
+      }
+      if (l >= 3) {
+        part(
+          body,
+          cylinder(0.8, 0.02, 0.03, 6),
+          C.log,
+          [-0.14, 0.46, -0.22],
+          [1, 1, 1],
+          [-0.6, 0, 0.3],
+        );
+        for (const x of [-0.42, -0.22])
+          part(body, cylinder(0.4, 0.025, 0.025, 6), C.post, [x, 0.2, 0.34]);
+        part(body, box(0.2, 0.18, 0.01), C.matTrim, [-0.32, 0.26, 0.34]);
+      }
+      if (l >= 4) {
+        part(body, cylinder(0.7, 0.035, 0.035, 6), C.post, [0.15, 0.5, 0.12]);
+        part(windowList, sphere(0.1, 8), lampColor, [0.15, 0.88, 0.12]);
+        part(body, box(0.16, 0.08, 0.012), C.flag, [0.24, 0.76, 0.12]);
+      }
+      break;
+    }
+    case 'salt-pans': {
+      // A low, wide grid of shallow trays of sea water drying in the sun, each
+      // with a snowy little heap of salt, a big salt pile, a rake and a sack.
+      // Flat and white-topped, so it never reads as a field. L2: two more
+      // trays. L3: a wheelbarrow of salt. L4: a little drying shed.
+      const trays: [number, number][] = [
+        [-0.2, -0.18],
+        [0.2, -0.18],
+        [-0.2, 0.2],
+      ];
+      if (l >= 2) trays.push([0.2, 0.2], [-0.6, -0.18]);
+      for (const [x, z] of trays) {
+        part(body, box(0.36, 0.12, 0.34), C.wellStone, [x, 0.06, z]);
+        part(body, box(0.3, 0.012, 0.28), C.brine, [x, 0.125, z]);
+        part(body, cylinder(0.07, 0, 0.16, 10), C.salt, [x + 0.06, 0.16, z - 0.04]);
+      }
+      part(body, cylinder(0.26, 0, 0.32, 14), C.salt, [0.46, 0.13, 0.32]);
+      part(body, cylinder(0.3, 0.12, 0.14, 10), C.parcel, [0.5, 0.15, -0.3]);
+      part(body, box(0.03, 0.5, 0.03), C.post, [0.36, 0.25, -0.44], [1, 1, 1], [0.3, 0, 0]);
+      part(body, box(0.16, 0.03, 0.04), C.post, [0.36, 0.49, -0.37]);
+      part(body, cylinder(0.42, 0.03, 0.03, 6), C.post, [-0.5, 0.21, 0.36]);
+      part(windowList, sphere(0.08, 8), lampColor, [-0.5, 0.46, 0.36]);
+      if (l >= 3) {
+        part(body, box(0.22, 0.1, 0.16), C.cart, [-0.12, 0.13, 0.5]);
+        part(body, cylinder(0.08, 0, 0.18, 10), C.salt, [-0.12, 0.22, 0.5]);
+        part(
+          body,
+          cylinder(0.04, 0.1, 0.1, 10),
+          C.post,
+          [-0.24, 0.05, 0.5],
+          [1, 1, 1],
+          [0, 0, Math.PI / 2],
+        );
+      }
+      if (l >= 4) {
+        part(body, box(0.3, 0.3, 0.26), C.storeTrim, [-0.6, 0.15, 0.2]);
+        part(body, box(0.36, 0.04, 0.32), C.millRoof, [-0.6, 0.33, 0.2], [1, 1, 1], [0, 0, 0.2]);
+        part(windowList, box(0.1, 0.08, 0.02), windowColor, [-0.6, 0.18, 0.06]);
+      }
+      break;
+    }
+    case 'watermill': {
+      // A creamy mill house with a blue-green roof and a big wooden wheel on
+      // its side dipping into a stream: the wheel is the silhouette. A sack
+      // of Flour by the door, a lit window and a lamp. L2: a second sack and
+      // a chimney. L3: a little loft window. L4: a pennant on the roof.
+      part(body, box(0.5, 0.46, 0.44), C.millWall, [-0.08, 0.23, 0.04]);
+      part(
+        body,
+        cylinder(0.56, 0.42, 0.42, 3),
+        C.millRoof,
+        [-0.08, 0.58, 0.04],
+        [1, 1, 1.25],
+        [0, 0, Math.PI / 2],
+      );
+      part(body, box(0.14, 0.22, 0.03), C.door, [-0.14, 0.11, -0.19]);
+      part(windowList, box(0.12, 0.1, 0.03), windowColor, [0.06, 0.28, -0.19]);
+      // The stream and the wheel on the +x side: a rim, a hub and paddles.
+      part(body, box(0.24, 0.04, 0.9), C.water, [0.34, 0.06, 0.04]);
+      part(
+        body,
+        CreateTorus(`${name}-wheel`, { diameter: 0.56, thickness: 0.06, tessellation: 20 }, scene),
+        C.wheel,
+        [0.3, 0.3, 0.04],
+        [1, 1, 1],
+        [0, 0, Math.PI / 2],
+      );
+      part(
+        body,
+        cylinder(0.12, 0.1, 0.1, 10),
+        C.log,
+        [0.27, 0.3, 0.04],
+        [1, 1, 1],
+        [0, 0, Math.PI / 2],
+      );
+      around(8, (a) => {
+        part(
+          body,
+          box(0.1, 0.03, 0.14),
+          C.wheel,
+          [0.3, 0.3 + Math.sin(a) * 0.28, 0.04 + Math.cos(a) * 0.28],
+          [1, 1, 1],
+          [-a, 0, 0],
+        );
+      });
+      part(body, sphere(0.16, 10), C.storeTrim, [-0.38, 0.08, -0.26], [1, 0.9, 1]);
+      part(body, cylinder(0.42, 0.03, 0.03, 6), C.post, [-0.44, 0.21, 0.36]);
+      part(windowList, sphere(0.08, 8), lampColor, [-0.44, 0.46, 0.36]);
+      if (l >= 2) {
+        part(body, sphere(0.14, 10), C.storeTrim, [-0.24, 0.07, -0.32], [1, 0.9, 1]);
+        part(body, box(0.1, 0.22, 0.1), C.chimney, [-0.24, 0.74, 0.18]);
+        part(body, sphere(0.08, 8), C.puff, [-0.24, 0.9, 0.18]);
+      }
+      if (l >= 3) part(windowList, sphere(0.1, 10), windowColor, [-0.08, 0.6, -0.2], [1, 1, 0.3]);
+      if (l >= 4) {
+        part(body, cylinder(0.3, 0.02, 0.02, 6), C.post, [0.08, 0.92, 0.04]);
+        part(body, box(0.14, 0.08, 0.012), C.flag, [0.16, 1.02, 0.04]);
+      }
+      break;
+    }
+    case 'irrigated-field': {
+      // A plot of tilled earth with rows of leafy Greens and a bright little
+      // water channel down one side, watched by a cheery scarecrow with a
+      // lantern. L2: a fourth row. L3: a watering can. L4: a sprinkler.
+      part(body, box(0.84, 0.12, 0.74), C.soil, [-0.04, 0.06, 0]);
+      part(body, box(0.1, 0.04, 0.78), C.water, [0.44, 0.1, 0]);
+      const rows = l >= 2 ? 4 : 3;
+      for (let i = 0; i < rows; i++) {
+        const z = -0.27 + i * (0.54 / Math.max(1, rows - 1));
+        part(body, box(0.74, 0.05, 0.08), C.soil, [-0.04, 0.14, z]);
+        for (let j = 0; j < 4; j++) {
+          part(
+            body,
+            sphere(0.12, 5),
+            j % 2 ? C.leafDark : C.leaf,
+            [-0.32 + j * 0.19, 0.2, z],
+            [1, 0.7, 1],
+          );
+        }
+      }
+      // The scarecrow: a post, arms, a straw-coloured head and a hat.
+      part(body, box(0.04, 0.6, 0.04), C.post, [-0.36, 0.3, 0.42]);
+      part(body, box(0.36, 0.04, 0.04), C.post, [-0.36, 0.44, 0.42]);
+      part(body, box(0.16, 0.18, 0.08), C.flag, [-0.36, 0.42, 0.42]);
+      part(body, sphere(0.14, 10), C.hay, [-0.36, 0.62, 0.42]);
+      part(body, cylinder(0.08, 0.1, 0.22, 12), C.barnRoof, [-0.36, 0.72, 0.42]);
+      part(windowList, sphere(0.07, 8), lampColor, [-0.18, 0.4, 0.42]);
+      if (l >= 3) {
+        part(body, cylinder(0.12, 0.1, 0.12, 10), C.gear, [0.32, 0.12, 0.44]);
+        part(
+          body,
+          cylinder(0.14, 0.02, 0.02, 5),
+          C.gear,
+          [0.4, 0.16, 0.44],
+          [1, 1, 1],
+          [0, 0, 0.9],
+        );
+      }
+      if (l >= 4) {
+        part(body, cylinder(0.36, 0.025, 0.025, 6), C.hoop, [0.1, 0.24, -0.05]);
+        part(
+          body,
+          CreateTorus(
+            `${name}-spray`,
+            { diameter: 0.18, thickness: 0.03, tessellation: 12 },
+            scene,
+          ),
+          C.water,
+          [0.1, 0.42, -0.05],
+        );
+      }
+      break;
+    }
+    case 'rain-barrel': {
+      // A chubby wooden barrel with metal hoops, a funnel lid to catch the
+      // rain, a tap with a puddle under it and a little sign with a lamp.
+      // Small and round: the smallest of the works. L2: a second barrel.
+      // L3: a gutter roof feeding them. L4: a third barrel on a stand.
+      const barrelAt = (x: number, y: number, z: number, s: number) => {
+        part(body, cylinder(0.42 * s, 0.32 * s, 0.32 * s, 16), C.barrel, [x, y + 0.21 * s, z]);
+        part(body, sphere(0.36 * s, 8), C.barrel, [x, y + 0.21 * s, z], [1, 0.6, 1]);
+        for (const dy of [0.08, 0.34]) {
+          part(
+            body,
+            CreateTorus(
+              `${name}-hoop`,
+              { diameter: 0.34 * s, thickness: 0.03, tessellation: 12 },
+              scene,
+            ),
+            C.hoop,
+            [x, y + dy * s, z],
+          );
+        }
+        part(body, cylinder(0.08 * s, 0.4 * s, 0.24 * s, 16), C.hoop, [x, y + 0.46 * s, z]);
+        part(body, cylinder(0.02, 0.24 * s, 0.24 * s, 16), C.water, [x, y + 0.5 * s, z]);
+      };
+      barrelAt(0, 0, 0, 1);
+      part(
+        body,
+        cylinder(0.1, 0.04, 0.04, 6),
+        C.hoop,
+        [0, 0.1, -0.2],
+        [1, 1, 1],
+        [Math.PI / 2, 0, 0],
+      );
+      part(body, cylinder(0.03, 0.24, 0.24, 14), C.water, [0, 0.05, -0.3], [1.2, 1, 0.8]);
+      part(body, cylinder(0.42, 0.03, 0.03, 6), C.post, [0.34, 0.21, -0.2]);
+      part(windowList, sphere(0.08, 8), lampColor, [0.34, 0.46, -0.2]);
+      if (l >= 2) barrelAt(-0.36, 0, 0.12, 0.8);
+      if (l >= 3) {
+        for (const x of [-0.56, 0.24]) part(body, box(0.04, 0.7, 0.04), C.post, [x, 0.35, 0.34]);
+        part(body, box(0.9, 0.04, 0.24), C.millRoof, [-0.16, 0.72, 0.28], [1, 1, 1], [0.3, 0, 0]);
+        part(body, box(0.9, 0.04, 0.06), C.hoop, [-0.16, 0.66, 0.16]);
+      }
+      if (l >= 4) {
+        part(body, box(0.3, 0.2, 0.3), C.post, [0.36, 0.1, 0.3]);
+        barrelAt(0.36, 0.2, 0.3, 0.7);
+      }
+      break;
+    }
+    case 'canal': {
+      // A straight stone-lined channel of bright water along +x, with a
+      // little plank footbridge over the middle. One level.
+      for (const z of [-0.16, 0.16]) part(body, box(1.2, 0.16, 0.1), C.stoneDark, [0, 0.08, z]);
+      part(body, box(1.2, 0.04, 0.24), C.water, [0, 0.1, 0]);
+      part(body, box(0.18, 0.04, 0.46), C.post, [0, 0.18, 0]);
+      for (const x of [-0.56, 0.56])
+        part(body, cylinder(0.12, 0.12, 0.12, 8), C.stoneDark, [x, 0.06, -0.24]);
+      break;
+    }
+    case 'levee': {
+      // A long, soft grassy bank along +x with a few stones and flowers on
+      // top. Low and long: it reads as a hill, not a wall. One level.
+      part(body, sphere(1, 10), C.bank, [0, 0.08, 0], [1.3, 0.4, 0.42]);
+      for (const x of [-0.4, 0.05, 0.42])
+        part(body, sphere(0.1, 8), C.rock, [x, 0.26, -0.12], [1, 0.7, 1]);
+      for (const x of [-0.2, 0.25]) {
+        part(body, sphere(0.07, 8), C.petal, [x, 0.27, 0.05]);
+        part(body, sphere(0.04, 6), C.petalAlt, [x, 0.3, 0.05]);
+      }
+      break;
+    }
+    case 'seawall': {
+      // A sturdy wall of chunky stone blocks along +x with crenels on top, a
+      // pink seashell on its face and a lamp at one end. One level.
+      for (let i = 0; i < 5; i++) {
+        const x = -0.52 + i * 0.26;
+        part(body, box(0.25, 0.22, 0.26), i % 2 ? C.wallDark : C.wall, [x, 0.11, 0]);
+        part(body, box(0.25, 0.2, 0.26), i % 2 ? C.wall : C.wallDark, [x, 0.32, 0]);
+        if (i % 2 === 0) part(body, box(0.18, 0.12, 0.24), C.wall, [x, 0.48, 0]);
+      }
+      part(body, sphere(0.1, 8), C.shell, [0.13, 0.26, -0.14], [1, 1, 0.4]);
+      part(body, cylinder(0.3, 0.03, 0.03, 6), C.post, [0.52, 0.57, 0]);
+      part(windowList, sphere(0.08, 8), lampColor, [0.52, 0.74, 0]);
+      break;
+    }
+    case 'weather-vane': {
+      // A tall thin post on a stone step, topped with an arrow and a little
+      // heart, the four letter arms below it, and a cup spinner: the tallest,
+      // thinnest Wild Isle silhouette. One level.
+      part(body, cylinder(0.14, 0.4, 0.46, 14), C.wellStone, [0, 0.07, 0]);
+      part(body, cylinder(1.1, 0.04, 0.05, 8), C.hoop, [0, 0.69, 0]);
+      for (const a of [0, Math.PI / 2]) {
+        part(body, box(0.4, 0.025, 0.025), C.hoop, [0, 1.0, 0], [1, 1, 1], [0, a, 0]);
+      }
+      around(4, (a) => {
+        part(body, sphere(0.06, 6), C.flag, [Math.cos(a) * 0.2, 1.0, Math.sin(a) * 0.2]);
+      });
+      part(body, box(0.5, 0.03, 0.03), C.hoop, [0, 1.22, 0]);
+      part(
+        body,
+        cylinder(0.14, 0, 0.12, 4),
+        C.target,
+        [0.29, 1.22, 0],
+        [1, 1, 1],
+        [0, 0, -Math.PI / 2],
+      );
+      part(body, box(0.02, 0.14, 0.16), C.target, [-0.24, 1.22, 0]);
+      around(3, (a) => {
+        part(
+          body,
+          box(0.14, 0.015, 0.015),
+          C.hoop,
+          [Math.cos(a) * 0.07, 0.62, Math.sin(a) * 0.07],
+          [1, 1, 1],
+          [0, -a, 0],
+        );
+        part(body, sphere(0.07, 8), C.millRoof, [Math.cos(a) * 0.15, 0.62, Math.sin(a) * 0.15]);
+      });
+      part(windowList, sphere(0.07, 8), lampColor, [0, 1.3, 0]);
+      break;
+    }
+    case 'waystation': {
+      // A cozy roadside stop: a peaked roof on four posts over a bench, a
+      // signpost with two arrows and a lamp. One level.
+      for (const [x, z] of [
+        [-0.28, -0.2],
+        [0.28, -0.2],
+        [-0.28, 0.2],
+        [0.28, 0.2],
+      ] as const) {
+        part(body, box(0.05, 0.5, 0.05), C.post, [x, 0.25, z]);
+      }
+      part(
+        body,
+        cylinder(0.7, 0.36, 0.36, 3),
+        C.cabinRoof,
+        [0, 0.6, 0],
+        [1, 1, 1.3],
+        [0, 0, Math.PI / 2],
+      );
+      part(body, box(0.46, 0.05, 0.16), C.log, [0, 0.18, 0.1]);
+      part(body, box(0.05, 0.62, 0.05), C.post, [0.52, 0.31, -0.3]);
+      part(body, box(0.26, 0.08, 0.02), C.storeTrim, [0.6, 0.52, -0.3]);
+      part(body, box(0.26, 0.08, 0.02), C.flag, [0.46, 0.4, -0.3]);
+      part(windowList, sphere(0.08, 8), lampColor, [-0.28, 0.42, -0.24]);
       break;
     }
     default:

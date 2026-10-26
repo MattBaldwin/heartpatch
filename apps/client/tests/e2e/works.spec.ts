@@ -1,0 +1,111 @@
+import { expect, test } from '@playwright/test';
+import { hasWaterNextDoor, hexKey, hexNeighbors, waterKindOf } from '@heartpatch/shared';
+import { selectTile } from './claim-land.js';
+import { api, hook } from './dev-hook.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
+
+/**
+ * Wild Isle works (#621 W1-10): a Fishing Pier goes up from the Build sheet
+ * on a homestead by the water, and a works whose water isn't next door shows
+ * held back with why. The homestead comes from the dev route; the patch is
+ * made through the lobby. Asserts on the game's own signals, never pixels.
+ */
+
+interface ViewTile {
+  q: number;
+  r: number;
+  terrain: string;
+  buildings: { buildingId: string }[];
+}
+
+const tileBuild = (page: Parameters<typeof hook>[0]) =>
+  hook<{ cards: string[]; mode: string | null }>(page, 'tileBuild');
+
+/** The held-back line each water need reads as (the server's words). */
+const HELD_BACK: Record<string, { needs: ('deep' | 'river' | 'lake')[]; line: string }> = {
+  'salt-pans': { needs: ['deep'], line: 'Only on the coast 🐚' },
+  watermill: { needs: ['river'], line: 'Needs the river 🌊' },
+  'river-well': { needs: ['river', 'lake'], line: 'Needs a river or lake next door 💧' },
+};
+
+test('a Fishing Pier goes up on a homestead by the water; a works with no water says why (#621)', async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const page = await newPlayer(browser, uniqueName('pier'));
+  const lobby = page.getByTestId('lobby');
+
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByTestId('lobby-patch-type-wild-isle').tap();
+  await lobby.getByLabel('Patch name').fill('Pier Cove');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await expect(lobby.getByTestId('lobby-wild-chip')).toHaveText('🌊 Wild Isle');
+  const maps = await api<{ maps: { id: string; name: string }[] }>(page, 'GET', '/maps');
+  const mapId = maps.body.maps.find((m) => m.name === 'Pier Cove')!.id;
+
+  // Homesteads next to home until one has water next door (an isle's home is
+  // by the sea, so the first nearly always does).
+  const view = async () =>
+    (await api<{ tiles: ViewTile[] }>(page, 'GET', `/maps/${mapId}/view`)).body.tiles;
+  const byWater = (tiles: ViewTile[], at: { q: number; r: number }) =>
+    hasWaterNextDoor(at, tiles, [], ['deep', 'river', 'lake'], 0);
+  let homestead: { q: number; r: number } | null = null;
+  let tiles: ViewTile[] = [];
+  for (let i = 0; i < 6 && !homestead; i++) {
+    const made = await api<{ q: number; r: number }>(page, 'POST', `/maps/${mapId}/dev/homestead`);
+    expect(made.status).toBe(201);
+    tiles = await view();
+    if (byWater(tiles, made.body)) homestead = made.body;
+  }
+  expect(homestead, 'a homestead with water next door').not.toBeNull();
+  const at = homestead!;
+  expect(
+    (await api(page, 'POST', `/maps/${mapId}/dev/items`, { items: { timber: 60, stone: 60 } }))
+      .status,
+  ).toBe(201);
+
+  await visitPatch(lobby);
+  await expect(lobby).toBeHidden();
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+
+  await selectTile(page, at);
+  await page.getByTestId('tile-build').tap();
+  await expect.poll(async () => (await tileBuild(page))?.cards ?? []).toContain('fishing-pier');
+  const cards = (await tileBuild(page))!.cards;
+  for (const id of ['rain-barrel', 'weather-vane', 'watermill', 'salt-pans', 'river-well']) {
+    expect(cards, id).toContain(id);
+  }
+
+  // One the water here doesn't suit is shown held back, with why.
+  const near = new Set(
+    hexNeighbors(at).flatMap((n) => {
+      const t = tiles.find((x) => hexKey(x) === hexKey(n));
+      const kind = t ? waterKindOf(t.terrain) : null;
+      return kind ? [kind] : [];
+    }),
+  );
+  const held = Object.entries(HELD_BACK).find(([, h]) => !h.needs.some((k) => near.has(k)));
+  if (held) {
+    const [id, { line }] = held;
+    const card = page.locator(`[data-build="${id}"]`);
+    await expect(card).toHaveAttribute('aria-disabled', 'true');
+    // A held-back card is aria-disabled but still taps, to say why (#242 3b-1).
+    await card.tap({ force: true });
+    await expect(page.getByTestId('build-detail')).toContainText(line);
+  }
+
+  // The pier: picked and built.
+  await page.locator('[data-build="fishing-pier"]').tap();
+  await expect(page.getByTestId('build-go')).toBeEnabled();
+  await page.getByTestId('build-go').tap();
+  await expect(page.getByTestId('tile-build-note')).toHaveText(
+    'Built! Your Fishing Pier is getting to work 🔨',
+  );
+  await expect
+    .poll(async () => {
+      const t = (await view()).find((x) => x.q === at.q && x.r === at.r);
+      return t?.buildings.map((b) => b.buildingId) ?? [];
+    })
+    .toEqual(['fishing-pier']);
+  await page.context().close();
+});

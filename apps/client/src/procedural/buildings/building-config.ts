@@ -85,6 +85,21 @@ export const BUILDING_COLORS = {
   parcel: '#e8b27a', // TUNE: cardboard parcels
   ribbon: '#ff7aa8', // TUNE: their pink ribbons, and the sign's heart
   crateMint: '#9fe3c8', // TUNE
+  // Wild Isle works (#621 W1-10): toys by the water.
+  fish: '#ffab6b', // TUNE: a caught fish, peachy orange
+  fishAlt: '#8fc7ff', // TUNE: a blue one
+  salt: '#fbf8ff', // TUNE: salt heaps, nearly white
+  brine: '#bfe9f2', // TUNE: the pans' shallow sea water
+  soil: '#a8775a', // TUNE: the field's tilled earth
+  wheel: '#d49a6a', // TUNE: the Watermill's wheel
+  millWall: '#fde6c8', // TUNE: its creamy walls
+  millRoof: '#7fb7c9', // TUNE: its blue-green roof
+  hoop: '#8a96a8', // TUNE: the Rain Barrel's hoops, the vane's metal
+  barrel: '#c98e62', // TUNE
+  bank: '#8fd17e', // TUNE: the Levee's grassy bank
+  wall: '#cfc6d9', // TUNE: the Seawall's blocks
+  wallDark: '#aea4bd', // TUNE
+  shell: '#ffc9d6', // TUNE: a seashell on the wall
 } as const;
 
 /**

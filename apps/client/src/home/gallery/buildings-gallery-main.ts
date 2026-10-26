@@ -30,7 +30,9 @@ setPerfReports(false);
  * and 2), `training1`, `training2` (Training Grounds with two squishies
  * practicing), `ring` (habitats filling ring tiles, #589), `lanterns` (every
  * kind of fire: a Hearthfire, a Jack-o'-Lantern and a Joy Lantern, #306 PR 5),
- * `res:<id>` (a resource building at levels 1–4, `&asleep=1` napping, #601).
+ * `res:<id>` (a resource building at levels 1–4, `&asleep=1` napping, #601),
+ * `works` (the six Wild Isle works, `&asleep=1` napping) and `wild` (the
+ * canal, shelters, vane and waystation, #621 W1-10).
  * `&night=1` lights any layout as the map at night (the Hollow layer's
  * `NIGHT_LOOK`), to judge glowing windows after dark.
  * Every shot uses one camera: `?pitch=` (degrees, default 42,
@@ -117,6 +119,25 @@ function squishy(
   };
 }
 
+/** A sample output for a resource building or works; `asleep`: paused for upkeep (its napping look). */
+function production(asleep: boolean): NonNullable<MyBuilding['production']> {
+  return {
+    resource: 'stone',
+    perCycle: 3,
+    cycleSeconds: 600,
+    ready: {},
+    cycles: 0,
+    maxCycles: 144,
+    full: false,
+    nextReadyAt: null,
+    upkeep: 17,
+    paidThrough: null,
+    pausedAt: asleep ? NOW : null,
+    upkeepRank: null,
+    delivering: false,
+  };
+}
+
 function layout(): Pick<HomeResponse, 'buildings' | 'squishies'> {
   const fireLevel = /^fire([123])$/.exec(show);
   if (fireLevel) {
@@ -190,12 +211,29 @@ function layout(): Pick<HomeResponse, 'buildings' | 'squishies'> {
       ],
     };
   }
+  // Wild Isle (#621 W1-10): the six works side by side on the home patch
+  // (`works`), and the canal, both shelters, the vane and the waystation
+  // (`wild`). `res:<id>` shows a works at levels 1–4 too.
+  if (show === 'works' || show === 'wild') {
+    const ids =
+      show === 'works'
+        ? ['fishing-pier', 'salt-pans', 'watermill', 'irrigated-field', 'rain-barrel', 'river-well']
+        : ['canal', 'levee', 'seawall', 'weather-vane', 'waystation'];
+    const at = TILES.filter((t) => !t.heartSeed);
+    return {
+      buildings: ids.map((id, i) =>
+        building(id, at[i] ?? { q: 0, r: 0 }, 1, {
+          production: production(params.get('asleep') === '1'),
+        }),
+      ),
+      squishies: [squishy('puddlepuff')],
+    };
+  }
   // A resource building at levels 1–4 (#601 PR 7): `?show=res:stone-quarry`,
   // `&asleep=1` for its napping look.
   const resource = /^res:([a-z-]+)$/.exec(show);
   if (resource?.[1]) {
     const id = resource[1];
-    const asleep = params.get('asleep') === '1';
     const at = [
       { q: 0, r: -1 },
       { q: 1, r: -1 },
@@ -204,23 +242,7 @@ function layout(): Pick<HomeResponse, 'buildings' | 'squishies'> {
     ];
     return {
       buildings: at.map((tile, i) =>
-        building(id, tile, i + 1, {
-          production: {
-            resource: 'stone',
-            perCycle: 3,
-            cycleSeconds: 600,
-            ready: {},
-            cycles: 0,
-            maxCycles: 144,
-            full: false,
-            nextReadyAt: null,
-            upkeep: 17,
-            paidThrough: null,
-            pausedAt: asleep ? NOW : null,
-            upkeepRank: null,
-            delivering: false,
-          },
-        }),
+        building(id, tile, i + 1, { production: production(params.get('asleep') === '1') }),
       ),
       squishies: [squishy('puddlepuff')],
     };
@@ -229,7 +251,9 @@ function layout(): Pick<HomeResponse, 'buildings' | 'squishies'> {
 }
 
 const home: HomeResponse = {
-  tiles: TILES,
+  // The Wild Isle layouts fill every ring tile, so no resource node sits under one.
+  tiles:
+    show === 'works' || show === 'wild' ? TILES.map((t) => ({ ...t, nodeResource: null })) : TILES,
   ...layout(),
   speciesDefs: [],
   items: {},

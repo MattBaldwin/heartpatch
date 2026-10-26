@@ -65,6 +65,7 @@ const E2E_GROUPS = [
     'perf-report',
     'pwa',
     'roster',
+    'works',
   ],
   // friendly's group: ~13.1 iPhone, ~17.0 iPad, and friendly makes everything here 1.3-2.5 times slower, so keep it lighter than the rest. hollow-dusk's whole 10 min dusk wait is counted.
   [

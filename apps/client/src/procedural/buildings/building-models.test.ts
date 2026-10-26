@@ -1,4 +1,5 @@
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
+import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { GAME_DATA } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -107,5 +108,95 @@ describe('Wild Isle travel models (#621 W1-6)', () => {
     // Longer than wide, so the map can turn it bank to bank.
     const size = bridge.body.getBoundingInfo().boundingBox.extendSize;
     expect(size.x).toBeGreaterThan(size.z * 2);
+  });
+});
+
+describe('Wild Isle works models (#621 W1-10)', () => {
+  const engine = new NullEngine({
+    renderWidth: 390,
+    renderHeight: 844,
+    textureSize: 1,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  /** Every Wild Isle building that stands on a homestead spot (bridges sit on rivers). */
+  const WILD = GAME_DATA.buildings
+    .filter(
+      (b) => b.patchTypes?.includes('wild-isle') && b.id !== 'bridge' && b.id !== 'ferry-dock',
+    )
+    .map((b) => b.id);
+  const WORKS = GAME_DATA.buildings.filter((b) => b.kind === 'works').map((b) => b.id);
+  /** TUNE: about the Greenhouse's; a homestead shows a handful at once. */
+  const TRIANGLE_CAP = 6000;
+
+  const triangles = (m: { body: Mesh; glow: Mesh | null }) =>
+    (m.body.getTotalIndices() + (m.glow?.getTotalIndices() ?? 0)) / 3;
+
+  it('has its own model for each, not the plain marker', () => {
+    const scene = new Scene(engine);
+    const marker = buildBuildingModel(
+      scene,
+      'no-such-building',
+      'plain',
+      1,
+    ).body.getTotalVertices();
+    expect(WILD).toHaveLength(11);
+    for (const id of WILD) {
+      expect(buildBuildingModel(scene, id, 'plain', 1).body.getTotalVertices(), id).toBeGreaterThan(
+        marker,
+      );
+    }
+  });
+
+  it('gives every one its own shape (no two the same size and part count)', () => {
+    const scene = new Scene(engine);
+    const shapes = new Map<string, string>();
+    for (const id of [...WILD, 'water-well']) {
+      const { body } = buildBuildingModel(scene, id, 'plain', 1);
+      const e = body.getBoundingInfo().boundingBox.extendSize;
+      const shape = [body.getTotalVertices(), e.x, e.y, e.z].map((n) => n.toFixed(2)).join(',');
+      expect(shapes.get(shape), `${id} looks like ${shapes.get(shape) ?? ''}`).toBeUndefined();
+      shapes.set(shape, id);
+    }
+  });
+
+  it('adds detail at every level of a works, L1 to L4, and stands taller', () => {
+    const scene = new Scene(engine);
+    expect(WORKS).toHaveLength(6);
+    for (const id of WORKS) {
+      let last = { parts: 0, height: 0 };
+      for (const l of [1, 2, 3, 4]) {
+        const m = buildBuildingModel(scene, id, 'plain', l);
+        const now = {
+          parts: m.body.getTotalVertices() + (m.glow?.getTotalVertices() ?? 0),
+          height: m.body.getBoundingInfo().boundingBox.maximum.y,
+        };
+        expect(now.parts, `${id} L${String(l)}`).toBeGreaterThan(last.parts);
+        expect(now.height, `${id} L${String(l)}`).toBeGreaterThan(last.height);
+        last = now;
+      }
+    }
+  });
+
+  it('lights its lamp while it works and goes dark while it naps', () => {
+    const scene = new Scene(engine);
+    for (const id of WILD.filter((i) => i !== 'canal' && i !== 'levee')) {
+      expect(buildBuildingModel(scene, id, 'plain', 1).glow, id).not.toBeNull();
+      expect(buildBuildingModel(scene, id, 'out', 1).glow, id).toBeNull();
+    }
+  });
+
+  it('stays one or two meshes and under the triangle cap at its biggest', () => {
+    const scene = new Scene(engine);
+    for (const id of WILD) {
+      const before = scene.meshes.length;
+      const m = buildBuildingModel(scene, id, 'plain', 4);
+      expect(scene.meshes.length - before, id).toBeLessThanOrEqual(2);
+      expect(triangles(m), id).toBeLessThanOrEqual(TRIANGLE_CAP);
+    }
   });
 });

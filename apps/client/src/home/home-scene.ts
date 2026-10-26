@@ -350,9 +350,10 @@ export class HomeScene {
           level: b.level,
           lit: b.lit,
           // A resource building paused for upkeep naps (#601), and so does
-          // the Warehouse, paused or cut off from home (PR 9).
+          // the Warehouse, paused or cut off from home (PR 9), and a Wild
+          // Isle works (#621 W1-10).
           asleep:
-            (b.kind === 'resource' && b.production?.pausedAt != null) ||
+            ((b.kind === 'resource' || b.kind === 'works') && b.production?.pausedAt != null) ||
             (b.kind === 'warehouse' &&
               (b.warehouse?.pausedAt != null || b.warehouse?.napping === true)),
           x: at.x,
