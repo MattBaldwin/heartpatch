@@ -353,6 +353,27 @@ function frameFacts(page, insets) {
       [...document.querySelectorAll(sel)]
         .filter(visible)
         .map((e) => e.innerText.trim().replace(/\s*\n+\s*/g, ' · '));
+    const listUnder = (head) => {
+      const h3 = [...document.querySelectorAll('.weather-sheet h3')].find(
+        (e) => e.textContent.trim() === head,
+      );
+      const next = h3?.nextElementSibling;
+      if (!next || !visible(next)) return [];
+      return [...next.querySelectorAll('[data-testid="weather-front"]')]
+        .filter(visible)
+        .map((e) => e.innerText.trim());
+    };
+    // Panel text that is really on screen: lines cut by the viewport are named, not quoted whole.
+    const viewBottom = h - insets.bottom;
+    const onScreen = [...document.querySelectorAll('.tile-panel')].filter(visible).flatMap((p) =>
+      [...p.querySelectorAll('h1,h2,h3,p,li,button,span.tile-panel-line')]
+        .filter((e) => visible(e) && e.children.length === 0 && e.innerText.trim())
+        .map((e) => {
+          const b = e.getBoundingClientRect();
+          const t = e.innerText.trim().replace(/\s*\n+\s*/g, ' ');
+          return { t, cut: b.top < 0 || b.bottom > viewBottom + 0.5 };
+        }),
+    );
     const hud = document.querySelector('[data-testid="map-hud"]');
     const sheet = document.querySelector('[data-testid="weather-sheet"]');
     const card = sheet && visible(sheet) ? sheet.querySelector('.weather-sheet-card') : null;
@@ -391,7 +412,9 @@ function frameFacts(page, insets) {
       cardBottom,
       peeking,
       now: text('[data-testid="weather-now"]'),
-      fronts: text('[data-testid="weather-front"]'),
+      // Today's lines and tomorrow's, told apart by the heading each list sits under.
+      fronts: listUnder('Today'),
+      tomorrowLines: listUnder('Tomorrow'),
       tomorrow: text('[data-testid="weather-tomorrow"], [data-testid="weather-no-vane"]'),
       sheetHeads: text('.weather-sheet h3'),
       mapPicture:
@@ -401,6 +424,7 @@ function frameFacts(page, insets) {
             )?.tagName ?? null)
           : null,
       panel: text('.tile-panel'),
+      panelLines: onScreen,
       morning: text('[data-testid="hollow-report"]'),
     };
   }, insets);
@@ -520,7 +544,7 @@ async function runDevice(browser, device, statePath, fx) {
         weather: 'rain',
         tier: 'high',
         describe: (f) =>
-          `The Forecast sheet open over the map${vane ? ', with a Weather Vane standing' : ', no Weather Vane'}. Right now: "${list(f.now)}". Today: ${list(f.fronts)}. Tomorrow: ${list(f.tomorrow)}.`,
+          `The Forecast sheet open over the map${vane ? ', with a Weather Vane standing' : ', no Weather Vane'}. Right now: "${list(f.now)}". Today: ${list(f.fronts)}. Tomorrow: ${list(vane ? f.tomorrowLines : f.tomorrow)}.`,
       });
     });
   await sheet('forecast-no-vane', false);
@@ -530,12 +554,24 @@ async function runDevice(browser, device, statePath, fx) {
   await phase('tile-knocked', { plan: 'storm', knocked: true }, 'storm', 'high', async () => {
     await showTile(page, fx.hut.tile);
     await until(page, () => document.querySelector('[data-testid$="-knocked"]') !== null);
+    // Show the panel from its top (its own header and close button), never left scrolled.
+    await page.evaluate(() => {
+      for (const p of document.querySelectorAll('.tile-panel'))
+        for (let e = p; e; e = e.parentElement) e.scrollTop = 0;
+    });
     await settle(page);
     await shot(page, device, 'tile-knocked', {
       weather: 'storm',
       tier: 'high',
       describe: (f) =>
-        `The tile panel of my Woodcutter's Hut a storm knocked about. Panel: ${list(f.panel)}.`,
+        `The tile panel of my Woodcutter's Hut a storm knocked about. On screen: ${list(f.panelLines.filter((l) => !l.cut).map((l) => l.t))}.${
+          f.panelLines.some((l) => l.cut)
+            ? ` Further down the panel, off screen until it is scrolled: ${f.panelLines
+                .filter((l) => l.cut)
+                .map((l) => l.t)
+                .join(' / ')}.`
+            : ''
+        }`,
     });
   });
 

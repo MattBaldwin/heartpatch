@@ -17,6 +17,9 @@ export interface ForecastSheet {
   readonly isOpen: boolean;
 }
 
+/** On the body while the sheet is up: weather.css tucks the map's side trays and night pills away. */
+const SHEET_OPEN = 'weather-sheet-open';
+
 function lines(list: readonly string[]): HTMLElement {
   return el(
     'ul',
@@ -118,6 +121,7 @@ export function createForecastSheet(root: HTMLElement, store: WeatherStore): For
     },
     open() {
       node.hidden = false;
+      document.body.classList.add(SHEET_OPEN);
       clearTheHud();
       draw();
       // A fresh read each time it opens, so a new vane shows at once.
@@ -125,6 +129,7 @@ export function createForecastSheet(root: HTMLElement, store: WeatherStore): For
     },
     close() {
       node.hidden = true;
+      document.body.classList.remove(SHEET_OPEN);
     },
   };
   closeButton.addEventListener('click', () => {

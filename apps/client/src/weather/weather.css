@@ -16,7 +16,9 @@
 
 .weather-tint[data-kind='storm'] {
   opacity: 1;
-  background: rgb(58 52 98 / 34%);
+  /* Multiplied over the map: the whole scene goes darker and cooler. */
+  mix-blend-mode: multiply;
+  background: rgb(168 180 204);
 }
 
 .weather-tint[data-kind='fog'] {
@@ -153,7 +155,7 @@
 
 .weather-map {
   align-self: center;
-  width: min(100%, 220px);
+  width: min(100%, 300px);
   height: auto;
   border-radius: 16px;
 }
@@ -171,6 +173,16 @@
   opacity: 0.5;
 }
 
+.weather-map-label {
+  fill: #2e2850;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 0.1;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
 .weather-map-home {
   fill: #e0508a;
   stroke: #fff;
@@ -185,4 +197,13 @@
 
 .weather-fix-row > .home-needs {
   margin-top: 0;
+}
+
+/* With the Forecast sheet up the trays and night pills would peek out around
+   its clear backdrop; hide them (not removed, so nothing re-lays out). */
+.weather-sheet-open .trays,
+.weather-sheet-open .hollow-hint,
+.weather-sheet-open .hollow-open,
+.weather-sheet-open .hollow-open-badge {
+  visibility: hidden;
 }

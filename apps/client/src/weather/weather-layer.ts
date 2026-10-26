@@ -1,8 +1,6 @@
 import { Constants } from '@babylonjs/core/Engines/constants';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
-import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder';
-import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import type { Scene } from '@babylonjs/core/scene';
@@ -10,10 +8,11 @@ import type { MapView } from '@heartpatch/shared';
 import { moteShare, type AmbientMode } from '../map/ambient-layout.js';
 import { glowMaterial, softDisc } from '../map/map-ambient.js';
 import type { MapLayer, MapLayerHost } from '../map/map-screen.js';
-import { merged } from '../map/map-props.js';
 import { attachTerrainPlugin, DRIFT_ATTRIBUTE } from '../map/terrain-plugin.js';
 import type { QualityTier } from '../engine/config.js';
+import { attachCloudShade } from './cloud-plugin.js';
 import { attachRain, RAIN_ATTRIBUTE } from './rain-plugin.js';
+import { buildBolt, buildCloud } from './weather-clouds.js';
 import { WEATHER_LOOK } from './weather-config.js';
 import { FULL_CLOUDS } from './weather-layout.js';
 import { WeatherPlacer, PLACE_EVERY_MS } from './weather-placer.js';
@@ -21,8 +20,8 @@ import type { WeatherStore } from './weather-store.js';
 import { createWeatherTint } from './weather-tint.js';
 
 // The Wild Isle weather you can see (#621 W1-9): instanced clouds, rain
-// streaks and fog over the fronts the server planned, plus a sky wash. Three
-// draw calls however big the storm. Cozy Patches build nothing.
+// streaks, fog, cloud shadows and a storm's lightning over the fronts the
+// server planned, plus a sky wash. Five draw calls however big the storm. Cozy Patches build nothing.
 
 export interface WeatherLayerOptions {
   readonly store: WeatherStore;
@@ -81,34 +80,24 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
       // soft shape, never rings of see-through balls.
       cloudMat.disableDepthWrite = false;
       attachTerrainPlugin(cloudMat, host.clock);
-      // Soft cushions, flattened like the sky's clouds (map-ambient.ts). Light is
-      // baked into the vertex colours (bright tops, dim bellies) because the
-      // material is unlit: otherwise a storm is one flat grey blob.
-      const { belly, top } = WEATHER_LOOK.clouds.shade;
-      const puff = (name: string, d: number, x: number, y: number, z: number): Mesh => {
-        const p = CreateSphere(name, { diameter: d, segments: 8 }, scene);
-        p.position.set(x, y, z);
-        p.scaling.y = WEATHER_LOOK.clouds.squash;
-        const at = p.getVerticesData(VertexBuffer.PositionKind) ?? [];
-        const colours = new Float32Array((at.length / 3) * 4);
-        for (let i = 0; i < at.length / 3; i++) {
-          // Height on the sphere, 0 at the bottom to 1 at the top, lifted by where the puff sits.
-          const up = ((at[i * 3 + 1] ?? 0) / d + 0.5 + y * 1.4) / 1.6;
-          const light = belly + (top - belly) * Math.min(1, Math.max(0, up));
-          colours.set([light, light, light, 1], i * 4);
-        }
-        p.setVerticesData(VertexBuffer.ColorKind, colours);
-        return p;
-      };
-      const cloud = merged('weather-clouds', [
-        puff('wc0', 1, 0, 0, 0),
-        puff('wc1', 0.72, 0.5, -0.04, 0.12),
-        puff('wc2', 0.66, -0.46, -0.05, -0.08),
-        puff('wc3', 0.6, 0.12, 0.2, -0.16),
-        puff('wc4', 0.5, -0.2, 0.17, 0.2),
-      ]);
+      // One fused cushion shape with a flat belly; its light comes from the
+      // cloud plugin (GLSL), since the material itself is unlit.
+      attachCloudShade(cloudMat);
+      const cloud = buildCloud(scene);
       cloud.hasVertexAlpha = true;
       cloud.material = cloudMat;
+
+      // Each cloud's soft shadow on the tiles, one flat disc apiece.
+      const shadowMat = glowMaterial(
+        scene,
+        'weather-shadow-mat',
+        WEATHER_LOOK.clouds.shadow.colour,
+        true,
+      );
+      shadowMat.backFaceCulling = false;
+      attachTerrainPlugin(shadowMat, host.clock);
+      const shadow = softDisc(scene, 'weather-shadow', WEATHER_LOOK.clouds.shadow.rings);
+      shadow.material = shadowMat;
 
       const fogMat = glowMaterial(scene, 'weather-fog-mat', WEATHER_LOOK.fog.colour, true);
       // The disc is seen from above whichever way its triangles wind.
@@ -130,9 +119,22 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
       );
       rain.material = rainMat;
 
+      // Lightning: a zig-zag bolt that flashes under a storm's lower deck (or
+      // holds still when motion is off). Same plugin as the rain, GLSL only.
+      const boltLook = WEATHER_LOOK.storm.bolts;
+      const boltMat = glowMaterial(scene, 'weather-bolt-mat', boltLook.colour, true);
+      boltMat.alpha = boltLook.alpha;
+      boltMat.alphaMode = Constants.ALPHA_COMBINE;
+      boltMat.backFaceCulling = false;
+      const boltPlugin = attachRain(boltMat, host.clock);
+      const bolt = buildBolt(scene, boltLook.width);
+      bolt.material = boltMat;
+
       const layout = placer.layout;
       instanced(cloud, layout.cloudMatrices, layout.cloudColours, 'color');
       cloud.thinInstanceSetBuffer(DRIFT_ATTRIBUTE, layout.cloudDrift, 4, false);
+      instanced(shadow, layout.shadowMatrices, layout.shadowColours, 'color');
+      instanced(bolt, layout.boltMatrices, layout.boltAttrs, RAIN_ATTRIBUTE);
       instanced(fog, layout.fogMatrices, layout.fogDrift, DRIFT_ATTRIBUTE);
       instanced(rain, layout.rainMatrices, layout.rainAttrs, RAIN_ATTRIBUTE);
 
@@ -149,16 +151,28 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
         // device's ambient goes `off` a few seconds in, which stops the clock:
         // the streaks then hold still, as under reduced motion, rather than
         // vanish (#621). A still mesh costs nothing between frames.
-        placer.setRainShare(rainPlugin ? moteShare(options.tier()) : 0);
+        const tier = options.tier();
+        placer.setRainShare(rainPlugin ? moteShare(tier) : 0);
+        // The low tier drops plain rain, but a storm keeps a lighter one: it is what makes it a storm.
+        placer.setStormSky({
+          storm: rainPlugin
+            ? Math.max(moteShare(tier), tier === 'low' ? WEATHER_LOOK.lowTier.stormRain : 0)
+            : 0,
+          still: mode !== 'live',
+        });
         // The low tier's clouds are fewer and lighter, as well as rainless.
-        placer.setClouds(options.tier() === 'low' ? WEATHER_LOOK.lowTier : FULL_CLOUDS);
+        placer.setClouds(tier === 'low' ? WEATHER_LOOK.lowTier : FULL_CLOUDS);
         const placed = placer.update(store.now());
         tint.set(store.kindNow());
         if (placed || last.mode !== mode) {
           show(cloud, layout.clouds);
           show(fog, layout.fog);
           show(rain, layout.rain);
-          for (const m of [cloud, fog, rain]) m.thinInstanceBufferUpdated('matrix');
+          show(shadow, layout.clouds);
+          show(bolt, layout.bolts, boltPlugin !== null);
+          for (const m of [cloud, shadow, fog, rain, bolt]) m.thinInstanceBufferUpdated('matrix');
+          shadow.thinInstanceBufferUpdated('color');
+          bolt.thinInstanceBufferUpdated(RAIN_ATTRIBUTE);
           cloud.thinInstanceBufferUpdated('color');
           cloud.thinInstanceBufferUpdated(DRIFT_ATTRIBUTE);
           fog.thinInstanceBufferUpdated(DRIFT_ATTRIBUTE);

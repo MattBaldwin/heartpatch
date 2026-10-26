@@ -1,10 +1,20 @@
 import { hexToWorld, type Hex, type MapView, type WeatherFront } from '@heartpatch/shared';
 import { FALLBACK_LOOK, HEX_SIZE, TERRAIN_LOOKS } from '../map/map-config.js';
 import { frontPosition } from './weather-layout.js';
+import { WEATHER_EMOJI } from './weather-model.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const SQRT3 = Math.sqrt(3);
 const SEA = '#bfe3f7'; // TUNE
+/** What a front is called on the little map, with its weather emoji. */
+const KIND_NAME: Readonly<Record<string, string>> = {
+  rain: 'Rain',
+  storm: 'Storm',
+  fog: 'Fog',
+  drought: 'Dry',
+};
+/** Label size, in the map's own units (a tile is `HEX_SIZE` across). // TUNE */
+const LABEL = 0.5;
 const KIND_FILL: Readonly<Record<string, string>> = {
   rain: '#7f8fc9',
   storm: '#5a5190',
@@ -102,6 +112,21 @@ export function islandMap(
         'data-active': at ? 'true' : 'false',
       }),
     );
+  }
+  // Each front says what it is, over its middle, so no front is an unlabeled smudge.
+  for (const f of fronts) {
+    const at = frontPosition(f, nowMs);
+    const centre = at ?? hexToWorld(f.from, HEX_SIZE);
+    const label = svg('text', {
+      x: centre.x,
+      y: -centre.z + LABEL * 0.35,
+      class: 'weather-map-label',
+      'font-size': LABEL,
+      'text-anchor': 'middle',
+      'fill-opacity': at ? 1 : 0.55,
+    });
+    label.textContent = `${WEATHER_EMOJI[f.kind]} ${KIND_NAME[f.kind] ?? f.kind}`;
+    root.append(label);
   }
   if (home) {
     const p = hexToWorld(home, HEX_SIZE);

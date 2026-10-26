@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { HEX_SIZE } from '../map/map-config.js';
 import {
   WEATHER_CAPS,
+  FULL_CLOUDS,
   createWeatherLayout,
   frontPosition,
   frontScale,
@@ -127,5 +128,72 @@ describe('layoutWeather', () => {
   it('draws nothing with no active front', () => {
     const out = layoutWeather([front()], START - HOUR, 1, createWeatherLayout());
     expect([out.clouds, out.rain, out.fog]).toEqual([0, 0, 0]);
+  });
+});
+
+describe('a storm sky', () => {
+  const at = START + 2 * HOUR;
+
+  it('keeps a lighter rain on the low tier (a storm share with the plain share at zero)', () => {
+    const none = layoutWeather([front()], at, 0, createWeatherLayout());
+    const low = layoutWeather([front()], at, 0, createWeatherLayout(), FULL_CLOUDS, {
+      storm: 0.45,
+      still: false,
+    });
+    const full = layoutWeather([front()], at, 1, createWeatherLayout());
+    expect(none.rain).toBe(0);
+    expect(low.rain).toBeGreaterThan(0);
+    expect(low.rain).toBeLessThan(full.rain);
+    // Plain rain stays off on that tier.
+    const plain = layoutWeather(
+      [front({ kind: 'rain' })],
+      at,
+      0,
+      createWeatherLayout(),
+      FULL_CLOUDS,
+      {
+        storm: 0.45,
+        still: false,
+      },
+    );
+    expect(plain.rain).toBe(0);
+  });
+
+  it("slants a storm's rain and makes it heavier than plain rain; plain rain falls straight", () => {
+    const storm = layoutWeather([front()], at, 1, createWeatherLayout());
+    const rain = layoutWeather([front({ kind: 'rain' })], at, 1, createWeatherLayout());
+    expect(storm.rainAttrs[3]).toBeGreaterThan(0);
+    expect(rain.rainAttrs[3]).toBe(0);
+    // Matrix x-scale (index 0) is the streak's thickness.
+    expect(storm.rainMatrices[0]).toBeGreaterThan(rain.rainMatrices[0] ?? 0);
+  });
+
+  it('gives each cloud a shadow, a darker lower deck, and bolts for a storm only', () => {
+    const storm = layoutWeather([front()], at, 1, createWeatherLayout());
+    expect(storm.clouds).toBeGreaterThan(2);
+    // Every cloud has a shadow with some alpha.
+    for (let i = 0; i < storm.clouds; i++)
+      expect(storm.shadowColours[i * 4 + 3]).toBeGreaterThan(0);
+    // Odd clouds are the lower deck: lower than the one before and darker.
+    expect(storm.cloudMatrices[16 + 13]).toBeLessThan(storm.cloudMatrices[13] ?? 0);
+    expect(storm.cloudColours[4]).toBeLessThan(storm.cloudColours[0] ?? 0);
+    expect(storm.bolts).toBeGreaterThan(0);
+    expect(storm.boltAttrs[3]).toBe(-2);
+    const rain = layoutWeather([front({ kind: 'rain' })], at, 1, createWeatherLayout());
+    expect(rain.bolts).toBe(0);
+  });
+
+  it('holds a couple of bolts still when motion is off, and never passes the cap', () => {
+    const still = layoutWeather([front()], at, 1, createWeatherLayout(), FULL_CLOUDS, {
+      storm: 1,
+      still: true,
+    });
+    expect(still.bolts).toBeGreaterThan(0);
+    expect(still.bolts).toBeLessThanOrEqual(2);
+    expect(still.boltAttrs[3]).toBe(-1);
+    const many = Array.from({ length: 12 }, (_, i) => front({ id: `s${String(i)}` }));
+    expect(layoutWeather(many, at, 1, createWeatherLayout()).bolts).toBeLessThanOrEqual(
+      WEATHER_CAPS.bolts,
+    );
   });
 });

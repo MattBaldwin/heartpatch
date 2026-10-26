@@ -7,7 +7,11 @@ import type { UniformBuffer } from '@babylonjs/core/Materials/uniformBuffer';
 import type { Scene } from '@babylonjs/core/scene';
 import type { TerrainClock } from '../map/terrain-plugin.js';
 
-/** Per-streak data: phase, speed, range (how far it falls), unused. */
+/**
+ * Per-streak data: phase, speed, range (how far it falls), slant (how far it
+ * drifts sideways per unit fallen). A lightning bolt shares the plugin: its
+ * fourth value is negative, -1 to hold still (motion off) or -2 to flash.
+ */
 export const RAIN_ATTRIBUTE = 'weatherRain';
 
 // The existing `fall` drift tumbles; rain wants straight, fast streaks that
@@ -25,7 +29,15 @@ const VERTEX_WORLDPOS = /* glsl */ `
 {
   float wrCycle = fract(weatherTime * weatherRain.y + weatherRain.x);
   worldPos.y -= weatherRain.z * wrCycle;
+  // Slant: the path leans and so does the streak (sheared by its own height).
+  worldPos.x += max(weatherRain.w, 0.0) * (weatherRain.z * wrCycle - position.y);
   vWeatherFade = sin(3.14159 * wrCycle);
+  if (weatherRain.w < -0.5) {
+    // A bolt: a quick double flash, then dark; or held lit when motion is off.
+    float wrFlash = pow(max(0.0, 1.0 - wrCycle * 7.0), 2.0)
+      + 0.6 * pow(max(0.0, 1.0 - abs(wrCycle - 0.2) * 14.0), 2.0);
+    vWeatherFade = weatherRain.w < -1.5 ? min(1.0, wrFlash) : 1.0;
+  }
 }
 `;
 

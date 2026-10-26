@@ -3,6 +3,7 @@ import {
   createWeatherLayout,
   layoutWeather,
   type CloudThickness,
+  type StormSky,
   type WeatherLayout,
 } from './weather-layout.js';
 
@@ -19,6 +20,7 @@ export class WeatherPlacer {
   private fronts: readonly WeatherFront[] = [];
   private share = 1;
   private clouds: CloudThickness = { share: 1, alpha: 1 };
+  private sky: StormSky = { storm: 1, still: false };
   private placedAt = -Infinity;
   /** How many times the layout was refilled (for tests and the dev hook). */
   placed = 0;
@@ -40,10 +42,16 @@ export class WeatherPlacer {
     this.placedAt = -Infinity;
   }
 
+  setStormSky(sky: StormSky): void {
+    if (sky.storm === this.sky.storm && sky.still === this.sky.still) return;
+    this.sky = sky;
+    this.placedAt = -Infinity;
+  }
+
   /** Refills the layout if it is due. Returns whether it did. */
   update(nowMs: number): boolean {
     if (nowMs - this.placedAt < PLACE_EVERY_MS && nowMs >= this.placedAt) return false;
-    layoutWeather(this.fronts, nowMs, this.share, this.layout, this.clouds);
+    layoutWeather(this.fronts, nowMs, this.share, this.layout, this.clouds, this.sky);
     this.placedAt = nowMs;
     this.placed++;
     return true;
