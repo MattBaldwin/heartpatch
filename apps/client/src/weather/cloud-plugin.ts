@@ -3,44 +3,70 @@ import type { Material } from '@babylonjs/core/Materials/material';
 import type { MaterialDefines } from '@babylonjs/core/Materials/materialDefines';
 import { MaterialPluginBase } from '@babylonjs/core/Materials/materialPluginBase';
 import { ShaderLanguage } from '@babylonjs/core/Materials/shaderLanguage';
+import type { UniformBuffer } from '@babylonjs/core/Materials/uniformBuffer';
 import { WEATHER_LOOK } from './weather-config.js';
 
 /** Per-vertex light on a cloud: height up the cloud (0 flat belly, 1 top), sunny side, unused, unused. */
 export const CLOUD_ATTRIBUTE = 'weatherCloud';
 
-const { belly, top, rim, rimStrength } = WEATHER_LOOK.clouds.shade;
+const { belly, top, rim, rimStrength, rimPower } = WEATHER_LOOK.clouds.shade;
+const flash = WEATHER_LOOK.clouds.flash;
 const f = (n: number): string => n.toFixed(3);
+
+/** How lit the sky is by lightning now, 0 to 1; the weather layer sets it each frame. */
+export interface CloudFlash {
+  value: number;
+}
 
 // The clouds' material is unlit (one flat emissive colour), so the light is
 // worked out from the cloud's own shape and handed down as a vertex attribute:
-// a dark flat belly, a bright top, and a warm rim on the sunny side. Doing it
-// here, in the fragment, rather than in vertex colours keeps one fused shape
-// shaded as one: the puffs share a single "height up the cloud" so no seam
-// shows where they overlap. GLSL only, like the rain plugin.
+// a dark flat belly, a bright top, and a warm edge light round the tops (a
+// fresnel term from the cloud's own normal, strongest on the sunny side).
+// Doing it here, in the fragment, rather than in vertex colours keeps one
+// fused shape shaded as one. A lightning flash (`weatherFlash`) lights the
+// bellies from below. GLSL only, like the rain plugin.
 const VERTEX_DEFINITIONS = /* glsl */ `
 attribute vec4 weatherCloud;
+#ifndef NORMAL
+attribute vec3 normal;
+#endif
 varying vec2 vWeatherCloud;
+varying vec3 vWeatherNormal;
+varying vec3 vWeatherPos;
 `;
 
 const VERTEX_MAIN_END = /* glsl */ `
 vWeatherCloud = weatherCloud.xy;
+vWeatherNormal = normalize(mat3(finalWorld) * normal);
+vWeatherPos = worldPos.xyz;
 `;
 
 const FRAGMENT_DEFINITIONS = /* glsl */ `
 varying vec2 vWeatherCloud;
+varying vec3 vWeatherNormal;
+varying vec3 vWeatherPos;
 `;
 
 const FRAGMENT_BEFORE_FOG = /* glsl */ `
 {
   float wcUp = smoothstep(0.0, 1.0, vWeatherCloud.x);
   color.rgb *= mix(${f(belly)}, ${f(top)}, wcUp);
-  color.rgb += vec3(${f(rim[0])}, ${f(rim[1])}, ${f(rim[2])}) * (vWeatherCloud.y * ${f(rimStrength)});
+  vec3 wcN = normalize(vWeatherNormal);
+  vec3 wcV = normalize(vEyePosition.xyz - vWeatherPos);
+  float wcEdge = pow(1.0 - clamp(dot(wcN, wcV), 0.0, 1.0), ${f(rimPower)});
+  float wcRim = wcEdge * smoothstep(0.25, 0.85, vWeatherCloud.x) * (0.35 + 0.65 * vWeatherCloud.y);
+  color.rgb += vec3(${f(rim[0])}, ${f(rim[1])}, ${f(rim[2])}) * (wcRim * ${f(rimStrength)});
+  color.rgb += vec3(${f(flash.colour[0])}, ${f(flash.colour[1])}, ${f(flash.colour[2])})
+    * (weatherFlash * mix(${f(flash.belly)}, ${f(flash.top)}, wcUp));
 }
 `;
 
 export class CloudPlugin extends MaterialPluginBase {
-  constructor(material: Material) {
+  private readonly flash: CloudFlash;
+
+  constructor(material: Material, flash: CloudFlash) {
     super(material, 'WeatherCloud', 231, { WEATHER_CLOUD: false });
+    this.flash = flash;
     this._enable(true);
   }
 
@@ -57,7 +83,20 @@ export class CloudPlugin extends MaterialPluginBase {
   }
 
   override getAttributes(attributes: string[], _scene: unknown, mesh: AbstractMesh): void {
-    if (mesh.isVerticesDataPresent(CLOUD_ATTRIBUTE)) attributes.push(CLOUD_ATTRIBUTE);
+    if (!mesh.isVerticesDataPresent(CLOUD_ATTRIBUTE)) return;
+    attributes.push(CLOUD_ATTRIBUTE);
+    if (!attributes.includes('normal')) attributes.push('normal');
+  }
+
+  override getUniforms(): { ubo: { name: string; size: number; type: string }[]; fragment: string } {
+    return {
+      ubo: [{ name: 'weatherFlash', size: 1, type: 'float' }],
+      fragment: 'uniform float weatherFlash;',
+    };
+  }
+
+  override bindForSubMesh(uniformBuffer: UniformBuffer): void {
+    uniformBuffer.updateFloat('weatherFlash', this.flash.value);
   }
 
   override getCustomCode(shaderType: string): Record<string, string> | null {
@@ -75,6 +114,6 @@ export class CloudPlugin extends MaterialPluginBase {
 }
 
 /** Shades `material`'s clouds under GLSL; null under WebGPU, where they stay one flat colour. */
-export function attachCloudShade(material: Material): CloudPlugin | null {
-  return material.shaderLanguage === ShaderLanguage.GLSL ? new CloudPlugin(material) : null;
+export function attachCloudShade(material: Material, flash: CloudFlash): CloudPlugin | null {
+  return material.shaderLanguage === ShaderLanguage.GLSL ? new CloudPlugin(material, flash) : null;
 }

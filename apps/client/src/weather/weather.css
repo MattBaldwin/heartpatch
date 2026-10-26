@@ -211,3 +211,10 @@
 .weather-sheet-open .hollow-open-badge {
   visibility: hidden;
 }
+
+/* A tile badge (the 🌙 over dark land) is DOM over the canvas, so a cloud
+   passing over it can't cover it in the scene: the weather layer marks the
+   ones a cloud's body is over, and they hide until it has moved on. */
+.weather-under-cloud {
+  visibility: hidden;
+}

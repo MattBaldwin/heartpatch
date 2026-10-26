@@ -190,13 +190,23 @@ export function layoutWeather(
         WEATHER_CAPS.clouds - nCloud,
         Math.max(3, Math.round(want.clouds * bulk * clouds.share)),
       );
-      for (let i = 0; i < nClouds; i++) {
-        const s = spotIn(seed, i, nClouds, front.radius, 10);
+      // A storm adds a lower deck under its main layer: wider, flatter, darker clouds.
+      const nDeck = isStorm
+        ? Math.min(
+            WEATHER_CAPS.clouds - nCloud - nClouds,
+            Math.max(2, Math.round(CLOUDS.deck.per * bulk * clouds.share)),
+          )
+        : 0;
+      for (let i = 0; i < nClouds + nDeck; i++) {
+        const lower = i >= nClouds;
+        const s = lower
+          ? spotIn(seed, i - nClouds, nDeck, front.radius * 0.8, 50)
+          : spotIn(seed, i, nClouds, front.radius, 10);
         const at = nCloud++;
-        // A storm's every other cloud is its lower deck: bigger, lower, darker.
-        const lower = isStorm && i % 2 === 1;
         const size =
-          (CLOUDS.size + s.jitter * CLOUDS.spread) * grow * (lower ? CLOUDS.deck.grow : 1);
+          (CLOUDS.size + s.jitter * CLOUDS.spread) *
+          grow *
+          (lower ? CLOUDS.deck.grow : isStorm ? CLOUDS.stormGrow : 1);
         const dark = lower ? CLOUDS.deck.dark : 1;
         put(
           out.cloudMatrices,
@@ -205,21 +215,18 @@ export function layoutWeather(
           CLOUDS.height + s.jitter * 0.5 - (lower ? CLOUDS.deck.drop : 0),
           centre.z + s.dz,
           size,
+          1,
+          lower ? CLOUDS.deck.flat : 1,
         );
-        out.cloudColours.set(
-          [
-            linear(colour[0]) * dark,
-            linear(colour[1]) * dark,
-            linear(colour[2]) * dark,
-            colour[3] * clouds.alpha,
-          ],
-          at * 4,
-        );
+        const c = at * 4;
+        out.cloudColours[c] = linear(colour[0]) * dark;
+        out.cloudColours[c + 1] = linear(colour[1]) * dark;
+        out.cloudColours[c + 2] = linear(colour[2]) * dark;
+        out.cloudColours[c + 3] = colour[3] * clouds.alpha;
         out.cloudDrift.set(
           [DRIFT_MODE.float, s.jitter * 6.28, 0.25 + s.jitter * 0.2, 0.15],
           at * 4,
         );
-        // Its shadow, a little ahead of the sun's side, flat on the tiles.
         put(
           out.shadowMatrices,
           at,
@@ -261,13 +268,13 @@ export function layoutWeather(
         const nBolts = Math.min(WEATHER_CAPS.bolts - bolts, Math.max(1, wanted));
         for (let i = 0; i < nBolts; i++) {
           // Under the lower deck's clouds, spread through the front.
-          const s = spotIn(seed, i * 2 + 1, nClouds, front.radius, 40);
+          const s = spotIn(seed, i, Math.max(1, nDeck), front.radius * 0.8, 50);
           const at = bolts++;
           put(
             out.boltMatrices,
             at,
             centre.x + s.dx,
-            CLOUDS.height - CLOUDS.deck.drop + 0.05,
+            CLOUDS.height - CLOUDS.deck.drop - 0.1,
             centre.z + s.dz,
             STORM.bolts.height * grow,
           );

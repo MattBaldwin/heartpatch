@@ -174,9 +174,15 @@ describe('a storm sky', () => {
     // Every cloud has a shadow with some alpha.
     for (let i = 0; i < storm.clouds; i++)
       expect(storm.shadowColours[i * 4 + 3]).toBeGreaterThan(0);
-    // Odd clouds are the lower deck: lower than the one before and darker.
-    expect(storm.cloudMatrices[16 + 13]).toBeLessThan(storm.cloudMatrices[13] ?? 0);
-    expect(storm.cloudColours[4]).toBeLessThan(storm.cloudColours[0] ?? 0);
+    // The last clouds are the lower deck: below every main cloud, darker, wider and flatter.
+    const plain = layoutWeather([front({ kind: 'rain' })], at, 1, createWeatherLayout());
+    expect(storm.clouds).toBeGreaterThan(plain.clouds);
+    const deck = (storm.clouds - 1) * 16;
+    let lowestMain = Infinity;
+    for (let i = 0; i < 9; i++) lowestMain = Math.min(lowestMain, storm.cloudMatrices[i * 16 + 13] ?? 0);
+    expect(storm.cloudMatrices[deck + 13]).toBeLessThan(lowestMain);
+    expect(storm.cloudColours[(storm.clouds - 1) * 4]).toBeLessThan(storm.cloudColours[0] ?? 0);
+    expect(storm.cloudMatrices[deck + 5]).toBeLessThan(storm.cloudMatrices[deck] ?? 0);
     expect(storm.bolts).toBeGreaterThan(0);
     expect(storm.boltAttrs[3]).toBe(-2);
     const rain = layoutWeather([front({ kind: 'rain' })], at, 1, createWeatherLayout());
