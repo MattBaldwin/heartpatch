@@ -36,9 +36,11 @@ export interface WeatherLayerOptions {
   readonly root?: HTMLElement;
 }
 
+/** The map's tile badges (DOM, not tappable) a cloud hides while it is over them. */
+const COVERED_BADGES = ['dark-moon', 'tile-mark'];
 /** How often, at most, badges under the clouds are checked again (ms). // TUNE: */
 const COVER_EVERY_MS = 100;
-/** Share of a cloud's scaled half-width that hides what is behind it (its body, not its soft edge). // TUNE: */
+/** Share of a cloud's scaled half-width that hides what is behind it (the shape has no soft edge, so all of it). // TUNE: */
 const COVER_BODY = 1;
 
 /** What the layer draws now, for the dev hook and the e2e. */
@@ -194,6 +196,8 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
       // (cloud-cover.ts). Checked when the camera or the clouds move, at most
       // every `COVER_EVERY_MS`, into fixed buffers.
       const cover = createCloudDiscs(WEATHER_CAPS.clouds);
+      // Live lists, made once: the 🌙 over dark land and the map's tile marks.
+      const covered = COVERED_BADGES.map((name) => document.getElementsByClassName(name));
       const viewport = new Viewport(0, 0, 1, 1);
       const centre = new Vector3();
       const edge = new Vector3();
@@ -218,7 +222,6 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
       const coverBadges = (): void => {
         const camera = scene.activeCamera;
         const canvas = scene.getEngine().getRenderingCanvas();
-        const badges = document.getElementsByClassName('dark-moon');
         if (!camera || !canvas) return;
         const transform = camera.getTransformationMatrix();
         if (!coverDirty && transform.updateFlag === coverFlag) return;
@@ -251,15 +254,17 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
             cover.count++;
           }
         }
-        for (let i = 0; i < badges.length; i++) {
-          const badge = badges[i];
-          if (!badge) continue;
-          let hide = false;
-          if (cover.count > 0 && !(badge as HTMLElement).hidden) {
-            const b = badge.getBoundingClientRect();
-            hide = underCloud(cover, b.left + b.width / 2, b.top + b.height / 2);
+        for (const badges of covered) {
+          for (let i = 0; i < badges.length; i++) {
+            const badge = badges[i];
+            if (!badge) continue;
+            let hide = false;
+            if (cover.count > 0 && badge instanceof HTMLElement && !badge.hidden) {
+              const b = badge.getBoundingClientRect();
+              hide = underCloud(cover, b.left + b.width / 2, b.top + b.height / 2);
+            }
+            badge.classList.toggle('weather-under-cloud', hide);
           }
-          badge.classList.toggle('weather-under-cloud', hide);
         }
       };
 

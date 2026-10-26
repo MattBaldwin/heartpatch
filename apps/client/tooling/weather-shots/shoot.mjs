@@ -358,6 +358,21 @@ function frameFacts(page, insets) {
       const p = port.getBoundingClientRect();
       return b.top >= p.top - 1 && b.bottom <= p.bottom + 1;
     };
+    const sheetLines = (want) =>
+      [
+        ...document.querySelectorAll(
+          '.weather-sheet-scroll [data-testid="weather-front"], .weather-sheet-scroll .weather-sheet-note, .weather-sheet-scroll [data-testid="weather-tomorrow"]',
+        ),
+      ]
+        .filter(visible)
+        .filter((e) => {
+          const b = e.getBoundingClientRect();
+          const p = e.closest('.weather-sheet-scroll').getBoundingClientRect();
+          const state =
+            b.top >= p.bottom - 1 ? 'below' : b.bottom > p.bottom + 1 || b.top < p.top - 1 ? 'cut' : 'in';
+          return state === want;
+        })
+        .map((e) => e.innerText.trim().replace(/\s*\n+\s*/g, ' · '));
     const text = (sel) =>
       [...document.querySelectorAll(sel)]
         .filter(shown)
@@ -372,17 +387,23 @@ function frameFacts(page, insets) {
         .filter(shown)
         .map((e) => e.innerText.trim());
     };
-    // Panel text that is really on screen: lines cut by the viewport are named, not quoted whole.
+    // Panel text that is really on screen, inside the panel's own scroll port
+    // and the viewport: a line scrolled up out of the panel is `above`, one
+    // cut by its edge or further down is `cut`; neither is quoted as on screen.
     const viewBottom = h - insets.bottom;
-    const onScreen = [...document.querySelectorAll('.tile-panel')].filter(visible).flatMap((p) =>
-      [...p.querySelectorAll('h1,h2,h3,p,li,button,span.tile-panel-line')]
+    const onScreen = [...document.querySelectorAll('.tile-panel')].filter(visible).flatMap((p) => {
+      const port = p.getBoundingClientRect();
+      const top = Math.max(0, port.top);
+      const bottom = Math.min(viewBottom, port.bottom);
+      return [...p.querySelectorAll('h1,h2,h3,p,li,button,span.tile-panel-line')]
         .filter((e) => visible(e) && e.children.length === 0 && e.innerText.trim())
         .map((e) => {
           const b = e.getBoundingClientRect();
           const t = e.innerText.trim().replace(/\s*\n+\s*/g, ' ');
-          return { t, cut: b.top < 0 || b.bottom > viewBottom + 0.5 };
-        }),
-    );
+          const above = b.bottom <= top + 0.5;
+          return { t, above, cut: !above && (b.top < top - 0.5 || b.bottom > bottom + 0.5) };
+        });
+    });
     const hud = document.querySelector('[data-testid="map-hud"]');
     const sheet = document.querySelector('[data-testid="weather-sheet"]');
     const card = sheet && visible(sheet) ? sheet.querySelector('.weather-sheet-card') : null;
@@ -435,6 +456,9 @@ function frameFacts(page, insets) {
           : null,
       panel: text('.tile-panel'),
       panelLines: onScreen,
+      // Sheet lines not wholly in the sheet's scroll port: cut by its edge, or further down.
+      sheetCut: sheetLines('cut'),
+      sheetBelow: sheetLines('below'),
       morning: text('[data-testid="hollow-report"]'),
     };
   }, insets);
@@ -554,7 +578,7 @@ async function runDevice(browser, device, statePath, fx) {
         weather: 'rain',
         tier: 'high',
         describe: (f) =>
-          `The Weather sheet (the Forecast) open over the map${vane ? ', with a Weather Vane standing' : ', no Weather Vane'}. Right now: "${list(f.now)}". ${f.sheetHeads.includes('Today') ? `Today: ${list(f.fronts)}.` : 'There is no Today list.'} Tomorrow: ${list(vane ? f.tomorrowLines : f.tomorrow)}. Notes at the bottom: ${list(f.sheetNotes)}. A small island map shows the fronts, each labelled.`,
+          `The Weather sheet (the Forecast) open over the map${vane ? ', with a Weather Vane standing' : ', no Weather Vane'}. Right now: "${list(f.now)}". ${f.sheetHeads.includes('Today') ? `Today: ${list(f.fronts)}.` : 'There is no Today list.'} Tomorrow: ${list(vane ? f.tomorrowLines : f.tomorrow)}. Notes at the bottom: ${list(f.sheetNotes)}.${f.sheetCut.length ? ` Cut at the sheet's bottom edge: ${f.sheetCut.join(' / ')}.` : ''}${f.sheetBelow.length ? ` Further down the scrolling sheet, not on screen: ${f.sheetBelow.join(' / ')}.` : ''} A small island map shows the fronts, each labelled.`,
       });
     });
   await sheet('forecast-no-vane', false);
@@ -570,9 +594,16 @@ async function runDevice(browser, device, statePath, fx) {
       weather: 'storm',
       tier: 'high',
       describe: (f) =>
-        `The tile panel of my Woodcutter's Hut a storm knocked about. On screen: ${list(f.panelLines.filter((l) => !l.cut).map((l) => l.t))}.${
+        `The tile panel of my Woodcutter's Hut a storm knocked about, scrolled to its Fix it card. On screen: ${list(f.panelLines.filter((l) => !l.cut && !l.above).map((l) => l.t))}.${
+          f.panelLines.some((l) => l.above)
+            ? ` Scrolled up out of the panel: ${f.panelLines
+                .filter((l) => l.above)
+                .map((l) => l.t)
+                .join(' / ')}.`
+            : ''
+        }${
           f.panelLines.some((l) => l.cut)
-            ? ` Further down the panel, off screen until it is scrolled: ${f.panelLines
+            ? ` Cut by the panel's edge or further down: ${f.panelLines
                 .filter((l) => l.cut)
                 .map((l) => l.t)
                 .join(' / ')}.`

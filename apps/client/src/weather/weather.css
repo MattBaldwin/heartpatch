@@ -213,9 +213,10 @@
   visibility: hidden;
 }
 
-/* A tile badge (the 🌙 over dark land) is DOM over the canvas, so a cloud
+/* A tile badge (the 🌙 over dark land, a tile mark) is DOM over the canvas, so a cloud
    passing over it can't cover it in the scene: the weather layer marks the
    ones a cloud's body is over, and they hide until it has moved on. */
-.weather-under-cloud {
+.dark-moon.weather-under-cloud,
+.tile-mark.weather-under-cloud {
   visibility: hidden;
 }

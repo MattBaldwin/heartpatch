@@ -19,14 +19,16 @@ export function fixRow(chips: HTMLElement, button: HTMLElement): HTMLElement {
 const ROUND_CARD = 8;
 
 /**
- * How far to scroll a panel so a card shows whole: just far enough for its
- * bottom (Fix it) to clear the panel's bottom, never so far that its top goes
- * under the panel's top. `cardTop` and `cardBottom` are measured from the
- * panel's top edge; `height` is the panel's visible height.
+ * How far to scroll a panel (negative is up) so a card shows whole: just far
+ * enough for its bottom (Fix it) to clear the panel's bottom, never so far
+ * that its top goes under the panel's top; a card above the view is scrolled
+ * back down to. `cardTop` and `cardBottom` are measured from the panel's top
+ * edge; `height` is the panel's visible height.
  */
 export function scrollToShow(cardTop: number, cardBottom: number, height: number): number {
-  const toBottom = cardBottom + ROUND_CARD - height;
-  return Math.max(0, Math.min(cardTop - ROUND_CARD, toBottom));
+  const toTop = cardTop - ROUND_CARD;
+  if (toTop < 0) return toTop;
+  return Math.max(0, Math.min(toTop, cardBottom + ROUND_CARD - height));
 }
 
 /**

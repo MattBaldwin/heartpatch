@@ -19,9 +19,9 @@ export const WEATHER_LOOK = {
     /** Size of a puff, before the front grows in: base plus up to `spread`. // TUNE: */
     size: 0.62,
     spread: 0.35,
-    /** Soft white for rain; slate grey (not purple) for a storm, solid so its puffs fuse. // TUNE: */
+    /** Soft white for rain; slate grey (not purple) for a storm; solid, so a cloud hides what is behind it. // TUNE: */
     colour: {
-      rain: [0.92, 0.94, 0.98, 0.7],
+      rain: [0.92, 0.94, 0.98, 1],
       storm: [0.64, 0.68, 0.78, 1],
     } satisfies Record<'rain' | 'storm', Rgba>,
     /** A cloud's flat bottom, as a share of a unit puff's height below its middle. // TUNE: */
@@ -37,8 +37,8 @@ export const WEATHER_LOOK = {
       /** How much the sunny side of each lump is lit over its shady side. */
       key: 0.8,
       rim: [1, 0.78, 0.38] as const,
-      rimStrength: 1.3,
-      rimPower: 1.8,
+      rimStrength: 1.6,
+      rimPower: 1.4,
     },
     /** What a lightning flash adds to the cloud: most on the belly, a little on top. // TUNE: */
     flash: { colour: [0.85, 0.88, 1] as const, belly: 0.6, top: 0.15 },

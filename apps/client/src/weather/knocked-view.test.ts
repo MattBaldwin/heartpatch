@@ -14,4 +14,8 @@ describe('scrollToShow', () => {
   it('never scrolls the top of a tall card out of sight', () => {
     expect(scrollToShow(120, 900, 400)).toBe(112);
   });
+
+  it('scrolls back up to a card above the view', () => {
+    expect(scrollToShow(-200, 100, 400)).toBe(-208);
+  });
 });
