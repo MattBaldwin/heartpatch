@@ -9,10 +9,12 @@
 // whose water suits it (the server judges), keeping the first inland one
 // empty for the Build sheet. Every device (iPhone 15, iPhone SE, iPad) then
 // signs in as that player at tier `high` and its own DPR. Shots, per device:
-// `gallery-works`, `gallery-works-asleep`, `zoom-seawall` (the Seawall at map
-// zoom), `gallery-wild`, `gallery-well` (the River Well at levels 1–4),
+// `gallery-works`, `gallery-compare` (resource buildings beside works),
+// `gallery-works-asleep`, `zoom-seawall` (the Seawall at map zoom),
+// `gallery-wild`, `gallery-well` (the River Well at levels 1–4),
 // `build-sheet` (a held-back card picked, its reason showing) and `homestead`
-// (the pier standing on its homestead).
+// (the pier standing on its homestead). Gallery rows use `&fill=1`: each
+// building fills its tile at the map's homestead size, as the game draws it.
 // No dev badge, no "(dev)" buttons. Env: DEVICES, PW_CHROMIUM_EXECUTABLE.
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -214,7 +216,20 @@ async function buildUp(page, mapId) {
         if (await place(id, at)) break;
       }
   }
-  return { built, empty };
+  // A resource building already in the game on a homestead of its own, for a
+  // map frame beside the works.
+  let resource = null;
+  for (let i = 0; i < 3 && !resource; i++) {
+    const made = await call(page, 'POST', `/maps/${mapId}/dev/homestead`);
+    if (made.status !== 201) break;
+    for (const id of ['woodcutters-hut', 'stone-quarry', 'ember-kiln', 'water-well']) {
+      if (await place(id, made.body)) {
+        resource = built.pop();
+        break;
+      }
+    }
+  }
+  return { built, empty, resource };
 }
 
 async function openMap(page) {
@@ -382,34 +397,39 @@ for (const key of WANT) {
   // The Seawall at map zoom on the home-base scene: no homestead reliably
   // lands on the coast in a dev run, so this stands in for a map frame.
   await gallery(
-    `show=solo:seawall&focus=0,-1&dist=${d.dist}`,
+    `show=solo:seawall&fill=1&focus=0,-1&dist=${d.dist}`,
     'zoom-seawall',
-    `Buildings gallery at map zoom (dist ${d.dist}): the Seawall, level 1`,
+    `Buildings gallery at map zoom (dist ${d.dist}): the Seawall, level 1, filling its tile at map size`,
   );
   await gallery(
-    `show=works&dist=${d.dist}`,
+    `show=works&fill=1&dist=${d.dist}`,
     'gallery-works',
-    'Buildings gallery: Fishing Pier, Salt Pans, Watermill, Irrigated Field, Rain Barrel and Water Well (River Well) at level 1, lamps lit',
+    'Buildings gallery at map size: Fishing Pier, Salt Pans, Watermill, Irrigated Field, Rain Barrel and Water Well (River Well) at level 1, lamps lit, each filling its tile',
   );
   await gallery(
-    `show=works&asleep=1&dist=${d.dist}`,
+    `show=compare&fill=1&dist=${d.dist}`,
+    'gallery-compare',
+    'Buildings gallery at map size: Woodcutter’s Hut, Ember Kiln and Pumpkin Barn (already in the game) beside the Fishing Pier, Seawall and Watermill, level 1, each filling its tile',
+  );
+  await gallery(
+    `show=works&asleep=1&fill=1&dist=${d.dist}`,
     'gallery-works-asleep',
-    'Buildings gallery: the same six works napping, lamps dark',
+    'Buildings gallery at map size: the same six works napping, lamps dark',
   );
   await gallery(
-    `show=wild&dist=${d.dist}`,
+    `show=wild&fill=1&dist=${d.dist}`,
     'gallery-wild',
-    'Buildings gallery: Canal, Levee, Seawall, Weather Vane and Waystation',
+    'Buildings gallery at map size: Canal, Levee, Seawall, Weather Vane and Waystation, each filling its tile',
   );
   await gallery(
-    `show=res:river-well&dist=${d.wellDist}`,
+    `show=res:river-well&fill=1&dist=${d.wellDist}`,
     'gallery-well',
-    'Buildings gallery: the Water Well (River Well) at levels 1 to 4',
+    'Buildings gallery at map size: the Water Well (River Well) at levels 1 to 4',
   );
   await gallery(
-    `show=res:greenhouse&dist=${d.wellDist}`,
+    `show=res:greenhouse&fill=1&dist=${d.wellDist}`,
     'gallery-greenhouse',
-    'Buildings gallery: the Greenhouse at levels 1 to 4',
+    'Buildings gallery at map size: the Greenhouse (already in the game) at levels 1 to 4',
   );
   if (key === 'iphone-se') {
     for (const id of CLOSE) {
@@ -470,6 +490,28 @@ for (const key of WANT) {
     await settle(page);
     await shot(`map-${id}`, `Map, zoomed in: ${words}`);
   }
+
+  // A resource building beside the works on the map: the camera on it, the
+  // caption naming the works within two tiles (all on screen at this zoom).
+  if (state.resource) {
+    const r = state.resource;
+    const near = state.built.filter(
+      (b) => (Math.abs(b.q - r.q) + Math.abs(b.r - r.r) + Math.abs(b.q + b.r - r.q - r.r)) / 2 <= 2,
+    );
+    await page.evaluate(({ q, r }) => window.__heartpatch.mapDev().show(q, r), r);
+    await settle(page);
+    const close = page.getByTestId('tile-panel').getByRole('button', { name: 'Close' });
+    if (await close.isVisible().catch(() => false)) await close.click();
+    await settle(page);
+    await shot(
+      'map-compare',
+      `Map, zoomed in: a ${r.id} (already in the game) in the middle${
+        near.length
+          ? `, with ${near.map((b) => b.id).join(', ')} within two tiles`
+          : ', no works within two tiles this run'
+      }`,
+    );
+  } else console.log('  no map compare shot (no resource building fit a homestead)');
 
   // The Build sheet on an empty homestead, a held-back card picked.
   const empty = state.empty;

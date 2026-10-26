@@ -9,10 +9,22 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import type { Scene } from '@babylonjs/core/scene';
 import { GAME_DATA } from '@heartpatch/shared';
-import { BUILDING_COLORS as C, LEVEL_SCALE, NAP_DIM } from './building-config.js';
+import { BUILDING_COLORS as C, LEVEL_SCALE, NAP_DIM, TILE_FOOTPRINT } from './building-config.js';
 
 /** The Wild Isle works (#621): the buildings that show a nap cue while paused. */
 const WORKS = new Set(GAME_DATA.buildings.filter((b) => b.kind === 'works').map((b) => b.id));
+
+/**
+ * The Wild Isle buildings that stand on a homestead (#621; the bridge and
+ * the ferry dock sit on water): each is fitted to `TILE_FOOTPRINT`.
+ */
+export const WILD_HOMESTEAD = new Set(
+  GAME_DATA.buildings
+    .filter(
+      (b) => b.patchTypes?.includes('wild-isle') && b.id !== 'bridge' && b.id !== 'ferry-dock',
+    )
+    .map((b) => b.id),
+);
 
 // Procedural building models (design doc §13, §19): primitives merged into
 // one vertex-coloured mesh per look, so every building of a kind is one draw
@@ -56,6 +68,41 @@ export function buildBuildingModel(
   buildingId: string,
   look: BuildingLook,
   level = 1,
+): BuildingModel {
+  const fit = WILD_HOMESTEAD.has(buildingId) ? footprintFit(scene, buildingId) : 1;
+  return buildModel(scene, buildingId, look, level, fit);
+}
+
+/** Each fitted building's footprint scale, worked out once from its level-1 and -4 bodies. */
+const fits = new Map<string, number>();
+
+/** How much to scale a building so its reach lands inside `TILE_FOOTPRINT`. */
+function footprintFit(scene: Scene, buildingId: string): number {
+  const known = fits.get(buildingId);
+  if (known !== undefined) return known;
+  /** How far its body gets from the tile's middle along x or z. */
+  const reach = (level: number) => {
+    const { body, glow } = buildModel(scene, buildingId, 'plain', level, 1);
+    const { minimum, maximum } = body.getBoundingInfo().boundingBox;
+    body.dispose();
+    glow?.dispose();
+    return Math.max(-minimum.x, maximum.x, -minimum.z, maximum.z);
+  };
+  const first = reach(1);
+  const fit = Math.min(
+    Math.min(Math.max(first, TILE_FOOTPRINT.min), TILE_FOOTPRINT.max) / first,
+    TILE_FOOTPRINT.maxTop / reach(LEVEL_SCALE.length),
+  );
+  fits.set(buildingId, fit);
+  return fit;
+}
+
+function buildModel(
+  scene: Scene,
+  buildingId: string,
+  look: BuildingLook,
+  level: number,
+  fit: number,
 ): BuildingModel {
   const name = modelKey(buildingId, look, level);
   const l = Math.max(1, level);
@@ -1318,7 +1365,7 @@ export function buildBuildingModel(
     case 'rain-barrel': {
       // A chubby staved barrel with three metal hoops, a wide funnel on top
       // catching raindrops, and a big brass tap on its front pouring into a
-      // puddle, by a little lamp. Small and round: the smallest of the works.
+      // puddle, by a little lamp, all on a round flagstone. The smallest of the works.
       // L2: a second barrel. L3: a gutter roof feeding them. L4: a third
       // barrel on a stand.
       const barrelAt = (x: number, y: number, z: number, s: number) => {
@@ -1364,6 +1411,8 @@ export function buildBuildingModel(
         // The water just above the funnel's lid (level with it, they flicker).
         part(body, cylinder(0.01, 0.38 * s, 0.38 * s, 16), C.water, [x, y + 0.646 * s, z]);
       };
+      // A round flagstone it all stands on, so it fills its tile like the rest.
+      part(body, cylinder(0.03, 0.84, 0.88, 12), C.wellStone, [0, 0.015, -0.08]);
       barrelAt(0, 0, 0, 1);
       // Raindrops falling into the funnel.
       for (const [x, y, z] of [
@@ -1564,8 +1613,8 @@ export function buildBuildingModel(
     case 'weather-vane': {
       // A tall post on a stone step with one big arrow on top (a pink head
       // and a heart-tail fin) and a lamp-ball finial: the tallest, thinnest
-      // Wild Isle silhouette. One level.
-      part(body, cylinder(0.14, 0.4, 0.46, 14), C.wellStone, [0, 0.07, 0]);
+      // Wild Isle silhouette, on a step wide enough to fill its tile. One level.
+      part(body, cylinder(0.14, 0.7, 0.8, 18), C.wellStone, [0, 0.07, 0]);
       part(body, cylinder(1.06, 0.05, 0.06, 8), C.post, [0, 0.67, 0]);
       part(body, box(0.62, 0.04, 0.04), C.hoop, [0, 1.18, 0]);
       part(
@@ -1585,7 +1634,8 @@ export function buildBuildingModel(
     }
     case 'waystation': {
       // A cozy roadside stop: a peaked roof on four posts over a bench, a
-      // signpost with two arrows and a lamp. One level.
+      // signpost with two arrows and a lamp, on a flagstone. One level.
+      part(body, box(1.0, 0.03, 0.62), C.wellStone, [0.16, 0.015, -0.08]);
       for (const [x, z] of [
         [-0.28, -0.2],
         [0.28, -0.2],
@@ -1630,6 +1680,14 @@ export function buildBuildingModel(
     }
     default:
       part(body, CreateBox(`${name}-box`, { size: 0.5 }, scene), C.plain, [0, 0.25, 0]);
+  }
+  // Fitted to its tile (`TILE_FOOTPRINT`): shrunk as a whole, or widened only.
+  if (fit !== 1) {
+    const by = new Vector3(fit, Math.min(fit, 1), fit);
+    for (const mesh of [...body, ...glow]) {
+      mesh.position.multiplyInPlace(by);
+      mesh.scaling.multiplyInPlace(by);
+    }
   }
   if (napping) {
     // Two lilac z's rising over its top, drawn unlit so they read at phone size.

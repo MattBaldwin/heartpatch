@@ -5,8 +5,8 @@ import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { GAME_DATA } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
-import { BUILDING_COLORS, LEVEL_SCALE } from './building-config.js';
-import { buildBuildingModel, levelScale } from './building-models.js';
+import { BUILDING_COLORS, LEVEL_SCALE, TILE_FOOTPRINT } from './building-config.js';
+import { buildBuildingModel, levelScale, WILD_HOMESTEAD } from './building-models.js';
 
 const RESOURCE = GAME_DATA.buildings.filter((b) => b.kind === 'resource').map((b) => b.id);
 
@@ -220,6 +220,43 @@ describe('Wild Isle works models (#621 W1-10)', () => {
         expect(brightness(body), `${id} L${String(l)}`).toBeLessThan(brightness(awake) * 0.9);
         const top = body.getBoundingInfo().boundingBox.maximum.y;
         expect(glow?.getBoundingInfo().boundingBox.minimum.y ?? 0, id).toBeGreaterThan(top);
+      }
+    }
+  });
+
+  it('fills its tile like the buildings already in the game (owner 2026-10-26)', () => {
+    // Reach: how far the body gets from the tile's middle along x or z.
+    const scene = new Scene(engine);
+    const reach = (id: string, level: number) => {
+      const { minimum, maximum } = buildBuildingModel(
+        scene,
+        id,
+        'plain',
+        level,
+      ).body.getBoundingInfo().boundingBox;
+      return Math.max(-minimum.x, maximum.x, -minimum.z, maximum.z);
+    };
+    const kinds = ['habitat', 'training-grounds', 'factory', 'resource', 'warehouse'];
+    const existing = GAME_DATA.buildings.filter((b) => kinds.includes(b.kind)).map((b) => b.id);
+    expect([...WILD_HOMESTEAD].sort()).toEqual([...WILD].sort());
+    for (const level of [1, 4]) {
+      const band = existing.map((id) => reach(id, level));
+      const [low, high] = [Math.min(...band), Math.max(...band)];
+      if (level === 1) {
+        // The target sits inside the band the existing buildings span.
+        expect(TILE_FOOTPRINT.min).toBeGreaterThanOrEqual(low);
+        expect(TILE_FOOTPRINT.max).toBeLessThanOrEqual(high);
+      } else {
+        expect(TILE_FOOTPRINT.maxTop).toBeLessThanOrEqual(high);
+      }
+      for (const id of WILD) {
+        const r = reach(id, level);
+        expect(r, `${id} L${String(level)}`).toBeGreaterThanOrEqual(
+          level === 1 ? TILE_FOOTPRINT.min - 0.005 : low,
+        );
+        expect(r, `${id} L${String(level)}`).toBeLessThanOrEqual(
+          level === 1 ? TILE_FOOTPRINT.max + 0.005 : Math.min(high, TILE_FOOTPRINT.maxTop + 0.005),
+        );
       }
     }
   });

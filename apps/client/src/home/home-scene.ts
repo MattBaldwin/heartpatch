@@ -130,6 +130,12 @@ export interface HomeSceneOptions {
   readonly keeper: KeeperConfig | null;
   /** What the Keeper wears (#43): clothing ids. */
   readonly keeperWearing?: readonly string[];
+  /**
+   * The buildings gallery's `&fill=1` (#621 W1-10): every building but a fire
+   * fills its tile off the Heart Seed, at the size the map draws a
+   * homestead's, so works and resource buildings show their map footprint.
+   */
+  readonly fillTiles?: boolean;
 }
 
 interface Resident {
@@ -331,7 +337,9 @@ export class HomeScene {
 
   /** Whether a building fills its home tile (#589): a habitat on a ring spot off the Heart Seed tile. */
   #fills(b: { q: number; r: number; spot: number; kind: string }): boolean {
-    return fillsTile(b.spot, b.q === this.#seed.q && b.r === this.#seed.r, b.kind);
+    const onSeed = b.q === this.#seed.q && b.r === this.#seed.r;
+    if (this.#options.fillTiles === true && !onSeed && b.kind !== 'hearthfire') return true;
+    return fillsTile(b.spot, onSeed, b.kind);
   }
 
   /** Where a building stands: the tile's middle if it fills the tile, else its spot. */

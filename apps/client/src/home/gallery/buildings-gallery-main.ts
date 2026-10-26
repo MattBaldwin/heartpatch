@@ -13,7 +13,7 @@ import { pickInitialTier } from '../../engine/quality/tiers.js';
 import { mountStage, type Stage } from '../../engine/stage.js';
 import { lodFor } from '../../procedural/motion.js';
 import { NIGHT_LOOK } from '../../hollow/hollow-config.js';
-import { HOME_VIEW } from '../home-config.js';
+import { HOME_VIEW, MAP_OUTER_BUILDING_SCALE } from '../home-config.js';
 import { HomeScene } from '../home-scene.js';
 import '../../styles.css';
 
@@ -34,7 +34,9 @@ setPerfReports(false);
  * `works` (the six Wild Isle works, `&asleep=1` napping), `wild` (the
  * canal, shelters, vane and waystation, #621 W1-10) and `solo:<id>` (one
  * building on tile 0,-1 at `&level=` (default 1), `&asleep=1` napping, for
- * a close-up with `&focus=0,-1`).
+ * a close-up with `&focus=0,-1`), and `compare` (resource buildings beside
+ * works, #621 W1-10). `&fill=1` draws every building but a fire filling its
+ * tile at the map's homestead size (`MAP_OUTER_BUILDING_SCALE`).
  * `&night=1` lights any layout as the map at night (the Hollow layer's
  * `NIGHT_LOOK`), to judge glowing windows after dark.
  * Every shot uses one camera: `?pitch=` (degrees, default 42,
@@ -55,6 +57,7 @@ const pitch = ((Number(params.get('pitch')) || 42) * Math.PI) / 180;
 const distance = Number(params.get('dist')) || 18;
 const focus = params.get('focus')?.split(',').map(Number) ?? null;
 const night = params.get('night') === '1';
+const fill = params.get('fill') === '1';
 
 const NOW = '2026-10-12T18:00:00.000Z';
 const ids = (n: number) => `0190a000-0000-7000-8000-${String(n).padStart(12, '0')}`;
@@ -216,11 +219,21 @@ function layout(): Pick<HomeResponse, 'buildings' | 'squishies'> {
   // Wild Isle (#621 W1-10): the six works side by side on the home patch
   // (`works`), and the canal, both shelters, the vane and the waystation
   // (`wild`). `res:<id>` shows a works at levels 1–4 too.
-  if (show === 'works' || show === 'wild') {
+  if (show === 'works' || show === 'wild' || show === 'compare') {
     const ids =
       show === 'works'
         ? ['fishing-pier', 'salt-pans', 'watermill', 'irrigated-field', 'rain-barrel', 'river-well']
-        : ['canal', 'levee', 'seawall', 'weather-vane', 'waystation'];
+        : show === 'wild'
+          ? ['canal', 'levee', 'seawall', 'weather-vane', 'waystation']
+          : // Each works next to a resource building already in the game.
+            [
+              'woodcutters-hut',
+              'fishing-pier',
+              'ember-kiln',
+              'seawall',
+              'pumpkin-barn',
+              'watermill',
+            ];
     const at = TILES.filter((t) => !t.heartSeed);
     return {
       buildings: ids.map((id, i) =>
@@ -267,11 +280,13 @@ function layout(): Pick<HomeResponse, 'buildings' | 'squishies'> {
 const wildLayout =
   show === 'works' ||
   show === 'wild' ||
+  show === 'compare' ||
+  fill ||
   show.startsWith('solo:') ||
   GAME_DATA.buildings.some((b) => b.kind === 'works' && show === `res:${b.id}`);
 
 const home: HomeResponse = {
-  // The Wild Isle layouts (a works at its levels, any close-up) keep resource nodes
+  // The Wild Isle layouts (a works at its levels, any close-up, any filled tile) keep resource nodes
   // off their tiles, so no tree or rock stands in a building.
   tiles: wildLayout ? TILES.map((t) => ({ ...t, nodeResource: null })) : TILES,
   ...layout(),
@@ -304,6 +319,7 @@ await boot(canvas, {
           registry: visualRegistry(GAME_DATA),
           lod: lodFor('closeUp', tier),
           keeper: null,
+          fillTiles: fill,
         });
         return homeScene.content;
       },
@@ -343,7 +359,12 @@ function sizes(): Record<string, { width: number; height: number }> {
     const isSquishy = mesh.name.startsWith('squishy-');
     if (!isBuilding && !isSquishy) continue;
     const { minimum, maximum } = mesh.getBoundingInfo().boundingBox;
-    const scale = isBuilding ? HOME_VIEW.buildingScale : HOME_VIEW.squishyScale;
+    const kind = GAME_DATA.buildings.find((b) => b.id === mesh.name.split(':')[0])?.kind;
+    const scale = !isBuilding
+      ? HOME_VIEW.squishyScale
+      : fill && kind !== 'hearthfire'
+        ? HOME_VIEW.hexSize * MAP_OUTER_BUILDING_SCALE
+        : HOME_VIEW.buildingScale;
     out[mesh.name] = {
       width: Math.max(maximum.x - minimum.x, maximum.z - minimum.z) * scale,
       height: (maximum.y - minimum.y) * scale,
