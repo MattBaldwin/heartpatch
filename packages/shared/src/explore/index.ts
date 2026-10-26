@@ -59,6 +59,37 @@ export function isExplorable(terrain: string, rules: ExploreRules): boolean {
   return exploreTerrain(terrain, rules) !== undefined;
 }
 
+/**
+ * Whether a land tile that borders a river explores as the river bank
+ * (#621 W1-13). Off until the owner decides how players reach the river
+ * kit: a river tile is water, so nobody owns one to explore it.
+ */
+export const RIVER_EDGE_KIT = false; // owner call pending (#621 W1-13)
+
+/**
+ * The terrain whose explore kit a tile uses (#621 W1-13): its own today.
+ * With `riverEdge` on, an explorable land tile with a river tile among
+ * `neighbourTerrains` uses the river bank's instead. Pure, so the server and
+ * the client can't disagree once it is switched on.
+ */
+export function exploreKitFor(
+  terrain: string,
+  neighbourTerrains: readonly string[],
+  rules: ExploreRules,
+  riverEdge: boolean = RIVER_EDGE_KIT,
+): string {
+  if (
+    riverEdge &&
+    terrain !== 'river' &&
+    isExplorable(terrain, rules) &&
+    isExplorable('river', rules) &&
+    neighbourTerrains.includes('river')
+  ) {
+    return 'river';
+  }
+  return terrain;
+}
+
 function kindOf(id: string, rules: ExploreRules): SearchSpotKind {
   const kind = rules.spotKinds.find((k) => k.id === id);
   if (!kind) throw new Error(`unknown search-spot kind "${id}"`);

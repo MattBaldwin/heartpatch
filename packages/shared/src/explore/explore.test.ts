@@ -12,12 +12,14 @@ import {
   type ExploreRules,
 } from '../schemas/data/explore.js';
 import {
+  exploreKitFor,
   exploreLayout,
   exploreNeeds,
   homesteadQuantity,
   isExplorable,
   isFullyExplored,
   isSearched,
+  RIVER_EDGE_KIT,
   searchedCount,
   searchSpots,
   withSearched,
@@ -154,6 +156,19 @@ describe('explore rules data', () => {
       SearchSpotKindSchema.safeParse({ id: 'x', name: 'X', tool: null, interaction: 'swim' })
         .success,
     ).toBe(false);
+  });
+
+  it('picks each tile’s own kit, with the river-edge rule ready but off (#621 W1-13)', () => {
+    expect(RIVER_EDGE_KIT).toBe(false);
+    expect(exploreKitFor('meadow', ['river', 'forest'], EXPLORE_RULES)).toBe('meadow');
+    expect(exploreKitFor('river', [], EXPLORE_RULES)).toBe('river');
+    // Switched on: explorable land beside a river explores as its bank.
+    expect(exploreKitFor('meadow', ['forest', 'river'], EXPLORE_RULES, true)).toBe('river');
+    expect(exploreKitFor('coast', ['river'], EXPLORE_RULES, true)).toBe('river');
+    // Not without a river next door, and never for land nobody explores.
+    expect(exploreKitFor('meadow', ['forest', 'wild-lake'], EXPLORE_RULES, true)).toBe('meadow');
+    expect(exploreKitFor('junipers-gap', ['river'], EXPLORE_RULES, true)).toBe('junipers-gap');
+    expect(exploreKitFor('ocean', ['river'], EXPLORE_RULES, true)).toBe('ocean');
   });
 
   it('gives the river bank hands, the Shovel and the Snorkel, with existing gestures (#621 W1-13)', () => {
