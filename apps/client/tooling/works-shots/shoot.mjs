@@ -505,9 +505,9 @@ for (const key of WANT) {
     await settle(page);
     await shot(
       'map-compare',
-      `Map, zoomed in: a ${r.id} (already in the game) in the middle${
+      `Map, zoomed in: a ${r.id.replaceAll('-', ' ')} (already in the game) in the middle${
         near.length
-          ? `, with ${near.map((b) => b.id).join(', ')} within two tiles`
+          ? `, with ${near.map((b) => b.id.replaceAll('-', ' ')).join(', ')} within two tiles`
           : ', no works within two tiles this run'
       }`,
     );

@@ -15,8 +15,9 @@ import { BUILDING_COLORS as C, LEVEL_SCALE, NAP_DIM, TILE_FOOTPRINT } from './bu
 const WORKS = new Set(GAME_DATA.buildings.filter((b) => b.kind === 'works').map((b) => b.id));
 
 /**
- * The Wild Isle buildings that stand on a homestead (#621; the bridge and
- * the ferry dock sit on water): each is fitted to `TILE_FOOTPRINT`.
+ * The Wild Isle buildings that stand in a homestead's middle (#621), each
+ * fitted to `TILE_FOOTPRINT`. Not the bridge (it spans a river) or the
+ * ferry dock (W1-6's travel builds, drawn as they were).
  */
 export const WILD_HOMESTEAD = new Set(
   GAME_DATA.buildings
