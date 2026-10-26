@@ -148,10 +148,8 @@ export const EXPLORE_RULES: ExploreRules = {
       // Wild Isle (#621 W1-13): a river tile is explored as its bank, with the
       // water flowing past its back edges. Its spots sit only on the shore and
       // in the shallows (`band`: from the waterline, 0.56 of the way out, to
-      // the back edges). Layout 2 for the band; nobody can reach a river tile
-      // yet, so there's no saved progress to keep.
+      // the back edges). A new terrain, so no saved progress to keep.
       terrain: 'river',
-      layout: 2,
       band: { depth: 0.44 }, // TUNE: the client's BANK.water is 1 - depth
       kinds: [
         { kind: 'mossy-log', weight: 3 },

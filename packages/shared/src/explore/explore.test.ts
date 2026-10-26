@@ -174,8 +174,7 @@ describe('explore rules data', () => {
 
   it('gives the river bank hands, the Shovel and the Snorkel, with existing gestures (#621 W1-13)', () => {
     const river = EXPLORE_RULES.terrains.find((t) => t.terrain === 'river');
-    // Layout 2: its spots moved onto the bank (`band`) before anyone could reach a river tile.
-    expect(river?.layout).toBe(2);
+    expect(river?.layout).toBeUndefined();
     const kinds = (river?.kinds ?? []).map((k) =>
       EXPLORE_RULES.spotKinds.find((s) => s.id === k.kind),
     );
@@ -249,7 +248,6 @@ describe('searchSpots', () => {
   it('keeps a banded terrain’s spots within its band of the back edges (#621 W1-13)', () => {
     const river = EXPLORE_RULES.terrains.find((t) => t.terrain === 'river');
     expect(river?.band).toBeDefined();
-    expect(exploreLayout('river', EXPLORE_RULES)).toBe(2);
     const depth = river?.band?.depth ?? 0;
     for (const seed of [SEED, 'another-map']) {
       for (const at of hexSpiral(hex(0, 0), 4)) {
