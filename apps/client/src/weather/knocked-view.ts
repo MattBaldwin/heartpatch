@@ -15,19 +15,32 @@ export function fixRow(chips: HTMLElement, button: HTMLElement): HTMLElement {
   );
 }
 
-/** Room kept above the card when it is scrolled to the panel's top (px). // TUNE: */
-const ABOVE_CARD = 8;
+/** Room kept round the card when it is scrolled into the panel (px). // TUNE: */
+const ROUND_CARD = 8;
+
+/**
+ * How far to scroll a panel so a card shows whole: just far enough for its
+ * bottom (Fix it) to clear the panel's bottom, never so far that its top goes
+ * under the panel's top. `cardTop` and `cardBottom` are measured from the
+ * panel's top edge; `height` is the panel's visible height.
+ */
+export function scrollToShow(cardTop: number, cardBottom: number, height: number): number {
+  const toBottom = cardBottom + ROUND_CARD - height;
+  return Math.max(0, Math.min(cardTop - ROUND_CARD, toBottom));
+}
 
 /**
  * Scrolls the tile panel holding `container` so the first knocked building's
- * card starts at its top. Returns whether there was one. Instant, so the
- * panel opens already there.
+ * card shows whole, scrolling no further than that (the panel's own header
+ * stays in sight when there is room). Returns whether there was one. Instant,
+ * so the panel opens already there.
  */
 export function bringKnockedIntoView(container: HTMLElement): boolean {
   const card = container.querySelector('[data-testid$="-knocked"]')?.closest('.home-card');
   const panel = container.closest('.tile-panel');
   if (!card || !panel) return false;
-  const offset = card.getBoundingClientRect().top - panel.getBoundingClientRect().top;
-  panel.scrollTop = Math.max(0, panel.scrollTop + offset - ABOVE_CARD);
+  const box = panel.getBoundingClientRect();
+  const c = card.getBoundingClientRect();
+  panel.scrollTop += scrollToShow(c.top - box.top, c.bottom - box.top, panel.clientHeight);
   return true;
 }

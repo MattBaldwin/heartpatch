@@ -122,6 +122,22 @@ export function spotIn(
   };
 }
 
+/** Turn between the main layer's spiral and the deck's, so deck clouds fill the gaps rather than sit under main ones. */
+const DECK_TURN = GOLDEN_ANGLE / 2;
+
+/** The i-th of n deck clouds: the spiral turned by half a step, a little tighter. */
+function deckSpot(
+  seed: number,
+  i: number,
+  n: number,
+  radiusTiles: number,
+): ReturnType<typeof spotIn> {
+  const s = spotIn(seed, i, n, radiusTiles * 0.85, 50);
+  const c = Math.cos(DECK_TURN);
+  const t = Math.sin(DECK_TURN);
+  return { dx: s.dx * c - s.dz * t, dz: s.dx * t + s.dz * c, jitter: s.jitter };
+}
+
 function put(
   m: Float32Array,
   at: number,
@@ -200,7 +216,7 @@ export function layoutWeather(
       for (let i = 0; i < nClouds + nDeck; i++) {
         const lower = i >= nClouds;
         const s = lower
-          ? spotIn(seed, i - nClouds, nDeck, front.radius * 0.8, 50)
+          ? deckSpot(seed, i - nClouds, nDeck, front.radius)
           : spotIn(seed, i, nClouds, front.radius, 10);
         const at = nCloud++;
         const size =
@@ -255,7 +271,7 @@ export function layoutWeather(
           out.rainMatrices,
           at,
           centre.x + s.dx,
-          CLOUDS.height - 0.1,
+          CLOUDS.height - RAIN.below,
           centre.z + s.dz,
           grow,
           heavy?.thick ?? 1,
@@ -270,7 +286,7 @@ export function layoutWeather(
           // Under the lower deck's clouds, spread through the front.
           // From under a deck cloud's near edge (the map camera looks north,
           // up +z), so the cloud doesn't hide the bolt hanging beneath it.
-          const s = spotIn(seed, i, Math.max(1, nDeck), front.radius * 0.8, 50);
+          const s = deckSpot(seed, i, Math.max(1, nDeck), front.radius);
           const deckSize = (CLOUDS.size + s.jitter * CLOUDS.spread) * grow * CLOUDS.deck.grow;
           const at = bolts++;
           put(

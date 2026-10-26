@@ -564,11 +564,7 @@ async function runDevice(browser, device, statePath, fx) {
   await phase('tile-knocked', { plan: 'storm', knocked: true }, 'storm', 'high', async () => {
     await showTile(page, fx.hut.tile);
     await until(page, () => document.querySelector('[data-testid$="-knocked"]') !== null);
-    // Show the panel from its top (its own header and close button), never left scrolled.
-    await page.evaluate(() => {
-      for (const p of document.querySelectorAll('.tile-panel'))
-        for (let e = p; e; e = e.parentElement) e.scrollTop = 0;
-    });
+    // The panel as the app leaves it: scrolled just far enough for the Fix it card to show whole.
     await settle(page);
     await shot(page, device, 'tile-knocked', {
       weather: 'storm',

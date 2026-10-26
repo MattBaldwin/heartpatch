@@ -179,7 +179,8 @@ describe('a storm sky', () => {
     expect(storm.clouds).toBeGreaterThan(plain.clouds);
     const deck = (storm.clouds - 1) * 16;
     let lowestMain = Infinity;
-    for (let i = 0; i < 9; i++) lowestMain = Math.min(lowestMain, storm.cloudMatrices[i * 16 + 13] ?? 0);
+    for (let i = 0; i < 9; i++)
+      lowestMain = Math.min(lowestMain, storm.cloudMatrices[i * 16 + 13] ?? 0);
     expect(storm.cloudMatrices[deck + 13]).toBeLessThan(lowestMain);
     expect(storm.cloudColours[(storm.clouds - 1) * 4]).toBeLessThan(storm.cloudColours[0] ?? 0);
     expect(storm.cloudMatrices[deck + 5]).toBeLessThan(storm.cloudMatrices[deck] ?? 0);

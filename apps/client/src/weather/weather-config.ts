@@ -13,7 +13,7 @@ export const WEATHER_LOOK = {
     /** Every puff is flattened by this on top of its own squash: a cushion, not a ball. // TUNE: */
     squash: 1,
     /** How softly the puffs melt into one another (a smooth union's blend width). // TUNE: */
-    blend: 0.1,
+    blend: 0.18,
     /** A storm's main clouds are this much bigger, so they close up into one heavy mass. // TUNE: */
     stormGrow: 1.35,
     /** Size of a puff, before the front grows in: base plus up to `spread`. // TUNE: */
@@ -37,7 +37,7 @@ export const WEATHER_LOOK = {
       /** How much the sunny side of each lump is lit over its shady side. */
       key: 0.8,
       rim: [1, 0.66, 0.3] as const,
-      rimStrength: 1.4,
+      rimStrength: 1,
       rimPower: 1.8,
     },
     /** What a lightning flash adds to the cloud: most on the belly, a little on top. // TUNE: */
@@ -54,7 +54,7 @@ export const WEATHER_LOOK = {
       colour: '#1b2433',
       height: 0.75,
       size: 1.05,
-      alpha: { rain: 0.12, storm: 0.5 },
+      alpha: { rain: 0.12, storm: 0.32 },
       rings: [
         [0.5, 1],
         [0.85, 0.5],
@@ -81,7 +81,7 @@ export const WEATHER_LOOK = {
       height: 1.6,
       width: 0.09,
       haloWidth: 0.6,
-      halo: [0.72, 0.78, 1, 0.6] as const,
+      halo: [0.42, 0.52, 1, 0.6] as const,
       hold: 2,
       /** How far towards the camera from under its deck cloud's middle, as a share of the cloud's size. */
       edge: 0.7,
@@ -94,17 +94,19 @@ export const WEATHER_LOOK = {
      */
     flash: { sun: 1.6, sky: 0.55, still: 0.45 },
     /** The high tier's glow round the bolts (a GlowLayer): its size, blur and strength. // TUNE: */
-    glow: { ratio: 0.25, blur: 32, intensity: 0.35 },
+    glow: { ratio: 0.5, blur: 16, intensity: 0.5 },
   },
   rain: {
     /** One streak: a thin cylinder, `height` long. // TUNE: */
     height: 0.62,
     diameter: 0.06,
     /** A cool blue that shows over pale grass and over dark woods. // TUNE: */
-    colour: '#5f86dc',
-    alpha: 0.9,
+    colour: '#6c8fd6',
+    alpha: 0.75,
     /** How far a streak falls in one cycle (world units). // TUNE: */
     fall: 1.9,
+    /** Where a streak starts: this far under a cloud's middle, out of the cloud's body. // TUNE: */
+    below: 0.5,
   },
   fog: {
     /** Low over the tiles, in big soft banks. // TUNE: */

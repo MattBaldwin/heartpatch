@@ -63,7 +63,7 @@ const FRAGMENT_BEFORE_FOG = /* glsl */ `
   float wcRim = wcEdge * smoothstep(0.02, 0.3, vWeatherCloud.x) * (0.35 + 0.65 * wcKey);
   // Blended towards the warm colour, not added: added onto a bright top it
   // would only clip to white.
-  color.rgb = mix(color.rgb, vec3(${f(rim[0])}, ${f(rim[1])}, ${f(rim[2])}), clamp(wcRim * ${f(rimStrength)}, 0.0, 0.85));
+  color.rgb = mix(color.rgb, vec3(${f(rim[0])}, ${f(rim[1])}, ${f(rim[2])}), clamp(wcRim * ${f(rimStrength)}, 0.0, 0.6));
   color.rgb += vec3(${f(flash.colour[0])}, ${f(flash.colour[1])}, ${f(flash.colour[2])})
     * (weatherFlash * mix(${f(flash.belly)}, ${f(flash.top)}, wcUp));
 }
@@ -96,7 +96,10 @@ export class CloudPlugin extends MaterialPluginBase {
     if (!attributes.includes('normal')) attributes.push('normal');
   }
 
-  override getUniforms(): { ubo: { name: string; size: number; type: string }[]; fragment: string } {
+  override getUniforms(): {
+    ubo: { name: string; size: number; type: string }[];
+    fragment: string;
+  } {
     return {
       ubo: [{ name: 'weatherFlash', size: 1, type: 'float' }],
       fragment: 'uniform float weatherFlash;',

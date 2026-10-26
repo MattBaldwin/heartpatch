@@ -39,7 +39,7 @@ export interface WeatherLayerOptions {
 /** How often, at most, badges under the clouds are checked again (ms). // TUNE: */
 const COVER_EVERY_MS = 100;
 /** Share of a cloud's scaled half-width that hides what is behind it (its body, not its soft edge). // TUNE: */
-const COVER_BODY = 0.8;
+const COVER_BODY = 1;
 
 /** What the layer draws now, for the dev hook and the e2e. */
 export interface WeatherStats {

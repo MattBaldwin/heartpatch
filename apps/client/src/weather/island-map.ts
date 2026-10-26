@@ -125,7 +125,6 @@ export function islandMap(
       class: 'weather-map-label',
       'font-size': LABEL,
       'text-anchor': 'middle',
-      'fill-opacity': at ? 1 : 0.55,
     });
     label.textContent = `${WEATHER_EMOJI[f.kind]} ${KIND_NAME[f.kind] ?? f.kind}`;
     root.append(label);
