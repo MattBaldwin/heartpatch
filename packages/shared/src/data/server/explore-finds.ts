@@ -136,4 +136,56 @@ export const EXPLORE_FINDS: ExploreFindTable[] = [
       { weight: 1, lore: 'chalk-on-the-cave-wall' },
     ],
   },
+  // Wild Isle (#621 W1-11): the coast. Fish is the coast's own find (a Fishing
+  // Pier catches lots, so a pool or a crab hole gives a few); Salt stays the
+  // Salt Pans'. TUNE: every weight and amount.
+  {
+    kind: 'shells',
+    finds: [
+      { weight: 4, items: { stone: 1 } },
+      { weight: 1, items: { glimmer: 1 } },
+      { weight: 3 },
+      { weight: 1, items: { heartdust: 1 } },
+    ],
+  },
+  {
+    kind: 'driftwood',
+    finds: [
+      { weight: 4, items: { timber: 1 } },
+      { weight: 2, items: { timber: 2 } },
+      { weight: 2, items: { emberwood: 1 } },
+      { weight: 2 },
+      { weight: 1, items: { heartdust: 1 } },
+    ],
+  },
+  {
+    kind: 'crab-hole',
+    finds: [
+      { weight: 3, items: { stone: 1 } },
+      { weight: 2, items: { fish: 1 } },
+      { weight: 1, items: { glimmer: 1 } },
+      { weight: 2 },
+      { weight: 1, items: { heartdust: 1 } },
+    ],
+  },
+  {
+    kind: 'tide-pool',
+    finds: [
+      { weight: 4, items: { fish: 1 } },
+      { weight: 1, items: { fish: 2 } },
+      { weight: 2, items: { water: 2 } },
+      { weight: 2 },
+      { weight: 1, items: { heartdust: 1 } },
+    ],
+  },
+  {
+    kind: 'kelp-bed',
+    finds: [
+      { weight: 4, items: { greens: 2 } },
+      { weight: 2, items: { fish: 1 } },
+      { weight: 2, items: { water: 1 } },
+      { weight: 2 },
+      { weight: 1, items: { heartdust: 1 } },
+    ],
+  },
 ];

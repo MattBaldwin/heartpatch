@@ -118,6 +118,7 @@ describe('explore text', () => {
       '🌱',
       '🍄', // Emoji 1.0 (#335)
       '📜', // Emoji 1.0: a torn page (#306)
+      '🐚', // Emoji 1.0: the coast's shell pile (#621)
     ]);
     const icons = [
       ...EXPLORE_RULES.spotKinds.map((k) => actionFor({ kind: k.id, tool: k.tool }).icon),

@@ -32,7 +32,7 @@ export const EXPLORE_TEXT = {
   /** Back, under a lake (#335). */
   popUp: 'Pop up',
   /** Under the joystick (#291). */
-  walkHint: 'Or drag anywhere, or tap to walk',
+  walkHint: 'Drag or tap to walk',
   /** Sprout's one-time tip after the tools were renamed (#335, owner decision 2026-10-09). */
   renamedTip: '🌱 Your Net is a Snorkel now, and your Rope a Walking Stick!',
   renamedTipExtra: 'Time for new adventures.',
@@ -82,6 +82,8 @@ const HAND_ICONS: Readonly<Record<string, string>> = {
   'pumpkin-row': '🎃',
   'hollow-log': 'log',
   rock: 'rock',
+  shells: '🐚',
+  driftwood: 'log',
   cairn: 'rock',
   'glow-mushrooms': '🍄',
 };
@@ -91,6 +93,13 @@ const HAND_VERBS: Readonly<Partial<Record<SpotInteraction, string>>> = {
   shake: 'Shake',
   stack: 'Stack',
   pick: 'Boop',
+};
+
+/** Spots whose gesture says its own thing (#621: the kelp bed parts kelp, not reeds). */
+export const KIND_PLAY_TEXT: Readonly<
+  Record<string, { icon: string; hint: string; easy: string; note?: string }>
+> = {
+  'kelp-bed': { icon: 'snorkel', hint: 'Swipe the kelp apart!', easy: 'tap to part it' },
 };
 
 /** What each tool gesture says and shows (boards b, d, e, f, g; style guide §6). */

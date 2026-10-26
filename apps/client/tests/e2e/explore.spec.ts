@@ -807,3 +807,72 @@ test('a tap on the lakebed swims the Keeper there, and a find leaves the lake al
     await page.context().close();
   }
 });
+
+/** The coast's five spot kinds and the tool each wants (#621 W1-11), cycled over a stubbed tile. */
+const COAST_SPOTS = [
+  { kind: 'shells', tool: null },
+  { kind: 'driftwood', tool: null },
+  { kind: 'crab-hole', tool: 'shovel' },
+  { kind: 'tide-pool', tool: 'net' },
+  { kind: 'kelp-bed', tool: 'net' },
+] as const;
+
+test('enters a coast tile on dry sand, with its shells, crab holes and Snorkel pools (#621 W1-11)', async ({
+  browser,
+}) => {
+  test.setTimeout(240_000); // one scene build; CI renders in software
+  const page = await newPlayer(browser, uniqueName('coast'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  // The Wild Isle is off by default (`HP_WILD_ISLE`), so a new patch has no
+  // coast: explore its Heart Seed tile as one. Only the client's look changes;
+  // nothing is searched, so the server's own spots are never contradicted.
+  await page.route('**/maps/*/explore?*', async (route) => {
+    const res = await route.fetch();
+    const body = (await res.json()) as {
+      terrain: string;
+      spots: { kind: string; tool: string | null }[];
+    };
+    body.terrain = 'coast';
+    body.spots.forEach((s, i) => Object.assign(s, COAST_SPOTS[i % COAST_SPOTS.length]));
+    await route.fulfill({ response: res, json: body });
+  });
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Sandcastle Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await slowExpect(lobby).toBeHidden();
+  await expect.poll(async () => (await mapState(page))?.tiles, slow).toBe(817);
+  await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  const box = (await page.locator('#game').boundingBox())!;
+  const explore = page.getByTestId('tile-explore');
+  await expect(async () => {
+    if ((await mapState(page))?.selected == null) {
+      await tapCanvas(page, box.x + box.width / 2, box.y + box.height / 2);
+    }
+    await expect(explore).toBeVisible({ timeout: 5_000 });
+  }).toPass(slow);
+  await explore.tap();
+
+  try {
+    await expect.poll(async () => (await exploreState(page))?.scene?.keeper, slow).toBe(true);
+    const state = (await exploreState(page))!;
+    expect(state.tile?.terrain).toBe('coast');
+    // Hands, the Shovel and the Snorkel, all on one tile.
+    expect(new Set(state.spots.map((s) => s.tool))).toEqual(new Set([null, 'shovel', 'net']));
+    expect(state.spots.map((s) => s.kind).every((k) => COAST_SPOTS.some((c) => c.kind === k))).toBe(
+      true,
+    );
+    const scene = state.scene!;
+    // A beach is walked on, not swum: the lake's underwater look is only the lake's.
+    expect(scene.sky.underwater).toBe(false);
+    expect(scene.spots).toBe(state.spots.length);
+    expect(scene.created.meshes).toBeLessThanOrEqual(BUILD_MESH_CEILING);
+    expect(scene.land).not.toBeNull();
+    await keeperStill(page);
+    expect(errors).toEqual([]);
+  } finally {
+    await page.context().close();
+  }
+});
