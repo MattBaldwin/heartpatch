@@ -369,7 +369,11 @@ function frameFacts(page, insets) {
           const b = e.getBoundingClientRect();
           const p = e.closest('.weather-sheet-scroll').getBoundingClientRect();
           const state =
-            b.top >= p.bottom - 1 ? 'below' : b.bottom > p.bottom + 1 || b.top < p.top - 1 ? 'cut' : 'in';
+            b.top >= p.bottom - 1
+              ? 'below'
+              : b.bottom > p.bottom + 1 || b.top < p.top - 1
+                ? 'cut'
+                : 'in';
           return state === want;
         })
         .map((e) => e.innerText.trim().replace(/\s*\n+\s*/g, ' · '));
