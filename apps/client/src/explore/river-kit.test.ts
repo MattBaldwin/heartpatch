@@ -1,4 +1,5 @@
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
+import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import { Scene } from '@babylonjs/core/scene';
 import { EXPLORE_RULES, searchSpots } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -10,7 +11,7 @@ import { bankReach, hexReach, landField, type LandSpot } from './land-shape.js';
 import { LAND_LIGHT } from './land-config.js';
 import { landLayout, type LayoutInput } from './land-layout.js';
 import { BANK, bankRadius, farBankRadius, REED_CLEAR, RIVER, RIVER_LOOK } from './river-config.js';
-import { farBankHeight, RIVER_SPOTS } from './river-kit.js';
+import { buildMist, farBankHeight, RIVER_SPOTS } from './river-kit.js';
 
 const SIZE = 7;
 const START = { x: 0, z: -2.94 };
@@ -254,6 +255,26 @@ describe('river spots', () => {
       expect(shape?.mesh.getTotalVertices(), kind).toBeGreaterThan(0);
       expect(shape?.glint, kind).toBeGreaterThan(0);
     }
+  });
+
+  it('lays the mist only out past the drop, off every spot, each wisp fading to nothing at its rim', () => {
+    // Over the shallows a wisp lay on the spots: a pale disc under the mossy log and the cattails.
+    const mesh = buildMist(new Scene(engine));
+    const positions = mesh.getVerticesData(VertexBuffer.PositionKind) ?? [];
+    const colors = mesh.getVerticesData(VertexBuffer.ColorKind) ?? [];
+    let seen = 0;
+    let rim = 0;
+    for (let v = 0; v < positions.length / 3; v++) {
+      const alpha = colors[v * 4 + 3] ?? 0;
+      const p = { x: positions[v * 3] ?? 0, z: positions[v * 3 + 2] ?? 0 };
+      if (alpha === 0) rim++;
+      if (alpha <= 0.005) continue;
+      seen++;
+      expect(Math.hypot(p.x, p.z), `vertex ${v}`).toBeGreaterThan(bankRadius());
+      expect(bankReach(p, SIZE), `vertex ${v}`).toBeGreaterThan(BANK.drop);
+    }
+    expect(seen).toBeGreaterThan(0);
+    expect(rim).toBeGreaterThan(0);
   });
 
   it('builds the water, the far bank, the jetty and the reeds, inside the mobile budget', () => {

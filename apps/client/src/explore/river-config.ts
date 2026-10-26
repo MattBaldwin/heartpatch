@@ -80,7 +80,7 @@ export const RIVER = {
   deep: '#1f6f86', // TUNE: a dark, greener teal than the sea
   shallows: '#9fe3d6', // TUNE
   /** How see-through the shallows are (0 clear, 1 solid), and the deep. */
-  shallowAlpha: 0.38, // TUNE: the sandy bed shows through
+  shallowAlpha: 0.3, // TUNE: the sandy bed shows through, not a grey slab
   deepAlpha: 0.94, // TUNE
   /** How far the shallows reach out past the near bank's deep edge, and the river's width to the far bank. */
   shallowReach: 1.4, // TUNE

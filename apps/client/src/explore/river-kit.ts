@@ -785,35 +785,75 @@ export function buildLanternHalo(scene: Scene): Mesh {
   return mesh;
 }
 
+/** How far past the drop a wisp's middle sits, per unit across: its long half-axis and rim wobble. */
+const MIST_CLEAR = 0.8 * 1.18;
+
+/** Points round a mist wisp's rim: enough that it never reads as a polygon. */
+const MIST_AROUND = 40;
+
 /**
  * Wisps of mist lying low on the water at dusk (lightly spooky): wide, flat
- * and faint, each a few stacked discs, smaller and fainter upwards, so its
- * edge fades out instead of ending hard. Out over the shallows' far side and
- * the deep, clear of the shore and the spots' pads.
+ * and faint, each one soft disc whose alpha falls away to nothing at its
+ * wavy rim, so it reads as a wisp, not a hard-edged oval. Out over the deep,
+ * past the drop, clear of the shallows and every spot in them.
  */
 export function buildMist(scene: Scene): Mesh {
   const mesh = kitMesh(scene, 'river-mist', () => {
     const rs = bankRadius();
     const rf = farBankRadius();
+    const lavender = Color3.FromHexString('#d6d0ff').toLinearSpace(); // TUNE
     const parts: Part[] = [];
     for (let i = 0; i < 14; i++) {
       const a = rad(20 + spread(i * 3 + 2) * 140);
-      const r = rs - 0.4 + spread(i * 7 + 1) * (rf - rs + 0.4);
       const d = 1.6 + spread(i * 11) * 1.2;
+      // Its whole wobbly rim past the drop: over the shallows it lay on the
+      // spots and read as a pale disc under the log and the cattails.
+      const near = rs + MIST_CLEAR * d;
+      const r = near + spread(i * 7 + 1) * Math.max(0, rf - near);
       const y = RIVER.level + 0.16 + spread(i * 5) * 0.1;
-      for (const [k, alpha] of [
-        [1, 0.2],
-        [0.72, 0.17],
-        [0.45, 0.14],
-      ] as const) {
-        const at = polar(r, a, y + (1 - k) * 0.05);
-        parts.push(faded(flat(sphere(d * k, 12, at, [1.6, 0.02, 1]), '#d6d0ff'), alpha)); // TUNE
-      }
+      parts.push(mistWisp(polar(r, a, y), d, 0.3, lavender, i)); // TUNE: the core's alpha
     }
     return merged(parts);
   });
   mesh.hasVertexAlpha = true;
   return mesh;
+}
+
+/**
+ * One wisp: a flat disc `d` across (half again as long as it's deep), its
+ * alpha `core` in the middle easing to 0 at a rim that wobbles by `seed`.
+ */
+function mistWisp(at: Vec3, d: number, core: number, colour: Color3, seed: number): Part {
+  const rings = 4;
+  const around = MIST_AROUND;
+  const positions: number[] = [at[0], at[1], at[2]];
+  const colors: number[] = [colour.r, colour.g, colour.b, core];
+  const indices: number[] = [];
+  for (let ring = 1; ring <= rings; ring++) {
+    const k = ring / rings;
+    for (let n = 0; n < around; n++) {
+      const t = (n / around) * Math.PI * 2;
+      const wobble = 1 + 0.12 * Math.sin(3 * t + seed) + 0.06 * Math.sin(5 * t + seed * 2.3); // TUNE
+      const rr = (d / 2) * k * wobble;
+      positions.push(at[0] + Math.cos(t) * rr * 1.6, at[1], at[2] + Math.sin(t) * rr);
+      colors.push(colour.r, colour.g, colour.b, core * (1 - k * k) ** 2);
+      const b = 1 + (ring - 1) * around;
+      if (ring === 1) {
+        indices.push(0, b + n, b + ((n + 1) % around));
+      } else {
+        const a0 = b - around + n;
+        const a1 = b - around + ((n + 1) % around);
+        indices.push(a0, b + n, a1, a1, b + n, b + ((n + 1) % around));
+      }
+    }
+  }
+  const part = finish(
+    positions,
+    indices,
+    positions.map((_, n) => (n % 3 === 1 ? 1 : 0)),
+  );
+  part.data.colors = colors;
+  return part;
 }
 
 // ── The near bank ────────────────────────────────────────────────────
