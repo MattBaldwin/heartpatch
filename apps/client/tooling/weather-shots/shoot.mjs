@@ -582,7 +582,7 @@ async function runDevice(browser, device, statePath, fx) {
         weather: 'rain',
         tier: 'high',
         describe: (f) =>
-          `The Weather sheet (the Forecast) open over the map${vane ? ', with a Weather Vane standing' : ', no Weather Vane'}. Right now: "${list(f.now)}". ${f.sheetHeads.includes('Today') ? `Today: ${list(f.fronts)}.` : 'There is no Today list.'} Tomorrow: ${list(vane ? f.tomorrowLines : f.tomorrow)}. Notes at the bottom: ${list(f.sheetNotes)}.${f.sheetCut.length ? ` Cut at the sheet's bottom edge: ${f.sheetCut.join(' / ')}.` : ''}${f.sheetBelow.length ? ` Further down the scrolling sheet, not on screen: ${f.sheetBelow.join(' / ')}.` : ''} A small island map shows the fronts, each labelled.`,
+          `The Weather sheet (the Forecast) open over the map${vane ? ', with a Weather Vane standing' : ', no Weather Vane'}. Right now: "${list(f.now)}". ${f.sheetHeads.includes('Today') ? `Today: ${list(f.fronts)}.` : 'There is no Today list.'} Tomorrow: ${list(vane ? f.tomorrowLines : f.tomorrow)}. A small island map shows the fronts, each labelled. Notes at the bottom: ${list(f.sheetNotes)}.${f.sheetCut.length ? ` Cut at the sheet's bottom edge: ${f.sheetCut.join(' / ')}.` : ''}${f.sheetBelow.length ? ` Further down the scrolling sheet, not on screen: ${f.sheetBelow.join(' / ')}.` : ''}`,
       });
     });
   await sheet('forecast-no-vane', false);
