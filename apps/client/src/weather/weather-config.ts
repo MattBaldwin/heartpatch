@@ -77,7 +77,7 @@ export const WEATHER_LOOK = {
      * half-depth towards the camera, so it shows under the bank's near
      * edge. // TUNE:
      */
-    deck: { drop: 0.35, grow: 1.2, near: 0.85, colour: [0.16, 0.18, 0.24] as const, alpha: 0.7 },
+    deck: { drop: 0.35, grow: 1.2, near: 1.15, colour: [0.14, 0.16, 0.22] as const, alpha: 0.8 },
     /** The soft shadow a cloud casts on the tiles: its colour, height, and its alpha by kind. // TUNE: */
     shadow: {
       /** sRGB, like the cloud colours. */

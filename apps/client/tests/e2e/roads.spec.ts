@@ -131,10 +131,12 @@ test('a Road reaches a claim two tiles away, and taking it up cuts the land off 
   // The map tells it on a card the next time it looks (a reload is one such look).
   await page.reload();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  // `data-ready` is the engine, not the map: the card comes once the map has
+  // opened and my land's tending is back, which takes a while in software GL.
+  await expect.poll(() => strandedDebug(page), { timeout: 60_000 }).toMatchObject({ card: true });
   const card = page.getByTestId('stranded-card');
   await expect(card).toBeVisible();
   await expect(card).toContainText('Some land is cut off!');
   await expect(card.getByRole('button', { name: 'Show me' })).toBeVisible();
-  await expect.poll(() => strandedDebug(page)).toMatchObject({ card: true });
   await page.context().close();
 });

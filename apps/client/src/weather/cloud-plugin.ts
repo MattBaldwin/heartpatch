@@ -81,7 +81,7 @@ const FRAGMENT_BEFORE_FOG = /* glsl */ `
   vec3 wcGold = vec3(${f(gold[0])}, ${f(gold[1])}, ${f(gold[2])});
   // A hard-edged band: half-mixed slate and gold reads as tan, so the band
   // goes from none to all gold over a short step.
-  float wcGlow = smoothstep(0.22, 0.45, wcRim * ${f(rimStrength)});
+  float wcGlow = smoothstep(0.3, 0.5, wcRim * ${f(rimStrength)});
   color.rgb = mix(color.rgb, wcGold, wcGlow) + wcGold * (wcGlow * 0.1);
 }
 `;
