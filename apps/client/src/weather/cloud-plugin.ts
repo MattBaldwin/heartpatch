@@ -13,6 +13,7 @@ const { belly, paleBelly, top, key, rim, rimStrength, rimPower } = WEATHER_LOOK.
 const sun = WEATHER_LOOK.clouds.sun;
 const sunLength = Math.hypot(...sun);
 const flash = WEATHER_LOOK.clouds.flash;
+const clearing = WEATHER_LOOK.clouds.clearing;
 const f = (n: number): string => n.toFixed(3);
 /**
  * The rim's gold as it should look on screen: this unlit material's colour
@@ -21,9 +22,14 @@ const f = (n: number): string => n.toFixed(3);
  */
 const gold = rim;
 
-/** How lit the sky is by lightning now, 0 to 1; the weather layer sets it each frame. */
+/**
+ * How lit the sky is by lightning now, 0 to 1, and where my Keeper stands
+ * (world x, y, z; `keeper` null: none to keep clear). The weather layer sets
+ * them; the plugin reads them as it binds.
+ */
 export interface CloudFlash {
   value: number;
+  keeper: { x: number; y: number; z: number } | null;
 }
 
 // The clouds' material is unlit (one flat emissive colour), so the light is
@@ -83,6 +89,14 @@ const FRAGMENT_BEFORE_FOG = /* glsl */ `
   // goes from none to all gold over a short step.
   float wcGlow = smoothstep(0.3, 0.5, wcRim * ${f(rimStrength)});
   color.rgb = mix(color.rgb, wcGold, wcGlow) + wcGold * (wcGlow * 0.1);
+  // My Keeper stays visible: how close the line from the eye through this
+  // point passes to the Keeper; within the radius the cloud thins.
+  if (weatherClear.w > 0.0) {
+    vec3 wcRay = normalize(vWeatherPos - vEyePosition.xyz);
+    vec3 wcTo = weatherClear.xyz - vEyePosition.xyz;
+    float wcMiss = length(wcTo - wcRay * dot(wcTo, wcRay));
+    color.a *= mix(${f(clearing.alpha)}, 1.0, smoothstep(weatherClear.w * ${f(1 - clearing.soft)}, weatherClear.w, wcMiss));
+  }
 }
 `;
 
@@ -118,13 +132,24 @@ export class CloudPlugin extends MaterialPluginBase {
     fragment: string;
   } {
     return {
-      ubo: [{ name: 'weatherFlash', size: 1, type: 'float' }],
-      fragment: 'uniform float weatherFlash;',
+      ubo: [
+        { name: 'weatherFlash', size: 1, type: 'float' },
+        { name: 'weatherClear', size: 4, type: 'vec4' },
+      ],
+      fragment: 'uniform float weatherFlash;\nuniform vec4 weatherClear;',
     };
   }
 
   override bindForSubMesh(uniformBuffer: UniformBuffer): void {
     uniformBuffer.updateFloat('weatherFlash', this.flash.value);
+    const k = this.flash.keeper;
+    uniformBuffer.updateFloat4(
+      'weatherClear',
+      k?.x ?? 0,
+      k?.y ?? 0,
+      k?.z ?? 0,
+      k ? clearing.radius : 0,
+    );
   }
 
   override getCustomCode(shaderType: string): Record<string, string> | null {

@@ -43,6 +43,13 @@ export const WEATHER_LOOK = {
     },
     /** What a lightning flash adds to the cloud: most on the belly, a little on top. // TUNE: */
     flash: { colour: [0.85, 0.88, 1] as const, belly: 0.6, top: 0.15 },
+    /**
+     * My Keeper stays visible under a cloud: where the line from the eye to
+     * the Keeper (at `height` over its tile) passes within `radius` of a
+     * cloud, the cloud thins to `alpha`, fading back over the outer
+     * `soft` share of the radius. // TUNE:
+     */
+    clearing: { height: 0.4, radius: 0.55, soft: 0.45, alpha: 0.3 },
     /** The sun's side, for the rim. // TUNE: */
     sun: [0.75, 0.55, 0.35] as const,
     /**

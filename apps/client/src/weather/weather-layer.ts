@@ -7,10 +7,12 @@ import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder'
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import type { Scene } from '@babylonjs/core/scene';
-import type { MapView } from '@heartpatch/shared';
+import { hexToWorld, type MapView } from '@heartpatch/shared';
 import { moteShare, type AmbientMode } from '../map/ambient-layout.js';
 import { glowMaterial, softDisc } from '../map/map-ambient.js';
+import { HEX_SIZE, HOME_LOOK } from '../map/map-config.js';
 import type { MapLayer, MapLayerHost } from '../map/map-screen.js';
+import { KEEPER_PLACES } from '../procedural/keeper/keeper-config.js';
 import { attachTerrainPlugin, DRIFT_ATTRIBUTE } from '../map/terrain-plugin.js';
 import type { QualityTier } from '../engine/config.js';
 import { attachCloudShade, type CloudFlash } from './cloud-plugin.js';
@@ -92,7 +94,7 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
       attachTerrainPlugin(cloudMat, host.clock);
       // One smooth fused shape with a flat belly; its light comes from the
       // cloud plugin (GLSL), since the material itself is unlit.
-      const flash: CloudFlash = { value: 0 };
+      const flash: CloudFlash = { value: 0, keeper: null };
       attachCloudShade(cloudMat, flash);
       const cloud = buildCloud(scene);
       cloud.hasVertexAlpha = true;
@@ -242,6 +244,16 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
         // The low tier's clouds are fewer and lighter, as well as rainless.
         placer.setClouds(tier === 'low' ? WEATHER_LOOK.lowTier : FULL_CLOUDS);
         const placed = placer.update(store.now());
+        // My Keeper stands beside my Heart Seed (map-scene.ts places it there).
+        const home = store.home;
+        if (home) {
+          const at = hexToWorld(home, HEX_SIZE);
+          flash.keeper = {
+            x: at.x + KEEPER_PLACES.map.offset.x,
+            y: HOME_LOOK.height + WEATHER_LOOK.clouds.clearing.height,
+            z: at.z + KEEPER_PLACES.map.offset.z,
+          };
+        } else flash.keeper = null;
         const kind = store.kindNow();
         tint.set(kind);
         if (layout.banks > 0) makeHemi();
