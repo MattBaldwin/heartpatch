@@ -7,15 +7,19 @@ import { WEATHER_LOOK } from './weather-config.js';
 
 const { squash, floor, sun, blend } = WEATHER_LOOK.clouds;
 
-/** [radius, x, y, z] of each puff of the one cloud shape: a wide base, lumps on top. */
+/**
+ * [radius, x, y, z, squash] of each puff of the one cloud shape: a wide flat
+ * base, then round lumps heaped on top, the biggest in the middle.
+ */
 const PUFFS = [
-  [0.75, 0, -0.06, 0],
-  [0.5, 0, 0.05, 0],
-  [0.4, 0.52, -0.02, 0.1],
-  [0.36, -0.5, -0.03, -0.06],
-  [0.32, 0.14, 0.24, -0.14],
-  [0.27, -0.22, 0.2, 0.18],
-  [0.26, 0.36, 0.14, 0.26],
+  [0.78, 0, -0.08, 0, 0.42],
+  [0.46, 0.02, 0.12, 0.02, 0.9],
+  [0.36, 0.46, 0.02, 0.1, 0.85],
+  [0.34, -0.44, 0.0, -0.08, 0.85],
+  [0.3, 0.2, 0.3, -0.16, 0.9],
+  [0.27, -0.22, 0.26, 0.2, 0.9],
+  [0.25, 0.3, 0.18, 0.32, 0.9],
+  [0.24, -0.3, 0.12, -0.34, 0.9],
 ] as const;
 
 /** Rings and segments of the sphere the cloud is grown from. */
@@ -31,11 +35,11 @@ function smin(a: number, b: number, k: number): number {
 /** Signed distance (roughly) to the puffs melted into one: below 0 inside. */
 export function cloudField(x: number, y: number, z: number): number {
   let d = Infinity;
-  for (const [r, px, py, pz] of PUFFS) {
+  for (const [r, px, py, pz, sq] of PUFFS) {
     const dx = x - px;
-    const dy = (y - py) / squash;
+    const dy = (y - py) / (sq * squash);
     const dz = z - pz;
-    const one = (Math.sqrt(dx * dx + dy * dy + dz * dz) - r) * squash;
+    const one = (Math.sqrt(dx * dx + dy * dy + dz * dz) - r) * sq * squash;
     d = d === Infinity ? one : smin(d, one, blend);
   }
   return d;
@@ -102,7 +106,8 @@ export function buildCloud(scene: Scene): Mesh {
     for (let i = 0; i < SEGMENTS; i++) {
       const a = j * row + i;
       const b = a + row;
-      indices.push(a, a + 1, b, a + 1, b + 1, b);
+      // Wound so the outside faces out (Babylon culls the other side).
+      indices.push(a, b, a + 1, a + 1, b, b + 1);
     }
   }
   const n = positions.length / 3;
@@ -142,6 +147,8 @@ const BOLT_PATH = [
   [0.08, -0.86],
   [-0.02, -1],
 ] as const;
+/** Share of the bolt's length, from the top, over which it fades in. // TUNE: */
+const BOLT_EMERGE = 0.2;
 const BOLT_FORK = [
   [0.06, -0.27],
   [0.2, -0.4],
@@ -176,10 +183,12 @@ export function buildBolt(
     const across = offsets.length;
     path.forEach(([x, y], k) => {
       const narrow = 1 - (taper * k) / Math.max(1, path.length - 1);
+      // The top fades in: the bolt comes out of the cloud's belly.
+      const emerge = Math.min(1, -y / BOLT_EMERGE);
       offsets.forEach((o, m) => {
         positions.push(x + o * narrow, y, 0);
         const c = rgba[m] ?? [1, 1, 1, 1];
-        colors.push(c[0], c[1], c[2], c[3]);
+        colors.push(c[0], c[1], c[2], c[3] * emerge);
       });
     });
     for (let k = 0; k < path.length - 1; k++) {

@@ -9,7 +9,9 @@ import { WEATHER_LOOK } from './weather-config.js';
 /** Per-vertex light on a cloud: height up the cloud (0 flat belly, 1 top), sunny side, unused, unused. */
 export const CLOUD_ATTRIBUTE = 'weatherCloud';
 
-const { belly, top, rim, rimStrength, rimPower } = WEATHER_LOOK.clouds.shade;
+const { belly, top, key, rim, rimStrength, rimPower } = WEATHER_LOOK.clouds.shade;
+const sun = WEATHER_LOOK.clouds.sun;
+const sunLength = Math.hypot(...sun);
 const flash = WEATHER_LOOK.clouds.flash;
 const f = (n: number): string => n.toFixed(3);
 
@@ -49,13 +51,19 @@ varying vec3 vWeatherPos;
 
 const FRAGMENT_BEFORE_FOG = /* glsl */ `
 {
-  float wcUp = smoothstep(0.0, 1.0, vWeatherCloud.x);
-  color.rgb *= mix(${f(belly)}, ${f(top)}, wcUp);
   vec3 wcN = normalize(vWeatherNormal);
+  // Height up the cloud and which way the surface faces both count: the
+  // belly and any face turned down are dark, each lump's sunny side is lit.
+  float wcUp = smoothstep(0.0, 1.0, vWeatherCloud.x) * (0.55 + 0.45 * clamp(wcN.y, 0.0, 1.0));
+  vec3 wcSun = vec3(${f(sun[0] / sunLength)}, ${f(sun[1] / sunLength)}, ${f(sun[2] / sunLength)});
+  float wcKey = clamp(dot(wcN, wcSun), 0.0, 1.0);
+  color.rgb *= mix(${f(belly)}, ${f(top)}, wcUp) * (1.0 - ${f(key)} * 0.5 + ${f(key)} * wcKey);
   vec3 wcV = normalize(vEyePosition.xyz - vWeatherPos);
   float wcEdge = pow(1.0 - clamp(dot(wcN, wcV), 0.0, 1.0), ${f(rimPower)});
-  float wcRim = wcEdge * smoothstep(0.25, 0.85, vWeatherCloud.x) * (0.35 + 0.65 * vWeatherCloud.y);
-  color.rgb += vec3(${f(rim[0])}, ${f(rim[1])}, ${f(rim[2])}) * (wcRim * ${f(rimStrength)});
+  float wcRim = wcEdge * smoothstep(0.02, 0.3, vWeatherCloud.x) * (0.35 + 0.65 * wcKey);
+  // Blended towards the warm colour, not added: added onto a bright top it
+  // would only clip to white.
+  color.rgb = mix(color.rgb, vec3(${f(rim[0])}, ${f(rim[1])}, ${f(rim[2])}), clamp(wcRim * ${f(rimStrength)}, 0.0, 0.85));
   color.rgb += vec3(${f(flash.colour[0])}, ${f(flash.colour[1])}, ${f(flash.colour[2])})
     * (weatherFlash * mix(${f(flash.belly)}, ${f(flash.top)}, wcUp));
 }

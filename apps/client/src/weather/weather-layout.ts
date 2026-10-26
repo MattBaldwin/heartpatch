@@ -268,16 +268,21 @@ export function layoutWeather(
         const nBolts = Math.min(WEATHER_CAPS.bolts - bolts, Math.max(1, wanted));
         for (let i = 0; i < nBolts; i++) {
           // Under the lower deck's clouds, spread through the front.
+          // From under a deck cloud's near edge (the map camera looks north,
+          // up +z), so the cloud doesn't hide the bolt hanging beneath it.
           const s = spotIn(seed, i, Math.max(1, nDeck), front.radius * 0.8, 50);
+          const deckSize = (CLOUDS.size + s.jitter * CLOUDS.spread) * grow * CLOUDS.deck.grow;
           const at = bolts++;
           put(
             out.boltMatrices,
             at,
             centre.x + s.dx,
-            CLOUDS.height - CLOUDS.deck.drop - 0.1,
-            centre.z + s.dz,
+            CLOUDS.height + s.jitter * 0.5 - CLOUDS.deck.drop - 0.05,
+            centre.z + s.dz - deckSize * STORM.bolts.edge,
             STORM.bolts.height * grow,
           );
+          // Lean: the bolt's down axis also runs towards the camera (-z).
+          out.boltMatrices[at * 16 + 6] = STORM.bolts.height * grow * STORM.bolts.lean;
           out.boltAttrs.set([s.jitter, 0.14 + s.jitter * 0.08, 0, storm.still ? -1 : -2], at * 4);
         }
       }

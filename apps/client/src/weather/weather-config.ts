@@ -10,10 +10,10 @@ export const WEATHER_LOOK = {
   clouds: {
     /** World height of a cloud's middle over the tiles. // TUNE: */
     height: 2.1,
-    /** A puff is flattened to this share of its width: a cushion, not a ball. // TUNE: */
-    squash: 0.6,
+    /** Every puff is flattened by this on top of its own squash: a cushion, not a ball. // TUNE: */
+    squash: 1,
     /** How softly the puffs melt into one another (a smooth union's blend width). // TUNE: */
-    blend: 0.32,
+    blend: 0.1,
     /** A storm's main clouds are this much bigger, so they close up into one heavy mass. // TUNE: */
     stormGrow: 1.35,
     /** Size of a puff, before the front grows in: base plus up to `spread`. // TUNE: */
@@ -22,7 +22,7 @@ export const WEATHER_LOOK = {
     /** Soft white for rain; slate grey (not purple) for a storm, solid so its puffs fuse. // TUNE: */
     colour: {
       rain: [0.92, 0.94, 0.98, 0.7],
-      storm: [0.86, 0.9, 0.96, 1],
+      storm: [0.64, 0.68, 0.78, 1],
     } satisfies Record<'rain' | 'storm', Rgba>,
     /** A cloud's flat bottom, as a share of a unit puff's height below its middle. // TUNE: */
     floor: -0.12,
@@ -32,14 +32,16 @@ export const WEATHER_LOOK = {
      * tops (strongest on the sunny side, sharper as `rimPower` grows). // TUNE:
      */
     shade: {
-      belly: 0.62,
-      top: 1.1,
-      rim: [1, 0.7, 0.36] as const,
-      rimStrength: 0.85,
-      rimPower: 2.4,
+      belly: 0.4,
+      top: 1.2,
+      /** How much the sunny side of each lump is lit over its shady side. */
+      key: 0.8,
+      rim: [1, 0.66, 0.3] as const,
+      rimStrength: 1.4,
+      rimPower: 1.8,
     },
     /** What a lightning flash adds to the cloud: most on the belly, a little on top. // TUNE: */
-    flash: { colour: [0.85, 0.88, 1] as const, belly: 0.9, top: 0.25 },
+    flash: { colour: [0.85, 0.88, 1] as const, belly: 0.6, top: 0.15 },
     /** The sun's side, for the rim. // TUNE: */
     sun: [0.75, 0.55, 0.35] as const,
     /**
@@ -61,7 +63,7 @@ export const WEATHER_LOOK = {
     },
   },
   /** The low tier draws fewer, solid clouds, and a lighter storm rain; no plain rain. // TUNE: */
-  lowTier: { share: 0.5, alpha: 1, stormRain: 1 },
+  lowTier: { share: 0.5, alpha: 1, stormRain: 0.8 },
   /** A storm's rain is heavier and falls at a slant. // TUNE: */
   storm: {
     /** Streak size against plain rain, and how far across it drifts per unit it falls. */
@@ -76,11 +78,15 @@ export const WEATHER_LOOK = {
      */
     bolts: {
       per: 3,
-      height: 1.3,
-      width: 0.07,
-      haloWidth: 0.42,
-      halo: [0.72, 0.78, 1, 0.55] as const,
+      height: 1.6,
+      width: 0.09,
+      haloWidth: 0.6,
+      halo: [0.72, 0.78, 1, 0.6] as const,
       hold: 2,
+      /** How far towards the camera from under its deck cloud's middle, as a share of the cloud's size. */
+      edge: 0.7,
+      /** How far its foot leans towards the camera per unit it falls, so it isn't foreshortened to a stub. */
+      lean: 0.8,
     },
     /**
      * A flash lights the scene: the sun and sky light rise by up to this
@@ -88,7 +94,7 @@ export const WEATHER_LOOK = {
      */
     flash: { sun: 1.6, sky: 0.55, still: 0.45 },
     /** The high tier's glow round the bolts (a GlowLayer): its size, blur and strength. // TUNE: */
-    glow: { ratio: 0.25, blur: 48, intensity: 1.4 },
+    glow: { ratio: 0.25, blur: 32, intensity: 0.35 },
   },
   rain: {
     /** One streak: a thin cylinder, `height` long. // TUNE: */

@@ -91,6 +91,8 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
       // Writes depth, and draws before the other weather (`alphaIndex`), so
       // the shadows, fog and rain behind a cloud stay hidden behind it.
       cloudMat.disableDepthWrite = false;
+      // Babylon turns depth writes off in its blended pass unless forced.
+      cloudMat.forceDepthWrite = true;
       attachTerrainPlugin(cloudMat, host.clock);
       // One smooth fused shape with a flat belly; its light comes from the
       // cloud plugin (GLSL), since the material itself is unlit.
@@ -140,10 +142,14 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
       const boltMat = glowMaterial(scene, 'weather-bolt-mat', '#ffffff', true);
       boltMat.alphaMode = Constants.ALPHA_ADD;
       boltMat.backFaceCulling = false;
+      // Seen through the clouds, as a flash lights them from inside; its top
+      // fades in, so it comes out of the cloud rather than sitting on it.
+      boltMat.depthFunction = Constants.ALWAYS;
       const boltPlugin = attachRain(boltMat, host.clock);
       const bolt = buildBolt(scene, boltLook.width, boltLook.haloWidth, boltLook.halo);
       bolt.material = boltMat;
-      for (const m of [shadow, fog, rain, bolt]) m.alphaIndex = 1;
+      for (const m of [shadow, fog, rain]) m.alphaIndex = 1;
+      bolt.alphaIndex = 2;
 
       // The high tier's glow round the bolts: drawn with the bolt's own
       // material, so it flashes with them. Made the first time it is wanted.
@@ -199,14 +205,20 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
       let coverLater = 0;
       // A check skipped for being too soon runs once the wait is up, so the
       // last place the camera came to rest is always checked.
+      // A check is followed by one more a moment later: the badges are
+      // placed after the frame (by their own layer), maybe after this check.
+      let trailing = false;
       const coverAgain = (): void => {
         coverLater = 0;
+        coverDirty = true;
+        trailing = true;
         coverBadges();
+        trailing = false;
       };
       const coverBadges = (): void => {
         const camera = scene.activeCamera;
         const canvas = scene.getEngine().getRenderingCanvas();
-        const badges = (options.root ?? document.body).getElementsByClassName('dark-moon');
+        const badges = document.getElementsByClassName('dark-moon');
         if (!camera || !canvas) return;
         const transform = camera.getTransformationMatrix();
         if (!coverDirty && transform.updateFlag === coverFlag) return;
@@ -217,6 +229,7 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
         }
         coverAt = now;
         coverDirty = false;
+        if (!trailing && !coverLater) coverLater = window.setTimeout(coverAgain, COVER_EVERY_MS);
         coverFlag = transform.updateFlag;
         cover.count = 0;
         if (cloud.isEnabled()) {
@@ -284,7 +297,10 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
         placer.setClouds(tier === 'low' ? WEATHER_LOOK.lowTier : FULL_CLOUDS);
         const placed = placer.update(store.now());
         tint.set(store.kindNow());
+        // Clouds drift and badges come and go without a frame being drawn (a
+        // still map renders only on change): check them here too.
         coverDirty = true;
+        coverBadges();
         if (placed || last.mode !== mode) {
           show(cloud, layout.clouds);
           show(fog, layout.fog);
@@ -327,7 +343,7 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
         off();
         scene.onBeforeRenderObservable.remove(watch);
         scene.onAfterRenderObservable.remove(afterRender);
-        for (const badge of (options.root ?? document.body).querySelectorAll('.weather-under-cloud'))
+        for (const badge of document.querySelectorAll('.weather-under-cloud'))
           badge.classList.remove('weather-under-cloud');
         tint.remove();
       });
