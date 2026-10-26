@@ -1096,43 +1096,55 @@ export function buildBuildingModel(
       // its side dipping into a stream: the wheel is the silhouette. A sack
       // of Flour by the door, a lit window and a lamp. L2: a second sack and
       // a chimney. L3: a little loft window. L4: a pennant on the roof.
-      part(body, box(0.5, 0.46, 0.44), C.millWall, [-0.08, 0.23, 0.04]);
+      part(body, box(0.46, 0.46, 0.44), C.millWall, [-0.16, 0.23, 0.04]);
       part(
         body,
-        cylinder(0.56, 0.42, 0.42, 3),
+        cylinder(0.52, 0.42, 0.42, 3),
         C.millRoof,
-        [-0.08, 0.58, 0.04],
+        [-0.16, 0.58, 0.04],
         [1, 1, 1.25],
         [0, 0, Math.PI / 2],
       );
-      part(body, box(0.14, 0.22, 0.03), C.door, [-0.14, 0.11, -0.19]);
-      part(windowList, box(0.12, 0.1, 0.03), windowColor, [0.06, 0.28, -0.19]);
-      // The stream and the wheel on the +x side: a rim, a hub and paddles.
-      part(body, box(0.24, 0.04, 0.9), C.water, [0.34, 0.06, 0.04]);
+      part(body, box(0.14, 0.22, 0.03), C.door, [-0.24, 0.11, -0.19]);
+      part(windowList, box(0.12, 0.1, 0.03), windowColor, [-0.04, 0.28, -0.19]);
+      // The wheel beside the house, facing out (-z) so it reads round: a rim,
+      // an inner ring, spokes, a hub on its axle and paddles dipping into a
+      // stream that runs past.
+      const wheel: [number, number, number] = [0.32, 0.32, -0.02];
+      part(body, box(0.18, 0.04, 0.9), C.water, [wheel[0], 0.06, wheel[2]]);
+      for (const [d, t] of [
+        [0.56, 0.05],
+        [0.3, 0.035],
+      ] as const) {
+        part(
+          body,
+          CreateTorus(`${name}-wheel`, { diameter: d, thickness: t, tessellation: 20 }, scene),
+          C.wheel,
+          wheel,
+          [1, 1, 1],
+          [Math.PI / 2, 0, 0],
+        );
+      }
+      around(4, (a) => {
+        part(body, box(0.54, 0.025, 0.025), C.wheel, wheel, [1, 1, 1], [0, 0, a / 2]);
+      });
+      part(body, cylinder(0.12, 0.09, 0.09, 10), C.log, wheel, [1, 1, 1], [Math.PI / 2, 0, 0]);
       part(
         body,
-        CreateTorus(`${name}-wheel`, { diameter: 0.56, thickness: 0.06, tessellation: 20 }, scene),
-        C.wheel,
-        [0.3, 0.3, 0.04],
-        [1, 1, 1],
-        [0, 0, Math.PI / 2],
-      );
-      part(
-        body,
-        cylinder(0.12, 0.1, 0.1, 10),
+        cylinder(0.2, 0.04, 0.04, 8),
         C.log,
-        [0.27, 0.3, 0.04],
+        [0.14, wheel[1], wheel[2]],
         [1, 1, 1],
         [0, 0, Math.PI / 2],
       );
       around(8, (a) => {
         part(
           body,
-          box(0.1, 0.03, 0.14),
+          box(0.12, 0.035, 0.11),
           C.wheel,
-          [0.3, 0.3 + Math.sin(a) * 0.28, 0.04 + Math.cos(a) * 0.28],
+          [wheel[0] + Math.cos(a) * 0.29, wheel[1] + Math.sin(a) * 0.29, wheel[2]],
           [1, 1, 1],
-          [-a, 0, 0],
+          [0, 0, a],
         );
       });
       part(body, sphere(0.16, 10), C.storeTrim, [-0.38, 0.08, -0.26], [1, 0.9, 1]);
@@ -1143,10 +1155,10 @@ export function buildBuildingModel(
         part(body, box(0.1, 0.22, 0.1), C.chimney, [-0.24, 0.74, 0.18]);
         part(body, sphere(0.08, 8), C.puff, [-0.24, 0.9, 0.18]);
       }
-      if (l >= 3) part(windowList, sphere(0.1, 10), windowColor, [-0.08, 0.6, -0.2], [1, 1, 0.3]);
+      if (l >= 3) part(windowList, sphere(0.1, 10), windowColor, [-0.16, 0.6, -0.2], [1, 1, 0.3]);
       if (l >= 4) {
-        part(body, cylinder(0.3, 0.02, 0.02, 6), C.post, [0.08, 0.92, 0.04]);
-        part(body, box(0.14, 0.08, 0.012), C.flag, [0.16, 1.02, 0.04]);
+        part(body, cylinder(0.3, 0.02, 0.02, 6), C.post, [-0.06, 0.92, 0.04]);
+        part(body, box(0.14, 0.08, 0.012), C.flag, [0.02, 1.02, 0.04]);
       }
       break;
     }
@@ -1209,14 +1221,15 @@ export function buildBuildingModel(
       // Small and round: the smallest of the works. L2: a second barrel.
       // L3: a gutter roof feeding them. L4: a third barrel on a stand.
       const barrelAt = (x: number, y: number, z: number, s: number) => {
-        part(body, cylinder(0.42 * s, 0.32 * s, 0.32 * s, 16), C.barrel, [x, y + 0.21 * s, z]);
-        part(body, sphere(0.36 * s, 8), C.barrel, [x, y + 0.21 * s, z], [1, 0.6, 1]);
+        // A barrel's belly: a tall, round-sided body (no narrow foot), flat at the top.
+        part(body, cylinder(0.42 * s, 0.3 * s, 0.3 * s, 16), C.barrel, [x, y + 0.23 * s, z]);
+        part(body, sphere(0.38 * s, 10), C.barrel, [x, y + 0.23 * s, z], [1, 1.2, 1]);
         for (const dy of [0.08, 0.34]) {
           part(
             body,
             CreateTorus(
               `${name}-hoop`,
-              { diameter: 0.34 * s, thickness: 0.03, tessellation: 12 },
+              { diameter: 0.37 * s, thickness: 0.03, tessellation: 12 },
               scene,
             ),
             C.hoop,
@@ -1227,15 +1240,17 @@ export function buildBuildingModel(
         part(body, cylinder(0.02, 0.24 * s, 0.24 * s, 16), C.water, [x, y + 0.5 * s, z]);
       };
       barrelAt(0, 0, 0, 1);
+      // The tap on its right side, its puddle beside it (not under the
+      // barrel, which would read as a goblet's foot from above).
       part(
         body,
         cylinder(0.1, 0.04, 0.04, 6),
         C.hoop,
-        [0, 0.1, -0.2],
+        [0.2, 0.14, -0.06],
         [1, 1, 1],
-        [Math.PI / 2, 0, 0],
+        [0, 0, Math.PI / 2],
       );
-      part(body, cylinder(0.03, 0.24, 0.24, 14), C.water, [0, 0.05, -0.3], [1.2, 1, 0.8]);
+      part(body, cylinder(0.03, 0.16, 0.16, 14), C.water, [0.3, 0.05, -0.1], [1.2, 1, 0.8]);
       part(body, cylinder(0.42, 0.03, 0.03, 6), C.post, [0.34, 0.21, -0.2]);
       part(windowList, sphere(0.08, 8), lampColor, [0.34, 0.46, -0.2]);
       if (l >= 2) barrelAt(-0.36, 0, 0.12, 0.8);
@@ -1251,19 +1266,36 @@ export function buildBuildingModel(
       break;
     }
     case 'canal': {
-      // A straight stone-lined channel of bright water along +x, with a
-      // little plank footbridge over the middle. One level.
-      for (const z of [-0.16, 0.16]) part(body, box(1.2, 0.16, 0.1), C.stoneDark, [0, 0.08, z]);
-      part(body, box(1.2, 0.04, 0.24), C.water, [0, 0.1, 0]);
-      part(body, box(0.18, 0.04, 0.46), C.post, [0, 0.18, 0]);
-      for (const x of [-0.56, 0.56])
-        part(body, cylinder(0.12, 0.12, 0.12, 8), C.stoneDark, [x, 0.06, -0.24]);
+      // A straight water channel along +x between two soft grassy banks,
+      // edged with stone, with a lily pad, reeds and a little arched plank
+      // bridge. Grass, then water, then grass: it reads as a stream. One level.
+      for (const z of [-0.3, 0.3]) {
+        part(body, box(1.2, 0.12, 0.22), C.bank, [0, 0.06, z]);
+        part(body, box(1.2, 0.05, 0.05), C.stoneDark, [0, 0.13, z < 0 ? -0.18 : 0.18]);
+      }
+      part(body, box(1.2, 0.06, 0.34), C.water, [0, 0.07, 0]);
+      part(body, cylinder(0.015, 0.14, 0.14, 12), C.leaf, [-0.34, 0.11, 0.04]);
+      part(body, sphere(0.05, 6), C.petal, [-0.32, 0.13, 0.04]);
+      for (const x of [0.4, 0.46, 0.52]) {
+        part(body, cylinder(0.24, 0.015, 0.02, 5), C.leafDark, [x, 0.22, -0.3]);
+      }
+      part(body, box(0.2, 0.035, 0.5), C.post, [0.06, 0.2, 0], [1, 1, 1], [0, 0, 0]);
+      for (const z of [-0.22, 0.22]) {
+        part(
+          body,
+          box(0.2, 0.035, 0.12),
+          C.post,
+          [0.06, 0.16, z],
+          [1, 1, 1],
+          [z < 0 ? -0.5 : 0.5, 0, 0],
+        );
+      }
       break;
     }
     case 'levee': {
       // A long, soft grassy bank along +x with a few stones and flowers on
       // top. Low and long: it reads as a hill, not a wall. One level.
-      part(body, sphere(1, 10), C.bank, [0, 0.08, 0], [1.3, 0.4, 0.42]);
+      part(body, sphere(1, 10), C.bank, [0, 0.11, 0], [1.3, 0.42, 0.42]);
       for (const x of [-0.4, 0.05, 0.42])
         part(body, sphere(0.1, 8), C.rock, [x, 0.26, -0.12], [1, 0.7, 1]);
       for (const x of [-0.2, 0.25]) {
@@ -1273,53 +1305,57 @@ export function buildBuildingModel(
       break;
     }
     case 'seawall': {
-      // A sturdy wall of chunky stone blocks along +x with crenels on top, a
-      // pink seashell on its face and a lamp at one end. One level.
-      for (let i = 0; i < 5; i++) {
-        const x = -0.52 + i * 0.26;
-        part(body, box(0.25, 0.22, 0.26), i % 2 ? C.wallDark : C.wall, [x, 0.11, 0]);
-        part(body, box(0.25, 0.2, 0.26), i % 2 ? C.wall : C.wallDark, [x, 0.32, 0]);
-        if (i % 2 === 0) part(body, box(0.18, 0.12, 0.24), C.wall, [x, 0.48, 0]);
+      // A sturdy stone wall along +x, its sea face (-z) sloping back, a round
+      // capstone on top, a white curl of foam at its foot, a pink seashell
+      // and a lamp. Sloped and long: a breakwater, not a castle. One level.
+      for (let i = 0; i < 4; i++) {
+        const x = -0.45 + i * 0.3;
+        part(
+          body,
+          box(0.29, 0.36, 0.26),
+          i % 2 ? C.wallDark : C.wall,
+          [x, 0.18, 0],
+          [1, 1, 1],
+          [-0.25, 0, 0],
+        );
       }
-      part(body, sphere(0.1, 8), C.shell, [0.13, 0.26, -0.14], [1, 1, 0.4]);
-      part(body, cylinder(0.3, 0.03, 0.03, 6), C.post, [0.52, 0.57, 0]);
-      part(windowList, sphere(0.08, 8), lampColor, [0.52, 0.74, 0]);
+      part(
+        body,
+        cylinder(1.2, 0.16, 0.16, 12),
+        C.wall,
+        [0, 0.38, 0.06],
+        [1, 1, 1],
+        [0, 0, Math.PI / 2],
+      );
+      for (const x of [-0.42, -0.1, 0.22, 0.48]) {
+        part(body, sphere(0.14, 8), C.salt, [x, 0.06, -0.2], [1.3, 0.6, 0.8]);
+      }
+      part(body, box(1.2, 0.04, 0.18), C.water, [0, 0.03, -0.3]);
+      part(body, sphere(0.14, 8), C.shell, [0.12, 0.22, -0.19], [1, 1, 0.4], [-0.25, 0, 0]);
+      part(body, cylinder(0.3, 0.03, 0.03, 6), C.post, [0.5, 0.58, 0.08]);
+      part(windowList, sphere(0.08, 8), lampColor, [0.5, 0.75, 0.08]);
       break;
     }
     case 'weather-vane': {
-      // A tall thin post on a stone step, topped with an arrow and a little
-      // heart, the four letter arms below it, and a cup spinner: the tallest,
-      // thinnest Wild Isle silhouette. One level.
+      // A tall post on a stone step with one big arrow on top (a pink head
+      // and a heart-tail fin) and a lamp-ball finial: the tallest, thinnest
+      // Wild Isle silhouette. One level.
       part(body, cylinder(0.14, 0.4, 0.46, 14), C.wellStone, [0, 0.07, 0]);
-      part(body, cylinder(1.1, 0.04, 0.05, 8), C.hoop, [0, 0.69, 0]);
-      for (const a of [0, Math.PI / 2]) {
-        part(body, box(0.4, 0.025, 0.025), C.hoop, [0, 1.0, 0], [1, 1, 1], [0, a, 0]);
-      }
-      around(4, (a) => {
-        part(body, sphere(0.06, 6), C.flag, [Math.cos(a) * 0.2, 1.0, Math.sin(a) * 0.2]);
-      });
-      part(body, box(0.5, 0.03, 0.03), C.hoop, [0, 1.22, 0]);
+      part(body, cylinder(1.06, 0.05, 0.06, 8), C.post, [0, 0.67, 0]);
+      part(body, box(0.62, 0.04, 0.04), C.hoop, [0, 1.18, 0]);
       part(
         body,
-        cylinder(0.14, 0, 0.12, 4),
+        cylinder(0.2, 0, 0.18, 4),
         C.target,
-        [0.29, 1.22, 0],
-        [1, 1, 1],
+        [0.38, 1.18, 0],
+        [1, 1, 0.4],
         [0, 0, -Math.PI / 2],
       );
-      part(body, box(0.02, 0.14, 0.16), C.target, [-0.24, 1.22, 0]);
-      around(3, (a) => {
-        part(
-          body,
-          box(0.14, 0.015, 0.015),
-          C.hoop,
-          [Math.cos(a) * 0.07, 0.62, Math.sin(a) * 0.07],
-          [1, 1, 1],
-          [0, -a, 0],
-        );
-        part(body, sphere(0.07, 8), C.millRoof, [Math.cos(a) * 0.15, 0.62, Math.sin(a) * 0.15]);
-      });
-      part(windowList, sphere(0.07, 8), lampColor, [0, 1.3, 0]);
+      for (const z of [-0.035, 0.035]) {
+        part(body, sphere(0.12, 8), C.target, [-0.3, 1.2, z * 0.2], [1, 1, 0.25], [0, 0, z * 12]);
+      }
+      part(body, box(0.1, 0.16, 0.02), C.target, [-0.33, 1.16, 0], [1, 1, 1], [0, 0, 0.4]);
+      part(windowList, sphere(0.08, 8), lampColor, [0, 1.25, 0]);
       break;
     }
     case 'waystation': {

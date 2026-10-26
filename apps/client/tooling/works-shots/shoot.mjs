@@ -25,10 +25,40 @@ const PASSWORD = 'squishy-secret';
 const PATCH = 'Pier Cove';
 const TIER = 'high';
 const DEVICES = {
-  'iphone-15': { label: 'iPhone 15', width: 393, height: 852, dpr: 3, dist: 34, wellDist: 20 },
-  'iphone-se': { label: 'iPhone SE', width: 375, height: 667, dpr: 2, dist: 32, wellDist: 19 },
-  ipad: { label: 'iPad', width: 1080, height: 810, dpr: 2, dist: 18, wellDist: 11 },
+  'iphone-15': { label: 'iPhone 15', width: 393, height: 852, dpr: 3, dist: 34, wellDist: 28 },
+  'iphone-se': { label: 'iPhone SE', width: 375, height: 667, dpr: 2, dist: 32, wellDist: 27 },
+  ipad: { label: 'iPad', width: 1080, height: 810, dpr: 2, dist: 18, wellDist: 15 },
 };
+/**
+ * The patch keeps its maker's time zone (the lobby sends the device's): one
+ * where it is about 1 pm now, so the map is in daylight whenever this runs.
+ */
+const ZONES = [
+  'Pacific/Kiritimati',
+  'Pacific/Auckland',
+  'Asia/Tokyo',
+  'Asia/Shanghai',
+  'Asia/Kolkata',
+  'Asia/Dubai',
+  'Europe/Athens',
+  'Europe/London',
+  'Atlantic/Azores',
+  'America/Sao_Paulo',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'Pacific/Honolulu',
+];
+const hourIn = (zone) =>
+  Number(
+    new Intl.DateTimeFormat('en-GB', { hour: 'numeric', timeZone: zone, hourCycle: 'h23' }).format(
+      new Date(),
+    ),
+  );
+const DAY_ZONE = ZONES.reduce((best, z) =>
+  Math.abs(hourIn(z) - 13) < Math.abs(hourIn(best) - 13) ? z : best,
+);
 const WANT = (process.env.DEVICES ?? Object.keys(DEVICES).join(',')).split(',');
 /** What each homestead gets, first fit wins (the server says which water suits). */
 const TRY = ['fishing-pier', 'watermill', 'salt-pans', 'river-well', 'irrigated-field'];
@@ -199,7 +229,11 @@ const browser = await chromium.launch({
     : {}),
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 });
-const setup = await browser.newContext({ viewport: { width: 393, height: 852 } });
+const setup = await browser.newContext({
+  viewport: { width: 393, height: 852 },
+  timezoneId: DAY_ZONE,
+});
+console.log('time zone', DAY_ZONE, hourIn(DAY_ZONE));
 const first = await setup.newPage();
 const name = playerName();
 const mapId = await signUp(first, name);
@@ -230,6 +264,7 @@ for (const key of WANT) {
     isMobile: key !== 'ipad',
     hasTouch: true,
     storageState: storage,
+    timezoneId: DAY_ZONE,
   });
   await context.addInitScript(() => {
     // No dev-only UI in a picture: the server badge, the stats stack, any "(dev)" button.

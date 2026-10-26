@@ -6,8 +6,9 @@ import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
  * Wild Isle works (#621 W1-10): a Fishing Pier goes up from the Build sheet
- * on a homestead by the water, and a works whose water isn't next door shows
- * held back with why. The homestead comes from the dev route; the patch is
+ * on a homestead by the water (the Rain Barrel, if the dev route only finds
+ * inland ones), and a works whose water isn't next door shows held back with
+ * why. The homestead comes from the dev route; the patch is
  * made through the lobby. Asserts on the game's own signals, never pixels.
  */
 
@@ -49,15 +50,19 @@ test('a Fishing Pier goes up on a homestead by the water; a works with no water 
     (await api<{ tiles: ViewTile[] }>(page, 'GET', `/maps/${mapId}/view`)).body.tiles;
   const byWater = (tiles: ViewTile[], at: { q: number; r: number }) =>
     hasWaterNextDoor(at, tiles, [], ['deep', 'river', 'lake'], 0);
+  // Homesteads can't touch each other, so the ring runs out after a few: the
+  // route then refuses, and the last one made is used, by water or not.
   let homestead: { q: number; r: number } | null = null;
+  let wet = false;
   let tiles: ViewTile[] = [];
-  for (let i = 0; i < 6 && !homestead; i++) {
+  for (let i = 0; i < 6 && !wet; i++) {
     const made = await api<{ q: number; r: number }>(page, 'POST', `/maps/${mapId}/dev/homestead`);
-    expect(made.status).toBe(201);
+    if (made.status !== 201) break;
+    homestead = made.body;
     tiles = await view();
-    if (byWater(tiles, made.body)) homestead = made.body;
+    wet = byWater(tiles, made.body);
   }
-  expect(homestead, 'a homestead with water next door').not.toBeNull();
+  expect(homestead, 'a homestead next to home').not.toBeNull();
   const at = homestead!;
   expect(
     (await api(page, 'POST', `/maps/${mapId}/dev/items`, { items: { timber: 60, stone: 60 } }))
@@ -94,18 +99,25 @@ test('a Fishing Pier goes up on a homestead by the water; a works with no water 
     await expect(page.getByTestId('build-detail')).toContainText(line);
   }
 
-  // The pier: picked and built.
-  await page.locator('[data-build="fishing-pier"]').tap();
+  // By the water the pier goes up; inland it says why, and the Rain Barrel
+  // (which needs no water) goes up instead.
+  const pick = wet ? 'fishing-pier' : 'rain-barrel';
+  if (!wet) {
+    await page.locator('[data-build="fishing-pier"]').tap({ force: true });
+    await expect(page.getByTestId('build-detail')).toContainText('Needs water next door 💧');
+  }
+  await page.locator(`[data-build="${pick}"]`).tap();
   await expect(page.getByTestId('build-go')).toBeEnabled();
   await page.getByTestId('build-go').tap();
+  const name = wet ? 'Fishing Pier' : 'Rain Barrel';
   await expect(page.getByTestId('tile-build-note')).toHaveText(
-    'Built! Your Fishing Pier is getting to work 🔨',
+    `Built! Your ${name} is getting to work 🔨`,
   );
   await expect
     .poll(async () => {
       const t = (await view()).find((x) => x.q === at.q && x.r === at.r);
       return t?.buildings.map((b) => b.buildingId) ?? [];
     })
-    .toEqual(['fishing-pier']);
+    .toEqual([pick]);
   await page.context().close();
 });

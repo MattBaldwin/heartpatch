@@ -250,10 +250,15 @@ function layout(): Pick<HomeResponse, 'buildings' | 'squishies'> {
   throw new Error(`unknown ?show=${show}`);
 }
 
+const wildLayout =
+  show === 'works' ||
+  show === 'wild' ||
+  GAME_DATA.buildings.some((b) => b.kind === 'works' && show === `res:${b.id}`);
+
 const home: HomeResponse = {
-  // The Wild Isle layouts fill every ring tile, so no resource node sits under one.
-  tiles:
-    show === 'works' || show === 'wild' ? TILES.map((t) => ({ ...t, nodeResource: null })) : TILES,
+  // The Wild Isle layouts (and a works at its levels) keep resource nodes
+  // off their tiles, so no tree or rock stands in a building.
+  tiles: wildLayout ? TILES.map((t) => ({ ...t, nodeResource: null })) : TILES,
   ...layout(),
   speciesDefs: [],
   items: {},
