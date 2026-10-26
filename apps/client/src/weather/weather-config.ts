@@ -25,7 +25,7 @@ export const WEATHER_LOOK = {
       storm: [0.64, 0.68, 0.78, 1],
     } satisfies Record<'rain' | 'storm', Rgba>,
     /** A cloud's flat bottom, as a share of a unit puff's height below its middle. // TUNE: */
-    floor: -0.12,
+    floor: 0.02,
     /**
      * Light on the cloud, from its own shape (cloud-plugin.ts): how dim the
      * flat belly is, how bright the top, and the warm edge light round the
@@ -36,8 +36,8 @@ export const WEATHER_LOOK = {
       top: 1.2,
       /** How much the sunny side of each lump is lit over its shady side. */
       key: 0.8,
-      rim: [1, 0.66, 0.3] as const,
-      rimStrength: 1,
+      rim: [1, 0.78, 0.38] as const,
+      rimStrength: 1.3,
       rimPower: 1.8,
     },
     /** What a lightning flash adds to the cloud: most on the belly, a little on top. // TUNE: */
@@ -79,8 +79,8 @@ export const WEATHER_LOOK = {
     bolts: {
       per: 3,
       height: 1.6,
-      width: 0.09,
-      haloWidth: 0.6,
+      width: 0.11,
+      haloWidth: 0.7,
       halo: [0.42, 0.52, 1, 0.6] as const,
       hold: 2,
       /** How far towards the camera from under its deck cloud's middle, as a share of the cloud's size. */
@@ -94,7 +94,7 @@ export const WEATHER_LOOK = {
      */
     flash: { sun: 1.6, sky: 0.55, still: 0.45 },
     /** The high tier's glow round the bolts (a GlowLayer): its size, blur and strength. // TUNE: */
-    glow: { ratio: 0.5, blur: 16, intensity: 0.5 },
+    glow: { ratio: 0.5, blur: 16, intensity: 0.25 },
   },
   rain: {
     /** One streak: a thin cylinder, `height` long. // TUNE: */

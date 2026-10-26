@@ -1,4 +1,3 @@
-import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import type { Scene } from '@babylonjs/core/scene';
@@ -149,6 +148,8 @@ const BOLT_PATH = [
 ] as const;
 /** Share of the bolt's length, from the top, over which it fades in (and towards its foot, out). // TUNE: */
 const BOLT_EMERGE = 0.2;
+/** The pool of light on the ground at the bolt's foot: radius (bolt lengths) and alpha against the halo's. // TUNE: */
+const BOLT_POOL = { radius: 0.6, alpha: 0.8 };
 const BOLT_FORK = [
   [0.06, -0.27],
   [0.2, -0.4],
@@ -159,7 +160,8 @@ const BOLT_FORK = [
 /**
  * A lightning bolt in the x-y plane, hanging from y = 0 to -1: a jagged white
  * core `width` wide with a fork, inside a soft halo ribbon `haloWidth` across
- * (`halo` colour at its middle line, nothing at its edges). Vertex colours
+ * (`halo` colour at its middle line, nothing at its edges), a fainter wider
+ * glow, and a soft pool of light on the ground at its foot. Vertex colours
  * carry both, so it is one mesh and one draw call, meant to be added onto
  * what is behind (additive), so it glows on the dark clouds.
  */
@@ -204,10 +206,27 @@ export function buildBolt(
   const white = [1, 1, 1, 1] as const;
   const h = haloWidth / 2;
   const w = width / 2;
+  // A wide faint outer glow, the halo, then the core.
+  const outer = [halo[0], halo[1], halo[2], halo[3] * 0.25] as const;
+  ribbon(BOLT_PATH, [-h * 2.2, 0, h * 2.2], [clear, outer, clear], 0.2);
   ribbon(BOLT_PATH, [-h, 0, h], [clear, glow, clear], 0.3);
   ribbon(BOLT_FORK, [-h * 0.6, 0, h * 0.6], [clear, glow, clear], 0.5);
   ribbon(BOLT_PATH, [-w, w], [white, white], 0.5);
   ribbon(BOLT_FORK, [-w * 0.7, w * 0.7], [white, white], 0.7);
+  // The flash on the ground: a soft flat pool of light round the bolt's foot.
+  const pool = positions.length / 3;
+  positions.push(BOLT_PATH[BOLT_PATH.length - 1]?.[0] ?? 0, -1, 0);
+  colors.push(halo[0], halo[1], halo[2], halo[3] * BOLT_POOL.alpha);
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    positions.push(
+      (BOLT_PATH[BOLT_PATH.length - 1]?.[0] ?? 0) + Math.cos(a) * BOLT_POOL.radius,
+      -1,
+      Math.sin(a) * BOLT_POOL.radius,
+    );
+    colors.push(halo[0], halo[1], halo[2], 0);
+    indices.push(pool, pool + 1 + i, pool + 1 + ((i + 1) % 16));
+  }
   const mesh = new Mesh('weather-bolt', scene);
   const data = new VertexData();
   data.positions = positions;

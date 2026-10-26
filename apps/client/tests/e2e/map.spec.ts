@@ -453,7 +453,7 @@ test('draws a Wild Isle storm inside the draw-call budget; low keeps a lighter s
     });
   };
 
-  // High tier, a storm: clouds and rain, still inside the Wild Isle budget (5 weather draw calls: clouds, shadows, rain, bolts, fog).
+  // High tier, a storm: clouds and rain, still inside the Wild Isle budget (5 weather draw calls: clouds, shadows, rain, bolts, fog; plus the glow pass round the bolts).
   const storm = await look('tier=high&patch=wild&weather=storm');
   expect(storm.weather?.clouds).toBeGreaterThan(0);
   expect(storm.weather?.rain).toBeGreaterThan(0);

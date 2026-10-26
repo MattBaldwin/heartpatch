@@ -16,9 +16,10 @@
 
 .weather-tint[data-kind='storm'] {
   opacity: 1;
-  /* Multiplied over the map: the whole scene goes darker and cooler. */
+  /* Multiplied over the map: the whole scene goes darker and a little cooler
+     (not so blue that the clouds' warm edge light turns to mud). */
   mix-blend-mode: multiply;
-  background: rgb(168 180 204);
+  background: rgb(176 181 196);
 }
 
 .weather-tint[data-kind='fog'] {

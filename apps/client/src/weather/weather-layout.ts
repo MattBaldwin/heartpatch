@@ -14,7 +14,7 @@ export const WEATHER_CAPS = { clouds: 72, rain: 480, fog: 48, bolts: 12 } as con
 /** Instances a radius-3 front asks for; other radii scale from it. // TUNE: */
 const PER_FRONT = {
   rain: { clouds: 10, rain: 90 },
-  storm: { clouds: 9, rain: 110 },
+  storm: { clouds: 9, rain: 160 },
   fog: { fog: 18 },
 } as const;
 
