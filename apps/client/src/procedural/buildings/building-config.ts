@@ -109,6 +109,9 @@ export const BUILDING_COLORS = {
   riverStone: '#a89c90', // TUNE: the Levee's rounded grey-brown stones
   mortar: '#5f6b7d', // TUNE: the dark lines between them
   foam: '#eef8ff', // TUNE: the Seawall's splash, a soft blue-white
+  waveDeep: '#4a95d4', // TUNE: the Seawall wave's deep body (option A)
+  beaconRed: '#e8584f', // TUNE: the Seawall beacon's stripes (option C)
+  beaconWhite: '#f6f0f4', // TUNE
   brass: '#e6b85c', // TUNE: the Rain Barrel's tap
   napZ: '#e4dcff', // TUNE: the lilac "z z" over a napping works
   napDusk: '#6f6a8f', // TUNE: what a napping works' colours dim towards
