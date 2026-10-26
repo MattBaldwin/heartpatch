@@ -376,7 +376,8 @@ for (const key of WANT) {
     const seen = await facts(page);
     if (seen.dev) throw new Error(`${file}: dev UI or "Reconnecting…" on screen`);
     extra = { insetsOn, inBands: await inBands(page, d.insets), ...extra };
-    await page.screenshot({ path: path.join(OUT, file) });
+    // A software-rendered iPad frame can take longer than the 30 s default.
+    await page.screenshot({ path: path.join(OUT, file), timeout: 120_000 });
     captions.push({
       file,
       device: d.label,
@@ -535,10 +536,11 @@ for (const key of WANT) {
     f,
   );
   await context.close();
+  // Written after each device, so a later device's failure keeps these.
+  await writeFile(
+    path.join(OUT, 'captions.json'),
+    JSON.stringify({ name, mapId, state, captions }, null, 2),
+  );
 }
-await writeFile(
-  path.join(OUT, 'captions.json'),
-  JSON.stringify({ name, mapId, state, captions }, null, 2),
-);
 await browser.close();
 console.log('done', OUT);
