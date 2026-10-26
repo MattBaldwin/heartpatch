@@ -1,7 +1,7 @@
 import { findAvoidedWords, STARTERS } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { claimLand } from './claim-land.js';
-import { api, hook, idle } from './dev-hook.js';
+import { api, hook, idle, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { closeTrays, trayButton } from './trays.js';
 
@@ -43,8 +43,7 @@ interface HollowDebug {
 const ABORTED_FETCH = /\/api\/v1\/\S* due to access control checks\.?$/;
 
 const hollowState = (page: Page) => hook<HollowDebug>(page, 'hollow');
-const mapState = (page: Page) =>
-  hook<{ id: string; live: string | null; selected: string | null }>(page, 'map');
+const mapState = (page: Page) => hook<{ id: string; selected: string | null }>(page, 'map');
 const battleState = (page: Page) =>
   hook<{ status: string; scene: { squishies: number; shadowLook: number } | null }>(page, 'battle');
 
@@ -78,7 +77,7 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  await waitForLiveMap(page);
   const mapId = (await mapState(page))!.id;
   await expect
     .poll(() => hollowState(page))
@@ -119,7 +118,7 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   await page.reload();
   reloading = false;
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
-  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  await waitForLiveMap(page);
   // The hollow status loads after the map is live; its debug view is null until then.
   await expect.poll(async () => (await hollowState(page))?.night, { timeout: 30_000 }).toBe(false);
   // The reload shut the trays: open the one the nudge lives in again.

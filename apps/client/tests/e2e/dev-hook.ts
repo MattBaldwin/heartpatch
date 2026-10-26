@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 /**
  * The getters on the dev-only `window.__heartpatch` hook (src/engine/dev-hook.d.ts).
@@ -60,6 +60,25 @@ export function hook<T>(page: Page, name: HookName): Promise<T | null> {
     (n) => ((window as unknown as HookWindow).__heartpatch?.[n]?.() ?? null) as T | null,
     name,
   );
+}
+
+/**
+ * How long the map gets to open and catch up live: on a slow WebKit runner
+ * (software GL) the patch can still be building well after `data-ready`.
+ */
+export const LIVE_MAP_TIMEOUT = 60_000;
+
+/**
+ * Waits until the map is open and following the patch live (and is `mapId`,
+ * if given). `#game[data-ready]` marks the engine, not the map: wait on this
+ * before tapping, selecting or reading the map.
+ */
+export async function waitForLiveMap(page: Page, mapId?: string): Promise<void> {
+  await expect
+    .poll(() => hook<{ id: string; live: string | null }>(page, 'map'), {
+      timeout: LIVE_MAP_TIMEOUT,
+    })
+    .toMatchObject(mapId === undefined ? { live: 'live' } : { id: mapId, live: 'live' });
 }
 
 /** Frames drawn so far (0 without the hook); stays put while the scene is idle. */

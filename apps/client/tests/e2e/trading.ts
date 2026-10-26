@@ -1,6 +1,6 @@
 import { expect, type Browser, type Page } from '@playwright/test';
 import { tapCanvas } from './claim-land.js';
-import { api, hook, idle } from './dev-hook.js';
+import { api, hook, idle, waitForLiveMap } from './dev-hook.js';
 import { traysState } from './trays.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
@@ -30,7 +30,6 @@ const posts = (page: Page) =>
     onScreen: { name: string; x: number; y: number }[];
     connected: { name: string; x: number; y: number }[];
   }>(page, 'posts');
-const mapState = (page: Page) => hook<{ live: string | null }>(page, 'map');
 
 /**
  * Names on the post screen whose words break across lines, e.g. "Pebblesno"
@@ -214,7 +213,7 @@ export async function twoTraders(
   await expect(samLobby).toBeHidden();
   for (const page of [lee, sam]) {
     await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-    await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+    await waitForLiveMap(page, mapId);
   }
   return { lee, sam, leeName, samName, mapId, errors };
 }
