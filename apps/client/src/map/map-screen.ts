@@ -505,7 +505,15 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       mode: () => built.ambientMode,
       invalidate: options.invalidate,
     };
-    for (const layer of options.layers ?? []) layer.attach(scene, drawn, host);
+    for (const layer of options.layers ?? []) {
+      // One layer that fails to attach (a decorative one, say the weather)
+      // must not stop the map opening, nor the layers after it.
+      try {
+        layer.attach(scene, drawn, host);
+      } catch (err) {
+        console.error('A map layer could not attach', err);
+      }
+    }
     if (selected) built.select(selected);
     built.showBuildArea(buildArea?.view ?? null);
     const unregister = options.targets?.register('resource-node', () =>

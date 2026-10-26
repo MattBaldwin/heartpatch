@@ -1411,8 +1411,6 @@ const maps = createMapScreen({
   layers: [
     hollowLayer,
     darkLand,
-    weatherLayer,
-    knockedMarks,
     jobs.gatherers,
     land.layer,
     roads.layer,
@@ -1422,6 +1420,9 @@ const maps = createMapScreen({
     villageWins,
     keyHunt.layer,
     trickOrTreat.layer,
+    // Wild Isle weather, after the land's own layers: it only dresses the map.
+    weatherLayer,
+    knockedMarks,
     // Last: each frame the marks keep clear of the flags placed just before them.
     tileMarks,
   ],
