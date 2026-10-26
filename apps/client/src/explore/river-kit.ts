@@ -802,9 +802,9 @@ export function buildMist(scene: Scene): Mesh {
       const d = 1.6 + spread(i * 11) * 1.2;
       const y = RIVER.level + 0.16 + spread(i * 5) * 0.1;
       for (const [k, alpha] of [
-        [1, 0.1],
-        [0.72, 0.09],
-        [0.45, 0.08],
+        [1, 0.2],
+        [0.72, 0.17],
+        [0.45, 0.14],
       ] as const) {
         const at = polar(r, a, y + (1 - k) * 0.05);
         parts.push(faded(flat(sphere(d * k, 6, at, [1.6, 0.02, 1]), '#d6d0ff'), alpha)); // TUNE
@@ -929,7 +929,7 @@ export const RIVER_EXTRAS: Layers = {
     ripples: { build: buildRipples },
     'river-rocks': { build: buildRiverRocks },
     'far-bank': { build: buildFarBank },
-    mist: { build: buildMist, glow: 0.9, darkOnly: true }, // TUNE: faint, lavender
+    mist: { build: buildMist, glow: 1.2, darkOnly: true }, // TUNE: faint, lavender
     jetty: { build: buildJetty },
     lantern: { build: buildLantern, glow: 1.1, dusk: 2.6 }, // TUNE: a warm dot by day, bright at dusk
     'lantern-halo': { build: buildLanternHalo, glow: 1.4, darkOnly: true }, // TUNE
