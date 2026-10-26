@@ -1997,7 +1997,7 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
   - Every other biome keeps the old cream halo at 0.6.
 - **Explore terrain `band` without a layout bump (#701).** `river` isn't on main yet, so supervisor 22's "bump river's layout" condition doesn't apply. The other conditions stand.
 - **Works production fields (W1-10c).** `production.weather?: 'faster'|'slower'|'same'|'waiting'` and `production.short?: ItemCounts` are additive and optional, works only, and computed on the server. The client never derives them from the bag or the forecast. Not a big feature.
-- **WebKit e2e waits.** Three specs that #698 didn't touch flaked on iPhone/iPad WebKit because `#game[data-ready]` marks the engine, not the map. Each got a test-only fix:
+- **WebKit e2e waits.** Three specs flaked on iPhone/iPad WebKit because `#game[data-ready]` marks the engine, not the map: two older ones #698 didn't otherwise touch, and #698's own new `works.spec.ts`. Each got a test-only fix:
   - `hollowed-cellar.spec.ts` closes the late "yay" card;
   - `works.spec.ts` waits for the live map hook;
   - `territory.spec.ts` uses a 60 s first poll.
