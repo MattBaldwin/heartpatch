@@ -431,7 +431,7 @@ test('keeps a Wild Isle in its draw-call and triangle budget, up close and zoome
   expect(far.activeTriangles).toBeLessThanOrEqual(WILD_BUDGET.farTriangles);
 });
 
-test('draws a Wild Isle storm inside the draw-call budget; low draws no rain; reduced motion holds still (#621)', async ({
+test('draws a Wild Isle storm inside the draw-call budget; low keeps a lighter storm rain; reduced motion holds still (#621)', async ({
   page,
 }) => {
   test.setTimeout(150_000); // shader compiles; CI renders in software
@@ -453,7 +453,7 @@ test('draws a Wild Isle storm inside the draw-call budget; low draws no rain; re
     });
   };
 
-  // High tier, a storm: clouds and rain, still inside the Wild Isle budget (3 weather draw calls).
+  // High tier, a storm: clouds and rain, still inside the Wild Isle budget (5 weather draw calls: clouds, shadows, rain, bolts, fog).
   const storm = await look('tier=high&patch=wild&weather=storm');
   expect(storm.weather?.clouds).toBeGreaterThan(0);
   expect(storm.weather?.rain).toBeGreaterThan(0);
@@ -465,11 +465,14 @@ test('draws a Wild Isle storm inside the draw-call budget; low draws no rain; re
   expect(fog.weather?.rain).toBe(0);
   expect(fog.stats?.drawCalls).toBeLessThanOrEqual(WILD_BUDGET.drawCalls);
 
-  // The low tier draws clouds and fog only, no rain.
+  // The low tier drops plain rain but a storm keeps a lighter one: fewer streaks than the high tier.
   const low = await look('tier=low&patch=wild&weather=storm');
   expect(low.weather?.mode).toBe('off');
   expect(low.weather?.clouds).toBeGreaterThan(0);
-  expect(low.weather?.rain).toBe(0);
+  expect(low.weather?.rain).toBeGreaterThan(0);
+  expect(low.weather?.rain).toBeLessThan(storm.weather?.rain ?? 0);
+  const lowRain = await look('tier=low&patch=wild&weather=rain');
+  expect(lowRain.weather?.rain).toBe(0);
 
   // Reduced motion (the gallery's setting) holds the weather still: the clock never moves.
   await look('tier=high&patch=wild&weather=storm');
