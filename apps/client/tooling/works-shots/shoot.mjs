@@ -10,8 +10,9 @@
 // empty for the Build sheet. Every device (iPhone 15, iPhone SE, iPad) then
 // signs in as that player at tier `high` and its own DPR. Shots, per device:
 // `gallery-works`, `gallery-works-asleep`, `zoom-seawall` (the Seawall at map
-// zoom), `gallery-wild`, `gallery-well` (the River Well at levels 1–4), `build-sheet` (a held-back card picked, its
-// reason showing) and `homestead` (the pier standing on its homestead).
+// zoom), `gallery-wild`, `gallery-well` (the River Well at levels 1–4),
+// `build-sheet` (a held-back card picked, its reason showing) and `homestead`
+// (the pier standing on its homestead).
 // No dev badge, no "(dev)" buttons. Env: DEVICES, PW_CHROMIUM_EXECUTABLE.
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';

@@ -225,6 +225,7 @@ describe('Wild Isle works models (#621 W1-10)', () => {
   });
 
   it('stays one or two meshes and under the triangle cap at its biggest', () => {
+    // Level 4 for the works; one-level buildings (the Seawall, the Canal…) ignore it.
     const scene = new Scene(engine);
     for (const id of WILD) {
       const before = scene.meshes.length;
