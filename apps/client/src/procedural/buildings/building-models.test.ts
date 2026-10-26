@@ -1,9 +1,11 @@
+import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { GAME_DATA } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
-import { LEVEL_SCALE } from './building-config.js';
+import { BUILDING_COLORS, LEVEL_SCALE } from './building-config.js';
 import { buildBuildingModel, levelScale } from './building-models.js';
 
 const RESOURCE = GAME_DATA.buildings.filter((b) => b.kind === 'resource').map((b) => b.id);
@@ -186,7 +188,39 @@ describe('Wild Isle works models (#621 W1-10)', () => {
     const scene = new Scene(engine);
     for (const id of WILD.filter((i) => i !== 'canal' && i !== 'levee')) {
       expect(buildBuildingModel(scene, id, 'plain', 1).glow, id).not.toBeNull();
-      expect(buildBuildingModel(scene, id, 'out', 1).glow, id).toBeNull();
+      // A napping works' only glow is its lilac "z z"; the rest go fully dark.
+      const out = buildBuildingModel(scene, id, 'out', 1).glow;
+      if (!WORKS.includes(id)) {
+        expect(out, id).toBeNull();
+        continue;
+      }
+      const colors = out?.getVerticesData(VertexBuffer.ColorKind) ?? [];
+      const z = Color3.FromHexString(BUILDING_COLORS.napZ).toLinearSpace();
+      expect(colors.length, id).toBeGreaterThan(0);
+      for (let i = 0; i < colors.length; i += 4) {
+        expect(colors[i], id).toBeCloseTo(z.r, 4);
+        expect(colors[i + 2], id).toBeCloseTo(z.b, 4);
+      }
+    }
+  });
+
+  it('dims a napping works and floats its "z z" above its top, at every level', () => {
+    const scene = new Scene(engine);
+    for (const id of WORKS) {
+      for (const l of [1, 4]) {
+        const awake = buildBuildingModel(scene, id, 'plain', l).body;
+        const { body, glow } = buildBuildingModel(scene, id, 'out', l);
+        const brightness = (m: Mesh) => {
+          const c = m.getVerticesData(VertexBuffer.ColorKind) ?? [];
+          let sum = 0;
+          for (let i = 0; i < c.length; i += 4)
+            sum += (c[i] ?? 0) + (c[i + 1] ?? 0) + (c[i + 2] ?? 0);
+          return sum / Math.max(1, c.length / 4);
+        };
+        expect(brightness(body), `${id} L${String(l)}`).toBeLessThan(brightness(awake) * 0.9);
+        const top = body.getBoundingInfo().boundingBox.maximum.y;
+        expect(glow?.getBoundingInfo().boundingBox.minimum.y ?? 0, id).toBeGreaterThan(top);
+      }
     }
   });
 

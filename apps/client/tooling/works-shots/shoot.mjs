@@ -25,9 +25,33 @@ const PASSWORD = 'squishy-secret';
 const PATCH = 'Pier Cove';
 const TIER = 'high';
 const DEVICES = {
-  'iphone-15': { label: 'iPhone 15', width: 393, height: 852, dpr: 3, dist: 34, wellDist: 28 },
-  'iphone-se': { label: 'iPhone SE', width: 375, height: 667, dpr: 2, dist: 32, wellDist: 27 },
-  ipad: { label: 'iPad', width: 1080, height: 810, dpr: 2, dist: 18, wellDist: 15 },
+  'iphone-15': {
+    label: 'iPhone 15',
+    width: 393,
+    height: 852,
+    dpr: 3,
+    dist: 34,
+    wellDist: 28,
+    insets: { top: 59, bottom: 34, left: 0, right: 0 },
+  },
+  'iphone-se': {
+    label: 'iPhone SE',
+    width: 375,
+    height: 667,
+    dpr: 2,
+    dist: 32,
+    wellDist: 27,
+    insets: { top: 20, bottom: 0, left: 0, right: 0 },
+  },
+  ipad: {
+    label: 'iPad',
+    width: 1080,
+    height: 810,
+    dpr: 2,
+    dist: 18,
+    wellDist: 15,
+    insets: { top: 24, bottom: 20, left: 0, right: 0 },
+  },
 };
 /**
  * The patch keeps its maker's time zone (the lobby sends the device's): one
@@ -64,6 +88,23 @@ const WANT = (process.env.DEVICES ?? Object.keys(DEVICES).join(',')).split(',');
 const TRY = ['fishing-pier', 'watermill', 'salt-pans', 'river-well', 'irrigated-field'];
 /** Then the ones that need no water, on homesteads inland. */
 const DRY = ['rain-barrel', 'weather-vane'];
+/** The shelters, tried on a second spot of a homestead by the right water. */
+const SHELTERS = ['seawall', 'levee'];
+/** Close-ups on iPhone SE, one building each (`?show=solo:<id>`). */
+const CLOSE = [
+  'fishing-pier',
+  'salt-pans',
+  'watermill',
+  'irrigated-field',
+  'rain-barrel',
+  'river-well',
+  'greenhouse',
+  'canal',
+  'levee',
+  'seawall',
+  'weather-vane',
+  'waystation',
+];
 
 const until = async (page, fn, arg, timeout = 180_000) => {
   const end = Date.now() + timeout;
@@ -142,15 +183,15 @@ async function buildUp(page, mapId) {
   });
   const built = [];
   let empty = null;
-  const place = async (id, at) => {
+  const place = async (id, at, spot = 1) => {
     const res = await call(page, 'POST', `/maps/${mapId}/buildings`, {
       buildingId: id,
       q: at.q,
       r: at.r,
-      spot: 1,
+      spot,
     });
     const ok = res.status === 200 || res.status === 201;
-    if (ok) built.push({ id, ...at });
+    if (ok) built.push({ id, q: at.q, r: at.r, spot });
     else console.log('  no', id, res.status, res.body?.error?.message);
     return ok;
   };
@@ -162,7 +203,13 @@ async function buildUp(page, mapId) {
     for (const id of TRY.filter((t) => !built.some((b) => b.id === t))) {
       if ((placed = await place(id, at))) break;
     }
-    if (placed) continue;
+    if (placed) {
+      // A shelter beside it, where the water suits one.
+      for (const id of SHELTERS.filter((t) => !built.some((b) => b.id === t))) {
+        if (await place(id, at, 2)) break;
+      }
+      continue;
+    }
     // The first homestead no water works fits stays empty: its Build sheet holds them back.
     if (!empty) empty = at;
     else
@@ -205,6 +252,32 @@ async function settle(page) {
   }
   await page.waitForTimeout(400);
 }
+
+/**
+ * Controls that reach into the notch or home-indicator band: what a frame's
+ * caption may say about the safe areas.
+ */
+const inBands = (page, insets) =>
+  page.evaluate((insets) => {
+    const h = window.innerHeight;
+    return [...document.querySelectorAll('button,[role="button"],h1,h2,header,nav')]
+      .filter((e) => {
+        const b = e.getBoundingClientRect();
+        const st = window.getComputedStyle(e);
+        if (b.width === 0 || b.height === 0 || st.visibility === 'hidden') return false;
+        return (
+          (insets.top > 0 && b.top < insets.top) ||
+          (insets.bottom > 0 && b.bottom > h - insets.bottom)
+        );
+      })
+      .map((e) => {
+        const b = e.getBoundingClientRect();
+        const label = (e.getAttribute('aria-label') || e.textContent || e.tagName)
+          .trim()
+          .slice(0, 30);
+        return `${label} [${Math.round(b.top)}–${Math.round(b.bottom)}]`;
+      });
+  }, insets);
 
 /** What the frame shows, so a bad one is loud and the caption is true. */
 const facts = (page) =>
@@ -277,10 +350,20 @@ for (const key of WANT) {
     }).observe(document, { childList: true, subtree: true, characterData: true });
   });
   const page = await context.newPage();
+  // The device's safe areas (the notch and home indicator), as roads-shots does.
+  const cdp = await context.newCDPSession(page);
+  const insetsOn = await cdp
+    .send('Emulation.setSafeAreaInsetsOverride', { insets: d.insets })
+    .then(() => true)
+    .catch(() => {
+      console.warn('safe-area emulation unavailable on this Chromium');
+      return false;
+    });
   const shot = async (id, caption, extra = {}) => {
     const file = `${key}-${id}.png`;
     const seen = await facts(page);
     if (seen.dev) throw new Error(`${file}: dev UI or "Reconnecting…" on screen`);
+    extra = { insetsOn, inBands: await inBands(page, d.insets), ...extra };
     await page.screenshot({ path: path.join(OUT, file) });
     captions.push({
       file,
@@ -319,6 +402,25 @@ for (const key of WANT) {
     'gallery-well',
     'Buildings gallery: the Water Well (River Well) at levels 1 to 4',
   );
+  await gallery(
+    `show=res:greenhouse&dist=${d.wellDist}`,
+    'gallery-greenhouse',
+    'Buildings gallery: the Greenhouse at levels 1 to 4',
+  );
+  if (key === 'iphone-se') {
+    for (const id of CLOSE) {
+      await gallery(
+        `show=solo:${id}&focus=0,-1&dist=7`,
+        `close-${id}`,
+        `Buildings gallery close-up: ${id}, level 1`,
+      );
+    }
+    await gallery(
+      `show=solo:watermill&asleep=1&focus=0,-1&dist=7`,
+      'close-watermill-asleep',
+      'Buildings gallery close-up: watermill, level 1, napping',
+    );
+  }
 
   // The game: the pier standing on its homestead.
   await openMap(page);
@@ -338,6 +440,32 @@ for (const key of WANT) {
     'homestead',
     'Map, zoomed in: the Fishing Pier standing on a Wild Isle homestead by the water',
   );
+
+  // Where the water-bound ones stand: each built on a real homestead, so the
+  // server let it (the Watermill needs a river, the Salt Pans and Seawall
+  // the sea, the Field any water next door).
+  const WHERE = {
+    watermill:
+      'the Watermill on a homestead the server let it build on (it needs a river next door)',
+    'salt-pans':
+      'the Salt Pans on a homestead the server let them build on (they need the sea next door)',
+    seawall: 'the Seawall on a homestead the server let it build on (it needs the sea next door)',
+    'irrigated-field':
+      'the Irrigated Field on a homestead the server let it build on (it needs water next door)',
+  };
+  for (const [id, words] of Object.entries(WHERE)) {
+    const b = state.built.find((x) => x.id === id);
+    if (!b) {
+      console.log('  no map shot for', id, '(no homestead fit it this run)');
+      continue;
+    }
+    await page.evaluate(({ q, r }) => window.__heartpatch.mapDev().show(q, r), b);
+    await settle(page);
+    const close = page.getByTestId('tile-panel').getByRole('button', { name: 'Close' });
+    if (await close.isVisible().catch(() => false)) await close.click();
+    await settle(page);
+    await shot(`map-${id}`, `Map, zoomed in: ${words}`);
+  }
 
   // The Build sheet on an empty homestead, a held-back card picked.
   const empty = state.empty;

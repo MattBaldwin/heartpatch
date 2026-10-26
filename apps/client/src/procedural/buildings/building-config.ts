@@ -88,7 +88,7 @@ export const BUILDING_COLORS = {
   // Wild Isle works (#621 W1-10): toys by the water.
   fish: '#ffab6b', // TUNE: a caught fish, peachy orange
   fishAlt: '#8fc7ff', // TUNE: a blue one
-  salt: '#fbf8ff', // TUNE: salt heaps, nearly white
+  salt: '#e6e0ea', // TUNE: salt heaps, off-white so they don't bloom
   brine: '#bfe9f2', // TUNE: the pans' shallow sea water
   soil: '#a8775a', // TUNE: the field's tilled earth
   wheel: '#d49a6a', // TUNE: the Watermill's wheel
@@ -100,7 +100,21 @@ export const BUILDING_COLORS = {
   wall: '#cfc6d9', // TUNE: the Seawall's blocks
   wallDark: '#aea4bd', // TUNE
   shell: '#ffc9d6', // TUNE: a seashell on the wall
+  clay: '#d9a07c', // TUNE: the Salt Pans' clay rims
+  plank: '#c99a6e', // TUNE: the Levee's plank edge
+  stave: '#a8734f', // TUNE: the lines between the Rain Barrel's staves
+  seaStone: '#a3b3c6', // TUNE: the Seawall's grey-blue blocks
+  seaStoneLight: '#bfcbd9', // TUNE
+  seaStoneDark: '#8496ab', // TUNE
+  mortar: '#5f6b7d', // TUNE: the dark lines between them
+  foam: '#eef8ff', // TUNE: the Seawall's splash, a soft blue-white
+  brass: '#e6b85c', // TUNE: the Rain Barrel's tap
+  napZ: '#e4dcff', // TUNE: the lilac "z z" over a napping works
+  napDusk: '#6f6a8f', // TUNE: what a napping works' colours dim towards
 } as const;
+
+/** TUNE: how far a napping works' colours dim towards `napDusk` (0 none, 1 all). */
+export const NAP_DIM = 0.5;
 
 /**
  * How much bigger each building level stands (owner decision 2026-10-06:

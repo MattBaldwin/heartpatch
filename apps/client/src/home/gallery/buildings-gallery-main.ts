@@ -31,8 +31,10 @@ setPerfReports(false);
  * practicing), `ring` (habitats filling ring tiles, #589), `lanterns` (every
  * kind of fire: a Hearthfire, a Jack-o'-Lantern and a Joy Lantern, #306 PR 5),
  * `res:<id>` (a resource building at levels 1–4, `&asleep=1` napping, #601),
- * `works` (the six Wild Isle works, `&asleep=1` napping) and `wild` (the
- * canal, shelters, vane and waystation, #621 W1-10).
+ * `works` (the six Wild Isle works, `&asleep=1` napping), `wild` (the
+ * canal, shelters, vane and waystation, #621 W1-10) and `solo:<id>` (one
+ * building on tile 0,-1 at `&level=` (default 1), `&asleep=1` napping, for
+ * a close-up with `&focus=0,-1`).
  * `&night=1` lights any layout as the map at night (the Hollow layer's
  * `NIGHT_LOOK`), to judge glowing windows after dark.
  * Every shot uses one camera: `?pitch=` (degrees, default 42,
@@ -247,16 +249,29 @@ function layout(): Pick<HomeResponse, 'buildings' | 'squishies'> {
       squishies: [squishy('puddlepuff')],
     };
   }
+  const solo = /^solo:([a-z-]+)$/.exec(show);
+  if (solo?.[1]) {
+    const level = Number(params.get('level')) || 1;
+    return {
+      buildings: [
+        building(solo[1], { q: 0, r: -1 }, level, {
+          production: production(params.get('asleep') === '1'),
+        }),
+      ],
+      squishies: [squishy('puddlepuff')],
+    };
+  }
   throw new Error(`unknown ?show=${show}`);
 }
 
 const wildLayout =
   show === 'works' ||
   show === 'wild' ||
+  show.startsWith('solo:') ||
   GAME_DATA.buildings.some((b) => b.kind === 'works' && show === `res:${b.id}`);
 
 const home: HomeResponse = {
-  // The Wild Isle layouts (and a works at its levels) keep resource nodes
+  // The Wild Isle layouts (a works at its levels, any close-up) keep resource nodes
   // off their tiles, so no tree or rock stands in a building.
   tiles: wildLayout ? TILES.map((t) => ({ ...t, nodeResource: null })) : TILES,
   ...layout(),

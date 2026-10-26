@@ -90,7 +90,7 @@ export function buildingIcon(buildingId: string): string {
     case 'irrigated-field':
       return '🌱';
     case 'rain-barrel':
-      return '☔';
+      return '🛢️';
     case 'canal':
       return '🏞️';
     case 'levee':

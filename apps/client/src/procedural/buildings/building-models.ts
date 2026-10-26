@@ -6,8 +6,13 @@ import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder'
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { CreateTorus } from '@babylonjs/core/Meshes/Builders/torusBuilder';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import type { Scene } from '@babylonjs/core/scene';
-import { BUILDING_COLORS as C, LEVEL_SCALE } from './building-config.js';
+import { GAME_DATA } from '@heartpatch/shared';
+import { BUILDING_COLORS as C, LEVEL_SCALE, NAP_DIM } from './building-config.js';
+
+/** The Wild Isle works (#621): the buildings that show a nap cue while paused. */
+const WORKS = new Set(GAME_DATA.buildings.filter((b) => b.kind === 'works').map((b) => b.id));
 
 // Procedural building models (design doc §13, §19): primitives merged into
 // one vertex-coloured mesh per look, so every building of a kind is one draw
@@ -56,6 +61,10 @@ export function buildBuildingModel(
   const l = Math.max(1, level);
   const body: Mesh[] = [];
   const glow: Mesh[] = [];
+  // A napping works (#621 W1-10) dims and grows a "z z" so it reads asleep
+  // at phone size, not just by its dark lamp.
+  const napping = look === 'out' && WORKS.has(buildingId);
+  const napDusk = linear(C.napDusk);
   /**
    * Adds one primitive in one colour, or shaded per vertex: `shade` gets the
    * vertex's model-space position and returns its colour (flame gradients,
@@ -74,6 +83,7 @@ export function buildBuildingModel(
     mesh.scaling.set(...scale);
     mesh.rotation.set(...rotation);
     const c = linear(color);
+    const dim = napping && list === body;
     const count = mesh.getTotalVertices();
     const colors = new Float32Array(count * 4);
     const local = shade ? mesh.getVerticesData(VertexBuffer.PositionKind) : null;
@@ -91,6 +101,7 @@ export function buildBuildingModel(
         );
         v = shade(p);
       }
+      if (dim) v = Color3.Lerp(v, napDusk, NAP_DIM);
       colors.set([v.r, v.g, v.b, 1], i * 4);
     }
     mesh.setVerticesData(VertexBuffer.ColorKind, colors);
@@ -113,6 +124,51 @@ export function buildBuildingModel(
     );
   const box = (width: number, height: number, depth: number) =>
     CreateBox(`${name}-part`, { width, height, depth }, scene);
+  /**
+   * A convex profile in the y–z plane (`[z, y]` points, in order) pushed
+   * `length` along x: a bank's slopes, a sea wall's curl. Flat-shaded, faces
+   * wound outward the way Babylon's own builders wind them.
+   */
+  const prism = (profile: readonly (readonly [number, number])[], length: number): Mesh => {
+    const positions: number[] = [];
+    const indices: number[] = [];
+    const n = profile.length;
+    const mid = profile.reduce((m, [z, y]) => [m[0] + z / n, m[1] + y / n], [0, 0]);
+    const tri = (a: Vector3, b: Vector3, c: Vector3, out: Vector3) => {
+      const face = Vector3.Cross(a.subtract(b), c.subtract(b));
+      const [p, q] = Vector3.Dot(face, out) >= 0 ? [b, c] : [c, b];
+      const i = positions.length / 3;
+      positions.push(a.x, a.y, a.z, p.x, p.y, p.z, q.x, q.y, q.z);
+      indices.push(i, i + 1, i + 2);
+    };
+    const at = (k: number, x: number) => {
+      const [z, y] = profile[k % n] ?? [0, 0];
+      return new Vector3(x, y, z);
+    };
+    const h = length / 2;
+    for (let k = 0; k < n; k++) {
+      const [z0, y0] = profile[k] ?? [0, 0];
+      const [z1, y1] = profile[(k + 1) % n] ?? [0, 0];
+      const out = new Vector3(0, (y0 + y1) / 2 - mid[1], (z0 + z1) / 2 - mid[0]);
+      tri(at(k, -h), at(k, h), at(k + 1, h), out);
+      tri(at(k, -h), at(k + 1, h), at(k + 1, -h), out);
+    }
+    for (const [x, dir] of [
+      [-h, -1],
+      [h, 1],
+    ] as const) {
+      for (let k = 1; k < n - 1; k++) tri(at(0, x), at(k, x), at(k + 1, x), new Vector3(dir, 0, 0));
+    }
+    const data = new VertexData();
+    data.positions = positions;
+    data.indices = indices;
+    data.normals = [];
+    data.uvs = new Array<number>((positions.length / 3) * 2).fill(0);
+    VertexData.ComputeNormals(positions, indices, data.normals);
+    const mesh = new Mesh(`${name}-part`, scene);
+    data.applyToMesh(mesh, true);
+    return mesh;
+  };
   // A resource building's windows and lamps (#601): lit while it works,
   // dark while it naps (`out`).
   const awake = look !== 'out';
@@ -737,15 +793,18 @@ export function buildBuildingModel(
         part(body, cylinder(0.12, 0.12, 0.09, 10), C.bucket, [-0.4, 0.06, 0.24]);
       }
       if (l >= 4) {
+        // The River Well's tower stands beside the well, clear of its roof
+        // (behind it, its cap clipped into the roof).
+        const [tx, tz] = buildingId === 'river-well' ? [0.72, -0.04] : [0.46, 0.27];
         for (const [x, z] of [
-          [0.38, 0.22],
-          [0.54, 0.22],
-          [0.46, 0.36],
+          [tx - 0.08, tz - 0.05],
+          [tx + 0.08, tz - 0.05],
+          [tx, tz + 0.09],
         ] as const) {
           part(body, cylinder(0.5, 0.025, 0.025, 6), C.post, [x, 0.25, z]);
         }
-        part(body, cylinder(0.22, 0.24, 0.24, 14), C.water, [0.46, 0.6, 0.27]);
-        part(body, cylinder(0.12, 0, 0.28, 14), C.workshopRoof, [0.46, 0.77, 0.27]);
+        part(body, cylinder(0.22, 0.24, 0.24, 14), C.water, [tx, 0.6, tz]);
+        part(body, cylinder(0.12, 0, 0.28, 14), C.workshopRoof, [tx, 0.77, tz]);
       }
       break;
     }
@@ -1051,43 +1110,54 @@ export function buildBuildingModel(
       break;
     }
     case 'salt-pans': {
-      // A low, wide grid of shallow trays of sea water drying in the sun, each
-      // with a snowy little heap of salt, a big salt pile, a rake and a sack.
-      // Flat and white-topped, so it never reads as a field. L2: two more
-      // trays. L3: a wheelbarrow of salt. L4: a little drying shed.
-      const trays: [number, number][] = [
-        [-0.2, -0.18],
-        [0.2, -0.18],
-        [-0.2, 0.2],
+      // Shallow square pools of sea water on a flat clay floor, each edged in
+      // a raised clay rim, with snowy salt crusting in the corners, a tall
+      // salt heap, a rake leaning on it and a sack. Flat and low: pools in
+      // the ground, not trays on it. L2: two more pools. L3: a wheelbarrow
+      // of salt. L4: a little drying shed.
+      const pools: [number, number][] = [
+        [-0.22, -0.2],
+        [0.16, -0.2],
+        [-0.22, 0.18],
       ];
-      if (l >= 2) trays.push([0.2, 0.2], [-0.6, -0.18]);
-      for (const [x, z] of trays) {
-        part(body, box(0.36, 0.12, 0.34), C.wellStone, [x, 0.06, z]);
-        part(body, box(0.3, 0.012, 0.28), C.brine, [x, 0.125, z]);
-        part(body, cylinder(0.07, 0, 0.16, 10), C.salt, [x + 0.06, 0.16, z - 0.04]);
+      if (l >= 2) pools.push([0.16, 0.18], [-0.6, -0.2]);
+      part(body, box(1.16, 0.06, 0.96), C.clay, [-0.04, 0.03, 0]);
+      for (const [x, z] of pools) {
+        part(body, box(0.34, 0.016, 0.32), C.brine, [x, 0.072, z]);
+        for (const dz of [-0.17, 0.17]) part(body, box(0.4, 0.06, 0.05), C.clay, [x, 0.09, z + dz]);
+        for (const dx of [-0.19, 0.19])
+          part(body, box(0.05, 0.06, 0.32), C.clay, [x + dx, 0.09, z]);
+        // A little heap raked up onto the clay at the pool's corner.
+        part(body, cylinder(0.1, 0, 0.13, 10), C.salt, [x + 0.19, 0.17, z + 0.17]);
       }
-      part(body, cylinder(0.26, 0, 0.32, 14), C.salt, [0.46, 0.13, 0.32]);
-      part(body, cylinder(0.3, 0.12, 0.14, 10), C.parcel, [0.5, 0.15, -0.3]);
-      part(body, box(0.03, 0.5, 0.03), C.post, [0.36, 0.25, -0.44], [1, 1, 1], [0.3, 0, 0]);
-      part(body, box(0.16, 0.03, 0.04), C.post, [0.36, 0.49, -0.37]);
-      part(body, cylinder(0.42, 0.03, 0.03, 6), C.post, [-0.5, 0.21, 0.36]);
-      part(windowList, sphere(0.08, 8), lampColor, [-0.5, 0.46, 0.36]);
+      // The heap: a tall, rounded white cone, and the rake leaning on it.
+      part(body, cylinder(0.3, 0.06, 0.36, 14), C.salt, [0.46, 0.21, 0.24]);
+      part(body, sphere(0.1, 8), C.salt, [0.46, 0.36, 0.24]);
+      // The rake: a long handle leaning on the heap, a wide head with tines.
+      part(body, box(0.035, 0.62, 0.035), C.post, [0.32, 0.32, 0.06], [1, 1, 1], [0, 0, -0.45]);
+      part(body, box(0.26, 0.045, 0.05), C.post, [0.19, 0.1, 0.06]);
+      for (const dx of [-0.1, -0.035, 0.035, 0.1]) {
+        part(body, box(0.04, 0.1, 0.04), C.post, [0.19 + dx, 0.09, 0.02]);
+      }
+      part(body, cylinder(0.26, 0.12, 0.15, 10), C.parcel, [0.5, 0.19, -0.3]);
+      part(body, cylinder(0.42, 0.03, 0.03, 6), C.post, [-0.5, 0.27, 0.42]);
+      part(windowList, sphere(0.08, 8), lampColor, [-0.5, 0.52, 0.42]);
       if (l >= 3) {
-        part(body, box(0.22, 0.1, 0.16), C.cart, [-0.12, 0.13, 0.5]);
-        part(body, cylinder(0.08, 0, 0.18, 10), C.salt, [-0.12, 0.22, 0.5]);
+        part(body, box(0.22, 0.1, 0.16), C.cart, [-0.12, 0.15, 0.5]);
+        part(body, cylinder(0.08, 0, 0.18, 10), C.salt, [-0.12, 0.24, 0.5]);
         part(
           body,
           cylinder(0.04, 0.1, 0.1, 10),
           C.post,
-          [-0.24, 0.05, 0.5],
+          [-0.24, 0.08, 0.5],
           [1, 1, 1],
           [0, 0, Math.PI / 2],
         );
       }
       if (l >= 4) {
-        part(body, box(0.3, 0.3, 0.26), C.storeTrim, [-0.6, 0.15, 0.2]);
-        part(body, box(0.36, 0.04, 0.32), C.millRoof, [-0.6, 0.33, 0.2], [1, 1, 1], [0, 0, 0.2]);
-        part(windowList, box(0.1, 0.08, 0.02), windowColor, [-0.6, 0.18, 0.06]);
+        part(body, box(0.3, 0.3, 0.26), C.storeTrim, [-0.6, 0.18, 0.2]);
+        part(body, box(0.36, 0.04, 0.32), C.millRoof, [-0.6, 0.36, 0.2], [1, 1, 1], [0, 0, 0.2]);
+        part(windowList, box(0.1, 0.08, 0.02), windowColor, [-0.6, 0.21, 0.06]);
       }
       break;
     }
@@ -1216,48 +1286,86 @@ export function buildBuildingModel(
       break;
     }
     case 'rain-barrel': {
-      // A chubby wooden barrel with metal hoops, a funnel lid to catch the
-      // rain, a tap with a puddle under it and a little sign with a lamp.
-      // Small and round: the smallest of the works. L2: a second barrel.
-      // L3: a gutter roof feeding them. L4: a third barrel on a stand.
+      // A chubby staved barrel with three metal hoops, a wide funnel on top
+      // catching raindrops, and a big brass tap on its front pouring into a
+      // puddle, by a little lamp. Small and round: the smallest of the works.
+      // L2: a second barrel. L3: a gutter roof feeding them. L4: a third
+      // barrel on a stand.
       const barrelAt = (x: number, y: number, z: number, s: number) => {
         // A barrel's belly: a tall, round-sided body (no narrow foot), flat at the top.
-        part(body, cylinder(0.42 * s, 0.3 * s, 0.3 * s, 16), C.barrel, [x, y + 0.23 * s, z]);
-        part(body, sphere(0.38 * s, 10), C.barrel, [x, y + 0.23 * s, z], [1, 1.2, 1]);
-        for (const dy of [0.08, 0.34]) {
+        part(body, cylinder(0.42 * s, 0.3 * s, 0.3 * s, 12), C.barrel, [x, y + 0.23 * s, z]);
+        part(body, sphere(0.38 * s, 8), C.barrel, [x, y + 0.23 * s, z], [1, 1.2, 1]);
+        // The staves: dark lines down the belly, hugging its curve (the
+        // belly is round in the middle, narrower at the hoops).
+        around(6, (a) => {
+          for (const [dy, r, h] of [
+            [0.23, 0.188, 0.14],
+            [0.11, 0.165, 0.1],
+            [0.35, 0.165, 0.1],
+          ] as const) {
+            part(
+              body,
+              box(0.014, h * s, 0.014),
+              C.stave,
+              [x + Math.cos(a) * r * s, y + dy * s, z + Math.sin(a) * r * s],
+              [1, 1, 1],
+              [0, -a, 0],
+            );
+          }
+        });
+        for (const [dy, d] of [
+          [0.06, 0.3],
+          [0.23, 0.37],
+          [0.4, 0.3],
+        ] as const) {
           part(
             body,
             CreateTorus(
               `${name}-hoop`,
-              { diameter: 0.37 * s, thickness: 0.03, tessellation: 12 },
+              { diameter: d * s, thickness: 0.03, tessellation: 10 },
               scene,
             ),
             C.hoop,
             [x, y + dy * s, z],
           );
         }
-        part(body, cylinder(0.08 * s, 0.4 * s, 0.24 * s, 16), C.hoop, [x, y + 0.46 * s, z]);
-        part(body, cylinder(0.02, 0.24 * s, 0.24 * s, 16), C.water, [x, y + 0.5 * s, z]);
+        // The funnel: wider than the barrel, so it reads from above.
+        part(body, cylinder(0.22 * s, 0.58 * s, 0.18 * s, 12), C.hoop, [x, y + 0.54 * s, z]);
+        // The water just above the funnel's lid (level with it, they flicker).
+        part(body, cylinder(0.01, 0.5 * s, 0.5 * s, 16), C.water, [x, y + 0.656 * s, z]);
       };
       barrelAt(0, 0, 0, 1);
-      // The tap on its right side, its puddle beside it (not under the
-      // barrel, which would read as a goblet's foot from above).
+      // Raindrops falling into the funnel.
+      for (const [x, y, z] of [
+        [-0.08, 0.8, 0.02],
+        [0.07, 0.87, -0.04],
+        [0.01, 0.95, 0.05],
+      ] as const) {
+        part(body, sphere(0.06, 6), C.water, [x, y, z], [0.8, 1.3, 0.8]);
+      }
+      // The tap on the front (-z, facing the camera): a fat spout, a cross
+      // handle and a ribbon of water down into a puddle.
+      const tapZ = -0.24;
       part(
         body,
-        cylinder(0.1, 0.04, 0.04, 6),
-        C.hoop,
-        [0.2, 0.14, -0.06],
+        cylinder(0.24, 0.13, 0.13, 10),
+        C.brass,
+        [0, 0.15, tapZ - 0.03],
         [1, 1, 1],
-        [0, 0, Math.PI / 2],
+        [Math.PI / 2, 0, 0],
       );
-      part(body, cylinder(0.03, 0.16, 0.16, 14), C.water, [0.3, 0.05, -0.1], [1.2, 1, 0.8]);
+      part(body, cylinder(0.12, 0.15, 0.11, 10), C.brass, [0, 0.09, tapZ - 0.14]);
+      part(body, box(0.24, 0.05, 0.05), C.brass, [0, 0.27, tapZ - 0.05]);
+      part(body, box(0.05, 0.1, 0.05), C.brass, [0, 0.24, tapZ - 0.05]);
+      part(body, box(0.045, 0.06, 0.045), C.water, [0, 0.05, tapZ - 0.11]);
+      part(body, cylinder(0.02, 0.28, 0.28, 14), C.water, [0, 0.03, tapZ - 0.14], [1.2, 1, 0.8]);
       part(body, cylinder(0.42, 0.03, 0.03, 6), C.post, [0.34, 0.21, -0.2]);
       part(windowList, sphere(0.08, 8), lampColor, [0.34, 0.46, -0.2]);
       if (l >= 2) barrelAt(-0.36, 0, 0.12, 0.8);
       if (l >= 3) {
-        for (const x of [-0.56, 0.24]) part(body, box(0.04, 0.7, 0.04), C.post, [x, 0.35, 0.34]);
-        part(body, box(0.9, 0.04, 0.24), C.millRoof, [-0.16, 0.72, 0.28], [1, 1, 1], [0.3, 0, 0]);
-        part(body, box(0.9, 0.04, 0.06), C.hoop, [-0.16, 0.66, 0.16]);
+        for (const x of [-0.56, 0.24]) part(body, box(0.04, 0.84, 0.04), C.post, [x, 0.42, 0.34]);
+        part(body, box(0.9, 0.04, 0.24), C.millRoof, [-0.16, 0.86, 0.28], [1, 1, 1], [0.3, 0, 0]);
+        part(body, box(0.9, 0.04, 0.06), C.hoop, [-0.16, 0.8, 0.16]);
       }
       if (l >= 4) {
         part(body, box(0.3, 0.2, 0.3), C.post, [0.36, 0.1, 0.3]);
@@ -1293,47 +1401,109 @@ export function buildBuildingModel(
       break;
     }
     case 'levee': {
-      // A long, soft grassy bank along +x with a few stones and flowers on
-      // top. Low and long: it reads as a hill, not a wall. One level.
-      part(body, sphere(1, 10), C.bank, [0, 0.11, 0], [1.3, 0.42, 0.42]);
-      for (const x of [-0.4, 0.05, 0.42])
-        part(body, sphere(0.1, 8), C.rock, [x, 0.26, -0.12], [1, 0.7, 1]);
-      for (const x of [-0.2, 0.25]) {
-        part(body, sphere(0.07, 8), C.petal, [x, 0.27, 0.05]);
-        part(body, sphere(0.04, 6), C.petalAlt, [x, 0.3, 0.05]);
+      // A raised earth bank along +x holding the river back: a trapezoid
+      // ridge of brown earth (its cut ends show the soil), grassed over its
+      // flat top and land side, its water slope (-z) faced with stones down
+      // to a strip of river, and flowers and reeds on top. An earth bank,
+      // not a hill or a planter. One level.
+      const bank: [number, number][] = [
+        [-0.5, 0.05],
+        [-0.18, 0.34],
+        [0.16, 0.34],
+        [0.48, 0.05],
+      ];
+      part(body, box(1.24, 0.06, 0.22), C.water, [0, 0.06, -0.62]);
+      part(body, prism(bank, 1.22), C.soil, [0, 0, 0]);
+      part(
+        body,
+        prism(
+          bank.map(([z, y]) => [z * 1.03, y + 0.015]),
+          1.14,
+        ),
+        C.bank,
+        [0, 0, 0],
+      );
+      // Stones laid up the water slope (42°), in two staggered rows.
+      for (let row = 0; row < 2; row++) {
+        for (let i = 0; i < 5; i++) {
+          const x = -0.46 + i * 0.23 + (row ? 0.11 : 0);
+          if (x > 0.5) continue;
+          part(
+            body,
+            box(0.2, 0.05, 0.16),
+            (i + row) % 2 ? C.wallDark : C.wall,
+            [x, 0.12 + row * 0.12, -0.42 + row * 0.13],
+            [1, 1, 1],
+            [-0.74, 0, 0],
+          );
+        }
+      }
+      for (const x of [-0.36, 0.1, 0.44]) {
+        part(body, cylinder(0.16, 0.012, 0.016, 5), C.leafDark, [x, 0.44, 0.04]);
+      }
+      for (const x of [-0.18, 0.28]) {
+        part(body, sphere(0.07, 8), C.petal, [x, 0.4, -0.04]);
+        part(body, sphere(0.04, 6), C.petalAlt, [x, 0.43, -0.04]);
       }
       break;
     }
     case 'seawall': {
-      // A sturdy stone wall along +x, its sea face (-z) sloping back, a round
-      // capstone on top, a white curl of foam at its foot, a pink seashell
-      // and a lamp. Sloped and long: a breakwater, not a castle. One level.
-      for (let i = 0; i < 4; i++) {
-        const x = -0.45 + i * 0.3;
+      // A sturdy sea wall along +x: two courses of chunky grey-blue stone
+      // blocks with dark mortar gaps between, and above them its sea face
+      // (-z) curving out over the water like a breaking wave (a wave-return
+      // lip), a white splash bursting up against the face under the curl, a
+      // pink seashell and a lamp. Blocky and curled: a breakwater. One level.
+      part(body, box(1.24, 0.06, 0.4), C.water, [0, 0.06, -0.48]);
+      part(body, box(1.18, 0.52, 0.34), C.mortar, [0, 0.3, 0]);
+      const stones = [C.seaStone, C.seaStoneLight, C.seaStoneDark];
+      for (let row = 0; row < 2; row++) {
+        const shift = row ? 0.15 : 0;
+        for (let i = -1; i < 4; i++) {
+          const x0 = Math.max(-0.6, -0.6 + shift + i * 0.3 + 0.025);
+          const x1 = Math.min(0.6, -0.6 + shift + (i + 1) * 0.3 - 0.025);
+          if (x1 - x0 < 0.05) continue;
+          part(body, box(x1 - x0, 0.14, 0.38), stones[(row + i + 3) % 3] ?? C.seaStone, [
+            (x0 + x1) / 2,
+            0.12 + row * 0.17,
+            0,
+          ]);
+        }
+      }
+      // The lip: a thin curved band (segments of an arc around a centre out
+      // over the sea) rising off the face and curling out and down.
+      const c = { z: -0.4, y: 0.36 };
+      const [rIn, rOut] = [0.21, 0.28];
+      const steps = 7;
+      const arc = (t: number, r: number): [number, number] => [
+        c.z + Math.cos(t) * r,
+        c.y + Math.sin(t) * r,
+      ];
+      for (let i = 0; i < steps; i++) {
+        const t0 = (i / steps) * (Math.PI * 0.85);
+        const t1 = ((i + 1) / steps) * (Math.PI * 0.85);
         part(
           body,
-          box(0.29, 0.36, 0.26),
-          i % 2 ? C.wallDark : C.wall,
-          [x, 0.18, 0],
-          [1, 1, 1],
-          [-0.25, 0, 0],
+          prism([arc(t0, rIn), arc(t0, rOut), arc(t1, rOut), arc(t1, rIn)], 1.22),
+          i % 2 ? C.seaStoneLight : C.seaStone,
+          [0, 0, 0],
         );
       }
-      part(
-        body,
-        cylinder(1.2, 0.16, 0.16, 12),
-        C.wall,
-        [0, 0.38, 0.06],
-        [1, 1, 1],
-        [0, 0, Math.PI / 2],
-      );
-      for (const x of [-0.42, -0.1, 0.22, 0.48]) {
-        part(body, sphere(0.14, 8), C.salt, [x, 0.06, -0.2], [1.3, 0.6, 0.8]);
+      // The top: a coping behind the curl.
+      part(body, box(1.22, 0.08, 0.5), C.seaStoneLight, [0, 0.62, -0.08]);
+      // The splash: foam bursting up the face under the curl.
+      for (const [x, y, z, d] of [
+        [-0.24, 0.14, -0.3, 0.2],
+        [-0.12, 0.26, -0.3, 0.15],
+        [-0.3, 0.32, -0.32, 0.12],
+        [-0.18, 0.4, -0.34, 0.09],
+        [0.3, 0.14, -0.3, 0.15],
+        [0.36, 0.25, -0.32, 0.1],
+      ] as const) {
+        part(body, sphere(d, 8), C.foam, [x, y, z]);
       }
-      part(body, box(1.2, 0.04, 0.18), C.water, [0, 0.03, -0.3]);
-      part(body, sphere(0.14, 8), C.shell, [0.12, 0.22, -0.19], [1, 1, 0.4], [-0.25, 0, 0]);
-      part(body, cylinder(0.3, 0.03, 0.03, 6), C.post, [0.5, 0.58, 0.08]);
-      part(windowList, sphere(0.08, 8), lampColor, [0.5, 0.75, 0.08]);
+      part(body, sphere(0.12, 8), C.shell, [0.12, 0.68, 0.04], [1, 0.4, 1]);
+      part(body, cylinder(0.3, 0.03, 0.03, 6), C.post, [0.5, 0.8, 0.08]);
+      part(windowList, sphere(0.08, 8), lampColor, [0.5, 0.97, 0.08]);
       break;
     }
     case 'weather-vane': {
@@ -1378,14 +1548,49 @@ export function buildBuildingModel(
         [0, 0, Math.PI / 2],
       );
       part(body, box(0.46, 0.05, 0.16), C.log, [0, 0.18, 0.1]);
-      part(body, box(0.05, 0.62, 0.05), C.post, [0.52, 0.31, -0.3]);
-      part(body, box(0.26, 0.08, 0.02), C.storeTrim, [0.6, 0.52, -0.3]);
-      part(body, box(0.26, 0.08, 0.02), C.flag, [0.46, 0.4, -0.3]);
+      // The signpost: two arrow boards nailed across the front of the post,
+      // one pointing each way, so both clearly hang on it.
+      part(body, box(0.05, 0.66, 0.05), C.post, [0.52, 0.33, -0.3]);
+      part(body, box(0.24, 0.08, 0.02), C.storeTrim, [0.6, 0.54, -0.335]);
+      part(
+        body,
+        cylinder(0.02, 0.1, 0.1, 3),
+        C.storeTrim,
+        [0.72, 0.54, -0.335],
+        [1, 1, 0.8],
+        [Math.PI / 2, 0, -Math.PI / 2],
+      );
+      part(body, box(0.24, 0.08, 0.02), C.flag, [0.44, 0.42, -0.335]);
+      part(
+        body,
+        cylinder(0.02, 0.1, 0.1, 3),
+        C.flag,
+        [0.32, 0.42, -0.335],
+        [1, 1, 0.8],
+        [Math.PI / 2, 0, Math.PI / 2],
+      );
+      part(body, box(0.07, 0.04, 0.07), C.post, [0.52, 0.68, -0.3]);
       part(windowList, sphere(0.08, 8), lampColor, [-0.28, 0.42, -0.24]);
       break;
     }
     default:
       part(body, CreateBox(`${name}-box`, { size: 0.5 }, scene), C.plain, [0, 0.25, 0]);
+  }
+  if (napping) {
+    // Two lilac z's rising over its top, drawn unlit so they read at phone size.
+    let top = 0;
+    for (const mesh of body) {
+      mesh.computeWorldMatrix(true);
+      top = Math.max(top, mesh.getBoundingInfo().boundingBox.maximumWorld.y);
+    }
+    const zee = (x: number, y: number, size: number) => {
+      const t = size * 0.18;
+      for (const dy of [-size / 2, size / 2])
+        part(glow, box(size, t, t), C.napZ, [x, y + dy, -0.2]);
+      part(glow, box(size * 1.35, t, t), C.napZ, [x, y, -0.2], [1, 1, 1], [0, 0, Math.PI / 4]);
+    };
+    zee(0.1, top + 0.12, 0.12);
+    zee(0.28, top + 0.3, 0.16);
   }
   // Each level stands a little bigger.
   const { across, up } = levelScale(l);
