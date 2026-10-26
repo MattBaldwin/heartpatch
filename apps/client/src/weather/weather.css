@@ -16,10 +16,9 @@
 
 .weather-tint[data-kind='storm'] {
   opacity: 1;
-  /* Multiplied over the map: the whole scene goes darker and a little cooler
-     (not so blue that the clouds' warm edge light turns to mud). */
-  mix-blend-mode: multiply;
-  background: rgb(176 181 196);
+  /* Only a faint cool wash: the storm's dimming is the scene's own light
+     (weather-layer.ts), so nothing over the canvas mutes the clouds' gold edge. */
+  background: rgb(60 70 100 / 6%);
 }
 
 .weather-tint[data-kind='fog'] {
@@ -210,13 +209,5 @@
 .weather-sheet-open .hollow-hint,
 .weather-sheet-open .hollow-open,
 .weather-sheet-open .hollow-open-badge {
-  visibility: hidden;
-}
-
-/* A tile badge (the 🌙 over dark land, a tile mark) is DOM over the canvas, so a cloud
-   passing over it can't cover it in the scene: the weather layer marks the
-   ones a cloud's body is over, and they hide until it has moved on. */
-.dark-moon.weather-under-cloud,
-.tile-mark.weather-under-cloud {
   visibility: hidden;
 }

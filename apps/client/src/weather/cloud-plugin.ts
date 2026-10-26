@@ -9,11 +9,17 @@ import { WEATHER_LOOK } from './weather-config.js';
 /** Per-vertex light on a cloud: height up the cloud (0 flat belly, 1 top), sunny side, unused, unused. */
 export const CLOUD_ATTRIBUTE = 'weatherCloud';
 
-const { belly, top, key, rim, rimStrength, rimPower } = WEATHER_LOOK.clouds.shade;
+const { belly, paleBelly, top, key, rim, rimStrength, rimPower } = WEATHER_LOOK.clouds.shade;
 const sun = WEATHER_LOOK.clouds.sun;
 const sunLength = Math.hypot(...sun);
 const flash = WEATHER_LOOK.clouds.flash;
 const f = (n: number): string => n.toFixed(3);
+/**
+ * The rim's gold as it should look on screen: this unlit material's colour
+ * reaches the screen as it is (no gamma step after it), so it is given in
+ * sRGB, not linear.
+ */
+const gold = rim;
 
 /** How lit the sky is by lightning now, 0 to 1; the weather layer sets it each frame. */
 export interface CloudFlash {
@@ -22,8 +28,9 @@ export interface CloudFlash {
 
 // The clouds' material is unlit (one flat emissive colour), so the light is
 // worked out from the cloud's own shape and handed down as a vertex attribute:
-// a dark flat belly, a bright top, and a warm edge light round the tops (a
-// fresnel term from the cloud's own normal, strongest on the sunny side).
+// a dark flat belly, a bright top, and a warm gold edge light round the tops
+// (a fresnel term from the cloud's own normal, strongest on the sunny side),
+// laid on last as its own light so the slate under it can't mute it.
 // Doing it here, in the fragment, rather than in vertex colours keeps one
 // fused shape shaded as one. A lightning flash (`weatherFlash`) lights the
 // bellies from below. GLSL only, like the rain plugin.
@@ -57,16 +64,25 @@ const FRAGMENT_BEFORE_FOG = /* glsl */ `
   float wcUp = smoothstep(0.0, 1.0, vWeatherCloud.x) * (0.55 + 0.45 * clamp(wcN.y, 0.0, 1.0));
   vec3 wcSun = vec3(${f(sun[0] / sunLength)}, ${f(sun[1] / sunLength)}, ${f(sun[2] / sunLength)});
   float wcKey = clamp(dot(wcN, wcSun), 0.0, 1.0);
-  color.rgb *= mix(${f(belly)}, ${f(top)}, wcUp) * (1.0 - ${f(key)} * 0.5 + ${f(key)} * wcKey);
+  // A pale rain cloud keeps a light underside (soft white, not charcoal);
+  // a slate storm bank gets the full dark belly.
+  float wcPale = smoothstep(0.45, 0.8, dot(color.rgb, vec3(0.3333)));
+  float wcStorm = mix(${f(belly)}, ${f(top)}, wcUp) * (1.0 - ${f(key)} * 0.5 + ${f(key)} * wcKey);
+  float wcSoft = mix(${f(paleBelly)}, ${f(top)}, wcUp) * (0.9 + 0.1 * wcKey);
+  color.rgb *= mix(wcStorm, wcSoft, wcPale);
   vec3 wcV = normalize(vEyePosition.xyz - vWeatherPos);
   float wcEdge = pow(1.0 - clamp(dot(wcN, wcV), 0.0, 1.0), ${f(rimPower)});
   float wcRim = wcEdge * smoothstep(0.02, 0.3, vWeatherCloud.x) * (0.35 + 0.65 * wcKey);
-  // A screen blend: lights the edge towards warm gold without clipping a
-  // bright top to white or muddying a dark one.
-  vec3 wcGold = vec3(${f(rim[0])}, ${f(rim[1])}, ${f(rim[2])}) * clamp(wcRim * ${f(rimStrength)}, 0.0, 0.9);
-  color.rgb = 1.0 - (1.0 - color.rgb) * (1.0 - wcGold);
   color.rgb += vec3(${f(flash.colour[0])}, ${f(flash.colour[1])}, ${f(flash.colour[2])})
     * (weatherFlash * mix(${f(flash.belly)}, ${f(flash.top)}, wcUp));
+  // The gold edge, after the slate and the light: the edge turns to gold
+  // (a mix, so it stays gold rather than washing out to white) and glows a
+  // little over it.
+  vec3 wcGold = vec3(${f(gold[0])}, ${f(gold[1])}, ${f(gold[2])});
+  // A hard-edged band: half-mixed slate and gold reads as tan, so the band
+  // goes from none to all gold over a short step.
+  float wcGlow = smoothstep(0.22, 0.45, wcRim * ${f(rimStrength)});
+  color.rgb = mix(color.rgb, wcGold, wcGlow) + wcGold * (wcGlow * 0.1);
 }
 `;
 

@@ -100,16 +100,21 @@ describe('layoutWeather', () => {
     expect(half.rain).toBeLessThan(full.rain);
     expect(half.rain).toBeGreaterThan(0);
     expect(none.rain).toBe(0);
-    expect(none.clouds).toBeGreaterThan(0);
+    expect(none.banks).toBe(1);
   });
 
-  it('thins and lightens the clouds for the low tier', () => {
+  it('thins and lightens the clouds for the low tier, but a storm keeps its one bank', () => {
     const at = START + 2 * HOUR;
-    const full = layoutWeather([front()], at, 0, createWeatherLayout());
-    const thin = layoutWeather([front()], at, 0, createWeatherLayout(), { share: 0.5, alpha: 0.5 });
+    const lowTier = { share: 0.5, alpha: 0.5 };
+    const rainy = front({ kind: 'rain' });
+    const full = layoutWeather([rainy], at, 0, createWeatherLayout());
+    const thin = layoutWeather([rainy], at, 0, createWeatherLayout(), lowTier);
     expect(thin.clouds).toBeLessThan(full.clouds);
     expect(thin.clouds).toBeGreaterThan(0);
     expect(thin.cloudColours[3]).toBeCloseTo((full.cloudColours[3] ?? 0) * 0.5);
+    const storm = layoutWeather([front()], at, 0, createWeatherLayout(), lowTier);
+    expect(storm.banks).toBe(1);
+    expect(storm.bankColours[3]).toBeCloseTo(0.5);
   });
 
   it('fog gives fog and no clouds or rain; drought gives nothing', () => {
@@ -168,26 +173,32 @@ describe('a storm sky', () => {
     expect(storm.rainMatrices[0]).toBeGreaterThan(rain.rainMatrices[0] ?? 0);
   });
 
-  it('gives each cloud a shadow, a darker lower deck, and bolts for a storm only', () => {
+  it('gives a storm one wide bank, a darker see-through deck under it and a shadow; bolts for a storm only', () => {
     const storm = layoutWeather([front()], at, 1, createWeatherLayout());
-    expect(storm.clouds).toBeGreaterThan(2);
-    // Every cloud has a shadow with some alpha.
-    for (let i = 0; i < storm.clouds; i++)
-      expect(storm.shadowColours[i * 4 + 3]).toBeGreaterThan(0);
-    // The last clouds are the lower deck: below every main cloud, darker, wider and flatter.
+    // One bank, no loose puffs.
+    expect([storm.banks, storm.clouds]).toEqual([1, 0]);
+    // The deck, then the shadow: the deck under the bank's belly, darker than
+    // the bank and see-through; the shadow lower, on the tiles.
+    expect(storm.shadows).toBe(2);
+    const belly = storm.bankMatrices[13] ?? 0;
+    const deckY = storm.shadowMatrices[13] ?? 0;
+    const shadowY = storm.shadowMatrices[16 + 13] ?? 0;
+    expect(deckY).toBeLessThan(belly);
+    expect(shadowY).toBeLessThan(deckY);
+    expect(storm.shadowColours[0]).toBeLessThan(storm.bankColours[0] ?? 0);
+    expect(storm.shadowColours[3]).toBeGreaterThan(0);
+    expect(storm.shadowColours[3]).toBeLessThan(1);
+    // The deck is wider than it is deep, like the bank.
+    expect(storm.shadowMatrices[10]).toBeLessThan(storm.shadowMatrices[0] ?? 0);
+    // A rain front: puffs, each with its shadow, and no bank.
     const plain = layoutWeather([front({ kind: 'rain' })], at, 1, createWeatherLayout());
-    expect(storm.clouds).toBeGreaterThan(plain.clouds);
-    const deck = (storm.clouds - 1) * 16;
-    let lowestMain = Infinity;
-    for (let i = 0; i < 9; i++)
-      lowestMain = Math.min(lowestMain, storm.cloudMatrices[i * 16 + 13] ?? 0);
-    expect(storm.cloudMatrices[deck + 13]).toBeLessThan(lowestMain);
-    expect(storm.cloudColours[(storm.clouds - 1) * 4]).toBeLessThan(storm.cloudColours[0] ?? 0);
-    expect(storm.cloudMatrices[deck + 5]).toBeLessThan(storm.cloudMatrices[deck] ?? 0);
+    expect(plain.banks).toBe(0);
+    expect(plain.shadows).toBe(plain.clouds);
     expect(storm.bolts).toBeGreaterThan(0);
     expect(storm.boltAttrs[3]).toBe(-2);
-    const rain = layoutWeather([front({ kind: 'rain' })], at, 1, createWeatherLayout());
-    expect(rain.bolts).toBe(0);
+    // Bolts hang from the bank's near (south) half, under its belly.
+    expect(storm.boltMatrices[14]).toBeLessThan(storm.bankMatrices[14] ?? 0);
+    expect(plain.bolts).toBe(0);
   });
 
   it('holds a couple of bolts still when motion is off, and never passes the cap', () => {

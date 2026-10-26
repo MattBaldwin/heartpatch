@@ -1,8 +1,8 @@
 import { Constants } from '@babylonjs/core/Engines/constants';
 import { GlowLayer } from '@babylonjs/core/Layers/glowLayer';
+import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
-import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { Viewport } from '@babylonjs/core/Maths/math.viewport';
+import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
@@ -13,10 +13,9 @@ import { glowMaterial, softDisc } from '../map/map-ambient.js';
 import type { MapLayer, MapLayerHost } from '../map/map-screen.js';
 import { attachTerrainPlugin, DRIFT_ATTRIBUTE } from '../map/terrain-plugin.js';
 import type { QualityTier } from '../engine/config.js';
-import { createCloudDiscs, underCloud } from './cloud-cover.js';
 import { attachCloudShade, type CloudFlash } from './cloud-plugin.js';
 import { attachRain, RAIN_ATTRIBUTE } from './rain-plugin.js';
-import { buildBolt, buildCloud } from './weather-clouds.js';
+import { buildBank, buildBolt, buildCloud } from './weather-clouds.js';
 import { WEATHER_LOOK } from './weather-config.js';
 import { skyFlash } from './weather-flash.js';
 import { FULL_CLOUDS, WEATHER_CAPS } from './weather-layout.js';
@@ -24,24 +23,19 @@ import { WeatherPlacer, PLACE_EVERY_MS } from './weather-placer.js';
 import type { WeatherStore } from './weather-store.js';
 import { createWeatherTint } from './weather-tint.js';
 
-// The Wild Isle weather you can see (#621 W1-9): instanced clouds, rain
-// streaks, fog, cloud shadows and a storm's lightning over the fronts the
-// server planned, plus a sky wash. Five draw calls however big the storm (and
-// a glow pass round the bolts on the high tier). Lightning lights the cloud
-// bellies and pulses the scene's light. Cozy Patches build nothing.
+// The Wild Isle weather you can see (#621 W1-9): instanced clouds, a storm's
+// banks, rain streaks, fog, cloud shadows and a storm's lightning over the
+// fronts the server planned, plus a sky wash. Six draw calls however big the
+// storm (and a glow pass round the bolts on the high tier). Lightning lights
+// the cloud bellies and flashes the scene's light; a storm over the patch
+// dims and cools it. Cozy Patches build nothing. The map's tile marks and
+// flags are DOM over the canvas, so they stay readable over a cloud.
 
 export interface WeatherLayerOptions {
   readonly store: WeatherStore;
   readonly tier: () => QualityTier;
   readonly root?: HTMLElement;
 }
-
-/** The map's tile badges (DOM, not tappable) a cloud hides while it is over them. */
-const COVERED_BADGES = ['dark-moon', 'tile-mark'];
-/** How often, at most, badges under the clouds are checked again (ms). // TUNE: */
-const COVER_EVERY_MS = 100;
-/** Share of a cloud's scaled half-width that hides what is behind it (the shape has no soft edge, so all of it). // TUNE: */
-const COVER_BODY = 1;
 
 /** What the layer draws now, for the dev hook and the e2e. */
 export interface WeatherStats {
@@ -104,14 +98,15 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
       cloud.hasVertexAlpha = true;
       cloud.material = cloudMat;
       cloud.alphaIndex = 0;
+      // A storm's bank: one wide slab per front, same material and light.
+      const bank = buildBank(scene);
+      bank.hasVertexAlpha = true;
+      bank.material = cloudMat;
+      bank.alphaIndex = 0;
 
-      // Each cloud's soft shadow on the tiles, one flat disc apiece.
-      const shadowMat = glowMaterial(
-        scene,
-        'weather-shadow-mat',
-        WEATHER_LOOK.clouds.shadow.colour,
-        true,
-      );
+      // Each cloud's soft shadow on the tiles, and a storm bank's see-through
+      // lower deck: flat discs, their colour per disc.
+      const shadowMat = glowMaterial(scene, 'weather-shadow-mat', '#ffffff', true);
       shadowMat.backFaceCulling = false;
       attachTerrainPlugin(shadowMat, host.clock);
       const shadow = softDisc(scene, 'weather-shadow', WEATHER_LOOK.clouds.shadow.rings);
@@ -171,106 +166,52 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
       };
 
       // A flash lights the cloud bellies (the cloud plugin) and the scene: the
-      // sun and the sky light rise with it. Their own value is kept, and
-      // taken afresh if something else (the night) changes it meanwhile.
+      // sun and the sky light rise with it, and a sky-wide light (made the
+      // first time a storm comes) lights the tiles on both tiers. A storm over
+      // the patch dims the sun and the sky and leaves a faint cool light: the
+      // storm's mood. The sun's and sky's own values are kept, and taken
+      // afresh if something else (the night) changes them meanwhile.
       const sun = scene.getLightByName('sun');
       const pulse = WEATHER_LOOK.storm.flash;
+      const mood = WEATHER_LOOK.storm.mood;
       let sunBase = sun?.intensity ?? 0;
       let sunSet = Number.NaN;
       let skyBase = scene.environmentIntensity;
       let skySet = Number.NaN;
-      const light = (lit: number): void => {
-        if (lit === flash.value) return;
-        flash.value = lit;
+      let hemi: HemisphericLight | null = null;
+      let stormy = false;
+      let lit = Number.NaN;
+      const light = (now: number, overPatch: boolean): void => {
+        if (now === lit && overPatch === stormy) return;
+        lit = now;
+        stormy = overPatch;
+        flash.value = now;
+        const dim = overPatch ? 1 : 0;
         if (sun) {
           if (sun.intensity !== sunSet) sunBase = sun.intensity;
-          sunSet = sunBase * (1 + pulse.sun * lit);
+          sunSet = sunBase * (1 - (1 - mood.sun) * dim) * (1 + pulse.sun * now);
           sun.intensity = sunSet;
         }
         if (scene.environmentIntensity !== skySet) skyBase = scene.environmentIntensity;
-        skySet = skyBase * (1 + pulse.sky * lit);
+        skySet = skyBase * (1 - (1 - mood.sky) * dim) * (1 + pulse.sky * now);
         scene.environmentIntensity = skySet;
+        if (hemi) hemi.intensity = pulse.hemi * now + mood.hemi * dim;
       };
-
-      // Badges over the tiles (DOM) that a cloud's body is over hide
-      // (cloud-cover.ts). Checked when the camera or the clouds move, at most
-      // every `COVER_EVERY_MS`, into fixed buffers.
-      const cover = createCloudDiscs(WEATHER_CAPS.clouds);
-      // Live lists, made once: the 🌙 over dark land and the map's tile marks.
-      const covered = COVERED_BADGES.map((name) => document.getElementsByClassName(name));
-      const viewport = new Viewport(0, 0, 1, 1);
-      const centre = new Vector3();
-      const edge = new Vector3();
-      const onScreen = new Vector3();
-      const offScreen = new Vector3();
-      let coverFlag = -1;
-      let coverDirty = true;
-      let coverAt = 0;
-      let coverLater = 0;
-      // A check skipped for being too soon runs once the wait is up, so the
-      // last place the camera came to rest is always checked.
-      // A check is followed by one more a moment later: the badges are
-      // placed after the frame (by their own layer), maybe after this check.
-      let trailing = false;
-      const coverAgain = (): void => {
-        coverLater = 0;
-        coverDirty = true;
-        trailing = true;
-        coverBadges();
-        trailing = false;
-      };
-      const coverBadges = (): void => {
-        const camera = scene.activeCamera;
-        const canvas = scene.getEngine().getRenderingCanvas();
-        if (!camera || !canvas) return;
-        const transform = camera.getTransformationMatrix();
-        if (!coverDirty && transform.updateFlag === coverFlag) return;
-        const now = performance.now();
-        if (now - coverAt < COVER_EVERY_MS) {
-          if (!coverLater) coverLater = window.setTimeout(coverAgain, COVER_EVERY_MS);
-          return;
-        }
-        coverAt = now;
-        coverDirty = false;
-        if (!trailing && !coverLater) coverLater = window.setTimeout(coverAgain, COVER_EVERY_MS);
-        coverFlag = transform.updateFlag;
-        cover.count = 0;
-        if (cloud.isEnabled()) {
-          const box = canvas.getBoundingClientRect();
-          camera.viewport.toGlobalToRef(box.width, box.height, viewport);
-          const m = layout.cloudMatrices;
-          for (let i = 0; i < layout.clouds; i++) {
-            const o = i * 16;
-            const r = (m[o] ?? 0) * COVER_BODY;
-            centre.set(m[o + 12] ?? 0, m[o + 13] ?? 0, m[o + 14] ?? 0);
-            Vector3.ProjectToRef(centre, Matrix.IdentityReadOnly, transform, viewport, onScreen);
-            edge.set(centre.x + r, centre.y, centre.z);
-            Vector3.ProjectToRef(edge, Matrix.IdentityReadOnly, transform, viewport, offScreen);
-            if (onScreen.z < 0 || onScreen.z > 1) continue;
-            const d = cover.count * 3;
-            cover.discs[d] = box.left + onScreen.x;
-            cover.discs[d + 1] = box.top + onScreen.y;
-            cover.discs[d + 2] = Math.hypot(offScreen.x - onScreen.x, offScreen.y - onScreen.y);
-            cover.count++;
-          }
-        }
-        for (const badges of covered) {
-          for (let i = 0; i < badges.length; i++) {
-            const badge = badges[i];
-            if (!badge) continue;
-            let hide = false;
-            if (cover.count > 0 && badge instanceof HTMLElement && !badge.hidden) {
-              const b = badge.getBoundingClientRect();
-              hide = underCloud(cover, b.left + b.width / 2, b.top + b.height / 2);
-            }
-            badge.classList.toggle('weather-under-cloud', hide);
-          }
-        }
+      const makeHemi = (): void => {
+        if (hemi) return;
+        hemi = new HemisphericLight('weather-flash', new Vector3(0, 1, -0.3), scene);
+        hemi.diffuse = new Color3(...pulse.hemiColour);
+        hemi.groundColor = Color3.Black();
+        hemi.specular = Color3.Black();
+        hemi.intensity = 0;
+        lit = Number.NaN;
       };
 
       const layout = placer.layout;
       instanced(cloud, layout.cloudMatrices, layout.cloudColours, 'color');
       cloud.thinInstanceSetBuffer(DRIFT_ATTRIBUTE, layout.cloudDrift, 4, false);
+      instanced(bank, layout.bankMatrices, layout.bankColours, 'color');
+      bank.thinInstanceSetBuffer(DRIFT_ATTRIBUTE, layout.bankDrift, 4, false);
       instanced(shadow, layout.shadowMatrices, layout.shadowColours, 'color');
       instanced(bolt, layout.boltMatrices, layout.boltAttrs, RAIN_ATTRIBUTE);
       instanced(fog, layout.fogMatrices, layout.fogDrift, DRIFT_ATTRIBUTE);
@@ -301,29 +242,33 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
         // The low tier's clouds are fewer and lighter, as well as rainless.
         placer.setClouds(tier === 'low' ? WEATHER_LOOK.lowTier : FULL_CLOUDS);
         const placed = placer.update(store.now());
-        tint.set(store.kindNow());
-        // Clouds drift and badges come and go without a frame being drawn (a
-        // still map renders only on change): check them here too.
-        coverDirty = true;
-        coverBadges();
+        const kind = store.kindNow();
+        tint.set(kind);
+        if (layout.banks > 0) makeHemi();
+        light(flash.value, kind === 'storm');
         if (placed || last.mode !== mode) {
           show(cloud, layout.clouds);
+          show(bank, layout.banks);
           show(fog, layout.fog);
           show(rain, layout.rain);
-          show(shadow, layout.clouds);
+          show(shadow, layout.shadows);
           show(bolt, layout.bolts, boltPlugin !== null);
           setGlow(tier === 'high' && bolt.isEnabled());
-          for (const m of [cloud, shadow, fog, rain, bolt]) m.thinInstanceBufferUpdated('matrix');
+          for (const m of [cloud, bank, shadow, fog, rain, bolt]) {
+            m.thinInstanceBufferUpdated('matrix');
+          }
           shadow.thinInstanceBufferUpdated('color');
           bolt.thinInstanceBufferUpdated(RAIN_ATTRIBUTE);
           cloud.thinInstanceBufferUpdated('color');
           cloud.thinInstanceBufferUpdated(DRIFT_ATTRIBUTE);
+          bank.thinInstanceBufferUpdated('color');
+          bank.thinInstanceBufferUpdated(DRIFT_ATTRIBUTE);
           fog.thinInstanceBufferUpdated(DRIFT_ATTRIBUTE);
           rain.thinInstanceBufferUpdated(RAIN_ATTRIBUTE);
           host.invalidate();
         }
         last = {
-          clouds: layout.clouds,
+          clouds: layout.clouds + layout.banks,
           rain: layout.rain,
           fog: layout.fog,
           mode,
@@ -338,18 +283,16 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
       // allocation. Each frame also follows the lightning's light.
       const watch = scene.onBeforeRenderObservable.add(() => {
         if (host.mode() !== last.mode) refresh();
-        light(bolt.isEnabled() ? skyFlash(layout.boltAttrs, layout.bolts, host.clock.time) : 0);
+        light(
+          bolt.isEnabled() ? skyFlash(layout.boltAttrs, layout.bolts, host.clock.time) : 0,
+          stormy,
+        );
       });
-      const afterRender = scene.onAfterRenderObservable.add(coverBadges);
       scene.onDisposeObservable.add(() => {
         clearInterval(timer);
-        clearTimeout(coverLater);
         stopStore();
         off();
         scene.onBeforeRenderObservable.remove(watch);
-        scene.onAfterRenderObservable.remove(afterRender);
-        for (const badge of document.querySelectorAll('.weather-under-cloud'))
-          badge.classList.remove('weather-under-cloud');
         tint.remove();
       });
       refresh();

@@ -9,12 +9,15 @@ import { WEATHER_LOOK } from './weather-config.js';
 // allocated once, so a refresh never allocates or changes the draw count.
 
 /** Most instances of each kind, ever. Fixed at scene build. // TUNE: */
-export const WEATHER_CAPS = { clouds: 72, rain: 480, fog: 48, bolts: 12 } as const;
+export const WEATHER_CAPS = { clouds: 72, banks: 6, rain: 720, fog: 48, bolts: 12 } as const;
+
+/** Shadows on the tiles: one under each cloud, and a shadow and a lower deck under each bank. */
+const SHADOW_CAP = WEATHER_CAPS.clouds + WEATHER_CAPS.banks * 2;
 
 /** Instances a radius-3 front asks for; other radii scale from it. // TUNE: */
 const PER_FRONT = {
   rain: { clouds: 10, rain: 90 },
-  storm: { clouds: 9, rain: 160 },
+  storm: { rain: 300 },
   fog: { fog: 18 },
 } as const;
 
@@ -25,12 +28,21 @@ const RAMP = 0.1;
 const { clouds: CLOUDS, fog: FOG, rain: RAIN, storm: STORM } = WEATHER_LOOK;
 
 const linear = (c: number): number => Math.pow(c, 2.2);
+/** How far a storm's rain is pulled towards the camera, as a share of its bank's half-depth. // TUNE: */
+const RAIN_NEAR = 0.45;
 
 export interface WeatherLayout {
   readonly cloudMatrices: Float32Array;
   readonly cloudColours: Float32Array;
   readonly cloudDrift: Float32Array;
-  /** One soft shadow on the tiles under each cloud. */
+  /** A storm's bank, one per storm front (weather-clouds.ts `bankShape`). */
+  readonly bankMatrices: Float32Array;
+  readonly bankColours: Float32Array;
+  readonly bankDrift: Float32Array;
+  /**
+   * Flat soft discs: a shadow on the tiles under each cloud and bank, and a
+   * bank's see-through lower deck. Colour and alpha per disc.
+   */
   readonly shadowMatrices: Float32Array;
   readonly shadowColours: Float32Array;
   readonly rainMatrices: Float32Array;
@@ -42,19 +54,24 @@ export interface WeatherLayout {
   readonly fogMatrices: Float32Array;
   readonly fogDrift: Float32Array;
   clouds: number;
+  banks: number;
+  shadows: number;
   rain: number;
   fog: number;
   bolts: number;
 }
 
 export function createWeatherLayout(): WeatherLayout {
-  const { clouds, rain, fog, bolts } = WEATHER_CAPS;
+  const { clouds, banks, rain, fog, bolts } = WEATHER_CAPS;
   return {
     cloudMatrices: new Float32Array(clouds * 16),
     cloudColours: new Float32Array(clouds * 4),
     cloudDrift: new Float32Array(clouds * 4),
-    shadowMatrices: new Float32Array(clouds * 16),
-    shadowColours: new Float32Array(clouds * 4),
+    bankMatrices: new Float32Array(banks * 16),
+    bankColours: new Float32Array(banks * 4),
+    bankDrift: new Float32Array(banks * 4),
+    shadowMatrices: new Float32Array(SHADOW_CAP * 16),
+    shadowColours: new Float32Array(SHADOW_CAP * 4),
     rainMatrices: new Float32Array(rain * 16),
     rainAttrs: new Float32Array(rain * 4),
     boltMatrices: new Float32Array(bolts * 16),
@@ -62,6 +79,8 @@ export function createWeatherLayout(): WeatherLayout {
     fogMatrices: new Float32Array(fog * 16),
     fogDrift: new Float32Array(fog * 4),
     clouds: 0,
+    banks: 0,
+    shadows: 0,
     rain: 0,
     fog: 0,
     bolts: 0,
@@ -122,22 +141,6 @@ export function spotIn(
   };
 }
 
-/** Turn between the main layer's spiral and the deck's, so deck clouds fill the gaps rather than sit under main ones. */
-const DECK_TURN = GOLDEN_ANGLE / 2;
-
-/** The i-th of n deck clouds: the spiral turned by half a step, a little tighter. */
-function deckSpot(
-  seed: number,
-  i: number,
-  n: number,
-  radiusTiles: number,
-): ReturnType<typeof spotIn> {
-  const s = spotIn(seed, i, n, radiusTiles * 0.85, 50);
-  const c = Math.cos(DECK_TURN);
-  const t = Math.sin(DECK_TURN);
-  return { dx: s.dx * c - s.dz * t, dz: s.dx * t + s.dz * c, jitter: s.jitter };
-}
-
 function put(
   m: Float32Array,
   at: number,
@@ -147,12 +150,13 @@ function put(
   scale: number,
   wide = 1,
   tall = 1,
+  deep = wide,
 ): void {
   const o = at * 16;
   m.fill(0, o, o + 16);
   m[o] = scale * wide;
   m[o + 5] = scale * tall;
-  m[o + 10] = scale * wide;
+  m[o + 10] = scale * deep;
   m[o + 12] = x;
   m[o + 13] = y;
   m[o + 14] = z;
@@ -189,80 +193,73 @@ export function layoutWeather(
   storm: StormSky = { storm: rainShare, still: false },
 ): WeatherLayout {
   let nCloud = 0;
+  let banks = 0;
+  let shadows = 0;
   let rain = 0;
   let fog = 0;
   let bolts = 0;
+  const shade = (
+    x: number,
+    y: number,
+    z: number,
+    scale: number,
+    wide: number,
+    deep: number,
+    rgb: readonly [number, number, number],
+    alpha: number,
+  ): void => {
+    if (shadows >= SHADOW_CAP) return;
+    const at = shadows++;
+    put(out.shadowMatrices, at, x, y, z, scale, wide, 1, deep);
+    out.shadowColours.set([linear(rgb[0]), linear(rgb[1]), linear(rgb[2]), alpha], at * 4);
+  };
   for (const front of fronts) {
     const centre = frontPosition(front, nowMs);
     const grow = frontScale(front, nowMs);
     if (!centre || grow <= 0) continue;
     const seed = seedOf(front.id);
     const bulk = front.radius / 3;
-    if (front.kind === 'rain' || front.kind === 'storm') {
-      const isStorm = front.kind === 'storm';
-      const want = PER_FRONT[front.kind];
-      const colour = CLOUDS.colour[front.kind];
+    if (front.kind === 'rain') {
+      const colour = CLOUDS.colour.rain;
       const nClouds = Math.min(
         WEATHER_CAPS.clouds - nCloud,
-        Math.max(3, Math.round(want.clouds * bulk * clouds.share)),
+        Math.max(3, Math.round(PER_FRONT.rain.clouds * bulk * clouds.share)),
       );
-      // A storm adds a lower deck under its main layer: wider, flatter, darker clouds.
-      const nDeck = isStorm
-        ? Math.min(
-            WEATHER_CAPS.clouds - nCloud - nClouds,
-            Math.max(2, Math.round(CLOUDS.deck.per * bulk * clouds.share)),
-          )
-        : 0;
-      for (let i = 0; i < nClouds + nDeck; i++) {
-        const lower = i >= nClouds;
-        const s = lower
-          ? deckSpot(seed, i - nClouds, nDeck, front.radius)
-          : spotIn(seed, i, nClouds, front.radius, 10);
+      for (let i = 0; i < nClouds; i++) {
+        const s = spotIn(seed, i, nClouds, front.radius, 10);
         const at = nCloud++;
-        const size =
-          (CLOUDS.size + s.jitter * CLOUDS.spread) *
-          grow *
-          (lower ? CLOUDS.deck.grow : isStorm ? CLOUDS.stormGrow : 1);
-        const dark = lower ? CLOUDS.deck.dark : 1;
+        const size = (CLOUDS.size + s.jitter * CLOUDS.spread) * grow;
         put(
           out.cloudMatrices,
           at,
           centre.x + s.dx,
-          CLOUDS.height + s.jitter * 0.5 - (lower ? CLOUDS.deck.drop : 0),
+          CLOUDS.height + s.jitter * 0.5,
           centre.z + s.dz,
           size,
-          1,
-          lower ? CLOUDS.deck.flat : 1,
         );
         const c = at * 4;
-        out.cloudColours[c] = linear(colour[0]) * dark;
-        out.cloudColours[c + 1] = linear(colour[1]) * dark;
-        out.cloudColours[c + 2] = linear(colour[2]) * dark;
+        out.cloudColours[c] = linear(colour[0]);
+        out.cloudColours[c + 1] = linear(colour[1]);
+        out.cloudColours[c + 2] = linear(colour[2]);
         out.cloudColours[c + 3] = colour[3] * clouds.alpha;
         out.cloudDrift.set(
           [DRIFT_MODE.float, s.jitter * 6.28, 0.25 + s.jitter * 0.2, 0.15],
           at * 4,
         );
-        put(
-          out.shadowMatrices,
-          at,
+        shade(
           centre.x + s.dx - 0.15,
           CLOUDS.shadow.height,
           centre.z + s.dz + 0.2,
           size * CLOUDS.shadow.size,
           1.25,
-          1,
-        );
-        out.shadowColours.set(
-          [1, 1, 1, CLOUDS.shadow.alpha[isStorm ? 'storm' : 'rain'] * grow],
-          at * 4,
+          1.25,
+          CLOUDS.shadow.colour,
+          CLOUDS.shadow.alpha.rain * grow,
         );
       }
-      const share = isStorm ? storm.storm : rainShare;
-      const heavy = isStorm ? STORM : null;
       const nRain = Math.min(
         WEATHER_CAPS.rain - rain,
-        Math.round(Math.max(4, want.rain * bulk) * share),
+        Math.round(Math.max(4, PER_FRONT.rain.rain * bulk) * rainShare),
       );
       for (let i = 0; i < nRain; i++) {
         const s = spotIn(seed, i, Math.max(1, nRain), front.radius, 20);
@@ -274,33 +271,89 @@ export function layoutWeather(
           CLOUDS.height - RAIN.below,
           centre.z + s.dz,
           grow,
-          heavy?.thick ?? 1,
-          heavy?.long ?? 1,
         );
-        out.rainAttrs.set([s.jitter, 0.9 + s.jitter * 0.6, RAIN.fall, heavy?.slant ?? 0], at * 4);
+        out.rainAttrs.set([s.jitter, 0.9 + s.jitter * 0.6, RAIN.fall, 0], at * 4);
       }
-      if (isStorm) {
-        const wanted = storm.still ? STORM.bolts.hold : Math.round(STORM.bolts.per * bulk);
-        const nBolts = Math.min(WEATHER_CAPS.bolts - bolts, Math.max(1, wanted));
-        for (let i = 0; i < nBolts; i++) {
-          // Under the lower deck's clouds, spread through the front.
-          // From under a deck cloud's near edge (the map camera looks north,
-          // up +z), so the cloud doesn't hide the bolt hanging beneath it.
-          const s = deckSpot(seed, i, Math.max(1, nDeck), front.radius);
-          const deckSize = (CLOUDS.size + s.jitter * CLOUDS.spread) * grow * CLOUDS.deck.grow;
-          const at = bolts++;
-          put(
-            out.boltMatrices,
-            at,
-            centre.x + s.dx,
-            CLOUDS.height + s.jitter * 0.5 - CLOUDS.deck.drop - 0.05,
-            centre.z + s.dz - deckSize * STORM.bolts.edge,
-            STORM.bolts.height * grow,
-          );
-          // Lean: the bolt's down axis also runs towards the camera (-z).
-          out.boltMatrices[at * 16 + 6] = STORM.bolts.height * grow * STORM.bolts.lean;
-          out.boltAttrs.set([s.jitter, 0.14 + s.jitter * 0.08, 0, storm.still ? -1 : -2], at * 4);
-        }
+    } else if (front.kind === 'storm') {
+      // One bank over the whole front (however thin the tier's clouds), a
+      // see-through darker deck under it and one broad shadow on the tiles.
+      const scale = bulk * grow;
+      const belly = CLOUDS.bank.belly;
+      const deep = CLOUDS.bank.deep / CLOUDS.bank.wide;
+      if (banks < WEATHER_CAPS.banks) {
+        const at = banks++;
+        put(out.bankMatrices, at, centre.x, belly, centre.z, scale);
+        const colour = CLOUDS.colour.storm;
+        out.bankColours.set(
+          [linear(colour[0]), linear(colour[1]), linear(colour[2]), colour[3] * clouds.alpha],
+          at * 4,
+        );
+        out.bankDrift.set([DRIFT_MODE.float, (seed & 0xff) / 40, 0.2, 0.08], at * 4);
+        const deck = CLOUDS.deck;
+        shade(
+          centre.x,
+          belly - deck.drop * scale,
+          centre.z - deck.near * CLOUDS.bank.deep * scale,
+          CLOUDS.bank.wide * deck.grow * scale,
+          1,
+          deep,
+          deck.colour,
+          deck.alpha * grow,
+        );
+        shade(
+          centre.x - 0.15,
+          CLOUDS.shadow.height,
+          centre.z + 0.2,
+          CLOUDS.bank.wide * CLOUDS.shadow.size * scale,
+          1,
+          deep,
+          CLOUDS.shadow.colour,
+          CLOUDS.shadow.alpha.storm * grow,
+        );
+      }
+      // Heavy slanted rain from the bank's belly, most of it towards its near
+      // (south) side and out past it, where the camera sees it fall rather
+      // than through the bank. Still inside the front.
+      const nRain = Math.min(
+        WEATHER_CAPS.rain - rain,
+        Math.round(Math.max(4, PER_FRONT.storm.rain * bulk) * storm.storm),
+      );
+      for (let i = 0; i < nRain; i++) {
+        const s = spotIn(seed, i, Math.max(1, nRain), front.radius, 20);
+        const at = rain++;
+        put(
+          out.rainMatrices,
+          at,
+          centre.x + s.dx,
+          belly - 0.05,
+          centre.z + s.dz * 0.75 - RAIN_NEAR * CLOUDS.bank.deep * scale,
+          grow,
+          STORM.thick,
+          STORM.long,
+        );
+        out.rainAttrs.set([s.jitter, 0.9 + s.jitter * 0.6, RAIN.fall, STORM.slant], at * 4);
+      }
+      // Bolts from under the bank's near edge (the map camera looks north,
+      // up +z), spread across it, so the bank doesn't hide them.
+      const wanted = storm.still ? STORM.bolts.hold : Math.round(STORM.bolts.per * bulk);
+      const nBolts = Math.min(WEATHER_CAPS.bolts - bolts, Math.max(1, wanted));
+      for (let i = 0; i < nBolts; i++) {
+        const jitter = hash01(seed, i, 60);
+        const across = ((i + 0.5) / nBolts) * 2 - 1;
+        const at = bolts++;
+        const x = centre.x + (across * 0.7 + (jitter - 0.5) * 0.2) * CLOUDS.bank.wide * scale;
+        const edge = Math.sqrt(Math.max(0, 1 - (across * 0.7) ** 2));
+        put(
+          out.boltMatrices,
+          at,
+          x,
+          belly + 0.05,
+          centre.z - edge * CLOUDS.bank.deep * STORM.bolts.edge * scale,
+          STORM.bolts.height * grow,
+        );
+        // Lean: the bolt's down axis also runs towards the camera (-z).
+        out.boltMatrices[at * 16 + 6] = STORM.bolts.height * grow * STORM.bolts.lean;
+        out.boltAttrs.set([jitter, 0.14 + jitter * 0.08, 0, storm.still ? -1 : -2], at * 4);
       }
     } else if (front.kind === 'fog') {
       const n = Math.min(WEATHER_CAPS.fog - fog, Math.max(4, Math.round(PER_FRONT.fog.fog * bulk)));
@@ -320,6 +373,8 @@ export function layoutWeather(
     }
   }
   out.clouds = nCloud;
+  out.banks = banks;
+  out.shadows = shadows;
   out.rain = rain;
   out.fog = fog;
   out.bolts = bolts;
