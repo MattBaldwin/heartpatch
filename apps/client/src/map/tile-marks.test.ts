@@ -26,7 +26,7 @@ describe('pickMarks (#602)', () => {
   });
 
   it('lists its kinds most pressing first', () => {
-    expect(TILE_MARK.kinds).toEqual(['meh', 'napping']);
+    expect(TILE_MARK.kinds).toEqual(['knocked', 'meh', 'napping']);
     for (const kind of TILE_MARK.kinds) expect(TILE_MARK.glyphs[kind]).not.toBe('');
   });
 });

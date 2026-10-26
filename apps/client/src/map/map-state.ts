@@ -249,6 +249,18 @@ export class MapState {
           ? 'redraw'
           : 'none';
       }
+      case 'building.knocked':
+      case 'building.repaired': {
+        // A storm knocked a building about, or it was fixed (#621): the 🩹 comes or goes.
+        const parsed = GAME_EVENTS[event.type].public.safeParse(event.data);
+        if (!parsed.success) return 'resync';
+        const knocked = event.type === 'building.knocked';
+        return this.editTile(hexKey(parsed.data), (tile) =>
+          tile.buildings.map((b) => (b.id === parsed.data.buildingRowId ? { ...b, knocked } : b)),
+        )
+          ? 'redraw'
+          : 'none';
+      }
       case 'building.moved': {
         const parsed = GAME_EVENTS['building.moved'].public.safeParse(event.data);
         if (!parsed.success) return 'resync';

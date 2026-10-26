@@ -9,7 +9,9 @@ import {
   type HollowStage,
   type MorningReport,
   type PvpMode,
+  type WeatherKind,
 } from '@heartpatch/shared';
+import { WEATHER_EMOJI } from '../weather/weather-model.js';
 import { joinNames } from './show-timeline.js';
 
 // The night's words around the show (#277, mockup screens 1, 2, 5 and 7):
@@ -193,5 +195,36 @@ export function upkeepPausedLine(
   return {
     icon: '💛',
     text: `${who} 💛: this morning's coins ran short. ${one ? 'It wakes' : 'They wake'} up as soon as you have ${enough}!`,
+  };
+}
+
+/** Who knocked the buildings about, by the weather that did it. */
+const KNOCKED_BY: Readonly<Record<Exclude<WeatherKind, 'clear'>, string>> = {
+  storm: 'The storm',
+  rain: 'The rain',
+  fog: 'The fog',
+  drought: 'The dry spell',
+};
+
+/**
+ * The morning card's line after a Wild Isle storm (#621 W1-9): the buildings
+ * it knocked about that still wait to be fixed (`HollowStatus.weatherNotes`).
+ * "The storm knocked your Pier about. Fix it when you can!", with the
+ * weather's emoji as the line's icon, never mid-sentence. Up to three by
+ * name, more by count. Never "damage" or "destroy": it is knocked, not broken.
+ * Only storms knock buildings today, and the notes don't say which weather
+ * did it, so `kind` is the storm unless told otherwise.
+ */
+export function weatherNotesLine(
+  notes: readonly { buildingId: string }[],
+  kind: Exclude<WeatherKind, 'clear'> = 'storm',
+): ReportLine | null {
+  if (notes.length === 0) return null;
+  const names = notes.map((n) => BUILDING_NAMES.get(n.buildingId) ?? 'building');
+  const named = new Set(names).size === names.length && names.length <= 3;
+  const what = named ? `your ${joinNames(names)}` : `${String(names.length)} of your buildings`;
+  return {
+    icon: WEATHER_EMOJI[kind],
+    text: `${KNOCKED_BY[kind]} knocked ${what} about. Fix ${notes.length === 1 ? 'it' : 'them'} when you can!`,
   };
 }

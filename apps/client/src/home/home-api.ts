@@ -69,6 +69,14 @@ export const homeApi = {
       headers: { 'idempotency-key': key },
     }),
 
+  /** Fixes a building a storm knocked about (#621): the server takes the bill and wakes it. */
+  repair: (mapId: string, buildingId: string, key: string): Promise<HomeResponse> =>
+    apiCallFor(`/maps/${mapId}/buildings/${buildingId}/repair`, {
+      method: 'POST',
+      schema: HomeResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
   /** Names my home (#306 PR 0): the server checks the gate and runs the text filter. */
   name: (mapId: string, name: string, key: string): Promise<HomeResponse> =>
     apiCallFor(`/maps/${mapId}/home/name`, {

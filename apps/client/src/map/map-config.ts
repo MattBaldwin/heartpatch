@@ -572,10 +572,11 @@ export const TILE_MARK = {
   /**
    * What a mark can say, most pressing first: `meh`, a gatherer of mine
    * that isn't keen on this job (#393's 🌧️); `napping`, a gatherer of mine
-   * with a full basket or on a homestead cut off from home.
+   * with a full basket or on a homestead cut off from home; `knocked`, a
+   * building of mine a storm knocked about (Wild Isle, #621): fix it.
    */
-  kinds: ['meh', 'napping'],
-  glyphs: { meh: '🌧️', napping: '💤' },
+  kinds: ['knocked', 'meh', 'napping'],
+  glyphs: { knocked: '🩹', meh: '🌧️', napping: '💤' },
 } as const;
 
 /**

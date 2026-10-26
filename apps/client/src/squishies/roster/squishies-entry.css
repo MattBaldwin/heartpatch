@@ -34,9 +34,10 @@
   clip-path: inset(50%);
 }
 
-/* On the map it leads Chat and Friends (the slot draws them round). On the
-   narrowest phones the row tightens so it never reaches "My patches". */
-@media (max-width: 359px) {
+/* On the map it leads Chat and Friends (the slot draws them round). On
+   phones up to the iPhone SE's 375pt (and a little over) the row tightens so
+   it never reaches "My patches": at 48pt it overlapped its end (#621). */
+@media (max-width: 389px) {
   .tray-top-right {
     gap: 4px;
   }
