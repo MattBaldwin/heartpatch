@@ -18,7 +18,7 @@ import { attachRain, RAIN_ATTRIBUTE } from './rain-plugin.js';
 import { buildBank, buildBolt, buildCloud } from './weather-clouds.js';
 import { WEATHER_LOOK } from './weather-config.js';
 import { skyFlash } from './weather-flash.js';
-import { FULL_CLOUDS, WEATHER_CAPS } from './weather-layout.js';
+import { FULL_CLOUDS } from './weather-layout.js';
 import { WeatherPlacer, PLACE_EVERY_MS } from './weather-placer.js';
 import type { WeatherStore } from './weather-store.js';
 import { createWeatherTint } from './weather-tint.js';
