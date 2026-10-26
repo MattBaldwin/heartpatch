@@ -514,6 +514,7 @@ export class ExploreScene implements AmbientTarget {
         seed: tileSeed(tile, 'land'),
         size,
         colliders: this.#colliders.map((c) => ({ x: c.x * size, z: c.z * size, r: c.r * size })),
+        spots: tile.spots.map((s) => ({ x: s.x * size, z: s.z * size, kind: s.kind })),
         start: this.#world(this.#at),
         tier: options.tier,
         sky: options.sky,

@@ -8,16 +8,20 @@ import { cylinder, flat, shaded, sphere } from './land-kit.js';
 import type { ExtrasContext, Growth } from './land-layout.js';
 import type { SpotShape } from './trail-kit.js';
 import type { LandOptions } from './explore-land.js';
-import { bankRadius, CROSSINGS, farBankRadius, RIVER } from './river-config.js';
+import { EXPLORE_VIEW } from './explore-config.js';
+import { bankReach } from './land-shape.js';
+import { BANK, bankRadius, CROSSINGS, farBankRadius, RIVER } from './river-config.js';
 
 // The river bank's shapes (#621 W1-13), on the meadow's kit like the coast's:
 // the same vinyl-toy primitives, vertex-coloured from a darker foot to a
-// sunlit top (art bible §4), one merged mesh each. The river curls round the
-// back of the tile in a lazy bend: its water, the ripples running with the
-// current, the far bank and the crossings are layers placed once at the
-// middle (the ground under the water is deep, so nothing there can stand on
-// it); the reeds and rocks on the near bank are seeded per tile. The four
-// search spots are drawn at world size.
+// sunlit top (art bible §4), one merged mesh each. The tile is the bank: its
+// back runs down a pebbly shore into clear shallows (`BANK`, shaped by the
+// land), and past the Keeper's clamp the river runs deep round a lazy bend.
+// The water, the ripples running with the current, the far bank and the mist
+// are layers placed once at the middle (the land's middle is at 0); the
+// jetty and its lantern are placed at the land's jetty, and the reeds and
+// rocks are seeded per tile. The four search spots are drawn at world size,
+// each on the ground its kind is padded to (`BANK.pads`).
 
 type Layers = NonNullable<LandOptions['extras']>;
 type Vec3 = [number, number, number];
@@ -29,6 +33,23 @@ const smooth = (t: number): number => {
   const c = Math.min(1, Math.max(0, t));
   return c * c * (3 - 2 * c);
 };
+
+/** Sets every vertex's alpha (the part's mesh must have `hasVertexAlpha`). */
+function faded(part: Part, alpha: number): Part {
+  const colors = part.data.colors;
+  if (colors) for (let i = 3; i < colors.length; i += 4) colors[i] = alpha;
+  return part;
+}
+
+/**
+ * How far out along bearing `a` the bank reaches `share` of the way to the
+ * back edges (`bankReach`), capped at `cap` where the bearing runs past the
+ * tile's sides (there the meadow falls straight into the water).
+ */
+function reachRadius(share: number, a: number, cap: number): number {
+  const per = bankReach({ x: Math.cos(a), z: Math.sin(a) }, EXPLORE_VIEW.hexSize);
+  return per > 0 ? Math.min(cap, share / per) : cap;
+}
 
 /** A point `r` out at bearing `a` (radians), at height `y`. */
 const polar = (r: number, a: number, y: number): Vec3 => [Math.cos(a) * r, y, Math.sin(a) * r];
@@ -118,58 +139,52 @@ function arc(r: number, a0: number, len: number, drift: (t: number) => number = 
 // ── The water ─────────────────────────────────────────────────────────
 
 /**
- * The river: one disc out to just under the far bank whose vertex colour is
- * pale in the shallows by each bank and deep in the channel's middle, so it
- * reads as a river running between two banks, not a lake.
+ * The river: one disc out past the far bank at the water's level, see-through
+ * and pale over the shallows' sandy bed, darkening to the deep teal channel
+ * past the drop (and back to pale by the far bank), so walkable water and
+ * deep water read apart at a glance. It's under the meadow everywhere else.
  */
 export function buildRiver(scene: Scene): Mesh {
-  return kitMesh(scene, 'river-water', () => {
+  const mesh = kitMesh(scene, 'river-water', () => {
+    const size = EXPLORE_VIEW.hexSize;
     const rs = bankRadius();
     const rf = farBankRadius();
     const shallow = Color3.FromHexString(RIVER.shallows).toLinearSpace();
     const deep = Color3.FromHexString(RIVER.deep).toLinearSpace();
-    const mid = (rs + rf) / 2;
     const reach = RIVER.shallowReach;
-    const radii = [
-      0,
-      rs - 1.2,
-      rs,
-      rs + reach * 0.5,
-      rs + reach,
-      rs + reach * 2,
-      mid,
-      rf - reach * 2,
-      rf - reach,
-      rf - reach * 0.5,
-      rf,
-      rf + 2,
-    ];
-    const around = 72;
+    const rings = 40;
+    const around = 96;
     const positions: number[] = [];
     const colors: number[] = [];
     const indices: number[] = [];
-    radii.forEach((r, ring) => {
-      // Deep where the water is furthest from either bank.
-      const k = smooth(Math.min(r - rs, rf - r) / (reach * 2));
+    for (let ring = 0; ring <= rings; ring++) {
+      const r = ring === 0 ? 0 : 2 + ((rf + 2 - 2) * (ring - 1)) / (rings - 1);
       for (let n = 0; n < around; n++) {
         const a = (n / around) * Math.PI * 2;
-        positions.push(Math.cos(a) * r, RIVER.level, Math.sin(a) * r);
+        const x = Math.cos(a) * r;
+        const z = Math.sin(a) * r;
+        // Deep past the shallows' drop (or past the meadow's own edge at the
+        // sides), pale again by the far bank.
+        const e = bankReach({ x, z }, size);
+        const out = Math.max(smooth((e - BANK.drop + 0.02) / 0.14), smooth((r - rs + 0.2) / 1.4));
+        const k = out * smooth((rf - r) / (reach * 2));
+        positions.push(x, RIVER.level, z);
         colors.push(
           shallow.r + (deep.r - shallow.r) * k,
           shallow.g + (deep.g - shallow.g) * k,
           shallow.b + (deep.b - shallow.b) * k,
-          1,
+          RIVER.shallowAlpha + (RIVER.deepAlpha - RIVER.shallowAlpha) * k,
         );
       }
-      if (ring === 0) return;
+      if (ring === 0) continue;
       for (let n = 0; n < around; n++) {
         const a0 = (ring - 1) * around + n;
         const a1 = (ring - 1) * around + ((n + 1) % around);
         const b0 = ring * around + n;
         const b1 = ring * around + ((n + 1) % around);
-        indices.push(a0, b0, a1, a1, b0, b1, a0, a1, b0, a1, b1, b0);
+        indices.push(a0, b0, a1, a1, b0, b1);
       }
-    });
+    }
     const part = finish(
       positions,
       indices,
@@ -178,6 +193,8 @@ export function buildRiver(scene: Scene): Mesh {
     part.data.colors = colors;
     return merged([part]);
   });
+  mesh.hasVertexAlpha = true;
+  return mesh;
 }
 
 /** Rocks standing in the current, as bearing (degrees), share of the way across, and size. */
@@ -188,18 +205,6 @@ export const RIVER_ROCKS: readonly (readonly [number, number, number])[] = [
   [112, 0.45, 0.7],
   [146, 0.62, 0.95],
   [168, 0.35, 0.65],
-]; // TUNE
-
-/** Where a stepping stone stands: share of the way across, and its size. */
-export const STEPPING_STONES: readonly (readonly [number, number])[] = [
-  [-0.04, 0.8],
-  [0.12, 0.72],
-  [0.27, 0.78],
-  [0.42, 0.7],
-  [0.57, 0.76],
-  [0.72, 0.7],
-  [0.87, 0.78],
-  [1.02, 0.84],
 ]; // TUNE
 
 /** A point a `share` of the way across the river at bearing `deg`, and its radius. */
@@ -279,15 +284,29 @@ export function buildRipples(scene: Scene): Mesh {
       const { r, a } = across(deg, share);
       parts.push(...wake(r, a, size));
     }
-    for (const [share, size] of STEPPING_STONES) {
-      const { r, a } = across(CROSSINGS.stones, share);
-      if (share > 0.02 && share < 0.98) parts.push(...wake(r, a, size * 0.8));
-    }
-    // A lapping wash along both banks: a thin wobbly band, lighter than the shallows.
-    for (const [r, phase] of [
-      [rs, 0],
-      [rf, 1.3],
-    ] as const) {
+    // A lapping wash along the near bank's waterline, round the back of the
+    // tile and down its sides: a thin wobbly band, lighter than the shallows.
+    const sides = rs + 0.1;
+    parts.push(
+      flat(
+        strip(
+          (t) => {
+            const a = rad(-25 + t * 230);
+            const d =
+              reachRadius(BANK.water, a, sides) +
+              0.06 * Math.sin(40 * t) +
+              0.04 * Math.sin(71 * t + 1);
+            return [Math.cos(a) * d, Math.sin(a) * d];
+          },
+          () => 0.12,
+          y + 0.002,
+          220,
+        ),
+        RIVER.ripple,
+      ),
+    );
+    // …and along the far bank.
+    for (const [r, phase] of [[rf, 1.3]] as const) {
       parts.push(
         flat(
           strip(
@@ -604,8 +623,8 @@ function ropeSwing(): Part[] {
   return parts;
 }
 
-/** Bearings the far bank keeps clear for the crossings, the swing and their landing. */
-const KEEP_CLEAR = [CROSSINGS.stones, CROSSINGS.log, CROSSINGS.swing] as const;
+/** Bearings the far bank keeps clear for the swing. */
+const KEEP_CLEAR = [CROSSINGS.swing] as const;
 const clearOf = (deg: number, by: number) => KEEP_CLEAR.every((c) => Math.abs(deg - c) > by);
 
 /**
@@ -649,168 +668,48 @@ export function buildFarBank(scene: Scene): Mesh {
   });
 }
 
-// ── The crossings ────────────────────────────────────────────────────
-
-/** A log's pose lying radially at bearing `a` from `r1` (height `y1`) to `r2` (height `y2`). */
-function radialLog(a: number, r1: number, y1: number, r2: number, y2: number) {
-  const length = Math.hypot(r2 - r1, y2 - y1);
-  const tip = Math.atan2(y2 - y1, r2 - r1);
-  const mid = polar((r1 + r2) / 2, a, (y1 + y2) / 2);
-  // The cylinder's axis lies along the bearing (roll a quarter turn, then yaw),
-  // tipped by the slope, so its top end points out across the river.
-  const tilt: Vec3 = [0, Math.PI - a, Math.PI / 2 - tip];
-  const along = (t: number): Vec3 => polar(r1 + (r2 - r1) * t, a, y1 + (y2 - y1) * t);
-  return { length, mid, tilt, along };
-}
+// ── The jetty ────────────────────────────────────────────────────────
 
 /**
- * The ways across: stepping stones from the near bank to the far one, a
- * mossy fallen log, and a little wooden jetty with a lantern on its end post.
+ * The jetty is built along +z from its foot at the waterline (the origin, at
+ * the water's level) out over the shallows; its instance turns it to the
+ * land's jetty (`BankField.jetty`). The Keeper walks on its deck.
  */
-export function buildCrossings(scene: Scene): Mesh {
-  return kitMesh(scene, 'river-crossings', () => {
-    const rs = bankRadius();
-    const rf = farBankRadius();
-    const parts: Part[] = [];
-    // Stepping stones: flat-topped and mossy, each a hop apart.
-    STEPPING_STONES.forEach(([share, size], i) => {
-      const { r, a } = across(CROSSINGS.stones, share);
-      const jog = (i % 2 ? 0.32 : -0.32) + (spread(i * 3 + 1) - 0.5) * 0.2;
-      const [x, , z] = polar(r, a + jog / r, 0);
-      const y = RIVER.level + 0.04;
-      parts.push(
-        shaded(
-          sphere(size, 6, [x, y, z], [1.15, 0.42, 1]),
-          '#56605a',
-          '#c2c4b6',
-          y - 0.1,
-          y + 0.16,
-        ),
-        shaded(
-          sphere(size * 0.6, 5, [x, y + 0.13, z], [1.2, 0.18, 1]),
-          '#6c9a48',
-          '#98c662',
-          y + 0.1,
-          y + 0.18,
-        ),
-      );
-    });
-    // The fallen log, from the near bank's grass to the far bank's foot.
-    const logA = rad(CROSSINGS.log);
-    const d = 0.62;
-    const log = radialLog(
-      logA,
-      rs - 1.1,
-      d / 2 - 0.05,
-      rf + 0.9,
-      farBankHeight(0.9, logA) + d / 2 - 0.05,
-    );
-    parts.push(
-      shaded(
-        cylinder(log.length, d * 0.92, d, 9, log.mid, log.tilt),
-        '#5c4430',
-        '#93714f',
-        log.mid[1] - d / 2,
-        log.mid[1] + d / 2,
-      ),
-    );
-    for (let i = 0; i < 9; i++) {
-      const t = 0.08 + (i / 8) * 0.84;
-      const [x, y, z] = log.along(t);
-      parts.push(
-        shaded(
-          sphere(0.42 + spread(i) * 0.14, 5, [x, y + d * 0.42, z], [1.1, 0.32, 1.1]),
-          '#557f36',
-          '#8ec05a',
-          y + d * 0.35,
-          y + d * 0.55,
-        ),
-      );
-    }
-    for (const t of [0.3, 0.62]) {
-      const [x, y, z] = log.along(t);
-      const side = t < 0.5 ? 1 : -1;
-      parts.push(
-        shaded(
-          cylinder(
-            0.5,
-            0.06,
-            0.13,
-            5,
-            [x - Math.sin(logA) * 0.3 * side, y + 0.35, z + Math.cos(logA) * 0.3 * side],
-            [0.7 * side, 0, 0.4],
-          ),
-          '#5c4430',
-          '#93714f',
-          y + 0.1,
-          y + 0.6,
-        ),
-      );
-    }
-    // A cluster of tiny orange caps near the log's bank end.
-    for (let i = 0; i < 3; i++) {
-      const [x, y, z] = log.along(0.12 + i * 0.03);
-      const off = (i - 1) * 0.14;
-      const px = x - Math.sin(logA) * (0.3 + off * 0.2);
-      const pz = z + Math.cos(logA) * (0.3 + off * 0.2);
-      parts.push(flat(cylinder(0.12, 0.04, 0.05, 4, [px, y + 0.2, pz]), '#f2e2c8'));
-      parts.push(
-        shaded(
-          sphere(0.16, 4, [px, y + 0.28, pz], [1, 0.55, 1]),
-          '#d9762f',
-          '#ffa65a',
-          y + 0.24,
-          y + 0.33,
-        ),
-      );
-    }
-    parts.push(...jetty());
-    return merged(parts);
-  });
-}
+const JETTY = BANK.jetty;
 
-/** The jetty's end: where its lantern hangs (the glow is its own layer). */
-function jettyEnd() {
-  const rs = bankRadius();
-  const a = rad(CROSSINGS.jetty);
-  return { a, from: rs - 1.3, to: rs + 2.1, deck: 0.2 };
+/** The lantern post on the jetty's end: its top, and where its lantern hangs. */
+function lanternPost() {
+  const x = JETTY.width / 2 - 0.04;
+  const z = JETTY.length - 0.14;
+  const top = JETTY.deck + 1.05;
+  const lamp: Vec3 = [x, top - 0.32, z + 0.28];
+  return { x, z, top, lamp };
 }
 
 /** A little wooden jetty out over the shallows: plank deck, stringers, posts and a lantern post. */
-function jetty(): Part[] {
-  const { a, from, to, deck } = jettyEnd();
+function jettyParts(): Part[] {
+  const { length, width, deck } = JETTY;
   const parts: Part[] = [];
-  const yaw = Math.PI / 2 - a;
-  const across: [number, number] = [-Math.sin(a), Math.cos(a)];
-  const planks = 9;
+  const planks = 8;
   for (let i = 0; i < planks; i++) {
-    const r = from + ((i + 0.5) / planks) * (to - from);
-    const [x, , z] = polar(r, a, 0);
-    const plank = box({ width: 1.15, height: 0.07, depth: (to - from) / planks - 0.05 });
-    plank.position.set(x, deck - 0.035, z);
-    plank.rotation.set(0, yaw + (spread(i) - 0.5) * 0.04, 0);
+    const plank = box({ width: width + 0.1, height: 0.07, depth: length / planks - 0.05 });
+    plank.position.set(0, deck - 0.035, ((i + 0.5) / planks) * length);
+    plank.rotation.set(0, (spread(i) - 0.5) * 0.05, 0);
     parts.push(shaded(plank, '#8a6440', i % 2 ? '#c49a68' : '#b98f5e', deck - 0.07, deck));
   }
+  const foot = -BANK.floor - 0.2;
   for (const k of [-1, 1] as const) {
-    const mid = polar((from + to) / 2, a, deck - 0.11);
-    const rail = box({ width: 0.09, height: 0.1, depth: to - from });
-    rail.position.set(mid[0] + across[0] * 0.5 * k, mid[1], mid[2] + across[1] * 0.5 * k);
-    rail.rotation.set(0, yaw, 0);
+    const rail = box({ width: 0.09, height: 0.1, depth: length });
+    rail.position.set((width / 2 - 0.06) * k, deck - 0.11, length / 2);
     parts.push(shaded(rail, '#5c4430', '#7c5d40', deck - 0.16, deck - 0.06));
-    for (const r of [from + 1.6, to - 0.08]) {
-      const [x, , z] = polar(r, a, 0);
-      const top = r > to - 0.5 ? deck + 0.32 : deck + 0.05;
-      const foot = RIVER.level - 0.4;
+    for (const z of [0.12, length * 0.55, length - 0.1]) {
+      const top = deck + 0.05;
       parts.push(
         shaded(
-          cylinder(top - foot, 0.13, 0.15, 6, [
-            x + across[0] * 0.52 * k,
-            (top + foot) / 2,
-            z + across[1] * 0.52 * k,
-          ]),
+          cylinder(top - foot, 0.13, 0.15, 6, [(width / 2 + 0.02) * k, (top + foot) / 2, z]),
           '#4c3826',
           '#8a6a4a',
-          RIVER.level,
+          0,
           top,
         ),
       );
@@ -827,14 +726,7 @@ function jetty(): Part[] {
       post.top,
     ),
     flat(
-      cylinder(
-        0.32,
-        0.05,
-        0.05,
-        4,
-        [post.x + post.out[0] * 0.14, post.top - 0.02, post.z + post.out[1] * 0.14],
-        [Math.PI / 2, -a, 0],
-      ),
+      cylinder(0.34, 0.05, 0.05, 4, [post.x, post.top - 0.02, post.z + 0.15], [Math.PI / 2, 0, 0]),
       '#4c3826',
     ),
     flat(
@@ -849,25 +741,53 @@ function jetty(): Part[] {
   return parts;
 }
 
-/** The lantern post's foot and top, and where its lantern hangs. */
-function lanternPost() {
-  const { a, to } = jettyEnd();
-  const across: [number, number] = [-Math.sin(a), Math.cos(a)];
-  const [x0, , z0] = polar(to - 0.3, a, 0);
-  const x = x0 + across[0] * 0.45;
-  const z = z0 + across[1] * 0.45;
-  const top = 1.15;
-  const out: [number, number] = [Math.cos(a), Math.sin(a)];
-  const lamp: Vec3 = [x + out[0] * 0.28, top - 0.32, z + out[1] * 0.28];
-  return { x, z, top, out, lamp };
+export function buildJetty(scene: Scene): Mesh {
+  return kitMesh(scene, 'river-jetty', () => merged(jettyParts()));
 }
 
-/** The jetty lantern's warm glass, lit from inside (its own layer, so it glows at dusk). */
+/** The jetty lantern's warm glass, lit from inside (its own layer, so it glows brighter at dusk). */
 export function buildLantern(scene: Scene): Mesh {
   return kitMesh(scene, 'river-lantern', () => {
     const { lamp } = lanternPost();
     return merged([flat(sphere(0.24, 5, lamp, [1, 1.15, 1]), '#ffc861')]);
   });
+}
+
+/** The lantern's soft halo once it's lit: shells of warm light, fainter outwards. */
+export function buildLanternHalo(scene: Scene): Mesh {
+  const mesh = kitMesh(scene, 'river-lantern-halo', () => {
+    const { lamp } = lanternPost();
+    return merged(
+      (
+        [
+          [0.55, 0.32],
+          [0.95, 0.16],
+          [1.5, 0.07],
+        ] as const
+      ).map(([d, alpha]) => faded(flat(sphere(d, 6, lamp), '#ffd27a'), alpha)), // TUNE
+    );
+  });
+  mesh.hasVertexAlpha = true;
+  return mesh;
+}
+
+/** Wisps of mist lying low on the water at dusk (lightly spooky): wide, flat and faint. */
+export function buildMist(scene: Scene): Mesh {
+  const mesh = kitMesh(scene, 'river-mist', () => {
+    const rs = bankRadius();
+    const rf = farBankRadius();
+    const parts: Part[] = [];
+    for (let i = 0; i < 14; i++) {
+      const a = rad(5 + spread(i * 3 + 2) * 170);
+      const r = rs - 1.2 + spread(i * 7 + 1) * (rf - rs + 1.5);
+      const d = 2.2 + spread(i * 11) * 1.8;
+      const y = RIVER.level + 0.12 + spread(i * 5) * 0.12;
+      parts.push(faded(flat(sphere(d, 6, polar(r, a, y), [1.6, 0.06, 1]), '#d6d0ff'), 0.16)); // TUNE
+    }
+    return merged(parts);
+  });
+  mesh.hasVertexAlpha = true;
+  return mesh;
 }
 
 // ── The near bank ────────────────────────────────────────────────────
@@ -887,52 +807,66 @@ export function buildBankRocks(scene: Scene): Mesh {
   );
 }
 
-/** `count` places in a ring `from`…`to` tile-sizes out within a bearing range, off the camera side. */
-function ring(
+/** Whether a place is clear of every spot's collider by `gap` more. */
+const clear = (ctx: ExtrasContext, x: number, z: number, gap: number): boolean =>
+  !ctx.colliders.some((k) => (x - k.x) ** 2 + (z - k.z) ** 2 < (k.r + gap) ** 2);
+
+/** `count` places on the bank between `from` and `to` of the way to its back edges (`bankReach`), clear of the spots and the jetty. */
+function onBank(
   ctx: ExtrasContext,
   count: number,
   from: number,
   to: number,
   scale: [number, number],
-  bearing: [number, number],
+  gap: number,
 ): Growth[] {
+  const jetty = ctx.land.bank?.jetty ?? null;
+  const offJetty = (x: number, z: number) => {
+    if (!jetty) return true;
+    const along = Math.min(
+      jetty.length,
+      Math.max(0, (x - jetty.x) * Math.cos(jetty.angle) + (z - jetty.z) * Math.sin(jetty.angle)),
+    );
+    const px = jetty.x + Math.cos(jetty.angle) * along;
+    const pz = jetty.z + Math.sin(jetty.angle) * along;
+    return Math.hypot(x - px, z - pz) > BANK.jetty.width / 2 + gap;
+  };
   const out: Growth[] = [];
   const between = (lo: number, hi: number) => lo + ctx.rand() * (hi - lo);
-  for (let tries = 0; out.length < count && tries < count * 40; tries++) {
-    const deg = between(bearing[0], bearing[1]);
-    const angle = rad(deg);
-    const d = between(ctx.size * from, ctx.size * to);
-    const x = Math.cos(angle) * d;
-    const z = Math.sin(angle) * d;
-    // The camera looks towards +z: nothing tall stands between it and the tile.
-    if (z < -ctx.size * 0.5 && Math.abs(x) < ctx.size * 1.5) continue;
-    // The crossings and the jetty land on the rim: keep their bearings clear.
-    if (!clearOf(deg, 9) || Math.abs(deg - CROSSINGS.jetty) < 11) continue;
+  const half = ctx.size * 0.866;
+  for (let tries = 0; out.length < count && tries < count * 60; tries++) {
+    const x = between(-half, half);
+    const z = between(0, ctx.size);
+    const e = bankReach({ x, z }, ctx.size);
+    if (e < from || e > to || Math.abs(x) > half - 0.3) continue;
+    if (!clear(ctx, x, z, gap) || !offJetty(x, z)) continue;
+    if (out.some((g) => Math.hypot(g.x - x, g.z - z) < gap * 1.6)) continue;
     out.push({ x, z, yaw: ctx.rand() * Math.PI * 2, scale: between(scale[0], scale[1]) });
   }
   return out;
 }
 
-/** Whether a place is clear of every spot's collider by `gap` more. */
-const clear = (ctx: ExtrasContext, g: Growth, gap: number): boolean =>
-  !ctx.colliders.some((k) => (g.x - k.x) ** 2 + (g.z - k.z) ** 2 < (k.r + gap) ** 2);
-
 function riverPlace(ctx: ExtrasContext): Readonly<Record<string, readonly Growth[]>> {
-  // Reeds and cattails along the rim where the grass meets the water, off the spots.
-  const reeds = ring(ctx, 14, 0.9, 1.0, [0.8, 1.2], [-30, 210]).filter((g) => clear(ctx, g, 0.4));
+  // Reeds growing in the shallows just past the waterline, off the spots and the jetty.
+  const reeds = onBank(ctx, 10, BANK.water + 0.03, BANK.water + 0.17, [0.75, 1.05], 0.5);
   for (const g of reeds) ctx.shade(g.x, g.z, 0.4 * g.scale, 1 * g.scale);
-  // A few mossy rocks on the bank.
-  const rocks = ring(ctx, 4, 0.82, 0.98, [0.7, 1.1], [-20, 200]).filter((g) => clear(ctx, g, 0.6));
+  // A few mossy rocks on the pebbly shore.
+  const rocks = onBank(ctx, 4, BANK.shore + 0.02, BANK.water - 0.03, [0.6, 0.9], 0.6);
   for (const r of rocks) ctx.shade(r.x, r.z, 0.7 * r.scale, 0.4 * r.scale);
   // The river and everything on it: one place each, at the middle (they are built round it).
   const middle = [{ x: 0, z: 0, yaw: 0, scale: 1 }];
+  // The jetty, its lantern and halo at the land's jetty, turned to run out over the water.
+  const jetty = ctx.land.bank?.jetty;
+  const pier = jetty ? [{ x: jetty.x, z: jetty.z, yaw: Math.PI / 2 - jetty.angle, scale: 1 }] : [];
   return {
     river: middle,
     ripples: middle,
     'river-rocks': middle,
     'far-bank': middle,
-    crossings: middle,
-    lantern: middle,
+    mist: middle,
+    jetty: pier,
+    lantern: pier,
+    'lantern-halo': pier,
     'bank-reeds': reeds,
     'bank-rocks': rocks,
   };
@@ -946,8 +880,10 @@ export const RIVER_EXTRAS: Layers = {
     ripples: { build: buildRipples },
     'river-rocks': { build: buildRiverRocks },
     'far-bank': { build: buildFarBank },
-    crossings: { build: buildCrossings },
-    lantern: { build: buildLantern, glow: 1.25 }, // TUNE: a warm dot at dusk
+    mist: { build: buildMist, glow: 0.7, darkOnly: true }, // TUNE: faint, lavender
+    jetty: { build: buildJetty },
+    lantern: { build: buildLantern, glow: 1.1, dusk: 2.6 }, // TUNE: a warm dot by day, bright at dusk
+    'lantern-halo': { build: buildLanternHalo, glow: 1.4, darkOnly: true }, // TUNE
     'bank-reeds': { build: buildBankReeds, sway: 0.05 }, // TUNE: a riverside breeze
     'bank-rocks': { build: buildBankRocks },
   },
@@ -1071,71 +1007,82 @@ function buildPebbleBar(scene: Scene): SpotShape {
   return { mesh, glint: 0.45 };
 }
 
-/** A soft, low rim of damp ground round a little pool, flush with the grass (no plinth). */
-function poolRim(d: number, wet: string, dry: string): Part {
-  return shaded(sphere(d, 8, [0, -0.06, 0], [1, 0.07, 1]), wet, dry, -0.06, 0.0);
-}
+/** How far over a spot's foot the water's surface is, for a kind padded under it (`BANK.pads`). */
+const surface = (kind: string): number => -(BANK.pads[kind] ?? 0);
 
-/** A swirly eddy: a round pool of clear water ringed with smooth stones, its ripples curling in a spiral, a fish fin peeking. */
+/**
+ * A swirly eddy out in the shallows: a darker, deeper swirl on the water's
+ * surface, its ripples curling in a spiral, smooth stones breaking the
+ * surface round it, a fish fin and a lily pad.
+ */
 function buildEddy(scene: Scene): SpotShape {
   const mesh = kitMesh(scene, 'river-spot-eddy', () => {
+    const y = surface('eddy');
     const parts: Part[] = [
-      poolRim(1.6, '#7d8a5a', '#93ab62'),
-      flat(cylinder(0.02, 1.05, 1.05, 18, [0, 0.0, 0]), RIVER.deep),
-      flat(cylinder(0.02, 0.7, 0.7, 16, [0, 0.012, 0]), RIVER.shallows),
+      flat(cylinder(0.012, 1.1, 1.1, 20, [0, y + 0.004, 0]), RIVER.deep),
+      flat(cylinder(0.012, 0.62, 0.62, 16, [0, y + 0.01, 0]), '#2a8a9a'),
     ];
-    // The swirl: three pale arms curling into the middle.
     for (let arm = 0; arm < 3; arm++) {
       const a0 = (arm / 3) * Math.PI * 2;
       parts.push(
         flat(
           strip(
             (t) => {
-              const a = a0 + t * 2.6;
-              const r = 0.46 * (1 - t) + 0.05;
+              const a = a0 + t * 2.8;
+              const r = 0.55 * (1 - t) + 0.05;
               return [Math.cos(a) * r, Math.sin(a) * r];
             },
-            (t) => 0.04 * (1 - t) + 0.01,
-            0.03,
-            14,
+            (t) => 0.05 * (1 - t) + 0.012,
+            y + 0.02,
+            16,
           ),
           RIVER.wake,
         ),
       );
     }
-    const stones = 10;
+    const stones = 7;
     for (let i = 0; i < stones; i++) {
-      const a = (i / stones) * Math.PI * 2;
-      const d = 0.22 + spread(i * 3 + 2) * 0.14;
-      const r = 0.6 + spread(i * 7) * 0.05;
+      const a = (i / stones) * Math.PI * 2 + 0.3;
+      const d = 0.24 + spread(i * 3 + 2) * 0.12;
+      const r = 0.68 + spread(i * 7) * 0.06;
+      // Each stone stands on the bed and breaks the surface, wet below and dry on top.
       parts.push(
         shaded(
-          sphere(d, 5, [Math.cos(a) * r, d * 0.12, Math.sin(a) * r], [1.2, 0.6, 1]),
-          '#56605a',
+          sphere(d, 5, [Math.cos(a) * r, y - 0.02, Math.sin(a) * r], [1.2, 1.3, 1]),
+          '#3f4a46',
           '#b9bdb2',
-          0,
-          d * 0.35,
+          y - 0.02,
+          y + d * 0.5,
         ),
       );
     }
-    // A little orange fin cutting the water, and a lily pad at the edge.
     parts.push(
-      shaded(sphere(0.3, 4, [0.18, 0.1, 0.12], [0.12, 1, 0.7]), '#ffb067', '#d9582a', 0.0, 0.24),
-      shaded(cylinder(0.02, 0.3, 0.3, 10, [-0.3, 0.03, -0.2]), '#3f8a44', '#6db35a', 0.02, 0.04),
-      flat(sphere(0.12, 4, [-0.28, 0.08, -0.2], [1, 0.7, 1]), '#ffb3cf'),
+      shaded(
+        sphere(0.3, 4, [0.16, y + 0.1, 0.1], [0.12, 1, 0.7]),
+        '#ffb067',
+        '#d9582a',
+        y,
+        y + 0.24,
+      ),
+      shaded(
+        cylinder(0.02, 0.3, 0.3, 10, [-0.34, y + 0.02, -0.22]),
+        '#3f8a44',
+        '#6db35a',
+        y,
+        y + 0.04,
+      ),
+      flat(sphere(0.12, 4, [-0.32, y + 0.07, -0.22], [1, 0.7, 1]), '#ffb3cf'),
     );
     return merged(parts);
   });
-  return { mesh, glint: 0.4 };
+  return { mesh, glint: 0.4 + surface('eddy') };
 }
 
-/** A cattail bed: a dense stand of reeds and velvety cattails in a boggy puddle, a dragonfly resting on top. */
+/** A cattail bed growing in the shallows: a dense stand of reeds and velvety cattails, a dragonfly resting on top. */
 function buildCattails(scene: Scene): SpotShape {
   const mesh = kitMesh(scene, 'river-spot-cattails', () => {
-    const parts: Part[] = [
-      poolRim(1.2, '#6f7350', '#93ab62'),
-      flat(cylinder(0.02, 0.78, 0.78, 14, [0.05, 0.0, 0.04]), '#6fb7a8'),
-    ];
+    const y = surface('cattails');
+    const parts: Part[] = [];
     for (const [x, z, s, seed] of [
       [0, 0.05, 1.15, 2],
       [0.26, 0.15, 0.95, 5],
@@ -1144,7 +1091,26 @@ function buildCattails(scene: Scene): SpotShape {
     ] as const) {
       parts.push(...cattailClump([x, 0.0, z], s, seed));
     }
-    // A dragonfly: a long slim blue body and four narrow wings, perched on a tip.
+    // Rings on the water round the stems.
+    for (const [x, z, d] of [
+      [0.32, -0.18, 0.4],
+      [-0.3, -0.12, 0.32],
+    ] as const) {
+      parts.push(
+        flat(
+          strip(
+            (t) => [
+              x + Math.cos(t * Math.PI * 2) * d * 0.5,
+              z + Math.sin(t * Math.PI * 2) * d * 0.5,
+            ],
+            () => 0.025,
+            y + 0.01,
+            20,
+          ),
+          RIVER.ripple,
+        ),
+      );
+    }
     const [dx, dy, dz] = [0.08, 1.4, 0.04];
     parts.push(
       flat(cylinder(0.42, 0.045, 0.06, 6, [dx + 0.05, dy, dz], [0, 0, Math.PI / 2]), '#2f78d8'),

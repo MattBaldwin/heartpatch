@@ -115,6 +115,14 @@ function insideTile(x: number, z: number, margin: number): boolean {
   return ax <= (SQRT3 / 2) * r && ax / SQRT3 + Math.abs(z) <= r;
 }
 
+/**
+ * How far towards the tile's two back edges (+z, away from the explore
+ * camera) a tile-local point is: 0 at the middle, 1 on either back edge.
+ */
+export function backReach(x: number, z: number): number {
+  return (z * (SQRT3 / 2) + Math.abs(x) / 2) / (SQRT3 / 2);
+}
+
 /** Where the seven building spots sit inside a tile (the middle, then `HEX_DIRECTIONS`). */
 function buildingSpots(rules: ExploreRules): { x: number; z: number }[] {
   const scale = rules.placement.buildingSpotScale;
@@ -167,11 +175,16 @@ export function searchSpots(
   const { buildingClearance, minGap, edgeMargin } = rules.placement;
   const blocked = buildingSpots(rules);
   const spots: SearchSpot[] = [];
+  // A banded terrain draws from the back half only (the band lies there), with
+  // more tries; without a band this is the whole tile, exactly as before.
+  const band = entry.band;
+  const tries = band ? TRIES_PER_SPOT * 4 : TRIES_PER_SPOT;
   for (const kind of kinds) {
-    for (let attempt = 0; attempt < TRIES_PER_SPOT; attempt++) {
+    for (let attempt = 0; attempt < tries; attempt++) {
       const x = round((rng.next() * 2 - 1) * (SQRT3 / 2));
-      const z = round(rng.next() * 2 - 1);
+      const z = round(band ? rng.next() : rng.next() * 2 - 1);
       if (!insideTile(x, z, edgeMargin)) continue;
+      if (band && backReach(x, z) < 1 - band.depth) continue;
       const far = (p: { x: number; z: number }, gap: number) =>
         (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z) >= gap * gap;
       if (!blocked.every((b) => far(b, buildingClearance))) continue;

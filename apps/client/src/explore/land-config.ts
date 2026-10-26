@@ -25,6 +25,11 @@ export interface LandPalette {
   readonly specks: readonly string[];
   /** Soft contact shade painted under trees, bushes and rocks (baked AO). */
   readonly shade: string;
+  /**
+   * A bank's ground (`LandShape.bank`): the dry pebbly sand of the shore, the
+   * darker wet sand at the waterline, and the sandy bed under the shallows.
+   */
+  readonly bank?: { readonly sand: string; readonly wet: string; readonly bed: string };
 }
 
 /** How a biome's land is shaped, world units. */
@@ -41,6 +46,8 @@ export interface LandShape {
   readonly fall: { readonly depth: number; readonly length: number };
   /** Rolling hills out past the edge: their height and how often. */
   readonly hills: { readonly height: number; readonly scale: number };
+  /** Water along the tile's back edges, inside the tile (the river, #621 W1-13). */
+  readonly bank?: LandBank;
   /** The path: width, how far it wanders side to side, and how often it bends. */
   readonly path: {
     readonly width: number;
@@ -48,6 +55,48 @@ export interface LandShape {
     readonly bend: number;
     /** It sinks this far into the grass (worn). */
     readonly sink: number;
+  };
+}
+
+/**
+ * A bank inside the tile: water runs past the tile's two back edges (away
+ * from the camera), and the ground steps down to it in bands of `reach`, the
+ * share of the way from the middle to those edges (`bankReach`: 0 at the
+ * middle, 1 on the back edges). Grass to `shore`, pebbly sand down to the
+ * waterline at `water`, the shallows' sandy floor from `bed`, falling away to
+ * the deep past `drop` (which sits past the Keeper's clamp, so the deep is
+ * never walked into) and bottoming out at `deep`.
+ */
+export interface LandBank {
+  readonly shore: number;
+  readonly water: number;
+  readonly bed: number;
+  readonly drop: number;
+  readonly deep: number;
+  /** The water's surface, and how far under it the shallows' floor and the deep's bottom sit. */
+  readonly level: number;
+  readonly floor: number;
+  readonly bottom: number;
+  /**
+   * The ground under a spot of these kinds on the bank, as a height above the
+   * water (negative: under it), so each one sits where it belongs: a pool
+   * dipped into the shallows, a pebble spit just out of the water. It eases
+   * to the bank round it over `padReach` world units.
+   */
+  readonly pads: Readonly<Record<string, number>>;
+  readonly padReach: number;
+  /**
+   * A short jetty from the shore out over the shallows: the bearings (degrees,
+   * 90 = straight back) to try in order, the first clear of every spot by
+   * `clear` world units wins; its length and width (world units), and its
+   * deck's height above the water. The Keeper walks on its deck.
+   */
+  readonly jetty: {
+    readonly bearings: readonly number[];
+    readonly clear: number;
+    readonly length: number;
+    readonly width: number;
+    readonly deck: number;
   };
 }
 
