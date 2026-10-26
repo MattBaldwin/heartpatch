@@ -1962,3 +1962,13 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 - **`tutorial.spec.ts:218` timeout on #686 and #694** was runner load: main and the next heads were green, so no code change.
 - **The W1-10 feed card frame** is shot in #698 only if it renders on main without care-lane changes; otherwise it is a follow-up.
 - **The works tile card** waits for #686 and ships as W1-10c.
+
+## 2026-10-26 — Coordinator calls (supervisor 22)
+
+**Coordinator calls**
+- **Keeper stays visible under weather:** tile marks (💤, 🌙) draw above clouds (the badge cover is removed), and the storm bank thins to about 0.3 alpha on the eye→Keeper line. A `weatherClear` uniform does this, with the Keeper position taken from the weather store's home plus `KEEPER_PLACES.map.offset`; there is no map-scene change. It isn't a render group, because that would draw the Keeper over buildings and trees, and #698 also edits map-scene.ts.
+- **Seawall:** after 9 failed silhouette rounds, the owner gets three different approaches rather than a 10th tweak (the 3+ FIX rule).
+- **River reachability is an owner call** (a game rule that touches server explore selection). W1-13 ships the biome with a pure `exploreKitFor` helper and the river-edge rule off (`RIVER_EDGE_KIT = false`), and holds its `changes/` entry.
+- **Explore terrain `band` (#701, shared contract):** `ExploreTerrain` gets an optional per-terrain `band` (for example `{ from: 'back', depth: 0.5 }`), which the shared `searchSpots` uses so river spots land on the bank. Conditions: it is optional, and behaviour is identical when it is absent (a golden test on the existing terrains' spot lists); it is pure and shared by the server and client; only river uses it, with river's `layout` bumped.
+- **#702:** main's red roads e2e was fixed by porting #686's test change on its own, rather than waiting on #686's owner screen approval. It merged with `tutorial.spec.ts:218` (ipad-webkit 6) red as runner load: the test is untouched and failed on #686 and #694 too. This is a one-off, not a precedent: the merge-gate exception still needs the check red on main too, or a fix lane that owns it.
+- **Supervisor-run reviews:** when a lane stops at its cap with only review left, the supervisor runs the fresh `reviewer` itself and posts the verdict, instead of starting a lane just for review (#686, #701).
