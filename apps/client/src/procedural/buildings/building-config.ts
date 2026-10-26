@@ -106,6 +106,7 @@ export const BUILDING_COLORS = {
   seaStone: '#a3b3c6', // TUNE: the Seawall's grey-blue blocks
   seaStoneLight: '#bfcbd9', // TUNE
   seaStoneDark: '#8496ab', // TUNE
+  riverStone: '#a89c90', // TUNE: the Levee's rounded grey-brown stones
   mortar: '#5f6b7d', // TUNE: the dark lines between them
   foam: '#eef8ff', // TUNE: the Seawall's splash, a soft blue-white
   brass: '#e6b85c', // TUNE: the Rain Barrel's tap

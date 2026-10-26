@@ -125,15 +125,29 @@ export function buildBuildingModel(
   const box = (width: number, height: number, depth: number) =>
     CreateBox(`${name}-part`, { width, height, depth }, scene);
   /**
-   * A convex profile in the y–z plane (`[z, y]` points, in order) pushed
-   * `length` along x: a bank's slopes, a sea wall's curl. Flat-shaded, faces
-   * wound outward the way Babylon's own builders wind them.
+   * A profile in the y–z plane (`[z, y]` points, in order, every point seen
+   * from the first) pushed `length` along x: a bank, a sea wall's curl.
+   * `taper` < 1 pulls the profile's upper points in at both ends, so the ends
+   * slope too. Flat-shaded, faces wound outward the way Babylon's own
+   * builders wind them (`Cross(a - b, c - b)` points out).
    */
-  const prism = (profile: readonly (readonly [number, number])[], length: number): Mesh => {
+  const prism = (
+    profile: readonly (readonly [number, number])[],
+    length: number,
+    taper = 1,
+  ): Mesh => {
     const positions: number[] = [];
     const indices: number[] = [];
     const n = profile.length;
-    const mid = profile.reduce((m, [z, y]) => [m[0] + z / n, m[1] + y / n], [0, 0]);
+    const low = Math.min(...profile.map(([, y]) => y));
+    // Which way the profile runs (the sign of its area), for each side's outward normal.
+    let area = 0;
+    for (let k = 0; k < n; k++) {
+      const [z0, y0] = profile[k] ?? [0, 0];
+      const [z1, y1] = profile[(k + 1) % n] ?? [0, 0];
+      area += z0 * y1 - z1 * y0;
+    }
+    const turn = area > 0 ? 1 : -1;
     const tri = (a: Vector3, b: Vector3, c: Vector3, out: Vector3) => {
       const face = Vector3.Cross(a.subtract(b), c.subtract(b));
       const [p, q] = Vector3.Dot(face, out) >= 0 ? [b, c] : [c, b];
@@ -141,23 +155,21 @@ export function buildBuildingModel(
       positions.push(a.x, a.y, a.z, p.x, p.y, p.z, q.x, q.y, q.z);
       indices.push(i, i + 1, i + 2);
     };
-    const at = (k: number, x: number) => {
+    const at = (k: number, end: number) => {
       const [z, y] = profile[k % n] ?? [0, 0];
-      return new Vector3(x, y, z);
+      return new Vector3(((end * length) / 2) * (y > low + 0.001 ? taper : 1), y, z);
     };
-    const h = length / 2;
     for (let k = 0; k < n; k++) {
       const [z0, y0] = profile[k] ?? [0, 0];
       const [z1, y1] = profile[(k + 1) % n] ?? [0, 0];
-      const out = new Vector3(0, (y0 + y1) / 2 - mid[1], (z0 + z1) / 2 - mid[0]);
-      tri(at(k, -h), at(k, h), at(k + 1, h), out);
-      tri(at(k, -h), at(k + 1, h), at(k + 1, -h), out);
+      const out = new Vector3(0, -(z1 - z0) * turn, (y1 - y0) * turn);
+      tri(at(k, -1), at(k, 1), at(k + 1, 1), out);
+      tri(at(k, -1), at(k + 1, 1), at(k + 1, -1), out);
     }
-    for (const [x, dir] of [
-      [-h, -1],
-      [h, 1],
-    ] as const) {
-      for (let k = 1; k < n - 1; k++) tri(at(0, x), at(k, x), at(k + 1, x), new Vector3(dir, 0, 0));
+    for (const end of [-1, 1]) {
+      for (let k = 1; k < n - 1; k++) {
+        tri(at(0, end), at(k, end), at(k + 1, end), new Vector3(end, 0, 0));
+      }
     }
     const data = new VertexData();
     data.positions = positions;
@@ -169,6 +181,19 @@ export function buildBuildingModel(
     data.applyToMesh(mesh, true);
     return mesh;
   };
+  /**
+   * Turns the parts added since `from` about y by `angle`, so a long
+   * building shows its end profile to the camera (the Levee's bank, the
+   * Seawall's curl), not only its face.
+   */
+  const turnSince = (from: { body: number; glow: number }, angle: number) => {
+    for (const mesh of [...body.slice(from.body), ...glow.slice(from.glow)]) {
+      mesh.bakeCurrentTransformIntoVertices();
+      mesh.rotation.set(0, angle, 0);
+      mesh.bakeCurrentTransformIntoVertices();
+    }
+  };
+  const mark = () => ({ body: body.length, glow: glow.length });
   // A resource building's windows and lamps (#601): lit while it works,
   // dark while it naps (`out`).
   const awake = look !== 'out';
@@ -1110,36 +1135,41 @@ export function buildBuildingModel(
       break;
     }
     case 'salt-pans': {
-      // Shallow square pools of sea water on a flat clay floor, each edged in
-      // a raised clay rim, with snowy salt crusting in the corners, a tall
+      // Four shallow square pools of sea water on a flat clay floor, each
+      // edged in a raised clay rim, with a little salt heap at a corner, a tall
       // salt heap, a rake leaning on it and a sack. Flat and low: pools in
       // the ground, not trays on it. L2: two more pools. L3: a wheelbarrow
       // of salt. L4: a little drying shed.
       const pools: [number, number][] = [
-        [-0.22, -0.2],
-        [0.16, -0.2],
-        [-0.22, 0.18],
+        [-0.3, -0.19],
+        [0.06, -0.19],
+        [-0.3, 0.19],
+        [0.06, 0.19],
       ];
-      if (l >= 2) pools.push([0.16, 0.18], [-0.6, -0.2]);
-      part(body, box(1.16, 0.06, 0.96), C.clay, [-0.04, 0.03, 0]);
+      if (l >= 2) pools.push([-0.66, -0.19], [-0.66, 0.19]);
+      const west = l >= 2 ? -0.86 : -0.5;
+      part(body, box(0.68 - west, 0.06, 0.92), C.clay, [(0.68 + west) / 2, 0.03, 0]);
       for (const [x, z] of pools) {
-        part(body, box(0.34, 0.016, 0.32), C.brine, [x, 0.072, z]);
-        for (const dz of [-0.17, 0.17]) part(body, box(0.4, 0.06, 0.05), C.clay, [x, 0.09, z + dz]);
-        for (const dx of [-0.19, 0.19])
-          part(body, box(0.05, 0.06, 0.32), C.clay, [x + dx, 0.09, z]);
+        part(body, box(0.3, 0.016, 0.32), C.brine, [x, 0.072, z]);
+        for (const dz of [-0.18, 0.18]) {
+          part(body, box(0.36, 0.07, 0.06), C.clay, [x, 0.095, z + dz]);
+        }
+        for (const dx of [-0.17, 0.17]) {
+          part(body, box(0.06, 0.07, 0.36), C.clay, [x + dx, 0.095, z]);
+        }
         // A little heap raked up onto the clay at the pool's corner.
-        part(body, cylinder(0.1, 0, 0.13, 10), C.salt, [x + 0.19, 0.17, z + 0.17]);
+        part(body, cylinder(0.1, 0, 0.13, 10), C.salt, [x - 0.17, 0.18, z + 0.18]);
       }
-      // The heap: a tall, rounded white cone, and the rake leaning on it.
-      part(body, cylinder(0.3, 0.06, 0.36, 14), C.salt, [0.46, 0.21, 0.24]);
-      part(body, sphere(0.1, 8), C.salt, [0.46, 0.36, 0.24]);
-      // The rake: a long handle leaning on the heap, a wide head with tines.
-      part(body, box(0.035, 0.62, 0.035), C.post, [0.32, 0.32, 0.06], [1, 1, 1], [0, 0, -0.45]);
-      part(body, box(0.26, 0.045, 0.05), C.post, [0.19, 0.1, 0.06]);
-      for (const dx of [-0.1, -0.035, 0.035, 0.1]) {
-        part(body, box(0.04, 0.1, 0.04), C.post, [0.19 + dx, 0.09, 0.02]);
+      // The heap: a tall, rounded white cone, and the rake leaning on it
+      // (its head with six tines on the clay in front, its handle up the heap).
+      part(body, cylinder(0.3, 0.06, 0.34, 14), C.salt, [0.47, 0.21, 0.22]);
+      part(body, sphere(0.1, 8), C.salt, [0.47, 0.36, 0.22]);
+      part(body, box(0.035, 0.5, 0.035), C.post, [0.44, 0.3, -0.02], [1, 1, 1], [0.6, 0, 0]);
+      part(body, box(0.26, 0.045, 0.05), C.post, [0.44, 0.12, -0.15]);
+      for (let i = 0; i < 6; i++) {
+        part(body, box(0.03, 0.08, 0.03), C.post, [0.33 + i * 0.044, 0.08, -0.17]);
       }
-      part(body, cylinder(0.26, 0.12, 0.15, 10), C.parcel, [0.5, 0.19, -0.3]);
+      part(body, cylinder(0.26, 0.12, 0.15, 10), C.parcel, [0.56, 0.19, -0.34]);
       part(body, cylinder(0.42, 0.03, 0.03, 6), C.post, [-0.5, 0.27, 0.42]);
       part(windowList, sphere(0.08, 8), lampColor, [-0.5, 0.52, 0.42]);
       if (l >= 3) {
@@ -1355,7 +1385,7 @@ export function buildBuildingModel(
         [Math.PI / 2, 0, 0],
       );
       part(body, cylinder(0.12, 0.15, 0.11, 10), C.brass, [0, 0.09, tapZ - 0.14]);
-      part(body, box(0.24, 0.05, 0.05), C.brass, [0, 0.27, tapZ - 0.05]);
+      part(body, box(0.14, 0.04, 0.04), C.brass, [0, 0.27, tapZ - 0.05]);
       part(body, box(0.05, 0.1, 0.05), C.brass, [0, 0.24, tapZ - 0.05]);
       part(body, box(0.045, 0.06, 0.045), C.water, [0, 0.05, tapZ - 0.11]);
       part(body, cylinder(0.02, 0.28, 0.28, 14), C.water, [0, 0.03, tapZ - 0.14], [1.2, 1, 0.8]);
@@ -1401,60 +1431,80 @@ export function buildBuildingModel(
       break;
     }
     case 'levee': {
-      // A raised earth bank along +x holding the river back: a trapezoid
-      // ridge of brown earth (its cut ends show the soil), grassed over its
-      // flat top and land side, its water slope (-z) faced with stones down
-      // to a strip of river, and flowers and reeds on top. An earth bank,
-      // not a hill or a planter. One level.
+      // A raised earth bank holding the river back: a low trapezoid ridge of
+      // brown earth with gently sloping sides and sloping ends (its ends show
+      // the soil), grassed over the top, rounded river stones of mixed sizes
+      // set along the foot of its water side (-z), a strip of river right at
+      // its foot, and flowers and reeds on top. Turned a little so its
+      // trapezoid end faces the camera. An earth bank, not a planter. One level.
+      const start = mark();
       const bank: [number, number][] = [
-        [-0.5, 0.05],
-        [-0.18, 0.34],
-        [0.16, 0.34],
-        [0.48, 0.05],
+        [-0.56, 0.05],
+        [-0.14, 0.3],
+        [0.12, 0.3],
+        [0.54, 0.05],
       ];
-      part(body, box(1.24, 0.06, 0.22), C.water, [0, 0.06, -0.62]);
-      part(body, prism(bank, 1.22), C.soil, [0, 0, 0]);
+      part(body, box(1.3, 0.06, 0.26), C.water, [0, 0.06, -0.68]);
+      part(body, prism(bank, 1.26, 0.72), C.soil, [0, 0, 0]);
       part(
         body,
         prism(
-          bank.map(([z, y]) => [z * 1.03, y + 0.015]),
-          1.14,
+          bank.map(([z, y]) => [z * 1.02, y + 0.012]),
+          1.0,
+          0.8,
         ),
         C.bank,
         [0, 0, 0],
       );
-      // Stones laid up the water slope (42°), in two staggered rows.
-      for (let row = 0; row < 2; row++) {
-        for (let i = 0; i < 5; i++) {
-          const x = -0.46 + i * 0.23 + (row ? 0.11 : 0);
-          if (x > 0.5) continue;
-          part(
-            body,
-            box(0.2, 0.05, 0.16),
-            (i + row) % 2 ? C.wallDark : C.wall,
-            [x, 0.12 + row * 0.12, -0.42 + row * 0.13],
-            [1, 1, 1],
-            [-0.74, 0, 0],
-          );
-        }
+      for (const [x, z, d] of [
+        [-0.5, -0.55, 0.16],
+        [-0.3, -0.58, 0.12],
+        [-0.12, -0.54, 0.17],
+        [0.08, -0.58, 0.11],
+        [0.26, -0.54, 0.15],
+        [0.44, -0.57, 0.12],
+        [-0.4, -0.46, 0.1],
+        [0.16, -0.45, 0.1],
+      ] as const) {
+        part(body, sphere(d, 8), C.riverStone, [x, 0.07, z], [1.2, 0.7, 1]);
       }
-      for (const x of [-0.36, 0.1, 0.44]) {
-        part(body, cylinder(0.16, 0.012, 0.016, 5), C.leafDark, [x, 0.44, 0.04]);
+      for (const x of [-0.24, 0.06, 0.3]) {
+        part(body, cylinder(0.14, 0.012, 0.016, 5), C.leafDark, [x, 0.38, 0.04]);
       }
-      for (const x of [-0.18, 0.28]) {
-        part(body, sphere(0.07, 8), C.petal, [x, 0.4, -0.04]);
-        part(body, sphere(0.04, 6), C.petalAlt, [x, 0.43, -0.04]);
+      for (const x of [-0.12, 0.2]) {
+        part(body, sphere(0.07, 8), C.petal, [x, 0.34, -0.04]);
+        part(body, sphere(0.04, 6), C.petalAlt, [x, 0.37, -0.04]);
       }
+      turnSince(start, -0.6);
       break;
     }
     case 'seawall': {
-      // A sturdy sea wall along +x: two courses of chunky grey-blue stone
-      // blocks with dark mortar gaps between, and above them its sea face
-      // (-z) curving out over the water like a breaking wave (a wave-return
-      // lip), a white splash bursting up against the face under the curl, a
-      // pink seashell and a lamp. Blocky and curled: a breakwater. One level.
-      part(body, box(1.24, 0.06, 0.4), C.water, [0, 0.06, -0.48]);
-      part(body, box(1.18, 0.52, 0.34), C.mortar, [0, 0.3, 0]);
+      // A sturdy sea wall: a tall face of chunky grey-blue stone blocks with
+      // dark mortar gaps, rising from the water and curving out over it at
+      // the top like a breaking wave (a wave-return lip), with a white splash
+      // bursting against its foot and a lamp. Turned a little so the curl's
+      // profile shows at its end. One level.
+      const start = mark();
+      part(body, box(1.3, 0.06, 0.46), C.water, [0, 0.06, -0.42]);
+      // The wall's body in profile: a straight back, a flat top, and a sea
+      // face that rises straight, then follows the curl's outer edge.
+      const c = { z: -0.42, y: 0.38 };
+      const [rIn, rOut] = [0.22, 0.3];
+      const arc = (t: number, r: number): [number, number] => [
+        c.z + Math.cos(t) * r,
+        c.y + Math.sin(t) * r,
+      ];
+      const curl = Math.PI * 0.85;
+      const steps = 7;
+      const outer: [number, number][] = [];
+      for (let i = 0; i <= 4; i++) outer.push(arc((i / 4) * (Math.PI / 2), rOut));
+      part(
+        body,
+        prism([[0.18, 0.68], [0.18, 0.04], [-0.2, 0.04], [-0.2, c.y], ...outer], 1.22),
+        C.mortar,
+        [0, 0, 0],
+      );
+      // The blocks on the sea face, below the curl, in offset courses.
       const stones = [C.seaStone, C.seaStoneLight, C.seaStoneDark];
       for (let row = 0; row < 2; row++) {
         const shift = row ? 0.15 : 0;
@@ -1462,48 +1512,45 @@ export function buildBuildingModel(
           const x0 = Math.max(-0.6, -0.6 + shift + i * 0.3 + 0.025);
           const x1 = Math.min(0.6, -0.6 + shift + (i + 1) * 0.3 - 0.025);
           if (x1 - x0 < 0.05) continue;
-          part(body, box(x1 - x0, 0.14, 0.38), stones[(row + i + 3) % 3] ?? C.seaStone, [
+          part(body, box(x1 - x0, 0.15, 0.06), stones[(row + i + 3) % 3] ?? C.seaStone, [
             (x0 + x1) / 2,
-            0.12 + row * 0.17,
-            0,
+            0.13 + row * 0.18,
+            -0.21,
           ]);
         }
       }
-      // The lip: a thin curved band (segments of an arc around a centre out
-      // over the sea) rising off the face and curling out and down.
-      const c = { z: -0.4, y: 0.36 };
-      const [rIn, rOut] = [0.21, 0.28];
-      const steps = 7;
-      const arc = (t: number, r: number): [number, number] => [
-        c.z + Math.cos(t) * r,
-        c.y + Math.sin(t) * r,
-      ];
+      // The top: a course of capstones.
+      for (let i = 0; i < 4; i++) {
+        part(body, box(0.27, 0.06, 0.46), stones[i % 3] ?? C.seaStone, [
+          -0.45 + i * 0.3,
+          0.71,
+          -0.06,
+        ]);
+      }
+      // The curl itself: a band of light stone from the face out and down.
       for (let i = 0; i < steps; i++) {
-        const t0 = (i / steps) * (Math.PI * 0.85);
-        const t1 = ((i + 1) / steps) * (Math.PI * 0.85);
+        const t0 = (i / steps) * curl;
+        const t1 = ((i + 1) / steps) * curl;
         part(
           body,
-          prism([arc(t0, rIn), arc(t0, rOut), arc(t1, rOut), arc(t1, rIn)], 1.22),
+          prism([arc(t0, rIn), arc(t0, rOut), arc(t1, rOut), arc(t1, rIn)], 1.24),
           i % 2 ? C.seaStoneLight : C.seaStone,
           [0, 0, 0],
         );
       }
-      // The top: a coping behind the curl.
-      part(body, box(1.22, 0.08, 0.5), C.seaStoneLight, [0, 0.62, -0.08]);
-      // The splash: foam bursting up the face under the curl.
+      // The splash: foam bursting up off the water against the face.
       for (const [x, y, z, d] of [
-        [-0.24, 0.14, -0.3, 0.2],
-        [-0.12, 0.26, -0.3, 0.15],
-        [-0.3, 0.32, -0.32, 0.12],
-        [-0.18, 0.4, -0.34, 0.09],
-        [0.3, 0.14, -0.3, 0.15],
-        [0.36, 0.25, -0.32, 0.1],
+        [-0.24, 0.1, -0.3, 0.22],
+        [-0.12, 0.2, -0.3, 0.16],
+        [-0.32, 0.26, -0.34, 0.13],
+        [0.3, 0.1, -0.3, 0.16],
+        [0.38, 0.2, -0.33, 0.1],
       ] as const) {
         part(body, sphere(d, 8), C.foam, [x, y, z]);
       }
-      part(body, sphere(0.12, 8), C.shell, [0.12, 0.68, 0.04], [1, 0.4, 1]);
-      part(body, cylinder(0.3, 0.03, 0.03, 6), C.post, [0.5, 0.8, 0.08]);
-      part(windowList, sphere(0.08, 8), lampColor, [0.5, 0.97, 0.08]);
+      part(body, cylinder(0.3, 0.03, 0.03, 6), C.post, [0.5, 0.88, 0.08]);
+      part(windowList, sphere(0.08, 8), lampColor, [0.5, 1.05, 0.08]);
+      turnSince(start, 0.6);
       break;
     }
     case 'weather-vane': {
