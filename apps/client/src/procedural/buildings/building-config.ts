@@ -103,9 +103,9 @@ export const BUILDING_COLORS = {
   clay: '#d9a07c', // TUNE: the Salt Pans' clay rims
   plank: '#c99a6e', // TUNE: the Levee's plank edge
   stave: '#a8734f', // TUNE: the lines between the Rain Barrel's staves
-  seaStone: '#a3b3c6', // TUNE: the Seawall's grey-blue blocks
-  seaStoneLight: '#bfcbd9', // TUNE
-  seaStoneDark: '#8496ab', // TUNE
+  seaStone: '#97adc0', // TUNE: the Seawall's grey-blue blocks
+  seaStoneLight: '#b6c8d8', // TUNE
+  seaStoneDark: '#7b93a9', // TUNE
   riverStone: '#a89c90', // TUNE: the Levee's rounded grey-brown stones
   mortar: '#5f6b7d', // TUNE: the dark lines between them
   foam: '#eef8ff', // TUNE: the Seawall's splash, a soft blue-white

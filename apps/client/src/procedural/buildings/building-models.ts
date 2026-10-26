@@ -1432,7 +1432,7 @@ export function buildBuildingModel(
     }
     case 'levee': {
       // A raised earth bank holding the river back: a low trapezoid ridge of
-      // brown earth with gently sloping sides and sloping ends (its ends show
+      // brown earth with sloping sides and sloping ends (its ends show
       // the soil), grassed over the top, rounded river stones of mixed sizes
       // set along the foot of its water side (-z), a strip of river right at
       // its foot, and flowers and reeds on top. Turned a little so its
@@ -1442,7 +1442,8 @@ export function buildBuildingModel(
         [-0.56, 0.05],
         [-0.14, 0.3],
         [0.12, 0.3],
-        [0.54, 0.05],
+        // The land side slopes gently, so it never meets the camera edge-on.
+        [0.7, 0.05],
       ];
       part(body, box(1.3, 0.03, 0.26), C.water, [0, 0.055, -0.68]);
       part(body, prism(bank, 1.26, 0.72), C.soil, [0, 0, 0]);
@@ -1479,65 +1480,58 @@ export function buildBuildingModel(
       break;
     }
     case 'seawall': {
-      // A tall, thin sea wall of grey-blue stone rising straight out of the
-      // water: block courses with dark mortar lines on its face and its ends,
-      // a thin coping strip along the top, and its sea face (-z) sweeping out
-      // over the water in a smooth curl like a breaking wave (a wave-return
-      // lip), with flat rings of foam where the water meets it and a lamp.
-      // A third as deep as it is tall, and turned a little so the curl's
-      // profile shows at its end. One level.
+      // A tall sea wall of blue-grey stone standing in the water: block
+      // courses with dark mortar lines on its face and ends, a flat top with
+      // a thin coping, and its sea face (-z) scooped into a smooth concave
+      // curve that sweeps out to an overhanging lip, as a wave-return wall
+      // throws a wave back, with flat rings of foam on the water at its foot
+      // and a lamp. Turned a little so the scoop's profile shows at its end.
+      // One level.
       const start = mark();
       const length = 1.3;
       const face = -0.14;
-      part(body, box(length + 0.04, 0.03, 0.46), C.water, [0, 0.055, face - 0.23]);
+      const back = 0.08;
+      part(body, box(length + 0.04, 0.03, 0.72), C.water, [0, 0.055, -0.26]);
       // The wall in profile: a straight back, a flat top, and a sea face
-      // that rises straight, then follows the curl's outer edge.
-      const [rIn, rOut] = [0.12, 0.17];
-      const c = { z: face - rIn, y: 0.5 };
-      const arc = (t: number, r: number): [number, number] => [
-        c.z + Math.cos(t) * r,
-        c.y + Math.sin(t) * r,
-      ];
-      const top = c.y + rOut;
-      const outer: [number, number][] = [];
-      for (let i = 0; i <= 6; i++) outer.push(arc((i / 6) * (Math.PI / 2), rOut));
+      // that rises straight, then scoops out along a quarter circle whose
+      // centre is out over the sea, ending in a lip with a square front.
+      const r = 0.2;
+      const c = { z: face - r, y: 0.46 };
+      const scoop: [number, number][] = [];
+      for (let i = 0; i <= 8; i++) {
+        const t = (i / 8) * (Math.PI / 2);
+        scoop.push([c.z + Math.cos(t) * r, c.y + Math.sin(t) * r]);
+      }
+      const top = c.y + r + 0.06;
       part(
         body,
-        prism([[0.08, top], [0.08, 0.04], [face, 0.04], [face, c.y], ...outer], length),
+        prism([[back, top], [back, 0.04], [face, 0.04], [face, c.y], ...scoop, [c.z, top]], length),
         C.seaStone,
         [0, 0, 0],
       );
-      // Mortar lines: courses along the face and both ends, joints offset.
+      // Mortar lines: courses along the straight face and both ends, joints offset.
       const courses = [0.16, 0.28, 0.4];
       for (const y of courses) {
         part(body, box(length + 0.01, 0.018, 0.02), C.mortar, [0, y, face - 0.005]);
         for (const x of [-length / 2, length / 2]) {
-          part(body, box(0.02, 0.018, 0.22), C.mortar, [x, y, -0.03]);
+          part(body, box(0.02, 0.018, back - face), C.mortar, [x, y, (back + face) / 2]);
         }
       }
       for (let row = 0; row <= courses.length; row++) {
-        const y0 = row ? (courses[row - 1] ?? 0) : 0.04;
+        const y0 = row ? (courses[row - 1] ?? 0) : 0.07;
         const y1 = courses[row] ?? c.y;
         for (let i = 0; i < 4; i++) {
           const x = -0.48 + i * 0.32 + (row % 2) * 0.16;
           part(body, box(0.018, y1 - y0, 0.02), C.mortar, [x, (y0 + y1) / 2, face - 0.005]);
         }
       }
-      // The coping: a thin strip of light stone along the top.
-      part(body, box(length + 0.02, 0.03, 0.24), C.seaStoneLight, [0, top + 0.015, -0.04]);
-      // The curl: a smooth band from the face out and over the water.
-      const curl = Math.PI * 0.9;
-      const steps = 12;
-      for (let i = 0; i < steps; i++) {
-        const t0 = (i / steps) * curl;
-        const t1 = ((i + 1) / steps) * curl;
-        part(
-          body,
-          prism([arc(t0, rIn), arc(t0, rOut), arc(t1, rOut), arc(t1, rIn)], length + 0.02),
-          C.seaStoneLight,
-          [0, 0, 0],
-        );
-      }
+      // The coping: a thin strip of light stone along the flat top, its
+      // front edge a little nose over the lip.
+      part(body, box(length + 0.02, 0.03, back - c.z + 0.04), C.seaStoneLight, [
+        0,
+        top + 0.015,
+        (back + c.z) / 2 - 0.02,
+      ]);
       // The foam: flat rings on the water at the wall's foot.
       for (const [x, d] of [
         [-0.38, 0.22],
@@ -1548,12 +1542,12 @@ export function buildBuildingModel(
           body,
           CreateTorus(`${name}-foam`, { diameter: d, thickness: 0.04, tessellation: 12 }, scene),
           C.foam,
-          [x, 0.075, face - 0.1],
+          [x, 0.075, face - 0.12],
           [1.4, 0.5, 0.7],
         );
       }
-      part(body, cylinder(0.3, 0.03, 0.03, 6), C.post, [0.52, top + 0.18, -0.02]);
-      part(windowList, sphere(0.08, 8), lampColor, [0.52, top + 0.35, -0.02]);
+      part(body, cylinder(0.3, 0.03, 0.03, 6), C.post, [0.52, top + 0.18, 0]);
+      part(windowList, sphere(0.08, 8), lampColor, [0.52, top + 0.35, 0]);
       turnSince(start, 0.6);
       break;
     }
