@@ -184,7 +184,11 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
       let stormy = false;
       let lit = Number.NaN;
       const light = (now: number, overPatch: boolean): void => {
-        if (now === lit && overPatch === stormy) return;
+        // Also when something else (the night) wrote the light since: its
+        // value is the new base, and the mood goes back on top of it.
+        const rewritten =
+          (sun !== null && sun.intensity !== sunSet) || scene.environmentIntensity !== skySet;
+        if (now === lit && overPatch === stormy && !rewritten) return;
         lit = now;
         stormy = overPatch;
         flash.value = now;
