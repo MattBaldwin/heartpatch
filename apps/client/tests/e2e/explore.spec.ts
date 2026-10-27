@@ -972,6 +972,20 @@ test('enters a river tile on its dry bank, with its mossy logs, pebble bars and 
     await expect.poll(async () => (await exploreState(page))?.hint, slow).toBe('net');
     await keeperStill(page);
     await expectNeedClearOfKeeper(page);
+
+    // A phone turned on its side: the card lays itself out again, still clear of him.
+    const portrait = page.viewportSize();
+    if (portrait && portrait.width < portrait.height && portrait.width < 500) {
+      for (const size of [
+        { width: 734, height: 343 }, // iPhone 15 held sideways (the reviewer's repro)
+        { width: 667, height: 375 }, // iPhone SE held sideways
+      ]) {
+        await page.setViewportSize(size);
+        await expectNeedClearOfKeeper(page);
+      }
+      await page.setViewportSize(portrait);
+      await expectNeedClearOfKeeper(page);
+    }
     expect(errors).toEqual([]);
   } finally {
     await page.context().close();

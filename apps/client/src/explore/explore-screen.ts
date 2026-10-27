@@ -69,6 +69,7 @@ import {
 import {
   besideSpot,
   clearOfKeeper,
+  needRoom,
   showcaseStance,
   CAVE_STAGE,
   freePoint,
@@ -1311,6 +1312,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       need.replaceChildren();
       needShift = 0;
       need.style.transform = '';
+      need.classList.remove('explore-need-compact');
       return;
     }
     if (bag === null) void askBag();
@@ -1343,27 +1345,66 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
 
   /** How far the missing-tool card is moved off its place (CSS px, up is negative). */
   let needShift = 0;
-  /** Slides the missing-tool card up or down so it never sits over the Keeper. */
+  /**
+   * Slides the missing-tool card up or down so it never sits over the Keeper.
+   * Where neither fits (a phone held sideways) it folds into its short shape
+   * and tries again.
+   */
   function placeNeed(): void {
+    if (need.hidden) return;
     const keeper = scene3d?.keeperOnScreen();
-    if (need.hidden || !keeper) return;
-    const r = need.getBoundingClientRect();
-    if (r.height === 0) return; // hidden by a gesture: nothing to place
-    const card = {
-      left: r.left,
-      right: r.right,
-      top: r.top - needShift,
-      bottom: r.bottom - needShift,
-    };
-    const room = {
-      top: top.getBoundingClientRect().bottom + EXPLORE_VIEW.needGap,
-      bottom: action.getBoundingClientRect().top - EXPLORE_VIEW.needGap,
-    };
-    const shift = Math.round(clearOfKeeper(card, keeper, room, EXPLORE_VIEW.needGap));
-    if (shift === needShift) return;
-    needShift = shift;
-    need.style.transform = shift === 0 ? '' : `translateY(${String(shift)}px)`;
+    if (!keeper) return;
+    let shift = needShiftFor(keeper);
+    if (shift === undefined) return; // hidden by a gesture: nothing to place
+    if (shift === null && !need.classList.contains('explore-need-compact')) {
+      need.classList.add('explore-need-compact');
+      shift = needShiftFor(keeper);
+      if (shift === undefined) return;
+    }
+    // Still no room either side (a screen too short for both): as high as it may go.
+    const dy = Math.round(
+      shift ?? needRoomNow().top - (need.getBoundingClientRect().top - needShift),
+    );
+    if (dy === needShift) return;
+    needShift = dy;
+    need.style.transform = dy === 0 ? '' : `translateY(${String(dy)}px)`;
   }
+
+  /** The card's own place on screen, as if it weren't moved. */
+  function needAtRest(): ScreenBox {
+    const r = need.getBoundingClientRect();
+    return { left: r.left, right: r.right, top: r.top - needShift, bottom: r.bottom - needShift };
+  }
+
+  function needRoomNow(): { top: number; bottom: number } {
+    const card = needAtRest();
+    return needRoom(
+      card,
+      top.getBoundingClientRect(),
+      [action.getBoundingClientRect(), stickBase.getBoundingClientRect()],
+      card.bottom,
+      EXPLORE_VIEW.needGap,
+    );
+  }
+
+  /** `clearOfKeeper` for the card as it's laid out now; undefined when it isn't shown. */
+  function needShiftFor(keeper: ScreenBox): number | null | undefined {
+    const card = needAtRest();
+    if (card.bottom - card.top === 0) return undefined;
+    return clearOfKeeper(card, keeper, needRoomNow(), EXPLORE_VIEW.needGap);
+  }
+
+  // Turning the phone (or resizing the window) lays the card out afresh: its
+  // full shape first, placed once the scene has its new size.
+  window.addEventListener('resize', () => {
+    if (need.hidden) return;
+    requestAnimationFrame(() => {
+      need.classList.remove('explore-need-compact');
+      needShift = 0;
+      need.style.transform = '';
+      placeNeed();
+    });
+  });
 
   let playDots: HTMLElement | null = null;
 

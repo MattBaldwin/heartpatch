@@ -10,6 +10,7 @@ import { startInteraction } from './interactions.js';
 import { clampToTile, insideTile } from './explore-view.js';
 import {
   clearOfKeeper,
+  needRoom,
   coverShare,
   glintNudge,
   besideSpot,
@@ -714,7 +715,7 @@ describe('the missing-tool card keeps clear of the Keeper', () => {
 
   it('moves up over his head when it covers him', () => {
     const card = { left: 100, right: 300, top: 400, bottom: 520 };
-    const dy = clearOfKeeper(card, keeper, room, 12);
+    const dy = clearOfKeeper(card, keeper, room, 12) ?? NaN;
     expect(card.bottom + dy).toBe(288);
     expect(overlaps(card, dy)).toBe(false);
   });
@@ -722,14 +723,49 @@ describe('the missing-tool card keeps clear of the Keeper', () => {
   it('goes under his feet when there is no room over his head', () => {
     const tall = { left: 150, right: 250, top: 120, bottom: 400 };
     const card = { left: 100, right: 300, top: 300, bottom: 420 };
-    const dy = clearOfKeeper(card, tall, room, 12);
+    const dy = clearOfKeeper(card, tall, room, 12) ?? NaN;
     expect(card.top + dy).toBe(412);
     expect(coverShare({ ...card, top: card.top + dy, bottom: card.bottom + dy }, tall)).toBe(0);
   });
 
-  it('keeps inside its band when neither side has room', () => {
+  it('says so when neither side has room, so the card can fold smaller', () => {
     const huge = { left: 0, right: 400, top: 100, bottom: 690 };
     const card = { left: 100, right: 300, top: 400, bottom: 520 };
-    expect(card.top + clearOfKeeper(card, huge, room, 12)).toBe(room.top);
+    expect(clearOfKeeper(card, huge, room, 12)).toBeNull();
+  });
+});
+
+describe('the band the missing-tool card may use', () => {
+  const topBar = { left: 0, right: 734, top: 0, bottom: 60 };
+
+  it('stops over the action button when it sits under the card (portrait)', () => {
+    const card = { left: 16, right: 374, top: 450, bottom: 560 };
+    const action = { left: 130, right: 260, top: 640, bottom: 770 };
+    expect(needRoom(card, topBar, [action], card.bottom, 12)).toEqual({ top: 72, bottom: 628 });
+  });
+
+  it('ignores controls beside the card and keeps its own bottom (landscape)', () => {
+    // iPhone 15 held sideways (734x343): the card between the stick and the button.
+    const card = { left: 150, right: 584, top: 195, bottom: 323 };
+    const action = { left: 602, right: 714, top: 211, bottom: 323 };
+    const stick = { left: 20, right: 124, top: 209, bottom: 313 };
+    const hidden = { left: 0, right: 0, top: 0, bottom: 0 };
+    expect(needRoom(card, topBar, [action, stick, hidden], card.bottom, 12)).toEqual({
+      top: 72,
+      bottom: 323,
+    });
+  });
+
+  it('has no room over or under the Keeper for the full card in landscape, but does for the short one', () => {
+    const keeper = { left: 347.2, right: 386.8, top: 185.9, bottom: 240.8 };
+    const room = { top: 72, bottom: 323 };
+    const full = { left: 150, right: 584, top: 195, bottom: 323 };
+    expect(clearOfKeeper(full, keeper, room, 12)).toBeNull();
+    const short = { left: 150, right: 584, top: 263, bottom: 323 };
+    const dy = clearOfKeeper(short, keeper, room, 12);
+    expect(dy).not.toBeNull();
+    const moved = { ...short, top: short.top + (dy ?? 0), bottom: short.bottom + (dy ?? 0) };
+    expect(coverShare(moved, keeper)).toBe(0);
+    expect(moved.top).toBeGreaterThanOrEqual(room.top);
   });
 });
