@@ -1,7 +1,7 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { claimLand } from './claim-land.js';
-import { api, hook } from './dev-hook.js';
+import { api, hook, waitForLiveMap } from './dev-hook.js';
 import { duskTimeZone } from './map-time.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
@@ -15,11 +15,11 @@ import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 const hollowState = (page: Page) =>
   hook<{ mapId: string; night: boolean; chips: string[]; darkSpots: number }>(page, 'hollow');
-const mapState = (page: Page) => hook<{ id: string; live: string | null }>(page, 'map');
+const mapState = (page: Page) => hook<{ id: string }>(page, 'map');
 
 async function openMap(page: Page): Promise<void> {
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
-  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  await waitForLiveMap(page);
 }
 
 test('at dusk, dark land gets a nudge to light a fire', async ({ browser }) => {

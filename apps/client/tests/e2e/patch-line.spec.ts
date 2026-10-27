@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { api, hook } from './dev-hook.js';
+import { api, hook, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
@@ -94,11 +94,7 @@ test('a patch-mate’s Legendary friend tells the patch, by name only to who has
   await friendLobby.getByRole('button', { name: /Legend Patch/ }).tap({ timeout: 30_000 });
   await visitPatch(friendLobby);
   await expect(friendLobby).toBeHidden();
-  await expect
-    .poll(async () => (await hook<{ live: string | null }>(friend, 'map'))?.live, {
-      timeout: 30_000,
-    })
-    .toBe('live');
+  await waitForLiveMap(friend);
   // Sprout's first-visit hint (a new player's) would hold the line back: say OK to it.
   const hintOk = friend.getByTestId('tray-hint-ok');
   await hintOk.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => undefined);
@@ -128,11 +124,7 @@ test('a patch-mate’s Legendary friend tells the patch, by name only to who has
   // battle may have taken the screen.)
   await meet(friend, mapId, 'thunderplume');
   await friend.goto('/');
-  await expect
-    .poll(async () => (await hook<{ live: string | null }>(friend, 'map'))?.live, {
-      timeout: 60_000,
-    })
-    .toBe('live');
+  await waitForLiveMap(friend);
   await expect(friend.getByTestId('battle-hud')).toBeHidden();
   await befriend(owner, mapId, 'thunderplume');
   await expect(line).toHaveText(`🌟 ${ownerName} befriended a Legendary Thunderplume!`, {

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { draws, hook, idle } from './dev-hook.js';
+import { draws, hook, idle, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { touch } from './touch.js';
 
@@ -14,7 +14,6 @@ interface MapDebug {
   homes: number;
   claimedHomes: number;
   selected: string | null;
-  live: string | null;
   props: number;
   propKinds: number;
   mutedTiles: number;
@@ -142,7 +141,7 @@ test('draws a patch, shows tile info on tap, and follows land changes live', asy
   // 9 terrain looks (trading posts too, #269) plus home tiles, however many tiles.
   expect(drawn.tileMeshes).toBeLessThanOrEqual(10);
   await expect(owner.locator('#game')).toHaveAttribute('data-ready', 'true');
-  await expect.poll(async () => (await mapState(owner))?.live, { timeout: 30_000 }).toBe('live');
+  await waitForLiveMap(owner);
 
   // The camera starts on the owner's Heart Seed: tapping the middle shows it.
   const box = (await owner.locator('#game').boundingBox())!;
@@ -361,7 +360,7 @@ test('an open home says it is saved for the next Keeper, and offers nothing to t
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  await waitForLiveMap(page);
 
   // Zoom out until an open home is on screen, then tap its middle.
   const box = (await page.locator('#game').boundingBox())!;

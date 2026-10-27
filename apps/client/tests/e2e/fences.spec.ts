@@ -1,7 +1,7 @@
 import { findAvoidedWords, type MapView } from '@heartpatch/shared';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { claimLand, findTile } from './claim-land.js';
-import { api, hook } from './dev-hook.js';
+import { api, hook, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { realTap } from './touch.js';
 import { trayButton } from './trays.js';
@@ -34,7 +34,7 @@ interface BuildDebug {
 }
 const buildState = (page: Page) => hook<BuildDebug>(page, 'tileBuild');
 const mapState = (page: Page) =>
-  hook<{ id: string; live: string | null; selected: string | null; fences: number }>(page, 'map');
+  hook<{ id: string; selected: string | null; fences: number }>(page, 'map');
 
 /** The claimed tile's fences, as the server's map view has them. */
 async function fencesOn(page: Page, mapId: string, at: { q: number; r: number }) {
@@ -57,7 +57,7 @@ test('builds a fence on every open edge, upgrades one, and takes one down', asyn
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  await waitForLiveMap(page);
   const mapId = (await mapState(page))!.id;
 
   const land = await claimLand(page, mapId);
@@ -170,7 +170,7 @@ test('Keep going on the fence-broke card starts the guard battle', async ({ brow
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  await waitForLiveMap(page);
 
   // The dev fight, finished as a fence battle my squishy won; the original stands in for the guards.
   let guards: unknown = null;

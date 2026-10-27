@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { findAvoidedWords } from '@heartpatch/shared';
-import { api, hook } from './dev-hook.js';
+import { api, hook, waitForLiveMap } from './dev-hook.js';
 import { expectRoomyLabels } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { realTap } from './touch.js';
@@ -51,6 +51,7 @@ test('crafts a Brave Brew, drinks it in a wild battle, and shows the chip', asyn
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await waitForLiveMap(page);
   const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
 
   // Craft one from dev items: the recipe page opens once Treats and Stone are in.
@@ -190,6 +191,7 @@ test('a full team at 375 px: Heart Charm, potions and Swap share the first line,
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await waitForLiveMap(page);
   const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
   // Two more squishies make a full team of three (BATTLE_RULES.teamSize).
   for (const speciesId of ['emberbun', 'thistlepip']) {

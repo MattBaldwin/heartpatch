@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { hook } from './dev-hook.js';
+import { hook, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /** The chat from the dev hook (src/chat/chat-screen.ts `ChatDebug`). */
@@ -13,10 +13,6 @@ interface ChatDebug {
 
 function chatState(page: Page): Promise<ChatDebug | null> {
   return hook<ChatDebug>(page, 'chat');
-}
-
-async function liveStatus(page: Page): Promise<string | null> {
-  return (await hook<{ live: string | null }>(page, 'map'))?.live ?? null;
 }
 
 test('two players on one patch trade quick messages live', async ({ browser }) => {
@@ -57,7 +53,7 @@ test('two players on one patch trade quick messages live', async ({ browser }) =
 
   // Both follow the patch live, with an empty feed.
   for (const page of [owner, friend]) {
-    await expect.poll(() => liveStatus(page), { timeout: 30_000 }).toBe('live');
+    await waitForLiveMap(page);
     await expect.poll(() => chatState(page)).toMatchObject({ open: false, feed: [] });
   }
 
