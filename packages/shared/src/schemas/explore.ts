@@ -137,6 +137,11 @@ export const ExploreTileResponseSchema = z.object({
   q: HexSchema.shape.q,
   r: HexSchema.shape.r,
   terrain: z.string(),
+  /**
+   * The terrain whose explore kit the tile uses, when not its own (#621
+   * W1-13): `river` on land beside a river. Absent: its own.
+   */
+  kit: z.string().optional(),
   spots: z.array(PublicSearchSpotSchema),
   /** Every tool the tile's spots call for, in tool order (hands need none). */
   needs: z.array(ToolIdSchema),

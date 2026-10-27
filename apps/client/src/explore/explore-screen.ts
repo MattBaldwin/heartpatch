@@ -94,6 +94,7 @@ import {
   type InteractionState,
 } from './interactions.js';
 import {
+  exploreKitOf,
   exploreSkyAt,
   exploreWorld,
   isUnderwater,
@@ -318,7 +319,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   const skyNow = (): SkyLook =>
     skyLook(
       exploreSkyAt(zone, options.now?.() ?? new Date()),
-      tile ? exploreWorld(tile.terrain) : 'ground',
+      tile ? exploreWorld(exploreKitOf(tile)) : 'ground',
     );
   /** The look last shown, so a quiet minute changes and redraws nothing. */
   let skyShown: SkyLook | null = null;
@@ -1213,7 +1214,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     // Under a lake, Back brings the Keeper up for air (#335).
     back.setAttribute(
       'aria-label',
-      isUnderwater(t.terrain) ? EXPLORE_TEXT.popUp : EXPLORE_TEXT.back,
+      isUnderwater(exploreKitOf(t)) ? EXPLORE_TEXT.popUp : EXPLORE_TEXT.back,
     );
     // Cleared land with only the cellar key's glint has no spots to count (#306).
     progress.textContent = cellarOf

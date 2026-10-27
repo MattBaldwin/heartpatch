@@ -159,17 +159,28 @@ describe('explore rules data', () => {
     ).toBe(false);
   });
 
-  it('picks each tile’s own kit, with the river-edge rule ready but off (#621 W1-13)', () => {
-    expect(RIVER_EDGE_KIT).toBe(false);
-    expect(exploreKitFor('meadow', ['river', 'forest'], EXPLORE_RULES)).toBe('meadow');
-    expect(exploreKitFor('river', [], EXPLORE_RULES)).toBe('river');
-    // Switched on: explorable land beside a river explores as its bank.
-    expect(exploreKitFor('meadow', ['forest', 'river'], EXPLORE_RULES, true)).toBe('river');
-    expect(exploreKitFor('coast', ['river'], EXPLORE_RULES, true)).toBe('river');
-    // Not without a river next door, and never for land nobody explores.
-    expect(exploreKitFor('meadow', ['forest', 'wild-lake'], EXPLORE_RULES, true)).toBe('meadow');
-    expect(exploreKitFor('junipers-gap', ['river'], EXPLORE_RULES, true)).toBe('junipers-gap');
-    expect(exploreKitFor('ocean', ['river'], EXPLORE_RULES, true)).toBe('ocean');
+  it('explores land beside a river as the river bank (#621 W1-13, owner decision 2026-10-27)', () => {
+    expect(RIVER_EDGE_KIT).toBe(true);
+    // The flag is the default: explorable land beside a river explores as its bank.
+    expect(exploreKitFor('meadow', ['forest', 'river'], EXPLORE_RULES)).toBe('river');
+    expect(exploreKitFor('lake', ['river'], EXPLORE_RULES)).toBe('river');
+    // Several water neighbours: one river among them is enough, and two are no different.
+    expect(exploreKitFor('hills', ['river', 'river', 'wild-lake'], EXPLORE_RULES)).toBe('river');
+    // Sea and river both next door: only the river has an edge kit, so it wins.
+    expect(exploreKitFor('meadow', ['ocean', 'coast', 'river'], EXPLORE_RULES)).toBe('river');
+    expect(exploreKitFor('coast', ['ocean', 'river'], EXPLORE_RULES)).toBe('river');
+    // Sea, coast or lake alone change nothing.
+    expect(exploreKitFor('meadow', ['ocean', 'coast'], EXPLORE_RULES)).toBe('meadow');
+    expect(exploreKitFor('coast', ['ocean', 'ocean'], EXPLORE_RULES)).toBe('coast');
+    expect(exploreKitFor('meadow', ['forest', 'wild-lake'], EXPLORE_RULES)).toBe('meadow');
+    expect(exploreKitFor('forest', [], EXPLORE_RULES)).toBe('forest');
+    // Water tiles keep their own (nobody claims them), and land nobody explores stays unexplorable.
+    expect(exploreKitFor('river', ['river', 'meadow'], EXPLORE_RULES)).toBe('river');
+    expect(exploreKitFor('ocean', ['river'], EXPLORE_RULES)).toBe('ocean');
+    expect(exploreKitFor('wild-lake', ['river'], EXPLORE_RULES)).toBe('wild-lake');
+    expect(exploreKitFor('junipers-gap', ['river'], EXPLORE_RULES)).toBe('junipers-gap');
+    // Switched off (tests only): every tile its own kit.
+    expect(exploreKitFor('meadow', ['river'], EXPLORE_RULES, false)).toBe('meadow');
   });
 
   it('gives the river bank hands, the Shovel and the Snorkel, with existing gestures (#621 W1-13)', () => {

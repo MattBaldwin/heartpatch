@@ -38,7 +38,7 @@ import {
   type AmbientStatus,
 } from '../map/ambient-layout.js';
 import type { AmbientTarget } from '../map/ambient-driver.js';
-import { isUnderwater, type SkyLook } from './explore-sky-look.js';
+import { exploreKitOf, isUnderwater, type SkyLook } from './explore-sky-look.js';
 import { spotWorld } from '../home/home-layout.js';
 import {
   AMBIENT,
@@ -476,7 +476,7 @@ export class ExploreScene implements AmbientTarget {
     const counts = import.meta.env.DEV && gl ? countGl(gl) : null;
     this.#gl = counts ? { counts, atOpen: { ...counts } } : null;
     this.#tile = tile;
-    this.#underwater = isUnderwater(tile.terrain);
+    this.#underwater = isUnderwater(exploreKitOf(tile));
     this.#highTier = bubblesAt(options.tier);
     // Underwater the Keeper swims instead of hopping (#399).
     this.#reduced = options.reducedMotion ?? (() => false);
@@ -501,12 +501,14 @@ export class ExploreScene implements AmbientTarget {
     this.#at = freePoint(EXPLORE_VIEW.start, this.#colliders);
 
     const landLook =
-      LAND_LOOKS[tile.terrain] ?? LAKE_LOOKS[tile.terrain] ?? BIOME_LOOKS[tile.terrain];
-    const waterLook = WATER_LOOKS_BY_TERRAIN[tile.terrain];
+      LAND_LOOKS[exploreKitOf(tile)] ??
+      LAKE_LOOKS[exploreKitOf(tile)] ??
+      BIOME_LOOKS[exploreKitOf(tile)];
+    const waterLook = WATER_LOOKS_BY_TERRAIN[exploreKitOf(tile)];
     // A biome's own layers: the lake's kelp and coral, the trail's peaks, the cave's walls.
     const extras = waterLook
       ? lakeExtras(waterLook, tileSeed(tile, 'water'))
-      : BIOME_EXTRAS[tile.terrain];
+      : BIOME_EXTRAS[exploreKitOf(tile)];
     // A grey village tile (#306 2a): the land and its spots read one drain.
     const drain = tile.community ? new HollowedDrain() : null;
     if (landLook) {
@@ -539,7 +541,7 @@ export class ExploreScene implements AmbientTarget {
         });
       }
     } else {
-      const look = TERRAIN_LOOKS[tile.terrain] ?? FALLBACK_LOOK;
+      const look = TERRAIN_LOOKS[exploreKitOf(tile)] ?? FALLBACK_LOOK;
       const h = look.height;
       // The same profile #buildGround lofts, so feet, props and decor sit on it.
       const top = tileSurface({
@@ -550,7 +552,7 @@ export class ExploreScene implements AmbientTarget {
         rings: TOP_RINGS.map((r) => ({ scale: r.scale, y: r.y + h })),
       });
       this.#surface = (p) => top(p) * this.#k;
-      this.#buildGround(tile.terrain);
+      this.#buildGround(exploreKitOf(tile));
     }
 
     // The land's props are matte (art bible §4); today's tiles keep their vinyl.
@@ -741,7 +743,7 @@ export class ExploreScene implements AmbientTarget {
       );
     }
 
-    if (tile.terrain === CELLAR_TERRAIN) {
+    if (exploreKitOf(tile) === CELLAR_TERRAIN) {
       this.#cellar = new CellarChests(
         scene,
         { world: (p) => this.#world(p), groundAt: (p) => this.#groundAt(p) },
@@ -1646,13 +1648,13 @@ export class ExploreScene implements AmbientTarget {
     for (const spot of tile.spots) {
       const shape = SPOT_PROPS[spot.kind] ?? 'rock';
       // Old forests grow their own old trees.
-      const prop = shape === 'tree' && tile.terrain === 'old-forest' ? 'old-tree' : shape;
+      const prop = shape === 'tree' && exploreKitOf(tile) === 'old-forest' ? 'old-tree' : shape;
       // On the land kit (#335), its own rocks, trees, logs and flower beds (and the lake's,
       // trail's and cave's spots), drawn at world size: built once a kind (the first is the
       // solid copy).
       let kit = built.get(spot.kind);
       if (kit === undefined && this.#land) {
-        kit = kitSpot(this.#scene, spot.kind, tile.terrain);
+        kit = kitSpot(this.#scene, spot.kind, exploreKitOf(tile));
         built.set(spot.kind, kit);
       }
       const kind = kit ? `kit:${spot.kind}` : prop;
@@ -1661,7 +1663,9 @@ export class ExploreScene implements AmbientTarget {
         this.#kitGlint.set(spot.kind, kit.glint);
         builders.set(
           kind,
-          () => kitSpot(this.#scene, spot.kind, tile.terrain)?.mesh ?? mapProp(this.#scene, 'rock'),
+          () =>
+            kitSpot(this.#scene, spot.kind, exploreKitOf(tile))?.mesh ??
+            mapProp(this.#scene, 'rock'),
         );
       } else {
         builders.set(kind, () =>

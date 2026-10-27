@@ -239,6 +239,14 @@ export function exploreWorld(terrain: string): ExploreWorld {
   return WORLDS[terrain] ?? 'ground';
 }
 
+/**
+ * The terrain whose explore kit a tile shows (#621 W1-13): the server's
+ * `kit` (land beside a river explores as its bank), else the tile's own.
+ */
+export function exploreKitOf(tile: { readonly terrain: string; readonly kit?: string }): string {
+  return tile.kit ?? tile.terrain;
+}
+
 /** Is this terrain explored underwater (#335, owner decision 2026-10-09: lakes, with a Snorkel)? */
 export function isUnderwater(terrain: string): boolean {
   return exploreWorld(terrain) === 'water';
