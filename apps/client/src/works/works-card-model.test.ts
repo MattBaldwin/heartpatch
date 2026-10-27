@@ -93,7 +93,8 @@ describe('the works tile card (#621 W1-10c)', () => {
   });
 
   it('reads an older server with no `short` as having enough', () => {
-    const { short: _short, ...older } = production();
+    const older = production();
+    delete older.short;
     expect(worksCard({ buildingId: 'watermill', production: older }, joined, NOW)?.state).toBe(
       'running',
     );
@@ -127,7 +128,7 @@ describe('the weather chip (#621 W1-10c)', () => {
   });
 
   it('keeps every chip short enough for one line on a small phone', () => {
-    const texts = WORKS_BUILDINGS.filter((b) => b.kind === 'works').flatMap((b) =>
+    const texts = WORKS_BUILDINGS.flatMap((b) =>
       b.kind === 'works'
         ? (['faster', 'slower', 'same', 'waiting'] as const).flatMap((w) => {
             const chip = worksChip(b, w);
@@ -135,8 +136,9 @@ describe('the weather chip (#621 W1-10c)', () => {
           })
         : [],
     );
+    const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' });
     expect(texts.length).toBeGreaterThan(0);
-    for (const t of texts) expect([...t].length, t).toBeLessThanOrEqual(30);
+    for (const t of texts) expect(Array.from(graphemes.segment(t)).length, t).toBeLessThanOrEqual(30);
   });
 });
 
