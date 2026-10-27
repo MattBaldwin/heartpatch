@@ -253,8 +253,11 @@ export default defineConfig({
   ...e2eGroup(process.env['HP_E2E_GROUP']),
   forbidOnly: isCI,
   retries: isCI ? 1 : 0,
-  // In CI, list prints every test's duration in the job log (for balancing E2E_GROUPS).
-  reporter: isCI ? [['github'], ['list'], ['html', { open: 'never' }]] : 'list',
+  // In CI, list prints every test's duration in the job log, and spec-timing puts each spec's
+  // time in a check-run annotation (readable when the log isn't), for balancing E2E_GROUPS.
+  reporter: isCI
+    ? [['github'], ['list'], ['html', { open: 'never' }], ['./tests/e2e/spec-timing-reporter.ts']]
+    : 'list',
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'retain-on-failure',
