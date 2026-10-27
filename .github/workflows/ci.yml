@@ -148,8 +148,11 @@ jobs:
     # groups at about 10 min, but by 2026-10-23 ipad-webkit group 2 took 26-28.5
     # min and timed out at 30 with every test passed (#631). After #647's
     # rebalance the slowest job seen in 9 runs (2026-10-24) took 29.2 min in
-    # all (ipad-webkit group 6, 27.9 min of tests), so 35 leaves ~6 min slack.
-    timeout-minutes: 35 # TUNE: lower again after group 6 is lightened
+    # all (ipad-webkit group 6, 27.9 min of tests), so 35 left ~6 min slack.
+    # By 2026-10-27 ipad-webkit group 4 took 30 min on main (912fc2a) and was
+    # cut off at 35 on #708 with no test failed, so 45 until the groups are
+    # rebalanced from fresh medians.
+    timeout-minutes: 45 # TUNE: lower again after the groups are rebalanced
     strategy:
       fail-fast: false
       matrix:
