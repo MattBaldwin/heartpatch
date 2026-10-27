@@ -138,7 +138,8 @@ describe('the weather chip (#621 W1-10c)', () => {
     );
     const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' });
     expect(texts.length).toBeGreaterThan(0);
-    for (const t of texts) expect(Array.from(graphemes.segment(t)).length, t).toBeLessThanOrEqual(30);
+    for (const t of texts)
+      expect(Array.from(graphemes.segment(t)).length, t).toBeLessThanOrEqual(30);
   });
 });
 
