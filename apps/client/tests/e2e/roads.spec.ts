@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { hexDistance, hexKey, hexNeighbors, isWaterTerrain } from '@heartpatch/shared';
 import { claimLand, playClaimBattle, selectTile } from './claim-land.js';
-import { api, hook } from './dev-hook.js';
+import { api, hook, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
@@ -52,6 +52,7 @@ test('a Road reaches a claim two tiles away, and taking it up cuts the land off 
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await waitForLiveMap(page, mapId);
   await expect.poll(() => roadsDebug(page)).toMatchObject({ loaded: true, roads: 0 });
 
   // Land next to home, claimed the ordinary way: the road goes here.

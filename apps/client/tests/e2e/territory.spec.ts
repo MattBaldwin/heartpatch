@@ -7,7 +7,7 @@ import {
   type PlayerBattle,
 } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { api, hook } from './dev-hook.js';
+import { api, hook, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { bigMoveButton } from './big-move.js';
 
@@ -109,8 +109,9 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  // `data-ready` marks the engine, not the map: under WebKit load the
-  // territory state lands after the default 5 s poll, so give it room.
+  await waitForLiveMap(page);
+  // Under WebKit load the territory state lands after the default 5 s poll,
+  // so give it room.
   await expect
     .poll(() => territoryState(page), { timeout: 60_000 })
     .toMatchObject({ attemptsLeft: TERRITORY_RULES.attemptsPerDay, onWatch: 0 });
@@ -253,6 +254,7 @@ test('says when tries come back once they are used up (#201)', async ({ browser 
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await waitForLiveMap(page);
   await expect
     .poll(() => territoryState(page), { timeout: 30_000 })
     .toMatchObject({ attemptsLeft: TERRITORY_RULES.attemptsPerDay });
@@ -283,6 +285,7 @@ test('says when tries come back once they are used up (#201)', async ({ browser 
   // Back on the patch (a reload lands there), wild land says when tries come back.
   await page.reload();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
+  await waitForLiveMap(page);
   // Roomy: a reload rebuilds the map scene, slow on a software-rendered runner.
   await expect
     .poll(() => territoryState(page), { timeout: 30_000 })
@@ -351,6 +354,7 @@ test('shows a refused Challenge’s reason on screen, even under a tall panel (#
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await waitForLiveMap(page);
   await expect.poll(() => territoryState(page), { timeout: 30_000 }).not.toBeNull();
 
   const panel = page.getByTestId('tile-panel');

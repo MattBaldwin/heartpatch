@@ -1,6 +1,6 @@
 import { findAvoidedWords, HEART_COIN_RULES } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { api, hook } from './dev-hook.js';
+import { api, hook, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { grantItems, postState, visitPost, wordsSplit } from './trading.js';
 
@@ -59,11 +59,7 @@ async function seller(
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  await expect
-    .poll(async () => (await hook<{ live: string | null }>(page, 'map'))?.live, {
-      timeout: 30_000,
-    })
-    .toBe('live');
+  await waitForLiveMap(page);
   await visitPost(page);
   await page.getByTestId('post-tab-sell').tap();
   await expect(page.getByTestId('post-sell-today')).toBeVisible();

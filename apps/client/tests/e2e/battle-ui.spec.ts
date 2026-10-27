@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { api, draws, hook, idle } from './dev-hook.js';
+import { api, draws, hook, idle, waitForLiveMap } from './dev-hook.js';
 import { expectRoomyLabels, freshResize, holdResizes, still, turnLikeIos } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { realTap, realTapAt } from './touch.js';
@@ -249,6 +249,7 @@ test('a double tap on the tile chip’s × never starts a battle', async ({ brow
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
+  await waitForLiveMap(page);
   const hintOk = page.getByTestId('tray-hint-ok');
   if (await hintOk.isVisible()) await realTap(hintOk);
 

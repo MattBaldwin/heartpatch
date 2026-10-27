@@ -1,6 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { api, hook } from './dev-hook.js';
+import { api, hook, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { openTray, traysState, trayButton } from './trays.js';
 
@@ -55,6 +55,7 @@ test('trays hold the controls, and the recipe book makes, seals, searches and fi
   await expect.poll(async () => (await traysState(page))?.open).toBeNull();
 
   // The book: always-open pages for a new account, a sealed Jack-o'-Lantern.
+  await waitForLiveMap(page);
   const mapId = (await mapState(page))!.id;
   await (await trayButton(page, 'recipe-book-open')).tap();
   const book = page.getByTestId('recipe-book');
@@ -145,6 +146,7 @@ test('the recipe book shows what’s cooking, and a finished craft lands by itse
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await waitForLiveMap(page);
 
   // Pumpkins open the Pumpkin Treats page (Halloween is on: the game clock
   // starts inside the 2026 window, playwright.config.ts `HP_DEV_NOW`).
@@ -263,6 +265,7 @@ test('a craft started elsewhere shows up when Make it is refused', async ({ brow
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await waitForLiveMap(page);
 
   const mapId = (await mapState(page))!.id;
   expect(

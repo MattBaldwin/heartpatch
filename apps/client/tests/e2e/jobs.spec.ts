@@ -1,7 +1,7 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { tapCanvas } from './claim-land.js';
-import { api, hook } from './dev-hook.js';
+import { api, hook, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
 
@@ -44,8 +44,7 @@ interface BattleBody {
 }
 
 const jobsState = (page: Page) => hook<JobsDebug>(page, 'jobs');
-const mapState = (page: Page) =>
-  hook<{ id: string; live: string | null; selected: string | null }>(page, 'map');
+const mapState = (page: Page) => hook<{ id: string; selected: string | null }>(page, 'map');
 const homeState = (page: Page) => hook<HomeMoodDebug>(page, 'home');
 
 test('a squishy gathers on its own, and the picked team goes to battle', async ({ browser }) => {
@@ -61,7 +60,7 @@ test('a squishy gathers on its own, and the picked team goes to battle', async (
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
-  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  await waitForLiveMap(page);
   const mapId = (await mapState(page))!.id;
 
   // A second friend to make the trade-off real (the starter is the first).
@@ -159,7 +158,7 @@ test('a gatherer on a spot it loves stays happy while a resting one drifts (#376
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
-  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  await waitForLiveMap(page);
   const mapId = (await mapState(page))!.id;
 
   const granted = await api(page, 'POST', `/maps/${mapId}/dev/squishies`, {
@@ -222,7 +221,7 @@ test('my gatherers show how they feel on the map, and are away from home (#393, 
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
-  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  await waitForLiveMap(page);
   const mapId = (await mapState(page))!.id;
 
   const grant = async () => {

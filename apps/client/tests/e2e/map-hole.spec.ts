@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { claimLand, tapTile } from './claim-land.js';
-import { hook, idle } from './dev-hook.js';
+import { hook, idle, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { traysState } from './trays.js';
 
@@ -12,8 +12,7 @@ import { traysState } from './trays.js';
  * by pixels: a screenshot of what the player sees.
  */
 
-const mapState = (page: Page) =>
-  hook<{ id: string; live: string; selected: string | null }>(page, 'map');
+const mapState = (page: Page) => hook<{ id: string; selected: string | null }>(page, 'map');
 
 /** The page background (styles.css `#fde8f0`), which shows through a hole in the canvas. */
 const PAGE_PINK = [253, 232, 240] as const;
@@ -70,7 +69,7 @@ test('claimed land leaves no hole in the map', async ({ browser }) => {
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
-  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  await waitForLiveMap(page);
   const mapId = (await mapState(page))!.id;
 
   const claimed = await claimLand(page, mapId);
