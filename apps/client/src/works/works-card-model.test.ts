@@ -69,13 +69,13 @@ describe('the works tile card (#621 W1-10c)', () => {
     const card = worksCard(mill({ short: { greens: 2 }, weather: 'same' }), joined, NOW);
     expect(card).toMatchObject({
       state: 'short',
-      line: 'Out of Greens! Bring some for the Watermill 🌿',
+      line: 'Out of Greens! Bring some for the mill\u00a0🌿',
       next: 'Each batch takes 2 🌿',
       chip: null,
     });
     // An empty bag says the same.
     expect(worksCard(mill({ short: { greens: 2 } }), joined, NOW, { greens: 0 })?.line).toBe(
-      'Out of Greens! Bring some for the Watermill 🌿',
+      'Out of Greens! Bring some for the mill\u00a0🌿',
     );
   });
 
@@ -83,7 +83,7 @@ describe('the works tile card (#621 W1-10c)', () => {
     const card = worksCard(mill({ short: { greens: 7 } }), joined, NOW, { greens: 7 });
     expect(card).toMatchObject({
       state: 'short',
-      line: 'Need 7 more Greens for the Watermill 🌿',
+      line: 'Need 7 more Greens for the mill\u00a0🌿',
       next: 'Each batch takes 2 🌿',
     });
   });
@@ -117,12 +117,12 @@ describe('the works tile card (#621 W1-10c)', () => {
 describe('the weather chip (#621 W1-10c)', () => {
   it('names the sky that speeds a works up or slows it down, from the server’s effect', () => {
     expect(worksChip(data('fishing-pier'), 'faster')).toEqual({
-      text: '🌫️ Foggy: faster today!',
+      text: '🌫️ Foggy: fish bite faster!',
       tone: 'up',
     });
-    expect(worksChip(data('irrigated-field'), 'faster')?.text).toBe('🌧️ Rainy: faster today!');
+    expect(worksChip(data('irrigated-field'), 'faster')?.text).toBe('🌧️ Rainy: growing faster!');
     expect(worksChip(data('irrigated-field'), 'slower')).toEqual({
-      text: '🌞 Dry: slower today',
+      text: '🌞 Dry: growing slower',
       tone: 'down',
     });
     expect(worksChip(data('fishing-pier'), 'same')).toEqual({

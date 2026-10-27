@@ -1828,7 +1828,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         tileButton(RESOURCE_TEXT.coins, options.onUpkeep, 'tile-works-upkeep-order', 'small'),
       );
     }
-    return standingNodes(b, 'resource', 'works', worksCardLines(card, portrait), actions);
+    return standingNodes(b, 'resource', 'works', worksCardLines(card, portrait), actions, true);
   }
 
   /**
@@ -1866,6 +1866,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     prefix: string,
     lines: readonly Node[],
     actions: readonly Node[],
+    /** Collect and Upkeep on a row of their own, above Upgrade and Take down (the works card's mockup v3). */
+    actionsOwnRow = false,
   ): Node[] {
     const current = home;
     if (!current) return [];
@@ -1964,8 +1966,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             ]
           : []),
         ...lines,
+        ...(actionsOwnRow && actions.length > 0 ? [tileRow(...actions)] : []),
         tileRow(
-          ...actions,
+          ...(actionsOwnRow ? [] : actions),
           ...(upgradeAt
             ? [
                 tileButton(

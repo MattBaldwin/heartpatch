@@ -16,7 +16,6 @@ import { MAX_DPR } from '../engine/dpr.js';
 import { setupLighting } from '../engine/lighting/lighting.js';
 import { accessoryItem } from './accessory.js';
 import { BuildingField } from './buildings/building-field.js';
-import { levelScale } from './buildings/building-models.js';
 import type { SquishyDetail } from './config.js';
 import { KeeperField } from './keeper/keeper-field.js';
 import { keeperItems } from './keeper/keeper-items.js';
@@ -45,11 +44,9 @@ const KEEPER_POSE = { pitch: 0.18, yaw: -0.2, lookAt: 0.55, lean: 0.18 }; // TUN
 /** Camera distance per unit of the Keeper's height. */
 const KEEPER_FIT = 2.5; // TUNE: room for hair, hats and wings; the crop trims the rest
 /** A building's pose (#621 W1-10c): from above and to one side, as the map's camera sees it. */
-const BUILDING_POSE = { pitch: 0.62, yaw: -0.5, lookAt: 0.35 }; // TUNE
-/** A level-1 building's size for the camera: tile-wide and up to `TILE_FOOTPRINT.maxTop` tall. */
-const BUILDING_SIZE = 1.3; // TUNE: the crop trims the rest
-/** Camera distance per unit of the building's size. */
-const BUILDING_FIT = 3; // TUNE: 2.4 clipped the Watermill's wheel and the Seawall's end
+const BUILDING_POSE = { pitch: 0.62, yaw: -0.5 }; // TUNE
+/** Room around a building's bounding sphere, so no edge of it touches the frame. */
+const BUILDING_ROOM = 1.08; // TUNE: the crop trims the rest
 
 export interface PortraitLook {
   readonly species: Species;
@@ -77,6 +74,36 @@ export interface BuildingPortraitLook {
   readonly asleep: boolean;
   /** The picture's side in CSS px. */
   readonly size: number;
+}
+
+type V3 = { readonly x: number; readonly y: number; readonly z: number };
+
+/**
+ * Where the camera sits to see a whole building from `pose` (#621 W1-10c):
+ * aimed at the middle of its box, back far enough that the box's bounding
+ * sphere fits inside the field of view `fov` (vertical, on a square shot)
+ * with `room` to spare, whichever way it's turned. So a long Seawall or a
+ * Fishing Pier's flat water never runs off the picture's edge.
+ */
+export function buildingCamera(
+  bounds: { readonly min: V3; readonly max: V3 },
+  pose: { readonly pitch: number; readonly yaw: number },
+  fov: number,
+  room = BUILDING_ROOM,
+): { position: V3; target: V3 } {
+  const { min, max } = bounds;
+  const target = { x: (min.x + max.x) / 2, y: (min.y + max.y) / 2, z: (min.z + max.z) / 2 };
+  const radius = Math.hypot(max.x - min.x, max.y - min.y, max.z - min.z) / 2;
+  const distance = (Math.max(radius, 0.01) / Math.sin(fov / 2)) * room;
+  const flat = Math.cos(pose.pitch) * distance;
+  return {
+    target,
+    position: {
+      x: target.x + Math.sin(pose.yaw) * flat,
+      y: target.y + Math.sin(pose.pitch) * distance,
+      z: target.z - Math.cos(pose.yaw) * flat,
+    },
+  };
 }
 
 /** A building picture's cache key: one draw per building, level, look and size. */
@@ -522,23 +549,20 @@ export function createPortraits(
     const engine = options.engine();
     if (!engine || engine.isDisposed || bisectFlags().noPortraits) return null;
     const { scene, field, camera, use } = buildingStageFor(engine);
-    field.set([
-      {
-        buildingId: look.buildingId,
-        level: look.level,
-        lit: null,
-        asleep: look.asleep,
-        x: 0,
-        z: 0,
-      },
-    ]);
+    const placement = {
+      buildingId: look.buildingId,
+      level: look.level,
+      lit: null,
+      asleep: look.asleep,
+      x: 0,
+      z: 0,
+    };
+    field.set([placement]);
     const done = use.begin();
     try {
-      const size = BUILDING_SIZE * levelScale(look.level).up;
-      const { position, target } = cameraFor(
-        { ...BUILDING_POSE, distance: BUILDING_FIT * size },
-        size,
-      );
+      const bounds = field.modelBounds(placement);
+      if (!bounds) return null;
+      const { position, target } = buildingCamera(bounds, BUILDING_POSE, FOV);
       camera.position.set(position.x, position.y, position.z);
       camera.setTarget(new Vector3(target.x, target.y, target.z));
       if (

@@ -25,7 +25,7 @@ export const WORKS_PORTRAIT_PX = 72; // TUNE: fits beside the lines on an iPhone
 
 const DATA = new Map(WORKS_BUILDINGS.map((b) => [b.id, b]));
 
-/** The sky's word on the chip: "Foggy: faster today!". */
+/** The sky's word on the chip: "Foggy: fish bite faster!". */
 const SKY_WORD: Readonly<Record<WeatherKind, string>> = {
   clear: 'Clear',
   rain: 'Rainy',
@@ -34,7 +34,15 @@ const SKY_WORD: Readonly<Record<WeatherKind, string>> = {
   drought: 'Dry',
 };
 
-/** What an `onlyWhile` building waits for: "waiting for rain". */
+/** What a works' weather speeds up or slows down, by what it makes (mockup v3). */
+const PACE_WORD: Readonly<Record<string, string>> = {
+  fish: 'fish bite',
+  greens: 'growing',
+};
+
+/** A works' short name on its need line: "for the mill" (mockup v3). */
+const SHORT_NAME: Readonly<Record<string, string>> = { watermill: 'mill' };
+
 /** The waiting chip's emoji: ☔ for rain, like the Rain Barrel's own line (mockup v3). */
 const WAIT_EMOJI: Readonly<Record<WeatherKind, string>> = { ...WEATHER_EMOJI, rain: '☔' };
 
@@ -46,6 +54,9 @@ const SKY_NOUN: Readonly<Record<WeatherKind, string>> = {
   drought: 'a dry spell',
 };
 
+/** A no-break space: a line's last word and its emoji wrap together, never the emoji alone. */
+const KEEP = '\u00a0';
+
 // Player-facing text (style guide: cozy, short, kid-readable; one idea a chip).
 export const WORKS_CARD_TEXT = {
   /** "Makes 🐟 Fish, even while you're away!" */
@@ -54,16 +65,20 @@ export const WORKS_CARD_TEXT = {
   /** "Turns 🌿 Greens into 🌾 Flour, even while you're away!" */
   turns: (eats: string, resource: string) =>
     `Turns ${itemIcon(eats)} ${itemName(eats)} into ${itemIcon(resource)} ${itemName(resource)}, even while you're away!`,
-  /** None in the bag: "Out of Greens! Bring some for the Watermill 🌿" */
+  /** None in the bag: "Out of Greens! Bring some for the mill 🌿" */
   need: (item: string, building: string) =>
-    `Out of ${itemName(item)}! Bring some for the ${building} ${itemIcon(item)}`,
-  /** Some, but not enough: "Need 7 more Greens for the Watermill 🌿" */
+    `Out of ${itemName(item)}! Bring some for the ${building}${KEEP}${itemIcon(item)}`,
+  /** Some, but not enough: "Need 7 more Greens for the mill 🌿" */
   needMore: (n: number, item: string, building: string) =>
-    `Need ${String(n)} more ${itemName(item)} for the ${building} ${itemIcon(item)}`,
+    `Need ${String(n)} more ${itemName(item)} for the ${building}${KEEP}${itemIcon(item)}`,
   /** "Each batch takes 2 🌿" */
   eats: (n: number, item: string) => `Each batch takes ${String(n)} ${itemIcon(item)}`,
-  faster: (kind: WeatherKind) => `${WEATHER_EMOJI[kind]} ${SKY_WORD[kind]}: faster today!`,
-  slower: (kind: WeatherKind) => `${WEATHER_EMOJI[kind]} ${SKY_WORD[kind]}: slower today`,
+  /** "🌫️ Foggy: fish bite faster!" */
+  faster: (kind: WeatherKind, resource: string) =>
+    `${WEATHER_EMOJI[kind]} ${SKY_WORD[kind]}: ${PACE_WORD[resource] ?? 'working'} faster!`,
+  /** "🌞 Dry: growing slower" */
+  slower: (kind: WeatherKind, resource: string) =>
+    `${WEATHER_EMOJI[kind]} ${SKY_WORD[kind]}: ${PACE_WORD[resource] ?? 'working'} slower`,
   /** An `onlyWhile` building under its weather: "🌧️ Rainy: filling up!" */
   filling: (kind: WeatherKind) => `${WEATHER_EMOJI[kind]} ${SKY_WORD[kind]}: filling up!`,
   waiting: (kind: WeatherKind) => `Dry here: waiting for ${SKY_NOUN[kind]} ${WAIT_EMOJI[kind]}`,
@@ -124,8 +139,8 @@ export function worksChip(
   const kind = weather === 'faster' ? kindWhere(b, (p) => p > 100) : kindWhere(b, (p) => p < 100);
   if (kind === null) return { text: WORKS_CARD_TEXT.usual, tone: 'same' };
   return weather === 'faster'
-    ? { text: WORKS_CARD_TEXT.faster(kind), tone: 'up' }
-    : { text: WORKS_CARD_TEXT.slower(kind), tone: 'down' };
+    ? { text: WORKS_CARD_TEXT.faster(kind, b.makes.resource), tone: 'up' }
+    : { text: WORKS_CARD_TEXT.slower(kind, b.makes.resource), tone: 'down' };
 }
 
 /** The first item the bag is short of (the server's `production.short`), or null. */
@@ -150,6 +165,7 @@ export function worksCard(
   const p = b.production;
   if (data?.kind !== 'works' || !p) return null;
   const need = firstShort(p.short);
+  const shortName = SHORT_NAME[data.id] ?? data.name;
   const state: WorksState =
     tile.homestead === 'paused'
       ? 'napping'
@@ -179,8 +195,8 @@ export function worksCard(
         ? RESOURCE_TEXT.paused(p.upkeep)
         : state === 'short' && need !== null
           ? (bag?.[need] ?? 0) > 0
-            ? WORKS_CARD_TEXT.needMore(p.short?.[need] ?? 0, need, data.name)
-            : WORKS_CARD_TEXT.need(need, data.name)
+            ? WORKS_CARD_TEXT.needMore(p.short?.[need] ?? 0, need, shortName)
+            : WORKS_CARD_TEXT.need(need, shortName)
           : state === 'full'
             ? RESOURCE_TEXT.full
             : making;
