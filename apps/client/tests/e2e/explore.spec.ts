@@ -892,18 +892,6 @@ test('enters a coast tile on dry sand, with its shells, crab holes and Snorkel p
     expect(scene.created.meshes).toBeLessThanOrEqual(BUILD_MESH_CEILING);
     expect(scene.land).not.toBeNull();
     await keeperStill(page);
-
-    // Up close at the cattails with no Snorkel yet, the hint card keeps clear of the Keeper.
-    const cattails = state.spots.filter((s) => s.kind === 'cattails');
-    const ids = cattails.map((s) => s.index);
-    let reached = false;
-    for (const spot of nearestFirst(cattails, (await exploreState(page))!.keeper).slice(0, 4)) {
-      if ((reached = await walkTo(page, spot.index, ids))) break;
-    }
-    expect(reached, 'walked up to the cattails').toBe(true);
-    await expect.poll(async () => (await exploreState(page))?.hint, slow).toBe('net');
-    await keeperStill(page);
-    await expectNeedClearOfKeeper(page);
     expect(errors).toEqual([]);
   } finally {
     await page.context().close();
@@ -972,6 +960,18 @@ test('enters a river tile on its dry bank, with its mossy logs, pebble bars and 
     expect(scene.created.meshes).toBeLessThanOrEqual(BUILD_MESH_CEILING);
     expect(scene.land).not.toBeNull();
     await keeperStill(page);
+
+    // Up close at the cattails with no Snorkel yet, the hint card keeps clear of the Keeper.
+    const cattails = state.spots.filter((s) => s.kind === 'cattails');
+    const ids = cattails.map((s) => s.index);
+    let reached = false;
+    for (const spot of nearestFirst(cattails, (await exploreState(page))!.keeper).slice(0, 4)) {
+      if ((reached = await walkTo(page, spot.index, ids))) break;
+    }
+    expect(reached, 'walked up to the cattails').toBe(true);
+    await expect.poll(async () => (await exploreState(page))?.hint, slow).toBe('net');
+    await keeperStill(page);
+    await expectNeedClearOfKeeper(page);
     expect(errors).toEqual([]);
   } finally {
     await page.context().close();
