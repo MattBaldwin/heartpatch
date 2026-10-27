@@ -192,7 +192,7 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 23 handoff, 2026-10-27 ~16:10 UTC):** main `3fb718b` (#707), migrations through 0061 (no new ones). Phase 1 is due Oct 31. DECISIONS is current through supervisor 23's first batch (#705); the rest is under "To record in DECISIONS (supervisor 23)" below. Supervisor 23 is `session_01LAjTpppnRWwFCyWWuFWdGp` (lineage depth 6) and handed off at ~714k context and $98.64 (it missed its own 400k threshold; see lessons). **The next supervisor is depth 7: it must not start another supervisor; it writes its handoff here and asks the owner to start the next one from a fresh session (§8.5).**
+- **State (supervisor 23 handoff, 2026-10-27 ~16:10 UTC):** main `3fb718b` (#707), migrations through 0061 (no new ones). Phase 1 is due Oct 31. DECISIONS is current through supervisor 23 (#705, #712). Supervisor 23 is `session_01LAjTpppnRWwFCyWWuFWdGp` (lineage depth 6) and handed off at ~714k context and $98.64 (it missed its own 400k threshold; see lessons). **The next supervisor is depth 7: it must not start another supervisor; it writes its handoff here and asks the owner to start the next one from a fresh session (§8.5).**
   - **Merged under supervisor 23:** #703 (s22 handoff), #704 (s22 DECISIONS), #686 (storm, owner A), #705 (s23 DECISIONS), #706 (Chore: shared `waitForLiveMap` e2e helper), #698 (works buildings: Seawall C, fill-the-tile `TILE_FOOTPRINT`, owner v4), #701 (river-bank explore, owner v7), #709 (Chore: e2e job timeout 35 → 45 min), #708 (river reachable from neighbouring land, owner A), #707 (works tile card with rendered building portraits, owner A).
   - **No lanes running.** All supervisor-23 lanes are archived. Supervisor 22 is retired, not archived.
 - **Open PR: #710** `Fix: explore need card clear of the Keeper; tidy works card numbers` (branch `fix-polish-need-card-and-meter`, head `2df4f0c`).
@@ -261,12 +261,6 @@ The supervisor keeps this list current. Remove items as they land.
   - #696 reviewer nits: CLAUDE.md's handoff rule says "A retired supervisor is archived", which conflicts with §8 (a CLAUDE.md wording fix); the $20 stop applies per lane, not per supervisor.
   - #694 nits: `// TUNE:` markers on the cap/rope ratios; the untested `top` branch of `logCap`.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
-- **To record in DECISIONS (supervisor 23, after #705):**
-  - **River reachability = A (owner, 2026-10-27):** explorable land beside a river explores as the river bank via shared `exploreKitFor` (#708). River beats coast; a tile that becomes river-edge follows the #335 kit-change rule.
-  - **Works tile card (owner, 2026-10-27):** mockup v3 layout/wording approved; building icons on the card are rendered portraits of the building's own model (`procedural/portraits.ts`), not emoji (🎡 is a Ferris wheel); "Need N more X" when short, "Out of X!" only at 0; a works with no weather data shows no chip.
-  - **Big numbers on cards** read like "10.8k" (shared `shortNumber`); 24 h storage at L1 is the design for every building, not a tuning bug.
-  - **CI changes are the coordinator's:** e2e `timeout-minutes` 45 (#709) until the groups are rebalanced.
-  - **Merging main into a PR to re-run CI is fine when main moved;** a verdict carries across a main-only merge (the supervisor posts a comment naming the new head and the main-only diff).
 - **Lessons (2026-10-27, supervisor 23):**
   - **Watch your own context, not just the lanes'.** `get_session` with no id shows `context_usage.used_tokens` and `usage.cost_usd` for the supervisor itself; check it at every sweep and hand off at ~400k.
   - **Lane cost is invisible while running and lanes' own estimates were off both ways** (W1-10c2 $11 vs est $7.5, W1-10c3 $14 vs $6, W1-13h $5.5 vs $8.5). Stop lanes on what you can see: elapsed minutes, context, number of shoots. Schedule a `send_later` hard stop when you start each lane.
