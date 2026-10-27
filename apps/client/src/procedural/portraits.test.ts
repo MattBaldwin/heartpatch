@@ -1,6 +1,6 @@
 import type { Species, VisualRegistry } from '@heartpatch/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createPortraits, inUse, opaqueBox } from './portraits.js';
+import { buildingPortraitKey, createPortraits, inUse, opaqueBox } from './portraits.js';
 
 // The portrait scene, as small as the draw's lifecycle needs (no WebGL here).
 const scenes: { disposed: boolean }[] = [];
@@ -237,5 +237,22 @@ describe('createPortraits', () => {
     await vi.waitFor(() => {
       expect(shots).toHaveLength(2);
     });
+  });
+});
+
+describe('buildingPortraitKey (#621 W1-10c)', () => {
+  it('draws one picture per building, level, look and size', () => {
+    const mill = { buildingId: 'watermill', level: 1, asleep: false, size: 72 };
+    const key = buildingPortraitKey(mill);
+    expect(buildingPortraitKey({ ...mill })).toBe(key);
+    const others = [
+      { ...mill, buildingId: 'seawall' },
+      { ...mill, level: 2 },
+      { ...mill, asleep: true },
+      { ...mill, size: 96 },
+    ].map(buildingPortraitKey);
+    expect(new Set([key, ...others]).size).toBe(5);
+    // Never the same key as a squishy's or a Keeper's.
+    expect(key.startsWith('building|')).toBe(true);
   });
 });
