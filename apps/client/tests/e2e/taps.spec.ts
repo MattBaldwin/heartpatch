@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { api, hook, idle } from './dev-hook.js';
+import { api, hook, idle, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { realTap, realTapAt, realTapThrough, restingBox } from './touch.js';
 import { trayButton, traysState } from './trays.js';
@@ -59,7 +59,7 @@ const expectToastShown = (page: Page, text = '') =>
       { timeout: 30_000 },
     )
     .toContain(text);
-const mapState = (page: Page) => hook<{ id: string; live: string | null }>(page, 'map');
+const mapState = (page: Page) => hook<{ id: string }>(page, 'map');
 const itemTotal = (items: Record<string, number>) =>
   Object.values(items).reduce((a, b) => a + b, 0);
 
@@ -72,7 +72,7 @@ async function onAPatch(page: Page, name: string): Promise<string> {
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
-  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  await waitForLiveMap(page);
   return (await mapState(page))!.id;
 }
 
@@ -189,7 +189,7 @@ test('one real tap opens each sheet and works each button over the map', async (
   await realTap(page.getByTestId('home-back'));
   await expect(home).toBeHidden();
   await expect(page.getByTestId('map-hud')).toContainText('Tappy Patch');
-  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  await waitForLiveMap(page);
 
   // A tile, then its panel's Close.
   await tapOwnNode(page);
@@ -352,7 +352,7 @@ test('Home and Bag open on the first tap while a tile panel is open', async ({ b
   expect((await hook<{ open: boolean }>(page, 'home'))?.open).toBe(true);
   await realTap(page.getByTestId('home-back'));
   await expect(page.getByTestId('home')).toBeHidden();
-  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  await waitForLiveMap(page);
 
   await tapOwnNode(page);
   await expect(panel).toBeVisible();

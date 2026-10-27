@@ -2,7 +2,7 @@ import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { tapCanvas } from './claim-land.js';
 import { SCREENS } from './layout.js';
-import { api, hook } from './dev-hook.js';
+import { api, hook, waitForLiveMap } from './dev-hook.js';
 import { traysState } from './trays.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import {
@@ -36,8 +36,6 @@ interface PostsDebug {
 }
 
 const posts = (page: Page) => hook<PostsDebug>(page, 'posts');
-const mapState = (page: Page) =>
-  hook<{ live: string | null; selected: string | null }>(page, 'map');
 const territoryState = (page: Page) => hook<{ tileAction: string | null }>(page, 'territory');
 /** `JourneyDebug` from src/trading/journey-screen.ts. */
 const journeyState = (page: Page) =>
@@ -67,7 +65,7 @@ async function newPatch(page: Page): Promise<void> {
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  await waitForLiveMap(page);
 }
 
 test('shows the trading posts near home, and a post’s panel says what it is', async ({
@@ -86,7 +84,7 @@ test('shows the trading posts near home, and a post’s panel says what it is', 
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  await waitForLiveMap(page);
 
   // A post sits 3 steps from my Heart Seed, so one is in view from home.
   await shutTrays(page);
@@ -360,7 +358,7 @@ test('swaps 10 Stone for 1 Glimmer at a post, up to the day’s cap (#523)', asy
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+  await waitForLiveMap(page);
   await visitPost(page);
 
   await page.getByTestId('post-tab-swap').tap();

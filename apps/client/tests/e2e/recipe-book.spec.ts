@@ -55,6 +55,7 @@ test('trays hold the controls, and the recipe book makes, seals, searches and fi
   await expect.poll(async () => (await traysState(page))?.open).toBeNull();
 
   // The book: always-open pages for a new account, a sealed Jack-o'-Lantern.
+  await waitForLiveMap(page);
   const mapId = (await mapState(page))!.id;
   await (await trayButton(page, 'recipe-book-open')).tap();
   const book = page.getByTestId('recipe-book');
