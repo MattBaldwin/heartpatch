@@ -195,7 +195,8 @@ test('a new family signs up with a patch invite and lands in the join queue (#19
 test('looking around the world has a big way back to the patch list (#212)', async ({
   browser,
 }) => {
-  test.setTimeout(90_000);
+  // Two map loads and a patch made: CI's iPad WebKit takes ~1.3m on a good run, so 90s ran out on a slow one.
+  test.setTimeout(180_000);
   const page = await newPlayer(browser, uniqueName('peek'));
   const lobby = page.getByTestId('lobby');
   const back = page.getByTestId('lobby-back');
