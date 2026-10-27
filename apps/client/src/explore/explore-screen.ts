@@ -68,6 +68,7 @@ import {
 } from './explore-view.js';
 import {
   besideSpot,
+  clearOfKeeper,
   showcaseStance,
   CAVE_STAGE,
   freePoint,
@@ -84,6 +85,7 @@ import {
   toCaveStage,
   yawToward,
   type Collider,
+  type ScreenBox,
   type TapWalk,
 } from './explore-world.js';
 import {
@@ -224,6 +226,8 @@ export interface ExploreDebug {
   readonly toast: string | null;
   /** The tool the spot in front needs and the bag has none of (the hint shows), or null. */
   readonly hint: ToolId | null;
+  /** The Keeper's box on screen, CSS px, or null (the missing-tool card keeps clear of it). */
+  readonly keeperOnScreen: ScreenBox | null;
   readonly scene: ExploreSceneStats | null;
   /**
    * Batch uploads since the page opened (`batchUploads`): each makes fresh
@@ -712,6 +716,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (playing) feed({ type: 'tick', t: now });
     const animating = s.step(now);
     renderDark();
+    if (moved || animating) placeNeed();
     // Only a change redraws: a finger resting on the stick, or pushing
     // against a rock or the tile's edge, moves nothing (the gestures and the
     // lantern's dark are DOM; a tool's swing animates through `step`).
@@ -1304,6 +1309,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (!tool || !front) {
       need.hidden = true;
       need.replaceChildren();
+      needShift = 0;
+      need.style.transform = '';
       return;
     }
     if (bag === null) void askBag();
@@ -1331,6 +1338,31 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     need.hidden = false;
     need.dataset['tool'] = tool;
     need.replaceChildren(...nodes);
+    placeNeed();
+  }
+
+  /** How far the missing-tool card is moved off its place (CSS px, up is negative). */
+  let needShift = 0;
+  /** Slides the missing-tool card up or down so it never sits over the Keeper. */
+  function placeNeed(): void {
+    const keeper = scene3d?.keeperOnScreen();
+    if (need.hidden || !keeper) return;
+    const r = need.getBoundingClientRect();
+    if (r.height === 0) return; // hidden by a gesture: nothing to place
+    const card = {
+      left: r.left,
+      right: r.right,
+      top: r.top - needShift,
+      bottom: r.bottom - needShift,
+    };
+    const room = {
+      top: top.getBoundingClientRect().bottom + EXPLORE_VIEW.needGap,
+      bottom: action.getBoundingClientRect().top - EXPLORE_VIEW.needGap,
+    };
+    const shift = Math.round(clearOfKeeper(card, keeper, room, EXPLORE_VIEW.needGap));
+    if (shift === needShift) return;
+    needShift = shift;
+    need.style.transform = shift === 0 ? '' : `translateY(${String(shift)}px)`;
   }
 
   let playDots: HTMLElement | null = null;
@@ -1950,6 +1982,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         card: card ? ('rare' as const) : null,
         toast: toast ? [toast.main, toast.extra].filter((x) => x).join(' · ') : null,
         hint: need.hidden ? null : ((need.dataset['tool'] as ToolId | undefined) ?? null),
+        keeperOnScreen: s?.keeperOnScreen() ?? null,
         scene: s?.stats ?? null,
         batchUploads: batchUploads.count,
         tierChanges,

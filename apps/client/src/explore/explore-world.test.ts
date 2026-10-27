@@ -9,6 +9,7 @@ import { EXPLORE_CAMERA, EXPLORE_VIEW, INTERACTION } from './explore-config.js';
 import { startInteraction } from './interactions.js';
 import { clampToTile, insideTile } from './explore-view.js';
 import {
+  clearOfKeeper,
   coverShare,
   glintNudge,
   besideSpot,
@@ -693,5 +694,42 @@ describe('on-screen cover (#335)', () => {
       r: 0.08,
     }));
     expect(showcaseStance({ x: -0.3, z: -0.6 }, thing, ring)).toBeNull();
+  });
+});
+
+describe('the missing-tool card keeps clear of the Keeper', () => {
+  const keeper = { left: 150, right: 250, top: 300, bottom: 500 };
+  const room = { top: 80, bottom: 700 };
+  const overlaps = (a: { top: number; bottom: number }, dy: number) =>
+    coverShare({ left: 100, right: 300, top: a.top + dy, bottom: a.bottom + dy }, keeper) > 0;
+
+  it('stays put when it already misses him', () => {
+    expect(clearOfKeeper({ left: 100, right: 300, top: 550, bottom: 650 }, keeper, room, 12)).toBe(
+      0,
+    );
+    expect(clearOfKeeper({ left: 260, right: 400, top: 350, bottom: 450 }, keeper, room, 12)).toBe(
+      0,
+    );
+  });
+
+  it('moves up over his head when it covers him', () => {
+    const card = { left: 100, right: 300, top: 400, bottom: 520 };
+    const dy = clearOfKeeper(card, keeper, room, 12);
+    expect(card.bottom + dy).toBe(288);
+    expect(overlaps(card, dy)).toBe(false);
+  });
+
+  it('goes under his feet when there is no room over his head', () => {
+    const tall = { left: 150, right: 250, top: 120, bottom: 400 };
+    const card = { left: 100, right: 300, top: 300, bottom: 420 };
+    const dy = clearOfKeeper(card, tall, room, 12);
+    expect(card.top + dy).toBe(412);
+    expect(coverShare({ ...card, top: card.top + dy, bottom: card.bottom + dy }, tall)).toBe(0);
+  });
+
+  it('keeps inside its band when neither side has room', () => {
+    const huge = { left: 0, right: 400, top: 100, bottom: 690 };
+    const card = { left: 100, right: 300, top: 400, bottom: 520 };
+    expect(card.top + clearOfKeeper(card, huge, room, 12)).toBe(room.top);
   });
 });

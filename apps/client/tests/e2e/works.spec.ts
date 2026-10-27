@@ -128,7 +128,7 @@ test('a Fishing Pier goes up on a homestead by the water; a works with no water 
   await expect(standing.getByTestId('tile-works-portrait')).toBeVisible();
   await expect(standing.getByTestId('tile-works-meter')).toBeVisible();
   await expect(standing.getByTestId('tile-works-note')).toContainText(
-    wet ? "Makes 🐟 Fish, even while you're away!" : 'Fills up when it rains ☔',
+    wet ? "Makes 🐟\u00a0Fish, even while you're away!" : 'Fills up when it rains ☔',
   );
   await page.context().close();
 });

@@ -908,6 +908,11 @@ export class ExploreScene implements AmbientTarget {
     return this.#at;
   }
 
+  /** The Keeper on screen, CSS px (feet to hair, about head-wide), or null before it's drawn. */
+  keeperOnScreen(): ScreenBox | null {
+    return this.#keeperBox();
+  }
+
   /** The Keeper's height, world units (feet to the top of its hair). */
   get keeperTall(): number {
     return this.#keeper ? this.#keeper.params.height * EXPLORE_VIEW.keeperScale : 0;

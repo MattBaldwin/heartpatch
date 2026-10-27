@@ -49,6 +49,8 @@ export const EXPLORE_VIEW = {
   standOff: 0.4, // TUNE
   /** A tap this close to a spot's middle means that spot, tile-local units. */
   tapPick: 0.1, // TUNE
+  /** The missing-tool card keeps this far from the Keeper on screen, CSS px. */
+  needGap: 12, // TUNE
   /** The Keeper stays this far inside the tile's edge, tile-local units. */
   edgeMargin: 0.06, // TUNE
   /**

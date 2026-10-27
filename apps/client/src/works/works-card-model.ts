@@ -64,10 +64,10 @@ const KEEP = '\u00a0';
 export const WORKS_CARD_TEXT = {
   /** "Makes 🐟 Fish, even while you're away!" */
   makes: (resource: string) =>
-    `Makes ${itemIcon(resource)} ${itemName(resource)}, even while you're away!`,
+    `Makes ${itemIcon(resource)}${KEEP}${itemName(resource)}, even while you're away!`,
   /** "Turns 🌿 Greens into 🌾 Flour, even while you're away!" */
   turns: (eats: string, resource: string) =>
-    `Turns ${itemIcon(eats)} ${itemName(eats)} into ${itemIcon(resource)} ${itemName(resource)}, even while you're away!`,
+    `Turns ${itemIcon(eats)}${KEEP}${itemName(eats)} into ${itemIcon(resource)}${KEEP}${itemName(resource)}, even while you're away!`,
   /** None in the bag: "Out of Greens! Bring some for the mill 🌿" */
   need: (item: string, building: string) =>
     `Out of ${itemName(item)}! Bring some for the ${building}${KEEP}${itemIcon(item)}`,
@@ -75,7 +75,7 @@ export const WORKS_CARD_TEXT = {
   needMore: (n: number, item: string, building: string) =>
     `Need ${String(n)} more ${n === 1 ? (ONE_NAME[item] ?? itemName(item)) : itemName(item)} for the ${building}${KEEP}${itemIcon(item)}`,
   /** "Each batch takes 2 🌿" */
-  eats: (n: number, item: string) => `Each batch takes ${String(n)} ${itemIcon(item)}`,
+  eats: (n: number, item: string) => `Each batch takes ${String(n)}${KEEP}${itemIcon(item)}`,
   /** "🌫️ Foggy: fish bite faster!" */
   faster: (kind: WeatherKind, resource: string) =>
     `${WEATHER_EMOJI[kind]} ${SKY_WORD[kind]}: ${PACE_WORD[resource] ?? 'working'} faster!`,

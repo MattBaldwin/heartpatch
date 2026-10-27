@@ -362,6 +362,28 @@ export function coverShare(by: ScreenBox, of: ScreenBox): number {
 }
 
 /**
+ * How far to move the missing-tool card up or down the screen (CSS px,
+ * negative is up) so it never covers the Keeper: 0 when its own place is
+ * already clear; else just above the Keeper's head, or just under its feet
+ * when there's no room above. `room` is the band the card may use (under the
+ * top bar, over the controls); with no room either side it goes as high as
+ * the band allows.
+ */
+export function clearOfKeeper(
+  card: ScreenBox,
+  keeper: ScreenBox,
+  room: { readonly top: number; readonly bottom: number },
+  gap: number,
+): number {
+  if (coverShare(card, keeper) === 0) return 0;
+  const up = keeper.top - gap - card.bottom;
+  if (card.top + up >= room.top) return up;
+  const down = keeper.bottom + gap - card.top;
+  if (card.bottom + down <= room.bottom) return down;
+  return room.top - card.top;
+}
+
+/**
  * How far to slide a glint sideways (world x) so it clears the Keeper as the
  * camera sees it (#335): its spiky hair, hands and feet. The camera looks
  * along +z, tilted down by `pitch`, so up the screen is height plus distance
