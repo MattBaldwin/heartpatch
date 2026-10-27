@@ -8,6 +8,8 @@ import type { MapView, WeatherFront, WeatherKind, WeatherView } from '@heartpatc
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerrainClock } from '../map/terrain-plugin.js';
 import type { MapLayerHost } from '../map/map-screen.js';
+import type * as WeatherClouds from './weather-clouds.js';
+import { buildBank } from './weather-clouds.js';
 import { createWeatherLayer } from './weather-layer.js';
 import type { WeatherStore } from './weather-store.js';
 
@@ -25,6 +27,12 @@ vi.mock('./weather-tint.js', () => ({
     };
   },
 }));
+
+// The bank builder can be made to throw, for a failure part-way through attaching.
+vi.mock('./weather-clouds.js', async (load) => {
+  const real = await load<typeof WeatherClouds>();
+  return { ...real, buildBank: vi.fn(real.buildBank) };
+});
 
 const START = Date.parse('2026-10-25T10:00:00Z');
 const NOW = START + 3_600_000;
@@ -160,5 +168,23 @@ describe('createWeatherLayer', () => {
     expect(sun.intensity).toBe(1);
     expect(scene.environmentIntensity).toBe(env);
     expect(layer.stats().clouds).toBe(0);
+  });
+
+  it('undoes what it made when it throws early', () => {
+    const { store, listeners } = fakeStore();
+    const meshes = scene.meshes.length;
+    const materials = scene.materials.length;
+    vi.mocked(buildBank).mockImplementationOnce(() => {
+      throw new Error('early');
+    });
+    expect(() => {
+      createWeatherLayer({ store, tier: () => 'medium', root }).attach(scene, view, host);
+    }).toThrow('early');
+    // The cloud and its material were made before the bank: both are gone.
+    expect(scene.meshes.length).toBe(meshes);
+    expect(scene.materials.length).toBe(materials);
+    expect(scene.getLightByName('weather-flash')).toBeNull();
+    expect(listeners.size).toBe(0);
+    expect(tints).toEqual({ made: 1, removed: 1 });
   });
 });

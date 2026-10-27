@@ -318,7 +318,14 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
         });
         refresh();
       } catch (err) {
-        for (const step of undo.reverse()) step();
+        // Every step runs even if one throws; the first error is the one to log.
+        for (const step of undo.reverse()) {
+          try {
+            step();
+          } catch (undoErr) {
+            console.error('The weather could not undo a step', undoErr);
+          }
+        }
         last = { clouds: 0, rain: 0, fog: 0, mode: 'off', placed: 0 };
         throw err;
       }
