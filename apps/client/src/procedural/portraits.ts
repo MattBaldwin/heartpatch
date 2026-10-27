@@ -15,6 +15,7 @@ import { bisectFlags } from '../engine/bisect-flags.js';
 import { MAX_DPR } from '../engine/dpr.js';
 import { setupLighting } from '../engine/lighting/lighting.js';
 import { accessoryItem } from './accessory.js';
+import { BuildingField } from './buildings/building-field.js';
 import type { SquishyDetail } from './config.js';
 import { KeeperField } from './keeper/keeper-field.js';
 import { keeperItems } from './keeper/keeper-items.js';
@@ -42,6 +43,10 @@ const FOV = 0.62; // TUNE: radians
 const KEEPER_POSE = { pitch: 0.18, yaw: -0.2, lookAt: 0.55, lean: 0.18 }; // TUNE
 /** Camera distance per unit of the Keeper's height. */
 const KEEPER_FIT = 2.5; // TUNE: room for hair, hats and wings; the crop trims the rest
+/** A building's pose (#621 W1-10c): from above and to one side, as the map's camera sees it. */
+const BUILDING_POSE = { pitch: 0.62, yaw: -0.5 }; // TUNE
+/** Room around a building's bounding sphere, so no edge of it touches the frame. */
+const BUILDING_ROOM = 1.08; // TUNE: the crop trims the rest
 
 export interface PortraitLook {
   readonly species: Species;
@@ -61,6 +66,51 @@ export interface KeeperPortraitLook {
   readonly size: number;
 }
 
+/** One of my buildings at its level (#621 W1-10c: the works tile card). */
+export interface BuildingPortraitLook {
+  readonly buildingId: string;
+  readonly level: number;
+  /** Napping: drawn in its asleep look, as on the map. */
+  readonly asleep: boolean;
+  /** The picture's side in CSS px. */
+  readonly size: number;
+}
+
+type V3 = { readonly x: number; readonly y: number; readonly z: number };
+
+/**
+ * Where the camera sits to see a whole building from `pose` (#621 W1-10c):
+ * aimed at the middle of its box, back far enough that the box's bounding
+ * sphere fits inside the field of view `fov` (vertical, on a square shot)
+ * with `room` to spare, whichever way it's turned. So a long Seawall or a
+ * Fishing Pier's flat water never runs off the picture's edge.
+ */
+export function buildingCamera(
+  bounds: { readonly min: V3; readonly max: V3 },
+  pose: { readonly pitch: number; readonly yaw: number },
+  fov: number,
+  room = BUILDING_ROOM,
+): { position: V3; target: V3 } {
+  const { min, max } = bounds;
+  const target = { x: (min.x + max.x) / 2, y: (min.y + max.y) / 2, z: (min.z + max.z) / 2 };
+  const radius = Math.hypot(max.x - min.x, max.y - min.y, max.z - min.z) / 2;
+  const distance = (Math.max(radius, 0.01) / Math.sin(fov / 2)) * room;
+  const flat = Math.cos(pose.pitch) * distance;
+  return {
+    target,
+    position: {
+      x: target.x + Math.sin(pose.yaw) * flat,
+      y: target.y + Math.sin(pose.pitch) * distance,
+      z: target.z - Math.cos(pose.yaw) * flat,
+    },
+  };
+}
+
+/** A building picture's cache key: one draw per building, level, look and size. */
+export function buildingPortraitKey(look: BuildingPortraitLook): string {
+  return `building|${look.buildingId}|${String(look.level)}|${look.asleep ? 'asleep' : 'awake'}|${String(look.size)}`;
+}
+
 export interface Portraits {
   /** The picture's URL when it's ready (cached), or null with no engine. */
   get(look: PortraitLook): Promise<string | null>;
@@ -70,6 +120,12 @@ export interface Portraits {
 export interface KeeperPortraits {
   /** A Keeper's picture (cached by look), or null with no engine. */
   keeper(look: KeeperPortraitLook): Promise<string | null>;
+}
+
+/** Building pictures (#621 W1-10c), on the same renderer, queue and cache. */
+export interface BuildingPortraits {
+  /** A building's picture (cached by look), or null with no engine. */
+  building(look: BuildingPortraitLook): Promise<string | null>;
 }
 
 export interface PortraitOptions {
@@ -257,7 +313,9 @@ export function inUse(dispose: () => void): InUse {
   };
 }
 
-export function createPortraits(options: PortraitOptions): Portraits & KeeperPortraits {
+export function createPortraits(
+  options: PortraitOptions,
+): Portraits & KeeperPortraits & BuildingPortraits {
   const cache = new Map<string, Promise<string | null>>();
   /** One render at a time, each after the last, so the map never stalls for long. */
   let queue: Promise<unknown> = Promise.resolve();
@@ -280,6 +338,15 @@ export function createPortraits(options: PortraitOptions): Portraits & KeeperPor
     use: InUse;
   } | null = null;
 
+  /** The buildings' own small scene (#621 W1-10c), made the first time one is asked for. */
+  let buildingStage: {
+    engine: AbstractEngine;
+    scene: Scene;
+    field: BuildingField;
+    camera: TargetCamera;
+    use: InUse;
+  } | null = null;
+
   /** No new draws on the current scene: it goes once its draws are done. */
   function retireStage(): void {
     stage?.use.retire();
@@ -289,6 +356,41 @@ export function createPortraits(options: PortraitOptions): Portraits & KeeperPor
   function retireKeeperStage(): void {
     keeperStage?.use.retire();
     keeperStage = null;
+  }
+
+  function retireBuildingStage(): void {
+    buildingStage?.use.retire();
+    buildingStage = null;
+  }
+
+  function buildingStageFor(engine: AbstractEngine): NonNullable<typeof buildingStage> {
+    if (
+      buildingStage?.engine === engine &&
+      !buildingStage.use.retired &&
+      !buildingStage.scene.isDisposed
+    ) {
+      return buildingStage;
+    }
+    retireBuildingStage();
+    const scene = new Scene(engine, { virtual: true });
+    scene.clearColor = new Color4(0, 0, 0, 0);
+    setupLighting(scene);
+    const field = new BuildingField(scene);
+    const camera = new TargetCamera('building-portrait-camera', Vector3.Zero(), scene);
+    camera.fov = FOV;
+    camera.minZ = 0.1;
+    scene.activeCamera = camera;
+    buildingStage = {
+      engine,
+      scene,
+      field,
+      camera,
+      use: inUse(() => {
+        field.dispose();
+        scene.dispose();
+      }),
+    };
+    return buildingStage;
   }
 
   function keeperStageFor(engine: AbstractEngine): NonNullable<typeof keeperStage> {
@@ -443,6 +545,48 @@ export function createPortraits(options: PortraitOptions): Portraits & KeeperPor
     }
   }
 
+  async function drawBuilding(look: BuildingPortraitLook): Promise<string | null> {
+    const engine = options.engine();
+    if (!engine || engine.isDisposed || bisectFlags().noPortraits) return null;
+    const { scene, field, camera, use } = buildingStageFor(engine);
+    const placement = {
+      buildingId: look.buildingId,
+      level: look.level,
+      lit: null,
+      asleep: look.asleep,
+      x: 0,
+      z: 0,
+    };
+    field.set([placement]);
+    const done = use.begin();
+    try {
+      const bounds = field.modelBounds(placement);
+      if (!bounds) return null;
+      const { position, target } = buildingCamera(bounds, BUILDING_POSE, FOV);
+      camera.position.set(position.x, position.y, position.z);
+      camera.setTarget(new Vector3(target.x, target.y, target.z));
+      if (
+        !(await withTimeout(
+          scene.whenReadyAsync().then(() => true),
+          READY_TIMEOUT_MS,
+        ))
+      ) {
+        return null;
+      }
+      const px = Math.round(look.size * MAX_DPR);
+      if (engine.skipFrameRender) return null;
+      portraitSnapshots.count++;
+      const shot = await snapshot(engine, camera, Math.round(px * DRAW_SCALE));
+      return await cropToSquishy(shot, px);
+    } catch {
+      return null;
+    } finally {
+      field.set([]);
+      options.invalidate();
+      done();
+    }
+  }
+
   /** Runs `work` after the last picture, so one snapshot is on the engine at a time. */
   function enqueue(work: () => Promise<string | null>): {
     entry: Promise<string | null>;
@@ -457,6 +601,22 @@ export function createPortraits(options: PortraitOptions): Portraits & KeeperPor
   }
 
   return {
+    building(look) {
+      const key = buildingPortraitKey(look);
+      let entry = cache.get(key);
+      if (!entry) {
+        entry = enqueue(() => drawBuilding(look)).entry;
+        cache.set(key, entry);
+        // No picture: forget it so the next look tries again, on a fresh scene.
+        const mine = entry;
+        void entry.then((url) => {
+          if (url !== null) return;
+          if (cache.get(key) === mine) cache.delete(key);
+          retireBuildingStage();
+        });
+      }
+      return entry;
+    },
     keeper(look) {
       const key = `keeper|${keeperHash(keeperParams(look.config, KEEPER_DATA, keeperItems(look.wearing)))}|${String(look.size)}`;
       let entry = cache.get(key);

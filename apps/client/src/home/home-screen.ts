@@ -70,6 +70,14 @@ import {
   type ReachTile,
 } from './home-view.js';
 import { FIX_TEXT, repairOffer } from '../weather/repair-offer.js';
+import type { BuildingPortraits } from '../procedural/portraits.js';
+import {
+  worksCard,
+  worksDescription,
+  worksHere,
+  worksPortraitLook,
+} from '../works/works-card-model.js';
+import { worksCardLines, worksPlainLines, worksPortrait } from '../works/works-card.js';
 import { bringKnockedIntoView, fixRow } from '../weather/knocked-view.js';
 import { homeTileLines } from './home-tile-info.js';
 import { createHomeNameSheet } from './home-name-sheet.js';
@@ -148,6 +156,8 @@ export interface HomeScreenOptions {
   onUpkeep?: () => void;
   /** The game clock in ms (the bag's `gameNow`), for a resource building's next batch. */
   now?: () => number;
+  /** Building pictures for the works tile card (#621 W1-10c), drawn on the game's engine. */
+  portraits?: BuildingPortraits;
   /** Whether "Jobs & team" shows on this map (not on the Tutorial Glade). */
   showJobs?: (mapId: string) => boolean;
   /**
@@ -1623,6 +1633,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     // So does my Warehouse (#601 PR 9).
     const store = warehouseHere(home, tile);
     if (store) return warehouseNodes(tile, store);
+    // So does my Wild Isle works, canal, shelter or vane (#621 W1-10c).
+    const wild = worksHere(home, tile);
+    if (wild) return worksNodes(tile, wild);
     const grounds = groundsTileOffer(tile, home);
     if (tileMode !== 'card' && tileTarget === 'grounds' && grounds) {
       return groundsNodes(tile, grounds);
@@ -1773,6 +1786,52 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   }
 
   /**
+   * My Wild Isle homestead building (#621 W1-10c): its own picture, and for
+   * a works its storage meter, the weather chip and the need line, with
+   * Collect and Upkeep as for a resource building. A canal, shelter or vane
+   * says what it does.
+   */
+  function worksNodes(tile: PublicTile, b: MyBuilding): Node[] {
+    const current = home;
+    if (!current) return [];
+    const now = options.now?.() ?? Date.parse(current.now);
+    const portrait = worksPortrait(options.portraits, worksPortraitLook(b, tile));
+    const card = worksCard(b, tile, now, current.items);
+    if (!card) {
+      return standingNodes(
+        b,
+        'resource',
+        'works',
+        worksPlainLines(worksDescription(b.buildingId), portrait),
+        [],
+      );
+    }
+    const actions: Node[] = [];
+    if (card.collect && options.onCollect) {
+      const collect = options.onCollect;
+      actions.push(
+        tileButton(
+          RESOURCE_TEXT.collect,
+          () => {
+            void collect().then(() => {
+              home = null;
+              void loadForPanel();
+            });
+          },
+          'tile-works-collect',
+          'small',
+        ),
+      );
+    }
+    if (options.onUpkeep && card.state !== 'napping') {
+      actions.push(
+        tileButton(RESOURCE_TEXT.coins, options.onUpkeep, 'tile-works-upkeep-order', 'small'),
+      );
+    }
+    return standingNodes(b, 'resource', 'works', worksCardLines(card, portrait), actions, true);
+  }
+
+  /**
    * My Warehouse on its homestead (#601 PR 9): delivering for my level 3+
    * resource buildings, paused for upkeep, or napping. Upkeep opens the
    * Heart Coins sheet's order (owner decision Q5); it has no levels to upgrade.
@@ -1807,6 +1866,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     prefix: string,
     lines: readonly Node[],
     actions: readonly Node[],
+    /** Collect and Upkeep on a row of their own, above Upgrade and Take down (the works card's mockup v3). */
+    actionsOwnRow = false,
   ): Node[] {
     const current = home;
     if (!current) return [];
@@ -1905,8 +1966,9 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             ]
           : []),
         ...lines,
+        ...(actionsOwnRow && actions.length > 0 ? [tileRow(...actions)] : []),
         tileRow(
-          ...actions,
+          ...(actionsOwnRow ? [] : actions),
           ...(upgradeAt
             ? [
                 tileButton(

@@ -1,6 +1,12 @@
 import type { Species, VisualRegistry } from '@heartpatch/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createPortraits, inUse, opaqueBox } from './portraits.js';
+import {
+  buildingCamera,
+  buildingPortraitKey,
+  createPortraits,
+  inUse,
+  opaqueBox,
+} from './portraits.js';
 
 // The portrait scene, as small as the draw's lifecycle needs (no WebGL here).
 const scenes: { disposed: boolean }[] = [];
@@ -237,5 +243,68 @@ describe('createPortraits', () => {
     await vi.waitFor(() => {
       expect(shots).toHaveLength(2);
     });
+  });
+});
+
+describe('buildingPortraitKey (#621 W1-10c)', () => {
+  it('draws one picture per building, level, look and size', () => {
+    const mill = { buildingId: 'watermill', level: 1, asleep: false, size: 72 };
+    const key = buildingPortraitKey(mill);
+    expect(buildingPortraitKey({ ...mill })).toBe(key);
+    const others = [
+      { ...mill, buildingId: 'seawall' },
+      { ...mill, level: 2 },
+      { ...mill, asleep: true },
+      { ...mill, size: 96 },
+    ].map(buildingPortraitKey);
+    expect(new Set([key, ...others]).size).toBe(5);
+    // Never the same key as a squishy's or a Keeper's.
+    expect(key.startsWith('building|')).toBe(true);
+  });
+});
+
+describe('buildingCamera (#621 W1-10c)', () => {
+  const FOV = 0.62;
+  const pose = { pitch: 0.62, yaw: -0.5 };
+  /** The widest angle from the camera's aim to any corner of the box. */
+  type Box = readonly [number, number, number];
+  function widest(min: Box, max: Box): number {
+    const cam = buildingCamera(
+      { min: { x: min[0], y: min[1], z: min[2] }, max: { x: max[0], y: max[1], z: max[2] } },
+      pose,
+      FOV,
+    );
+    const p = cam.position;
+    const aim: Box = [cam.target.x - p.x, cam.target.y - p.y, cam.target.z - p.z];
+    let most = 0;
+    for (const x of [min[0], max[0]])
+      for (const y of [min[1], max[1]])
+        for (const z of [min[2], max[2]]) {
+          const to: Box = [x - p.x, y - p.y, z - p.z];
+          const cos =
+            (to[0] * aim[0] + to[1] * aim[1] + to[2] * aim[2]) /
+            (Math.hypot(...to) * Math.hypot(...aim));
+          most = Math.max(most, Math.acos(Math.min(1, cos)));
+        }
+    return most;
+  }
+
+  it('keeps every corner of a long flat Seawall, or a Pier with its water, inside the frame', () => {
+    // A wall and its water run well past one tile, but low and flat.
+    expect(widest([-1.6, 0, -0.5], [1.6, 0.3, 0.5])).toBeLessThan(FOV / 2);
+    // A pier's water oval off to one side of its posts.
+    expect(widest([-1.2, 0, -0.9], [0.5, 0.8, 0.4])).toBeLessThan(FOV / 2);
+    // A tall one, at a higher level.
+    expect(widest([-0.6, 0, -0.6], [0.6, 2.4, 0.6])).toBeLessThan(FOV / 2);
+  });
+
+  it('aims at the middle of the box, so it sits centred however far it reaches', () => {
+    const cam = buildingCamera(
+      { min: { x: -2, y: 0, z: 0 }, max: { x: 0, y: 1, z: 1 } },
+      pose,
+      FOV,
+    );
+    expect(cam.target).toEqual({ x: -1, y: 0.5, z: 0.5 });
+    expect(cam.position.y).toBeGreaterThan(cam.target.y);
   });
 });

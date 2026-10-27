@@ -472,7 +472,11 @@ describe.skipIf(!url)('Wild Isle water works (#621 W1-8, needs DATABASE_URL)', (
         cycles: 6,
         ready: { flour: 3 },
         eats: { greens: 2 },
+        // The tile card's need line (W1-10c): 6 finished cycles and the next eat 14; the bag has 7.
+        short: { greens: 7 },
       });
+      // The weather never changes a Watermill: no chip.
+      expect(on(before, line[2]!)?.production?.weather).toBeUndefined();
       const settled = await settle(server, kid, mapId);
       expect(settled.produced).toEqual([
         expect.objectContaining({ buildingRowId: mill, items: { flour: 3 } }),
@@ -541,7 +545,17 @@ describe.skipIf(!url)('Wild Isle water works (#621 W1-8, needs DATABASE_URL)', (
         front('rain-1', 'rain', line[2]!),
         front('fog-1', 'fog', line[4]!),
       ]);
+      // The tile card's chip (W1-10c), from the weather over each tile now.
+      const chip = async (tile: Hex) =>
+        on(await home(server, kid, mapId), tile)?.production?.weather;
+      clock.setTime(placedAt.getTime() + HOUR_MS / 2);
+      expect(await chip(line[2]!)).toBe('same');
+      expect(await chip(line[4]!)).toBe('faster');
       clock.setTime(placedAt.getTime() + 2 * HOUR_MS);
+      expect(await chip(line[2]!)).toBe('waiting');
+      expect(await chip(line[4]!)).toBe('same');
+      // Neither eats: no need line.
+      expect(on(await home(server, kid, mapId), line[4]!)?.production?.short).toBeUndefined();
       const settled = await settle(server, kid, mapId);
       const made = (id: string) =>
         (settled.produced ?? []).find((p) => p.buildingRowId === id)?.items;

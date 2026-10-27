@@ -32,7 +32,9 @@ import {
   followsWeather,
   pacedProgress,
   worksPace,
+  worksShort,
   worksSource,
+  worksWeatherAt,
   type ProductionFacts,
   type UpkeepPlanEntry,
 } from './production.js';
@@ -599,5 +601,39 @@ describe('Wild Isle works (#621 W1-8)', () => {
     expect(eatsCap({ greens: 2, water: 1 }, { greens: 20, water: 4 })).toBe(4);
     expect(eatenBy(mill.eats, 3)).toEqual({ greens: 6 });
     expect(eatenBy(mill.eats, 0)).toEqual({});
+  });
+
+  describe('the works tile card’s weather chip and need line (#621 W1-10c)', () => {
+    it('says faster, slower or the same as a clear day, from the pace over its tile now', () => {
+      const pier = works('fishing-pier');
+      const fog = worksPace(pier, [cover('fog', T0, T0 + HOUR)]);
+      expect(worksWeatherAt(pier, fog, T0 + MIN)).toBe('faster');
+      expect(worksWeatherAt(pier, fog, T0 + HOUR)).toBe('same');
+      const field = works('irrigated-field');
+      const dry = worksPace(field, [cover('drought', T0, T0 + HOUR)]);
+      expect(worksWeatherAt(field, dry, T0)).toBe('slower');
+      expect(worksWeatherAt(field, worksPace(field, []), T0)).toBe('same');
+    });
+
+    it('has the Rain Barrel waiting without rain, and nothing for a works the weather never changes', () => {
+      const barrel = works('rain-barrel');
+      const rain = worksPace(barrel, [cover('rain', T0, T0 + HOUR)]);
+      expect(worksWeatherAt(barrel, rain, T0)).toBe('same');
+      expect(worksWeatherAt(barrel, rain, T0 + HOUR)).toBe('waiting');
+      const pans = works('salt-pans');
+      expect(worksWeatherAt(pans, worksPace(pans, []), T0)).toBeNull();
+    });
+
+    it('lists what the bag lacks for the next cycle, after the finished ones', () => {
+      const mill = works('watermill');
+      expect(mill.eats).toEqual({ greens: 2 });
+      expect(worksShort(mill.eats, {}, 0)).toEqual({ greens: 2 });
+      expect(worksShort(mill.eats, { greens: 1 }, 0)).toEqual({ greens: 1 });
+      expect(worksShort(mill.eats, { greens: 2 }, 0)).toEqual({});
+      // Three finished cycles eat 6 first; the next needs 2 more.
+      expect(worksShort(mill.eats, { greens: 7 }, 3)).toEqual({ greens: 1 });
+      expect(worksShort(mill.eats, { greens: 8 }, 3)).toEqual({});
+      expect(worksShort(undefined, {}, 0)).toEqual({});
+    });
   });
 });

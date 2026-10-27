@@ -896,6 +896,7 @@ document.body.append(homeSquishies, exploreSquishies);
 let bookFromHome = false;
 const home = createHomeScreen({
   root: document.body,
+  portraits,
   entryRoot: trays.slot('heartpatch'),
   onProblem: (message) => {
     lobby.showMessage(message);

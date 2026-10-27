@@ -54,7 +54,7 @@ export interface BuildingFieldStats {
 /** How far the light pool floats over a building's ground, per unit of building scale. */
 const POOL_LIFT = 0.06; // TUNE: clears the home tiles' dome
 
-const lookOf = (p: BuildingPlacement): BuildingLook =>
+const lookOf = (p: Pick<BuildingPlacement, 'lit' | 'asleep'>): BuildingLook =>
   p.lit === null ? (p.asleep ? 'out' : 'plain') : p.lit ? 'lit' : 'out';
 
 export class BuildingField {
@@ -141,6 +141,29 @@ export class BuildingField {
     setInstances(this.#pool, pools, true);
     if (pools.length > 0) meshes++;
     this.#stats = { buildings: placements.length, meshes, lit };
+  }
+
+  /**
+   * The model's own box for a placement already `set` (local space, before
+   * its placement's move and scale), body and glow together, or null when
+   * it isn't drawn. The portrait camera fits the whole building, flat water
+   * and ground pieces too, from this (#621 W1-10c).
+   */
+  modelBounds(
+    p: Pick<BuildingPlacement, 'buildingId' | 'lit' | 'asleep' | 'level'>,
+  ): { min: Vector3; max: Vector3 } | null {
+    const model = this.#models.get(modelKey(p.buildingId, lookOf(p), p.level ?? 1));
+    if (!model) return null;
+    const min = new Vector3(Infinity, Infinity, Infinity);
+    const max = new Vector3(-Infinity, -Infinity, -Infinity);
+    for (const mesh of [model.body, model.glow]) {
+      if (!mesh) continue;
+      mesh.refreshBoundingInfo();
+      const box = mesh.getBoundingInfo().boundingBox;
+      min.minimizeInPlace(box.minimum);
+      max.maximizeInPlace(box.maximum);
+    }
+    return min.x <= max.x ? { min, max } : null;
   }
 
   get stats(): BuildingFieldStats {

@@ -21,6 +21,9 @@ import {
   followsWeather,
   pacedProgress,
   worksPace,
+  worksShort,
+  worksWeatherAt,
+  type WorksPace,
   worksSource,
   type BuildingProduction,
   type DeliveryWindow,
@@ -146,6 +149,8 @@ export interface ProductionAt {
   homesteadPause: WorkPause | null;
   /** What a works eats a cycle (#621 W1-8), or null. */
   eats: ItemCounts | null;
+  /** A weather-paced works' pace on its tile (#621 W1-8), or null. */
+  pace: WorksPace | null;
   /** What `ready` eats (`eats` × its cycles). */
   eaten: ItemCounts;
   /** Every item banking it can touch, for the caller's one inventory lock: made and eaten, uncapped. */
@@ -234,6 +239,7 @@ export function productionAt(
     ready,
     homesteadPause,
     eats,
+    pace,
     eaten: eatenBy(eats ?? undefined, paid),
     touches,
     yieldOf,
@@ -308,6 +314,10 @@ export function productionView(
   if (!made) return null;
   const napping = row.homestead !== null && homesteadPauseOf(row)?.toMs === null;
   const seasonEnd = seasonEndsAt(made.source.resource, at, timeZone);
+  const weather =
+    made.building.kind === 'works' && made.pace
+      ? worksWeatherAt(made.building, made.pace, at.getTime())
+      : null;
   return {
     resource: made.source.resource,
     perCycle: made.source.perCycle,
@@ -331,6 +341,12 @@ export function productionView(
     seasonEndsAt: seasonEnd?.toISOString() ?? null,
     // A Wild Isle works that eats (#621 W1-8): what each cycle takes from the bag.
     ...(made.eats ? { eats: made.eats } : {}),
+    // The works tile card (#621 W1-10c): the weather's effect on its tile
+    // now, and what the bag lacks for an eater's next cycle.
+    ...(weather ? { weather } : {}),
+    ...(made.eats && ctx.bag
+      ? { short: worksShort(made.eats, ctx.bag, made.progress.cycles) }
+      : {}),
   };
 }
 

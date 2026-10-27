@@ -120,5 +120,15 @@ test('a Fishing Pier goes up on a homestead by the water; a works with no water 
       return t?.buildings.map((b) => b.buildingId) ?? [];
     })
     .toEqual([pick]);
+
+  // Its standing card (W1-10c): the building's own picture, its meter and what it makes.
+  await selectTile(page, at);
+  const standing = page.getByTestId('tile-works');
+  await expect(standing).toBeVisible();
+  await expect(standing.getByTestId('tile-works-portrait')).toBeVisible();
+  await expect(standing.getByTestId('tile-works-meter')).toBeVisible();
+  await expect(standing.getByTestId('tile-works-note')).toContainText(
+    wet ? "Makes 🐟 Fish, even while you're away!" : 'Fills up when it rains ☔',
+  );
   await page.context().close();
 });

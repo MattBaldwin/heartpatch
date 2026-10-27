@@ -20,6 +20,7 @@ import type { JobRules } from '../schemas/data/jobs.js';
 import type { Resource } from '../schemas/data/resources.js';
 import type { WeatherKind } from '../schemas/data/weather.js';
 import type { LocalDate } from '../schemas/time.js';
+import type { WorksWeather } from '../schemas/buildings.js';
 import type { CoverWindow } from '../weather/plan.js';
 import { addDays, daysBetween } from './local-date.js';
 
@@ -313,6 +314,42 @@ export function eatsCap(eats: Readonly<ItemCounts> | undefined, bag: Readonly<It
     if (n > 0) cap = Math.min(cap, Math.floor((bag[id] ?? 0) / n));
   }
   return cap;
+}
+
+/**
+ * How the weather on its tile sets a works building's pace at `atMs`
+ * (#621 W1-10c, the tile card's chip): faster or slower than a clear day's
+ * 100 %, the same, or `waiting` for an `onlyWhile` one (the Rain Barrel)
+ * with no front of its kind over it. Null for one that ignores the weather.
+ */
+export function worksWeatherAt(
+  building: Pick<WorksBuilding, 'weather' | 'onlyWhile' | 'weatherproof'>,
+  pace: WorksPace,
+  atMs: number,
+): WorksWeather | null {
+  if (!followsWeather(building)) return null;
+  const now = pace.windows.find((w) => w.fromMs <= atMs && atMs < w.toMs);
+  const percent = now ? now.percent : pace.basePercent;
+  if (building.onlyWhile !== undefined && percent === 0) return 'waiting';
+  return percent > 100 ? 'faster' : percent < 100 ? 'slower' : 'same';
+}
+
+/**
+ * What the bag is short of for a works building's next cycle (#621 W1-10c):
+ * the bag pays for the `cycles` already finished and one more, item by
+ * item; only the missing ones are listed, so `{}` means it has enough.
+ */
+export function worksShort(
+  eats: Readonly<ItemCounts> | undefined,
+  bag: Readonly<ItemCounts>,
+  cycles: number,
+): ItemCounts {
+  const out: ItemCounts = {};
+  for (const [id, n] of Object.entries(eats ?? {})) {
+    const missing = n * (Math.max(0, cycles) + 1) - (bag[id] ?? 0);
+    if (n > 0 && missing > 0) out[id] = missing;
+  }
+  return out;
 }
 
 /** What `cycles` cycles of a works building eat. */

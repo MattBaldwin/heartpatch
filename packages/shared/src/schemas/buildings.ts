@@ -78,6 +78,10 @@ export const PlacedBuildingSchema = z.object({
 });
 export type PlacedBuilding = z.infer<typeof PlacedBuildingSchema>;
 
+/** How the weather over a works building's tile sets its pace now (#621 W1-10c). */
+export const WorksWeatherSchema = z.enum(['faster', 'slower', 'same', 'waiting']);
+export type WorksWeather = z.infer<typeof WorksWeatherSchema>;
+
 /**
  * A resource building's output as its owner sees it (#601): the resource
  * and how much a cycle makes, how long a cycle takes, what's waiting for
@@ -126,6 +130,17 @@ export const BuildingProductionSchema = z.object({
    * for now. Left out for the rest and by an older server.
    */
   eats: ItemCountsSchema.optional(),
+  /**
+   * A Wild Isle works whose pace follows the weather (#621 W1-10c): how the
+   * weather over its tile sets it now, against a clear day. Left out for
+   * the rest and by an older server.
+   */
+  weather: WorksWeatherSchema.optional(),
+  /**
+   * A works that eats (#621 W1-10c): what the bag is short of for its next
+   * cycle (`{}` when it has enough). Left out for the rest and by an older server.
+   */
+  short: ItemCountsSchema.optional(),
 });
 export type BuildingProduction = z.infer<typeof BuildingProductionSchema>;
 
