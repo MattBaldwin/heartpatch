@@ -54,9 +54,12 @@ export const WORKS_CARD_TEXT = {
   /** "Turns 🌿 Greens into 🌾 Flour, even while you're away!" */
   turns: (eats: string, resource: string) =>
     `Turns ${itemIcon(eats)} ${itemName(eats)} into ${itemIcon(resource)} ${itemName(resource)}, even while you're away!`,
-  /** "Out of Greens! Bring some for the Watermill 🌿" */
+  /** None in the bag: "Out of Greens! Bring some for the Watermill 🌿" */
   need: (item: string, building: string) =>
     `Out of ${itemName(item)}! Bring some for the ${building} ${itemIcon(item)}`,
+  /** Some, but not enough: "Need 7 more Greens for the Watermill 🌿" */
+  needMore: (n: number, item: string, building: string) =>
+    `Need ${String(n)} more ${itemName(item)} for the ${building} ${itemIcon(item)}`,
   /** "Each batch takes 2 🌿" */
   eats: (n: number, item: string) => `Each batch takes ${String(n)} ${itemIcon(item)}`,
   faster: (kind: WeatherKind) => `${WEATHER_EMOJI[kind]} ${SKY_WORD[kind]}: faster today!`,
@@ -132,7 +135,8 @@ function firstShort(short: ItemCounts | undefined): string | null {
 
 /**
  * A works tile card: napping (its homestead is cut off) wins, then paused
- * for upkeep, then short of what it eats, then full, else running. Null
+ * for upkeep, then short of what it eats, then full, else running. The
+ * need line says "Out of" only when `bag` holds none of it. Null
  * for a building that isn't a works, or an older server's reply without
  * its production.
  */
@@ -140,6 +144,7 @@ export function worksCard(
   b: Pick<MyBuilding, 'buildingId' | 'production'>,
   tile: { homestead?: 'joined' | 'paused' | null },
   nowMs: number,
+  bag?: Readonly<ItemCounts>,
 ): WorksCard | null {
   const data = DATA.get(b.buildingId);
   const p = b.production;
@@ -173,7 +178,9 @@ export function worksCard(
       : state === 'paused'
         ? RESOURCE_TEXT.paused(p.upkeep)
         : state === 'short' && need !== null
-          ? WORKS_CARD_TEXT.need(need, data.name)
+          ? (bag?.[need] ?? 0) > 0
+            ? WORKS_CARD_TEXT.needMore(p.short?.[need] ?? 0, need, data.name)
+            : WORKS_CARD_TEXT.need(need, data.name)
           : state === 'full'
             ? RESOURCE_TEXT.full
             : making;

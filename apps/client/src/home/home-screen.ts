@@ -1796,7 +1796,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     if (!current) return [];
     const now = options.now?.() ?? Date.parse(current.now);
     const portrait = worksPortrait(options.portraits, worksPortraitLook(b, tile));
-    const card = worksCard(b, tile, now);
+    const card = worksCard(b, tile, now, current.items);
     if (!card) {
       return standingNodes(
         b,

@@ -73,6 +73,19 @@ describe('the works tile card (#621 W1-10c)', () => {
       next: 'Each batch takes 2 🌿',
       chip: null,
     });
+    // An empty bag says the same.
+    expect(worksCard(mill({ short: { greens: 2 } }), joined, NOW, { greens: 0 })?.line).toBe(
+      'Out of Greens! Bring some for the Watermill 🌿',
+    );
+  });
+
+  it('says how many more when the bag has some, but not enough', () => {
+    const card = worksCard(mill({ short: { greens: 7 } }), joined, NOW, { greens: 7 });
+    expect(card).toMatchObject({
+      state: 'short',
+      line: 'Need 7 more Greens for the Watermill 🌿',
+      next: 'Each batch takes 2 🌿',
+    });
   });
 
   it('naps or pauses before it asks for anything', () => {
