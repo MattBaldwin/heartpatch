@@ -239,6 +239,24 @@ export function createExploreRepo(db: Executor) {
     },
 
     /**
+     * The terrains of the tiles round `at` (#621 W1-13), in no order: a land
+     * tile by a river explores with the river kit (`exploreKitFor`). Fewer
+     * than six at the map's edge. Unlocked: nobody owns a water tile, so none is ever cleared.
+     */
+    neighbourTerrains: async (mapId: string, at: Hex): Promise<string[]> => {
+      const rows = await db
+        .select({ terrain: tiles.terrain })
+        .from(tiles)
+        .where(
+          and(
+            eq(tiles.mapId, mapId),
+            or(...hexNeighbors(at).map((n) => and(eq(tiles.q, n.q), eq(tiles.r, n.r)))),
+          ),
+        );
+      return rows.map((row) => row.terrain);
+    },
+
+    /**
      * The grey village `tileId` belongs to, while that tile isn't restored
      * (#306 2a); null on any other tile. Unlocked: nothing here changes
      * until restoring (PR 3), which takes the tile's lock first.

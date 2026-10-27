@@ -5,6 +5,7 @@ import {
   deriveSeed,
   EXPLORE_RULES,
   exploreJoy,
+  exploreKitFor,
   exploreLayout,
   GAME_DATA,
   HOLLOW_RULES,
@@ -182,37 +183,56 @@ async function greyVillage(
   return { village, morning: latestLocalMinute(at, zone, HOLLOW_RULES.morningMinute) };
 }
 
+/**
+ * A tile with the terrain whose explore kit it uses (#621 W1-13, owner
+ * decision 2026-10-27): its own, or the river bank's when it is land
+ * beside a river. `terrain` stays the tile's own, for its name and events.
+ */
+type KitTile = ExploreTileRow & { readonly kit: string };
+
+/** The tile with its kit (`exploreKitFor`), from its neighbours' terrains; null stays null. */
+async function withKit(
+  repo: ExploreRepo,
+  mapId: string,
+  tile: ExploreTileRow | null,
+): Promise<KitTile | null> {
+  if (!tile) return null;
+  const around = await repo.neighbourTerrains(mapId, tile);
+  return { ...tile, kit: exploreKitFor(tile.terrain, around, EXPLORE_RULES) };
+}
+
 /** My tile (or a grey village tile I may explore) and its spots, or a kid-readable error. */
 function tileSpots(
   seed: string,
-  tile: ExploreTileRow | null,
+  tile: KitTile | null,
   userId: string,
   grey: Grey | null,
-): { tile: ExploreTileRow; spots: SearchSpot[] } {
+): { tile: KitTile; spots: SearchSpot[] } {
   if (!tile) throw new AppError('NOT_FOUND', MESSAGES.noTile);
   if (!grey && tile.ownerUserId !== userId) throw new AppError('FORBIDDEN', MESSAGES.notYours);
-  if (!isExplorable(tile.terrain, EXPLORE_RULES)) {
+  if (!isExplorable(tile.kit, EXPLORE_RULES)) {
     throw new AppError('CONFLICT', MESSAGES.cantExplore);
   }
-  const spots = searchSpots(seed, tile, EXPLORE_RULES) ?? [];
+  // Spots are laid out for the kit: a river-edge tile gets the bank's.
+  const spots = searchSpots(seed, { q: tile.q, r: tile.r, terrain: tile.kit }, EXPLORE_RULES) ?? [];
   if (spots.length === 0) throw new AppError('CONFLICT', MESSAGES.cantExplore);
   return { tile, spots };
 }
 
 /**
- * A row's progress, counted against its terrain's layout today
- * (`exploreLayout`). A row made on another terrain (a converted tile) starts
- * fresh. One made under an older layout of the same terrain (a new kit,
- * #335) starts fresh while half-searched, but a finished one stays finished,
- * so a new kit never takes a homestead away (owner decision 2026-10-09).
+ * A row's progress, counted against its kit's layout today (`exploreLayout`;
+ * a row's `terrain` is the kit it was searched under). A row made on another
+ * terrain (a converted tile) starts fresh. One made under an older layout of
+ * the same kit (a new kit, #335), or under the tile's own kit before it
+ * explored as the river bank (#621 W1-13), starts fresh while half-searched,
+ * but a finished one stays finished, so a new kit never takes a homestead
+ * away (owner decision 2026-10-09).
  */
-function searchedMask(
-  row: ExploreRow | null,
-  tile: ExploreTileRow,
-  spots: readonly SearchSpot[],
-): number {
-  if (!row || row.terrain !== tile.terrain) return 0;
-  if (row.layout === exploreLayout(tile.terrain, EXPLORE_RULES)) return row.searched;
+function searchedMask(row: ExploreRow | null, tile: KitTile, spots: readonly SearchSpot[]): number {
+  if (!row || (row.terrain !== tile.kit && row.terrain !== tile.terrain)) return 0;
+  if (row.terrain === tile.kit && row.layout === exploreLayout(tile.kit, EXPLORE_RULES)) {
+    return row.searched;
+  }
   // Finished: every spot of today's kit is done. The row's stored `searched`
   // and `spot_count` stay the old kit's on purpose; it's never written again.
   return row.completedAt ? spots.reduce((mask, s) => withSearched(mask, s.index), 0) : 0;
@@ -222,9 +242,9 @@ function searchedMask(
  * A grey village tile's progress (#306 2a): only today's searches count
  * (its spots refill each morning), on today's layout.
  */
-function greyMask(row: ExploreRow | null, tile: ExploreTileRow, grey: Grey): number {
-  if (!row || row.terrain !== tile.terrain) return 0;
-  if (row.layout !== exploreLayout(tile.terrain, EXPLORE_RULES)) return 0;
+function greyMask(row: ExploreRow | null, tile: KitTile, grey: Grey): number {
+  if (!row || row.terrain !== tile.kit) return 0;
+  if (row.layout !== exploreLayout(tile.kit, EXPLORE_RULES)) return 0;
   return row.updatedAt.getTime() >= grey.morning.getTime() ? row.searched : 0;
 }
 
@@ -371,13 +391,9 @@ function notableOf(items: ItemCounts, lore: string | null, clothing: string | nu
  * placed, or an older patch's key), so its glint is offered on it alone
  * (#306). Refusing to clear the key tile instead would tell a rival where it is.
  */
-function keyOnly(
-  tile: ExploreTileRow | null,
-  userId: string,
-  grey: Grey | null,
-): ExploreTileRow | null {
+function keyOnly(tile: KitTile | null, userId: string, grey: Grey | null): KitTile | null {
   if (!tile || grey || tile.ownerUserId !== userId) return null;
-  return isExplorable(tile.terrain, EXPLORE_RULES) ? null : tile;
+  return isExplorable(tile.kit, EXPLORE_RULES) ? null : tile;
 }
 
 /**
@@ -443,7 +459,7 @@ async function findKey(
   input: {
     mapId: string;
     userId: string;
-    tile: ExploreTileRow;
+    tile: KitTile;
     spots: readonly SearchSpot[];
     at: Date;
   },
@@ -503,13 +519,13 @@ async function lockPuzzleRow(
   at: { q: number; r: number },
   userId: string,
   now: Date,
-): Promise<{ grey: Grey; tile: ExploreTileRow; spots: SearchSpot[]; row: ExploreRow }> {
+): Promise<{ grey: Grey; tile: KitTile; spots: SearchSpot[]; row: ExploreRow }> {
   // The tile, so its owner can't change mid-try (restoring takes it first too).
   const locked = await repo.lockTileAt(mapId, at.q, at.r);
   if (!locked) throw new AppError('NOT_FOUND', MESSAGES.noTile);
   const grey = await greyVillage(repo, mapId, locked, userId, now);
   if (!grey) throw new AppError('CONFLICT', MESSAGES.noPuzzle);
-  const { tile, spots } = tileSpots(seed, locked, userId, grey);
+  const { tile, spots } = tileSpots(seed, await withKit(repo, mapId, locked), userId, grey);
   // An old finished row (from before the tile was a village) is one of my
   // explored rows, which a capture may be locking as a set: take the set
   // first, as a search does.
@@ -520,8 +536,8 @@ async function lockPuzzleRow(
       userId,
       tileId: tile.id,
       mapId,
-      layout: exploreLayout(tile.terrain, EXPLORE_RULES),
-      terrain: tile.terrain,
+      layout: exploreLayout(tile.kit, EXPLORE_RULES),
+      terrain: tile.kit,
       spotCount: spots.length,
       at: now,
     }));
@@ -669,7 +685,7 @@ export function createExploreService(options: ExploreServiceOptions) {
       // My hunted keys off claimed land on a patch with no challenges (#306), before the glint is placed.
       await settleKeys(db, mapId, user.id);
       const repo = createExploreRepo(db);
-      const found = await repo.findTileAt(mapId, at.q, at.r);
+      const found = await withKit(repo, mapId, await repo.findTileAt(mapId, at.q, at.r));
       const grey = await greyVillage(repo, mapId, found, user.id, now());
       const seed = await seedOf(db, mapId);
       // My own land no one can explore (cleared land): only the cellar key's glint, if it hides there.
@@ -692,7 +708,9 @@ export function createExploreService(options: ExploreServiceOptions) {
           ...spots.map((s) => ({ ...s, done: isSearched(mask, s.index) })),
           ...(key ? [{ ...key, done: false }] : []),
         ],
-        needs: exploreNeeds(tile.terrain, EXPLORE_RULES),
+        // Only when it isn't the tile's own: land by a river explores as its bank.
+        ...(tile.kit !== tile.terrain ? { kit: tile.kit } : {}),
+        needs: exploreNeeds(tile.kit, EXPLORE_RULES),
         progress: { searched, total: spots.length },
         homestead: grey ? null : homesteadOf(row),
         tools: toolUses(items),
@@ -715,7 +733,11 @@ export function createExploreService(options: ExploreServiceOptions) {
         const seed = await seedOf(tx, mapId);
         // Step 6: the tile, so its owner can't change mid-search. A grey
         // village's own rows are only read: restoring (PR 3) locks the tile first.
-        const locked = await repo.lockTileAt(mapId, request.q, request.r);
+        const locked = await withKit(
+          repo,
+          mapId,
+          await repo.lockTileAt(mapId, request.q, request.r),
+        );
         const grey = await greyVillage(repo, mapId, locked, user.id, at);
         const bare = keyOnly(locked, user.id, grey);
         if (bare && request.spot === KEY_SPOT.index) {
@@ -746,8 +768,8 @@ export function createExploreService(options: ExploreServiceOptions) {
             userId: user.id,
             tileId: tile.id,
             mapId,
-            layout: exploreLayout(tile.terrain, EXPLORE_RULES),
-            terrain: tile.terrain,
+            layout: exploreLayout(tile.kit, EXPLORE_RULES),
+            terrain: tile.kit,
             spotCount: spots.length,
             at,
           }));
@@ -783,8 +805,8 @@ export function createExploreService(options: ExploreServiceOptions) {
           user.id,
           tile.id,
           {
-            layout: exploreLayout(tile.terrain, EXPLORE_RULES),
-            terrain: tile.terrain,
+            layout: exploreLayout(tile.kit, EXPLORE_RULES),
+            terrain: tile.kit,
             searched,
             spotCount: spots.length,
             completedAt: explored ? at : null,
@@ -810,7 +832,7 @@ export function createExploreService(options: ExploreServiceOptions) {
         );
         const roll = rollExploreFind(
           grey ? HOLLOWED_FINDS : EXPLORE_FINDS,
-          { kind: spot.kind, terrain: tile.terrain },
+          { kind: spot.kind, terrain: tile.kit },
           rngFor(),
           foundLore,
         );
@@ -968,7 +990,12 @@ export function createExploreService(options: ExploreServiceOptions) {
       const found = await repo.findTileAt(mapId, request.q, request.r);
       const grey = await greyVillage(repo, mapId, found, user.id, now());
       if (!grey) throw new AppError('CONFLICT', MESSAGES.noPuzzle);
-      const { tile, spots } = tileSpots(await seedOf(db, mapId), found, user.id, grey);
+      const { tile, spots } = tileSpots(
+        await seedOf(db, mapId),
+        await withKit(repo, mapId, found),
+        user.id,
+        grey,
+      );
       const row = await repo.findRow(user.id, tile.id);
       if (!row || row.puzzleAttempt === 0) throw new AppError('CONFLICT', MESSAGES.puzzleStale);
       const puzzle = puzzleView(grey, tile, spots, row, grey.village.puzzleSolvedBy, user.id);
@@ -993,7 +1020,12 @@ export function createExploreService(options: ExploreServiceOptions) {
       const found = await repo.findTileAt(mapId, request.q, request.r);
       const grey = await greyVillage(repo, mapId, found, user.id, now());
       if (!grey) throw new AppError('CONFLICT', MESSAGES.noPuzzle);
-      const { tile, spots } = tileSpots(await seedOf(db, mapId), found, user.id, grey);
+      const { tile, spots } = tileSpots(
+        await seedOf(db, mapId),
+        await withKit(repo, mapId, found),
+        user.id,
+        grey,
+      );
       const row = await repo.findRow(user.id, tile.id);
       if (!row || row.puzzleAttempt === 0) throw new AppError('CONFLICT', MESSAGES.storyStale);
       const puzzle = puzzleView(grey, tile, spots, row, grey.village.puzzleSolvedBy, user.id);

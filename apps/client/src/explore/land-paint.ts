@@ -53,6 +53,9 @@ export function paintGround(input: PaintInput): Uint8Array {
   const pathEdge = rgb(palette.pathEdge);
   const specks = palette.specks.map(rgb);
   const shade = rgb(palette.shade);
+  const bankColours = palette.bank
+    ? { sand: rgb(palette.bank.sand), wet: rgb(palette.bank.wet), bed: rgb(palette.bank.bed) }
+    : null;
 
   // The shade first, splatted into its own layer (each shade touches few texels),
   // and pools of light (shades with a tint) into a layer of their own.
@@ -144,6 +147,23 @@ export function paintGround(input: PaintInput): Uint8Array {
         c[0] *= grain;
         c[1] *= grain;
         c[2] *= grain;
+      }
+      // A bank (#621 W1-13): pebbly sand down to the water, darker and wet at
+      // the waterline, and the shallows' sandy bed seen through the water.
+      if (bankColours && land.bank) {
+        const sandy = land.bank.shore(x, z);
+        if (sandy > 0) {
+          const under = land.bank.level - land.height(x, z);
+          const pebble = 0.95 + 0.05 * valueNoise(x * 9, z * 9, seed + 33); // TUNE: a fine, gentle grain
+          const t: Rgb = [
+            bankColours.sand[0] * pebble,
+            bankColours.sand[1] * pebble,
+            bankColours.sand[2] * pebble,
+          ];
+          mixTo(t, bankColours.wet, smooth(-0.1, 0.0, under));
+          mixTo(t, bankColours.bed, smooth(0.04, 0.14, under));
+          mixTo(c, t, sandy);
+        }
       }
       const k = j * n + i;
       mixTo(c, shade, dark[k] ?? 0);

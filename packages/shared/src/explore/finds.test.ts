@@ -25,12 +25,12 @@ describe('explore find tables', () => {
     ];
     expect(checkExploreFinds(broken, GAME_DATA, EXPLORE_RULES, pages)).toEqual(
       expect.arrayContaining([
-        'finds[17]: unknown spot kind "puddle"',
-        'finds[18]: unknown terrain "moon"',
-        'finds[18].finds[0]: unknown item "gold"',
-        'finds[19].finds[0]: "pumpkins" can\'t be found exploring',
-        'finds[20].finds[0]: "shovel" can\'t be found exploring',
-        'finds[21].finds[0]: unknown lore page "no-such-page"',
+        'finds[21]: unknown spot kind "puddle"',
+        'finds[22]: unknown terrain "moon"',
+        'finds[22].finds[0]: unknown item "gold"',
+        'finds[23].finds[0]: "pumpkins" can\'t be found exploring',
+        'finds[24].finds[0]: "shovel" can\'t be found exploring',
+        'finds[25].finds[0]: unknown lore page "no-such-page"',
         'spot kind "cave" has no find table',
       ]),
     );
@@ -147,5 +147,36 @@ describe('Glimmer from exploring (#523)', () => {
     // TUNE: about 1 in 10 mountain spots and 1 in 4–5 hills spots (#523).
     expect(glimmerPerSpot('mountains')).toBeCloseTo(0.099, 3);
     expect(glimmerPerSpot('hills')).toBeCloseTo(0.225, 3);
+  });
+});
+
+describe('river find tables (#621 W1-13)', () => {
+  const river = EXPLORE_RULES.terrains.find((t) => t.terrain === 'river');
+
+  it('has a table with positive weights for every river spot', () => {
+    expect(river?.kinds.length).toBeGreaterThan(0);
+    for (const { kind } of river?.kinds ?? []) {
+      const table = exploreFindTable(EXPLORE_FINDS, kind, 'river');
+      expect(table, kind).toBeDefined();
+      for (const f of table?.finds ?? []) expect(f.weight, kind).toBeGreaterThan(0);
+    }
+  });
+
+  it('turns up water and fish from the Snorkel spots, and stays small', () => {
+    for (const kind of ['eddy', 'cattails']) {
+      const table = exploreFindTable(EXPLORE_FINDS, kind, 'river');
+      for (const item of ['water', 'fish']) {
+        expect(
+          table?.finds.some((f) => (f.items?.[item] ?? 0) > 0),
+          `${kind} ${item}`,
+        ).toBe(true);
+      }
+    }
+    for (const { kind } of river?.kinds ?? []) {
+      // A find is small next to a gather (a node gives 2–5 a gather, #199).
+      for (const f of exploreFindTable(EXPLORE_FINDS, kind, 'river')?.finds ?? []) {
+        for (const n of Object.values(f.items ?? {})) expect(n, kind).toBeLessThanOrEqual(2);
+      }
+    }
   });
 });

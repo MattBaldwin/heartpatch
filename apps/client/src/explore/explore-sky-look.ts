@@ -198,12 +198,35 @@ export const WATER_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
 };
 
 /**
+ * The river bank (#621 W1-13): the open ground's day and night, and a dusk
+ * that's lightly spooky rather than warm: a blue-violet sky, a cool lavender
+ * light low enough that the lanterns and fireflies come out, and mist.
+ */
+export const RIVER_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
+  ...SKY_LOOKS,
+  dusk: {
+    ...SKY_LOOKS.dusk,
+    zenith: '#3b3a7e', // TUNE: deep blue-violet
+    horizon: '#9a86c8', // TUNE: a lavender glow, not orange
+    sun: '#d9c4ff', // TUNE
+    cloud: '#8f86c0', // TUNE
+    clouds: 2,
+    stars: true,
+    starColor: '#e8e4ff',
+    groundTint: '#c9cdf2', // TUNE: everything cooled towards blue
+    light: { color: '#b4b8f0', sun: 0.6, environment: 0.62 }, // TUNE: dim enough for the lanterns
+  },
+};
+
+/**
  * Each biome's own world (#335, owner decisions 2026-10-09): lakes are
  * explored underwater, hills inside a cave, mountains up a trail; the rest
  * on cozy open ground.
  */
-export type ExploreWorld = 'ground' | 'water' | 'cave' | 'trail' | 'vault';
+export type ExploreWorld = 'ground' | 'water' | 'cave' | 'trail' | 'vault' | 'river';
 const WORLDS: Readonly<Record<string, ExploreWorld>> = {
+  // Wild Isle's river bank (#621 W1-13): open ground, with a cooler, spookier dusk.
+  river: 'river',
   lake: 'water',
   hills: 'cave',
   mountains: 'trail',
@@ -214,6 +237,14 @@ const WORLDS: Readonly<Record<string, ExploreWorld>> = {
 /** The world a terrain is explored in. */
 export function exploreWorld(terrain: string): ExploreWorld {
   return WORLDS[terrain] ?? 'ground';
+}
+
+/**
+ * The terrain whose explore kit a tile shows (#621 W1-13): the server's
+ * `kit` (land beside a river explores as its bank), else the tile's own.
+ */
+export function exploreKitOf(tile: { readonly terrain: string; readonly kit?: string }): string {
+  return tile.kit ?? tile.terrain;
 }
 
 /** Is this terrain explored underwater (#335, owner decision 2026-10-09: lakes, with a Snorkel)? */
@@ -264,7 +295,9 @@ export function skyLook(at: SkyAt, world: ExploreWorld = 'ground'): SkyLook {
         ? CAVE_LOOKS
         : world === 'vault'
           ? VAULT_LOOKS
-          : SKY_LOOKS;
+          : world === 'river'
+            ? RIVER_LOOKS
+            : SKY_LOOKS;
   const a = looks[at.phase];
   const b = looks[at.next];
   const t = Math.min(1, Math.max(0, at.blend));

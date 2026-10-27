@@ -1,9 +1,13 @@
+import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { describe, expect, it } from 'vitest';
+import { LAND_LIGHT } from './land-config.js';
 import {
   EXPLORE_SKY,
+  exploreKitOf,
   exploreWorld,
   isUnderwater,
   localMinuteIn,
+  RIVER_LOOKS,
   SKY_LOOKS,
   skyLook,
   WATER_LOOKS,
@@ -92,5 +96,31 @@ describe('the explore sky look (#335)', () => {
       expect(b, look.groundTint).toBeGreaterThan(r);
       expect(look.fog).not.toBeNull();
     }
+  });
+});
+
+describe('the river bank’s dusk (#621 W1-13)', () => {
+  it('is explored on open ground with its own cooler, darker dusk', () => {
+    expect(exploreWorld('river')).toBe('river');
+    expect(RIVER_LOOKS.day).toBe(SKY_LOOKS.day);
+    expect(RIVER_LOOKS.night).toBe(SKY_LOOKS.night);
+    const dusk = RIVER_LOOKS.dusk;
+    // Blue-violet, not warm orange: more blue than red in the sky and the light.
+    for (const hex of [dusk.horizon, dusk.light.color, dusk.groundTint]) {
+      const c = Color3.FromHexString(hex);
+      expect(c.b, hex).toBeGreaterThan(c.r);
+    }
+    // Dim enough that the lanterns light and the fireflies come out.
+    expect(dusk.light.sun).toBeLessThan(LAND_LIGHT.lamp.dusk);
+  });
+});
+
+describe('the kit a tile shows (#621 W1-13)', () => {
+  it('is the server’s kit when it sends one, else the tile’s own terrain', () => {
+    expect(exploreKitOf({ terrain: 'meadow', kit: 'river' })).toBe('river');
+    expect(exploreKitOf({ terrain: 'meadow' })).toBe('meadow');
+    // A pond beside a river is searched on the bank, so Back isn't a pop up for air.
+    expect(isUnderwater(exploreKitOf({ terrain: 'lake', kit: 'river' }))).toBe(false);
+    expect(isUnderwater(exploreKitOf({ terrain: 'lake' }))).toBe(true);
   });
 });

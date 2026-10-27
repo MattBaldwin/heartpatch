@@ -84,6 +84,7 @@ const HAND_ICONS: Readonly<Record<string, string>> = {
   rock: 'rock',
   shells: '🐚',
   driftwood: 'log',
+  'mossy-log': 'log',
   cairn: 'rock',
   'glow-mushrooms': '🍄',
 };
@@ -100,6 +101,7 @@ export const KIND_PLAY_TEXT: Readonly<
   Record<string, { icon: string; hint: string; easy: string; note?: string }>
 > = {
   'kelp-bed': { icon: 'snorkel', hint: 'Swipe the kelp apart!', easy: 'tap to part it' },
+  cattails: { icon: 'snorkel', hint: 'Swipe the cattails apart!', easy: 'tap to part them' },
 };
 
 /** What each tool gesture says and shows (boards b, d, e, f, g; style guide §6). */

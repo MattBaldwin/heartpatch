@@ -1,5 +1,6 @@
 import { Material } from '@babylonjs/core/Materials/material';
 import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
 import { CreatePickingRay } from '@babylonjs/core/Culling/ray.core';
@@ -37,7 +38,7 @@ import {
   type AmbientStatus,
 } from '../map/ambient-layout.js';
 import type { AmbientTarget } from '../map/ambient-driver.js';
-import { isUnderwater, type SkyLook } from './explore-sky-look.js';
+import { exploreKitOf, isUnderwater, type SkyLook } from './explore-sky-look.js';
 import { spotWorld } from '../home/home-layout.js';
 import {
   AMBIENT,
@@ -101,6 +102,7 @@ import {
   EXPLORE_UNDERWATER,
   EXPLORE_TOOL,
   EXPLORE_VIEW,
+  haloStyle,
 } from './explore-config.js';
 import {
   createHop,
@@ -383,6 +385,8 @@ export class ExploreScene implements AmbientTarget {
   /** Each open spot's glint's x, as last drawn (redrawn only when one moves). */
   #glintNudge: number[] = [];
   readonly #halo: Mesh;
+  /** The halo's own colour, when its biome tints it with the time of day. */
+  #haloTint: { readonly mat: StandardMaterial; readonly base: Color3 } | null = null;
   readonly #tools: Record<ToolId, Mesh>;
   readonly #colliders: Collider[];
   readonly #buildings: BuildingField;
@@ -472,7 +476,7 @@ export class ExploreScene implements AmbientTarget {
     const counts = import.meta.env.DEV && gl ? countGl(gl) : null;
     this.#gl = counts ? { counts, atOpen: { ...counts } } : null;
     this.#tile = tile;
-    this.#underwater = isUnderwater(tile.terrain);
+    this.#underwater = isUnderwater(exploreKitOf(tile));
     this.#highTier = bubblesAt(options.tier);
     // Underwater the Keeper swims instead of hopping (#399).
     this.#reduced = options.reducedMotion ?? (() => false);
@@ -497,12 +501,14 @@ export class ExploreScene implements AmbientTarget {
     this.#at = freePoint(EXPLORE_VIEW.start, this.#colliders);
 
     const landLook =
-      LAND_LOOKS[tile.terrain] ?? LAKE_LOOKS[tile.terrain] ?? BIOME_LOOKS[tile.terrain];
-    const waterLook = WATER_LOOKS_BY_TERRAIN[tile.terrain];
+      LAND_LOOKS[exploreKitOf(tile)] ??
+      LAKE_LOOKS[exploreKitOf(tile)] ??
+      BIOME_LOOKS[exploreKitOf(tile)];
+    const waterLook = WATER_LOOKS_BY_TERRAIN[exploreKitOf(tile)];
     // A biome's own layers: the lake's kelp and coral, the trail's peaks, the cave's walls.
     const extras = waterLook
       ? lakeExtras(waterLook, tileSeed(tile, 'water'))
-      : BIOME_EXTRAS[tile.terrain];
+      : BIOME_EXTRAS[exploreKitOf(tile)];
     // A grey village tile (#306 2a): the land and its spots read one drain.
     const drain = tile.community ? new HollowedDrain() : null;
     if (landLook) {
@@ -514,6 +520,7 @@ export class ExploreScene implements AmbientTarget {
         seed: tileSeed(tile, 'land'),
         size,
         colliders: this.#colliders.map((c) => ({ x: c.x * size, z: c.z * size, r: c.r * size })),
+        spots: tile.spots.map((s) => ({ x: s.x * size, z: s.z * size, kind: s.kind })),
         start: this.#world(this.#at),
         tier: options.tier,
         sky: options.sky,
@@ -534,7 +541,7 @@ export class ExploreScene implements AmbientTarget {
         });
       }
     } else {
-      const look = TERRAIN_LOOKS[tile.terrain] ?? FALLBACK_LOOK;
+      const look = TERRAIN_LOOKS[exploreKitOf(tile)] ?? FALLBACK_LOOK;
       const h = look.height;
       // The same profile #buildGround lofts, so feet, props and decor sit on it.
       const top = tileSurface({
@@ -545,7 +552,7 @@ export class ExploreScene implements AmbientTarget {
         rings: TOP_RINGS.map((r) => ({ scale: r.scale, y: r.y + h })),
       });
       this.#surface = (p) => top(p) * this.#k;
-      this.#buildGround(tile.terrain);
+      this.#buildGround(exploreKitOf(tile));
     }
 
     // The land's props are matte (art bible §4); today's tiles keep their vinyl.
@@ -633,9 +640,14 @@ export class ExploreScene implements AmbientTarget {
       return halo.bakeCurrentTransformIntoVertices();
     });
     this.#halo.alwaysSelectAsActiveMesh = false;
+    const halo = haloStyle(landLook);
     const haloMat = overlayMaterial(scene, 'explore-halo-mat');
-    haloMat.emissiveColor = linear('#fffbe0');
-    haloMat.alpha = EXPLORE_VIEW.halo.alpha;
+    haloMat.emissiveColor = linear(halo.color);
+    haloMat.alpha = halo.alpha;
+    // Over the river it draws before the water, so the water tints it, and
+    // takes the dusk like the ground (#621 W1-13).
+    if (halo.alphaIndex !== undefined) this.#halo.alphaIndex = halo.alphaIndex;
+    if (halo.tinted) this.#haloTint = { mat: haloMat, base: haloMat.emissiveColor.clone() };
     this.#halo.material = haloMat;
     this.#halo.isPickable = false;
     this.#halo.setEnabled(false);
@@ -731,7 +743,7 @@ export class ExploreScene implements AmbientTarget {
       );
     }
 
-    if (tile.terrain === CELLAR_TERRAIN) {
+    if (exploreKitOf(tile) === CELLAR_TERRAIN) {
       this.#cellar = new CellarChests(
         scene,
         { world: (p) => this.#world(p), groundAt: (p) => this.#groundAt(p) },
@@ -1318,10 +1330,11 @@ export class ExploreScene implements AmbientTarget {
     this.#water?.setSky(look);
   }
 
-  /** The ground and decor take the time of day's tint; spots and glints don't. */
+  /** The ground and decor (and a biome's own halo) take the time of day's tint; spots and glints don't. */
   #tintGround(look: SkyLook): void {
     const tint = Color3.FromHexString(look.groundTint);
     for (const g of this.#ground) g.mat.albedoColor = g.base.multiply(tint);
+    if (this.#haloTint) this.#haloTint.mat.emissiveColor = this.#haloTint.base.multiply(tint);
   }
 
   /** The held tool at the Keeper's hand, following its position and heading. */
@@ -1635,13 +1648,13 @@ export class ExploreScene implements AmbientTarget {
     for (const spot of tile.spots) {
       const shape = SPOT_PROPS[spot.kind] ?? 'rock';
       // Old forests grow their own old trees.
-      const prop = shape === 'tree' && tile.terrain === 'old-forest' ? 'old-tree' : shape;
+      const prop = shape === 'tree' && exploreKitOf(tile) === 'old-forest' ? 'old-tree' : shape;
       // On the land kit (#335), its own rocks, trees, logs and flower beds (and the lake's,
       // trail's and cave's spots), drawn at world size: built once a kind (the first is the
       // solid copy).
       let kit = built.get(spot.kind);
       if (kit === undefined && this.#land) {
-        kit = kitSpot(this.#scene, spot.kind, tile.terrain);
+        kit = kitSpot(this.#scene, spot.kind, exploreKitOf(tile));
         built.set(spot.kind, kit);
       }
       const kind = kit ? `kit:${spot.kind}` : prop;
@@ -1650,7 +1663,9 @@ export class ExploreScene implements AmbientTarget {
         this.#kitGlint.set(spot.kind, kit.glint);
         builders.set(
           kind,
-          () => kitSpot(this.#scene, spot.kind, tile.terrain)?.mesh ?? mapProp(this.#scene, 'rock'),
+          () =>
+            kitSpot(this.#scene, spot.kind, exploreKitOf(tile))?.mesh ??
+            mapProp(this.#scene, 'rock'),
         );
       } else {
         builders.set(kind, () =>

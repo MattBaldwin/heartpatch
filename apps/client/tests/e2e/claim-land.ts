@@ -49,20 +49,25 @@ export async function tapCanvas(page: Page, x: number, y: number): Promise<void>
 export async function selectTile(page: Page, tile: { q: number; r: number }): Promise<void> {
   const key = `${String(tile.q)},${String(tile.r)}`;
   await expect
-    .poll(async () => {
-      await page.evaluate(
-        ({ q, r }) =>
-          (
-            window as unknown as {
-              __heartpatch?: { mapDev?: () => { select: (q: number, r: number) => boolean } };
-            }
-          ).__heartpatch
-            ?.mapDev?.()
-            .select(q, r),
-        tile,
-      );
-      return (await mapState(page))?.selected;
-    })
+    .poll(
+      async () => {
+        await page.evaluate(
+          ({ q, r }) =>
+            (
+              window as unknown as {
+                __heartpatch?: { mapDev?: () => { select: (q: number, r: number) => boolean } };
+              }
+            ).__heartpatch
+              ?.mapDev?.()
+              .select(q, r),
+          tile,
+        );
+        return (await mapState(page))?.selected;
+        // The map selects only once its 3D scene is built (`focus`), which can
+        // trail the live map by more than the default 5 s on a slow iPhone runner.
+      },
+      { timeout: 20_000 },
+    )
     .toBe(key);
 }
 

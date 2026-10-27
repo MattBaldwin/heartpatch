@@ -709,6 +709,130 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     ]);
   });
 
+  /**
+   * `first` and `second` from home as my meadows, no river anywhere on the
+   * patch, and a tile beside `first` (not home, not by `second`) that
+   * `river()` turns into a river (#621 W1-13).
+   */
+  async function byTheRiver(server: FastifyInstance, me: Player) {
+    const mapId = await patch(server, me);
+    await db.execute(
+      `update tiles set terrain = 'meadow' where map_id = '${mapId}' and terrain = 'river'`,
+    );
+    const { first, second } = await lineFromHome(mapId, me);
+    await ownMeadow(first, me);
+    await ownMeadow(second, me);
+    const all = await tilesOf(mapId);
+    const byKey = new Map(all.map((t) => [hexKey(t), t]));
+    const water = hexNeighbors(first)
+      .map((n) => byKey.get(hexKey(n)))
+      .find(
+        (t) =>
+          t !== undefined &&
+          t.homeSlot === null &&
+          t.ownerUserId === null &&
+          hexKey(t) !== hexKey(second) &&
+          hexDistance(t, second) > 1,
+      );
+    if (!water) throw new Error('no free tile beside first');
+    const river = () =>
+      db.execute(
+        `update tiles set terrain = 'river', owner_user_id = null, node_resource = null where id = '${water.id}'`,
+      );
+    return { mapId, first, second, water, river };
+  }
+
+  const RIVER_KINDS = EXPLORE_RULES.terrains
+    .find((t) => t.terrain === 'river')!
+    .kinds.map((k) => k.kind);
+
+  it('explores land beside a river as the river bank, and leaves other land as it was (#621 W1-13)', async () => {
+    const server = await start();
+    const me = await player();
+    const { mapId, first, second, water, river } = await byTheRiver(server, me);
+    const firstBefore = await view(server, me, mapId, first);
+    const secondBefore = await view(server, me, mapId, second);
+    expect(firstBefore.kit).toBeUndefined();
+    await river();
+
+    const bank = await view(server, me, mapId, first);
+    expect(bank).toMatchObject({ terrain: 'meadow', kit: 'river', needs: ['shovel', 'net'] });
+    expect(bank.spots.length).toBeGreaterThan(0);
+    for (const s of bank.spots) expect(RIVER_KINDS).toContain(s.kind);
+    expect(bank.spots).not.toEqual(firstBefore.spots);
+    // Golden: land not beside the river is exactly as it was.
+    expect(await view(server, me, mapId, second)).toEqual(secondBefore);
+    // The river tile itself is still nobody's to explore.
+    const wet = await call(
+      server,
+      'GET',
+      `/maps/${mapId}/explore?q=${String(water.q)}&r=${String(water.r)}`,
+      me,
+    );
+    expect(wet.statusCode).toBe(403);
+
+    // Searching finds from the bank's tables; the tile is still a meadow in its events.
+    await give(mapId, me, { shovel: 20, net: 20 });
+    for (const s of bank.spots) {
+      const res = await search(server, me, mapId, first, s.index);
+      expect(res.statusCode, res.body).toBe(200);
+    }
+    const searched = await eventsOf(mapId, 'explore.searched');
+    expect(searched).toHaveLength(bank.spots.length);
+    for (const e of searched) {
+      expect(e['terrain']).toBe('meadow');
+      expect(RIVER_KINDS).toContain(e['kind']);
+    }
+    expect(await eventsOf(mapId, 'tile.explored')).toEqual([
+      { userId: me.id, q: first.q, r: first.r, terrain: 'meadow' },
+    ]);
+    const row = await db.query.tileExplore.findFirst({
+      where: (t, { and, eq }) => and(eq(t.userId, me.id), eq(t.tileId, first.id)),
+    });
+    expect(row).toMatchObject({ terrain: 'river', spotCount: bank.spots.length });
+    expect(row?.completedAt).not.toBeNull();
+  });
+
+  it('restarts half-searched land that turns river bank, but keeps a finished one finished (#621 W1-13)', async () => {
+    const server = await start();
+    const me = await player();
+    const { mapId, first, second, river } = await byTheRiver(server, me);
+    // `first` finished (a homestead: it borders home), `second` half-searched as a meadow.
+    await exploreAll(server, me, mapId, first);
+    expect((await view(server, me, mapId, first)).homestead).toBe('joined');
+    const meadow = await view(server, me, mapId, second);
+    const hands = meadow.spots.find((s) => s.tool === null)!;
+    expect((await search(server, me, mapId, second, hands.index)).statusCode).toBe(200);
+    // Both change kit mid-day: `first` by its river, `second` by water poured round it.
+    await river();
+    await db.execute(
+      `update tiles set terrain = 'river', owner_user_id = null, node_resource = null where map_id = '${mapId}' and owner_user_id is null and home_slot is null and (q, r) in (${hexNeighbors(
+        second,
+      )
+        .map((n) => `(${String(n.q)}, ${String(n.r)})`)
+        .join(', ')})`,
+    );
+
+    const bank = await view(server, me, mapId, second);
+    expect(bank.kit).toBe('river');
+    expect(bank.progress).toEqual({ searched: 0, total: bank.spots.length });
+    expect(bank.spots.every((s) => !s.done)).toBe(true);
+    // Each river spot can be searched once, no more.
+    await give(mapId, me, { shovel: 20, net: 20 });
+    const spot = bank.spots[0]!.index;
+    expect((await search(server, me, mapId, second, spot)).statusCode).toBe(200);
+    expect((await search(server, me, mapId, second, spot)).statusCode).toBe(409);
+    expect((await view(server, me, mapId, second)).progress.searched).toBe(1);
+
+    // A finished tile stays finished, its homestead with it (owner decision 2026-10-09).
+    const done = await view(server, me, mapId, first);
+    expect(done.kit).toBe('river');
+    expect(done.progress).toEqual({ searched: done.spots.length, total: done.spots.length });
+    expect(done.spots.every((s) => s.done)).toBe(true);
+    expect(done.homestead).toBe('joined');
+    expect((await search(server, me, mapId, first, done.spots[0]!.index)).statusCode).toBe(409);
+  });
+
   it('locks the explored set before a stale row of it, in (user, tile) order (tech spec §7)', async () => {
     const server = await start();
     const me = await player();

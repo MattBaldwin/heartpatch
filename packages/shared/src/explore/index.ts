@@ -59,6 +59,40 @@ export function isExplorable(terrain: string, rules: ExploreRules): boolean {
   return exploreTerrain(terrain, rules) !== undefined;
 }
 
+/**
+ * Whether a land tile that borders a river explores as the river bank
+ * (#621 W1-13, owner decision 2026-10-27): a river tile is water, so nobody
+ * owns one to explore it; the land beside it is how players reach the kit.
+ */
+export const RIVER_EDGE_KIT = true;
+
+/**
+ * The terrain whose explore kit a tile uses (#621 W1-13): an explorable
+ * land tile with a river tile among `neighbourTerrains` uses the river
+ * bank's, else its own. Only the river has an edge kit: the sea, a coast or
+ * a lake beside a tile changes nothing, so land by both sea and river
+ * explores as the river bank. Water tiles keep their own (none is
+ * explorable). `riverEdge` off gives the tile's own, for tests. Pure: the
+ * server picks the kit with it and sends it to the client (`kit`).
+ */
+export function exploreKitFor(
+  terrain: string,
+  neighbourTerrains: readonly string[],
+  rules: ExploreRules,
+  riverEdge: boolean = RIVER_EDGE_KIT,
+): string {
+  if (
+    riverEdge &&
+    terrain !== 'river' &&
+    isExplorable(terrain, rules) &&
+    isExplorable('river', rules) &&
+    neighbourTerrains.includes('river')
+  ) {
+    return 'river';
+  }
+  return terrain;
+}
+
 function kindOf(id: string, rules: ExploreRules): SearchSpotKind {
   const kind = rules.spotKinds.find((k) => k.id === id);
   if (!kind) throw new Error(`unknown search-spot kind "${id}"`);
@@ -82,6 +116,14 @@ function insideTile(x: number, z: number, margin: number): boolean {
   const r = 1 - margin;
   const ax = Math.abs(x);
   return ax <= (SQRT3 / 2) * r && ax / SQRT3 + Math.abs(z) <= r;
+}
+
+/**
+ * How far towards the tile's two back edges (+z, away from the explore
+ * camera) a tile-local point is: 0 at the middle, 1 on either back edge.
+ */
+export function backReach(x: number, z: number): number {
+  return (z * (SQRT3 / 2) + Math.abs(x) / 2) / (SQRT3 / 2);
 }
 
 /** Where the seven building spots sit inside a tile (the middle, then `HEX_DIRECTIONS`). */
@@ -136,11 +178,16 @@ export function searchSpots(
   const { buildingClearance, minGap, edgeMargin } = rules.placement;
   const blocked = buildingSpots(rules);
   const spots: SearchSpot[] = [];
+  // A banded terrain draws from the back half only (the band lies there), with
+  // more tries; without a band this is the whole tile, exactly as before.
+  const band = entry.band;
+  const tries = band ? TRIES_PER_SPOT * 4 : TRIES_PER_SPOT;
   for (const kind of kinds) {
-    for (let attempt = 0; attempt < TRIES_PER_SPOT; attempt++) {
+    for (let attempt = 0; attempt < tries; attempt++) {
       const x = round((rng.next() * 2 - 1) * (SQRT3 / 2));
-      const z = round(rng.next() * 2 - 1);
+      const z = round(band ? rng.next() : rng.next() * 2 - 1);
       if (!insideTile(x, z, edgeMargin)) continue;
+      if (band && backReach(x, z) < 1 - band.depth) continue;
       const far = (p: { x: number; z: number }, gap: number) =>
         (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z) >= gap * gap;
       if (!blocked.every((b) => far(b, buildingClearance))) continue;

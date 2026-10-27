@@ -167,6 +167,9 @@ export function landLayout(input: LayoutInput): LandLayout {
   // Every spot and building sits in its own shade.
   for (const c of colliders) shade(c.x, c.z, c.r * 1.4, 1);
 
+  // A bank's sand and water grow no grass or flowers.
+  const onBank = (x: number, z: number) => (land.bank?.shore(x, z) ?? 0) > 0.35;
+
   // Grass: evenly random, thinner on the path, none on a spot.
   const tufts: Growth[] = [];
   const hexArea = 3 * Math.sqrt(3) * 0.5 * size * size;
@@ -180,7 +183,7 @@ export function landLayout(input: LayoutInput): LandLayout {
     // Outside the tile it's sparser (rejection keeps the inside density exact).
     if (!inside && rand() > Math.min(1, growth.tufts.outside / growth.tufts.inside)) continue;
     if (land.pathMask(x, z) > 0.2 && rand() > 0.08) continue;
-    if (inSpot(x, z, 0.05)) continue;
+    if (inSpot(x, z, 0.05) || onBank(x, z)) continue;
     // Clumps: grass is thicker where the noise is high.
     if (softNoise(x * 0.35, z * 0.35, seed + 3) < -0.45 && rand() < 0.6) continue;
     tufts.push(at(x, z, between(0.75, 1.3)));
@@ -199,7 +202,7 @@ export function landLayout(input: LayoutInput): LandLayout {
     if (inside && rand() > Math.min(1, growth.flowers.inside / growth.flowers.outside)) continue;
     if (softNoise(x * 0.28, z * 0.28, seed + 5) < 0.05) continue;
     if (land.pathMask(x, z) > 0) continue;
-    if (inSpot(x, z, SPOT_CLEAR) || nearStart(x, z, 0.5)) continue;
+    if (inSpot(x, z, SPOT_CLEAR) || nearStart(x, z, 0.5) || onBank(x, z)) continue;
     const pick = softNoise(x * 0.12, z * 0.12, seed + 9);
     const kind: FlowerKind = pick < -0.35 ? 'tulip' : pick < 0.25 ? 'daisy' : 'bell';
     flowers[kind].push(at(x, z, between(0.8, 1.25)));
