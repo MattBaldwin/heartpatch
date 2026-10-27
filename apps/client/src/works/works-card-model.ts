@@ -35,6 +35,9 @@ const SKY_WORD: Readonly<Record<WeatherKind, string>> = {
 };
 
 /** What an `onlyWhile` building waits for: "waiting for rain". */
+/** The waiting chip's emoji: ☔ for rain, like the Rain Barrel's own line (mockup v3). */
+const WAIT_EMOJI: Readonly<Record<WeatherKind, string>> = { ...WEATHER_EMOJI, rain: '☔' };
+
 const SKY_NOUN: Readonly<Record<WeatherKind, string>> = {
   clear: 'clear skies',
   rain: 'rain',
@@ -60,7 +63,7 @@ export const WORKS_CARD_TEXT = {
   slower: (kind: WeatherKind) => `${WEATHER_EMOJI[kind]} ${SKY_WORD[kind]}: slower today`,
   /** An `onlyWhile` building under its weather: "🌧️ Rainy: filling up!" */
   filling: (kind: WeatherKind) => `${WEATHER_EMOJI[kind]} ${SKY_WORD[kind]}: filling up!`,
-  waiting: (kind: WeatherKind) => `Dry here: waiting for ${SKY_NOUN[kind]} ${WEATHER_EMOJI[kind]}`,
+  waiting: (kind: WeatherKind) => `Dry here: waiting for ${SKY_NOUN[kind]} ${WAIT_EMOJI[kind]}`,
   usual: '⛅ Working as usual today',
 } as const;
 

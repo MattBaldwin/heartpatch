@@ -121,7 +121,7 @@ describe('the weather chip (#621 W1-10c)', () => {
   it('has the Rain Barrel filling under rain and waiting without it', () => {
     expect(worksChip(data('rain-barrel'), 'same')?.text).toBe('🌧️ Rainy: filling up!');
     expect(worksChip(data('rain-barrel'), 'waiting')).toEqual({
-      text: 'Dry here: waiting for rain 🌧️',
+      text: 'Dry here: waiting for rain ☔',
       tone: 'waiting',
     });
     expect(worksChip(data('salt-pans'), undefined)).toBeNull();
@@ -172,11 +172,18 @@ describe('the building’s picture (#621 W1-10c, owner decision A)', () => {
       size: WORKS_PORTRAIT_PX,
     });
     expect(show).toHaveBeenCalledWith('data:image/png;x');
-    // No engine (no picture): the soft square stays, and nothing breaks.
-    building.mockResolvedValueOnce(null);
+    // An empty first draw is asked for once more.
+    building.mockClear().mockResolvedValueOnce(null);
     show.mockClear();
-    await askPortrait({ building }, look, show);
-    await askPortrait(undefined, look, show);
+    await askPortrait({ building }, look, show, 0);
+    expect(building).toHaveBeenCalledTimes(2);
+    expect(show).toHaveBeenCalledWith('data:image/png;x');
+    // No engine (no picture): the soft square stays, and nothing breaks.
+    building.mockClear().mockResolvedValue(null);
+    show.mockClear();
+    await askPortrait({ building }, look, show, 0);
+    await askPortrait(undefined, look, show, 0);
+    expect(building).toHaveBeenCalledTimes(2);
     expect(show).not.toHaveBeenCalled();
   });
 });

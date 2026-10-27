@@ -49,7 +49,7 @@ const BUILDING_POSE = { pitch: 0.62, yaw: -0.5, lookAt: 0.35 }; // TUNE
 /** A level-1 building's size for the camera: tile-wide and up to `TILE_FOOTPRINT.maxTop` tall. */
 const BUILDING_SIZE = 1.3; // TUNE: the crop trims the rest
 /** Camera distance per unit of the building's size. */
-const BUILDING_FIT = 2.4; // TUNE
+const BUILDING_FIT = 3; // TUNE: 2.4 clipped the Watermill's wheel and the Seawall's end
 
 export interface PortraitLook {
   readonly species: Species;
