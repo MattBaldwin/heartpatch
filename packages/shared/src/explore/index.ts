@@ -61,16 +61,19 @@ export function isExplorable(terrain: string, rules: ExploreRules): boolean {
 
 /**
  * Whether a land tile that borders a river explores as the river bank
- * (#621 W1-13). Off until the owner decides how players reach the river
- * kit: a river tile is water, so nobody owns one to explore it.
+ * (#621 W1-13, owner decision 2026-10-27): a river tile is water, so nobody
+ * owns one to explore it; the land beside it is how players reach the kit.
  */
-export const RIVER_EDGE_KIT = false; // owner call pending (#621 W1-13)
+export const RIVER_EDGE_KIT = true;
 
 /**
- * The terrain whose explore kit a tile uses (#621 W1-13): its own today.
- * With `riverEdge` on, an explorable land tile with a river tile among
- * `neighbourTerrains` uses the river bank's instead. Pure, so the server and
- * the client can't disagree once it is switched on.
+ * The terrain whose explore kit a tile uses (#621 W1-13): an explorable
+ * land tile with a river tile among `neighbourTerrains` uses the river
+ * bank's, else its own. Only the river has an edge kit: the sea, a coast or
+ * a lake beside a tile changes nothing, so land by both sea and river
+ * explores as the river bank. Water tiles keep their own (none is
+ * explorable). `riverEdge` off gives the tile's own, for tests. Pure: the
+ * server picks the kit with it and sends it to the client (`kit`).
  */
 export function exploreKitFor(
   terrain: string,

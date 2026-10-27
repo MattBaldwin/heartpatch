@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { LAND_LIGHT } from './land-config.js';
 import {
   EXPLORE_SKY,
+  exploreKitOf,
   exploreWorld,
   isUnderwater,
   localMinuteIn,
@@ -111,5 +112,15 @@ describe('the river bank’s dusk (#621 W1-13)', () => {
     }
     // Dim enough that the lanterns light and the fireflies come out.
     expect(dusk.light.sun).toBeLessThan(LAND_LIGHT.lamp.dusk);
+  });
+});
+
+describe('the kit a tile shows (#621 W1-13)', () => {
+  it('is the server’s kit when it sends one, else the tile’s own terrain', () => {
+    expect(exploreKitOf({ terrain: 'meadow', kit: 'river' })).toBe('river');
+    expect(exploreKitOf({ terrain: 'meadow' })).toBe('meadow');
+    // A pond beside a river is searched on the bank, so Back isn't a pop up for air.
+    expect(isUnderwater(exploreKitOf({ terrain: 'lake', kit: 'river' }))).toBe(false);
+    expect(isUnderwater(exploreKitOf({ terrain: 'lake' }))).toBe(true);
   });
 });
