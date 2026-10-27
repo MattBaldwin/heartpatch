@@ -1395,8 +1395,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   }
 
   // Turning the phone (or resizing the window) lays the card out afresh: its
-  // full shape first, placed once the scene has its new size.
-  window.addEventListener('resize', () => {
+  // full shape first, placed once the scene has its new size. The full-screen
+  // ground is watched too, as the Keeper picker watches its card: iOS sends
+  // `resize` before a turned layout settles and none after (#251). Not the
+  // card itself, whose short shape would set this off again.
+  const replaceNeed = (): void => {
     if (need.hidden) return;
     requestAnimationFrame(() => {
       need.classList.remove('explore-need-compact');
@@ -1404,7 +1407,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       need.style.transform = '';
       placeNeed();
     });
-  });
+  };
+  window.addEventListener('resize', replaceNeed);
+  new ResizeObserver(replaceNeed).observe(ground);
 
   let playDots: HTMLElement | null = null;
 
