@@ -459,7 +459,7 @@ async function findKey(
   input: {
     mapId: string;
     userId: string;
-    tile: ExploreTileRow;
+    tile: KitTile;
     spots: readonly SearchSpot[];
     at: Date;
   },
