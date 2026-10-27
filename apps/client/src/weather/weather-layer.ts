@@ -18,6 +18,7 @@ import type { QualityTier } from '../engine/config.js';
 import { attachCloudShade, type CloudFlash } from './cloud-plugin.js';
 import { attachRain, RAIN_ATTRIBUTE } from './rain-plugin.js';
 import { buildBank, buildBolt, buildCloud } from './weather-clouds.js';
+import { createStormLight } from './storm-light.js';
 import { WEATHER_LOOK } from './weather-config.js';
 import { skyFlash } from './weather-flash.js';
 import { FULL_CLOUDS } from './weather-layout.js';
@@ -81,237 +82,258 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
     attach(scene: Scene, view: MapView, host?: MapLayerHost): void {
       store.sync(view);
       if (!host || !store.wild) return;
-      const placer = new WeatherPlacer();
-      const tint = createWeatherTint(options.root ?? document.body);
-
-      const cloudMat = glowMaterial(scene, 'weather-cloud-mat', '#ffffff', true);
-      cloudMat.emissiveColor = Color3.White();
-      // Writes depth, and draws before the other weather (`alphaIndex`), so
-      // the shadows, fog and rain behind a cloud stay hidden behind it.
-      cloudMat.disableDepthWrite = false;
-      // Babylon turns depth writes off in its blended pass unless forced.
-      cloudMat.forceDepthWrite = true;
-      attachTerrainPlugin(cloudMat, host.clock);
-      // One smooth fused shape with a flat belly; its light comes from the
-      // cloud plugin (GLSL), since the material itself is unlit.
-      const flash: CloudFlash = { value: 0, keeper: null };
-      attachCloudShade(cloudMat, flash);
-      const cloud = buildCloud(scene);
-      cloud.hasVertexAlpha = true;
-      cloud.material = cloudMat;
-      cloud.alphaIndex = 0;
-      // A storm's bank: one wide slab per front, same material and light.
-      const bank = buildBank(scene);
-      bank.hasVertexAlpha = true;
-      bank.material = cloudMat;
-      bank.alphaIndex = 0;
-
-      // Each cloud's soft shadow on the tiles, and a storm bank's see-through
-      // lower deck: flat discs, their colour per disc.
-      const shadowMat = glowMaterial(scene, 'weather-shadow-mat', '#ffffff', true);
-      shadowMat.backFaceCulling = false;
-      attachTerrainPlugin(shadowMat, host.clock);
-      const shadow = softDisc(scene, 'weather-shadow', WEATHER_LOOK.clouds.shadow.rings);
-      shadow.material = shadowMat;
-
-      const fogMat = glowMaterial(scene, 'weather-fog-mat', WEATHER_LOOK.fog.colour, true);
-      // The disc is seen from above whichever way its triangles wind.
-      fogMat.backFaceCulling = false;
-      attachTerrainPlugin(fogMat, host.clock);
-      const fog = softDisc(scene, 'weather-fog', WEATHER_LOOK.fog.rings);
-      fog.material = fogMat;
-
-      const look = WEATHER_LOOK.rain;
-      const rainMat = glowMaterial(scene, 'weather-rain-mat', look.colour, true);
-      rainMat.alpha = look.alpha;
-      rainMat.alphaMode = Constants.ALPHA_COMBINE;
-      // GLSL only: without the plugin a streak would just hang there, so it draws none.
-      const rainPlugin = attachRain(rainMat, host.clock);
-      const rain = CreateCylinder(
-        'weather-rain',
-        { height: look.height, diameter: look.diameter, tessellation: 3 },
-        scene,
-      );
-      rain.material = rainMat;
-
-      // Lightning: a jagged white bolt in a soft halo that flashes under a
-      // storm's lower deck (or holds still when motion is off), added onto the
-      // clouds behind it so it glows. Same plugin as the rain, GLSL only.
-      const boltLook = WEATHER_LOOK.storm.bolts;
-      const boltMat = glowMaterial(scene, 'weather-bolt-mat', '#ffffff', true);
-      boltMat.alphaMode = Constants.ALPHA_ADD;
-      boltMat.backFaceCulling = false;
-      // Seen through the clouds, as a flash lights them from inside; its top
-      // fades in, so it comes out of the cloud rather than sitting on it.
-      boltMat.depthFunction = Constants.ALWAYS;
-      const boltPlugin = attachRain(boltMat, host.clock);
-      const bolt = buildBolt(scene, boltLook.width, boltLook.haloWidth, boltLook.halo);
-      bolt.material = boltMat;
-      for (const m of [shadow, fog, rain]) m.alphaIndex = 1;
-      bolt.alphaIndex = 2;
-
-      // The high tier's glow round the bolts: drawn with the bolt's own
-      // material, so it flashes with them. Made the first time it is wanted.
-      let glow: GlowLayer | null = null;
-      const setGlow = (on: boolean): void => {
-        if (on && !glow) {
-          const g = WEATHER_LOOK.storm.glow;
-          glow = new GlowLayer('weather-glow', scene, {
-            mainTextureRatio: g.ratio,
-            blurKernelSize: g.blur,
-          });
-          glow.intensity = g.intensity;
-          glow.addIncludedOnlyMesh(bolt);
-          glow.referenceMeshToUseItsOwnMaterial(bolt);
-        }
-        if (glow) glow.isEnabled = on;
+      // All or nothing (#686): whatever a throw part-way leaves (meshes,
+      // observers, the tint, a dimmed sun) is undone, newest first, before the
+      // map's layer loop logs it and opens the map without weather.
+      const undo: (() => void)[] = [];
+      const own = <T extends { dispose(): void }>(thing: T): T => {
+        undo.push(() => {
+          thing.dispose();
+        });
+        return thing;
       };
-
-      // A flash lights the cloud bellies (the cloud plugin) and the scene: the
-      // sun and the sky light rise with it, and a sky-wide light (made the
-      // first time a storm comes) lights the tiles on both tiers. A storm over
-      // the patch dims the sun and the sky and leaves a faint cool light: the
-      // storm's mood. The sun's and sky's own values are kept, and taken
-      // afresh if something else (the night) changes them meanwhile.
-      const sun = scene.getLightByName('sun');
-      const pulse = WEATHER_LOOK.storm.flash;
-      const mood = WEATHER_LOOK.storm.mood;
-      let sunBase = sun?.intensity ?? 0;
-      let sunSet = Number.NaN;
-      let skyBase = scene.environmentIntensity;
-      let skySet = Number.NaN;
-      let hemi: HemisphericLight | null = null;
-      let stormy = false;
-      let lit = Number.NaN;
-      const light = (now: number, overPatch: boolean): void => {
-        // Also when something else (the night) wrote the light since: its
-        // value is the new base, and the mood goes back on top of it.
-        const rewritten =
-          (sun !== null && sun.intensity !== sunSet) || scene.environmentIntensity !== skySet;
-        if (now === lit && overPatch === stormy && !rewritten) return;
-        lit = now;
-        stormy = overPatch;
-        flash.value = now;
-        const dim = overPatch ? 1 : 0;
-        if (sun) {
-          if (sun.intensity !== sunSet) sunBase = sun.intensity;
-          sunSet = sunBase * (1 - (1 - mood.sun) * dim) * (1 + pulse.sun * now);
-          sun.intensity = sunSet;
-        }
-        if (scene.environmentIntensity !== skySet) skyBase = scene.environmentIntensity;
-        skySet = skyBase * (1 - (1 - mood.sky) * dim) * (1 + pulse.sky * now);
-        scene.environmentIntensity = skySet;
-        if (hemi) hemi.intensity = pulse.hemi * now + mood.hemi * dim;
+      // What runs on: undone on a throw, stopped with the scene.
+      const stops: (() => void)[] = [];
+      const running = (stop: () => void): void => {
+        undo.push(stop);
+        stops.push(stop);
       };
-      const makeHemi = (): void => {
-        if (hemi) return;
-        hemi = new HemisphericLight('weather-flash', new Vector3(0, 1, -0.3), scene);
-        hemi.diffuse = new Color3(...pulse.hemiColour);
+      try {
+        const placer = new WeatherPlacer();
+        const tint = createWeatherTint(options.root ?? document.body);
+        running(() => {
+          tint.remove();
+        });
+
+        const cloudMat = own(glowMaterial(scene, 'weather-cloud-mat', '#ffffff', true));
+        cloudMat.emissiveColor = Color3.White();
+        // Writes depth, and draws before the other weather (`alphaIndex`), so
+        // the shadows, fog and rain behind a cloud stay hidden behind it.
+        cloudMat.disableDepthWrite = false;
+        // Babylon turns depth writes off in its blended pass unless forced.
+        cloudMat.forceDepthWrite = true;
+        attachTerrainPlugin(cloudMat, host.clock);
+        // One smooth fused shape with a flat belly; its light comes from the
+        // cloud plugin (GLSL), since the material itself is unlit.
+        const flash: CloudFlash = { value: 0, keeper: null };
+        attachCloudShade(cloudMat, flash);
+        const cloud = own(buildCloud(scene));
+        cloud.hasVertexAlpha = true;
+        cloud.material = cloudMat;
+        cloud.alphaIndex = 0;
+        // A storm's bank: one wide slab per front, same material and light.
+        const bank = own(buildBank(scene));
+        bank.hasVertexAlpha = true;
+        bank.material = cloudMat;
+        bank.alphaIndex = 0;
+
+        // Each cloud's soft shadow on the tiles, and a storm bank's see-through
+        // lower deck: flat discs, their colour per disc.
+        const shadowMat = own(glowMaterial(scene, 'weather-shadow-mat', '#ffffff', true));
+        shadowMat.backFaceCulling = false;
+        attachTerrainPlugin(shadowMat, host.clock);
+        const shadow = own(softDisc(scene, 'weather-shadow', WEATHER_LOOK.clouds.shadow.rings));
+        shadow.material = shadowMat;
+
+        const fogMat = own(glowMaterial(scene, 'weather-fog-mat', WEATHER_LOOK.fog.colour, true));
+        // The disc is seen from above whichever way its triangles wind.
+        fogMat.backFaceCulling = false;
+        attachTerrainPlugin(fogMat, host.clock);
+        const fog = own(softDisc(scene, 'weather-fog', WEATHER_LOOK.fog.rings));
+        fog.material = fogMat;
+
+        const look = WEATHER_LOOK.rain;
+        const rainMat = own(glowMaterial(scene, 'weather-rain-mat', look.colour, true));
+        rainMat.alpha = look.alpha;
+        rainMat.alphaMode = Constants.ALPHA_COMBINE;
+        // GLSL only: without the plugin a streak would just hang there, so it draws none.
+        const rainPlugin = attachRain(rainMat, host.clock);
+        const rain = own(
+          CreateCylinder(
+            'weather-rain',
+            { height: look.height, diameter: look.diameter, tessellation: 3 },
+            scene,
+          ),
+        );
+        rain.material = rainMat;
+
+        // Lightning: a jagged white bolt in a soft halo that flashes under a
+        // storm's lower deck (or holds still when motion is off), added onto the
+        // clouds behind it so it glows. Same plugin as the rain, GLSL only.
+        const boltLook = WEATHER_LOOK.storm.bolts;
+        const boltMat = own(glowMaterial(scene, 'weather-bolt-mat', '#ffffff', true));
+        boltMat.alphaMode = Constants.ALPHA_ADD;
+        boltMat.backFaceCulling = false;
+        // Seen through the clouds, as a flash lights them from inside; its top
+        // fades in, so it comes out of the cloud rather than sitting on it.
+        boltMat.depthFunction = Constants.ALWAYS;
+        const boltPlugin = attachRain(boltMat, host.clock);
+        const bolt = own(buildBolt(scene, boltLook.width, boltLook.haloWidth, boltLook.halo));
+        bolt.material = boltMat;
+        for (const m of [shadow, fog, rain]) m.alphaIndex = 1;
+        bolt.alphaIndex = 2;
+
+        // The high tier's glow round the bolts: drawn with the bolt's own
+        // material, so it flashes with them. Made the first time it is wanted.
+        let glow: GlowLayer | null = null;
+        undo.push(() => {
+          glow?.dispose();
+        });
+        const setGlow = (on: boolean): void => {
+          if (on && !glow) {
+            const g = WEATHER_LOOK.storm.glow;
+            glow = new GlowLayer('weather-glow', scene, {
+              mainTextureRatio: g.ratio,
+              blurKernelSize: g.blur,
+            });
+            glow.intensity = g.intensity;
+            glow.addIncludedOnlyMesh(bolt);
+            glow.referenceMeshToUseItsOwnMaterial(bolt);
+          }
+          if (glow) glow.isEnabled = on;
+        };
+
+        // A flash lights the cloud bellies (the cloud plugin) and the scene: the
+        // sun, the sky light and a sky-wide light (storm-light.ts). That light
+        // is made here, before the first frame, and kept enabled at intensity 0:
+        // adding or disabling a light mid-session changes every lit material's
+        // light defines, so they all recompile, a hitch the first time a storm
+        // came (#686).
+        const hemi = own(new HemisphericLight('weather-flash', new Vector3(0, 1, -0.3), scene));
+        hemi.diffuse = new Color3(...WEATHER_LOOK.storm.flash.hemiColour);
         hemi.groundColor = Color3.Black();
         hemi.specular = Color3.Black();
         hemi.intensity = 0;
-        lit = Number.NaN;
-      };
-
-      const layout = placer.layout;
-      instanced(cloud, layout.cloudMatrices, layout.cloudColours, 'color');
-      cloud.thinInstanceSetBuffer(DRIFT_ATTRIBUTE, layout.cloudDrift, 4, false);
-      instanced(bank, layout.bankMatrices, layout.bankColours, 'color');
-      bank.thinInstanceSetBuffer(DRIFT_ATTRIBUTE, layout.bankDrift, 4, false);
-      instanced(shadow, layout.shadowMatrices, layout.shadowColours, 'color');
-      instanced(bolt, layout.boltMatrices, layout.boltAttrs, RAIN_ATTRIBUTE);
-      instanced(fog, layout.fogMatrices, layout.fogDrift, DRIFT_ATTRIBUTE);
-      instanced(rain, layout.rainMatrices, layout.rainAttrs, RAIN_ATTRIBUTE);
-
-      const show = (mesh: Mesh, count: number, allowed = true): void => {
-        const on = allowed && count > 0;
-        // Never a count of 0: Babylon would compile the instance-colour shader without instancing.
-        mesh.thinInstanceCount = Math.max(1, count);
-        mesh.setEnabled(on);
-      };
-      const refresh = (): void => {
-        const mode = host.mode();
-        placer.setFronts(store.view?.today.fronts ?? []);
-        // Rain by tier (none on low) where the plugin runs (not WebGPU). A slow
-        // device's ambient goes `off` a few seconds in, which stops the clock:
-        // the streaks then hold still, as under reduced motion, rather than
-        // vanish (#621). A still mesh costs nothing between frames.
-        const tier = options.tier();
-        placer.setRainShare(rainPlugin ? moteShare(tier) : 0);
-        // The low tier drops plain rain, but a storm keeps a lighter one: it is what makes it a storm.
-        placer.setStormSky({
-          storm: rainPlugin
-            ? Math.max(moteShare(tier), tier === 'low' ? WEATHER_LOOK.lowTier.stormRain : 0)
-            : 0,
-          still: mode !== 'live',
+        const storm = createStormLight({
+          sun: scene.getLightByName('sun'),
+          sky: scene,
+          hemi,
+          pulse: WEATHER_LOOK.storm.flash,
+          mood: WEATHER_LOOK.storm.mood,
         });
-        // The low tier's clouds are fewer and lighter, as well as rainless.
-        placer.setClouds(tier === 'low' ? WEATHER_LOOK.lowTier : FULL_CLOUDS);
-        const placed = placer.update(store.now());
-        // My Keeper stands beside my Heart Seed (map-scene.ts places it there).
-        const home = store.home;
-        if (home) {
-          const at = hexToWorld(home, HEX_SIZE);
-          flash.keeper = {
-            x: at.x + KEEPER_PLACES.map.offset.x,
-            y: HOME_LOOK.height + WEATHER_LOOK.clouds.clearing.height,
-            z: at.z + KEEPER_PLACES.map.offset.z,
-          };
-        } else flash.keeper = null;
-        const kind = store.kindNow();
-        tint.set(kind);
-        if (layout.banks > 0) makeHemi();
-        light(flash.value, kind === 'storm');
-        if (placed || last.mode !== mode) {
-          show(cloud, layout.clouds);
-          show(bank, layout.banks);
-          show(fog, layout.fog);
-          show(rain, layout.rain);
-          show(shadow, layout.shadows);
-          show(bolt, layout.bolts, boltPlugin !== null);
-          setGlow(tier === 'high' && bolt.isEnabled());
-          for (const m of [cloud, bank, shadow, fog, rain, bolt]) {
-            m.thinInstanceBufferUpdated('matrix');
-          }
-          shadow.thinInstanceBufferUpdated('color');
-          bolt.thinInstanceBufferUpdated(RAIN_ATTRIBUTE);
-          cloud.thinInstanceBufferUpdated('color');
-          cloud.thinInstanceBufferUpdated(DRIFT_ATTRIBUTE);
-          bank.thinInstanceBufferUpdated('color');
-          bank.thinInstanceBufferUpdated(DRIFT_ATTRIBUTE);
-          fog.thinInstanceBufferUpdated(DRIFT_ATTRIBUTE);
-          rain.thinInstanceBufferUpdated(RAIN_ATTRIBUTE);
-          host.invalidate();
-        }
-        last = {
-          clouds: layout.clouds + layout.banks,
-          rain: layout.rain,
-          fog: layout.fog,
-          mode,
-          placed: placer.placed,
+        undo.push(() => {
+          storm.reset();
+        });
+        const light = (now: number, overPatch: boolean): void => {
+          flash.value = now;
+          storm.apply(now, overPatch);
         };
-      };
 
-      const off = store.onChange(refresh);
-      const stopStore = store.start();
-      const timer = setInterval(refresh, PLACE_EVERY_MS);
-      // The mode can change under us (the slow-device judge): poll it, no
-      // allocation. Each frame also follows the lightning's light.
-      const watch = scene.onBeforeRenderObservable.add(() => {
-        if (host.mode() !== last.mode) refresh();
-        light(
-          bolt.isEnabled() ? skyFlash(layout.boltAttrs, layout.bolts, host.clock.time) : 0,
-          stormy,
-        );
+        const layout = placer.layout;
+        instanced(cloud, layout.cloudMatrices, layout.cloudColours, 'color');
+        cloud.thinInstanceSetBuffer(DRIFT_ATTRIBUTE, layout.cloudDrift, 4, false);
+        instanced(bank, layout.bankMatrices, layout.bankColours, 'color');
+        bank.thinInstanceSetBuffer(DRIFT_ATTRIBUTE, layout.bankDrift, 4, false);
+        instanced(shadow, layout.shadowMatrices, layout.shadowColours, 'color');
+        instanced(bolt, layout.boltMatrices, layout.boltAttrs, RAIN_ATTRIBUTE);
+        instanced(fog, layout.fogMatrices, layout.fogDrift, DRIFT_ATTRIBUTE);
+        instanced(rain, layout.rainMatrices, layout.rainAttrs, RAIN_ATTRIBUTE);
+
+        const show = (mesh: Mesh, count: number, allowed = true): void => {
+          const on = allowed && count > 0;
+          // Never a count of 0: Babylon would compile the instance-colour shader without instancing.
+          mesh.thinInstanceCount = Math.max(1, count);
+          mesh.setEnabled(on);
+        };
+        const refresh = (): void => {
+          const mode = host.mode();
+          placer.setFronts(store.view?.today.fronts ?? []);
+          // Rain by tier (none on low) where the plugin runs (not WebGPU). A slow
+          // device's ambient goes `off` a few seconds in, which stops the clock:
+          // the streaks then hold still, as under reduced motion, rather than
+          // vanish (#621). A still mesh costs nothing between frames.
+          const tier = options.tier();
+          placer.setRainShare(rainPlugin ? moteShare(tier) : 0);
+          // The low tier drops plain rain, but a storm keeps a lighter one: it is what makes it a storm.
+          placer.setStormSky({
+            storm: rainPlugin
+              ? Math.max(moteShare(tier), tier === 'low' ? WEATHER_LOOK.lowTier.stormRain : 0)
+              : 0,
+            still: mode !== 'live',
+          });
+          // The low tier's clouds are fewer and lighter, as well as rainless.
+          placer.setClouds(tier === 'low' ? WEATHER_LOOK.lowTier : FULL_CLOUDS);
+          const placed = placer.update(store.now());
+          // My Keeper stands beside my Heart Seed (map-scene.ts places it there).
+          const home = store.home;
+          if (home) {
+            const at = hexToWorld(home, HEX_SIZE);
+            flash.keeper = {
+              x: at.x + KEEPER_PLACES.map.offset.x,
+              y: HOME_LOOK.height + WEATHER_LOOK.clouds.clearing.height,
+              z: at.z + KEEPER_PLACES.map.offset.z,
+            };
+          } else flash.keeper = null;
+          const kind = store.kindNow();
+          tint.set(kind);
+          if (layout.banks > 0) storm.arm();
+          light(flash.value, kind === 'storm');
+          if (placed || last.mode !== mode) {
+            show(cloud, layout.clouds);
+            show(bank, layout.banks);
+            show(fog, layout.fog);
+            show(rain, layout.rain);
+            show(shadow, layout.shadows);
+            show(bolt, layout.bolts, boltPlugin !== null);
+            setGlow(tier === 'high' && bolt.isEnabled());
+            for (const m of [cloud, bank, shadow, fog, rain, bolt]) {
+              m.thinInstanceBufferUpdated('matrix');
+            }
+            shadow.thinInstanceBufferUpdated('color');
+            bolt.thinInstanceBufferUpdated(RAIN_ATTRIBUTE);
+            cloud.thinInstanceBufferUpdated('color');
+            cloud.thinInstanceBufferUpdated(DRIFT_ATTRIBUTE);
+            bank.thinInstanceBufferUpdated('color');
+            bank.thinInstanceBufferUpdated(DRIFT_ATTRIBUTE);
+            fog.thinInstanceBufferUpdated(DRIFT_ATTRIBUTE);
+            rain.thinInstanceBufferUpdated(RAIN_ATTRIBUTE);
+            host.invalidate();
+          }
+          last = {
+            clouds: layout.clouds + layout.banks,
+            rain: layout.rain,
+            fog: layout.fog,
+            mode,
+            placed: placer.placed,
+          };
+        };
+
+        running(store.onChange(refresh));
+        running(store.start());
+        const timer = setInterval(refresh, PLACE_EVERY_MS);
+        running(() => {
+          clearInterval(timer);
+        });
+        // The mode can change under us (the slow-device judge): poll it, no
+        // allocation. Each frame also follows the lightning's light.
+        const watch = scene.onBeforeRenderObservable.add(() => {
+          if (host.mode() !== last.mode) refresh();
+          light(
+            bolt.isEnabled() ? skyFlash(layout.boltAttrs, layout.bolts, host.clock.time) : 0,
+            storm.stormy,
+          );
+        });
+        running(() => {
+          scene.onBeforeRenderObservable.remove(watch);
+        });
+        refresh();
+      } catch (err) {
+        // Every step runs even if one throws; the first error is the one to log.
+        for (const step of undo.reverse()) {
+          try {
+            step();
+          } catch (undoErr) {
+            console.error('The weather could not undo a step', undoErr);
+          }
+        }
+        last = { clouds: 0, rain: 0, fog: 0, mode: 'off', placed: 0 };
+        throw err;
+      }
+      // Attached: the scene's disposal takes the meshes, materials, light
+      // and glow with it; the rest is stopped here.
+      scene.onDisposeObservable.addOnce(() => {
+        for (const stop of stops.reverse()) stop();
       });
-      scene.onDisposeObservable.add(() => {
-        clearInterval(timer);
-        stopStore();
-        off();
-        scene.onBeforeRenderObservable.remove(watch);
-        tint.remove();
-      });
-      refresh();
     },
     update(view: MapView): void {
       store.sync(view);

@@ -8,15 +8,19 @@ const testDir = './tests/e2e';
 /**
  * CI's e2e groups, one job each per device. Playwright's own --shard splits by
  * test count in file order, which put every heavy WebGL spec on shard 1 (12 min
- * on iPad). These are balanced by measured WebKit time on both devices (#408:
- * per-test medians of six CI runs' list-reporter durations), simulating how
+ * on iPad). These are balanced by measured WebKit time on both devices (#408,
+ * then spec-timing annotations below), simulating how
  * the 2 workers pull spec files in name order (a `parallel`-mode file,
  * friendly and tutorial-flow, hands out each test on its own). The minutes
- * above each group are that simulation on the median per-test durations of
- * three green main runs (2026-10-23/24): the specs had grown
- * to ~120 min of iPad time in total, so six groups can't go under ~18 min each
- * and nine would be ~12. Add job time (about 3 min of image pull, install,
- * build and server start) to get a job's wall clock.
+ * above each group are that simulation on per-spec seconds from the
+ * spec-timing annotations (tests/e2e/spec-timing-reporter.ts) of one green
+ * run, 2026-10-27, c006b78 (it tracked each job's measured test time within
+ * ~2 min). The specs had grown to ~275 min of iPad test time over 12
+ * workers, ~237 of it outside friendly's group, so the other five can't go
+ * much under ~24 min each. Add job time (about 3 min of image pull, install,
+ * build and server start) to get a job's wall clock; a slow runner has taken
+ * up to ~1.35 times as long (iPad groups 4-6: 26-28 min jobs in that run,
+ * 30-37 min in others the same day).
  *
  * Two specs need room beyond their own time (#408):
  * - friendly runs its two-phone tests side by side, so it fills both workers
@@ -25,8 +29,9 @@ const testDir = './tests/e2e';
  * - hollow-dusk waits on the wall clock for a time zone at dusk (map-time.ts),
  *   up to 10 min when it starts late in an hour. That wait costs no CPU, so
  *   its group is planned for the whole wait on one worker.
- * Rebalance from the CI list reporter's durations when a group gets slow
- * (#246, #408).
+ * Rebalance from the spec-timing annotations (`gh api
+ * repos/<owner>/<repo>/check-runs/<id>/annotations`, one per e2e job) when a
+ * group gets slow (#246, #408).
  *
  * Every spec is listed in exactly one group; there is no catch-all, so a new
  * spec can't quietly pile onto one job (group 5 grew to 28 min that way, #296).
@@ -36,26 +41,26 @@ const testDir = './tests/e2e';
  * (local runs) runs everything.
  */
 const E2E_GROUPS = [
-  // ~20.5 iPhone, ~24.2 iPad (medians of 9 CI runs, 2026-10-24) before lorebook moved to group 4. tutorial-flow's two runs go side by side.
+  // ~20.3 iPhone, ~24.2 iPad (spec-timing, c006b78). tutorial-flow's two runs go side by side.
   [
     'accessory-everywhere',
     'admin',
-    'auth',
+    'boutique',
     'care',
     'dress-up',
+    'explore',
     'hollow',
+    'hollowed-explore',
     'hollowed-restore',
     'landscape-phone',
-    'map-hole',
     'recipe-book',
     'squishy-gallery',
-    'taps',
     'tutorial-flow',
   ],
-  // ~14.6 iPhone, ~19.4 iPad.
+  // ~21.0 iPhone, ~24.1 iPad.
   [
+    'auth',
     'battle-ui',
-    'boutique',
     'capture',
     'care-layout',
     'hollowed-cellar',
@@ -65,9 +70,8 @@ const E2E_GROUPS = [
     'perf-report',
     'pwa',
     'roster',
-    'works',
   ],
-  // friendly's group: ~13.1 iPhone, ~17.0 iPad, and friendly makes everything here 1.3-2.5 times slower, so keep it lighter than the rest. hollow-dusk's whole 10 min dusk wait is counted.
+  // friendly's group: ~18.5 iPhone, ~20.1 iPad, and friendly makes everything here 1.3-2.5 times slower, so keep it lighter than the rest. hollow-dusk's whole 10 min dusk wait is counted.
   [
     'battle',
     'friendly',
@@ -79,30 +83,29 @@ const E2E_GROUPS = [
     'tray-layout',
     'wild-picker',
   ],
-  // ~12.8 iPhone, ~16.0 iPad before lorebook joined from group 1 (it timed out there on a slow iPad run), with far-hollow-bonus (a first attempt of trick-or-treat that times out adds a few more).
+  // ~24.4 iPhone, ~24.2 iPad. A first attempt of trick-or-treat that times out adds a few more.
   [
     'clear-land',
-    'explore',
     'factory',
     'far-hollow-bonus',
     'first-session',
-    'hollowed-explore',
+    'gift-trade-swap-bar',
     'homestead-colour',
     'keeper-gallery',
     'lorebook',
+    'map-hole',
     'milestones',
     'potions',
     'quality-budget',
     'roads',
     'sell-basket',
-    'gift-trade-swap-bar',
     'smoke',
+    'taps',
     'trick-or-treat',
     'whats-new',
   ],
-  // ~18.9 iPhone, ~22.1 iPad.
+  // ~17.9 iPhone, ~24.2 iPad.
   [
-    'account-help',
     'chat',
     'cinematic',
     'close-up',
@@ -112,9 +115,11 @@ const E2E_GROUPS = [
     'raids',
     'territory',
     'wardrobe',
+    'works',
   ],
-  // ~20.7 iPhone, ~26.4 iPad (slowest: 27.9 max). Put new specs elsewhere.
+  // ~23.6 iPhone, ~24.0 iPad.
   [
+    'account-help',
     'audio',
     'far-hollow-relight',
     'fences',
@@ -253,8 +258,11 @@ export default defineConfig({
   ...e2eGroup(process.env['HP_E2E_GROUP']),
   forbidOnly: isCI,
   retries: isCI ? 1 : 0,
-  // In CI, list prints every test's duration in the job log (for balancing E2E_GROUPS).
-  reporter: isCI ? [['github'], ['list'], ['html', { open: 'never' }]] : 'list',
+  // In CI, list prints every test's duration in the job log, and spec-timing puts each spec's
+  // time in a check-run annotation (readable when the log isn't), for balancing E2E_GROUPS.
+  reporter: isCI
+    ? [['github'], ['list'], ['html', { open: 'never' }], ['./tests/e2e/spec-timing-reporter.ts']]
+    : 'list',
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'retain-on-failure',

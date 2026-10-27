@@ -2005,3 +2005,17 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
   A shared `waitForLiveMap` e2e helper is queued as a Chore.
 - **Lane cost stops count helper subagents.** One river lane reached $25 because its background helper kept running after the stop. Briefs now give a budget "helpers included" and require `TaskStop` on helpers at the stop. The supervisor interrupts (`interrupt_session`) a lane that runs past its stop.
 - **Cheap diagnosis before another shoot.** After two paid re-shoot rounds fail to find a visual bug's cause, the supervisor runs a read-only code investigation before briefing another shoot. For #701 this found the halo after three shoot rounds had guessed wrong.
+
+## 2026-10-27 — Owner decisions and coordinator calls (supervisor 23)
+
+**Owner decisions**
+- **River reachability: option A (#708).** Explorable land beside a river explores as the river bank, through the shared `exploreKitFor`. River beats coast. A tile that becomes river-edge follows the #335 kit-change rule.
+- **Works tile card.** The mockup v3 layout and wording are approved.
+  - **Icons:** building icons on the card are rendered portraits of the building's own model (`procedural/portraits.ts`), not emoji (🎡 is a Ferris wheel).
+  - **Wording:** "Need N more X" when short, "Out of X!" only at 0.
+  - **Weather:** a works with no weather data shows no chip.
+
+**Coordinator calls**
+- **Big numbers on cards** read like "10.8k" (shared `shortNumber`). 24 h storage at L1 is the design for every building, not a tuning bug.
+- **CI changes are the coordinator's.** The e2e `timeout-minutes` is 45 (#709) until the groups are rebalanced.
+- **Merging main into a PR to re-run CI is fine when main moved.** A verdict carries across a main-only merge: the supervisor posts a comment naming the new head and the main-only diff.
