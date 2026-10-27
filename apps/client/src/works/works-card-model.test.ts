@@ -105,6 +105,17 @@ describe('the works tile card (#621 W1-10c)', () => {
     expect(worksCard({ buildingId: 'seawall', production: production() }, joined, NOW)).toBeNull();
   });
 
+  it('shows no "filling up!" chip on a full Rain Barrel, but keeps a full Pier\'s fog chip', () => {
+    const full = production({ full: true, weather: 'same' });
+    expect(
+      worksCard({ buildingId: 'rain-barrel', production: full }, joined, NOW)?.chip,
+    ).toBeNull();
+    const pier = production({ full: true, weather: 'faster' });
+    expect(
+      worksCard({ buildingId: 'fishing-pier', production: pier }, joined, NOW)?.chip?.text,
+    ).toBe('🌫️ Foggy: fish bite faster!');
+  });
+
   it('reads an older server with no `short` as having enough', () => {
     const older = production();
     delete older.short;

@@ -207,7 +207,11 @@ export function worksCard(
         ? RESOURCE_TEXT.next(formatWait(Math.max(0, Date.parse(p.nextReadyAt) - nowMs)))
         : null;
   // Short, napping or paused, the weather can't help: no chip (mockup v3).
-  const chip = state === 'running' || state === 'full' ? worksChip(data, p.weather) : null;
+  // Nor can it fill a full Rain Barrel: no "filling up!" under "It's full!".
+  const chip =
+    state === 'running' || (state === 'full' && data.onlyWhile === undefined)
+      ? worksChip(data, p.weather)
+      : null;
   return {
     state,
     resource: p.resource,
