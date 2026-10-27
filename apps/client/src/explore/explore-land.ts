@@ -57,7 +57,7 @@ import {
   type Shade,
 } from './land-layout.js';
 import { paintGround } from './land-paint.js';
-import { landField, unwarp, type LandField } from './land-shape.js';
+import { landField, unwarp, type LandField, type LandSpot } from './land-shape.js';
 
 // The explore land (#335 art reset, hero biome first): the sculpted ground
 // with its painted grass and path, layered growth (grass and flowers you walk
@@ -86,6 +86,8 @@ export interface LandOptions {
   readonly size: number;
   /** The spots' and buildings' colliders and the Keeper's start, world units. */
   readonly colliders: readonly Collider[];
+  /** The tile's spots with their kinds, world units: a bank (`LandShape.bank`) shapes the ground under them. */
+  readonly spots?: readonly LandSpot[];
   readonly start: WorldPoint;
   readonly tier: QualityTier;
   readonly sky: SkyLook;
@@ -116,6 +118,10 @@ export interface LandOptions {
           readonly thins?: boolean;
           /** Lit from inside (crystals, glow caps): unlit vertex colours times this; over 1 blooms. */
           readonly glow?: number;
+          /** A glowing layer's strength once the lanterns light (dusk and night), if not `glow`. */
+          readonly dusk?: number;
+          /** Shown only once the lanterns light (a lantern's halo, mist on the water). */
+          readonly darkOnly?: boolean;
         }
       >
     >;
@@ -130,6 +136,8 @@ interface Layer {
   /** Shown only by day (`day`), at dusk and night (`night`), or always. */
   readonly when?: 'day' | 'night';
   readonly mote?: boolean;
+  /** Shown only once the lanterns light (`LandOptions.extras`' `darkOnly`). */
+  readonly darkOnly?: boolean;
 }
 
 /**
@@ -149,7 +157,8 @@ export const paintKey = (
   start: WorldPoint,
   texels: number,
   shades: readonly Shade[],
-): string => JSON.stringify([look.palette, look.shape, seed, start, texels, shades]);
+  spots: readonly LandSpot[] = [],
+): string => JSON.stringify([look.palette, look.shape, seed, start, texels, shades, spots]);
 
 const matrix = (g: Growth, y: number): Matrix =>
   Matrix.Compose(
@@ -199,12 +208,21 @@ export class ExploreLand {
   #night = false;
   #grid: number;
   #texels: number;
+  readonly #spots: readonly LandSpot[];
+  /** Glowing biome layers whose strength changes once the lanterns light. */
+  readonly #lit: {
+    readonly mat: StandardMaterial;
+    readonly color: Color3;
+    readonly day: number;
+    readonly dark: number;
+  }[] = [];
 
   constructor(scene: Scene, options: LandOptions) {
     this.#scene = scene;
     this.#tier = options.tier;
     const { look, seed, size, colliders, start } = options;
-    this.field = landField(look.shape, seed, size, start);
+    this.field = landField(look.shape, seed, size, start, options.spots);
+    this.#spots = options.spots ?? [];
     // Shadows fall where the sun throws them (it never moves while exploring).
     const sd = LAND_LIGHT.sunDirection;
     this.layout = landLayout({
@@ -274,13 +292,22 @@ export class ExploreLand {
     // ── Life: drifting motes on the terrain plugin ─
     // A biome's own layers (`LandOptions.extras`), after the shared ones.
     for (const [name, layer] of Object.entries(options.extras?.layers ?? {})) {
-      const material =
-        layer.glow === undefined
-          ? landMat
-          : glow(scene, `land-${name}-glow-mat`, '#ffffff', layer.glow);
-      this.#grow(name, layer.build(scene), L.extras[name] ?? [], material, {
+      let material: Material = landMat;
+      const mesh = layer.build(scene);
+      if (layer.glow !== undefined) {
+        const lit = glow(scene, `land-${name}-glow-mat`, '#ffffff', layer.glow);
+        // Soft see-through light (a halo's shells, wisps of mist) blends over
+        // itself and what's behind it rather than hiding it.
+        if (mesh.hasVertexAlpha) lit.disableDepthWrite = true;
+        if (layer.dusk !== undefined) {
+          this.#lit.push({ mat: lit, color: Color3.White(), day: layer.glow, dark: layer.dusk });
+        }
+        material = lit;
+      }
+      this.#grow(name, mesh, L.extras[name] ?? [], material, {
         ...(layer.sway !== undefined ? { sway: layer.sway } : {}),
         ...(layer.thins !== undefined ? { thins: layer.thins } : {}),
+        ...(layer.darkOnly ? { darkOnly: true } : {}),
       });
     }
 
@@ -346,7 +373,7 @@ export class ExploreLand {
 
   /** The ground's height under a world point. */
   heightAt(x: number, z: number): number {
-    return this.field.height(x, z);
+    return this.field.stand(x, z);
   }
 
   get stats(): LandStats {
@@ -404,6 +431,10 @@ export class ExploreLand {
       dark ? LAND_LIGHT.lamp.glow : 0.75,
     );
     this.#night = dark;
+    for (const l of this.#lit) l.mat.emissiveColor = l.color.scale(dark ? l.dark : l.day);
+    for (const layer of this.#layers.values()) {
+      if (layer.darkOnly) layer.mesh.setEnabled(dark && layer.count > 0);
+    }
     this.#applyLife();
   }
 
@@ -448,7 +479,7 @@ export class ExploreLand {
 
     const t = this.#texels;
     // UVs run along the grid, so the texture's texels sit where the grid's warp puts them.
-    const key = paintKey(look, seed, start, t, this.layout.shades);
+    const key = paintKey(look, seed, start, t, this.layout.shades, this.#spots);
     const pixels =
       lastPaint?.key === key
         ? lastPaint.pixels
@@ -489,7 +520,7 @@ export class ExploreLand {
     mesh: Mesh,
     list: readonly Growth[],
     material: Material,
-    options: { sway?: number; thins?: boolean },
+    options: { sway?: number; thins?: boolean; darkOnly?: boolean },
   ): void {
     mesh.material = material;
     mesh.isPickable = false;
@@ -513,7 +544,13 @@ export class ExploreLand {
       mesh.thinInstanceSetBuffer(AMBIENT_ATTRIBUTE, ambient, 4, true);
     }
     mesh.freezeWorldMatrix();
-    this.#layers.set(name, { mesh, count: list.length, thins: options.thins === true });
+    this.#layers.set(name, {
+      mesh,
+      count: list.length,
+      thins: options.thins === true,
+      ...(options.darkOnly ? { darkOnly: true } : {}),
+    });
+    if (options.darkOnly) mesh.setEnabled(this.#night);
   }
 
   #drift(

@@ -12,12 +12,15 @@ import {
   type ExploreRules,
 } from '../schemas/data/explore.js';
 import {
+  backReach,
+  exploreKitFor,
   exploreLayout,
   exploreNeeds,
   homesteadQuantity,
   isExplorable,
   isFullyExplored,
   isSearched,
+  RIVER_EDGE_KIT,
   searchedCount,
   searchSpots,
   withSearched,
@@ -102,8 +105,9 @@ describe('explore rules data', () => {
       .filter((id) => isExplorable(id, EXPLORE_RULES));
     expect(explorable.sort()).toEqual(
       GAME_DATA.terrains
-        // Water is never land (Wild Isle, #621).
-        .filter((t) => !isWater(t))
+        // Water is never land (Wild Isle, #621), but a river tile is explored
+        // as its bank (#621 W1-13).
+        .filter((t) => !isWater(t) || t.id === 'river')
         .map((t) => t.id)
         // Nobody owns a trading post (#269), so nobody explores one. Cleared
         // land (#242) was a homestead, explored already, before it was cleared.
@@ -125,6 +129,7 @@ describe('explore rules data', () => {
       hills: ['lantern'], // #335: the cave
       mountains: ['rope'], // #335: the trail
       coast: ['shovel', 'net'], // #621 W1-11: hands, the Shovel and the Snorkel
+      river: ['shovel', 'net'], // #621 W1-13: the same three on the river bank
     });
     expect(exploreNeeds('junipers-gap', EXPLORE_RULES)).toEqual([]);
   });
@@ -152,6 +157,34 @@ describe('explore rules data', () => {
       SearchSpotKindSchema.safeParse({ id: 'x', name: 'X', tool: null, interaction: 'swim' })
         .success,
     ).toBe(false);
+  });
+
+  it('picks each tile’s own kit, with the river-edge rule ready but off (#621 W1-13)', () => {
+    expect(RIVER_EDGE_KIT).toBe(false);
+    expect(exploreKitFor('meadow', ['river', 'forest'], EXPLORE_RULES)).toBe('meadow');
+    expect(exploreKitFor('river', [], EXPLORE_RULES)).toBe('river');
+    // Switched on: explorable land beside a river explores as its bank.
+    expect(exploreKitFor('meadow', ['forest', 'river'], EXPLORE_RULES, true)).toBe('river');
+    expect(exploreKitFor('coast', ['river'], EXPLORE_RULES, true)).toBe('river');
+    // Not without a river next door, and never for land nobody explores.
+    expect(exploreKitFor('meadow', ['forest', 'wild-lake'], EXPLORE_RULES, true)).toBe('meadow');
+    expect(exploreKitFor('junipers-gap', ['river'], EXPLORE_RULES, true)).toBe('junipers-gap');
+    expect(exploreKitFor('ocean', ['river'], EXPLORE_RULES, true)).toBe('ocean');
+  });
+
+  it('gives the river bank hands, the Shovel and the Snorkel, with existing gestures (#621 W1-13)', () => {
+    const river = EXPLORE_RULES.terrains.find((t) => t.terrain === 'river');
+    expect(river?.layout).toBeUndefined();
+    const kinds = (river?.kinds ?? []).map((k) =>
+      EXPLORE_RULES.spotKinds.find((s) => s.id === k.kind),
+    );
+    expect(kinds.map((k) => [k?.id, k?.tool, k?.interaction])).toEqual([
+      ['mossy-log', null, 'lift'],
+      ['pebble-bar', 'shovel', 'dig'],
+      ['eddy', 'net', 'dive'],
+      ['cattails', 'net', 'part'],
+    ]);
+    expect(exploreNeeds('river', EXPLORE_RULES)).toEqual(['shovel', 'net']);
   });
 
   it('gives the coast hands, the Shovel and the Snorkel, with the lake’s gestures (#621 W1-11)', () => {
@@ -195,6 +228,42 @@ describe('searchSpots', () => {
       searchSpots(SEED, { q: 1, r: 2, terrain }, EXPLORE_RULES),
     );
     expect(hashString(JSON.stringify(layouts))).toBe('a82a50ab271a1cc770650507efa10ed6');
+  });
+
+  it('lays out every terrain without a band exactly as before bands (#621 W1-13)', () => {
+    // A golden hash of every unbanded terrain's spots on two maps, taken
+    // before `band` was added: an optional band must change nothing else.
+    const unbanded = EXPLORE_RULES.terrains.filter((t) => !t.band);
+    expect(unbanded.map((t) => t.terrain)).not.toContain('river');
+    const layouts = ['golden-a', 'golden-b'].flatMap((seed) =>
+      unbanded.flatMap((t) =>
+        hexSpiral(hex(0, 0), 2).map((at) =>
+          searchSpots(seed, { ...at, terrain: t.terrain }, EXPLORE_RULES),
+        ),
+      ),
+    );
+    expect(hashString(JSON.stringify(layouts))).toBe('5548ad6e8da809f8cf553e3bd162e435');
+  });
+
+  it('keeps a banded terrain’s spots within its band of the back edges (#621 W1-13)', () => {
+    const river = EXPLORE_RULES.terrains.find((t) => t.terrain === 'river');
+    expect(river?.band).toBeDefined();
+    const depth = river?.band?.depth ?? 0;
+    for (const seed of [SEED, 'another-map']) {
+      for (const at of hexSpiral(hex(0, 0), 4)) {
+        const spots = searchSpots(seed, { ...at, terrain: 'river' }, EXPLORE_RULES) ?? [];
+        expect(spots.length).toBeGreaterThanOrEqual(river?.spots.min ?? 1);
+        for (const s of spots) {
+          expect(backReach(s.x, s.z)).toBeGreaterThanOrEqual(1 - depth);
+          expect(backReach(s.x, s.z)).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+    // The reach: 0 in the middle, 1 on either back edge and in the back corner.
+    expect(backReach(0, 0)).toBe(0);
+    expect(backReach(0, 1)).toBeCloseTo(1, 9);
+    expect(backReach(Math.sqrt(3) / 2, 0.5)).toBeCloseTo(1, 9);
+    expect(backReach(-Math.sqrt(3) / 4, 0.75)).toBeCloseTo(1, 9);
   });
 
   it('differs from tile to tile, from map to map and from layout to layout', () => {

@@ -68,6 +68,13 @@ export const ExploreTerrainSchema = z
       min: z.number().int().min(1).max(MAX_SEARCH_SPOTS),
       max: z.number().int().min(1).max(MAX_SEARCH_SPOTS),
     }),
+    /**
+     * Where this terrain's spots may sit (#621 W1-13): only within `depth` of
+     * the tile's two back edges (away from the explore camera), as a share of
+     * the way from the middle to those edges. The river bank keeps its spots
+     * on the shore and in the shallows. Absent: anywhere in the tile.
+     */
+    band: z.strictObject({ depth: z.number().positive().max(1) }).optional(),
   })
   .refine((t) => t.spots.min <= t.spots.max, {
     message: 'spots.min must not be more than spots.max',

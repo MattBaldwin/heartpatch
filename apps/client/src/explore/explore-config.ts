@@ -1,3 +1,5 @@
+import type { LandLook } from './land-config.js';
+
 /**
  * Explore view tunables (#199, owner design 2026-10-07; cozy-sim feel #291,
  * owner mockup 2026-10-08). All first guesses to judge on the playtest
@@ -85,6 +87,11 @@ export const EXPLORE_VIEW = {
     'crab-hole': 0.045,
     'tide-pool': 0.07,
     'kelp-bed': 0.045,
+    // Wild Isle's river bank (#621 W1-13): an eddy's pool is nearly the pond's width.
+    'mossy-log': 0.05,
+    'pebble-bar': 0.05,
+    eddy: 0.06,
+    cattails: 0.046,
     // The cellar's chests (#306): a chest is about 1.15 across, the big one 2.
     chest: 0.072,
     'big-chest': 0.13,
@@ -366,3 +373,20 @@ export const EXPLORE_SWIM = {
   /** Kick bubbles are one extra draw: only on the high tier, so the iPad 9th gen's low and medium tiers pay nothing (owner, 30 fps with no headroom). */
   bubbleTiers: { high: true, medium: false, low: false }, // TUNE
 } as const;
+
+/** How the soft halo under the spot in front draws (#621 W1-13). */
+export interface HaloStyle {
+  readonly color: string;
+  readonly alpha: number;
+  /** Set: drawn before the see-through layers (the river's water is 0). */
+  readonly alphaIndex?: number;
+  /** Whether it takes the time of day's ground tint. */
+  readonly tinted: boolean;
+}
+
+/** The halo for a biome's look: its own (under the water, dusk-tinted) or the cream default. */
+export function haloStyle(look: Pick<LandLook, 'halo'> | undefined): HaloStyle {
+  const own = look?.halo;
+  if (!own) return { color: '#fffbe0', alpha: EXPLORE_VIEW.halo.alpha, tinted: false };
+  return { color: own.color, alpha: own.alpha, alphaIndex: -1, tinted: true };
+}

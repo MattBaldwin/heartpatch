@@ -188,4 +188,47 @@ export const EXPLORE_FINDS: ExploreFindTable[] = [
       { weight: 1, items: { heartdust: 1 } },
     ],
   },
+  // Wild Isle (#621 W1-13): the river bank. Water is the river's own find (a
+  // River Well draws lots, so an eddy gives a little); fish turn up in the
+  // Snorkel spots too. TUNE: every weight and amount.
+  {
+    kind: 'mossy-log',
+    finds: [
+      { weight: 4, items: { timber: 1 } },
+      { weight: 2, items: { greens: 1 } },
+      { weight: 1, items: { emberwood: 1 } },
+      { weight: 3 },
+      { weight: 1, items: { heartdust: 1 } },
+    ],
+  },
+  {
+    kind: 'pebble-bar',
+    finds: [
+      { weight: 4, items: { stone: 1 } },
+      { weight: 2, items: { stone: 2 } },
+      { weight: 1, items: { glimmer: 1 } },
+      { weight: 2 },
+      { weight: 1, items: { heartdust: 1 } },
+    ],
+  },
+  {
+    kind: 'eddy',
+    finds: [
+      { weight: 3, items: { water: 2 } },
+      { weight: 3, items: { fish: 1 } },
+      { weight: 1, items: { fish: 2 } },
+      { weight: 2 },
+      { weight: 1, items: { heartdust: 1 } },
+    ],
+  },
+  {
+    kind: 'cattails',
+    finds: [
+      { weight: 4, items: { greens: 2 } },
+      { weight: 2, items: { water: 1 } },
+      { weight: 1, items: { fish: 1 } },
+      { weight: 2 },
+      { weight: 1, items: { heartdust: 1 } },
+    ],
+  },
 ];
