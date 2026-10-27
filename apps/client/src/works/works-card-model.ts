@@ -40,6 +40,9 @@ const PACE_WORD: Readonly<Record<string, string>> = {
   greens: 'growing',
 };
 
+/** One of an eaten item, for "Need 1 more Green" (item names are plural, or mass nouns like Fish). */
+const ONE_NAME: Readonly<Record<string, string>> = { greens: 'Green' };
+
 /** A works' short name on its need line: "for the mill" (mockup v3). */
 const SHORT_NAME: Readonly<Record<string, string>> = { watermill: 'mill' };
 
@@ -70,7 +73,7 @@ export const WORKS_CARD_TEXT = {
     `Out of ${itemName(item)}! Bring some for the ${building}${KEEP}${itemIcon(item)}`,
   /** Some, but not enough: "Need 7 more Greens for the mill 🌿" */
   needMore: (n: number, item: string, building: string) =>
-    `Need ${String(n)} more ${itemName(item)} for the ${building}${KEEP}${itemIcon(item)}`,
+    `Need ${String(n)} more ${n === 1 ? (ONE_NAME[item] ?? itemName(item)) : itemName(item)} for the ${building}${KEEP}${itemIcon(item)}`,
   /** "Each batch takes 2 🌿" */
   eats: (n: number, item: string) => `Each batch takes ${String(n)} ${itemIcon(item)}`,
   /** "🌫️ Foggy: fish bite faster!" */

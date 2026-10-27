@@ -105,6 +105,12 @@ describe('the works tile card (#621 W1-10c)', () => {
     expect(worksCard({ buildingId: 'seawall', production: production() }, joined, NOW)).toBeNull();
   });
 
+  it('says one Green, not one Greens, when the mill needs just one more', () => {
+    expect(worksCard(mill({ short: { greens: 1 } }), joined, NOW, { greens: 1 })?.line).toBe(
+      'Need 1 more Green for the mill\u00a0🌿',
+    );
+  });
+
   it('shows no "filling up!" chip on a full Rain Barrel, but keeps a full Pier\'s fog chip', () => {
     const full = production({ full: true, weather: 'same' });
     expect(
