@@ -22,6 +22,7 @@ import { formatWait } from '../inventory/game-clock.js';
 import { itemName } from '../inventory/bag-view.js';
 import { itemIcon } from '../inventory/item-icons.js';
 import { buildingIcon, buildingName, homesteadSpot } from '../home/home-view.js';
+import { shortNumber } from '../ui/short-number.js';
 
 // Resource buildings on the client (#601 PR 7): which one a homestead's land
 // takes, what its tile card says in each of its five states, the
@@ -72,8 +73,10 @@ export const RESOURCE_TEXT = {
   built: (name: string) => `Built! Your ${name} is getting to work 🔨`,
   making: (e: ResourceEffect) =>
     `Makes ${String(e.perHour)} ${itemIcon(e.resource)} ${itemName(e.resource)} an hour, even while you're away!`,
-  stored: (n: number, max: number, icon: string) => `${icon} ${String(n)} of ${String(max)}`,
-  storedNoCap: (n: number, icon: string) => `${icon} ${String(n)} waiting`,
+  /** The meter: "🛢️ 0 of 10.8k" (big numbers short, `shortNumber`). */
+  stored: (n: number, max: number, icon: string) =>
+    `${icon} ${shortNumber(n)} of ${shortNumber(max)}`,
+  storedNoCap: (n: number, icon: string) => `${icon} ${shortNumber(n)} waiting`,
   next: (wait: string) => `Next batch in ${wait}`,
   full: "It's full! Tap Collect to bring it all home 🧺",
   paused: (coins: number) =>

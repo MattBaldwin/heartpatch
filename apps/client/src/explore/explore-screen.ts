@@ -68,6 +68,8 @@ import {
 } from './explore-view.js';
 import {
   besideSpot,
+  clearOfKeeper,
+  needRoom,
   showcaseStance,
   CAVE_STAGE,
   freePoint,
@@ -84,6 +86,7 @@ import {
   toCaveStage,
   yawToward,
   type Collider,
+  type ScreenBox,
   type TapWalk,
 } from './explore-world.js';
 import {
@@ -224,6 +227,8 @@ export interface ExploreDebug {
   readonly toast: string | null;
   /** The tool the spot in front needs and the bag has none of (the hint shows), or null. */
   readonly hint: ToolId | null;
+  /** The Keeper's box on screen, CSS px, or null (the missing-tool card keeps clear of it). */
+  readonly keeperOnScreen: ScreenBox | null;
   readonly scene: ExploreSceneStats | null;
   /**
    * Batch uploads since the page opened (`batchUploads`): each makes fresh
@@ -712,6 +717,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (playing) feed({ type: 'tick', t: now });
     const animating = s.step(now);
     renderDark();
+    if (moved || animating) placeNeed();
     // Only a change redraws: a finger resting on the stick, or pushing
     // against a rock or the tile's edge, moves nothing (the gestures and the
     // lantern's dark are DOM; a tool's swing animates through `step`).
@@ -1304,6 +1310,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (!tool || !front) {
       need.hidden = true;
       need.replaceChildren();
+      needShift = 0;
+      need.style.transform = '';
+      need.classList.remove('explore-need-compact');
       return;
     }
     if (bag === null) void askBag();
@@ -1331,7 +1340,76 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     need.hidden = false;
     need.dataset['tool'] = tool;
     need.replaceChildren(...nodes);
+    placeNeed();
   }
+
+  /** How far the missing-tool card is moved off its place (CSS px, up is negative). */
+  let needShift = 0;
+  /**
+   * Slides the missing-tool card up or down so it never sits over the Keeper.
+   * Where neither fits (a phone held sideways) it folds into its short shape
+   * and tries again.
+   */
+  function placeNeed(): void {
+    if (need.hidden) return;
+    const keeper = scene3d?.keeperOnScreen();
+    if (!keeper) return;
+    let shift = needShiftFor(keeper);
+    if (shift === undefined) return; // hidden by a gesture: nothing to place
+    if (shift === null && !need.classList.contains('explore-need-compact')) {
+      need.classList.add('explore-need-compact');
+      shift = needShiftFor(keeper);
+      if (shift === undefined) return;
+    }
+    // Still no room either side (a screen too short for both): as high as it may go.
+    const dy = Math.round(
+      shift ?? needRoomNow().top - (need.getBoundingClientRect().top - needShift),
+    );
+    if (dy === needShift) return;
+    needShift = dy;
+    need.style.transform = dy === 0 ? '' : `translateY(${String(dy)}px)`;
+  }
+
+  /** The card's own place on screen, as if it weren't moved. */
+  function needAtRest(): ScreenBox {
+    const r = need.getBoundingClientRect();
+    return { left: r.left, right: r.right, top: r.top - needShift, bottom: r.bottom - needShift };
+  }
+
+  function needRoomNow(): { top: number; bottom: number } {
+    const card = needAtRest();
+    return needRoom(
+      card,
+      top.getBoundingClientRect(),
+      [action.getBoundingClientRect(), stickBase.getBoundingClientRect()],
+      card.bottom,
+      EXPLORE_VIEW.needGap,
+    );
+  }
+
+  /** `clearOfKeeper` for the card as it's laid out now; undefined when it isn't shown. */
+  function needShiftFor(keeper: ScreenBox): number | null | undefined {
+    const card = needAtRest();
+    if (card.bottom - card.top === 0) return undefined;
+    return clearOfKeeper(card, keeper, needRoomNow(), EXPLORE_VIEW.needGap);
+  }
+
+  // Turning the phone (or resizing the window) lays the card out afresh: its
+  // full shape first, placed once the scene has its new size. The full-screen
+  // ground is watched too, as the Keeper picker watches its card: iOS sends
+  // `resize` before a turned layout settles and none after (#251). Not the
+  // card itself, whose short shape would set this off again.
+  const replaceNeed = (): void => {
+    if (need.hidden) return;
+    requestAnimationFrame(() => {
+      need.classList.remove('explore-need-compact');
+      needShift = 0;
+      need.style.transform = '';
+      placeNeed();
+    });
+  };
+  window.addEventListener('resize', replaceNeed);
+  new ResizeObserver(replaceNeed).observe(ground);
 
   let playDots: HTMLElement | null = null;
 
@@ -1950,6 +2028,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         card: card ? ('rare' as const) : null,
         toast: toast ? [toast.main, toast.extra].filter((x) => x).join(' · ') : null,
         hint: need.hidden ? null : ((need.dataset['tool'] as ToolId | undefined) ?? null),
+        keeperOnScreen: s?.keeperOnScreen() ?? null,
         scene: s?.stats ?? null,
         batchUploads: batchUploads.count,
         tierChanges,

@@ -362,6 +362,49 @@ export function coverShare(by: ScreenBox, of: ScreenBox): number {
 }
 
 /**
+ * The band the missing-tool card may use up and down the screen: under the
+ * top bar, and over whichever control sits below the card's own span (the
+ * action button in portrait). In landscape the controls sit beside the card,
+ * not under it, so nothing below limits it and it keeps its own bottom
+ * (`floor`, already clear of the safe area).
+ */
+export function needRoom(
+  card: ScreenBox,
+  topBar: ScreenBox,
+  below: readonly ScreenBox[],
+  floor: number,
+  gap: number,
+): { readonly top: number; readonly bottom: number } {
+  let bottom = Infinity;
+  for (const b of below) {
+    if (b.right <= card.left || b.left >= card.right || b.bottom <= b.top) continue;
+    bottom = Math.min(bottom, b.top - gap);
+  }
+  return { top: topBar.bottom + gap, bottom: bottom === Infinity ? floor : bottom };
+}
+
+/**
+ * How far to move the missing-tool card up or down the screen (CSS px,
+ * negative is up) so it never covers the Keeper: 0 when its own place is
+ * already clear; else just above the Keeper's head, or below its feet when
+ * there's no room above. `room` is the band the card may use (`needRoom`).
+ * Null when neither fits: the caller makes the card smaller and asks again.
+ */
+export function clearOfKeeper(
+  card: ScreenBox,
+  keeper: ScreenBox,
+  room: { readonly top: number; readonly bottom: number },
+  gap: number,
+): number | null {
+  if (coverShare(card, keeper) === 0) return 0;
+  const up = keeper.top - gap - card.bottom;
+  if (card.top + up >= room.top) return up;
+  const down = keeper.bottom + gap - card.top;
+  if (card.bottom + down <= room.bottom) return down;
+  return null;
+}
+
+/**
  * How far to slide a glint sideways (world x) so it clears the Keeper as the
  * camera sees it (#335): its spiky hair, hands and feet. The camera looks
  * along +z, tilted down by `pitch`, so up the screen is height plus distance

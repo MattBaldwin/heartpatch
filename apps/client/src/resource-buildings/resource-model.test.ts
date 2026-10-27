@@ -9,6 +9,7 @@ import { CLEAR_TEXT } from '../inventory/clear-model.js';
 import { describe, expect, it } from 'vitest';
 import {
   RESOURCE_BUILDINGS,
+  RESOURCE_TEXT,
   moveInOrder,
   outOfSeason,
   producedLines,
@@ -467,5 +468,11 @@ describe('resourceCard with the Warehouse and the seasons (#601 PR 9)', () => {
     expect(resourceCard(paused, { homestead: 'joined' }, HALLOWEEN, NOW)?.upkeep).toBe(
       '💛 17 each morning',
     );
+  });
+});
+
+describe('the stored line keeps big numbers short (polish of #601)', () => {
+  it('reads an empty tank as 0 of 10.8k', () => {
+    expect(RESOURCE_TEXT.stored(0, 10800, '🛢️')).toBe('🛢️ 0 of 10.8k');
   });
 });

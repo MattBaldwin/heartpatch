@@ -56,7 +56,7 @@ describe('the works tile card (#621 W1-10c)', () => {
       max: 288,
       percent: 38,
       meter: '🌾 109 of 288',
-      line: "Turns 🌿 Greens into 🌾 Flour, even while you're away!",
+      line: "Turns 🌿\u00a0Greens into 🌾\u00a0Flour, even while you're away!",
       next: 'Next batch in 3m',
       upkeep: '💛 14 each morning',
       collect: true,
@@ -70,7 +70,7 @@ describe('the works tile card (#621 W1-10c)', () => {
     expect(card).toMatchObject({
       state: 'short',
       line: 'Out of Greens! Bring some for the mill\u00a0🌿',
-      next: 'Each batch takes 2 🌿',
+      next: 'Each batch takes 2\u00a0🌿',
       chip: null,
     });
     // An empty bag says the same.
@@ -84,7 +84,7 @@ describe('the works tile card (#621 W1-10c)', () => {
     expect(card).toMatchObject({
       state: 'short',
       line: 'Need 7 more Greens for the mill\u00a0🌿',
-      next: 'Each batch takes 2 🌿',
+      next: 'Each batch takes 2\u00a0🌿',
     });
   });
 

@@ -74,6 +74,7 @@ interface ExploreDebug {
   card: 'rare' | null;
   toast: string | null;
   hint: string | null;
+  keeperOnScreen: { left: number; right: number; top: number; bottom: number } | null;
   batchUploads: number;
   tierChanges: number;
   scene: {
@@ -101,6 +102,25 @@ interface ExploreDebug {
 }
 
 const exploreState = (page: Page) => hook<ExploreDebug>(page, 'explore');
+
+/** The missing-tool card never sits over the Keeper in a close-up (polish of #621). */
+async function expectNeedClearOfKeeper(page: Page): Promise<void> {
+  await expect
+    .poll(async () => {
+      const keeper = (await exploreState(page))?.keeperOnScreen;
+      const card = await page.getByTestId('explore-need').boundingBox();
+      if (!keeper || !card) return 'not shown';
+      const clear =
+        card.x >= keeper.right ||
+        card.x + card.width <= keeper.left ||
+        card.y >= keeper.bottom ||
+        card.y + card.height <= keeper.top;
+      return clear
+        ? 'clear'
+        : `card ${JSON.stringify(card)} over the Keeper ${JSON.stringify(keeper)}`;
+    }, slow)
+    .toBe('clear');
+}
 const frameCap = (page: Page) => hook<{ fps: number }>(page, 'frameCap');
 
 /** Frames drawn so far and the page's clock, to read a drawn frame rate between two readings. */
@@ -459,6 +479,7 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     await slowExpect(page.getByTestId('explore-recipe')).toContainText('Timber');
     await expect(action).toBeDisabled();
     await expect(action).toContainText('Dig');
+    await expectNeedClearOfKeeper(page);
     expect((await exploreState(page))?.card).toBeNull();
     expect((await exploreState(page))?.progress?.searched).toBe(searched);
   }
@@ -939,6 +960,32 @@ test('enters a river tile on its dry bank, with its mossy logs, pebble bars and 
     expect(scene.created.meshes).toBeLessThanOrEqual(BUILD_MESH_CEILING);
     expect(scene.land).not.toBeNull();
     await keeperStill(page);
+
+    // Up close at the cattails with no Snorkel yet, the hint card keeps clear of the Keeper.
+    const cattails = state.spots.filter((s) => s.kind === 'cattails');
+    const ids = cattails.map((s) => s.index);
+    let reached = false;
+    for (const spot of nearestFirst(cattails, (await exploreState(page))!.keeper).slice(0, 4)) {
+      if ((reached = await walkTo(page, spot.index, ids))) break;
+    }
+    expect(reached, 'walked up to the cattails').toBe(true);
+    await expect.poll(async () => (await exploreState(page))?.hint, slow).toBe('net');
+    await keeperStill(page);
+    await expectNeedClearOfKeeper(page);
+
+    // A phone turned on its side: the card lays itself out again, still clear of him.
+    const portrait = page.viewportSize();
+    if (portrait && portrait.width < portrait.height && portrait.width < 500) {
+      for (const size of [
+        { width: 734, height: 343 }, // iPhone 15 held sideways (the reviewer's repro)
+        { width: 667, height: 375 }, // iPhone SE held sideways
+      ]) {
+        await page.setViewportSize(size);
+        await expectNeedClearOfKeeper(page);
+      }
+      await page.setViewportSize(portrait);
+      await expectNeedClearOfKeeper(page);
+    }
     expect(errors).toEqual([]);
   } finally {
     await page.context().close();
