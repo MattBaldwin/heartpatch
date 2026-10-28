@@ -96,8 +96,12 @@ export function valueLines(value: readonly GuideValue[]): string[] {
     switch (v.kind) {
       case 'safe':
         return [`Keeps squishies safe ${plural(v.radius, 'tile', 'tiles')} around it`];
-      case 'fuel':
-        return [`Needs ${shortNumber(v.perNight)} fuel each night`];
+      case 'burns':
+        return [
+          `Burns ${shortNumber(v.perNight)} ${itemName(v.resource)} a night, holds ${plural(v.nights, 'night', 'nights')}`,
+        ];
+      case 'lights':
+        return [`Level ${String(v.level)} lights ${plural(v.radius, 'tile', 'tiles')} around`];
       case 'grows': {
         const who = [
           ...v.elements.map((e) => ELEMENT_NAMES.get(e) ?? e),
@@ -184,6 +188,8 @@ export function placeChips(place: readonly GuidePlace[]): string[] {
             homestead: 'Your homestead',
           }[p.placement],
         ];
+      case 'centre':
+        return ['Middle spot'];
       case 'on-water':
         return [`On a ${WATER_WORDS[p.water] ?? p.water} tile`, 'Next to your land'];
       case 'terrain':

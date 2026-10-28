@@ -41,14 +41,29 @@ describe('buildingGuide (#715)', () => {
     const g = guide('hearthfire');
     expect(g.group).toBe('fires');
     expect(g.value).toContainEqual({ kind: 'safe', radius: 1 });
-    expect(kinds(g.value)).toContain('fuel');
+    // The fuel by name and how long a full fire lasts, and the level that lights farther.
+    expect(g.value).toContainEqual({
+      kind: 'burns',
+      resource: 'emberwood',
+      perNight: 1,
+      nights: 8,
+    });
+    expect(g.value).toContainEqual({ kind: 'lights', level: 3, radius: 2 });
+    expect(kinds(g.value)).not.toContain('fuel');
+    // Your land, the middle spot, one a tile: in that order.
+    expect(kinds(g.place)).toEqual(['placement', 'centre', 'per-tile']);
     expect(g.place).toContainEqual({ kind: 'placement', placement: 'land' });
     expect(g.place).toContainEqual({ kind: 'per-tile', max: 1 });
     expect(g.gate).toBeNull();
   });
 
   it('a lantern gives everything back when packed up', () => {
-    expect(guide('joy-lantern').value).toContainEqual({ kind: 'refund-all' });
+    const g = guide('joy-lantern');
+    expect(g.value).toContainEqual({ kind: 'refund-all' });
+    // It burns fuel too, and has one level: nothing lights farther.
+    expect(kinds(g.value)).toContain('burns');
+    expect(kinds(g.value)).not.toContain('lights');
+    expect(kinds(g.place)).toContain('centre');
   });
 
   it('habitat: room and who grows faster, at home, up to its home cap', () => {
@@ -58,6 +73,7 @@ describe('buildingGuide (#715)', () => {
     expect(g.place).toContainEqual({ kind: 'placement', placement: 'home' });
     expect(g.place).toContainEqual({ kind: 'per-home', max: 4, atHome: true });
     expect(kinds(g.place)).not.toContain('per-tile');
+    expect(kinds(g.place)).not.toContain('centre');
   });
 
   it('training grounds and the factory are helpers', () => {

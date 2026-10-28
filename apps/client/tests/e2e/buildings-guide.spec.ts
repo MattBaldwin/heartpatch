@@ -31,6 +31,44 @@ const guideState = (page: Page) => hook<GuideDebug>(page, 'buildingsGuide');
 const buildState = (page: Page) => hook<BuildDebug>(page, 'tileBuild');
 const mapState = (page: Page) => hook<{ id: string; selected: string | null }>(page, 'map');
 
+/** The cards the guide's list shows on screen now, by building id. */
+const onScreen = (page: Page) =>
+  page.evaluate(() => {
+    const list = document.querySelector('[data-testid="guide-list"]');
+    if (!list) return [];
+    const box = list.getBoundingClientRect();
+    return [...list.querySelectorAll<HTMLElement>('[data-testid="guide-entry"]')]
+      .filter((card) => {
+        const r = card.getBoundingClientRect();
+        return r.bottom > box.top && r.top < box.bottom;
+      })
+      .map((card) => card.dataset['building'] ?? '');
+  });
+
+/** Every card on screen gets its picture (the guide's own `data-portrait` signal). */
+async function picturesDrawn(page: Page): Promise<string[]> {
+  const ids = await onScreen(page);
+  expect(ids.length).toBeGreaterThan(0);
+  for (const id of ids) {
+    await expect(
+      page.locator(`[data-building="${id}"] .guide-portrait`),
+      `${id}'s picture`,
+    ).toHaveAttribute('data-portrait', 'drawn', { timeout: 60_000 });
+  }
+  return ids;
+}
+
+/** The ✕ is what a tap at its middle lands on: nothing (the Keeper menu) covers it. */
+async function closeTappable(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const close = document.querySelector('[data-testid="guide-close"]');
+    if (!close) return false;
+    const r = close.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return hit !== null && close.contains(hit);
+  });
+}
+
 test('See all buildings lists every building, what fits here, and builds from it', async ({
   browser,
 }) => {
@@ -78,6 +116,10 @@ test('See all buildings lists every building, what fits here, and builds from it
   expect(state.counts['hedge'] ?? 0).toBeGreaterThanOrEqual(1);
   await expect(guide.getByTestId('guide-entry')).toHaveCount(state.ids.length);
 
+  // Each card on screen gets its picture, the fire's first among them.
+  expect(await picturesDrawn(page)).toContain('hearthfire');
+  expect(await closeTappable(page)).toBe(true);
+
   const hedge = guide.locator('[data-building="hedge"]');
   await expect(hedge.getByTestId('guide-fit')).toHaveText('✓ Fits this tile');
   // Every word on the sheet passes the kid-safe word list.
@@ -94,6 +136,21 @@ test('See all buildings lists every building, what fits here, and builds from it
   expect(box.y + box.height).toBeLessThanOrEqual(view.height);
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(view.width);
+
+  // Coming later, the Waystation among it: its pictures come as it scrolls in.
+  await guide.getByTestId('guide-filter-all').tap();
+  await guide.locator('[data-jump="later"]').tap();
+  expect(await picturesDrawn(page)).toContain('waystation');
+
+  // Turned on its side (a phone only): the ✕ stays clear of the Keeper menu
+  // and the list keeps real room under the header.
+  if (view.width < 600) {
+    await page.setViewportSize({ width: view.height, height: view.width });
+    await expect.poll(() => closeTappable(page)).toBe(true);
+    const list = (await guide.getByTestId('guide-list').boundingBox())!;
+    expect(list.height).toBeGreaterThan(150);
+    await page.setViewportSize(view);
+  }
 
   // ‹ Build: back to the sheet, tile still picked.
   await guide.getByTestId('guide-back').tap();

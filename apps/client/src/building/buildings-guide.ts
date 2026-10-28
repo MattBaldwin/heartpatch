@@ -16,7 +16,6 @@ import { seasonsOn } from '../map/map-dressing.js';
 import type { BuildingPortraits } from '../procedural/portraits.js';
 import { buttonClass, hpClose } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
-import { worksPortrait } from '../works/works-card.js';
 import type { BuildCard } from './build-model.js';
 import {
   GUIDE_TEXT,
@@ -31,6 +30,7 @@ import {
   valueLines,
   type GuideFit,
 } from './buildings-guide-model.js';
+import { createGuidePortraits } from './guide-portraits.js';
 import type { BuildSource } from './tile-build.js';
 import './buildings-guide.css';
 
@@ -149,6 +149,7 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
     list,
   );
   sheet.hidden = true;
+  const pictures = createGuidePortraits(options.portraits, list);
   sheet.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') back.click();
   });
@@ -157,6 +158,7 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
   function shut(): void {
     shown = null;
     sheet.hidden = true;
+    pictures.reset();
     list.replaceChildren();
   }
 
@@ -208,6 +210,7 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
       }),
     );
 
+    pictures.reset();
     list.replaceChildren(
       ...(shelves.length === 0
         ? [el('p', { class: 'guide-empty', 'data-testid': 'guide-empty' }, GUIDE_TEXT.nothingFits)]
@@ -231,14 +234,14 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
     const opening = shown?.opening;
     const f: GuideFit = fit ?? { kind: 'no', reason: '' };
     const later = f.kind === 'later';
-    const portrait = worksPortrait(options.portraits, {
+    // Fires drawn lit and cozy, as the mockup has them.
+    const portrait = pictures.box({
       buildingId: entry.id,
       level: 1,
       asleep: false,
       size: PORTRAIT_PX,
+      ...(entry.group === 'fires' ? { lit: true } : {}),
     });
-    portrait.classList.add('guide-portrait');
-    portrait.removeAttribute('data-testid');
 
     const fitRow = later
       ? []

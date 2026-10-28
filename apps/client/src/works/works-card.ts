@@ -30,26 +30,31 @@ export function worksPortrait(
   return box;
 }
 
-/** A first draw that comes back empty (a busy or paused engine) is asked for once more after this. */
+/** A draw that comes back empty (a busy or paused engine) is asked for again after this. */
 export const PORTRAIT_RETRY_MS = 1_500; // TUNE
 
 /**
  * Asks the shared portraits for the building's picture, and shows it once
- * there is one. An empty first draw isn't cached, so one later ask redraws it.
+ * there is one. An empty draw isn't cached, so a later ask redraws it: up to
+ * `tries` asks in all. True once it's shown.
  */
 export async function askPortrait(
   portraits: BuildingPortraits | undefined,
   look: BuildingPortraitLook,
   show: (url: string) => void,
   retryMs = PORTRAIT_RETRY_MS,
-): Promise<void> {
-  if (!portraits) return;
-  let url = await portraits.building(look);
-  if (url === null) {
-    await new Promise((done) => setTimeout(done, retryMs));
-    url = await portraits.building(look);
+  tries = 2,
+): Promise<boolean> {
+  if (!portraits) return false;
+  for (let i = 0; i < tries; i++) {
+    if (i > 0) await new Promise((done) => setTimeout(done, retryMs));
+    const url = await portraits.building(look);
+    if (url !== null) {
+      show(url);
+      return true;
+    }
   }
-  if (url !== null) show(url);
+  return false;
 }
 
 /** A works card's lines (`worksCard`) beside its picture. */

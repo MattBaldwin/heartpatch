@@ -74,6 +74,8 @@ export interface BuildingPortraitLook {
   readonly asleep: boolean;
   /** The picture's side in CSS px. */
   readonly size: number;
+  /** Fires only: drawn lit and cozy (the Buildings guide). Left out: the plain look. */
+  readonly lit?: boolean;
 }
 
 type V3 = { readonly x: number; readonly y: number; readonly z: number };
@@ -108,7 +110,7 @@ export function buildingCamera(
 
 /** A building picture's cache key: one draw per building, level, look and size. */
 export function buildingPortraitKey(look: BuildingPortraitLook): string {
-  return `building|${look.buildingId}|${String(look.level)}|${look.asleep ? 'asleep' : 'awake'}|${String(look.size)}`;
+  return `building|${look.buildingId}|${String(look.level)}|${look.asleep ? 'asleep' : 'awake'}|${String(look.size)}${look.lit ? '|lit' : ''}`;
 }
 
 export interface Portraits {
@@ -552,7 +554,7 @@ export function createPortraits(
     const placement = {
       buildingId: look.buildingId,
       level: look.level,
-      lit: null,
+      lit: look.lit === true ? true : null,
       asleep: look.asleep,
       x: 0,
       z: 0,

@@ -1,6 +1,8 @@
 /* The Buildings guide (#715): a tall sheet over the map, under the corner
-   buttons like the recipe book, clear of the safe-area bands. Its list is the
-   only part that scrolls. Two columns of cards on an iPad. */
+   buttons like the recipe book (so the Keeper menu's "Log out" never sits on
+   its ✕, in either orientation), clear of the safe-area bands. Opaque, so
+   the Build sheet under it never shows through. Its list is the only part
+   that scrolls. Two columns of cards on an iPad. */
 
 .guide {
   position: fixed;
@@ -13,7 +15,7 @@
   max-width: 920px;
   margin: 0 auto;
   border-radius: 28px;
-  background: rgb(255 250 252 / 99%);
+  background: #fffafc;
   box-shadow: 0 18px 44px rgb(74 49 80 / 42%);
   overflow: hidden;
   font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
@@ -24,11 +26,57 @@
   display: none;
 }
 
-/* Landscape phone: the corner buttons sit at the sides, so the sheet rises. */
+/* A tablet: roomier margins, as in the mockup. */
+@media (min-width: 700px) and (min-height: 600px) {
+  .guide {
+    inset: calc(env(safe-area-inset-top) + 66px) calc(env(safe-area-inset-right) + 40px)
+      calc(env(safe-area-inset-bottom) + 28px) calc(env(safe-area-inset-left) + 40px);
+  }
+}
+
+/* Landscape phone: little height, so the tile strip, filter and shelf chips
+   share one row under the bar and the list keeps most of the sheet. */
 @media (max-height: 500px) and (orientation: landscape) {
   .guide {
-    inset: calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 64px)
-      calc(env(safe-area-inset-bottom) + 6px) calc(env(safe-area-inset-left) + 64px);
+    display: grid;
+    grid-template-columns: minmax(0, auto) auto minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .guide-bar {
+    grid-column: 1 / -1;
+    padding-bottom: 2px;
+  }
+
+  .guide-tile {
+    max-width: 240px;
+    margin: 0 0 0 12px;
+  }
+
+  .guide-tile > span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .guide-filter {
+    margin: 0 0 0 8px;
+  }
+
+  .guide-seg {
+    padding: 0 12px;
+  }
+
+  .guide-jump {
+    min-width: 0;
+    padding: 4px 12px 4px 8px;
+  }
+
+  .guide-list {
+    grid-column: 1 / -1;
+    align-self: stretch;
   }
 }
 
@@ -198,7 +246,8 @@
   border-color: #cfe9d8;
 }
 
-.guide-entry-later {
+/* A later card greys its own content; its card stays solid. */
+.guide-entry-later > * {
   opacity: 0.55;
   filter: grayscale(0.8);
 }

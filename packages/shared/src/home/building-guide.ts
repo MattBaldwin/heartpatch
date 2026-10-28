@@ -60,7 +60,16 @@ const GROUP_OF: Record<BuildingKind, GuideGroup> = {
 
 /** Why build one: what it does at level 1. */
 export type GuideValue =
-  | BuildingEffect
+  | Exclude<BuildingEffect, { kind: 'fuel' }>
+  /** A fire: the fuel it burns each night, and how many nights it holds. */
+  | {
+      readonly kind: 'burns';
+      readonly resource: string;
+      readonly perNight: number;
+      readonly nights: number;
+    }
+  /** A fire's first upgrade that lights farther: its level and new radius. */
+  | { readonly kind: 'lights'; readonly level: number; readonly radius: number }
   | EconomyEffect
   | Exclude<WildIsleEffect, { kind: 'needs-water' }>
   /** A travel building: what it joins up (`reach` for a waystation). */
@@ -71,6 +80,8 @@ export type GuideValue =
 /** Where it can go. */
 export type GuidePlace =
   | { readonly kind: 'placement'; readonly placement: BuildingPlacement }
+  /** It takes the tile's middle spot (a fire), so one tile holds one. */
+  | { readonly kind: 'centre' }
   /** It stands on water of this kind (a bridge), next to the player's land. */
   | { readonly kind: 'on-water'; readonly water: WaterKind }
   /** Only on land of this terrain (a resource building). */
@@ -162,7 +173,20 @@ export function buildingsGuide(
 
 function valueOf(def: Building, economy: EconomyEffectRules): GuideValue[] {
   const out: GuideValue[] = [
-    ...buildingEffects(def),
+    ...buildingEffects(def).flatMap((e): GuideValue[] => {
+      if (e.kind !== 'fuel') return [e];
+      if (def.kind !== 'hearthfire') return [];
+      const burns: GuideValue = {
+        kind: 'burns',
+        resource: def.fuelResource,
+        perNight: def.fuelPerNight,
+        nights: def.maxFuelNights,
+      };
+      const first = def.levels[0]?.safeRadius ?? 0;
+      const level = def.levels.findIndex((l) => l.safeRadius > first);
+      const row = def.levels[level];
+      return row ? [burns, { kind: 'lights', level: level + 1, radius: row.safeRadius }] : [burns];
+    }),
     ...economyEffects(def, 1, economy),
     ...wildIsleEffects(def).filter(
       (e): e is Exclude<WildIsleEffect, { kind: 'needs-water' }> => e.kind !== 'needs-water',
@@ -186,6 +210,7 @@ function placeOf(def: Building): GuidePlace[] {
   } else {
     out.push({ kind: 'placement', placement: def.placement });
   }
+  if (def.slot === 'centre') out.push({ kind: 'centre' });
   if (def.kind === 'resource') out.push({ kind: 'terrain', terrain: def.terrain });
   if ('needsWater' in def && def.needsWater) {
     out.push({ kind: 'needs-water', water: def.needsWater });

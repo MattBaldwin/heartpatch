@@ -72,10 +72,20 @@ describe('buildings guide words (#715)', () => {
     }
   });
 
-  it('hearthfire: safe tiles, your land, one a tile', () => {
+  it('hearthfire: safe tiles, its fuel by name, your land, the middle spot, one a tile', () => {
     const g = entry('hearthfire');
-    expect(valueLines(g.value)).toContain('Keeps squishies safe 1 tile around it');
-    expect(placeChips(g.place)).toEqual(expect.arrayContaining(['Your land', '1 per tile']));
+    expect(valueLines(g.value)).toEqual([
+      'Keeps squishies safe 1 tile around it',
+      'Burns 1 Emberwood a night, holds 8 nights',
+      'Level 3 lights 2 tiles around',
+    ]);
+    expect(placeChips(g.place)).toEqual(['Your land', 'Middle spot', '1 per tile']);
+  });
+
+  it('a Joy Lantern names its fuel too', () => {
+    const g = entry('joy-lantern');
+    expect(valueLines(g.value)).toContain('Burns 1 Emberwood a night, holds 8 nights');
+    expect(placeChips(g.place).slice(0, 2)).toEqual(['Your land', 'Middle spot']);
   });
 
   it('habitat and training read as rooms and XP', () => {
