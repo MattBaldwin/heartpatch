@@ -23,8 +23,16 @@ import {
   valueLines,
 } from './buildings-guide-model.js';
 
-const ECONOMY = { jobs: JOB_RULES, explore: EXPLORE_RULES, resourceBuildings: RESOURCE_BUILDING_RULES };
-const entry = (id: string, seasons: readonly string[] = ['halloween'], patchType: 'cozy' | 'wild-isle' = 'wild-isle'): BuildingGuideEntry => {
+const ECONOMY = {
+  jobs: JOB_RULES,
+  explore: EXPLORE_RULES,
+  resourceBuildings: RESOURCE_BUILDING_RULES,
+};
+const entry = (
+  id: string,
+  seasons: readonly string[] = ['halloween'],
+  patchType: 'cozy' | 'wild-isle' = 'wild-isle',
+): BuildingGuideEntry => {
   const b = BUILDINGS.find((x) => x.id === id);
   const g = b && buildingGuide(b, { patchType, seasons, rules: HOME_BASE_RULES, economy: ECONOMY });
   if (!g) throw new Error(id);
@@ -46,7 +54,12 @@ describe('buildings guide words (#715)', () => {
   it('words every building of every kind with at least one why line and one where chip', () => {
     for (const patchType of ['cozy', 'wild-isle'] as const) {
       for (const b of BUILDINGS) {
-        const g = buildingGuide(b, { patchType, seasons: [], rules: HOME_BASE_RULES, economy: ECONOMY });
+        const g = buildingGuide(b, {
+          patchType,
+          seasons: [],
+          rules: HOME_BASE_RULES,
+          economy: ECONOMY,
+        });
         if (!g) continue;
         expect(valueLines(g.value).length, b.id).toBeGreaterThan(0);
         expect(placeChips(g.place).length, b.id).toBeGreaterThan(0);
@@ -75,7 +88,9 @@ describe('buildings guide words (#715)', () => {
     const g = entry('hedge');
     expect(valueLines(g.value)).toContain('Keeps other Keepers off this edge');
     expect(valueLines(g.value).some((l) => l.endsWith('energy'))).toBe(true);
-    expect(placeChips(g.place)).toEqual(expect.arrayContaining(['Edges of your tiles', 'Priced per edge']));
+    expect(placeChips(g.place)).toEqual(
+      expect.arrayContaining(['Edges of your tiles', 'Priced per edge']),
+    );
   });
 
   it('a factory caps the whole patch', () => {
@@ -102,8 +117,13 @@ describe('buildings guide words (#715)', () => {
     expect(valueLines(entry('levee').value)[0]).toMatch(/^Keeps .* off 1 tile around$/);
     expect(valueLines(entry('weather-vane').value)).toContain("Shows tomorrow's weather");
     expect(valueLines(entry('bridge').value)).toContain('Every Keeper on the patch can cross here');
-    expect(placeChips(entry('bridge').place).slice(0, 2)).toEqual(['On a river tile', 'Next to your land']);
-    expect(valueLines(entry('waystation').value)[0]).toBe('Keeps land up to 3 tiles away joined to home');
+    expect(placeChips(entry('bridge').place).slice(0, 2)).toEqual([
+      'On a river tile',
+      'Next to your land',
+    ]);
+    expect(valueLines(entry('waystation').value)[0]).toBe(
+      'Keeps land up to 3 tiles away joined to home',
+    );
   });
 
   it('labels the Coming later shelf: season, or not in the game yet', () => {
@@ -138,13 +158,19 @@ describe('buildings guide words (#715)', () => {
     expect(guideAction(fits, { timber: 9 })).toBe('build');
     expect(guideAction(fits, null)).toBe('build');
     expect(guideAction(fits, { timber: 1 })).toBe('short');
-    expect(guideAction({ kind: 'fits', card: card('j', { craft: 'Make it first' }) }, {})).toBe('craft');
+    expect(guideAction({ kind: 'fits', card: card('j', { craft: 'Make it first' }) }, {})).toBe(
+      'craft',
+    );
     expect(guideAction({ kind: 'no', reason: 'x' }, {})).toBe('off');
     expect(guideAction({ kind: 'later', label: 'x' }, {})).toBe('none');
   });
 
   it('counts tiles each building fits, once a tile, blocked cards left out', () => {
-    const tiles = [{ q: 0, r: 0 }, { q: 1, r: 0 }, { q: 2, r: 0 }] as unknown as PublicTile[];
+    const tiles = [
+      { q: 0, r: 0 },
+      { q: 1, r: 0 },
+      { q: 2, r: 0 },
+    ] as unknown as PublicTile[];
     const counts = fitCounts(tiles, (t) =>
       t.q === 0
         ? [card('hedge'), card('hedge'), card('watermill')]
@@ -156,7 +182,9 @@ describe('buildings guide words (#715)', () => {
   });
 
   it('the tile strip and the cost parts', () => {
-    expect(tileLine({ terrain: 'meadow', homeSlot: null, homestead: 'joined' })).toBe('Homestead · Meadow');
+    expect(tileLine({ terrain: 'meadow', homeSlot: null, homestead: 'joined' })).toBe(
+      'Homestead · Meadow',
+    );
     expect(tileLine({ terrain: 'meadow', homeSlot: 1 })).toBe('Your home · Meadow');
     expect(costParts({ timber: 1200, stone: 5 }, { timber: 10, stone: 9 })).toEqual([
       { id: 'timber', count: '1.2k', short: true },

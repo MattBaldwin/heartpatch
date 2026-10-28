@@ -273,7 +273,7 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
                 class: `guide-fit ${f.kind === 'fits' ? 'guide-fit-yes' : 'guide-fit-no'}`,
                 'data-testid': 'guide-fit',
               },
-              f.kind === 'fits' ? GUIDE_TEXT.fits : `✗ ${f.kind === 'no' ? f.reason : ''}`,
+              f.kind === 'fits' ? GUIDE_TEXT.fits : `✗ ${f.reason}`,
             ),
             el(
               'span',

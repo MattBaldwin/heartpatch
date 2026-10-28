@@ -172,7 +172,13 @@ export function createTileBuild(options: TileBuildOptions): TileBuild {
       },
       onBuild: () => void build(),
       ...(options.onRecipeBook ? { onRecipeBook: options.onRecipeBook } : {}),
-      ...(options.guide ? { onSeeAll: () => seeAll(cards) } : {}),
+      ...(options.guide
+        ? {
+            onSeeAll: () => {
+              seeAll(cards);
+            },
+          }
+        : {}),
       onCancel: () => {
         leave('');
         render();
