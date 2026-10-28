@@ -216,6 +216,7 @@ test('"Later" puts the optional tutorial away, and the lobby offers it back', as
 });
 
 test("an update can't reload away a new account's recovery code", async ({ page }) => {
+  test.setTimeout(90_000); // loads the app and signs up; CI's iPad WebKit ran past 30s
   await page.goto('/');
   const overlay = page.getByTestId('auth-overlay');
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
