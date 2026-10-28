@@ -1,0 +1,411 @@
+import {
+  EXPLORE_RULES,
+  GAME_DATA,
+  GUIDE_GROUPS,
+  HOME_BASE_RULES,
+  JOB_RULES,
+  RESOURCE_BUILDING_RULES,
+  buildingsGuide,
+  type BuildingGuideEntry,
+  type GuideGroup,
+  type ItemCounts,
+  type MapView,
+  type PublicTile,
+} from '@heartpatch/shared';
+import { itemIcon } from '../inventory/item-icons.js';
+import { itemName } from '../inventory/bag-view.js';
+import { seasonsOn } from '../map/map-dressing.js';
+import type { BuildingPortraits } from '../procedural/portraits.js';
+import { buttonClass, hpClose } from '../ui/button/button.js';
+import { el } from '../ui/dom.js';
+import { worksPortrait } from '../works/works-card.js';
+import type { BuildCard } from './build-model.js';
+import {
+  GUIDE_TEXT,
+  costParts,
+  fitCounts,
+  fitHere,
+  guideAction,
+  placeChips,
+  tileLine,
+  valueLines,
+  type GuideFit,
+} from './buildings-guide-model.js';
+import type { BuildSource } from './tile-build.js';
+import './buildings-guide.css';
+
+// The Buildings guide (#715): "See all buildings" in the Build sheet opens
+// every building this patch can have, shelf by shelf, with why to build it,
+// where it goes, whether the picked tile takes it and how many of my tiles
+// do, and a "Coming later" shelf of what waits (owner variant B). Every line
+// comes from the building data (shared `buildingsGuide`); every ✓ comes from
+// the Build sheets' own cards. "Build here" goes back to the Build sheet
+// with that card picked.
+
+export interface BuildingsGuideOptions {
+  readonly root: HTMLElement;
+  readonly portraits?: BuildingPortraits;
+  /** Every Build sheet's sources (land and river), for "Fits N of your tiles". */
+  readonly sources: () => readonly BuildSource[];
+  /** The game's clock (the server's date), for which seasons are on. */
+  readonly now: () => Date;
+}
+
+/** One opening: the picked tile and what its Build sheet offers there. */
+export interface GuideOpening {
+  readonly tile: PublicTile;
+  readonly view: MapView;
+  /** The Build sheet's cards on the picked tile. */
+  readonly here: readonly BuildCard[];
+  readonly bag: ItemCounts | null;
+  readonly onBuildHere: (id: string) => void;
+  readonly onRecipeBook?: () => void;
+  /** ‹ Build: back to the sheet, tile still picked. */
+  readonly onBack: () => void;
+  /** ✕: closes the sheet too. */
+  readonly onClose: () => void;
+}
+
+/** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
+export interface BuildingsGuideDebug {
+  readonly open: boolean;
+  readonly filter: Filter;
+  /** Every building listed (now and later), in order. */
+  readonly ids: readonly string[];
+  /** The ones the picked tile takes. */
+  readonly fits: readonly string[];
+  readonly later: readonly string[];
+  /** Tiles each building fits on. */
+  readonly counts: Readonly<Record<string, number>>;
+}
+
+export interface BuildingsGuide {
+  open: (opening: GuideOpening) => void;
+  close: () => void;
+  readonly isOpen: boolean;
+  readonly debug: BuildingsGuideDebug;
+}
+
+type Filter = 'fits' | 'all';
+
+interface Shown {
+  readonly opening: GuideOpening;
+  readonly entries: readonly BuildingGuideEntry[];
+  readonly fit: ReadonlyMap<string, GuideFit>;
+  readonly counts: ReadonlyMap<string, number>;
+}
+
+const ECONOMY = {
+  jobs: JOB_RULES,
+  explore: EXPLORE_RULES,
+  resourceBuildings: RESOURCE_BUILDING_RULES,
+};
+const PORTRAIT_PX = 64; // TUNE: the mockup's card picture
+
+export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsGuide {
+  let shown: Shown | null = null;
+  let filter: Filter = 'all';
+
+  const close = hpClose(GUIDE_TEXT.close, 'guide-close');
+  close.addEventListener('click', () => {
+    const was = shown;
+    shut();
+    was?.opening.onClose();
+  });
+  const back = el(
+    'button',
+    {
+      type: 'button',
+      class: `${buttonClass({ variant: 'secondary', small: true })} guide-back`,
+      'data-testid': 'guide-back',
+    },
+    GUIDE_TEXT.back,
+  );
+  back.addEventListener('click', () => {
+    const was = shown;
+    shut();
+    was?.opening.onBack();
+  });
+  const title = el('h2', { class: 'guide-title', id: 'guide-title' }, GUIDE_TEXT.title);
+  const tileStrip = el('p', { class: 'guide-tile', 'data-testid': 'guide-tile' });
+  const filters = el('div', { class: 'guide-filter', role: 'group' });
+  const jumps = el('div', { class: 'guide-jump', 'data-testid': 'guide-jump' });
+  const list = el('div', { class: 'guide-list', 'data-testid': 'guide-list' });
+  const sheet = el(
+    'section',
+    {
+      class: 'guide',
+      role: 'dialog',
+      'aria-modal': 'true',
+      'aria-labelledby': 'guide-title',
+      'data-testid': 'buildings-guide',
+    },
+    el('div', { class: 'guide-bar' }, back, title, close),
+    tileStrip,
+    filters,
+    jumps,
+    list,
+  );
+  sheet.hidden = true;
+  sheet.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') back.click();
+  });
+  options.root.append(sheet);
+
+  function shut(): void {
+    shown = null;
+    sheet.hidden = true;
+    list.replaceChildren();
+  }
+
+  function render(): void {
+    if (!shown) return;
+    const { entries, fit, counts, opening } = shown;
+    const now = entries.filter((e) => e.gate === null);
+    const fitting = now.filter((e) => fit.get(e.id)?.kind === 'fits');
+    const later = entries.filter((e) => e.gate !== null);
+
+    tileStrip.replaceChildren(
+      el('span', { class: 'guide-hex', 'aria-hidden': 'true' }),
+      el('span', {}, `${GUIDE_TEXT.yourTile} `, el('b', {}, tileLine(opening.tile))),
+    );
+
+    const seg = (key: Filter, label: string) => {
+      const b = el(
+        'button',
+        {
+          type: 'button',
+          class: 'guide-seg',
+          'aria-pressed': String(filter === key),
+          'data-testid': `guide-filter-${key}`,
+        },
+        label,
+      );
+      b.addEventListener('click', () => {
+        filter = key;
+        list.scrollTop = 0;
+        render();
+      });
+      return b;
+    };
+    filters.replaceChildren(
+      seg('fits', GUIDE_TEXT.fitsFilter(fitting.length)),
+      seg('all', GUIDE_TEXT.allFilter(entries.length)),
+    );
+
+    const listed = filter === 'fits' ? fitting : now;
+    const shelves: {
+      key: string;
+      label: string;
+      note: string;
+      items: readonly BuildingGuideEntry[];
+    }[] = GUIDE_GROUPS.flatMap((g: GuideGroup) => {
+      const items = listed.filter((e) => e.group === g);
+      if (items.length === 0) return [];
+      const n = items.filter((e) => fit.get(e.id)?.kind === 'fits').length;
+      return [{ key: g, label: GUIDE_TEXT.groups[g], note: GUIDE_TEXT.groupFits(n), items }];
+    });
+    if (filter === 'all' && later.length > 0) {
+      shelves.push({
+        key: 'later',
+        label: GUIDE_TEXT.later,
+        note: GUIDE_TEXT.laterNote,
+        items: later,
+      });
+    }
+
+    jumps.replaceChildren(
+      ...shelves.map((s) => {
+        const b = el(
+          'button',
+          { type: 'button', class: 'guide-chip', 'data-jump': s.key },
+          s.key === 'later' ? GUIDE_TEXT.laterChip : s.label,
+        );
+        b.addEventListener('click', () => {
+          const head = list.querySelector<HTMLElement>(`[data-shelf="${s.key}"]`);
+          if (head) list.scrollTop = head.offsetTop - list.offsetTop;
+        });
+        return b;
+      }),
+    );
+
+    list.replaceChildren(
+      ...(shelves.length === 0
+        ? [el('p', { class: 'guide-empty', 'data-testid': 'guide-empty' }, GUIDE_TEXT.nothingFits)]
+        : shelves.flatMap((s) => [
+            el(
+              'div',
+              { class: 'guide-group', 'data-shelf': s.key },
+              el('h3', {}, s.label),
+              el('small', {}, s.note),
+            ),
+            ...s.items.map((e) => entryCard(e, fit.get(e.id), counts.get(e.id) ?? 0)),
+          ])),
+    );
+  }
+
+  function entryCard(
+    entry: BuildingGuideEntry,
+    fit: GuideFit | undefined,
+    count: number,
+  ): HTMLElement {
+    const opening = shown?.opening;
+    const f: GuideFit = fit ?? { kind: 'no', reason: '' };
+    const later = f.kind === 'later';
+    const portrait = worksPortrait(options.portraits, {
+      buildingId: entry.id,
+      level: 1,
+      asleep: false,
+      size: PORTRAIT_PX,
+    });
+    portrait.classList.add('guide-portrait');
+    portrait.removeAttribute('data-testid');
+
+    const fitRow = later
+      ? []
+      : [
+          el(
+            'div',
+            { class: 'guide-fitrow' },
+            el(
+              'span',
+              {
+                class: `guide-fit ${f.kind === 'fits' ? 'guide-fit-yes' : 'guide-fit-no'}`,
+                'data-testid': 'guide-fit',
+              },
+              f.kind === 'fits' ? GUIDE_TEXT.fits : `✗ ${f.kind === 'no' ? f.reason : ''}`,
+            ),
+            el(
+              'span',
+              { class: 'guide-count', 'data-testid': 'guide-count' },
+              GUIDE_TEXT.fitCount(count),
+            ),
+          ),
+        ];
+
+    const action = guideAction(f, opening?.bag ?? null);
+    let foot: HTMLElement;
+    if (f.kind === 'later') {
+      foot = el(
+        'span',
+        { class: 'guide-fit guide-fit-soon', 'data-testid': 'guide-later' },
+        f.label,
+      );
+    } else {
+      const primary = action === 'build' || action === 'craft';
+      foot = el(
+        'button',
+        {
+          type: 'button',
+          class: buttonClass({ variant: primary ? 'primary' : 'secondary', small: true }),
+          'data-testid': 'guide-build',
+        },
+        action === 'craft'
+          ? GUIDE_TEXT.recipeBook
+          : action === 'short'
+            ? GUIDE_TEXT.needMore
+            : GUIDE_TEXT.buildHere,
+      );
+      (foot as HTMLButtonElement).disabled = !primary;
+      foot.addEventListener('click', () => {
+        if (!opening) return;
+        shut();
+        if (action === 'craft' && opening.onRecipeBook) opening.onRecipeBook();
+        else opening.onBuildHere(entry.id);
+      });
+    }
+    const edges = entry.place.some((p) => p.kind === 'edges');
+    const cost = el(
+      'div',
+      { class: 'guide-cost' },
+      ...costParts(entry.cost, later ? null : (opening?.bag ?? null)).map((p) =>
+        el(
+          'span',
+          { class: p.short ? 'guide-short' : '', title: itemName(p.id) },
+          `${p.count} ${itemIcon(p.id)}`,
+        ),
+      ),
+      ...(edges ? [el('span', { class: 'guide-per' }, GUIDE_TEXT.perEdge)] : []),
+    );
+
+    return el(
+      'article',
+      {
+        class: `guide-entry${later ? ' guide-entry-later' : ''}${f.kind === 'fits' ? ' guide-entry-fits' : ''}`,
+        'data-testid': 'guide-entry',
+        'data-building': entry.id,
+      },
+      el(
+        'div',
+        { class: 'guide-head' },
+        portrait,
+        el(
+          'div',
+          { class: 'guide-names' },
+          el('h4', { class: 'guide-name' }, entry.name),
+          el('p', { class: 'guide-desc' }, entry.description),
+        ),
+      ),
+      el(
+        'div',
+        { class: 'guide-sec' },
+        el('h5', {}, GUIDE_TEXT.why),
+        el(
+          'ul',
+          { class: 'guide-why' },
+          ...valueLines(entry.value).map((line) => el('li', {}, line)),
+        ),
+      ),
+      el(
+        'div',
+        { class: 'guide-sec' },
+        el('h5', {}, GUIDE_TEXT.where),
+        el(
+          'div',
+          { class: 'guide-chips' },
+          ...placeChips(entry.place).map((c) => el('span', { class: 'guide-place' }, c)),
+        ),
+        ...fitRow,
+      ),
+      el('div', { class: 'guide-foot' }, cost, foot),
+    );
+  }
+
+  return {
+    open: (opening) => {
+      const patchType = opening.view.map.patchType ?? 'cozy';
+      const entries = buildingsGuide(GAME_DATA.buildings, {
+        patchType,
+        seasons: seasonsOn(opening.view.map.timeZone, options.now()),
+        rules: HOME_BASE_RULES,
+        economy: ECONOMY,
+      });
+      const sources = options.sources();
+      const counts = fitCounts(opening.view.tiles, (t) =>
+        sources.flatMap((s) => s.cards(t, opening.view)),
+      );
+      const fit = new Map(entries.map((e) => [e.id, fitHere(e, opening.here)]));
+      shown = { opening, entries, fit, counts };
+      filter = 'all';
+      sheet.hidden = false;
+      list.scrollTop = 0;
+      render();
+      back.focus();
+    },
+    close: shut,
+    get isOpen() {
+      return shown !== null;
+    },
+    get debug() {
+      const entries = shown?.entries ?? [];
+      return {
+        open: shown !== null,
+        filter,
+        ids: entries.map((e) => e.id),
+        fits: entries.filter((e) => shown?.fit.get(e.id)?.kind === 'fits').map((e) => e.id),
+        later: entries.filter((e) => e.gate !== null).map((e) => e.id),
+        counts: Object.fromEntries(shown?.counts ?? []),
+      };
+    },
+  };
+}

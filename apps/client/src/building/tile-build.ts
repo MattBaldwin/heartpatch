@@ -4,6 +4,7 @@ import { el, messageOf } from '../ui/dom.js';
 import { ApiRequestError } from '../net/api.js';
 import { BUILD_TEXT, buildStatus, pickCard, type BuildCard } from './build-model.js';
 import { createBuildSheet } from './build-sheet.js';
+import type { BuildingsGuide } from './buildings-guide.js';
 import { setPanelFocus } from './panel-focus.js';
 
 // Building on my land from the map (#371): tap the tile, tap Build, tap the
@@ -39,6 +40,8 @@ export interface TileBuildOptions {
   readonly reveal?: (tile: PublicTile) => void;
   /** Opens the recipe book, for a card with something to make first (a clearing tool). */
   readonly onRecipeBook?: () => void;
+  /** The Buildings guide (#715) behind the sheet's "See all buildings"; left out, no link. */
+  readonly guide?: BuildingsGuide;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -169,6 +172,7 @@ export function createTileBuild(options: TileBuildOptions): TileBuild {
       },
       onBuild: () => void build(),
       ...(options.onRecipeBook ? { onRecipeBook: options.onRecipeBook } : {}),
+      ...(options.guide ? { onSeeAll: () => seeAll(cards) } : {}),
       onCancel: () => {
         leave('');
         render();
@@ -177,6 +181,53 @@ export function createTileBuild(options: TileBuildOptions): TileBuild {
     setFocus(container, true);
     if (sheet.element.parentElement !== container) container.replaceChildren(sheet.element);
     light(tile, view, cards);
+  }
+
+  /** True while the guide is open from this sheet (the land and river sheets share one). */
+  let guideMine = false;
+  function closeGuide(): void {
+    if (!guideMine) return;
+    guideMine = false;
+    options.guide?.close();
+  }
+
+  /** "See all buildings": the guide over the sheet, measured against this tile's own cards. */
+  function seeAll(cards: readonly BuildCard[]): void {
+    const guide = options.guide;
+    if (!panel || !guide) return;
+    const at = generation;
+    guideMine = true;
+    guide.open({
+      tile: panel.tile,
+      view: panel.view,
+      here: cards,
+      bag,
+      onBuildHere: (id) => {
+        guideMine = false;
+        if (at !== generation || mode !== 'build') return;
+        selectedId = id;
+        note = '';
+        render();
+      },
+      ...(options.onRecipeBook
+        ? {
+            onRecipeBook: () => {
+              guideMine = false;
+              options.onRecipeBook?.();
+            },
+          }
+        : {}),
+      onBack: () => {
+        // The sheet is still there, tile still picked.
+        guideMine = false;
+      },
+      onClose: () => {
+        guideMine = false;
+        if (at !== generation || mode !== 'build') return;
+        leave('');
+        render();
+      },
+    });
   }
 
   function leave(say: string): void {
@@ -256,6 +307,7 @@ export function createTileBuild(options: TileBuildOptions): TileBuild {
         const same = panel?.tile.q === tile.q && panel.tile.r === tile.r;
         if (!same) {
           generation += 1;
+          closeGuide();
           if (mode === 'build') options.area().setBuildArea(null);
           mode = 'card';
           note = '';
@@ -269,6 +321,7 @@ export function createTileBuild(options: TileBuildOptions): TileBuild {
       },
       hide: () => {
         generation += 1;
+        closeGuide();
         if (panel) setFocus(panel.container, false);
         panel?.container.replaceChildren();
         panel = null;

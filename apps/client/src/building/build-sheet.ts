@@ -2,6 +2,7 @@ import type { ItemCounts } from '@heartpatch/shared';
 import { buttonClass } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import { iconNode } from '../ui/line-icons.js';
+import { GUIDE_TEXT } from './buildings-guide-model.js';
 import {
   BUILD_TEXT,
   buildStatus,
@@ -37,6 +38,8 @@ export interface BuildSheetProps {
   readonly onBuild: () => void;
   readonly onCancel: () => void;
   readonly onRecipeBook?: () => void;
+  /** "See all buildings" (#715): opens the Buildings guide; left out, no link. */
+  readonly onSeeAll?: () => void;
 }
 
 export interface BuildSheet {
@@ -140,6 +143,21 @@ export function createBuildSheet(): BuildSheet {
         go.hidden = true;
       }
       actions.push(button(BUILD_TEXT.cancel, 'build-cancel', true, props.onCancel));
+      const more: HTMLElement[] = [];
+      if (props.onSeeAll) {
+        const seeAll = el(
+          'button',
+          {
+            type: 'button',
+            class: buttonClass({ variant: 'quiet', small: true }),
+            'data-testid': 'build-see-all',
+          },
+          GUIDE_TEXT.seeAll,
+        );
+        seeAll.disabled = props.working;
+        seeAll.addEventListener('click', props.onSeeAll);
+        more.push(el('div', { class: 'build-more' }, seeAll));
+      }
 
       const left = row.scrollLeft;
       element.replaceChildren(
@@ -153,6 +171,7 @@ export function createBuildSheet(): BuildSheet {
           },
           detail,
         ),
+        ...more,
         el('div', { class: 'build-actions' }, ...actions),
         ...(props.note
           ? [
