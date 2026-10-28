@@ -6,7 +6,10 @@ import { ShaderLanguage } from '@babylonjs/core/Materials/shaderLanguage';
 import type { UniformBuffer } from '@babylonjs/core/Materials/uniformBuffer';
 import { WEATHER_LOOK } from './weather-config.js';
 
-/** Per-vertex light on a cloud: height up the cloud (0 flat belly, 1 top), sunny side, unused, unused. */
+/**
+ * Per-vertex light on a cloud: height up the cloud (0 flat belly, 1 top),
+ * sunny side, how much gold edge light it may take (0 to 1), unused.
+ */
 export const CLOUD_ATTRIBUTE = 'weatherCloud';
 
 const { belly, paleBelly, top, key, rim, rimStrength, rimPower } = WEATHER_LOOK.clouds.shade;
@@ -45,19 +48,19 @@ attribute vec4 weatherCloud;
 #ifndef NORMAL
 attribute vec3 normal;
 #endif
-varying vec2 vWeatherCloud;
+varying vec3 vWeatherCloud;
 varying vec3 vWeatherNormal;
 varying vec3 vWeatherPos;
 `;
 
 const VERTEX_MAIN_END = /* glsl */ `
-vWeatherCloud = weatherCloud.xy;
+vWeatherCloud = weatherCloud.xyz;
 vWeatherNormal = normalize(mat3(finalWorld) * normal);
 vWeatherPos = worldPos.xyz;
 `;
 
 const FRAGMENT_DEFINITIONS = /* glsl */ `
-varying vec2 vWeatherCloud;
+varying vec3 vWeatherCloud;
 varying vec3 vWeatherNormal;
 varying vec3 vWeatherPos;
 `;
@@ -78,7 +81,9 @@ const FRAGMENT_BEFORE_FOG = /* glsl */ `
   color.rgb *= mix(wcStorm, wcSoft, wcPale);
   vec3 wcV = normalize(vEyePosition.xyz - vWeatherPos);
   float wcEdge = pow(1.0 - clamp(dot(wcN, wcV), 0.0, 1.0), ${f(rimPower)});
-  float wcRim = wcEdge * smoothstep(0.02, 0.3, vWeatherCloud.x) * (0.35 + 0.65 * wcKey);
+  // Only where the cloud lets it (a bank: round its outline, not on the
+  // inner ridges of its top, which the tilt also sees edge-on).
+  float wcRim = wcEdge * smoothstep(0.02, 0.3, vWeatherCloud.x) * (0.35 + 0.65 * wcKey) * vWeatherCloud.z;
   color.rgb += vec3(${f(flash.colour[0])}, ${f(flash.colour[1])}, ${f(flash.colour[2])})
     * (weatherFlash * mix(${f(flash.belly)}, ${f(flash.top)}, wcUp));
   // The gold edge, after the slate and the light: the edge turns to gold

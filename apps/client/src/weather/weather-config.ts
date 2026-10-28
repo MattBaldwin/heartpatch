@@ -77,6 +77,14 @@ export const WEATHER_LOOK = {
       rimSize: 0.72,
       /** How softly the puffs melt into the slab and each other. */
       blend: 0.18,
+      /**
+       * The gold edge light keeps to the bank's outline: none inside `rimFrom`
+       * of its footprint (the far flank of the heaped top, which the map's
+       * tilt sees edge-on and lit as a gold arc), all of it from `rimTo` out,
+       * as a share of the slab's half-width or half-depth. // TUNE:
+       */
+      rimFrom: 0.75,
+      rimTo: 0.95,
     },
     /**
      * A storm's lower deck: a flat, see-through, darker slab hanging `drop`
