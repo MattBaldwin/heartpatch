@@ -19,6 +19,7 @@ import { attachCloudShade, type CloudFlash } from './cloud-plugin.js';
 import { attachRain, RAIN_ATTRIBUTE } from './rain-plugin.js';
 import { buildBank, buildBolt, buildCloud } from './weather-clouds.js';
 import { createStormLight } from './storm-light.js';
+import { createStormMarks } from './storm-marks.js';
 import { WEATHER_LOOK } from './weather-config.js';
 import { skyFlash } from './weather-flash.js';
 import { FULL_CLOUDS } from './weather-layout.js';
@@ -32,7 +33,9 @@ import { createWeatherTint } from './weather-tint.js';
 // storm (and a glow pass round the bolts on the high tier). Lightning lights
 // the cloud bellies and flashes the scene's light; a storm over the patch
 // dims and cools it. Cozy Patches build nothing. The map's tile marks and
-// flags are DOM over the canvas, so they stay readable over a cloud.
+// flags are DOM over the canvas, so they stay readable over a cloud; they keep
+// clear of a bolt's foot, and a 🌙 under a storm's bank is a small one
+// (storm-marks.ts).
 
 export interface WeatherLayerOptions {
   readonly store: WeatherStore;
@@ -297,6 +300,20 @@ export function createWeatherLayer(options: WeatherLayerOptions): WeatherLayer {
             placed: placer.placed,
           };
         };
+
+        // The map's DOM marks keep clear of the bolts' feet, and a 🌙 seen
+        // through a bank is drawn smaller (storm-marks.ts). After each frame,
+        // so they follow the camera as drawn.
+        const marks = createStormMarks(options.root ?? document.body);
+        running(() => {
+          marks.remove();
+        });
+        const placeMarks = scene.onAfterRenderObservable.add(() => {
+          marks.update(scene, layout, bolt.isEnabled(), performance.now());
+        });
+        running(() => {
+          scene.onAfterRenderObservable.remove(placeMarks);
+        });
 
         running(store.onChange(refresh));
         running(store.start());

@@ -211,3 +211,20 @@
 .weather-sheet-open .hollow-open-badge {
   visibility: hidden;
 }
+
+/* A bolt's foot (storm-marks.ts): an empty, see-through box the map's flags
+   and marks keep clear of, as they do of my Keeper. Never in a tap's way. */
+.weather-bolt-room {
+  position: fixed;
+  z-index: 0;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* A 🌙 seen through a storm's bank: still there, but small, so the bank isn't
+   polka-dotted (#686). Its box stays centred on its tile. TUNE: */
+.dark-moon.weather-under-storm {
+  font-size: 11px;
+}
