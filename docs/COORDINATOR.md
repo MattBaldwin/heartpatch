@@ -185,7 +185,7 @@ Post the verdict comment summarizing each round. Don't merge.
    - current `main` state, open PRs and sessions;
    - the queued follow-ups (§9);
    - the next batch to launch.
-4. Retire the old session (rename it "(retired)"). Don't archive it until the owner says so. (Build sessions are archived after merge, per §4; supervisor sessions are not.)
+4. Retire the old session (rename it "(retired)") and archive it once the new supervisor has confirmed the handoff (owner, 2026-10-28). Name the new session "Heartpatch supervisor N (coordinator)" and tag it `heartpatch:supervisor` and `heartpatch:phase-1` to keep the lineage visible.
 5. **Lineage limit (coordinator rule, 2026-10-11):** sessions nest at most 8 deep, counting the owner's first supervisor session as depth 1. The last supervisor, at depth 7, doesn't start another one. It writes the handoff into the repo (this playbook, DECISIONS, and the §9 state) and asks the owner to start the next supervisor from a fresh session.
 
 ## 9. Open follow-ups for upcoming briefs
