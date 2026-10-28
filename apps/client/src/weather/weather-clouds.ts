@@ -227,12 +227,19 @@ export function bankField(x: number, y: number, z: number): number {
 }
 
 /**
- * A storm's bank, its belly at y = 0: one surface grown from a sphere
- * stretched to the slab's size (so its vertices spread evenly over the wide
- * top, not bunched in the middle), each vertex pushed out along its own ray
- * to the outermost crossing of the field (so a puff that leans out keeps its
- * bump). Anything below the belly is pressed flat onto it: a hard, flat
- * underside. Normals from the field's gradient. Pure, for the tests.
+ * A storm's bank, its belly at y = 0: one surface grown from a sphere, each
+ * vertex pushed in along its own ray to the outermost crossing of the field
+ * (so a puff that leans out keeps its bump). Anything below the belly is
+ * pressed flat onto it: a hard, flat underside. Normals from the field's
+ * gradient. Pure, for the tests.
+ *
+ * The rays start from a flat core most of the slab's size, not one point in
+ * its middle, so over the top they fall almost straight down. Cast from the
+ * middle, they grazed the top and skipped the outer wall of the dip between
+ * the top's puffs and the rim's (a ray coming in can only land on a face
+ * turned away from where it starts): one ring of long triangles bridged that
+ * dip all round, its normals tipped out, and it lit as streaks and a gold
+ * seam (#686).
  */
 export function bankShape(): CloudShape {
   const positions: number[] = [];
@@ -240,24 +247,32 @@ export function bankShape(): CloudShape {
   const indices: number[] = [];
   const e = 0.01;
   const oy = BANK.thick * 0.3;
-  // Far enough out along every ray to be outside the slab and its puffs.
-  const sx = BANK.wide * 1.25;
+  // The core the rays start from, inside the slab.
+  const cx = BANK.wide * 0.9;
+  const cz = BANK.deep * 0.75;
+  // How far each ray reaches past the core: with it, far enough out to be
+  // outside the slab and its puffs.
+  const sx = BANK.wide * 0.4;
   const sy = BANK.thick * 3.2;
-  const sz = BANK.deep * 1.4;
+  const sz = BANK.deep * 0.95;
   const steps = 20;
   for (let j = 0; j <= BANK_RINGS; j++) {
     const polar = (j / BANK_RINGS) * Math.PI;
     for (let i = 0; i <= BANK_SEGMENTS; i++) {
       const around = (i / BANK_SEGMENTS) * Math.PI * 2;
-      const dx = Math.sin(polar) * Math.cos(around) * sx;
+      const ux = Math.sin(polar) * Math.cos(around);
+      const uz = Math.sin(polar) * Math.sin(around);
+      const ox = ux * cx;
+      const oz = uz * cz;
+      const dx = ux * sx;
       const dy = Math.cos(polar) * sy;
-      const dz = Math.sin(polar) * Math.sin(around) * sz;
+      const dz = uz * sz;
       // Walk in from outside to the first point inside, then bisect.
       let outside = 1;
       let inside = 0;
       for (let k = steps - 1; k >= 0; k--) {
         const t = k / steps;
-        if (bankField(dx * t, oy + dy * t, dz * t) < 0) {
+        if (bankField(ox + dx * t, oy + dy * t, oz + dz * t) < 0) {
           inside = t;
           break;
         }
@@ -265,13 +280,13 @@ export function bankShape(): CloudShape {
       }
       for (let k = 0; k < 12; k++) {
         const t = (inside + outside) / 2;
-        if (bankField(dx * t, oy + dy * t, dz * t) < 0) inside = t;
+        if (bankField(ox + dx * t, oy + dy * t, oz + dz * t) < 0) inside = t;
         else outside = t;
       }
       const t = (inside + outside) / 2;
-      const x = dx * t;
+      const x = ox + dx * t;
       let y = oy + dy * t;
-      const z = dz * t;
+      const z = oz + dz * t;
       let nx = bankField(x + e, y, z) - bankField(x - e, y, z);
       let ny = bankField(x, y + e, z) - bankField(x, y - e, z);
       let nz = bankField(x, y, z + e) - bankField(x, y, z - e);
@@ -304,6 +319,15 @@ let bankOnce: CloudShape | null = null;
 export function buildBank(scene: Scene): Mesh {
   bankOnce ??= bankShape();
   return cloudMesh(scene, 'weather-bank', bankOnce, 0);
+}
+
+/** How high a bank's top reaches over its belly, at scale 1. */
+export function bankTop(): number {
+  bankOnce ??= bankShape();
+  let top = 0;
+  for (let i = 1; i < bankOnce.positions.length; i += 3)
+    top = Math.max(top, bankOnce.positions[i] ?? 0);
+  return top;
 }
 
 /** The bolt's path, top to bottom, in a 1-tall frame hanging from y = 0; and a short fork off its third kink. */

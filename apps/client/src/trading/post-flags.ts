@@ -84,10 +84,11 @@ const TOP_BAR =
   '.tray-top-left, .tray-top-right, .auth-chip-toggle, body:not(.hp-trays-on) .auth-chip';
 /**
  * Everything over the map: the corner buttons (an open Keeper menu too), the
- * patch name pill, the tray handles (#426), the night's chips (#306) and
- * every open sheet or panel.
+ * patch name pill, the tray handles (#426), the night's chips (#306), every
+ * open sheet or panel, and a storm's bolt feet (weather/storm-marks.ts), so
+ * no pill sits where lightning lands.
  */
-const OVER_MAP = `.tray-top-left, .tray-top-right, .auth-chip, .map-hud, .tray-handle, .night-chip, ${SHEET_SELECTOR}`;
+const OVER_MAP = `.tray-top-left, .tray-top-right, .auth-chip, .map-hud, .tray-handle, .night-chip, .weather-bolt-room, ${SHEET_SELECTOR}`;
 
 /**
  * What a flag must keep clear of, in CSS pixels: where the top bar ends (0

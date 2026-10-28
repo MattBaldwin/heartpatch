@@ -174,4 +174,13 @@ export const WEATHER_LOOK = {
       [1, 0],
     ] as readonly [number, number][],
   },
+  /**
+   * The map's DOM marks with a storm (#686 follow-ups, storm-marks.ts): a
+   * bolt's `foot` is kept clear of the map's pills and marks, from `from` of
+   * the way down the bolt to its foot and `pool` bolt lengths round it; a 🌙
+   * seen through a storm's bank is drawn smaller, so the bank isn't
+   * polka-dotted, and looked at again at most every `every` ms. The size is
+   * in weather.css (`.weather-under-storm`). // TUNE:
+   */
+  marks: { from: 0.55, pool: 0.3, every: 100 },
 } as const;
