@@ -331,6 +331,10 @@ describe('every building has a model (#715)', () => {
         const { body, glow } = buildBuildingModel(scene, id, 'plain', level);
         const map = buildFence(scene, id, level, fenceLength(HEX_SIZE));
         expect(body.getTotalVertices(), `${id} L${String(level)}`).toBe(map.getTotalVertices());
+        // The same size too: no extra level scale on top of the fence's own.
+        const size = (m: Mesh) => m.getBoundingInfo().boundingBox.extendSize;
+        expect(size(body).y, `${id} L${String(level)} height`).toBeCloseTo(size(map).y, 5);
+        expect(size(body).x, `${id} L${String(level)} length`).toBeCloseTo(size(map).x, 5);
         expect(glow, id).toBeNull();
       }
     }

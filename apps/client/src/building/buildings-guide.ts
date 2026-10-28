@@ -152,10 +152,17 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
   const pictures = createGuidePortraits(options.portraits, list);
   /** The shelf whose jump chip was tapped last (cleared on every redraw). */
   let tapped: string | null = null;
+  /** A frame is booked to re-pick the chip (one pick per frame while the list scrolls). */
+  let picking = false;
   list.addEventListener(
     'scroll',
     () => {
-      pickChip();
+      if (picking) return;
+      picking = true;
+      requestAnimationFrame(() => {
+        picking = false;
+        pickChip();
+      });
     },
     { passive: true },
   );
@@ -254,7 +261,9 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
     const head = heads.find((h) => h.dataset['shelf'] === tapped);
     if (bottom && head && at(head) >= list.scrollTop) key = tapped ?? key;
     for (const chip of jumps.querySelectorAll<HTMLElement>('.guide-chip')) {
-      if (chip.dataset['jump'] === key) chip.setAttribute('aria-current', 'true');
+      const on = chip.dataset['jump'] === key;
+      if (on === chip.hasAttribute('aria-current')) continue;
+      if (on) chip.setAttribute('aria-current', 'true');
       else chip.removeAttribute('aria-current');
     }
   }

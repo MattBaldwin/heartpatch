@@ -1758,8 +1758,8 @@ function buildModel(
     zee(0.1, top + 0.12, 0.12);
     zee(0.28, top + 0.3, 0.16);
   }
-  // Each level stands a little bigger.
-  const { across, up } = levelScale(l);
+  // Each level stands a little bigger (not a fence: `buildFence` sizes its own levels).
+  const { across, up } = FENCES.has(buildingId) ? { across: 1, up: 1 } : levelScale(l);
   if (across !== 1 || up !== 1) {
     for (const mesh of [...body, ...glow]) {
       mesh.position.multiplyInPlace(new Vector3(across, up, across));
