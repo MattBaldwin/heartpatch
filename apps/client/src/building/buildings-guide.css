@@ -157,7 +157,9 @@
 .guide-jump {
   display: flex;
   gap: 6px;
-  padding: 4px 12px 8px;
+  padding: 4px var(--hp-pad-x) 8px;
+  /* A picked chip slides in with this much room, so its label never touches the edge. */
+  scroll-padding-inline: var(--hp-pad-x);
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
@@ -182,10 +184,12 @@
   color: #7a2d55;
 }
 
-/* The shelf in view (or the one tapped), picked like the wardrobe's chips. */
+/* The shelf in view (or the one tapped): filled with the primary plum so it
+   reads at a glance (white on plum is about 5:1). */
 .guide-chip[aria-current='true'] {
-  border-color: #ff7aa2;
-  background: #fff;
+  border-color: var(--hp-primary-lip);
+  background: var(--hp-primary);
+  color: var(--hp-primary-ink);
 }
 
 .guide-list {

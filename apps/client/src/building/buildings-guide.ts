@@ -263,9 +263,24 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
     for (const chip of jumps.querySelectorAll<HTMLElement>('.guide-chip')) {
       const on = chip.dataset['jump'] === key;
       if (on === chip.hasAttribute('aria-current')) continue;
-      if (on) chip.setAttribute('aria-current', 'true');
-      else chip.removeAttribute('aria-current');
+      if (on) {
+        chip.setAttribute('aria-current', 'true');
+        showChip(chip);
+      } else chip.removeAttribute('aria-current');
     }
+  }
+
+  /**
+   * Slides the chip row so a newly picked chip sits fully inside it, with the
+   * row's padding to spare. It scrolls only the row: `scrollIntoView` would
+   * also nudge the sheet and page on iOS.
+   */
+  function showChip(chip: HTMLElement): void {
+    const row = jumps.getBoundingClientRect();
+    const box = chip.getBoundingClientRect();
+    const pad = parseFloat(getComputedStyle(jumps).scrollPaddingLeft) || 0;
+    if (box.left < row.left + pad) jumps.scrollLeft -= row.left + pad - box.left;
+    else if (box.right > row.right - pad) jumps.scrollLeft += box.right - (row.right - pad);
   }
 
   function entryCard(

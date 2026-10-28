@@ -68,6 +68,18 @@ async function picturesDrawn(page: Page): Promise<string[]> {
 }
 
 /** The ✕ is what a tap at its middle lands on: nothing (the Keeper menu) covers it. */
+/** The picked jump chip sits wholly inside the chip row's visible box. */
+async function pickedChipShown(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const row = document.querySelector('[data-testid="guide-jump"]');
+    const chip = row?.querySelector('.guide-chip[aria-current="true"]');
+    if (!row || !chip) return false;
+    const r = row.getBoundingClientRect();
+    const c = chip.getBoundingClientRect();
+    return c.left >= r.left && c.right <= r.right;
+  });
+}
+
 async function closeTappable(page: Page): Promise<boolean> {
   return page.evaluate(() => {
     const close = document.querySelector('[data-testid="guide-close"]');
@@ -157,6 +169,14 @@ test('See all buildings lists every building, what fits here, and builds from it
   await fences.tap();
   await expect(fences).toHaveAttribute('aria-current', 'true');
   await expect(guide.locator('.guide-chip[aria-current]')).toHaveCount(1);
+  // Scrolling the list moves the pick, and the row slides the picked chip
+  // fully into view (no "ires" for Fires), from the bottom back to the top.
+  const shelfList = guide.getByTestId('guide-list');
+  await shelfList.evaluate((l) => (l.scrollTop = l.scrollHeight));
+  await expect.poll(() => pickedChipShown(page)).toBe(true);
+  await shelfList.evaluate((l) => (l.scrollTop = 0));
+  await expect(chips.first()).toHaveAttribute('aria-current', 'true');
+  await expect.poll(() => pickedChipShown(page)).toBe(true);
   expect(await picturesDrawn(page)).toEqual(expect.arrayContaining(['hedge']));
   await guide.getByTestId('guide-entry').last().scrollIntoViewIfNeeded();
   expect(await picturesDrawn(page)).toContain(state.ids.at(-1));
