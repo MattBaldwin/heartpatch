@@ -2019,3 +2019,19 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 - **Big numbers on cards** read like "10.8k" (shared `shortNumber`). 24 h storage at L1 is the design for every building, not a tuning bug.
 - **CI changes are the coordinator's.** The e2e `timeout-minutes` is 45 (#709) until the groups are rebalanced.
 - **Merging main into a PR to re-run CI is fine when main moved.** A verdict carries across a main-only merge: the supervisor posts a comment naming the new head and the main-only diff.
+
+## 2026-10-28 — Owner decisions and coordinator calls (supervisor 24)
+
+**Owner decisions**
+- **#710 screens approved (A)** and merged.
+- **Buildings guide (#715, owner request 2026-10-27).**
+  - **Entry point B:** a "See all buildings" link in the Build sheet. No HUD or menu button.
+  - **Mockup approved:** https://claude.ai/artifact/CnYd5KSi4A2Cmytfh2Zgyu. Variant B also shows later unlocks greyed on a "Coming later" shelf.
+  - **Labels:** a season gate reads "Back next Halloween"; a level or progress gate reads "Unlocks at level N" or "Unlocks in N days"; "Coming soon!" is only for things not yet in the game.
+- **Storm lane before the iPhone SE layout lane** (owner, 2026-10-28).
+
+**Coordinator calls**
+- **The guide's "fits" comes from the Build sheet's own `BuildSource` cards.** There is no second placement rule on the client.
+- **Merging `main` into an approved PR to re-run CI** (when `main` moved) is the way around 403 re-runs. The verdict carries, as supervisor 23 decided.
+- **e2e per-spec timings come from check-run annotations** (`gh api repos/.../check-runs/<id>/annotations`, title `spec-timing`). `ci.yml` `timeout-minutes` stays 45 until 3–4 more runs confirm ~24-minute groups, then drops to ~40.
+- **Watermill rate is 6/h** (`cyclePercent` 200). The #715 mockup's 12/h was wrong; the data is right.
