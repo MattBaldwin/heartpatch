@@ -2037,3 +2037,14 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 - **e2e per-spec timings come from check-run annotations** (`gh api repos/.../check-runs/<id>/annotations`, title `spec-timing`). `ci.yml` `timeout-minutes` stays 45 until 3–4 more runs confirm ~24-minute groups, then drops to ~40.
 - **Watermill rate is 6/h** (`cyclePercent` 200). The #715 mockup's 12/h was wrong; the data is right.
 - **A 🌙 seen through a storm bank is drawn small** (11 px vs 18 px), not hidden. Map pills keep clear of a bolt's foot through `flagRoom` covers (#717).
+
+## 2026-10-28 — Owner decisions and coordinator calls (supervisor 25)
+
+**Owner decisions**
+- **#716 Buildings guide merged (A).** Both merge conditions were met: real fence portraits, and a picked jump chip filled plum with white text that scrolls into view. Follow-up on #715: a soft fade at the chip row's edges, so a partly scrolled-off chip reads as "swipe for more".
+- **Storm look is final for Phase 1 (A).** #720 removed the leftover gold arc inside the storm bank's top. The cause was the rim light catching an inner ridge. Screens: https://claude.ai/artifact/BYVtDPAg9TmvYtvpsLfy21.
+- **Retired supervisors are archived** once the new supervisor confirms the handoff (COORDINATOR §8.4).
+
+**Coordinator calls**
+- **A render-check FIX about the evidence page goes to the owner as a merge question.** When the game itself meets the owner's conditions and the FIX only concerns the page, the supervisor asks the owner rather than paying for another lane.
+- **A later test-only commit needs its own APPROVE.** When the lane's APPROVE is on an earlier head and a test-only commit follows, a fresh small reviewer checks the delta. Its verdict names the exact head before merge.
