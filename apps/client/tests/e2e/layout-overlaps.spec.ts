@@ -1,4 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
+import { selectTile } from './claim-land.js';
+import { api, hook } from './dev-hook.js';
 import { expectClear, settled } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
@@ -20,25 +22,18 @@ const PHONES = [
 
 /** My tiles (a fresh patch owns only mine). */
 async function myTiles(page: Page): Promise<{ q: number; r: number }[]> {
-  return page.evaluate(async () => {
-    const id = window.__heartpatch?.map?.()?.id;
-    const res = await fetch(`/api/v1/maps/${String(id)}/view`, {
-      headers: { 'x-requested-with': 'heartpatch' },
-    });
-    const view = (await res.json()) as {
-      tiles: { q: number; r: number; ownerUserId: string | null }[];
-    };
-    return view.tiles.filter((t) => t.ownerUserId !== null);
-  });
+  const map = await hook<{ id: string }>(page, 'map');
+  const view = await api<{ tiles: { q: number; r: number; ownerUserId: string | null }[] }>(
+    page,
+    'GET',
+    `/maps/${map!.id}/view`,
+  );
+  return view.body.tiles.filter((t) => t.ownerUserId !== null);
 }
 
 /** Opens a tile's panel, as a tap on it would. */
 async function openTile(page: Page, tile: { q: number; r: number }): Promise<void> {
-  const picked = await page.evaluate(
-    ({ q, r }) => window.__heartpatch?.mapDev?.().select(q, r) === true,
-    tile,
-  );
-  expect(picked).toBe(true);
+  await selectTile(page, tile);
   await expect(page.getByTestId('tile-panel')).toBeVisible();
 }
 

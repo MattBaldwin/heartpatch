@@ -1,6 +1,6 @@
 ---
 title: Buttons stop bumping into each other
-area: map
+area: land
 ---
 
 On small phones the 🐾 button no longer squishes into "My patches", a busy tile's card has room for all its lines, and on an iPad it stays under your patch's name.
