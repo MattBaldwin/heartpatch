@@ -1,3 +1,4 @@
+import { plainMarkers } from '../procedural/buildings/building-models.js';
 import type { BuildingPortraitLook, BuildingPortraits } from '../procedural/portraits.js';
 import { el } from '../ui/dom.js';
 import { askPortrait } from '../works/works-card.js';
@@ -56,7 +57,8 @@ export function lazyAsks<T, L>(
 export interface GuidePortraits {
   /**
    * A card's picture box: empty until it nears the screen and is drawn. Its
-   * `data-portrait` says waiting, drawing, drawn or none (e2e waits on drawn).
+   * `data-portrait` says waiting, drawing, drawn or none (e2e waits on drawn),
+   * or plain when it drew the lilac box of a building with no model yet.
    */
   box(look: BuildingPortraitLook): HTMLElement;
   /** Forgets every box not yet asked for (the list was redrawn or the guide shut). */
@@ -79,7 +81,11 @@ export function createGuidePortraits(
       undefined,
       GUIDE_PORTRAIT_TRIES,
     ).then((drawn) => {
-      box.dataset['portrait'] = drawn ? 'drawn' : 'none';
+      box.dataset['portrait'] = !drawn
+        ? 'none'
+        : plainMarkers.has(look.buildingId)
+          ? 'plain'
+          : 'drawn';
     });
   });
   return {

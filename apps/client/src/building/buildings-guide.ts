@@ -150,6 +150,15 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
   );
   sheet.hidden = true;
   const pictures = createGuidePortraits(options.portraits, list);
+  /** The shelf whose jump chip was tapped last (cleared on every redraw). */
+  let tapped: string | null = null;
+  list.addEventListener(
+    'scroll',
+    () => {
+      pickChip();
+    },
+    { passive: true },
+  );
   sheet.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') back.click();
   });
@@ -195,6 +204,7 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
       seg('all', GUIDE_TEXT.allFilter(entries.length)),
     );
 
+    tapped = null;
     jumps.replaceChildren(
       ...shelves.map((s) => {
         const b = el(
@@ -204,7 +214,9 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
         );
         b.addEventListener('click', () => {
           const head = list.querySelector<HTMLElement>(`[data-shelf="${s.key}"]`);
+          tapped = s.key;
           if (head) list.scrollTop = head.offsetTop - list.offsetTop;
+          pickChip();
         });
         return b;
       }),
@@ -224,6 +236,27 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
             ...s.items.map((e) => entryCard(e, fit.get(e.id), counts.get(e.id) ?? 0)),
           ])),
     );
+    pickChip();
+  }
+
+  /**
+   * Marks the jump chip of the shelf in view (#715) with `aria-current`: the
+   * last shelf whose heading has reached the list's top. At the very bottom
+   * the last shelves can't reach it, so a tapped one still on screen stays picked.
+   */
+  function pickChip(): void {
+    const top = list.scrollTop + 8; // TUNE: a heading just under the top counts
+    const heads = [...list.querySelectorAll<HTMLElement>('[data-shelf]')];
+    const at = (h: HTMLElement) => h.offsetTop - list.offsetTop;
+    let key = heads[0]?.dataset['shelf'];
+    for (const h of heads) if (at(h) <= top) key = h.dataset['shelf'];
+    const bottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 2;
+    const head = heads.find((h) => h.dataset['shelf'] === tapped);
+    if (bottom && head && at(head) >= list.scrollTop) key = tapped ?? key;
+    for (const chip of jumps.querySelectorAll<HTMLElement>('.guide-chip')) {
+      if (chip.dataset['jump'] === key) chip.setAttribute('aria-current', 'true');
+      else chip.removeAttribute('aria-current');
+    }
   }
 
   function entryCard(

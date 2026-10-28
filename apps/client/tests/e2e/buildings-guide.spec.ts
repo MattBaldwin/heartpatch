@@ -46,15 +46,23 @@ const onScreen = (page: Page) =>
       .map((card) => card.dataset['building'] ?? '');
   });
 
-/** Every card on screen gets its picture (the guide's own `data-portrait` signal). */
+/**
+ * Every card on screen gets its picture (the guide's own `data-portrait`
+ * signal), and a real model's: `plain` is the lilac box of a building with none.
+ */
 async function picturesDrawn(page: Page): Promise<string[]> {
   const ids = await onScreen(page);
   expect(ids.length).toBeGreaterThan(0);
   for (const id of ids) {
-    await expect(
-      page.locator(`[data-building="${id}"] .guide-portrait`),
-      `${id}'s picture`,
-    ).toHaveAttribute('data-portrait', 'drawn', { timeout: 60_000 });
+    const picture = page.locator(`[data-building="${id}"] .guide-portrait`);
+    await expect(picture, `${id}'s picture`).toHaveAttribute(
+      'data-portrait',
+      /^(drawn|plain|none)$/,
+      { timeout: 60_000 },
+    );
+    expect(await picture.getAttribute('data-portrait'), `${id}'s picture is its own model`).toBe(
+      'drawn',
+    );
   }
   return ids;
 }
@@ -141,6 +149,15 @@ test('See all buildings lists every building, what fits here, and builds from it
   // The last cards (the end of the old all-at-once queue) draw as they
   // scroll in, and so does Coming later when this patch has one.
   await guide.getByTestId('guide-filter-all').tap();
+  // The first shelf's chip starts picked; a tapped chip takes over, and the
+  // fences draw as fences, not the plain box.
+  const chips = guide.locator('.guide-chip');
+  await expect(chips.first()).toHaveAttribute('aria-current', 'true');
+  const fences = guide.locator('[data-jump="fences"]');
+  await fences.tap();
+  await expect(fences).toHaveAttribute('aria-current', 'true');
+  await expect(guide.locator('.guide-chip[aria-current]')).toHaveCount(1);
+  expect(await picturesDrawn(page)).toEqual(expect.arrayContaining(['hedge']));
   await guide.getByTestId('guide-entry').last().scrollIntoViewIfNeeded();
   expect(await picturesDrawn(page)).toContain(state.ids.at(-1));
   if (state.later.length > 0) {

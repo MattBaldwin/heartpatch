@@ -9,10 +9,23 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import type { Scene } from '@babylonjs/core/scene';
 import { GAME_DATA } from '@heartpatch/shared';
+import { buildFence } from '../../map/fence-props.js';
+import { fenceLength } from '../../map/fence-layout.js';
+import { HEX_SIZE } from '../../map/map-config.js';
 import { BUILDING_COLORS as C, LEVEL_SCALE, NAP_DIM, TILE_FOOTPRINT } from './building-config.js';
 
 /** The Wild Isle works (#621): the buildings that show a nap cue while paused. */
 const WORKS = new Set(GAME_DATA.buildings.filter((b) => b.kind === 'works').map((b) => b.id));
+
+/** The fences (#715): drawn as the map draws them, one straight segment in their own look. */
+const FENCES = new Set(GAME_DATA.buildings.filter((b) => b.kind === 'fence').map((b) => b.id));
+
+/**
+ * The ids drawn as the plain marker so far (no model of their own yet), so a
+ * test or the Buildings guide can tell a real picture from the lilac box.
+ */
+const markers = new Set<string>();
+export const plainMarkers: ReadonlySet<string> = markers;
 
 /**
  * The Wild Isle buildings that stand in a homestead's middle (#621), each
@@ -1713,6 +1726,12 @@ function buildModel(
       break;
     }
     default:
+      if (FENCES.has(buildingId)) {
+        // The map's own fence look (`fence-props.ts`), one hex edge long.
+        body.push(buildFence(scene, buildingId, l, fenceLength(HEX_SIZE)));
+        break;
+      }
+      markers.add(buildingId);
       part(body, CreateBox(`${name}-box`, { size: 0.5 }, scene), C.plain, [0, 0.25, 0]);
   }
   // Fitted to its tile (`TILE_FOOTPRINT`): shrunk as a whole, or widened only.

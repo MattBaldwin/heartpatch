@@ -182,6 +182,12 @@
   color: #7a2d55;
 }
 
+/* The shelf in view (or the one tapped), picked like the wardrobe's chips. */
+.guide-chip[aria-current='true'] {
+  border-color: #ff7aa2;
+  background: #fff;
+}
+
 .guide-list {
   flex: 1;
   min-height: 0;
