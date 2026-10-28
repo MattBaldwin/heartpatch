@@ -149,6 +149,13 @@
   max-height: none;
 }
 
+/* The trays step aside for the sheet (main.ts onPanelFocus), and without them
+   the account chip fell back to its wide "Hi, name! Log out" pill over the
+   map. It steps aside too (as for a battle or exploring); the sheet has Not now. */
+body:has(.tile-panel-building:not([hidden])) .auth-chip {
+  display: none;
+}
+
 .tile-panel-building .tile-panel-head,
 .tile-panel-building .tile-panel-guardians,
 .tile-panel-building .tile-panel-gatherer,

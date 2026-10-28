@@ -112,6 +112,7 @@ const E2E_GROUPS = [
     'close-up',
     'far-hollow-house',
     'heart-coins',
+    'layout-overlaps',
     'map',
     'raids',
     'territory',

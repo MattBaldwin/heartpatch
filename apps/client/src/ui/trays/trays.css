@@ -528,14 +528,36 @@
 
 /* ── Top corner and little notes ───────────────────────────────────────── */
 
-/* "My patches" in the top-left corner. */
-.tray-top-left {
+/* The top row: "My patches" on the left, the round buttons (Squishies, Chat,
+   Friends) on the right, short of the Keeper menu (the auth chip, top right).
+   One flex row, so the round buttons stop 8px short of "My patches" on any
+   width or font instead of being placed from the right on their own; when it's
+   tight, "My patches" wraps onto two lines rather than sit under them. The row
+   itself lets taps through to the map. */
+.trays > .tray-top {
   position: absolute;
   top: calc(env(safe-area-inset-top) + 8px);
   left: calc(env(safe-area-inset-left) + 12px);
+  /* The Keeper menu's width (auth.css --hp-me-width on the body) and 8px each side. */
+  right: calc(env(safe-area-inset-right) + 16px + var(--hp-me-width, 48px));
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.tray-top > * {
+  pointer-events: auto;
+}
+
+.tray-top-left {
+  display: flex;
+  min-width: 0;
 }
 
 .tray-top-left > button {
+  min-width: min-content;
   min-height: 48px;
   margin: 0;
   padding: var(--hp-pad-y) calc(var(--hp-pad-x) + 4px);
@@ -545,10 +567,8 @@
 
 /* Chat sits left of the Keeper menu (the auth chip, top right). */
 .tray-top-right {
-  position: absolute;
-  top: calc(env(safe-area-inset-top) + 8px);
-  right: calc(env(safe-area-inset-right) + 64px);
   display: flex;
+  flex: none;
   gap: 8px;
 }
 

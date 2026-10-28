@@ -34,10 +34,12 @@
   clip-path: inset(50%);
 }
 
-/* On the map it leads Chat and Friends (the slot draws them round). On
-   phones up to the iPhone SE's 375pt (and a little over) the row tightens so
-   it never reaches "My patches": at 48pt it overlapped its end (#621). */
-@media (max-width: 389px) {
+/* On the map it leads Chat and Friends (the slot draws them round). The top
+   row (trays.css .tray-top) keeps them clear of "My patches" at any width; on
+   phones up to an iPhone 16 Pro's 402pt the row tightens so "My patches" keeps
+   to one line (at 48pt it overlapped its end on an iPhone SE, #621, and had
+   2px to spare on an iPhone 15). */
+@media (max-width: 409px) {
   .tray-top-right {
     gap: 4px;
   }
@@ -50,6 +52,20 @@
   .tray-top-left > button {
     padding-inline: var(--hp-pad-x);
     font-size: 14px;
+  }
+}
+
+/* The narrowest phones (320pt): tighter gaps (the buttons stay 44pt), so
+   "My patches" (on two lines here) and the row still fit beside the Keeper menu. */
+@media (max-width: 359px) {
+  .trays > .tray-top {
+    right: calc(env(safe-area-inset-right) + 8px + var(--hp-me-width) + 4px);
+    gap: 4px;
+  }
+
+  .tray-top-left > button {
+    padding-inline: 8px;
+    font-size: 13px;
   }
 }
 

@@ -268,10 +268,6 @@
   cursor: pointer;
 }
 
-.hp-trays-on .tray-top-right {
-  right: calc(env(safe-area-inset-right) + 8px + var(--hp-me-width) + 8px);
-}
-
 .auth-chip-face {
   flex: none;
   width: 36px;

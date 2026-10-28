@@ -1,0 +1,197 @@
+import { expect, test, type Page } from '@playwright/test';
+import { expectClear, settled } from './layout.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
+
+// Four overlaps the render-checks found on an iPhone SE and an iPad: the 🐾
+// button over "My patches", a busy tile panel cut off in a short window, the
+// "Log out" chip over the map while the Build sheet is up, and the iPad's tile
+// panel over the map's name pill. Each is checked on the game's own boxes.
+
+const SE = { width: 375, height: 667 };
+const PHONES = [
+  { name: 'smallest phone', width: 320, height: 568 },
+  { name: 'iPhone SE', ...SE },
+  { name: 'iPhone 15', width: 393, height: 852 },
+  { name: 'iPhone 16 Pro', width: 402, height: 874 },
+  { name: 'iPhone Pro Max', width: 430, height: 932 },
+  { name: 'iPad portrait', width: 820, height: 1180 },
+  { name: 'iPad landscape', width: 1080, height: 810 },
+] as const;
+
+/** My tiles (a fresh patch owns only mine). */
+async function myTiles(page: Page): Promise<{ q: number; r: number }[]> {
+  return page.evaluate(async () => {
+    const id = window.__heartpatch?.map?.()?.id;
+    const res = await fetch(`/api/v1/maps/${String(id)}/view`, {
+      headers: { 'x-requested-with': 'heartpatch' },
+    });
+    const view = (await res.json()) as {
+      tiles: { q: number; r: number; ownerUserId: string | null }[];
+    };
+    return view.tiles.filter((t) => t.ownerUserId !== null);
+  });
+}
+
+/** Opens a tile's panel, as a tap on it would. */
+async function openTile(page: Page, tile: { q: number; r: number }): Promise<void> {
+  const picked = await page.evaluate(
+    ({ q, r }) => window.__heartpatch?.mapDev?.().select(q, r) === true,
+    tile,
+  );
+  expect(picked).toBe(true);
+  await expect(page.getByTestId('tile-panel')).toBeVisible();
+}
+
+/** Opens the panel of one of my tiles with a Build button (home's middle has Go home). */
+async function openBuildable(page: Page): Promise<void> {
+  for (const tile of await myTiles(page)) {
+    await openTile(page, tile);
+    const build = page.getByTestId('tile-build');
+    if (
+      await build.waitFor({ timeout: 2_000 }).then(
+        () => true,
+        () => false,
+      )
+    )
+      return;
+  }
+  throw new Error('none of my tiles has a Build button');
+}
+
+async function openMyTile(page: Page): Promise<void> {
+  await openTile(page, (await myTiles(page))[0]!);
+}
+
+async function closePanel(page: Page): Promise<void> {
+  const panel = page.getByTestId('tile-panel');
+  await page.evaluate(() => document.querySelector('[data-testid="busy-rows"]')?.remove());
+  await panel.getByRole('button', { name: 'Close' }).tap();
+  await expect(panel).toBeHidden();
+}
+
+/**
+ * A busy tile (roads, a dock, guards, a fire's note): more lines in the panel
+ * than any screen holds, with a button last, as a Wild Isle dock's has.
+ */
+async function makeBusy(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const actions = document.querySelector('[data-testid="tile-panel-actions"]')!;
+    const extra = document.createElement('div');
+    extra.dataset['testid'] = 'busy-rows';
+    for (let i = 0; i < 14; i++) {
+      const line = document.createElement('p');
+      line.textContent = `A busy line, number ${String(i + 1)}.`;
+      line.style.margin = '0 0 10px';
+      extra.append(line);
+    }
+    const last = document.createElement('button');
+    last.type = 'button';
+    last.className = 'hp-button hp-button-secondary';
+    last.dataset['testid'] = 'busy-last';
+    last.textContent = 'Last button';
+    extra.append(last);
+    actions.append(extra);
+  });
+}
+
+test('small phones and iPads: nothing sits on anything (#621 render-checks)', async ({
+  browser,
+}) => {
+  test.setTimeout(300_000); // seven screens; CI renders in software
+  const page = await newPlayer(browser, uniqueName('fit'));
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  // A Wild Isle, as the render-checks were (its home tiles take a Build sheet).
+  await lobby.getByTestId('lobby-patch-type-wild-isle').tap();
+  await lobby.getByLabel('Patch name').fill('Fit Cove');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  const hint = page.getByTestId('tray-hint-ok');
+  if (await hint.isVisible()) await hint.tap();
+
+  for (const screen of PHONES) {
+    await test.step(`${screen.name}: the top row`, async () => {
+      await page.setViewportSize({ width: screen.width, height: screen.height });
+      // The 🐾, Chat and Friends never touch "My patches", nor the Keeper menu.
+      await expectClear(page, '.tray-top-left > button', '.tray-top-right > button');
+      await expectClear(page, '[data-testid="keeper-menu"]', '.tray-top-right > button');
+    });
+  }
+
+  await test.step('iPhone SE: a busy tile panel has room, and its last button is reachable', async () => {
+    await page.setViewportSize(SE);
+    await openMyTile(page);
+    await makeBusy(page);
+    await settled(page);
+    const panel = page.getByTestId('tile-panel');
+    const box = (await panel.boundingBox())!;
+    // Room for most of the screen (it was a 238px window under the side handles),
+    // still under the map's name pill and inside the screen.
+    expect(box.height).toBeGreaterThan(380);
+    expect(box.y + box.height).toBeLessThanOrEqual(SE.height);
+    await expectClear(page, '[data-testid="tile-panel"]', '[data-testid="map-hud"]');
+    // The handles step aside while it's open, so none peeks over it.
+    for (const handle of await page.locator('[data-testid^="tray-handle-"]').all()) {
+      await expect(handle).toBeHidden();
+    }
+    // A taller panel scrolls inside: its last button comes into view, inside the screen.
+    const last = page.getByTestId('busy-last');
+    await last.scrollIntoViewIfNeeded();
+    const lastBox = (await last.boundingBox())!;
+    const after = (await panel.boundingBox())!;
+    expect(lastBox.y).toBeGreaterThanOrEqual(after.y);
+    expect(lastBox.y + lastBox.height).toBeLessThanOrEqual(after.y + after.height);
+    expect(lastBox.y + lastBox.height).toBeLessThanOrEqual(SE.height);
+    await closePanel(page);
+    await expect(page.locator('[data-testid^="tray-handle-"]').first()).toBeVisible();
+  });
+
+  await test.step('iPad: a busy tile panel stops under the map’s name pill', async () => {
+    for (const size of [
+      { width: 1080, height: 810 },
+      { width: 820, height: 1180 },
+    ]) {
+      await page.setViewportSize(size);
+      await openMyTile(page);
+      await makeBusy(page);
+      await expectClear(page, '[data-testid="tile-panel"]', '[data-testid="map-hud"]');
+      await closePanel(page);
+    }
+  });
+
+  for (const screen of [SE, { width: 393, height: 852 }, { width: 1080, height: 810 }]) {
+    await test.step(`${String(screen.width)}×${String(screen.height)}: the Build sheet`, async () => {
+      await page.setViewportSize(screen);
+      await openBuildable(page);
+      const chip = page.locator('.auth-chip');
+      await expect(chip).toBeVisible();
+      const centre = await chip.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      });
+      await page.getByTestId('tile-build').tap();
+      await expect(page.getByTestId('build-sheet')).toBeVisible();
+      await settled(page);
+      // The account chip steps aside with the trays: no "Log out" over the map
+      // (or anything else) where the Keeper menu was.
+      await expect(chip).toBeHidden();
+      await expect(page.getByRole('button', { name: 'Log out' })).toBeHidden();
+      const top = await page.evaluate(
+        ({ x, y }) => document.elementFromPoint(x, y)?.closest('.auth-chip') ?? null,
+        centre,
+      );
+      expect(top).toBeNull();
+      // Build! and Not now are on screen.
+      for (const id of ['build-go', 'build-cancel']) {
+        const b = (await page.getByTestId(id).boundingBox())!;
+        expect(b.y + b.height).toBeLessThanOrEqual(screen.height);
+      }
+      await page.getByTestId('build-cancel').tap();
+      await expect(page.getByTestId('build-sheet')).toBeHidden();
+      await expect(chip).toBeVisible();
+      await closePanel(page);
+    });
+  }
+  await page.context().close();
+});
