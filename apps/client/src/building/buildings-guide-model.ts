@@ -65,6 +65,8 @@ export const GUIDE_TEXT = {
   fitCount: (n: number) => (n === 1 ? 'Fits 1 of your tiles' : `Fits ${String(n)} of your tiles`),
   buildHere: 'Build here',
   needMore: 'Need more',
+  atHome: '🏡 Build it at your home',
+  goHome: 'Go home',
   recipeBook: '📖 Recipe book',
   perEdge: 'an edge',
   groupFits: (n: number) => (n === 0 ? 'none fit here' : `${String(n)} fit here`),
@@ -126,10 +128,11 @@ export function valueLines(value: readonly GuideValue[]): string[] {
       case 'eats':
         return [`Eats ${costWords(v.items)} each time`];
       case 'weather':
-        return Object.entries(v.percent).flatMap(([kind, pct]) => {
-          const w = WEATHER_WORDS[kind as WeatherKind];
-          if (pct > 100) return [`Extra fast in ${w}!`];
-          if (pct < 100) return [`Sleepy in ${w}`];
+        return (Object.keys(WEATHER_WORDS) as WeatherKind[]).flatMap((kind) => {
+          const pct = v.percent[kind];
+          if (pct === undefined) return [];
+          if (pct > 100) return [`Extra fast in ${WEATHER_WORDS[kind]}!`];
+          if (pct < 100) return [`Sleepy in ${WEATHER_WORDS[kind]}`];
           return [];
         });
       case 'only-while':
@@ -210,6 +213,8 @@ export function gateLabel(entry: Pick<BuildingGuideEntry, 'gate'>): string | nul
 export type GuideFit =
   | { readonly kind: 'later'; readonly label: string }
   | { readonly kind: 'fits'; readonly card: BuildCard }
+  /** Built from the home screen, never from a tile's Build sheet (the habitats). */
+  | { readonly kind: 'home' }
   | { readonly kind: 'no'; readonly reason: string };
 
 /**
@@ -218,10 +223,14 @@ export type GuideFit =
  * all says what the building needs, from its data.
  */
 export function fitHere(entry: BuildingGuideEntry, here: readonly BuildCard[]): GuideFit {
-  const label = gateLabel(entry);
-  if (label !== null) return { kind: 'later', label };
+  // A card the sheet offers unblocked wins: the server's season beats the phone's date.
   const card = here.find((c) => c.id === entry.id);
   if (card && card.blocked === null) return { kind: 'fits', card };
+  const label = gateLabel(entry);
+  if (label !== null) return { kind: 'later', label };
+  if (entry.place.some((p) => p.kind === 'placement' && p.placement === 'home')) {
+    return { kind: 'home' };
+  }
   return { kind: 'no', reason: card?.blocked ?? needsLine(entry.place) };
 }
 
@@ -242,10 +251,11 @@ export function needsLine(place: readonly GuidePlace[]): string {
 }
 
 /** What the card's button does. */
-export type GuideAction = 'build' | 'short' | 'craft' | 'off' | 'none';
+export type GuideAction = 'build' | 'short' | 'craft' | 'home' | 'off' | 'none';
 
 export function guideAction(fit: GuideFit, bag: ItemCounts | null): GuideAction {
   if (fit.kind === 'later') return 'none';
+  if (fit.kind === 'home') return 'home';
   if (fit.kind === 'no') return 'off';
   if (fit.card.craft !== null) return 'craft';
   if (bag && !canAfford(bag, fit.card.cost)) return 'short';

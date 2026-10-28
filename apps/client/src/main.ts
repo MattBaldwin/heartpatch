@@ -1322,6 +1322,9 @@ const buildingsGuide = createBuildingsGuide({
     roads.bridgeSource,
   ],
   now: () => new Date(inventory.gameNow()),
+  onHome: () => {
+    void home.open();
+  },
 });
 const tileBuild = createTileBuild({
   guide: buildingsGuide,

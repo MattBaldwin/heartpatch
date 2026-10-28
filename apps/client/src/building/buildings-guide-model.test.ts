@@ -140,10 +140,23 @@ describe('buildings guide words (#715)', () => {
       reason: 'Needs the river 🌊',
     });
     expect(fitHere(mill, [])).toEqual({ kind: 'no', reason: 'Needs river next door' });
-    expect(fitHere(entry('waystation'), [card('waystation')])).toEqual({
+    expect(fitHere(entry('waystation'), [])).toEqual({
       kind: 'later',
       label: 'Coming soon!',
     });
+  });
+
+  it('a habitat is built at home, never from a tile sheet', () => {
+    const den = entry('ember-den');
+    expect(fitHere(den, [])).toEqual({ kind: 'home' });
+    expect(guideAction({ kind: 'home' }, {})).toBe('home');
+    expect(GUIDE_TEXT.atHome).toBe('🏡 Build it at your home');
+  });
+
+  it('a card the sheet offers unblocked wins over the phone-date season gate', () => {
+    const barn = entry('pumpkin-barn', [], 'cozy');
+    expect(fitHere(barn, [])).toEqual({ kind: 'later', label: 'Back next Halloween' });
+    expect(fitHere(barn, [card('pumpkin-barn')])).toMatchObject({ kind: 'fits' });
   });
 
   it('says what a missing building needs, from its data', () => {

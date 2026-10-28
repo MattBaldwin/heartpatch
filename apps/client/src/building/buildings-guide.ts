@@ -49,6 +49,8 @@ export interface BuildingsGuideOptions {
   readonly sources: () => readonly BuildSource[];
   /** The game's clock (the server's date), for which seasons are on. */
   readonly now: () => Date;
+  /** Opens my home base, where the habitats are built ("Go home"). */
+  readonly onHome?: () => void;
 }
 
 /** One opening: the picked tile and what its Build sheet offers there. */
@@ -263,29 +265,58 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
 
     const fitRow = later
       ? []
-      : [
-          el(
-            'div',
-            { class: 'guide-fitrow' },
+      : f.kind === 'home'
+        ? [
             el(
-              'span',
-              {
-                class: `guide-fit ${f.kind === 'fits' ? 'guide-fit-yes' : 'guide-fit-no'}`,
-                'data-testid': 'guide-fit',
-              },
-              f.kind === 'fits' ? GUIDE_TEXT.fits : `✗ ${f.reason}`,
+              'div',
+              { class: 'guide-fitrow' },
+              el(
+                'span',
+                { class: 'guide-fit guide-fit-soon', 'data-testid': 'guide-fit' },
+                GUIDE_TEXT.atHome,
+              ),
             ),
+          ]
+        : [
             el(
-              'span',
-              { class: 'guide-count', 'data-testid': 'guide-count' },
-              GUIDE_TEXT.fitCount(count),
+              'div',
+              { class: 'guide-fitrow' },
+              el(
+                'span',
+                {
+                  class: `guide-fit ${f.kind === 'fits' ? 'guide-fit-yes' : 'guide-fit-no'}`,
+                  'data-testid': 'guide-fit',
+                },
+                f.kind === 'fits' ? GUIDE_TEXT.fits : `✗ ${f.reason}`,
+              ),
+              el(
+                'span',
+                { class: 'guide-count', 'data-testid': 'guide-count' },
+                GUIDE_TEXT.fitCount(count),
+              ),
             ),
-          ),
-        ];
+          ];
 
     const action = guideAction(f, opening?.bag ?? null);
     let foot: HTMLElement;
-    if (f.kind === 'later') {
+    if (f.kind === 'home') {
+      foot = el(
+        'button',
+        {
+          type: 'button',
+          class: buttonClass({ variant: 'primary', small: true }),
+          'data-testid': 'guide-home',
+        },
+        GUIDE_TEXT.goHome,
+      );
+      (foot as HTMLButtonElement).disabled = !options.onHome;
+      foot.addEventListener('click', () => {
+        const was = shown;
+        shut();
+        was?.opening.onClose();
+        options.onHome?.();
+      });
+    } else if (f.kind === 'later') {
       foot = el(
         'span',
         { class: 'guide-fit guide-fit-soon', 'data-testid': 'guide-later' },
@@ -310,6 +341,7 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
       foot.addEventListener('click', () => {
         if (!opening) return;
         shut();
+        // The river sheet has no recipe book, and offers no card to make first.
         if (action === 'craft' && opening.onRecipeBook) opening.onRecipeBook();
         else opening.onBuildHere(entry.id);
       });
