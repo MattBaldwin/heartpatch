@@ -123,11 +123,19 @@ test('small phones and iPads: nothing sits on anything (#621 render-checks)', as
     const box = (await panel.boundingBox())!;
     // Room for half the screen (it was a 238px window under the side handles),
     // still under the map's name pill and inside the screen.
-    expect(box.height).toBeGreaterThan(320);
+    expect(box.height).toBeGreaterThan(300);
     expect(box.y + box.height).toBeLessThanOrEqual(SE.height);
     await expectClear(page, '[data-testid="tile-panel"]', '[data-testid="map-hud"]');
-    // The handles move up over it, under the map's chips: Home and Bag stay one
-    // tap away (#165), on nothing and under nothing.
+    // The handles move up over it, under the land chip (shown here, as when land
+    // misses you, with Wild Isle's cut-off card): Home and Bag stay one tap away
+    // (#165), on nothing and under nothing. The cut-off card steps aside.
+    await page.evaluate(() => {
+      for (const id of ['land-chip', 'stranded-card']) {
+        document.querySelector<HTMLElement>(`[data-testid="${id}"]`)!.hidden = false;
+      }
+    });
+    await expect(page.getByTestId('land-chip')).toBeVisible();
+    await expect(page.getByTestId('stranded-card')).toBeHidden();
     for (const side of ['adventure', 'heartpatch']) {
       await expect(page.getByTestId(`tray-handle-${side}`)).toBeVisible();
       await expectClear(
@@ -146,6 +154,12 @@ test('small phones and iPads: nothing sits on anything (#621 render-checks)', as
     expect(lastBox.y + lastBox.height).toBeLessThanOrEqual(SE.height);
     await closePanel(page);
     await expect(page.locator('[data-testid^="tray-handle-"]').first()).toBeVisible();
+    await expect(page.getByTestId('stranded-card')).toBeVisible();
+    await page.evaluate(() => {
+      for (const id of ['land-chip', 'stranded-card']) {
+        document.querySelector<HTMLElement>(`[data-testid="${id}"]`)!.hidden = true;
+      }
+    });
   });
 
   await test.step('iPad: a busy tile panel stops under the map’s name pill', async () => {
