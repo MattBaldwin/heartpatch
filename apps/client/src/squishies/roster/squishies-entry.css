@@ -63,8 +63,10 @@
     gap: 4px;
   }
 
+  /* Two lines' glyphs stand taller than their 1.2 line boxes: 10px top and
+     bottom keeps them clear of the button's edge (tray-layout's 8px). */
   .tray-top-left > button {
-    padding-inline: 8px;
+    padding: 10px 8px;
     font-size: 13px;
   }
 }
