@@ -2029,9 +2029,11 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
   - **Mockup approved:** https://claude.ai/artifact/CnYd5KSi4A2Cmytfh2Zgyu. Variant B also shows later unlocks greyed on a "Coming later" shelf.
   - **Labels:** a season gate reads "Back next Halloween"; a level or progress gate reads "Unlocks at level N" or "Unlocks in N days"; "Coming soon!" is only for things not yet in the game.
 - **Storm lane before the iPhone SE layout lane** (owner, 2026-10-28).
+- **#717 storm visuals: A, merge now** (owner, 2026-10-28). The leftover thin gold arc in the storm bank's top goes to a small follow-up lane.
 
 **Coordinator calls**
 - **The guide's "fits" comes from the Build sheet's own `BuildSource` cards.** There is no second placement rule on the client.
 - **Merging `main` into an approved PR to re-run CI** (when `main` moved) is the way around 403 re-runs. The verdict carries, as supervisor 23 decided.
 - **e2e per-spec timings come from check-run annotations** (`gh api repos/.../check-runs/<id>/annotations`, title `spec-timing`). `ci.yml` `timeout-minutes` stays 45 until 3–4 more runs confirm ~24-minute groups, then drops to ~40.
 - **Watermill rate is 6/h** (`cyclePercent` 200). The #715 mockup's 12/h was wrong; the data is right.
+- **A 🌙 seen through a storm bank is drawn small** (11 px vs 18 px), not hidden. Map pills keep clear of a bolt's foot through `flagRoom` covers (#717).
