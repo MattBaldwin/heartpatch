@@ -9,7 +9,7 @@ import { askPortrait } from '../works/works-card.js';
 
 /** Asks in all for one picture before it stays the soft square. */
 export const GUIDE_PORTRAIT_TRIES = 5; // TUNE
-/** How far below the list's bottom edge a card starts drawing. */
+/** How far past the list's top and bottom edges a card starts drawing. */
 export const GUIDE_PORTRAIT_MARGIN = '240px'; // TUNE: about one card
 
 /** The bits of IntersectionObserver used, so a test can stand in for it. */
@@ -24,7 +24,7 @@ const browserNearScreen: NearScreenFactory<Element> = (near, root) =>
     (seen) => {
       for (const s of seen) if (s.isIntersecting) near(s.target);
     },
-    { root, rootMargin: `0px 0px ${GUIDE_PORTRAIT_MARGIN} 0px` },
+    { root, rootMargin: `${GUIDE_PORTRAIT_MARGIN} 0px` },
   );
 
 /** Runs `start` once for each added target, when it first comes near the screen. */

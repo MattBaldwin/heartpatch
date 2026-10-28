@@ -31,7 +31,7 @@ const guideState = (page: Page) => hook<GuideDebug>(page, 'buildingsGuide');
 const buildState = (page: Page) => hook<BuildDebug>(page, 'tileBuild');
 const mapState = (page: Page) => hook<{ id: string; selected: string | null }>(page, 'map');
 
-/** The cards the guide's list shows on screen now, by building id. */
+/** The cards whose picture the guide's list shows on screen now, by building id. */
 const onScreen = (page: Page) =>
   page.evaluate(() => {
     const list = document.querySelector('[data-testid="guide-list"]');
@@ -39,7 +39,8 @@ const onScreen = (page: Page) =>
     const box = list.getBoundingClientRect();
     return [...list.querySelectorAll<HTMLElement>('[data-testid="guide-entry"]')]
       .filter((card) => {
-        const r = card.getBoundingClientRect();
+        const r = card.querySelector('.guide-portrait')?.getBoundingClientRect();
+        if (!r) return false;
         return r.bottom > box.top && r.top < box.bottom;
       })
       .map((card) => card.dataset['building'] ?? '');
@@ -137,10 +138,15 @@ test('See all buildings lists every building, what fits here, and builds from it
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(view.width);
 
-  // Coming later, the Waystation among it: its pictures come as it scrolls in.
+  // The last cards (the end of the old all-at-once queue) draw as they
+  // scroll in, and so does Coming later when this patch has one.
   await guide.getByTestId('guide-filter-all').tap();
-  await guide.locator('[data-jump="later"]').tap();
-  expect(await picturesDrawn(page)).toContain('waystation');
+  await guide.getByTestId('guide-entry').last().scrollIntoViewIfNeeded();
+  expect(await picturesDrawn(page)).toContain(state.ids.at(-1));
+  if (state.later.length > 0) {
+    await guide.locator('[data-jump="later"]').tap();
+    expect(await picturesDrawn(page)).toContain(state.later[0]);
+  }
 
   // Turned on its side (a phone only): the ✕ stays clear of the Keeper menu
   // and the list keeps real room under the header.
