@@ -1,5 +1,6 @@
 import {
   GAME_DATA,
+  GUIDE_GROUPS,
   type BuildingGuideEntry,
   type GuideGroup,
   type GuidePlace,
@@ -70,6 +71,7 @@ export const GUIDE_TEXT = {
   recipeBook: '📖 Recipe book',
   perEdge: 'an edge',
   groupFits: (n: number) => (n === 0 ? 'none fit here' : `${String(n)} fit here`),
+  groupHome: 'Built at your home',
   later: 'Coming later',
   laterNote: "Can't build these yet",
   laterChip: 'Later',
@@ -232,6 +234,51 @@ export function fitHere(entry: BuildingGuideEntry, here: readonly BuildCard[]): 
     return { kind: 'home' };
   }
   return { kind: 'no', reason: card?.blocked ?? needsLine(entry.place) };
+}
+
+/** One shelf of the list: a group, or "Coming later". */
+export interface GuideShelf {
+  readonly key: GuideGroup | 'later';
+  readonly items: readonly BuildingGuideEntry[];
+  /** How many of its cards fit the picked tile. */
+  readonly fits: number;
+  /** How many are built from home instead (the habitats). */
+  readonly home: number;
+}
+
+/**
+ * The list's shelves. Cards go on "Coming later" by their fit, not the
+ * entry's gate, so a card the sheet offers (the server's season) never sits
+ * there and always counts toward Fits. "Coming later" shows under All only.
+ */
+export function guideShelves(
+  entries: readonly BuildingGuideEntry[],
+  fit: ReadonlyMap<string, GuideFit>,
+  filter: 'fits' | 'all',
+): { readonly fitting: number; readonly shelves: GuideShelf[] } {
+  const kind = (e: BuildingGuideEntry) => fit.get(e.id)?.kind;
+  const now = entries.filter((e) => kind(e) !== 'later');
+  const fitting = now.filter((e) => kind(e) === 'fits');
+  const later = entries.filter((e) => kind(e) === 'later');
+  const listed = filter === 'fits' ? fitting : now;
+  const shelves: GuideShelf[] = GUIDE_GROUPS.flatMap((g) => {
+    const items = listed.filter((e) => e.group === g);
+    if (items.length === 0) return [];
+    const fits = items.filter((e) => kind(e) === 'fits').length;
+    const home = items.filter((e) => kind(e) === 'home').length;
+    return [{ key: g, items, fits, home }];
+  });
+  if (filter === 'all' && later.length > 0) {
+    shelves.push({ key: 'later', items: later, fits: 0, home: 0 });
+  }
+  return { fitting: fitting.length, shelves };
+}
+
+/** A group shelf's note: how many fit, or that they're built at home. */
+export function shelfNote(shelf: Pick<GuideShelf, 'fits' | 'home'>): string {
+  return shelf.fits === 0 && shelf.home > 0
+    ? GUIDE_TEXT.groupHome
+    : GUIDE_TEXT.groupFits(shelf.fits);
 }
 
 /** What a building needs that this tile doesn't have, from its data. */

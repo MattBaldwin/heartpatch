@@ -17,8 +17,10 @@ import {
   fitHere,
   gateLabel,
   guideAction,
+  guideShelves,
   needsLine,
   placeChips,
+  shelfNote,
   tileLine,
   valueLines,
 } from './buildings-guide-model.js';
@@ -157,6 +159,41 @@ describe('buildings guide words (#715)', () => {
     const barn = entry('pumpkin-barn', [], 'cozy');
     expect(fitHere(barn, [])).toEqual({ kind: 'later', label: 'Back next Halloween' });
     expect(fitHere(barn, [card('pumpkin-barn')])).toMatchObject({ kind: 'fits' });
+  });
+
+  it('shelves by fit, so an offered seasonal card leaves Coming later and counts as fitting', () => {
+    const barn = entry('pumpkin-barn', [], 'cozy');
+    const den = entry('ember-den');
+    const way = entry('waystation');
+    const entries = [barn, den, way];
+    const fitsOf = (here: readonly BuildCard[]) =>
+      new Map(entries.map((e) => [e.id, fitHere(e, here)]));
+    const keys = (shelves: readonly { key: string; items: readonly { id: string }[] }[]) =>
+      shelves.map((s) => [s.key, s.items.map((e) => e.id)]);
+
+    // Phone date has Halloween over and the sheet doesn't offer it: Coming later.
+    const off = guideShelves(entries, fitsOf([]), 'all');
+    expect(off.fitting).toBe(0);
+    expect(keys(off.shelves).at(-1)).toEqual(['later', ['pumpkin-barn', 'waystation']]);
+
+    // The server's sheet offers it unblocked: off Coming later, into Fits.
+    const on = fitsOf([card('pumpkin-barn')]);
+    const all = guideShelves(entries, on, 'all');
+    expect(all.fitting).toBe(1);
+    expect(keys(all.shelves).at(-1)).toEqual(['later', ['waystation']]);
+    expect(all.shelves.find((s) => s.items.includes(barn))).toMatchObject({ fits: 1 });
+    expect(keys(guideShelves(entries, on, 'fits').shelves)).toEqual([
+      [barn.group, ['pumpkin-barn']],
+    ]);
+  });
+
+  it('a shelf of habitats says they are built at home, not none fit here', () => {
+    expect(shelfNote({ fits: 0, home: 2 })).toBe('Built at your home');
+    expect(shelfNote({ fits: 1, home: 2 })).toBe('1 fit here');
+    expect(shelfNote({ fits: 0, home: 0 })).toBe('none fit here');
+    const den = entry('ember-den');
+    const { shelves } = guideShelves([den], new Map([[den.id, fitHere(den, [])]]), 'all');
+    expect(shelves).toEqual([{ key: den.group, items: [den], fits: 0, home: 1 }]);
   });
 
   it('says what a missing building needs, from its data', () => {

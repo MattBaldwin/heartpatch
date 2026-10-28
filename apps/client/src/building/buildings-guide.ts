@@ -1,13 +1,11 @@
 import {
   EXPLORE_RULES,
   GAME_DATA,
-  GUIDE_GROUPS,
   HOME_BASE_RULES,
   JOB_RULES,
   RESOURCE_BUILDING_RULES,
   buildingsGuide,
   type BuildingGuideEntry,
-  type GuideGroup,
   type ItemCounts,
   type MapView,
   type PublicTile,
@@ -26,7 +24,9 @@ import {
   fitCounts,
   fitHere,
   guideAction,
+  guideShelves,
   placeChips,
+  shelfNote,
   tileLine,
   valueLines,
   type GuideFit,
@@ -163,9 +163,7 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
   function render(): void {
     if (!shown) return;
     const { entries, fit, counts, opening } = shown;
-    const now = entries.filter((e) => e.gate === null);
-    const fitting = now.filter((e) => fit.get(e.id)?.kind === 'fits');
-    const later = entries.filter((e) => e.gate !== null);
+    const { fitting, shelves } = guideShelves(entries, fit, filter);
 
     tileStrip.replaceChildren(
       el('span', { class: 'guide-hex', 'aria-hidden': 'true' }),
@@ -191,37 +189,16 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
       return b;
     };
     filters.replaceChildren(
-      seg('fits', GUIDE_TEXT.fitsFilter(fitting.length)),
+      seg('fits', GUIDE_TEXT.fitsFilter(fitting)),
       seg('all', GUIDE_TEXT.allFilter(entries.length)),
     );
-
-    const listed = filter === 'fits' ? fitting : now;
-    const shelves: {
-      key: string;
-      label: string;
-      note: string;
-      items: readonly BuildingGuideEntry[];
-    }[] = GUIDE_GROUPS.flatMap((g: GuideGroup) => {
-      const items = listed.filter((e) => e.group === g);
-      if (items.length === 0) return [];
-      const n = items.filter((e) => fit.get(e.id)?.kind === 'fits').length;
-      return [{ key: g, label: GUIDE_TEXT.groups[g], note: GUIDE_TEXT.groupFits(n), items }];
-    });
-    if (filter === 'all' && later.length > 0) {
-      shelves.push({
-        key: 'later',
-        label: GUIDE_TEXT.later,
-        note: GUIDE_TEXT.laterNote,
-        items: later,
-      });
-    }
 
     jumps.replaceChildren(
       ...shelves.map((s) => {
         const b = el(
           'button',
           { type: 'button', class: 'guide-chip', 'data-jump': s.key },
-          s.key === 'later' ? GUIDE_TEXT.laterChip : s.label,
+          s.key === 'later' ? GUIDE_TEXT.laterChip : GUIDE_TEXT.groups[s.key],
         );
         b.addEventListener('click', () => {
           const head = list.querySelector<HTMLElement>(`[data-shelf="${s.key}"]`);
@@ -238,8 +215,8 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
             el(
               'div',
               { class: 'guide-group', 'data-shelf': s.key },
-              el('h3', {}, s.label),
-              el('small', {}, s.note),
+              el('h3', {}, s.key === 'later' ? GUIDE_TEXT.later : GUIDE_TEXT.groups[s.key]),
+              el('small', {}, s.key === 'later' ? GUIDE_TEXT.laterNote : shelfNote(s)),
             ),
             ...s.items.map((e) => entryCard(e, fit.get(e.id), counts.get(e.id) ?? 0)),
           ])),
@@ -300,7 +277,7 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
     const action = guideAction(f, opening?.bag ?? null);
     let foot: HTMLElement;
     if (f.kind === 'home') {
-      foot = el(
+      const home = el(
         'button',
         {
           type: 'button',
@@ -309,13 +286,14 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
         },
         GUIDE_TEXT.goHome,
       );
-      (foot as HTMLButtonElement).disabled = !options.onHome;
-      foot.addEventListener('click', () => {
+      home.disabled = !options.onHome;
+      home.addEventListener('click', () => {
         const was = shown;
         shut();
         was?.opening.onClose();
         options.onHome?.();
       });
+      foot = home;
     } else if (f.kind === 'later') {
       foot = el(
         'span',
@@ -324,7 +302,7 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
       );
     } else {
       const primary = action === 'build' || action === 'craft';
-      foot = el(
+      const build = el(
         'button',
         {
           type: 'button',
@@ -337,14 +315,15 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
             ? GUIDE_TEXT.needMore
             : GUIDE_TEXT.buildHere,
       );
-      (foot as HTMLButtonElement).disabled = !primary;
-      foot.addEventListener('click', () => {
+      build.disabled = !primary;
+      build.addEventListener('click', () => {
         if (!opening) return;
         shut();
         // The river sheet has no recipe book, and offers no card to make first.
         if (action === 'craft' && opening.onRecipeBook) opening.onRecipeBook();
         else opening.onBuildHere(entry.id);
       });
+      foot = build;
     }
     const edges = entry.place.some((p) => p.kind === 'edges');
     const cost = el(
@@ -435,7 +414,7 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
         filter,
         ids: entries.map((e) => e.id),
         fits: entries.filter((e) => shown?.fit.get(e.id)?.kind === 'fits').map((e) => e.id),
-        later: entries.filter((e) => e.gate !== null).map((e) => e.id),
+        later: entries.filter((e) => shown?.fit.get(e.id)?.kind === 'later').map((e) => e.id),
         counts: Object.fromEntries(shown?.counts ?? []),
       };
     },
