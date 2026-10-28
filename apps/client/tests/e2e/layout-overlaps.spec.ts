@@ -121,14 +121,20 @@ test('small phones and iPads: nothing sits on anything (#621 render-checks)', as
     await settled(page);
     const panel = page.getByTestId('tile-panel');
     const box = (await panel.boundingBox())!;
-    // Room for most of the screen (it was a 238px window under the side handles),
+    // Room for half the screen (it was a 238px window under the side handles),
     // still under the map's name pill and inside the screen.
-    expect(box.height).toBeGreaterThan(380);
+    expect(box.height).toBeGreaterThan(320);
     expect(box.y + box.height).toBeLessThanOrEqual(SE.height);
     await expectClear(page, '[data-testid="tile-panel"]', '[data-testid="map-hud"]');
-    // The handles step aside while it's open, so none peeks over it.
-    for (const handle of await page.locator('[data-testid^="tray-handle-"]').all()) {
-      await expect(handle).toBeHidden();
+    // The handles move up over it, under the map's chips: Home and Bag stay one
+    // tap away (#165), on nothing and under nothing.
+    for (const side of ['adventure', 'heartpatch']) {
+      await expect(page.getByTestId(`tray-handle-${side}`)).toBeVisible();
+      await expectClear(
+        page,
+        `[data-testid="tray-handle-${side}"]`,
+        '[data-testid="tile-panel"], [data-testid="map-hud"], .land-chip, .gather-chip',
+      );
     }
     // A taller panel scrolls inside: its last button comes into view, inside the screen.
     const last = page.getByTestId('busy-last');

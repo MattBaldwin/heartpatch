@@ -191,17 +191,23 @@
 
 /* A short phone held upright (an iPhone SE): under the handles there's only
    room for a few rows, so a busy tile's lower rows sat cut off in a 238px
-   window. While the panel is open the handles step aside (as for the Hollow's
-   morning card) and it may grow up to just under the land chips (+164px, one
-   44px line), so the map's name, coins and chips stay in sight. A taller panel
-   still scrolls inside. // TUNE: */
+   window. While the panel is open the handles (and their little notes) move up
+   to just under the land chips (+164px, one 44px line, then 8px), and the
+   panel grows to 8px under the handles (94px tall, ui/trays): Home and Bag stay
+   one tap away (#165) and the map's name, coins and chips stay in sight. A
+   taller panel still scrolls inside. // TUNE: */
 @media (orientation: portrait) and (max-height: 739px) and (max-width: 661px) {
   body:has(.tile-panel:not([hidden])) .tray-handle {
-    visibility: hidden;
+    top: calc(env(safe-area-inset-top) + 216px);
+    translate: none;
+  }
+
+  body:has(.tile-panel:not([hidden])) .tray-peek {
+    top: calc(env(safe-area-inset-top) + 263px);
   }
 
   .tile-panel {
-    max-height: calc(100dvh - 232px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 330px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   }
 }
 
