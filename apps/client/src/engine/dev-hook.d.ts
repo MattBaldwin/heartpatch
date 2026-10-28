@@ -22,6 +22,7 @@ import type { WeatherStats } from '../weather/weather-layer.js';
 import type { RaidReportDebug } from '../raids/raid-report.js';
 import type { TerritoryDebug } from '../territory/territory-screen.js';
 import type { TileBuildDebug } from '../building/tile-build.js';
+import type { BuildingsGuideDebug } from '../building/buildings-guide.js';
 import type { RoadsDebug } from '../roads/roads-screen.js';
 import type { FenceDebug } from '../fences/fence-screen.js';
 import type { TutorialDebug } from '../tutorial/tutorial-screen.js';
@@ -120,6 +121,8 @@ declare global {
       /** The fence sheet (#203): its step and the bag it read, or null off a map. */
       fences?(): FenceDebug | null;
       tileBuild?(): TileBuildDebug;
+      /** The Buildings guide (#715). */
+      buildingsGuide?(): BuildingsGuideDebug;
       /** Wild Isle roads the client has, and how many it drew per level (#621). */
       roads?(): RoadsDebug;
       /** Cut-off land drawn by look, and whether the "Some land is cut off!" card shows (#621). */

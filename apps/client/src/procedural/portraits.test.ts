@@ -256,8 +256,11 @@ describe('buildingPortraitKey (#621 W1-10c)', () => {
       { ...mill, level: 2 },
       { ...mill, asleep: true },
       { ...mill, size: 96 },
+      { ...mill, lit: true },
     ].map(buildingPortraitKey);
-    expect(new Set([key, ...others]).size).toBe(5);
+    expect(new Set([key, ...others]).size).toBe(6);
+    // Not lit is the plain look: the same picture as leaving it out.
+    expect(buildingPortraitKey({ ...mill, lit: false })).toBe(key);
     // Never the same key as a squishy's or a Keeper's.
     expect(key.startsWith('building|')).toBe(true);
   });

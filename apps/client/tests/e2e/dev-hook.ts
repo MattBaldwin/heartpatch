@@ -20,6 +20,7 @@ export type HookName =
   | 'territory'
   | 'fences'
   | 'tileBuild'
+  | 'buildingsGuide'
   | 'roads'
   | 'stranded'
   | 'hollow'

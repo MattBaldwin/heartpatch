@@ -106,6 +106,7 @@ const E2E_GROUPS = [
   ],
   // ~17.9 iPhone, ~24.2 iPad.
   [
+    'buildings-guide',
     'chat',
     'cinematic',
     'close-up',

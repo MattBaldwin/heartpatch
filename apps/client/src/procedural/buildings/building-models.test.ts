@@ -5,12 +5,16 @@ import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { GAME_DATA } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
+import { buildFence } from '../../map/fence-props.js';
+import { fenceLength } from '../../map/fence-layout.js';
+import { HEX_SIZE } from '../../map/map-config.js';
 import { BUILDING_COLORS, LEVEL_SCALE, TILE_FOOTPRINT } from './building-config.js';
 import {
   buildBuildingModel,
   footprintEdgeReach,
   footprintReach,
   levelScale,
+  plainMarkers,
   WILD_HOMESTEAD,
 } from './building-models.js';
 
@@ -287,6 +291,52 @@ describe('Wild Isle works models (#621 W1-10)', () => {
       const m = buildBuildingModel(scene, id, 'plain', 4);
       expect(scene.meshes.length - before, id).toBeLessThanOrEqual(2);
       expect(triangles(m), id).toBeLessThanOrEqual(TRIANGLE_CAP);
+    }
+  });
+});
+
+describe('every building has a model (#715)', () => {
+  const engine = new NullEngine({
+    renderWidth: 390,
+    renderHeight: 844,
+    textureSize: 1,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  it('counts an unknown id as the plain marker', () => {
+    buildBuildingModel(new Scene(engine), 'no-such-building', 'plain', 1);
+    expect(plainMarkers.has('no-such-building')).toBe(true);
+  });
+
+  it('gives every building in BUILDINGS its own model, not the plain marker', () => {
+    const scene = new Scene(engine);
+    for (const b of GAME_DATA.buildings) {
+      const { body, glow } = buildBuildingModel(scene, b.id, 'plain', 1);
+      body.dispose();
+      glow?.dispose();
+      expect(plainMarkers.has(b.id), b.id).toBe(false);
+    }
+  });
+
+  it("draws each fence as the map's own segment, at every level", () => {
+    const scene = new Scene(engine);
+    const fences = GAME_DATA.buildings.filter((b) => b.kind === 'fence').map((b) => b.id);
+    expect(fences).toHaveLength(8);
+    for (const id of fences) {
+      for (const level of [1, 2, 3]) {
+        const { body, glow } = buildBuildingModel(scene, id, 'plain', level);
+        const map = buildFence(scene, id, level, fenceLength(HEX_SIZE));
+        expect(body.getTotalVertices(), `${id} L${String(level)}`).toBe(map.getTotalVertices());
+        // The same size too: no extra level scale on top of the fence's own.
+        const size = (m: Mesh) => m.getBoundingInfo().boundingBox.extendSize;
+        expect(size(body).y, `${id} L${String(level)} height`).toBeCloseTo(size(map).y, 5);
+        expect(size(body).x, `${id} L${String(level)} length`).toBeCloseTo(size(map).x, 5);
+        expect(glow, id).toBeNull();
+      }
     }
   });
 });

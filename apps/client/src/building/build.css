@@ -156,3 +156,10 @@
 .tile-panel-building .tile-panel-details {
   display: none;
 }
+
+/* "See all buildings" (#715): quiet, under the picked card's line, so the row and Build! stay put. */
+.build-more {
+  display: flex;
+  justify-content: flex-end;
+  margin: -2px 0 0;
+}

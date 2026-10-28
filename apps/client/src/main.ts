@@ -49,6 +49,7 @@ import { createFriendlyScreen } from './friendly/friendly-screen.js';
 import { createCloseUpScreen, type CloseUpFrom } from './close-up/close-up-screen.js';
 import { onPanelFocus } from './building/panel-focus.js';
 import { createTileBuild } from './building/tile-build.js';
+import { createBuildingsGuide } from './building/buildings-guide.js';
 import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen, type MapLayer } from './map/map-screen.js';
 import { seasonsOn } from './map/map-dressing.js';
@@ -1309,7 +1310,24 @@ const wildPicker = createWildPicker({ meet: (mapId, tile) => battles.meetWild(ma
 onPanelFocus((focused) => {
   trays.setVisible(!focused);
 });
+// The Buildings guide (#715), from either Build sheet's "See all buildings".
+const buildingsGuide = createBuildingsGuide({
+  root: document.body,
+  portraits,
+  sources: () => [
+    home.buildSource,
+    inventory.clearSource,
+    fences.buildSource,
+    roads.buildSource,
+    roads.bridgeSource,
+  ],
+  now: () => new Date(inventory.gameNow()),
+  onHome: () => {
+    void home.open();
+  },
+});
 const tileBuild = createTileBuild({
+  guide: buildingsGuide,
   // Clear land (#242) sits with the buildings it makes room for.
   sources: [home.buildSource, inventory.clearSource, fences.buildSource, roads.buildSource],
   area: () => maps,
@@ -1323,6 +1341,7 @@ const tileBuild = createTileBuild({
 });
 // A river tile's Build sheet: just the bridge (#621).
 const waterBuild = createTileBuild({
+  guide: buildingsGuide,
   sources: [roads.bridgeSource],
   area: () => maps,
   reveal: (tile) => {
@@ -2158,6 +2177,7 @@ if (import.meta.env.DEV) {
     territory: () => territory.debug,
     fences: () => fences.debug,
     tileBuild: () => tileBuild.debug,
+    buildingsGuide: () => buildingsGuide.debug,
     roads: () => roads.debug,
     stranded: () => ({ ...strandedLayer.debug, card: strandedCard.shown }),
     hollow: () => hollow.debug,
