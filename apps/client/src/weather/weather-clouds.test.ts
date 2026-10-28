@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { bankField, bankShape } from './weather-clouds.js';
+import { CAMERA } from '../engine/config.js';
+import { bankField, bankRim, bankShape, cloudShade } from './weather-clouds.js';
 import { WEATHER_LOOK } from './weather-config.js';
 
 const BANK = WEATHER_LOOK.clouds.bank;
@@ -100,5 +101,70 @@ describe("a storm's bank", () => {
   it('is wound and sized for one draw', () => {
     expect(shape.indices.length % 3).toBe(0);
     expect(xs.length).toBeLessThan(6000);
+  });
+
+  it('lights gold round its outline only, not on the far flank of its top (#717 follow-up)', () => {
+    // cloud-plugin.ts's gold band, worked out per vertex as the map camera
+    // sees it (pitch from the south, eye far off), with and without the
+    // bank's own rim share.
+    const { rimPower, rimStrength } = WEATHER_LOOK.clouds.shade;
+    const sun = WEATHER_LOOK.clouds.sun;
+    const sunLength = Math.hypot(...sun);
+    const eye = [0, Math.sin(CAMERA.pitch), -Math.cos(CAMERA.pitch)] as const;
+    const step = (a: number, b: number, x: number): number => {
+      const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+      return t * t * (3 - 2 * t);
+    };
+    const gated = cloudShade(shape, 0, bankRim);
+    const open = cloudShade(shape, 0);
+    const gold = { inner: 0, innerOpen: 0, outline: 0, outlineOpen: 0 };
+    for (let i = 0; i < shape.positions.length / 3; i++) {
+      const [nx, ny, nz] = [0, 1, 2].map((k) => shape.normals[i * 3 + k] ?? 0) as [
+        number,
+        number,
+        number,
+      ];
+      const nv = nx * eye[0] + ny * eye[1] + nz * eye[2];
+      if (nv < 0) continue; // turned away: culled
+      const key = Math.min(1, Math.max(0, (nx * sun[0] + ny * sun[1] + nz * sun[2]) / sunLength));
+      const rim = (share: number): number =>
+        step(
+          0.3,
+          0.5,
+          (1 - nv) ** rimPower *
+            step(0.02, 0.3, gated[i * 4] ?? 0) *
+            (0.35 + 0.65 * key) *
+            share *
+            rimStrength,
+        );
+      const x = shape.positions[i * 3] ?? 0;
+      const z = shape.positions[i * 3 + 2] ?? 0;
+      const u = Math.max(Math.abs(x) / BANK.wide, Math.abs(z) / BANK.deep);
+      const lit = rim(gated[i * 4 + 2] ?? 0) > 0.05;
+      const litOpen = rim(open[i * 4 + 2] ?? 0) > 0.05;
+      if (u < 0.7) {
+        gold.inner += Number(lit);
+        gold.innerOpen += Number(litOpen);
+      } else if (u >= 1) {
+        gold.outline += Number(lit);
+        gold.outlineOpen += Number(litOpen);
+      }
+    }
+    // Without the rim share the far flank of the heaped top lit gold (the arc)...
+    expect(gold.innerOpen).toBeGreaterThan(5);
+    // ...with it, none of the top's middle does, and the outline keeps all its gold.
+    expect(gold.inner).toBe(0);
+    expect(gold.outline).toBe(gold.outlineOpen);
+    expect(gold.outline).toBeGreaterThan(50);
+  });
+
+  it('gives an ordinary cloud its full gold edge everywhere', () => {
+    const one = cloudShade(
+      { positions: [0, 0, 0, 1, 1, 1], normals: [0, 1, 0, 0, 1, 0], indices: [] },
+      0,
+    );
+    expect([one[2], one[6]]).toEqual([1, 1]);
+    expect(bankRim(0, 0)).toBe(0);
+    expect(bankRim(BANK.wide, 0)).toBe(1);
   });
 });

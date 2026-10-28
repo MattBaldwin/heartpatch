@@ -225,14 +225,16 @@ test('hunts a won Hollow’s cellar key by its treasure map, opens the cellar an
   const big = inside.spots.at(-1)!;
   // On a slow runner the "yay" card can land after a one-off check and cover
   // the ground, so walking finds nothing to tap: close it whenever it shows,
-  // until the ground on the way to the big chest takes a tap again.
+  // until the ground on the way to the big chest takes a tap again. The walk
+  // is retried with it: the card can still land after that check, between
+  // steps of the walk.
   await expect
     .poll(async () => {
       if (await yay.isVisible()) await yay.tap();
-      return (await waypoint(page, big)) !== null;
+      if ((await waypoint(page, big)) === null) return false;
+      return walkTo(page, big.index);
     }, slow)
     .toBe(true);
-  expect(await walkTo(page, big.index)).toBe(true);
   await slowExpect(action).toHaveText(/Open/);
   await action.tap();
   const play = page.getByTestId('explore-play');

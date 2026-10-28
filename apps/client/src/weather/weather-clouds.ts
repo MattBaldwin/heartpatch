@@ -121,12 +121,17 @@ export interface CloudShape {
 }
 
 /**
- * The mesh for a cloud's surface, each vertex carrying its height up the
- * cloud (0 at the flat belly `base`, 1 at the top) and how much it faces the
- * sun, for the shade in cloud-plugin.ts.
+ * Each vertex's light for the shade in cloud-plugin.ts (`CLOUD_ATTRIBUTE`, 4
+ * per vertex): its height up the cloud (0 at the flat belly `base`, 1 at the
+ * top), how much it faces the sun, and how much gold edge light it may take,
+ * from `rim` at its (x, z) (all of it if none). Pure, for the tests.
  */
-function cloudMesh(scene: Scene, name: string, shape: CloudShape, base: number): Mesh {
-  const { positions, normals, indices } = shape;
+export function cloudShade(
+  shape: CloudShape,
+  base: number,
+  rim?: (x: number, z: number) => number,
+): Float32Array {
+  const { positions, normals } = shape;
   const n = positions.length / 3;
   let high = base;
   for (let i = 0; i < n; i++) high = Math.max(high, positions[i * 3 + 1] ?? 0);
@@ -140,7 +145,21 @@ function cloudMesh(scene: Scene, name: string, shape: CloudShape, base: number):
       norm;
     shade[i * 4] = Math.min(1, Math.max(0, ((positions[i * 3 + 1] ?? 0) - base) / (high - base)));
     shade[i * 4 + 1] = Math.max(0, facing);
+    shade[i * 4 + 2] = rim ? rim(positions[i * 3] ?? 0, positions[i * 3 + 2] ?? 0) : 1;
   }
+  return shade;
+}
+
+/** The mesh for a cloud's surface, shaded by `cloudShade`. */
+function cloudMesh(
+  scene: Scene,
+  name: string,
+  shape: CloudShape,
+  base: number,
+  rim?: (x: number, z: number) => number,
+): Mesh {
+  const { positions, normals, indices } = shape;
+  const shade = cloudShade(shape, base, rim);
   const cloud = new Mesh(name, scene);
   const data = new VertexData();
   data.positions = positions;
@@ -315,10 +334,24 @@ export function bankShape(): CloudShape {
 /** The bank's shape, worked out once (it is the same for every storm). */
 let bankOnce: CloudShape | null = null;
 
+/**
+ * How much gold edge light a bank takes at (x, z), its belly's middle at 0:
+ * none over the middle of its top, all of it round its outline. The map's
+ * tilt sees the far flank of the heaped top edge-on as well as the outline,
+ * and the edge light (a fresnel term, cloud-plugin.ts) can't tell them
+ * apart, so without this that flank lit as a thin gold arc inside the bank
+ * (#717 follow-up).
+ */
+export function bankRim(x: number, z: number): number {
+  const u = Math.max(Math.abs(x) / BANK.wide, Math.abs(z) / BANK.deep);
+  const t = Math.min(1, Math.max(0, (u - BANK.rimFrom) / (BANK.rimTo - BANK.rimFrom)));
+  return t * t * (3 - 2 * t);
+}
+
 /** A storm's bank as a mesh, shaded like the clouds (cloud-plugin.ts). */
 export function buildBank(scene: Scene): Mesh {
   bankOnce ??= bankShape();
-  return cloudMesh(scene, 'weather-bank', bankOnce, 0);
+  return cloudMesh(scene, 'weather-bank', bankOnce, 0, bankRim);
 }
 
 /** How high a bank's top reaches over its belly, at scale 1. */
