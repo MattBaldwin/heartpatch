@@ -192,39 +192,56 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 23 handoff, 2026-10-27 ~16:10 UTC):** main `3fb718b` (#707), migrations through 0061 (no new ones). Phase 1 is due Oct 31. DECISIONS is current through supervisor 23 (#705, #712). Supervisor 23 is `session_01LAjTpppnRWwFCyWWuFWdGp` (lineage depth 6) and handed off at ~714k context and $98.64 (it missed its own 400k threshold; see lessons). **The next supervisor is depth 7: it must not start another supervisor; it writes its handoff here and asks the owner to start the next one from a fresh session (§8.5).**
-  - **Merged under supervisor 23:** #703 (s22 handoff), #704 (s22 DECISIONS), #686 (storm, owner A), #705 (s23 DECISIONS), #706 (Chore: shared `waitForLiveMap` e2e helper), #698 (works buildings: Seawall C, fill-the-tile `TILE_FOOTPRINT`, owner v4), #701 (river-bank explore, owner v7), #709 (Chore: e2e job timeout 35 → 45 min), #708 (river reachable from neighbouring land, owner A), #707 (works tile card with rendered building portraits, owner A).
-  - **No lanes running.** All supervisor-23 lanes are archived. Supervisor 22 is retired, not archived.
-- **Open PR: #710** `Fix: explore need card clear of the Keeper; tidy works card numbers` (branch `fix-polish-need-card-and-meter`, head `2df4f0c`).
-  - Reviewer APPROVE on 2df4f0c (comment 6446275338). Merge-tree clean on 3fb718b.
-  - Screens (owner not yet asked): https://claude.ai/artifact/YQNp2nUKWBoG9Q5FbZ38wD. Supervisor render-check **PASS** (6 like-for-like pairs, HUD hidden, tier high). Non-blocking: in landscape iPhone the moved card now covers the swirl pond's sparkle.
-  - **CI red only on `e2e (ipad-webkit, 5)`:** `far-hollow-house.spec.ts:55` and `wardrobe.spec.ts:203` failed, 2 more flaky, 37 min vs 25 on main. #710 doesn't touch those specs; runner load is likely. Sessions and the supervisor get 403 on re-runs. **Next:** ask the owner to click "Re-run failed jobs" on #710 (one click), together with the screens approval (rec A). If it fails again, a small lane makes those two specs robust (waitForLiveMap / longer polls), never a skip.
+- **State (supervisor 24 handoff, 2026-10-28 ~05:10 UTC):** main `c4f2647` (#710), migrations unchanged (through 0061). Phase 1 is due Oct 31. Supervisor 24 is `session_01RAEPnEvk5jvhpPtHzVZYw6` (lineage depth 7). **Supervisor 24 was depth 7, the last allowed (§8.5): it does not start another supervisor. The OWNER starts the next supervisor from a fresh session (depth resets).** DECISIONS is current through supervisor 23; supervisor 24's items are listed below for the coordinator to record.
+  - **Merged under supervisor 24:** #711 (s23 handoff), #712 (s23 DECISIONS), #713 (Fix: storm layer robustness: storm light made once at intensity 0, all-or-nothing weather attach, night re-basing tests), #714 (Chore: e2e per-spec `spec-timing` `::notice` annotations + `E2E_GROUPS` rebalance; slowest iPad group about 24 min), #710 (owner A; the supervisor merged `main` into the branch to re-run CI, since re-runs 403).
+  - **Lane running:** screens-only lane `session_01RAEPnH7iSwFrNjH3F9Qv81` for #716 (hard stop 05:53). All other supervisor-24 lanes are done. Supervisor 23 is retired, not archived.
+- **Open PR: #716** `#715: Buildings guide` (branch `issue-715-buildings-guide`, head `284981f`).
+  - Reviewer APPROVE on 284981f (comment 6460952514). CI 15/15 green. Merge-tree clean.
+  - **Next:** the screens-only lane finishes, then a fresh Opus render-check, then the owner's screens approval, then merge.
+  - Scope cuts (follow-ups): the "Show me" map highlight (needs a map overlay); per-level "More about it" detail; level/day unlock labels need a data/schema gate (shared contract, so an owner call). Today "Coming later" shows season gates only.
+  - Non-blocking reviewer notes: a seasonal card that the server blocks for a tile reason after the phone-date season end shows "Back next…" instead of the server reason; the `ECONOMY` const is duplicated at `buildings-guide.ts:114`.
+- **Open PR: #717** `Fix: storm visual follow-ups from #686` (branch `fix-storm-visuals`, head `4217a6e`).
+  - **Fixes (still open until #717 merges):** 🌙 marks drawn small over the storm bank; the streaks/gold seam in the bank (a thinner gold arc remains, see Next); the iPad Mossy Mailbox pill kept clear of a bolt's foot through `flagRoom`. If #717 isn't merged, all three stay open.
+  - Reviewer APPROVE on the head. CI 15/15 green. Merge-tree clean.
+  - Screens: https://claude.ai/artifact/AT939U3MNLyFFxpuYy8TeC (supervisor render-check PASS after a wording fix).
+  - **Next:** the owner answers the question below, then merge on A. A thinner gold arc inside the bank's top still reads as a seam (25–35% fewer gold px than main); likely the rim colour on an inner ridge (shading), not mesh. Needs a device check: rain cap 720 on iPad 9th gen.
 - **Owner decisions queued (one at a time, plain text, recommended first, artifact opened + URL inline, PushNotification):**
-  1. #710 screens + the one-click CI re-run (rec A: approve).
-- **Queue (start in this order as lanes free up):**
-  1. **Polish, one small lane at a time (hard stops 60–90 min / ~130k; screens in a separate 45-min screens-only lane):**
-     - (a) **Storm follow-ups from #686 (owner A):** 🌙 marks full-size over the bank; streaks/gold seam; iPad Mossy Mailbox pill at a bolt's foot; half-attached layer on throw (map-screen.ts:511); HemisphericLight added mid-session recompiles materials (weather-layer.ts:205, pre-warm); no unit test for night re-basing; rain cap 720 unmeasured on iPad 9th gen.
-     - (b) **Works follow-ups from #698/#707:** Seawall ripple rings read as life rings, mooring ring faint; Pier deck slim; River Well stream reads as a pond; **replace emoji `buildingIcon` lists (home-view.ts) with rendered portraits** (owner A for the card; same look everywhere); Collect never pictured; SE card scrolls.
-     - (c) **E2E_GROUPS rebalance** (playwright.config.ts): ipad groups 4/5/6 run 30–37 min against the 45-min cap. Needs per-spec timings; job logs are 403 from sessions, so add a timing reporter or read the Playwright report artifact.
-     - (d) Earlier Wave 1 items still open: the coast spawn and guardian tables (data-only: drop the `coast` skips in species.test.ts and guardian-rules.test.ts); W1-12 Wild Isle on (coordinator, last).
-  2. #655 E (Chore: drop the legacy one-line sell request) one release after C.
-  3. The server adopts W1-6's `travelBuildCheck` for bridge and dock placement (#685 merged).
-  4. **Layout polish lane (seen in #688 and #685 render-checks, pre-existing):** the iPhone SE paw button overlaps "My patches" (serious: taps are ambiguous); on iPad the tile panel covers the Wild Isle pill; phone bottom panels clip their lower rows; a "Log out" chip shows behind the Build sheet; the dark-spots pills show through. Also `house.spec.ts:611` showed as flaky on #689. From #694: the explore HUD (joystick, Dive/Lift) sits over spots, the dive card covers the pool, the Shovel chip stays on shells, and the walk hint is hidden in landscape. From #685: the night pills show through the bridge panel. From #698: the iPhone 15 top bar and bottom buttons may sit in the safe-area bands (verify with emulated insets); the disabled Build! button looks filled.
-  5. Leftover `.auth-button` sites (B2b handoff on #674).
-  6. **Logged nits:**
-     - the What's new date wraps on SE
-     - `isPlural` in crooked-text.ts
-     - the 6e/6f nits
-     - the Water echo near the home indicator
-     - room-name pills truncate ("Dining Roo…", "Conservato…")
-     - disabled Feed looks enabled in close-up
-     - the trays `hp-settling` fallback (the e2e-fix finding); it can fire mid-slide
-     - re-measure the E2E_GROUPS medians after a few runs; group 6 iPad is the tightest
-     - #678: on the landscape phone, the 4-move (Splashmallow) battle shows sky only (no arena or fighters). It is pre-existing on `eb15770` (before #662), maybe a capture-rig limit; it needs a look
-     - #681: the patch card shows two filled primary buttons (pre-existing)
-     - TECH_SPEC §7 "Selling to the post" is stale after #668 (a Docs follow-up)
-     - #682 and #683 follow-ups are in DECISIONS (supervisor 18)
+  1. **#717 storm visuals (asked, awaiting the answer):** A (recommended) merge now and fix the leftover gold arc in a follow-up; B hold; C move to Phase 2.
+  2. **#716 screens approval,** once the screens-only lane and the fresh render-check pass.
+- **Queue (start in this order as lanes free up; one lane at a time):**
+  1. If #717 merges with A: a small follow-up lane for the gold arc (rim shading), code-only, then screens.
+  2. **iPhone SE layout lane** (serious: the paw button overlaps "My patches"; phone bottom panels clip; a "Log out" chip shows behind the Build sheet; on iPad the tile panel covers the Wild Isle pill). Plus, from #710, landscape iPhone: the moved need card covers the swirl pond's sparkle. Also still open from earlier render-checks: the dark-spots and night pills show through panels; from #694 the explore HUD (joystick, Dive/Lift) sits over spots, the dive card covers the pool, the Shovel chip stays on shells, the walk hint is hidden in landscape; `house.spec.ts:611` showed as flaky on #689; from #698 the iPhone 15 top bar and bottom buttons may sit in the safe-area bands (verify with emulated insets) and the disabled Build! button looks filled.
+  3. **Works follow-ups (#698/#707):** replace the emoji `buildingIcon` lists in `home-view.ts` with rendered portraits (owner A for the card; same look everywhere); Seawall rings read as life rings, mooring ring faint; Pier deck slim; River Well stream reads as a pond; Collect never pictured; SE card scrolls.
+  4. **#715 follow-ups:** the "Show me" map highlight; per-level detail; level/day unlock gates (need an owner call).
+  5. **E2E:** re-measure from the `spec-timing` annotations after 3–4 runs, then `ci.yml` timeout 45 → ~40 (coordinator's CI change). `trading-posts.spec.ts:237` is still flaky (300 s timeout, passed on retry).
+  6. **Remaining earlier items:**
+     - the coast spawn and guardian tables (data-only: drop the `coast` skips in species.test.ts and guardian-rules.test.ts); W1-12 Wild Isle on (coordinator, last);
+     - #655 E (Chore: drop the legacy one-line sell request) one release after C;
+     - the server adopts W1-6's `travelBuildCheck` for bridge and dock placement (#685 merged);
+     - leftover `.auth-button` sites (B2b handoff on #674);
+     - **logged nits:**
+       - the What's new date wraps on SE
+       - `isPlural` in crooked-text.ts
+       - the 6e/6f nits
+       - the Water echo near the home indicator
+       - room-name pills truncate ("Dining Roo…", "Conservato…")
+       - disabled Feed looks enabled in close-up
+       - the trays `hp-settling` fallback (the e2e-fix finding); it can fire mid-slide
+       - #678: on the landscape phone, the 4-move (Splashmallow) battle shows sky only (no arena or fighters). It is pre-existing on `eb15770` (before #662), maybe a capture-rig limit; it needs a look
+       - #681: the patch card shows two filled primary buttons (pre-existing)
+       - TECH_SPEC §7 "Selling to the post" is stale after #668 (a Docs follow-up)
+       - #682 and #683 follow-ups are in DECISIONS (supervisor 18)
   7. **Owner to-dos:** optionally allow kenney.nl, opengameart.org and freesound.org (Network access → Allowed domains). Optionally delete the stale remote branch `chore-ci-e2e-timeout` (auto mode blocks the coordinator from deleting it).
+- **To record in DECISIONS (supervisor 24):**
+  - **Owner decisions:**
+    - #710 screens approved (A), merged.
+    - #715 Buildings guide (owner request 2026-10-27): entry point B is a "See all buildings" link in the Build sheet (no HUD or menu button). Mockup approved (https://claude.ai/artifact/CnYd5KSi4A2Cmytfh2Zgyu). Variant B also shows later unlocks greyed on a "Coming later" shelf. Labels: season gate "Back next Halloween"; level/progress gate "Unlocks at level N" or "Unlocks in N days"; "Coming soon!" only for things not yet in the game.
+    - Storm lane before the SE layout lane (owner, 2026-10-28).
+  - **Coordinator calls:**
+    - The guide's "fits" comes from the Build sheet's own `BuildSource` cards (no second placement rule).
+    - Merging `main` into an approved PR to re-run CI (when `main` moved) is the way around 403 re-runs; the verdict carries (as supervisor 23 decided).
+    - e2e per-spec timings now come from check-run annotations (`gh api repos/.../check-runs/<id>/annotations`, title `spec-timing`). `ci.yml` `timeout-minutes` stays 45 until 3–4 more runs confirm ~24-min groups, then ~40.
+    - A 🌙 seen through a storm bank is drawn small (11 px vs 18 px), not hidden; map pills keep clear of a bolt's foot via `flagRoom` covers (from #717, if merged).
 - **Sweep helper:** the supervisor's sweep script checked, for each open PR, the head SHA, check-run counts, a reviewer APPROVE comment naming the head, and `git merge-tree --write-tree origin/main <head>`. Recreate it in your scratchpad. Use `gh api` (REST); `gh pr create` is GraphQL and 403s, so open PRs with `gh api repos/MattBaldwin/heartpatch/pulls -f ... -F body=@file`.
 - **Filed, no lane yet:** #341 (Forest Chihuahua, Phase 2), #319 and #320 (Phase 2).
 - **Check-in (owner, 2026-10-23):** a supervisor sweep every ~20 min while lanes are active, via a self-bound trigger (arm your own and delete your predecessor's). The owner asked for active supervision: sweep GitHub for open PRs (no PR subscriptions, §5), merge on the gates, nudge stuck lanes, and start the next queued lane.
@@ -261,6 +278,12 @@ The supervisor keeps this list current. Remove items as they land.
   - #696 reviewer nits: CLAUDE.md's handoff rule says "A retired supervisor is archived", which conflicts with §8 (a CLAUDE.md wording fix); the $20 stop applies per lane, not per supervisor.
   - #694 nits: `// TUNE:` markers on the cap/rope ratios; the untested `top` branch of `logCap`.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
+- **Lessons (2026-10-28, supervisor 24):**
+  - **Lanes blow their context budget even with hard stops** (#715 code lane 283k/$10.36, storm-visuals 220k/$5.69). A 90-min stop is too late: check lanes at 45 min and send "wrap up" at ~130k. Hand a finishing job to a FRESH small lane with a Lane handoff; it is cheaper than letting a big-context lane continue (the #715 fix lane did the same work at $3.95).
+  - **HTML mockup lanes are cheap** (~$4.79, 15 min) and worth it; two render-check rounds caught real issues (wrong SE frame, clipped labels, wrong Build sheet text).
+  - **iPad WebKit e2e flakes hit specs PRs don't touch** (recipe-book, trading-posts, tutorial). `tutorial.spec.ts:218` needed `test.setTimeout(90_000)` like its siblings (fixed in #716); `trading-posts.spec.ts:237` is still flaky.
+  - **Sessions can't read job logs but CAN read check-run annotations;** use them for failing spec names (`annotation_level != notice`).
+  - **Two non-overlapping lanes in parallel worked** (the owner asked for storm next while #715 ran).
 - **Lessons (2026-10-27, supervisor 23):**
   - **Watch your own context, not just the lanes'.** `get_session` with no id shows `context_usage.used_tokens` and `usage.cost_usd` for the supervisor itself; check it at every sweep and hand off at ~400k.
   - **Lane cost is invisible while running and lanes' own estimates were off both ways** (W1-10c2 $11 vs est $7.5, W1-10c3 $14 vs $6, W1-13h $5.5 vs $8.5). Stop lanes on what you can see: elapsed minutes, context, number of shoots. Schedule a `send_later` hard stop when you start each lane.
@@ -386,6 +409,7 @@ The supervisor keeps this list current. Remove items as they land.
   - Batch 8–9: #95 10.14, #96 9.22, #94 10.96, #93 1.56, #97 16.73, #98 11.44, #99 29.61, audit 1.9.
   - Batches 10–12: #102 5.24, #103 10.37, #104 6.31, #105 36.09, #106 32.17, #107 24.81, Docs #101 2.00, audits 2.83 and 2.92. The CI split (#100) was coordinator-made.
   - Supervisor 3: about 28.
+  - Supervisor 24: about $15 at handoff. Lanes: storm-fix 3.87, e2e-timing 3.20, #715 mockup 4.79, #715 code 10.36, storm-visuals 5.69, #717 screens 3.15, #715 fix 3.95, #716 screens (running).
   - Big lanes run $25–50; flag above about $35 (superseded by the §2 $20 cost stop).
 - **Owner questions queued:** none open. The tutorial gate, tutorial coins, the Halloween clock, the milestone member count and the #24/#44/#45/#46 confirmations were answered on 2026-10-04 (DECISIONS, "2026-10-04 — Owner decisions").
   - **AWS:** done 2026-10-05 (DECISIONS, "Deploy on the new AWS experience"). A fresh supervisor container needs the network policy to allow `*.signin.aws.amazon.com`, `signin.aws.amazon.com`, `*.amazonaws.com` and `*.api.aws`, then the CLI install and `aws login --remote --region us-east-2 --profile heartpatch` (pipe the pasted code into the waiting process through a FIFO). Agent Toolkit rules live in the uncommitted `CLAUDE.local.md`.
