@@ -55,15 +55,25 @@ function collectRows(node: Element, origin: number, out: RowBox[]): void {
 
 /** Sizes the panel to whole rows under its CSS cap and marks where it has more. */
 function fit(panel: HTMLElement): void {
+  if (panel.hidden) {
+    panel.style.maxHeight = '';
+    return;
+  }
+  // Measuring at the full cap shortens how far the panel can scroll, so the
+  // browser pulls its scroll back; put it back after, or a refit while
+  // scrolled down (a pick in the guard picker) moves the rows under a finger.
+  const scrolled = panel.scrollTop;
   panel.style.maxHeight = '';
-  if (panel.hidden) return;
   const cap = parseFloat(getComputedStyle(panel).maxHeight);
+  let next = '';
   if (Number.isFinite(cap) && panel.scrollHeight > cap) {
     const rows: RowBox[] = [];
     collectRows(panel, panel.getBoundingClientRect().top - panel.scrollTop, rows);
     const height = wholeRowHeight(cap, rows);
-    if (height < cap) panel.style.maxHeight = `${String(height)}px`;
+    if (height < cap) next = `${String(height)}px`;
   }
+  panel.style.maxHeight = next;
+  panel.scrollTop = scrolled;
   hint(panel);
 }
 
