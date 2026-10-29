@@ -223,6 +223,8 @@ export function createTrays(options: TraysOptions): Trays {
 
   const topLeft = slotBox('top-left', 'tray-top-left');
   const topRight = slotBox('top-right', 'tray-top-right');
+  // One row for both corners, so the round buttons can never reach "My patches".
+  const topBar = el('div', { class: 'tray-top' }, topLeft, topRight);
 
   const toast = el('p', { class: 'tray-say', role: 'status', 'data-testid': 'tray-say' });
   toast.hidden = true;
@@ -273,8 +275,7 @@ export function createTrays(options: TraysOptions): Trays {
     'div',
     { class: 'trays', 'data-testid': 'trays' },
     scrim,
-    topLeft,
-    topRight,
+    topBar,
     ...sides.flatMap((s) => [s.tray, s.handle, s.peek]),
     toast,
     hint,

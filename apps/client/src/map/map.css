@@ -189,6 +189,34 @@
   }
 }
 
+/* A short phone held upright (an iPhone SE): under the handles there's only
+   room for a few rows, so a busy tile's lower rows sat cut off in a 238px
+   window. While the panel is open the handles (and their little notes) move up
+   to 8px under the land chip (land/land.css: +164px, at most 66px tall with its
+   Visit button), and the panel grows to 8px under the handles (94px tall,
+   ui/trays): Home and Bag stay one tap away (#165) and the map's name, coins and
+   land chip stay in sight. Wild Isle's cut-off card (+212px or +236px, two
+   lines) would sit on the handles, so it steps aside until the panel closes. A
+   taller panel still scrolls inside. // TUNE: */
+@media (orientation: portrait) and (max-height: 739px) and (max-width: 661px) {
+  body:has(.tile-panel:not([hidden])) .tray-handle {
+    top: calc(env(safe-area-inset-top) + 238px);
+    translate: none;
+  }
+
+  body:has(.tile-panel:not([hidden])) .tray-peek {
+    top: calc(env(safe-area-inset-top) + 285px);
+  }
+
+  body:has(.tile-panel:not([hidden])) .land-stranded {
+    display: none;
+  }
+
+  .tile-panel {
+    max-height: calc(100dvh - 352px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+}
+
 /* Wide enough that the panel (470px at most, centred) clears both handles
    (96px each, ui/trays) beside it: it only has to stay under the corner
    buttons (56px from the top), so a phone on its side shows "Go home"
@@ -199,10 +227,20 @@
   }
 }
 
+/* A tablet: the centred panel would reach the map's name pill (map-hud, +64px
+   and 44px tall: the patch, coins and weather) right above it, so it stops 8px
+   under the pill. A phone on its side (520px tall at most, as the trays'
+   landscape query) keeps the rule above: it has no height to spare. */
+@media (min-width: 662px) and (min-height: 521px) {
+  .tile-panel {
+    max-height: calc(100dvh - 128px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+}
+
 @media (min-width: 662px) and (orientation: portrait) and (min-height: 740px) {
   .tile-panel {
     max-height: calc(
-      100dvh - 76px - env(safe-area-inset-top) - max(env(safe-area-inset-bottom), 22px)
+      100dvh - 128px - env(safe-area-inset-top) - max(env(safe-area-inset-bottom), 22px)
     );
   }
 }
