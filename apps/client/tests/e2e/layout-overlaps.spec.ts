@@ -102,7 +102,7 @@ async function expectWholeRows(page: Page): Promise<void> {
     const foot = panel.getBoundingClientRect().bottom;
     const sliced = [...panel.querySelectorAll('p, button, .tile-panel-head')]
       .filter((row) => row.closest('.tile-panel-head') === row || !row.closest('.tile-panel-head'))
-      .map((row) => ({ text: row.textContent ?? '', box: row.getBoundingClientRect() }))
+      .map((row) => ({ text: row.textContent, box: row.getBoundingClientRect() }))
       .filter(({ box }) => box.height > 0 && box.top < foot - 1 && box.bottom > foot + 1)
       .map(({ text }) => text);
     const scrolls = panel.scrollTop + panel.clientHeight < panel.scrollHeight - 2;

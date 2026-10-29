@@ -88,9 +88,17 @@ export function watchPanelFit(panel: HTMLElement): () => void {
   let frame = 0;
   const schedule = (): void => {
     cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(() => fit(panel));
+    frame = requestAnimationFrame(() => {
+      fit(panel);
+    });
   };
-  panel.addEventListener('scroll', () => hint(panel), { passive: true });
+  panel.addEventListener(
+    'scroll',
+    () => {
+      hint(panel);
+    },
+    { passive: true },
+  );
   window.addEventListener('resize', schedule);
   // A row shown or hidden, a new action, the Build sheet's class: refit.
   new MutationObserver(schedule).observe(panel, {
