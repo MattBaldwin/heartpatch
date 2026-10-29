@@ -7,7 +7,9 @@ import { newPlayer, uniqueName, visitPatch } from './players.js';
 // Four overlaps the render-checks found on an iPhone SE and an iPad: the 🐾
 // button over "My patches", a busy tile panel cut off in a short window, the
 // "Log out" chip over the map while the Build sheet is up, and the iPad's tile
-// panel over the map's name pill. Each is checked on the game's own boxes.
+// panel over the map's name pill. Then (#721 follow-up) the panel ends between
+// rows, and the Build sheet keeps the round Me button. Each is checked on the
+// game's own boxes.
 
 const SE = { width: 375, height: 667 };
 const PHONES = [
@@ -89,6 +91,28 @@ async function makeBusy(page: Page): Promise<void> {
   });
 }
 
+/**
+ * The tile panel never ends through a row: every line and button in it is
+ * either whole in sight or wholly below its foot, and while it can scroll
+ * further its foot fades ("more below").
+ */
+async function expectWholeRows(page: Page): Promise<void> {
+  await settled(page);
+  const fit = await page.getByTestId('tile-panel').evaluate((panel) => {
+    const foot = panel.getBoundingClientRect().bottom;
+    const sliced = [...panel.querySelectorAll('p, button, .tile-panel-head')]
+      .filter((row) => row.closest('.tile-panel-head') === row || !row.closest('.tile-panel-head'))
+      .map((row) => ({ text: row.textContent ?? '', box: row.getBoundingClientRect() }))
+      .filter(({ box }) => box.height > 0 && box.top < foot - 1 && box.bottom > foot + 1)
+      .map(({ text }) => text);
+    const scrolls = panel.scrollTop + panel.clientHeight < panel.scrollHeight - 2;
+    const fade = getComputedStyle(panel, '::after').content !== 'none';
+    return { sliced, scrolls, fade };
+  });
+  expect(fit.sliced).toEqual([]);
+  expect(fit.fade).toBe(fit.scrolls);
+}
+
 test('small phones and iPads: nothing sits on anything (#621 render-checks)', async ({
   browser,
 }) => {
@@ -121,11 +145,14 @@ test('small phones and iPads: nothing sits on anything (#621 render-checks)', as
     await settled(page);
     const panel = page.getByTestId('tile-panel');
     const box = (await panel.boundingBox())!;
-    // Room for half the screen (it was a 238px window under the side handles),
-    // still under the map's name pill and inside the screen.
-    expect(box.height).toBeGreaterThan(300);
+    // Room for close to half the screen (it was a 238px window under the side
+    // handles; whole rows may give up one line of its 315px cap), still under
+    // the map's name pill and inside the screen.
+    expect(box.height).toBeGreaterThan(260);
     expect(box.y + box.height).toBeLessThanOrEqual(SE.height);
     await expectClear(page, '[data-testid="tile-panel"]', '[data-testid="map-hud"]');
+    // It ends between rows, fading at its foot while there's more below.
+    await expectWholeRows(page);
     // The handles move up over it, under the land chip (shown here, as when land
     // misses you, with Wild Isle's cut-off card): Home and Bag stay one tap away
     // (#165), on nothing and under nothing. The cut-off card steps aside.
@@ -169,8 +196,10 @@ test('small phones and iPads: nothing sits on anything (#621 render-checks)', as
     ]) {
       await page.setViewportSize(size);
       await openMyTile(page);
+      await expectWholeRows(page);
       await makeBusy(page);
       await expectClear(page, '[data-testid="tile-panel"]', '[data-testid="map-hud"]');
+      await expectWholeRows(page);
       await closePanel(page);
     }
   });
@@ -179,24 +208,22 @@ test('small phones and iPads: nothing sits on anything (#621 render-checks)', as
     await test.step(`${String(screen.width)}×${String(screen.height)}: the Build sheet`, async () => {
       await page.setViewportSize(screen);
       await openBuildable(page);
-      const chip = page.locator('.auth-chip');
-      await expect(chip).toBeVisible();
-      const centre = await chip.evaluate((el) => {
-        const r = el.getBoundingClientRect();
-        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-      });
+      const me = page.locator('.auth-chip-toggle');
+      await expect(me).toBeVisible();
       await page.getByTestId('tile-build').tap();
       await expect(page.getByTestId('build-sheet')).toBeVisible();
       await settled(page);
-      // The account chip steps aside with the trays: no "Log out" over the map
-      // (or anything else) where the Keeper menu was.
-      await expect(chip).toBeHidden();
+      // The round Me button stays in its corner, clear of the sheet, and opens
+      // the menu with Log out; the wide "Hi, name! Log out" pill never shows.
+      await expect(me).toBeVisible();
+      await expectClear(page, '.auth-chip-toggle', '[data-testid="tile-panel"]');
+      await expect(page.locator('.auth-chip-name')).toBeHidden();
       await expect(page.getByRole('button', { name: 'Log out' })).toBeHidden();
-      const top = await page.evaluate(
-        ({ x, y }) => document.elementFromPoint(x, y)?.closest('.auth-chip') ?? null,
-        centre,
-      );
-      expect(top).toBeNull();
+      await me.tap();
+      await expect(page.getByRole('button', { name: 'Log out' })).toBeVisible();
+      await me.tap();
+      await expect(page.getByRole('button', { name: 'Log out' })).toBeHidden();
+      await expectWholeRows(page);
       // Build! and Not now are on screen.
       for (const id of ['build-go', 'build-cancel']) {
         const b = (await page.getByTestId(id).boundingBox())!;
@@ -204,7 +231,7 @@ test('small phones and iPads: nothing sits on anything (#621 render-checks)', as
       }
       await page.getByTestId('build-cancel').tap();
       await expect(page.getByTestId('build-sheet')).toBeHidden();
-      await expect(chip).toBeVisible();
+      await expect(me).toBeVisible();
       await closePanel(page);
     });
   }

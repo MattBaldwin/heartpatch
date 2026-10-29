@@ -144,16 +144,19 @@
 }
 
 /* While the sheet is up it has the whole panel: the tile's title lines step
-   aside and the panel may grow past the side trays' handles (they hide). */
+   aside and the panel may grow past the side trays' handles (they hide). It
+   stops 8px under the corner's Me button (48px tall at +8px, ui/auth), which
+   stays put over the sheet so Log out is one tap away. */
 .tile-panel.tile-panel-building {
-  max-height: none;
+  max-height: calc(100dvh - 76px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
 }
 
-/* The trays step aside for the sheet (main.ts onPanelFocus), and without them
-   the account chip fell back to its wide "Hi, name! Log out" pill over the
-   map. It steps aside too (as for a battle or exploring); the sheet has Not now. */
-body:has(.tile-panel-building:not([hidden])) .auth-chip {
-  display: none;
+@media (orientation: portrait) and (min-height: 740px) {
+  .tile-panel.tile-panel-building {
+    max-height: calc(
+      100dvh - 76px - env(safe-area-inset-top) - max(env(safe-area-inset-bottom), 22px)
+    );
+  }
 }
 
 .tile-panel-building .tile-panel-head,

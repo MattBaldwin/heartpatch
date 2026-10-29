@@ -231,26 +231,30 @@
 }
 
 /* The Keeper menu over the map (ui/trays): a round face button; the name,
-   menu rows and "Log out" fold out under it. Off the map it's the plain chip. */
+   menu rows and "Log out" fold out under it. Off the map it's the plain chip.
+   The Build sheet hides the trays (main.ts onPanelFocus) but keeps this round
+   button, not the wide pill over the sheet (#721 follow-up). Its :where() adds
+   no weight, so these rules rank as the trays' alone. */
 .auth-chip-toggle,
 .auth-chip-head,
 .auth-chip-menu {
   display: none;
 }
 
-.hp-trays-on .auth-chip {
+:is(.hp-trays-on, :where(body:has(.tile-panel-building:not([hidden])))) .auth-chip {
   flex-direction: column;
   align-items: flex-end;
   padding: 0;
   background: none;
 }
 
-.hp-trays-on {
+.hp-trays-on,
+body:has(.tile-panel-building:not([hidden])) {
   /* The corner button's width; Chat (trays.css) sits left of it. */
   --hp-me-width: 84px;
 }
 
-.hp-trays-on .auth-chip-toggle {
+:is(.hp-trays-on, :where(body:has(.tile-panel-building:not([hidden])))) .auth-chip-toggle {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -284,11 +288,13 @@
   line-height: 1;
 }
 
-.hp-trays-on .auth-chip-body {
+:is(.hp-trays-on, :where(body:has(.tile-panel-building:not([hidden])))) .auth-chip-body {
   display: none;
 }
 
-.hp-trays-on .auth-chip-open .auth-chip-body {
+:is(.hp-trays-on, :where(body:has(.tile-panel-building:not([hidden]))))
+  .auth-chip-open
+  .auth-chip-body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -301,13 +307,13 @@
   box-shadow: 0 14px 34px rgb(74 49 80 / 30%);
 }
 
-.hp-trays-on .auth-chip-name {
+:is(.hp-trays-on, :where(body:has(.tile-panel-building:not([hidden])))) .auth-chip-name {
   padding: 4px 8px 8px;
   font-size: 16px;
   font-weight: 900;
 }
 
-.hp-trays-on .auth-chip-head {
+:is(.hp-trays-on, :where(body:has(.tile-panel-building:not([hidden])))) .auth-chip-head {
   display: flex;
   margin-top: -10px;
 }
@@ -330,7 +336,7 @@
   cursor: pointer;
 }
 
-.hp-trays-on .auth-chip-menu {
+:is(.hp-trays-on, :where(body:has(.tile-panel-building:not([hidden])))) .auth-chip-menu {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -367,7 +373,9 @@
   border-radius: 999px;
 }
 
-.hp-trays-on .auth-chip-body > .hp-button {
+:is(.hp-trays-on, :where(body:has(.tile-panel-building:not([hidden]))))
+  .auth-chip-body
+  > .hp-button {
   min-height: 48px;
 }
 

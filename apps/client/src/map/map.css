@@ -246,7 +246,24 @@
 }
 
 .tile-panel-home {
+  --tile-panel-bg: rgb(255 246 230);
   background: rgb(255 246 230 / 99%); /* not solid: see .tile-panel */
+}
+
+/* A panel taller than its cap ends between rows (panel-fit.ts) and, while it
+   has more below, a soft fade at its foot says "scroll for more" instead of a
+   row that looks cut off (as the Buildings guide's chip row fades at its
+   edge). It sits past the bottom padding, at the panel's very edge, and takes
+   no room of its own. // TUNE: */
+.tile-panel:is([data-more='end'], [data-more='both'])::after {
+  content: '';
+  position: sticky;
+  bottom: -12px;
+  display: block;
+  height: 24px;
+  margin: -24px -12px -12px;
+  background: linear-gradient(rgb(255 255 255 / 0%), var(--tile-panel-bg, rgb(255 250 252)) 90%);
+  pointer-events: none;
 }
 
 .tile-panel-head {
