@@ -1,6 +1,7 @@
 import { hpClose } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import type { TileInfo } from './tile-info.js';
+import { watchPanelFit } from './panel-fit.js';
 
 // The tile chip: a compact card at the bottom of the map when a tile is
 // tapped (tech spec §6, DOM overlay; owner decision 2026-10-04: the world
@@ -94,6 +95,7 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
   );
   panel.hidden = true;
   root.append(panel);
+  watchPanelFit(panel);
 
   return {
     show: (info) => {
