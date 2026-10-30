@@ -63,8 +63,7 @@ import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { createMapsRepo, type JoinRequestRow, type MemberRow, type TileViewRow } from './repo.js';
 import { WILD_ISLE_OFF, wildIsleOpenFor, type WildIsleSwitch } from './wild-isle-switch.js';
-import { createLongNightRepo } from '../long-night/repo.js';
-import { keeperOfTheNightOn, longNightOnMap } from '../long-night/service.js';
+import { keeperOfTheNightOn, longNightWeekdayOn } from '../long-night/service.js';
 import { LONG_NIGHT_OFF, type LongNightSwitch } from '../long-night/switch.js';
 
 export interface MapsService {
@@ -299,10 +298,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       starterPick(db, mapId, user.id),
       store.patchTypeOf(mapId),
       // The Long Night's weekday (#727), left out while it's switched off here.
-      (async () =>
-        (await longNightOnMap(db, longNight, mapId))
-          ? ((await createLongNightRepo(db).weekday(mapId)) ?? null)
-          : undefined)(),
+      longNightWeekdayOn(db, longNight, mapId),
     ]);
     let admin: MapDetail['admin'] = null;
     if (role === 'owner') {

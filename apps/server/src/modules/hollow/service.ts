@@ -64,7 +64,12 @@ import { grantItems } from '../inventory/service.js';
 import { createCareRepo } from '../care/repo.js';
 import { checkpointContentment } from '../jobs/contentment.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
-import { longNightStatus, longNightTonight, resolveLongNight } from '../long-night/service.js';
+import {
+  longNightStatus,
+  longNightTonight,
+  resolveLongNight,
+  type LongNightKeeper,
+} from '../long-night/service.js';
 import { LONG_NIGHT_OFF, type LongNightSwitch } from '../long-night/switch.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
@@ -312,7 +317,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       // Where he can't strike (the Glade, or a patch at 0 %) he only watches:
       // the same stage `tonight` shows, and no walk to play.
       const stage = canStrike ? strength.stage : 'watching';
-      return { userId, keeperNight: nightNo, stage, grace, strikes };
+      return { userId, joinedAt, keeperNight: nightNo, stage, grace, strikes };
     });
     const outcomes = nightfall(
       keepers.map(({ userId, grace, strikes }) => ({
@@ -328,6 +333,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
     );
 
     const stored: StoredOutcome[] = [];
+    const longNightKeepers: LongNightKeeper[] = [];
     const taken: GameEventPayload<'hollow.nightfall'>['taken'] = [];
     const walks: NonNullable<GameEventPayload<'hollow.nightfall'>['walks']> = [];
     for (const [i, outcome] of outcomes.entries()) {
@@ -400,6 +406,14 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         },
       });
       walks.push({ userId, stage: keeper.stage, reclaimed: reclaimedAt, walk });
+      // On a Long Night (#727) a Keeper held if he took nothing of theirs and
+      // won back none of their land.
+      longNightKeepers.push({
+        userId,
+        grace: keeper.grace,
+        joinedAt: keeper.joinedAt,
+        held: took.length === 0 && reclaimedAt.length === 0,
+      });
     }
     // A guard taken to the Hollow leaves the watch; its tile falls back to its
     // land's guardians, as with any guard that can't stand watch.
@@ -469,8 +483,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
           ).events
         : [];
     await repo.setOutcomes(nightRowId, stored);
-    // The Long Night's row, beside the night's own (#727): a Keeper held if
-    // he took nothing of theirs and won back none of their land.
+    // The Long Night's row, beside the night's own (#727).
     const resolved = longNight
       ? await resolveLongNight(tx, {
           map,
@@ -478,12 +491,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
           at,
           seed,
           percent: nightPercent,
-          keepers: stored.map((o) => ({
-            userId: o.userId,
-            grace: keepers.find((k) => k.userId === o.userId)?.grace ?? false,
-            joinedAt: members.find((m) => m.userId === o.userId)?.joinedAt ?? at,
-            held: o.taken.length === 0 && (o.reclaimed ?? []).length === 0,
-          })),
+          keepers: longNightKeepers,
           fires: buildings.filter((b) => b.kind === 'hearthfire'),
           hollowRules: rules,
         })
@@ -723,6 +731,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         at,
         showNight,
         fallen: showNight === lastNight,
+        strikes,
       });
       const speciesIds = new Set([
         ...hollowed.map((s) => s.speciesId),

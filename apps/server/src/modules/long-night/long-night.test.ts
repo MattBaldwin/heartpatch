@@ -96,12 +96,12 @@ describe.skipIf(!url)('the Long Night, server resolve (#727c, needs DATABASE_URL
   }
 
   /** The Hollow on its own: no grace, a certain strike, and the switch as asked. */
-  const hollowService = (longNight: LongNightSwitch = ON) =>
+  const hollowService = (longNight: LongNightSwitch = ON, rules: HollowRules = NO_GRACE) =>
     createHollowService({
       db,
       clock: () => clock,
       battles: createBattlesService({ db, clock: () => clock }),
-      rules: NO_GRACE,
+      rules,
       longNight,
     });
 
@@ -442,6 +442,50 @@ describe.skipIf(!url)('the Long Night, server resolve (#727c, needs DATABASE_URL
     expect(await nightOf(plain)).toEqual([]);
     expect((await statusOf(server, kid, theirs)).hollow.longNight).toBeDefined();
     expect((await statusOf(server, kid, plain)).hollow.longNight).toBeUndefined();
+  });
+
+  it('a Long Night rolls the same strikes as an ordinary night at the scaled percent', async () => {
+    // Uncertain chances, so the strike counts depend on the seed.
+    const rules: HollowRules = {
+      ...NO_GRACE,
+      strength: {
+        ...NO_GRACE.strength,
+        nights: [{ from: 1, stage: 'curious', chances: [30, 30, 30] }],
+      },
+    };
+    const server = await start();
+    const keepers = [await player(), await player(), await player(), await player()];
+    const mapId = await patch(server, keepers[0]!, keepers.slice(1));
+    const strikesOf = async () =>
+      (await db.query.hollowEvents.findFirst({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.night, SATURDAY)),
+      }))!.outcomes as { userId: string; strikes: number }[];
+
+    clock.setTime(Date.parse(AFTER_NIGHTFALL));
+    await hollowService(ON, rules).runNightfall(mapId, SATURDAY);
+    const longNight = await strikesOf();
+    expect(await nightOf(mapId)).toHaveLength(1);
+    // The same night again as an ordinary one at 300 % (the patch's 100 % × 3).
+    await db.execute(`delete from hollow_events where map_id = '${mapId}'`);
+    await db.execute(`update maps set hollow_strength_percent = 300 where id = '${mapId}'`);
+    await hollowService(OFF, rules).runNightfall(mapId, SATURDAY);
+    const ordinary = await strikesOf();
+    const counts = (o: { userId: string; strikes: number }[]) =>
+      o.map(({ userId, strikes }) => [userId, strikes]);
+    expect(counts(ordinary)).toEqual(counts(longNight));
+  });
+
+  it('a patch at 0 % shows no countdown: no Night comes there', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    await db.execute(`update maps set hollow_strength_percent = 0 where id = '${mapId}'`);
+    expect((await statusOf(server, kid, mapId)).hollow.longNight).toEqual({
+      weekday: 6,
+      tonight: false,
+      nextAt: null,
+      gap: null,
+    });
   });
 
   it('status before the Night: the countdown, and no Gap', async () => {

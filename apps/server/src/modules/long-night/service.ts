@@ -273,9 +273,11 @@ export async function longNightStatus(
     /** The night the show is about (`tonight.night`), and whether it has fallen. */
     showNight: LocalDate;
     fallen: boolean;
+    /** He can strike here (not 0 %): where he only watches, no Night comes. */
+    strikes: boolean;
   },
 ): Promise<HollowStatus['longNight']> {
-  const { map, user, local, at, showNight, fallen } = args;
+  const { map, user, local, at, showNight, fallen, strikes } = args;
   if (!PATCHES.includes(map.kind) || !(await longNightOnMap(db, longNight, map.id))) {
     return undefined;
   }
@@ -285,13 +287,18 @@ export async function longNightStatus(
   const latestNight = latest?.night ?? null;
   const window = latest ? windowOf(latest) : null;
   const mine = latest?.outcomes.find((o) => o.userId === user.id);
-  const nextAt = nextLongNightAt(local, weekday, latestNight, HOME_BASE_RULES, (l) =>
-    instantOfLocalDate(l, map.timeZone),
-  );
+  // At 0 % no Night runs (`fall`), so there's nothing to count down to.
+  const nextAt = strikes
+    ? nextLongNightAt(local, weekday, latestNight, HOME_BASE_RULES, (l) =>
+        instantOfLocalDate(l, map.timeZone),
+      )
+    : null;
   return {
     weekday,
     // A night that has fallen was one if it left a row; a coming one if it will be.
-    tonight: latestNight === showNight || (!fallen && isLongNight(weekday, showNight, latestNight)),
+    tonight:
+      latestNight === showNight ||
+      (!fallen && strikes && isLongNight(weekday, showNight, latestNight)),
     nextAt: nextAt?.toISOString() ?? null,
     gap:
       latest && window && isGapOpen(window, at)
@@ -304,6 +311,16 @@ export async function longNightStatus(
           }
         : null,
   };
+}
+
+/** Map details' `longNightWeekday` (#727): undefined while switched off for the patch. */
+export async function longNightWeekdayOn(
+  db: Executor,
+  longNight: LongNightSwitch,
+  mapId: string,
+): Promise<LongNightWeekday | null | undefined> {
+  if (!(await longNightOnMap(db, longNight, mapId))) return undefined;
+  return (await createLongNightRepo(db).weekday(mapId)) ?? null;
 }
 
 /**
