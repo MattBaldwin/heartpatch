@@ -2,9 +2,10 @@ import { z } from 'zod';
 import { formatDataIssues } from './issues.js';
 
 /**
- * A day of the week, as `Date.getUTCDay` counts it: 0 is Sunday, 6 is
- * Saturday. The Long Night's day on a patch (#727, owner decision Q1: the
- * weekday only; the Night is that day's normal nightfall in map time).
+ * A day of the week in map time: 0 is Sunday, 6 is Saturday (`weekdayOf`
+ * a map-local date, never a UTC day). The Long Night's day on a patch (#727,
+ * owner decision Q1: the weekday only; the Night is that day's normal
+ * nightfall in map time).
  */
 export const LongNightWeekdaySchema = z.number().int().min(0).max(6);
 export type LongNightWeekday = z.infer<typeof LongNightWeekdaySchema>;
