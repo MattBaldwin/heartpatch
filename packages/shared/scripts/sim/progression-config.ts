@@ -86,6 +86,16 @@ export interface ProgressionConfig {
   readonly kidPolicy: BattleAiPolicy;
   /** Map seats to model (`MAP_GEN.layouts`); two kids of one kind share each map. */
   readonly seats: readonly number[];
+  /**
+   * The boredom gate (#736): for the `kid` profile, no more than `maxGapDays`
+   * days between "firsts" (or from day 1 to the first, or from the last to
+   * `windowDays`) within the first `windowDays` days.
+   */
+  readonly firstsGate: {
+    readonly kid: string;
+    readonly windowDays: number;
+    readonly maxGapDays: number;
+  };
 }
 
 export const PROGRESSION_CONFIG: ProgressionConfig = {
@@ -110,6 +120,8 @@ export const PROGRESSION_CONFIG: ProgressionConfig = {
   // 4 was new maps' size when the journey gate was set (#318 made new maps 6;
   // older patches keep 4); 2 is the review's layout.
   seats: [4, 2],
+  // TUNE: #736's default, something new for a casual kid at least every 5 days of the first month.
+  firstsGate: { kid: 'casual', windowDays: 30, maxGapDays: 5 },
 };
 
 /** The shipped data. */

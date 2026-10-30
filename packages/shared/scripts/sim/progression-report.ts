@@ -1,7 +1,20 @@
 import { addXp, grantedXp, xpForLevel } from '../../src/care/growth.js';
 import { BATTLE_RULES } from '../../src/data/battle.js';
 import { GUARDIAN_RULES } from '../../src/data/server/guardian-rules.js';
-import type { ProgressionConfig, ProgressionRules } from './progression-config.js';
+import {
+  CURRENT_RULES,
+  type ProgressionConfig,
+  type ProgressionRules,
+} from './progression-config.js';
+import {
+  BIG_AND_BOUNCY,
+  FIRSTS,
+  firstsGate,
+  firstsOf,
+  formatFirst,
+  formatFirstsGate,
+  type FirstsFacts,
+} from './progression-firsts.js';
 import {
   MODEL_LIMITS,
   type DayRecord,
@@ -13,8 +26,6 @@ import {
 
 /** Days the tables show. */
 const SHOWN_DAYS = [1, 2, 3, 4, 5, 7, 10, 14, 21, 26, 30, 40, 50, 60];
-/** The secret milestone "Big and Bouncy" (a squishy at level 20). */
-const BIG_AND_BOUNCY = 20;
 
 /** The milestones a run reaches, by day (null: not within the run). */
 export interface RunSummary {
@@ -176,7 +187,13 @@ function journeySection(rows: readonly JourneyOddsRow[]): string {
 export function renderProgression(
   runs: readonly ProgressionRun[],
   config: ProgressionConfig,
-  info: { seconds: number; odds?: readonly WildOddsRow[]; journeys?: readonly JourneyOddsRow[] },
+  info: {
+    seconds: number;
+    odds?: readonly WildOddsRow[];
+    journeys?: readonly JourneyOddsRow[];
+    /** Species facts for the "firsts" table (#736); none leaves it out. */
+    firsts?: FirstsFacts;
+  },
 ): string {
   const summaries = runs.map((run) => summarise(run, config));
   const ruleSets = [...new Set(runs.map((r) => r.rules))];
@@ -220,6 +237,7 @@ export function renderProgression(
       ]),
     ),
     '',
+    ...(info.firsts ? renderFirsts(runs, config, info.firsts) : []),
     "## What a Juniper's Gap win pays",
     '',
     'An average Gap team (three guardians at the middle of their levels), at the day the Gap is ready.',
@@ -287,4 +305,48 @@ export function renderProgression(
     }
   }
   return `${lines.join('\n')}\n`;
+}
+
+/** The "firsts" table (#736): each run's first of each new thing, and the boredom gate. */
+function renderFirsts(
+  runs: readonly ProgressionRun[],
+  config: ProgressionConfig,
+  facts: FirstsFacts,
+): string[] {
+  const gate = config.firstsGate;
+  const rows = runs.map((run) => {
+    const firsts = firstsOf(lead(run).days, facts);
+    const result = firstsGate(firsts, gate);
+    const longest = Math.max(...result.gaps.map((g) => g.days));
+    return [
+      run.rules.label,
+      String(run.seats),
+      run.profile.id,
+      ...firsts.map((f) => formatFirst(f.day, config.days)),
+      String(longest),
+    ];
+  });
+  const gated = runs.filter(
+    (r) => r.profile.id === gate.kid && r.rules === CURRENT_RULES && r.seats === config.seats[0],
+  );
+  return [
+    '## Firsts (#736)',
+    '',
+    `The day each new thing first happens to kid 0. "Rare befriended" counts only a befriend that joins the team (a late bound); "map full" is the shared map's last neutral tile. Gate: ${formatFirstsGate(
+      firstsGate(firstsOf(gated[0] ? lead(gated[0]).days : [], facts), gate),
+      gate,
+    )} (shipped rules, ${String(config.seats[0])}-seat map).`,
+    '',
+    markdownTable(
+      [
+        'Rules',
+        'Map seats',
+        'Kid',
+        ...FIRSTS.map((f) => f.label),
+        `Longest gap (days 1–${String(gate.windowDays)})`,
+      ],
+      rows,
+    ),
+    '',
+  ];
 }

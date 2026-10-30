@@ -67,6 +67,7 @@ Rulings so far: #372B and #376 are big; #261, #379, #372A and the trail and cave
 3. **Cross-PR pass (supervisor):** read the diff against `main` and the other open PRs. Look for lane violations, duplicate helpers, a second way of doing something, naming, and contract changes nobody flagged.
 4. **Decision compliance:** the PR follows every DECISIONS.md entry that applies to it. Spot-check the code, not just the PR body.
 5. **Base is current:** if `main` moved in a way that could interact, the branch has merged `main` and CI is green again.
+6. **Firsts before and after (#736):** a gameplay PR that changes a `// TUNE:` number pastes the casual and engaged "firsts" rows from `pnpm sim:progression`, before and after, in its body.
 
 Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict comment.
 

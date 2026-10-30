@@ -8,7 +8,13 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { PATCH_ECONOMY_CONFIG } from './patch-economy-config.js';
-import { renderPatchEconomy, runPatchEconomy, upkeepPercent } from './patch-economy.js';
+import {
+  formatWhatPays,
+  renderPatchEconomy,
+  runPatchEconomy,
+  upkeepPercent,
+  whatPays,
+} from './patch-economy.js';
 import { PROGRESSION_CONFIG } from './progression-config.js';
 
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -30,6 +36,19 @@ for (const run of runs) {
   const last = run.days.at(-1);
   console.log(
     `  ${String(run.seats)} seats ${run.kid.padEnd(7)}${run.away.length > 0 ? ` away ${String(run.away[0])}` : '       '}${run.warehouse ? '' : ' no-wh'} first hut day ${String(run.firstHutDay ?? '-')}, upkeep ${String(upkeepPercent(run, run.allHutsDay ?? 999))} % of 💛, ${String(last?.balance ?? 0)} 💛 on day ${String(last?.day ?? 0)}`,
+  );
+}
+const paysRun = runs.find(
+  (r) =>
+    r.kid === PATCH_ECONOMY_CONFIG.whatPays.kid &&
+    r.seats === PATCH_ECONOMY_CONFIG.seats[0] &&
+    r.away.length === 0 &&
+    r.warehouse,
+);
+if (paysRun) {
+  // TODO(#729): exit non-zero on a FAIL once #729 merges; soft until then.
+  console.log(
+    `  ${formatWhatPays(whatPays(paysRun, PATCH_ECONOMY_CONFIG), paysRun, PATCH_ECONOMY_CONFIG)}`,
   );
 }
 console.log(`Report: ${reportPath}`);
