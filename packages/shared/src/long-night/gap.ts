@@ -36,7 +36,7 @@ export function longNightContentHash(
   secrets: LongNightSecrets,
   table: Pick<SpawnTable, 'entries'>,
 ): string {
-  const sorted = <T extends object>(o: T) =>
+  const sorted = (o: object) =>
     Object.fromEntries(Object.entries(o).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
   return hashString(
     JSON.stringify({

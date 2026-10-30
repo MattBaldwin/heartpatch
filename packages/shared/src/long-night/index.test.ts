@@ -23,35 +23,14 @@ const SATURDAY = 6;
 const at = (date: string, minute: number): MapLocalTime => ({ date, minute });
 
 /**
- * The instant a map-local time names in `timeZone`, for the DST test only
- * (shared code doesn't use `Intl`; the server's `instantOfLocal` does this).
+ * America/New_York in autumn 2026, for the DST test only: EDT (UTC−4) until
+ * clocks go back at 2 AM on Sunday 1 November, EST (UTC−5) after. Shared
+ * code can't use `Intl`; the server's `instantOfLocal` does this for real.
  */
-function instantIn(timeZone: string) {
-  return (local: MapLocalTime): Date => {
-    const guess = Date.UTC(
-      Number(local.date.slice(0, 4)),
-      Number(local.date.slice(5, 7)) - 1,
-      Number(local.date.slice(8, 10)),
-      Math.floor(local.minute / 60),
-      local.minute % 60,
-    );
-    // The zone's offset at the guess, then once more at the corrected time.
-    const offsetAt = (ms: number) => {
-      const parts = new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        hourCycle: 'h23',
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric',
-      }).formatToParts(new Date(ms));
-      const n = (t: string) => Number(parts.find((p) => p.type === t)?.value);
-      return Date.UTC(n('year'), n('month') - 1, n('day'), n('hour'), n('minute')) - ms;
-    };
-    const first = guess - offsetAt(guess);
-    return new Date(guess - offsetAt(first));
-  };
+function newYork(local: MapLocalTime): Date {
+  const offsetHours = local.date < '2026-11-01' ? 4 : 5;
+  const [y, m, d] = local.date.split('-').map(Number);
+  return new Date(Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 1, offsetHours, local.minute));
 }
 
 describe('weekdayOf (#727)', () => {
@@ -104,7 +83,7 @@ describe('nextLongNight (#727)', () => {
   });
 
   it("keeps nightfall's map time across a daylight-saving change (America/New_York)", () => {
-    const instantOf = instantIn('America/New_York');
+    const instantOf = newYork;
     // US clocks go back on Sunday 1 November 2026.
     const before = nextLongNightAt(at('2026-10-30', 600), SATURDAY, null, rules, instantOf);
     const after = nextLongNightAt(at('2026-11-01', 600), SATURDAY, '2026-10-31', rules, instantOf);
