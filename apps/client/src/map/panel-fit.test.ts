@@ -27,6 +27,14 @@ describe('wholeRowHeight', () => {
     ).toBe(300);
   });
 
+  it('a phone on its side: the cap under the corner buttons still ends between rows', () => {
+    // 393px tall: 100dvh - 76px (map.css) is 317, which cuts the seventh row.
+    const cap = 393 - 76;
+    const height = wholeRowHeight(cap, rows);
+    expect(height).toBe(300);
+    expect(rows.some((r) => r.top < height && r.bottom > height)).toBe(false);
+  });
+
   it('ignores subpixel brushes with a row edge', () => {
     expect(wholeRowHeight(52.5, rows)).toBe(52.5);
   });
