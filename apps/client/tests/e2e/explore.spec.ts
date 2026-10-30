@@ -122,17 +122,26 @@ async function expectNeedClearOfKeeper(page: Page): Promise<void> {
               near: number | null;
               keeperOnScreen: Box | null;
               glintOnScreen: (index: number) => Box | null;
+              spots: readonly { index: number; done: boolean }[];
             };
           };
           const e = (window as unknown as { __heartpatch?: Hook }).__heartpatch?.explore?.();
           const el = document.querySelector('[data-testid="explore-need"]');
           if (!e?.keeperOnScreen || !el || e.near === null) return 'not shown';
           const card = el.getBoundingClientRect();
-          const over = (b: Box) =>
-            card.left < b.right &&
-            card.right > b.left &&
-            card.top < b.bottom &&
-            card.bottom > b.top;
+          const overAt = (c: Box, b: Box) =>
+            c.left < b.right && c.right > b.left && c.top < b.bottom && c.bottom > b.top;
+          const over = (b: Box) => overAt(card, b);
+          // Where the card sits unmoved: it never slides onto a glint that place left showing.
+          const dy = new DOMMatrix(getComputedStyle(el).transform).m42;
+          const rest = { ...card.toJSON(), top: card.top - dy, bottom: card.bottom - dy } as Box;
+          for (const spot of e.spots) {
+            if (spot.done || spot.index === e.near) continue;
+            const other = e.glintOnScreen(spot.index);
+            if (other && over(other) && !overAt(rest, other)) {
+              return `card ${JSON.stringify(card)} moved onto glint ${String(spot.index)} ${JSON.stringify(other)}`;
+            }
+          }
           if (over(e.keeperOnScreen)) {
             return `card ${JSON.stringify(card)} over the Keeper ${JSON.stringify(e.keeperOnScreen)}`;
           }
@@ -1034,8 +1043,14 @@ test('enters a river tile on its dry bank, with its mossy logs, pebble bars and 
     // A phone turned on its side: the card lays itself out again, still clear of him.
     const portrait = page.viewportSize();
     const sideways = portrait && portrait.width < portrait.height && portrait.width < 500;
-    if (sideways) {
-      for (const size of SIDEWAYS) {
+    // An iPad turned on its side too (Layout B2: every glint, both ways up).
+    const turns = sideways
+      ? SIDEWAYS
+      : portrait
+        ? [{ width: portrait.height, height: portrait.width }]
+        : [];
+    if (portrait) {
+      for (const size of turns) {
         await page.setViewportSize(size);
         await expectNeedClearOfKeeper(page);
       }
@@ -1062,8 +1077,8 @@ test('enters a river tile on its dry bank, with its mossy logs, pebble bars and 
     await keeperStill(page);
     await expectNeedClearOfKeeper(page);
     const upright = await needBox(page);
-    if (sideways) {
-      for (const size of SIDEWAYS) {
+    if (portrait) {
+      for (const size of turns) {
         await page.setViewportSize(size);
         await expectNeedClearOfKeeper(page);
       }

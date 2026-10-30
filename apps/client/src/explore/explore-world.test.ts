@@ -772,6 +772,52 @@ describe('the missing-tool card keeps clear of the glint it is about (Layout B2)
   });
 });
 
+describe('the missing-tool card never moves onto a glint its own place left showing (Layout B2, portrait)', () => {
+  // An iPhone held upright: the full card low on the screen, the Keeper
+  // above it, glints scattered round the tile.
+  const room = { top: 72, bottom: 628 };
+  const keeper = { left: 175, right: 215, top: 300, bottom: 360 };
+  const card = { left: 16, right: 374, top: 450, bottom: 560 };
+  const moved = (dy: number) => ({ ...card, top: card.top + dy, bottom: card.bottom + dy });
+
+  it('stays put when its place covers nothing', () => {
+    const front = { left: 230, right: 260, top: 330, bottom: 360 };
+    const far = { left: 60, right: 90, top: 380, bottom: 410 };
+    expect(clearOf(card, [keeper, front], room, 12, [far])).toBe(0);
+  });
+
+  it('stays put when its place covers only another glint (as before Layout B2)', () => {
+    const front = { left: 230, right: 260, top: 330, bottom: 360 };
+    const under = { left: 60, right: 90, top: 500, bottom: 530 };
+    expect(clearOf(card, [keeper, front], room, 12, [under])).toBe(0);
+  });
+
+  it('does not slide off the front glint onto a far one just above', () => {
+    const front = { left: 230, right: 260, top: 520, bottom: 550 };
+    const far = { left: 60, right: 90, top: 405, bottom: 435 };
+    // Clear of the Keeper and front glint only, it lands on the far glint.
+    const blind = clearOf(card, [keeper, front], room, 12) ?? NaN;
+    expect(coverShare(moved(blind), far)).toBeGreaterThan(0);
+    const dy = clearOf(card, [keeper, front], room, 12, [far]) ?? NaN;
+    for (const b of [keeper, front, far]) expect(coverShare(moved(dy), b)).toBe(0);
+    expect(moved(dy).top).toBeGreaterThanOrEqual(room.top);
+    expect(moved(dy).bottom).toBeLessThanOrEqual(room.bottom);
+  });
+
+  it('ignores a glint it already covered when it moves', () => {
+    const front = { left: 230, right: 260, top: 520, bottom: 550 };
+    const under = { left: 60, right: 90, top: 470, bottom: 500 };
+    const dy = clearOf(card, [keeper, front], room, 12, [under]) ?? NaN;
+    expect(dy).toBe(clearOf(card, [keeper, front], room, 12));
+  });
+
+  it('says so when every place covers a glint that showed, so the card can fold smaller', () => {
+    const front = { left: 230, right: 260, top: 520, bottom: 550 };
+    const wall = { left: 300, right: 330, top: 72, bottom: 440 };
+    expect(clearOf(card, [keeper, front], room, 12, [wall])).toBeNull();
+  });
+});
+
 describe('the band the missing-tool card may use', () => {
   const topBar = { left: 0, right: 734, top: 0, bottom: 60 };
 

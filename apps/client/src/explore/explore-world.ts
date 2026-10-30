@@ -387,35 +387,36 @@ export function needRoom(
  * How far to move the missing-tool card up or down the screen (CSS px,
  * negative is up) so it never covers any of `keep`: the Keeper, and the
  * glint of the spot the card is about (Layout B2: a phone held sideways had
- * the card over the swirly eddy's glint). 0 when its own place is already
- * clear; else the nearest move up that clears them all (just above one of
- * them), else the nearest move down. `room` is the band the card may use
- * (`needRoom`). Null when nothing fits: the caller makes the card smaller and
- * asks again.
+ * the card over the swirly eddy's glint). `spare` is the other glints: the
+ * card never moves onto one its own place left showing (a portrait phone
+ * moved off the front glint onto a far one), but one it already covers
+ * doesn't move it. 0 when its own place is clear of `keep`; else the nearest
+ * move up that clears them all (just above one of them), else the nearest
+ * move down. `room` is the band the card may use (`needRoom`). Null when
+ * nothing fits: the caller makes the card smaller and asks again.
  */
 export function clearOf(
   card: ScreenBox,
   keep: readonly ScreenBox[],
   room: { readonly top: number; readonly bottom: number },
   gap: number,
+  spare: readonly ScreenBox[] = [],
 ): number | null {
-  const covers = (dy: number) =>
-    keep.some(
-      (b) =>
-        card.left < b.right &&
-        card.right > b.left &&
-        card.top + dy < b.bottom &&
-        card.bottom + dy > b.top,
-    );
-  if (!covers(0)) return 0;
+  const over = (dy: number, b: ScreenBox) =>
+    card.left < b.right &&
+    card.right > b.left &&
+    card.top + dy < b.bottom &&
+    card.bottom + dy > b.top;
+  if (!keep.some((b) => over(0, b))) return 0;
+  const all = [...keep, ...spare.filter((b) => !over(0, b))];
   const fits = (dy: number) =>
-    card.top + dy >= room.top && card.bottom + dy <= room.bottom && !covers(dy);
-  const up = keep
+    card.top + dy >= room.top && card.bottom + dy <= room.bottom && !all.some((b) => over(dy, b));
+  const up = all
     .map((b) => b.top - gap - card.bottom)
     .filter((dy) => dy < 0 && fits(dy))
     .sort((a, b) => b - a);
   if (up.length > 0) return up[0] ?? null;
-  const down = keep
+  const down = all
     .map((b) => b.bottom + gap - card.top)
     .filter((dy) => dy > 0 && fits(dy))
     .sort((a, b) => a - b);

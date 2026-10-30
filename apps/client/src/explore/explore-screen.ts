@@ -1351,20 +1351,31 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let needGlints = 0;
   /**
    * Slides the missing-tool card up or down so it never sits over the Keeper
-   * or the glint of the spot it's about (Layout B2). Where nothing fits (a
-   * phone held sideways) it folds into its short shape and tries again.
+   * or the glint of the spot it's about (Layout B2), nor onto another glint
+   * its own place left showing. Where nothing fits (a phone held sideways) it
+   * folds into its short shape and tries again, then lets the other glints go.
    */
   function placeNeed(): void {
     needGlints = scene3d?.glintMoves ?? 0;
     if (need.hidden) return;
     const keeper = scene3d?.keeperOnScreen();
     if (!keeper) return;
-    const glint = front ? scene3d?.glintOnScreen(front.index) : null;
+    const glintOf = (index: number) => scene3d?.glintOnScreen(index) ?? null;
+    const glint = front ? glintOf(front.index) : null;
     const keep = glint ? [keeper, glint] : [keeper];
-    let shift = needShiftFor(keep);
+    const spare = (tile?.spots ?? [])
+      .filter((s) => !s.done && s.index !== front?.index)
+      .map((s) => glintOf(s.index))
+      .filter((b) => b !== null);
+    let shift = needShiftFor(keep, spare);
     if (shift === undefined) return; // hidden by a gesture: nothing to place
     if (shift === null && !need.classList.contains('explore-need-compact')) {
       need.classList.add('explore-need-compact');
+      shift = needShiftFor(keep, spare);
+      if (shift === undefined) return;
+    }
+    // No place misses the other glints too: keep clear of the Keeper and its glint at least.
+    if (shift === null) {
       shift = needShiftFor(keep);
       if (shift === undefined) return;
     }
@@ -1395,10 +1406,13 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   }
 
   /** `clearOf` for the card as it's laid out now; undefined when it isn't shown. */
-  function needShiftFor(keep: readonly ScreenBox[]): number | null | undefined {
+  function needShiftFor(
+    keep: readonly ScreenBox[],
+    spare: readonly ScreenBox[] = [],
+  ): number | null | undefined {
     const card = needAtRest();
     if (card.bottom - card.top === 0) return undefined;
-    return clearOf(card, keep, needRoomNow(), EXPLORE_VIEW.needGap);
+    return clearOf(card, keep, needRoomNow(), EXPLORE_VIEW.needGap, spare);
   }
 
   // Turning the phone (or resizing the window) lays the card out afresh: its
