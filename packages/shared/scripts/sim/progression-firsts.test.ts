@@ -9,6 +9,7 @@ import {
   formatFirst,
   formatFirstsGate,
   type First,
+  type FirstDay,
   type FirstsFacts,
 } from './progression-firsts.js';
 import { PROGRESSION_CONFIG } from './progression-config.js';
@@ -52,7 +53,7 @@ const facts: FirstsFacts = {
 };
 const dayOf = (firsts: readonly First[], id: string) => firsts.find((f) => f.id === id)?.day;
 const gate = { kid: 'casual', windowDays: 30, maxGapDays: 5 };
-const firsts = (days: readonly (number | null)[]): First[] =>
+const firsts = (days: readonly FirstDay[]): First[] =>
   days.map((d, i) => ({ id: String(i), label: String(i), day: d }));
 
 describe('firstsFacts', () => {
