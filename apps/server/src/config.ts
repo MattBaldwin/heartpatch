@@ -4,6 +4,18 @@ import { z } from 'zod';
 /** An unset build arg reaches the image as an empty string: treat it as unset. */
 const unsetIfEmpty = (value: unknown) => (value === '' ? undefined : value);
 
+/** A comma-separated list of usernames (a feature switch's testers), lower-cased, blanks dropped. */
+const usernameList = () =>
+  z
+    .string()
+    .default('')
+    .transform((list) =>
+      list
+        .split(',')
+        .map((name) => name.trim().toLowerCase())
+        .filter((name) => name.length > 0),
+    );
+
 const ConfigSchema = z.object({
   // Defaults to production so a misconfigured image never loads dev-only tooling.
   NODE_ENV: z.enum(['development', 'test', 'production']).default('production'),
@@ -56,15 +68,7 @@ const ConfigSchema = z.object({
   HP_HOUSE: z.enum(['off', 'testers', 'on']).default('off'),
   // Usernames who see the house while `HP_HOUSE=testers`, comma-separated
   // (case doesn't matter). Lets the owner try it on prod while kids don't.
-  HP_HOUSE_TESTERS: z
-    .string()
-    .default('')
-    .transform((list) =>
-      list
-        .split(',')
-        .map((name) => name.trim().toLowerCase())
-        .filter((name) => name.length > 0),
-    ),
+  HP_HOUSE_TESTERS: usernameList(),
   // Wild Isle (#621) feature switch: `off` refuses `wild-isle` patches for
   // everyone (creating one is FORBIDDEN and the lobby hides the choice),
   // `testers` lets only `HP_WILD_ISLE_TESTERS` make one, `on` every player.
@@ -72,15 +76,7 @@ const ConfigSchema = z.object({
   HP_WILD_ISLE: z.enum(['off', 'testers', 'on']).default('off'),
   // Usernames who can make a Wild Isle while `HP_WILD_ISLE=testers`,
   // comma-separated (case doesn't matter), as `HP_HOUSE_TESTERS`.
-  HP_WILD_ISLE_TESTERS: z
-    .string()
-    .default('')
-    .transform((list) =>
-      list
-        .split(',')
-        .map((name) => name.trim().toLowerCase())
-        .filter((name) => name.length > 0),
-    ),
+  HP_WILD_ISLE_TESTERS: usernameList(),
   // The Long Night (#727) feature switch: `off` runs every nightfall as an
   // ordinary night and leaves the Long Night out of every reply, `testers`
   // runs it only on patches with an `HP_LONG_NIGHT_TESTERS` member (the
@@ -89,15 +85,7 @@ const ConfigSchema = z.object({
   HP_LONG_NIGHT: z.enum(['off', 'testers', 'on']).default('off'),
   // Usernames who see the Long Night while `HP_LONG_NIGHT=testers`,
   // comma-separated (case doesn't matter), as `HP_HOUSE_TESTERS`.
-  HP_LONG_NIGHT_TESTERS: z
-    .string()
-    .default('')
-    .transform((list) =>
-      list
-        .split(',')
-        .map((name) => name.trim().toLowerCase())
-        .filter((name) => name.length > 0),
-    ),
+  HP_LONG_NIGHT_TESTERS: usernameList(),
   // Branching evolution (#32): the secret salt evolution rolls are seeded
   // with, so a player who knows a squishy's id can't work out its roll.
   // Required in production; development and tests fall back to a fixed dev

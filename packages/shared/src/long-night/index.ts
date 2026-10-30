@@ -41,7 +41,8 @@ export function isLongNight(
   if (weekday === null || weekdayOf(night) !== weekday) return false;
   if (latest === null) return true;
   const since = daysBetween(latest, night);
-  return since <= 0 || since >= WEEK;
+  // A `latest` after `night` (a later Night already ran) never makes this one.
+  return since === 0 || since >= WEEK;
 }
 
 /**
