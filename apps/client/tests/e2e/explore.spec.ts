@@ -132,7 +132,8 @@ async function expectNeedClearOfKeeper(page: Page): Promise<void> {
           const overAt = (c: Box, b: Box) =>
             c.left < b.right && c.right > b.left && c.top < b.bottom && c.bottom > b.top;
           const over = (b: Box) => overAt(card, b);
-          // Where the card sits unmoved: it never slides onto a glint that place left showing.
+          // Where the card sits unmoved: it never covers more of any glint
+          // than that place does (1px of rounding allowed).
           const dy = new DOMMatrix(getComputedStyle(el).transform).m42;
           const rest = {
             left: card.left,
@@ -140,14 +141,31 @@ async function expectNeedClearOfKeeper(page: Page): Promise<void> {
             top: card.top - dy,
             bottom: card.bottom - dy,
           };
+          const cover = (c: Box, b: Box) =>
+            Math.max(0, Math.min(c.right, b.right) - Math.max(c.left, b.left)) *
+            Math.max(0, Math.min(c.bottom, b.bottom) - Math.max(c.top, b.top));
           // With glints all round the Keeper there may be no such place: then
           // it says so, and still keeps clear of him and his glint.
           const crowded = (el as HTMLElement).dataset['glints'] === 'crowded';
           for (const spot of crowded ? [] : e.spots) {
             if (spot.done || spot.index === e.near) continue;
             const other = e.glintOnScreen(spot.index);
-            if (other && over(other) && !overAt(rest, other)) {
-              return `card ${JSON.stringify(card)} (moved ${String(dy)}px, ${el.className}) moved onto glint ${String(spot.index)} ${JSON.stringify(other)}; Keeper ${JSON.stringify(e.keeperOnScreen)}, front ${JSON.stringify(e.glintOnScreen(e.near))}`;
+            if (other && cover(card, other) > cover(rest, other) + (other.right - other.left)) {
+              return `card ${JSON.stringify(card)} (moved ${String(dy)}px, ${el.className}) covers more of glint ${String(spot.index)} ${JSON.stringify(other)} than at rest; Keeper ${JSON.stringify(e.keeperOnScreen)}, front ${JSON.stringify(e.glintOnScreen(e.near))}`;
+            }
+          }
+          // The 🐾 button under Back: never under it, and its gap kept.
+          const paw = document.querySelector<HTMLElement>('.squishies-open-explore');
+          if (paw && !paw.hidden) {
+            const p = paw.getBoundingClientRect();
+            const gap = Math.max(
+              p.left - card.right,
+              card.left - p.right,
+              p.top - card.bottom,
+              card.top - p.bottom,
+            );
+            if (p.width > 0 && gap < 11) {
+              return `card ${JSON.stringify(card)} ${String(gap)}px from the 🐾 button ${JSON.stringify(p)}`;
             }
           }
           if (over(e.keeperOnScreen)) {
@@ -186,18 +204,22 @@ async function expectNeedClearOfKeeper(page: Page): Promise<void> {
     .toBe('clear');
   // Which rule placed it, in the report: every glint, or (crowded) the Keeper and his glint.
   const glints = await page.getByTestId('explore-need').getAttribute('data-glints');
+  const short = await page
+    .getByTestId('explore-need')
+    .evaluate((n) => n.classList.contains('explore-need-compact'));
   const size = page.viewportSize();
   test.info().annotations.push({
     type: 'need-glints',
-    description: `${String(size?.width)}x${String(size?.height)}: ${String(glints)}`,
+    description: `${String(size?.width)}x${String(size?.height)}: ${String(glints)}${short ? ', short' : ''}`,
   });
 }
 
-/** Phones held sideways: iPhone 15 (full screen and under the browser's bars) and SE. */
+/** Phones held sideways: iPhone 15 (full screen and under the browser's bars) and SE; then SE upright. */
 const SIDEWAYS = [
   { width: 852, height: 393 }, // iPhone 15 held sideways, installed
   { width: 734, height: 343 }, // iPhone 15 held sideways (the reviewer's repro)
   { width: 667, height: 375 }, // iPhone SE held sideways
+  { width: 375, height: 667 }, // iPhone SE upright (its pebble glint, Layout B2)
 ] as const;
 
 /** The card's box, to check a turn back to portrait leaves it as it was. */

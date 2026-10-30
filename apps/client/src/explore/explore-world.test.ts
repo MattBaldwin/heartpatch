@@ -10,7 +10,8 @@ import { startInteraction } from './interactions.js';
 import { clampToTile, insideTile } from './explore-view.js';
 import {
   clearOf,
-  clearOfMost,
+  needBetter,
+  placeNeedCard,
   needRoom,
   coverShare,
   glintNudge,
@@ -828,7 +829,7 @@ describe('the missing-tool card never moves onto a glint its own place left show
     const high = { left: 257, right: 288, top: 92, bottom: 118 };
     const low = { left: 500, right: 530, top: 164, bottom: 172 };
     expect(clearOf(card, [keeper, front], room, 12, [high, low])).toBeNull();
-    const dy = clearOfMost(card, [keeper, front], room, 12, [high, low]) ?? NaN;
+    const dy = placeNeedCard(card, [keeper, front], room, 12, [high, low])?.dy ?? NaN;
     const at = { ...card, top: card.top + dy, bottom: card.bottom + dy };
     expect(coverShare(at, keeper) + coverShare(at, front)).toBe(0);
     expect(at.top).toBeGreaterThanOrEqual(room.top);
@@ -840,7 +841,54 @@ describe('the missing-tool card never moves onto a glint its own place left show
   it('when crowded, is null only when the Keeper and its glint leave no room', () => {
     const tall = { left: 100, right: 120, top: 60, bottom: 640 };
     const front = { left: 230, right: 260, top: 520, bottom: 550 };
-    expect(clearOfMost(card, [tall, front], room, 12, [])).toBeNull();
+    expect(placeNeedCard(card, [tall, front], room, 12, [])).toBeNull();
+  });
+
+  it('never covers more of a glint its own place half covers (iPhone SE upright)', () => {
+    // A pebble glint at the card's right edge, its lower part under the card's
+    // top: moving up off the eddy's glint must not take more of it.
+    const front = { left: 230, right: 260, top: 520, bottom: 550 };
+    const pebble = { left: 340, right: 372, top: 430, bottom: 462 };
+    const restCover = Math.max(0, pebble.bottom - card.top) * (pebble.right - pebble.left);
+    expect(restCover).toBeGreaterThan(0);
+    const p = placeNeedCard(card, [keeper, front], room, 12, [pebble]);
+    expect(p?.hides).toBe(0);
+    const at = moved(p?.dy ?? NaN);
+    const cover =
+      Math.max(0, Math.min(at.bottom, pebble.bottom) - Math.max(at.top, pebble.top)) *
+      (pebble.right - pebble.left);
+    expect(cover).toBeLessThanOrEqual(restCover);
+    // Counting glints alone, the nearest place up sits over more of it.
+    const blind = moved(placeNeedCard(card, [keeper, front], room, 12)?.dy ?? NaN);
+    expect(Math.min(blind.bottom, pebble.bottom) - Math.max(blind.top, pebble.top)).toBe(
+      pebble.bottom - pebble.top,
+    );
+  });
+
+  it('weighs the same count of glints by how much more of them it covers', () => {
+    const a = { dy: -40, hides: 1, area: 120 };
+    const b = { dy: -10, hides: 1, area: 300 };
+    expect(needBetter(a, b)).toBe(true);
+    expect(needBetter(b, a)).toBe(false);
+    expect(needBetter({ dy: -90, hides: 0, area: 0 }, a)).toBe(true);
+    // Equal: not better, so the card keeps its full shape rather than folding.
+    expect(needBetter(a, { ...a, dy: -5 })).toBe(false);
+  });
+
+  it('keeps its gap under the 🐾 button (iPhone 15 upright)', () => {
+    const front = { left: 230, right: 260, top: 520, bottom: 550 };
+    const paw = { left: 16, right: 64, top: 127, bottom: 175 };
+    // The caller widens the button by the gap, so no place comes nearer.
+    const near = { left: 4, right: 76, top: 115, bottom: 187 };
+    const keeper = { left: 175, right: 215, top: 300, bottom: 360 };
+    const over = { ...card, top: 340, bottom: 450 };
+    // Without the button it sits just over the Keeper's head, 3px under it.
+    const blind = placeNeedCard(over, [keeper, front], room, 12)?.dy ?? NaN;
+    expect(over.top + blind - paw.bottom).toBe(3);
+    const dy = placeNeedCard(over, [keeper, front, near], room, 12)?.dy ?? NaN;
+    const at = { ...over, top: over.top + dy, bottom: over.bottom + dy };
+    expect(at.top >= paw.bottom + 12 || at.bottom <= paw.top - 12).toBe(true);
+    expect(coverShare(at, keeper) + coverShare(at, front)).toBe(0);
   });
 });
 
