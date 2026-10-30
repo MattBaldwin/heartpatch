@@ -152,6 +152,10 @@ async function expectNeedClearOfKeeper(page: Page): Promise<void> {
           // it says so, and takes the place (in its band, clear of the Keeper,
           // his glint and the 🐾 button) over the least more of the others.
           const crowded = (el as HTMLElement).dataset['glints'] === 'crowded';
+          // Never folded short while the phone is upright (owner, option (b)).
+          if (innerWidth <= innerHeight && el.classList.contains('explore-need-compact')) {
+            return `card short upright at ${String(innerWidth)}x${String(innerHeight)}`;
+          }
           const front = e.glintOnScreen(e.near);
           const pawEl = document.querySelector<HTMLElement>('.squishies-open-explore');
           const pawAt = pawEl && !pawEl.hidden ? pawEl.getBoundingClientRect() : null;
@@ -170,12 +174,14 @@ async function expectNeedClearOfKeeper(page: Page): Promise<void> {
             const keep = [e.keeperOnScreen, ...(front ? [front] : [])].map(grow);
             if (pawAt && pawAt.width > 0) keep.push(grow(pawAt));
             const at = (d: number) => ({ ...rest, top: rest.top + d, bottom: rest.bottom + d });
+            // A glint counts as covered more past a 1px row of it: the card
+            // moves in whole px.
             const score = (c: Box) => {
               let hides = 0;
               let area = 0;
               for (const b of others) {
                 const more = cover(c, b) - cover(rest, b);
-                if (more > 0) {
+                if (more > b.right - b.left) {
                   hides++;
                   area += more;
                 }
@@ -195,15 +201,16 @@ async function expectNeedClearOfKeeper(page: Page): Promise<void> {
                 best = sc;
             }
             if (!place && best) return `no place, but ${JSON.stringify(best)} fits`;
-            // Its places sit a gap off each box, so allow a little more than the scan's best.
-            const slack = Math.max(0, ...others.map((b) => b.right - b.left)) * 12;
+            // The card where it sits covers no more extra than any place the
+            // scan finds clear of the Keeper, his glint and the 🐾 button.
+            const mine = score(card);
+            const slack = others.reduce((sum, b) => sum + (b.right - b.left), 0);
             if (
-              place &&
               best &&
-              (place.hides > best.hides ||
-                (place.hides === best.hides && place.area > best.area + slack))
+              (mine.hides > best.hides ||
+                (mine.hides === best.hides && mine.area > best.area + slack))
             ) {
-              return `crowded place ${JSON.stringify(place)} worse than ${JSON.stringify(best)}`;
+              return `crowded card ${JSON.stringify(mine)} (plan ${JSON.stringify(place)}) covers more than ${JSON.stringify(best)}`;
             }
           }
           for (const spot of crowded ? [] : e.spots) {
@@ -294,14 +301,20 @@ type Turn = {
   };
 };
 
-/** Turns (or resizes) the screen, with its safe-area insets (none unless given; Chromium only). */
+/**
+ * Turns (or resizes) the screen, with its safe-area insets (none unless
+ * given). Insets need CDP, so only Chromium gets them; WebKit (CI) turns
+ * without.
+ */
 async function turnTo(page: Page, size: Turn): Promise<void> {
-  const cdp = await page.context().newCDPSession(page);
-  const i = size.insets ?? {};
-  await cdp.send('Emulation.setSafeAreaInsetsOverride', {
-    insets: { top: i.top ?? 0, bottom: i.bottom ?? 0, left: i.left ?? 0, right: i.right ?? 0 },
-  });
-  await cdp.detach();
+  if (page.context().browser()?.browserType().name() === 'chromium') {
+    const cdp = await page.context().newCDPSession(page);
+    const i = size.insets ?? {};
+    await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+      insets: { top: i.top ?? 0, bottom: i.bottom ?? 0, left: i.left ?? 0, right: i.right ?? 0 },
+    });
+    await cdp.detach();
+  }
   await page.setViewportSize({ width: size.width, height: size.height });
 }
 

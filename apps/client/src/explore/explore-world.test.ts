@@ -11,6 +11,7 @@ import { clampToTile, insideTile } from './explore-view.js';
 import {
   clearOf,
   needBetter,
+  needFolds,
   placeNeedCard,
   needRoom,
   coverShare,
@@ -873,6 +874,75 @@ describe('the missing-tool card never moves onto a glint its own place left show
     expect(needBetter({ dy: -90, hides: 0, area: 0 }, a)).toBe(true);
     // Equal: not better, so the card keeps its full shape rather than folding.
     expect(needBetter(a, { ...a, dy: -5 })).toBe(false);
+  });
+
+  it('never folds short while the phone is upright (owner decision, option (b))', () => {
+    const crowded = { dy: -40, hides: 2, area: 900 };
+    const better = { dy: -20, hides: 0, area: 0 };
+    expect(needFolds(false, crowded)).toBe(false);
+    expect(needFolds(false, null)).toBe(false);
+    expect(needFolds(false, crowded, better)).toBe(false);
+    expect(needFolds(false, null, better)).toBe(false);
+  });
+
+  it('held sideways, folds only when crowded and short covers strictly less', () => {
+    const crowded = { dy: -40, hides: 1, area: 300 };
+    // Clear in its full shape: no fold tried.
+    expect(needFolds(true, { dy: -10, hides: 0, area: 0 })).toBe(false);
+    // Crowded or nowhere to go: worth a try.
+    expect(needFolds(true, crowded)).toBe(true);
+    expect(needFolds(true, null)).toBe(true);
+    // Kept only when it strictly helps.
+    expect(needFolds(true, crowded, { dy: -5, hides: 1, area: 120 })).toBe(true);
+    expect(needFolds(true, crowded, { dy: -5, hides: 1, area: 300 })).toBe(false);
+    expect(needFolds(true, crowded, { dy: -5, hides: 2, area: 10 })).toBe(false);
+    expect(needFolds(true, crowded, null)).toBe(false);
+    expect(needFolds(true, null, { dy: -5, hides: 3, area: 999 })).toBe(true);
+    expect(needFolds(true, null, null)).toBe(false);
+  });
+
+  it('when crowded, picks the least extra cover of every place clear of the Keeper and its glint', () => {
+    const front = { left: 230, right: 260, top: 520, bottom: 550 };
+    // Glints above and below the Keeper: no place misses them all.
+    const spare = [
+      { left: 150, right: 182, top: 180, bottom: 212 },
+      { left: 300, right: 340, top: 230, bottom: 300 },
+      { left: 40, right: 70, top: 400, bottom: 440 },
+    ];
+    const keep = [keeper, front];
+    const p = placeNeedCard(card, keep, room, 12, spare);
+    expect(p).not.toBeNull();
+    const cover = (c: typeof card, b: typeof card) =>
+      Math.max(0, Math.min(c.right, b.right) - Math.max(c.left, b.left)) *
+      Math.max(0, Math.min(c.bottom, b.bottom) - Math.max(c.top, b.top));
+    const extra = (dy: number) => {
+      let hides = 0;
+      let area = 0;
+      for (const b of spare) {
+        const more = cover(moved(dy), b) - cover(card, b);
+        if (more > 0) {
+          hides++;
+          area += more;
+        }
+      }
+      return { hides, area };
+    };
+    const grown = keep.map((b) => ({
+      left: b.left - 12,
+      right: b.right + 12,
+      top: b.top - 12,
+      bottom: b.bottom + 12,
+    }));
+    // Every place in the band at 0.5px steps that keeps the gap off both.
+    let others = 0;
+    for (let dy = room.top - card.top; dy <= room.bottom - card.bottom; dy += 0.5) {
+      if (grown.some((b) => cover(moved(dy), b) > 0)) continue;
+      others++;
+      const e = extra(dy);
+      expect(p!.hides < e.hides || (p!.hides === e.hides && p!.area <= e.area)).toBe(true);
+    }
+    expect(others).toBeGreaterThan(0);
+    expect(extra(p!.dy)).toEqual({ hides: p!.hides, area: p!.area });
   });
 
   it('keeps its gap under the 🐾 button (iPhone 15 upright)', () => {

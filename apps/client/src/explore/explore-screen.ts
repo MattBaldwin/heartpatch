@@ -68,7 +68,7 @@ import {
 } from './explore-view.js';
 import {
   besideSpot,
-  needBetter,
+  needFolds,
   placeNeedCard,
   needRoom,
   showcaseStance,
@@ -1369,12 +1369,12 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   /** Fresh layouts so far (a new spot, a spot searched, a turn, the scene settling). */
   let needLayouts = 0;
   /** The layout where folding short didn't help, so it isn't tried again. */
-  let needFolds = -1;
+  let needFoldTried = -1;
   /**
    * Slides the missing-tool card up or down so it never sits over the Keeper
    * or the glint of the spot it's about (Layout B2), nor onto another glint
-   * its own place left showing. Where nothing fits (a phone held sideways) it
-   * folds into its short shape and tries again, then lets the other glints go.
+   * its own place left showing. Where nothing fits it lets the other glints go,
+   * over as little more of them as it can; held sideways it may fold short first.
    */
   function placeNeed(settled = false): void {
     needGlints = scene3d?.glintMoves ?? 0;
@@ -1389,6 +1389,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       needShift = 0;
       need.style.transform = '';
     }
+    // Never short while the phone is upright (Layout B2, option (b)).
+    const sideways = window.innerWidth > window.innerHeight;
+    if (!sideways) need.classList.remove('explore-need-compact');
     const keeper = scene3d?.keeperOnScreen();
     if (!keeper) return;
     const glintOf = (index: number) => scene3d?.glintOnScreen(index) ?? null;
@@ -1405,20 +1408,20 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       .filter((b) => b !== null);
     let place = needPlaceFor(keep, spare);
     if (place === undefined) return; // hidden by a gesture: nothing to place
-    // Folded short only when that covers strictly less (once per layout, so
-    // a walk doesn't fold and unfold it every frame).
+    // Folded short only held sideways, and only when that covers strictly
+    // less (once per layout, so a walk doesn't fold and unfold it every frame).
     const full = place;
     if (
-      (full === null || full.hides > 0) &&
-      needFolds !== needLayouts &&
+      needFolds(sideways, full) &&
+      needFoldTried !== needLayouts &&
       !need.classList.contains('explore-need-compact')
     ) {
       need.classList.add('explore-need-compact');
       const short = needPlaceFor(keep, spare);
       if (short === undefined) return;
-      if (short !== null && (full === null || needBetter(short, full))) place = short;
+      if (needFolds(sideways, full, short)) place = short;
       else if (full !== null) {
-        needFolds = needLayouts;
+        needFoldTried = needLayouts;
         need.classList.remove('explore-need-compact');
       }
     }

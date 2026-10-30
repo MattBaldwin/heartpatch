@@ -466,6 +466,22 @@ export function needBetter(a: NeedPlace, b: NeedPlace): boolean {
 }
 
 /**
+ * Whether the missing-tool card takes its short shape (Layout B2): never
+ * while the phone is upright, and held sideways only when its full shape is
+ * crowded and the short one covers strictly less (`short` is undefined until
+ * it's been tried). The owner's call, option (b).
+ */
+export function needFolds(
+  sideways: boolean,
+  full: NeedPlace | null,
+  short?: NeedPlace | null,
+): boolean {
+  if (!sideways || (full !== null && full.hides === 0)) return false;
+  if (short === undefined) return true;
+  return short !== null && (full === null || needBetter(short, full));
+}
+
+/**
  * How far to move the missing-tool card (CSS px, negative is up) so it
  * covers none of `keep` and no more of any of `spare` than its own place
  * does (`placeNeedCard`). Null when there's no such place: the caller makes
