@@ -2102,3 +2102,19 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
   - B, #745: the dev fast-forward route behind `HP_DEV_SQUISHY_GRANTS`, with its schema in `packages/shared/src/schemas/fast-forward.ts` beside the other Dev* schemas.
 - **#743 merged with one red e2e shard.** The red shard was `ipad-webkit 6`, `trading-posts.spec.ts:132`, a known flake that's green on main. The PR changes only `packages/shared/scripts/sim/**` and docs, which nothing in src/apps imports.
 - **#740 portrait regression:** a fresh fix lane on the same branch. Rule: the card never covers a sparkle more than it was covered at its resting place, keeps clear of the paw/HUD buttons, and folds to the short card only when folding helps.
+
+## 2026-10-30 — Owner decisions and coordinator calls (supervisor 29)
+
+**Owner decisions**
+- **#740 need card: option (b) "Least-bad, never fold up" (owner, 2026-10-30).**
+  - When no spot keeps the card clear of everything, keep it off the Keeper and the front (swirl) sparkle.
+  - Among those spots, pick the one with the least extra sparkle cover versus the card's unmoved resting place.
+  - Never fold to the short card in portrait. Fold sideways only when it strictly helps.
+  - Always stay at least 11pt clear of the paw/HUD buttons, including the as-high fallback and real safe-area insets.
+  - Screens https://claude.ai/artifact/7dnzm3TfnVsNawzcfZM55T (v6).
+- **#748 food row: "Merge when green" (owner, 2026-10-30).** Accepted differences from the mockup: the Best tie-break is most-owned (the mockup said "made for it"), and the cheer pill sits under the buttons. Screens https://claude.ai/artifact/Nv86fpnvqHVLbbTnX6dXeW (v4).
+
+**Coordinator calls**
+- **#740 baseline:** "at rest" means the card's unmoved resting place (the code's `needAtRest`), not the Before build.
+- **#747 merged with one red e2e shard.** The red shard was `ipad-webkit 1`, `recipe-book.spec.ts:135`, a home-trays timeout on a slow shard. The PR has no client files, so it was judged unrelated, like #743.
+- **727a e2e waiver:** the 727a lane touched no client or e2e paths, so no local e2e run was required before the APPROVE counted.
