@@ -383,25 +383,119 @@ export function needRoom(
   return { top: topBar.bottom + gap, bottom: bottom === Infinity ? floor : bottom };
 }
 
+/** A place for the missing-tool card: its move, and how much more of the other glints it covers. */
+export interface NeedPlace {
+  /** CSS px, negative is up. */
+  readonly dy: number;
+  /** Glints it covers more of than its own place does. */
+  readonly hides: number;
+  /** How much more of them, px² in all. */
+  readonly area: number;
+}
+
 /**
- * How far to move the missing-tool card up or down the screen (CSS px,
- * negative is up) so it never covers the Keeper: 0 when its own place is
- * already clear; else just above the Keeper's head, or below its feet when
- * there's no room above. `room` is the band the card may use (`needRoom`).
- * Null when neither fits: the caller makes the card smaller and asks again.
+ * The best place for the missing-tool card (Layout B2): never over any of
+ * `keep` (the Keeper, the glint of the spot the card is about, the 🐾
+ * button), and over as little more of `spare` (the other glints) as it can
+ * than its own place already is: fewest glints first, then least area, then
+ * nearest, up before down. Its own place when that's clear of `keep`. `room`
+ * is the band the card may use (`needRoom`). Null when nothing clears `keep`.
  */
-export function clearOfKeeper(
+export function placeNeedCard(
   card: ScreenBox,
-  keeper: ScreenBox,
+  keep: readonly ScreenBox[],
   room: { readonly top: number; readonly bottom: number },
   gap: number,
+  spare: readonly ScreenBox[] = [],
+): NeedPlace | null {
+  const overlap = (dy: number, b: ScreenBox) =>
+    Math.max(0, Math.min(card.right, b.right) - Math.max(card.left, b.left)) *
+    Math.max(0, Math.min(card.bottom + dy, b.bottom) - Math.max(card.top + dy, b.top));
+  if (keep.every((b) => overlap(0, b) === 0)) return { dy: 0, hides: 0, area: 0 };
+  const atRest = spare.map((b) => overlap(0, b));
+  const place = (dy: number): NeedPlace => {
+    let hides = 0;
+    let area = 0;
+    spare.forEach((b, i) => {
+      const more = overlap(dy, b) - (atRest[i] ?? 0);
+      if (more > 0) {
+        hides++;
+        area += more;
+      }
+    });
+    return { dy, hides, area };
+  };
+  // A gap off everything it keeps clear of.
+  const kept = keep.map((b) => ({
+    left: b.left - gap,
+    right: b.right + gap,
+    top: b.top - gap,
+    bottom: b.bottom + gap,
+  }));
+  const fits = (dy: number) =>
+    card.top + dy >= room.top - 0.01 &&
+    card.bottom + dy <= room.bottom + 0.01 &&
+    kept.every((b) => overlap(dy, b) < 0.01);
+  // A gap off each box, and (as how much of a glint it covers changes only
+  // where an edge meets an edge) flush with each glint's edges and the band's.
+  const moves = [
+    ...keep.flatMap((b) => [b.top - gap - card.bottom, b.bottom + gap - card.top]),
+    ...spare.flatMap((b) => [
+      b.top - gap - card.bottom,
+      b.bottom + gap - card.top,
+      b.top - card.bottom,
+      b.bottom - card.top,
+      b.top - card.top,
+      b.bottom - card.bottom,
+    ]),
+    room.top - card.top,
+    room.bottom - card.bottom,
+  ];
+  const up = moves.filter((dy) => dy < 0 && fits(dy)).sort((x, y) => y - x);
+  const down = moves.filter((dy) => dy > 0 && fits(dy)).sort((x, y) => x - y);
+  let best: NeedPlace | null = null;
+  for (const p of [...up, ...down].map(place)) {
+    if (!best || needBetter(p, best)) best = p;
+  }
+  return best;
+}
+
+/** Whether place `a` covers strictly less of the other glints than `b`. */
+export function needBetter(a: NeedPlace, b: NeedPlace): boolean {
+  return a.hides < b.hides || (a.hides === b.hides && a.area < b.area);
+}
+
+/**
+ * Whether the missing-tool card takes its short shape (Layout B2): never
+ * while the phone is upright, and held sideways only when its full shape is
+ * crowded and the short one covers strictly less (`short` is undefined until
+ * it's been tried). The owner's call, option (b).
+ */
+export function needFolds(
+  sideways: boolean,
+  full: NeedPlace | null,
+  short?: NeedPlace | null,
+): boolean {
+  if (!sideways || (full !== null && full.hides === 0)) return false;
+  if (short === undefined) return true;
+  return short !== null && (full === null || needBetter(short, full));
+}
+
+/**
+ * How far to move the missing-tool card (CSS px, negative is up) so it
+ * covers none of `keep` and no more of any of `spare` than its own place
+ * does (`placeNeedCard`). Null when there's no such place: the caller makes
+ * the card smaller and asks again.
+ */
+export function clearOf(
+  card: ScreenBox,
+  keep: readonly ScreenBox[],
+  room: { readonly top: number; readonly bottom: number },
+  gap: number,
+  spare: readonly ScreenBox[] = [],
 ): number | null {
-  if (coverShare(card, keeper) === 0) return 0;
-  const up = keeper.top - gap - card.bottom;
-  if (card.top + up >= room.top) return up;
-  const down = keeper.bottom + gap - card.top;
-  if (card.bottom + down <= room.bottom) return down;
-  return null;
+  const p = placeNeedCard(card, keep, room, gap, spare);
+  return p && p.hides === 0 ? p.dy : null;
 }
 
 /**

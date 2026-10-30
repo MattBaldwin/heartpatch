@@ -9,7 +9,10 @@ import { EXPLORE_CAMERA, EXPLORE_VIEW, INTERACTION } from './explore-config.js';
 import { startInteraction } from './interactions.js';
 import { clampToTile, insideTile } from './explore-view.js';
 import {
-  clearOfKeeper,
+  clearOf,
+  needBetter,
+  needFolds,
+  placeNeedCard,
   needRoom,
   coverShare,
   glintNudge,
@@ -705,17 +708,13 @@ describe('the missing-tool card keeps clear of the Keeper', () => {
     coverShare({ left: 100, right: 300, top: a.top + dy, bottom: a.bottom + dy }, keeper) > 0;
 
   it('stays put when it already misses him', () => {
-    expect(clearOfKeeper({ left: 100, right: 300, top: 550, bottom: 650 }, keeper, room, 12)).toBe(
-      0,
-    );
-    expect(clearOfKeeper({ left: 260, right: 400, top: 350, bottom: 450 }, keeper, room, 12)).toBe(
-      0,
-    );
+    expect(clearOf({ left: 100, right: 300, top: 550, bottom: 650 }, [keeper], room, 12)).toBe(0);
+    expect(clearOf({ left: 260, right: 400, top: 350, bottom: 450 }, [keeper], room, 12)).toBe(0);
   });
 
   it('moves up over his head when it covers him', () => {
     const card = { left: 100, right: 300, top: 400, bottom: 520 };
-    const dy = clearOfKeeper(card, keeper, room, 12) ?? NaN;
+    const dy = clearOf(card, [keeper], room, 12) ?? NaN;
     expect(card.bottom + dy).toBe(288);
     expect(overlaps(card, dy)).toBe(false);
   });
@@ -723,7 +722,7 @@ describe('the missing-tool card keeps clear of the Keeper', () => {
   it('goes under his feet when there is no room over his head', () => {
     const tall = { left: 150, right: 250, top: 120, bottom: 400 };
     const card = { left: 100, right: 300, top: 300, bottom: 420 };
-    const dy = clearOfKeeper(card, tall, room, 12) ?? NaN;
+    const dy = clearOf(card, [tall], room, 12) ?? NaN;
     expect(card.top + dy).toBe(412);
     expect(coverShare({ ...card, top: card.top + dy, bottom: card.bottom + dy }, tall)).toBe(0);
   });
@@ -731,7 +730,234 @@ describe('the missing-tool card keeps clear of the Keeper', () => {
   it('says so when neither side has room, so the card can fold smaller', () => {
     const huge = { left: 0, right: 400, top: 100, bottom: 690 };
     const card = { left: 100, right: 300, top: 400, bottom: 520 };
-    expect(clearOfKeeper(card, huge, room, 12)).toBeNull();
+    expect(clearOf(card, [huge], room, 12)).toBeNull();
+  });
+});
+
+describe('the missing-tool card keeps clear of the glint it is about (Layout B2)', () => {
+  // A phone held sideways: the short card between the stick and the button,
+  // under the Keeper's middle, with too little room over his head, and the
+  // swirly eddy's glint beside his feet.
+  const room = { top: 150, bottom: 373 };
+  const keeper = { left: 405, right: 447, top: 200, bottom: 262 };
+  const glint = { left: 470, right: 500, top: 250, bottom: 280 };
+  const card = { left: 150, right: 702, top: 240, bottom: 300 };
+  const clear = (dy: number, of: { left: number; right: number; top: number; bottom: number }) =>
+    coverShare({ ...card, top: card.top + dy, bottom: card.bottom + dy }, of) === 0;
+
+  it('does not stop under the Keeper when that puts it over the glint', () => {
+    // Clear of the Keeper alone, it would sit just under his feet, on the glint.
+    const keeperOnly = clearOf(card, [keeper], room, 12) ?? NaN;
+    expect(clear(keeperOnly, keeper)).toBe(true);
+    expect(clear(keeperOnly, glint)).toBe(false);
+    const dy = clearOf(card, [keeper, glint], room, 12) ?? NaN;
+    expect(clear(dy, keeper)).toBe(true);
+    expect(clear(dy, glint)).toBe(true);
+    expect(card.top + dy).toBeGreaterThanOrEqual(room.top);
+    expect(card.bottom + dy).toBeLessThanOrEqual(room.bottom);
+  });
+
+  it('stays put when it already misses both', () => {
+    const low = { ...card, top: 300, bottom: 360 };
+    expect(clearOf(low, [keeper, glint], room, 12)).toBe(0);
+  });
+
+  it('takes the nearest place up that misses both, even between them', () => {
+    const high = { left: 405, right: 447, top: 100, bottom: 140 };
+    const dy = clearOf(card, [high, glint], room, 12) ?? NaN;
+    expect(card.bottom + dy).toBe(glint.top - 12);
+    expect(clear(dy, high) && clear(dy, glint)).toBe(true);
+  });
+
+  it('says so when no place misses both, so the card can fold smaller', () => {
+    const tallGlint = { left: 470, right: 500, top: 80, bottom: 370 };
+    expect(clearOf(card, [keeper, tallGlint], room, 12)).toBeNull();
+  });
+});
+
+describe('the missing-tool card never moves onto a glint its own place left showing (Layout B2, portrait)', () => {
+  // An iPhone held upright: the full card low on the screen, the Keeper
+  // above it, glints scattered round the tile.
+  const room = { top: 72, bottom: 628 };
+  const keeper = { left: 175, right: 215, top: 300, bottom: 360 };
+  const card = { left: 16, right: 374, top: 450, bottom: 560 };
+  const moved = (dy: number) => ({ ...card, top: card.top + dy, bottom: card.bottom + dy });
+
+  it('stays put when its place covers nothing', () => {
+    const front = { left: 230, right: 260, top: 330, bottom: 360 };
+    const far = { left: 60, right: 90, top: 380, bottom: 410 };
+    expect(clearOf(card, [keeper, front], room, 12, [far])).toBe(0);
+  });
+
+  it('stays put when its place covers only another glint (as before Layout B2)', () => {
+    const front = { left: 230, right: 260, top: 330, bottom: 360 };
+    const under = { left: 60, right: 90, top: 500, bottom: 530 };
+    expect(clearOf(card, [keeper, front], room, 12, [under])).toBe(0);
+  });
+
+  it('does not slide off the front glint onto a far one just above', () => {
+    const front = { left: 230, right: 260, top: 520, bottom: 550 };
+    const far = { left: 60, right: 90, top: 405, bottom: 435 };
+    // Clear of the Keeper and front glint only, it lands on the far glint.
+    const blind = clearOf(card, [keeper, front], room, 12) ?? NaN;
+    expect(coverShare(moved(blind), far)).toBeGreaterThan(0);
+    const dy = clearOf(card, [keeper, front], room, 12, [far]) ?? NaN;
+    for (const b of [keeper, front, far]) expect(coverShare(moved(dy), b)).toBe(0);
+    expect(moved(dy).top).toBeGreaterThanOrEqual(room.top);
+    expect(moved(dy).bottom).toBeLessThanOrEqual(room.bottom);
+  });
+
+  it('ignores a glint it already covered when it moves', () => {
+    const front = { left: 230, right: 260, top: 520, bottom: 550 };
+    const under = { left: 60, right: 90, top: 470, bottom: 500 };
+    const dy = clearOf(card, [keeper, front], room, 12, [under]) ?? NaN;
+    expect(dy).toBe(clearOf(card, [keeper, front], room, 12));
+  });
+
+  it('says so when every place covers a glint that showed, so the card can fold smaller', () => {
+    const front = { left: 230, right: 260, top: 520, bottom: 550 };
+    const wall = { left: 300, right: 330, top: 72, bottom: 440 };
+    expect(clearOf(card, [keeper, front], room, 12, [wall])).toBeNull();
+  });
+
+  it('when crowded, keeps clear of the Keeper and its glint on the fewest others', () => {
+    // A phone held sideways (734x343), short card: every place clear of the
+    // Keeper and the eddy's glint is on some other glint.
+    const room = { top: 72, bottom: 323 };
+    const keeper = { left: 347, right: 387, top: 186, bottom: 241 };
+    const front = { left: 402, right: 441, top: 174, bottom: 208 };
+    const card = { left: 150, right: 584, top: 235, bottom: 323 };
+    const high = { left: 257, right: 288, top: 92, bottom: 118 };
+    const low = { left: 500, right: 530, top: 164, bottom: 172 };
+    expect(clearOf(card, [keeper, front], room, 12, [high, low])).toBeNull();
+    const dy = placeNeedCard(card, [keeper, front], room, 12, [high, low])?.dy ?? NaN;
+    const at = { ...card, top: card.top + dy, bottom: card.bottom + dy };
+    expect(coverShare(at, keeper) + coverShare(at, front)).toBe(0);
+    expect(at.top).toBeGreaterThanOrEqual(room.top);
+    // Just over the Keeper's head it covers both; over the eddy's glint, one.
+    expect(at.bottom).toBeLessThanOrEqual(front.top - 12);
+    expect([high, low].filter((b) => coverShare(at, b) > 0)).toEqual([high]);
+  });
+
+  it('when crowded, is null only when the Keeper and its glint leave no room', () => {
+    const tall = { left: 100, right: 120, top: 60, bottom: 640 };
+    const front = { left: 230, right: 260, top: 520, bottom: 550 };
+    expect(placeNeedCard(card, [tall, front], room, 12, [])).toBeNull();
+  });
+
+  it('never covers more of a glint its own place half covers (iPhone SE upright)', () => {
+    // A pebble glint at the card's right edge, its lower part under the card's
+    // top: moving up off the eddy's glint must not take more of it.
+    const front = { left: 230, right: 260, top: 520, bottom: 550 };
+    const pebble = { left: 340, right: 372, top: 430, bottom: 462 };
+    const restCover = Math.max(0, pebble.bottom - card.top) * (pebble.right - pebble.left);
+    expect(restCover).toBeGreaterThan(0);
+    const p = placeNeedCard(card, [keeper, front], room, 12, [pebble]);
+    expect(p?.hides).toBe(0);
+    const at = moved(p?.dy ?? NaN);
+    const cover =
+      Math.max(0, Math.min(at.bottom, pebble.bottom) - Math.max(at.top, pebble.top)) *
+      (pebble.right - pebble.left);
+    expect(cover).toBeLessThanOrEqual(restCover);
+    // Counting glints alone, the nearest place up sits over more of it.
+    const blind = moved(placeNeedCard(card, [keeper, front], room, 12)?.dy ?? NaN);
+    expect(Math.min(blind.bottom, pebble.bottom) - Math.max(blind.top, pebble.top)).toBe(
+      pebble.bottom - pebble.top,
+    );
+  });
+
+  it('weighs the same count of glints by how much more of them it covers', () => {
+    const a = { dy: -40, hides: 1, area: 120 };
+    const b = { dy: -10, hides: 1, area: 300 };
+    expect(needBetter(a, b)).toBe(true);
+    expect(needBetter(b, a)).toBe(false);
+    expect(needBetter({ dy: -90, hides: 0, area: 0 }, a)).toBe(true);
+    // Equal: not better, so the card keeps its full shape rather than folding.
+    expect(needBetter(a, { ...a, dy: -5 })).toBe(false);
+  });
+
+  it('never folds short while the phone is upright (owner decision, option (b))', () => {
+    const crowded = { dy: -40, hides: 2, area: 900 };
+    const better = { dy: -20, hides: 0, area: 0 };
+    expect(needFolds(false, crowded)).toBe(false);
+    expect(needFolds(false, null)).toBe(false);
+    expect(needFolds(false, crowded, better)).toBe(false);
+    expect(needFolds(false, null, better)).toBe(false);
+  });
+
+  it('held sideways, folds only when crowded and short covers strictly less', () => {
+    const crowded = { dy: -40, hides: 1, area: 300 };
+    // Clear in its full shape: no fold tried.
+    expect(needFolds(true, { dy: -10, hides: 0, area: 0 })).toBe(false);
+    // Crowded or nowhere to go: worth a try.
+    expect(needFolds(true, crowded)).toBe(true);
+    expect(needFolds(true, null)).toBe(true);
+    // Kept only when it strictly helps.
+    expect(needFolds(true, crowded, { dy: -5, hides: 1, area: 120 })).toBe(true);
+    expect(needFolds(true, crowded, { dy: -5, hides: 1, area: 300 })).toBe(false);
+    expect(needFolds(true, crowded, { dy: -5, hides: 2, area: 10 })).toBe(false);
+    expect(needFolds(true, crowded, null)).toBe(false);
+    expect(needFolds(true, null, { dy: -5, hides: 3, area: 999 })).toBe(true);
+    expect(needFolds(true, null, null)).toBe(false);
+  });
+
+  it('when crowded, picks the least extra cover of every place clear of the Keeper and its glint', () => {
+    const front = { left: 230, right: 260, top: 520, bottom: 550 };
+    // Glints above and below the Keeper: no place misses them all.
+    const spare = [
+      { left: 150, right: 182, top: 180, bottom: 212 },
+      { left: 300, right: 340, top: 230, bottom: 300 },
+      { left: 40, right: 70, top: 400, bottom: 440 },
+    ];
+    const keep = [keeper, front];
+    const p = placeNeedCard(card, keep, room, 12, spare);
+    expect(p).not.toBeNull();
+    const cover = (c: typeof card, b: typeof card) =>
+      Math.max(0, Math.min(c.right, b.right) - Math.max(c.left, b.left)) *
+      Math.max(0, Math.min(c.bottom, b.bottom) - Math.max(c.top, b.top));
+    const extra = (dy: number) => {
+      let hides = 0;
+      let area = 0;
+      for (const b of spare) {
+        const more = cover(moved(dy), b) - cover(card, b);
+        if (more > 0) {
+          hides++;
+          area += more;
+        }
+      }
+      return { hides, area };
+    };
+    const grown = keep.map((b) => ({
+      left: b.left - 12,
+      right: b.right + 12,
+      top: b.top - 12,
+      bottom: b.bottom + 12,
+    }));
+    // Every place in the band at 0.5px steps that keeps the gap off both.
+    let others = 0;
+    for (let dy = room.top - card.top; dy <= room.bottom - card.bottom; dy += 0.5) {
+      if (grown.some((b) => cover(moved(dy), b) > 0)) continue;
+      others++;
+      const e = extra(dy);
+      expect(p!.hides < e.hides || (p!.hides === e.hides && p!.area <= e.area)).toBe(true);
+    }
+    expect(others).toBeGreaterThan(0);
+    expect(extra(p!.dy)).toEqual({ hides: p!.hides, area: p!.area });
+  });
+
+  it('keeps its gap under the 🐾 button (iPhone 15 upright)', () => {
+    const front = { left: 230, right: 260, top: 520, bottom: 550 };
+    const paw = { left: 16, right: 64, top: 127, bottom: 175 };
+    const near = paw;
+    const keeper = { left: 175, right: 215, top: 300, bottom: 360 };
+    const over = { ...card, top: 340, bottom: 450 };
+    // Without the button it sits just over the Keeper's head, 3px under it.
+    const blind = placeNeedCard(over, [keeper, front], room, 12)?.dy ?? NaN;
+    expect(over.top + blind - paw.bottom).toBe(3);
+    const dy = placeNeedCard(over, [keeper, front, near], room, 12)?.dy ?? NaN;
+    const at = { ...over, top: over.top + dy, bottom: over.bottom + dy };
+    expect(at.top >= paw.bottom + 12 || at.bottom <= paw.top - 12).toBe(true);
+    expect(coverShare(at, keeper) + coverShare(at, front)).toBe(0);
   });
 });
 
@@ -760,9 +986,9 @@ describe('the band the missing-tool card may use', () => {
     const keeper = { left: 347.2, right: 386.8, top: 185.9, bottom: 240.8 };
     const room = { top: 72, bottom: 323 };
     const full = { left: 150, right: 584, top: 195, bottom: 323 };
-    expect(clearOfKeeper(full, keeper, room, 12)).toBeNull();
+    expect(clearOf(full, [keeper], room, 12)).toBeNull();
     const short = { left: 150, right: 584, top: 263, bottom: 323 };
-    const dy = clearOfKeeper(short, keeper, room, 12);
+    const dy = clearOf(short, [keeper], room, 12);
     expect(dy).not.toBeNull();
     const moved = { ...short, top: short.top + (dy ?? 0), bottom: short.bottom + (dy ?? 0) };
     expect(coverShare(moved, keeper)).toBe(0);
