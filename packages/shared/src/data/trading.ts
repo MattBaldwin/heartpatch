@@ -52,9 +52,6 @@ export const TRADE_VALUES: TradeValues = {
     pumpkins: 8, // TUNE:
     'witch-dust': 12, // TUNE:
     'magic-fallen-leaves': 10, // TUNE:
-    'turkey-feathers': 10, // TUNE:
-    presents: 14, // TUNE:
-    fireworks: 14, // TUNE:
     'heart-charm': 20, // TUNE:
     'jack-o-lantern-hearthfire': 40, // TUNE:
     'brave-brew': 18, // TUNE:

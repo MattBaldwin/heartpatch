@@ -139,10 +139,14 @@ describe('buildingGuide (#715)', () => {
     expect(kinds(guide('ferry-dock').place)).toContain('needs-water');
   });
 
-  it('the waystation waits on the shelf: in the data, not in the game yet', () => {
-    const g = guide('waystation');
-    expect(g.gate).toEqual({ kind: 'not-yet' });
-    expect(g.value).toContainEqual({ kind: 'travel', role: 'waystation', reach: 3 });
+  it('the waystation stays out of the guide until it can be built (#735)', () => {
+    const way = BUILDINGS.find((b) => b.id === 'waystation')!;
+    for (const patchType of ['cozy', 'wild-isle'] as const) {
+      expect(buildingGuide(way, ctx({ patchType }))).toBeNull();
+      expect(buildingsGuide(BUILDINGS, ctx({ patchType })).map((e) => e.id)).not.toContain(
+        'waystation',
+      );
+    }
   });
 
   it('a seasonal building out of its season waits for next time', () => {
@@ -171,7 +175,8 @@ describe('buildingGuide (#715)', () => {
         buildingsGuide(BUILDINGS, ctx({ patchType })).map((e) => e.id),
       ),
     );
-    expect(BUILDINGS.filter((b) => !ids.has(b.id)).map((b) => b.id)).toEqual([]);
+    // The Waystation waits until the server builds it (#735).
+    expect(BUILDINGS.filter((b) => !ids.has(b.id)).map((b) => b.id)).toEqual(['waystation']);
   });
 
   it('a new building shows up with no guide code (rule 5)', () => {

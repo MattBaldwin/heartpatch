@@ -98,12 +98,14 @@ export type GuidePlace =
   /** Only built during this season. */
   | { readonly kind: 'season'; readonly season: string };
 
-/** Why it can't be built yet: it waits on the "Coming later" shelf. */
+/**
+ * Why it can't be built yet: it waits on the "Coming later" shelf. Only a
+ * seasonal building out of its season: one whose rules aren't in the game
+ * yet (the Waystation, #735) stays out of the guide altogether.
+ */
 export type GuideGate =
   /** A seasonal building out of its season: back next time. */
-  | { readonly kind: 'season'; readonly season: string }
-  /** In the data, but its rules aren't in the game yet (the Waystation). */
-  | { readonly kind: 'not-yet' };
+  { readonly kind: 'season'; readonly season: string };
 
 export interface BuildingGuideEntry {
   readonly id: string;
@@ -131,7 +133,9 @@ export interface BuildingGuideContext {
 
 /**
  * One building's guide entry, or null when it never goes up on this patch
- * type (its `patchTypes` leave it out, or its terrain isn't there).
+ * type (its `patchTypes` leave it out, or its terrain isn't there) or its
+ * rules aren't in the game yet (the Waystation, #735: no greyed card with no
+ * "unlocks when" line).
  */
 export function buildingGuide(def: Building, ctx: BuildingGuideContext): BuildingGuideEntry | null {
   if (!buildsOnPatchType(def, ctx.patchType)) return null;
@@ -142,11 +146,8 @@ export function buildingGuide(def: Building, ctx: BuildingGuideContext): Buildin
     return null;
   }
   let gate: GuideGate | null = null;
-  if (!isBuildableOn(ctx.rules, def, ctx.patchType)) {
-    // A Wild Isle kind its patch takes but whose rules still wait.
-    if (def.kind !== 'travel') return null;
-    gate = { kind: 'not-yet' };
-  } else if (def.season !== undefined && !ctx.seasons.includes(def.season)) {
+  if (!isBuildableOn(ctx.rules, def, ctx.patchType)) return null;
+  if (def.season !== undefined && !ctx.seasons.includes(def.season)) {
     gate = { kind: 'season', season: def.season };
   }
   return {
