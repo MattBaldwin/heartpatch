@@ -15,21 +15,12 @@ import {
   type PublicUser,
 } from '@heartpatch/shared';
 import { LONG_NIGHT_GAP_TABLE } from '@heartpatch/shared/server';
-import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
-import {
-  buildings,
-  gameEvents,
-  keepers,
-  mapMembers,
-  sessions,
-  squishies,
-  users,
-} from '../../db/schema.js';
+import { buildings, keepers, sessions, squishies, users } from '../../db/schema.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
@@ -264,9 +255,9 @@ describe.skipIf(!url)('the Long Night, server resolve (#727c, needs DATABASE_URL
       night: SATURDAY,
       held: true,
       keeperOfNightUserId: friend.id,
-      seed: expect.any(String),
       contentHash: longNightNightHash(NO_GRACE),
     });
+    expect(row!.seed.length).toBeGreaterThan(0);
     expect(row!.strikeAt.toISOString()).toBe(
       new Date(Date.parse(NIGHTFALL) + HOLLOW_RULES.show.prowlMinutes * 60_000).toISOString(),
     );
@@ -363,8 +354,8 @@ describe.skipIf(!url)('the Long Night, server resolve (#727c, needs DATABASE_URL
     expect(parseGameEventPayload('longnight.resolved', resolved.payload)).toMatchObject({
       held: false,
       heldBy: [kid.id],
-      outcomes: expect.any(Array),
     });
+    expect(parseGameEventPayload('longnight.resolved', resolved.payload).outcomes).toHaveLength(2);
 
     // Rule 6: nothing client-bound carries the outcomes, the percent or a Gap species.
     const secret = /outcomes|percent|gapSpeciesId|strengthMultiplier/;
@@ -394,11 +385,12 @@ describe.skipIf(!url)('the Long Night, server resolve (#727c, needs DATABASE_URL
     await dark(mapId, friend);
     // They joined three weeks ago, and their last move on the patch was then too.
     const then = new Date(Date.parse(START) - 21 * DAY_MS);
-    await db
-      .update(gameEvents)
-      .set({ createdAt: then })
-      .where(eq(gameEvents.actorUserId, friend.id));
-    await db.update(mapMembers).set({ joinedAt: then }).where(eq(mapMembers.userId, friend.id));
+    await db.execute(
+      `update game_events set created_at = '${then.toISOString()}' where actor_user_id = '${friend.id}'`,
+    );
+    await db.execute(
+      `update map_members set joined_at = '${then.toISOString()}' where user_id = '${friend.id}'`,
+    );
 
     await saturdayNight(mapId);
     const [row] = await nightOf(mapId);
