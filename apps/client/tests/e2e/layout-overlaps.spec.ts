@@ -22,6 +22,11 @@ const PHONES = [
   { name: 'iPad portrait', width: 820, height: 1180 },
   { name: 'iPad landscape', width: 1080, height: 810 },
 ] as const;
+/** Phones on their side (the trays' landscape query: 520px tall at most). */
+const LANDSCAPE_PHONES = [
+  { width: 852, height: 393 }, // iPhone 15
+  { width: 667, height: 375 }, // iPhone SE
+] as const;
 
 /** My tiles (a fresh patch owns only mine). */
 async function myTiles(page: Page): Promise<{ q: number; r: number }[]> {
@@ -76,6 +81,10 @@ async function makeBusy(page: Page): Promise<void> {
     const actions = document.querySelector('[data-testid="tile-panel-actions"]')!;
     const extra = document.createElement('div');
     extra.dataset['testid'] = 'busy-rows';
+    // A full row, as a feature slot's lines take (on a phone on its side it
+    // would otherwise sit beside Go home and Explore and stretch them).
+    extra.style.flex = '1 1 100%';
+    extra.style.gridColumn = '1 / -1';
     for (let i = 0; i < 14; i++) {
       const line = document.createElement('p');
       line.textContent = `A busy line, number ${String(i + 1)}.`;
@@ -263,8 +272,28 @@ test('small phones and iPads: nothing sits on anything (#621 render-checks)', as
     }
   });
 
+  await test.step('a phone on its side: the tile panel stops under the map’s name pill', async () => {
+    for (const size of LANDSCAPE_PHONES) {
+      await page.setViewportSize(size);
+      // A quiet tile and a busy one: neither reaches the pill (its top edge
+      // peeked out from under the panel, Layout B1), and both end between rows.
+      await openMyTile(page);
+      await expectClear(page, '[data-testid="tile-panel"]', '[data-testid="map-hud"]');
+      await expectWholeRows(page);
+      await makeBusy(page);
+      await expectClear(page, '[data-testid="tile-panel"]', '[data-testid="map-hud"]');
+      await expectWholeRows(page);
+      const box = (await page.getByTestId('tile-panel').boundingBox())!;
+      expect(box.y + box.height).toBeLessThanOrEqual(size.height);
+      // Still room for a few rows under the pill (#138: a phone on its side).
+      expect(box.height).toBeGreaterThan(180);
+      await closePanel(page);
+    }
+  });
+
   for (const screen of [
     SE,
+    ...LANDSCAPE_PHONES,
     { width: 393, height: 852 },
     { width: 1080, height: 810 },
     { width: 820, height: 1180 },

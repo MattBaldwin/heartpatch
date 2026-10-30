@@ -218,20 +218,13 @@
 }
 
 /* Wide enough that the panel (470px at most, centred) clears both handles
-   (96px each, ui/trays) beside it: it only has to stay under the corner
-   buttons (56px from the top), so a phone on its side shows "Go home"
-   without scrolling (#138). */
+   (96px each, ui/trays) beside it, but not the map's name pill (map-hud,
+   +64px and 44px tall: the patch, coins and weather) right above it, so it
+   stops 8px under the pill. On a tablet and on a phone on its side alike:
+   the pill's top edge peeked out from under a phone's panel (Layout B1). A
+   phone on its side keeps room for its first rows ("Go home", #138), and a
+   busy tile scrolls inside. // TUNE: */
 @media (min-width: 662px) {
-  .tile-panel {
-    max-height: calc(100dvh - 76px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-  }
-}
-
-/* A tablet: the centred panel would reach the map's name pill (map-hud, +64px
-   and 44px tall: the patch, coins and weather) right above it, so it stops 8px
-   under the pill. A phone on its side (520px tall at most, as the trays'
-   landscape query) keeps the rule above: it has no height to spare. */
-@media (min-width: 662px) and (min-height: 521px) {
   .tile-panel {
     max-height: calc(100dvh - 128px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   }
