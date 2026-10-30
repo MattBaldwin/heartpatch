@@ -3,8 +3,8 @@ import type { Config } from '../../config.js';
 
 /*
  * The Wild Isle feature switch (#621, `HP_WILD_ISLE`), shaped like the
- * house's (`house/switch.ts`). It ships dark: off until the coordinator's
- * `Chore: Wild Isle on` (W1-12). It only gates making a Wild Isle; a patch
+ * house's (`house/switch.ts`). Off by default; production turns it on in
+ * `infra/compose/docker-compose.prod.yml` (W1-12). It only gates making a Wild Isle; a patch
  * that already is one plays on whatever the switch says.
  */
 

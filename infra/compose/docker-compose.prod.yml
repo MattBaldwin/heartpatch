@@ -58,6 +58,10 @@ services:
       APP_VERSION: ${HEARTPATCH_TAG}
       # Built from POSTGRES_PASSWORD unless .env sets DATABASE_URL explicitly.
       DATABASE_URL: ${DATABASE_URL:-postgres://heartpatch:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set in .env}@db:5432/heartpatch}
+      # Wild Isle is on for Halloween (owner decision 2026-10-30), shipped by
+      # deploy rather than a hand edit. A value in .env still wins, so the
+      # operator can set `off` or `testers` there without a release.
+      HP_WILD_ISLE: ${HP_WILD_ISLE:-on}
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]

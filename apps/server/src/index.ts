@@ -93,6 +93,12 @@ app.log.info(
   { longNight: config.HP_LONG_NIGHT, longNightTesters: config.HP_LONG_NIGHT_TESTERS.length },
   'the Long Night switch',
 );
+// The Wild Isle switch (#621), logged like the house's: the mode and how
+// many testers, never their names.
+app.log.info(
+  { wildIsle: config.HP_WILD_ISLE, wildIsleTesters: config.HP_WILD_ISLE_TESTERS.length },
+  'the Wild Isle switch',
+);
 // The First Patch for accounts that finished the tutorial before milestones
 // existed (#44). Idempotent, so every boot can run it; it never blocks start.
 createMilestonesService({ db: db.db, clock })
