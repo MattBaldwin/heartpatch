@@ -2,6 +2,8 @@
 // busy tile's panel taller than its cap (map.css) stops just above the first
 // row that doesn't fit whole, and a soft fade at its foot says there's more to
 // scroll to. Measured from the panel, so it follows a resize or a new row.
+// The Build sheet is the exception: its Build! row is pinned to the panel's
+// foot (building/build.css), so it keeps its cap and never fades.
 
 import { moreAttr, scrollMore } from '../ui/keeper/scroll-hint.js';
 
@@ -55,8 +57,9 @@ function collectRows(node: Element, origin: number, out: RowBox[]): void {
 
 /** Sizes the panel to whole rows under its CSS cap and marks where it has more. */
 function fit(panel: HTMLElement): void {
-  if (panel.hidden) {
+  if (panel.hidden || building(panel)) {
     panel.style.maxHeight = '';
+    if (!panel.hidden) hint(panel);
     return;
   }
   // Measuring at the full cap shortens how far the panel can scroll, so the
@@ -77,7 +80,16 @@ function fit(panel: HTMLElement): void {
   hint(panel);
 }
 
+/** The Build sheet is up in the panel (fence care's steps keep whole rows). */
+function building(panel: HTMLElement): boolean {
+  return panel.querySelector('.build-sheet:not([hidden])') !== null;
+}
+
 function hint(panel: HTMLElement): void {
+  if (building(panel)) {
+    panel.dataset['more'] = 'none';
+    return;
+  }
   panel.dataset['more'] = moreAttr(
     scrollMore(panel.scrollTop, panel.clientHeight, panel.scrollHeight),
   );
