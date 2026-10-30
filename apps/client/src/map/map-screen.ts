@@ -44,6 +44,7 @@ import { describeTile } from './tile-info.js';
 import { mountTilePanel } from './tile-panel.js';
 import { emptyTileActions } from './tile-actions.js';
 import { wildMarkers } from './wild-markers.js';
+import { watchHudPlace } from './hud-place.js';
 import './map.css';
 
 // The map screen (#7, live updates from #22): draws the open map, keeps it
@@ -368,6 +369,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   );
   hud.hidden = true;
   options.root.append(hud);
+  watchHudPlace(hud);
 
   const setStatus = (status: WsStatus): void => {
     const text = STATUS_TEXT[status];

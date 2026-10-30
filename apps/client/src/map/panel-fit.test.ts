@@ -27,11 +27,11 @@ describe('wholeRowHeight', () => {
     ).toBe(300);
   });
 
-  it('a phone on its side: the shorter cap under the name pill still ends between rows', () => {
-    // 393px tall: 100dvh - 128px (map.css) is 265, which cuts the sixth row.
-    const cap = 393 - 128;
+  it('a phone on its side: the cap under the corner buttons still ends between rows', () => {
+    // 393px tall: 100dvh - 76px (map.css) is 317, which cuts the seventh row.
+    const cap = 393 - 76;
     const height = wholeRowHeight(cap, rows);
-    expect(height).toBe(252);
+    expect(height).toBe(300);
     expect(rows.some((r) => r.top < height && r.bottom > height)).toBe(false);
   });
 

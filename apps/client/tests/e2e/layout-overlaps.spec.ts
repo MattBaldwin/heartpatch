@@ -272,11 +272,34 @@ test('small phones and iPads: nothing sits on anything (#621 render-checks)', as
     }
   });
 
-  await test.step('a phone on its side: the tile panel stops under the map’s name pill', async () => {
+  await test.step('a phone on its side: the name pill moves up between the corner buttons', async () => {
+    // An iPhone 15 on its side has its Dynamic Island's inset (59px) at the
+    // left and right; Chromium can fake it (as battle-ui does), WebKit can't.
+    const chromium = page.context().browser()?.browserType().name() === 'chromium';
+    const cdp = chromium ? await page.context().newCDPSession(page) : null;
     for (const size of LANDSCAPE_PHONES) {
+      const side = cdp && size.width === 852 ? 59 : 0;
+      await cdp?.send(
+        'Emulation.setSafeAreaInsetsOverride' as never,
+        { insets: { top: 0, bottom: side ? 21 : 0, left: side, right: side } } as never,
+      );
       await page.setViewportSize(size);
-      // A quiet tile and a busy one: neither reaches the pill (its top edge
-      // peeked out from under the panel, Layout B1), and both end between rows.
+      // The pill sits in the top row (Layout B1: the panel can't stop under it
+      // and still fit a busy tile's buttons, #264), clear of "My patches", the
+      // round buttons and the Me button, and out of the notch.
+      const hud = page.getByTestId('map-hud');
+      await expect(hud).toHaveAttribute('data-place', 'top');
+      await expectClear(
+        page,
+        '[data-testid="map-hud"]',
+        '.tray-top-left, .tray-top-right > button, .auth-chip-toggle',
+      );
+      const pill = (await hud.boundingBox())!;
+      expect(pill.x).toBeGreaterThanOrEqual(side);
+      expect(pill.x + pill.width).toBeLessThanOrEqual(size.width - side);
+      expect(pill.y + pill.height).toBeLessThanOrEqual(64);
+      // A quiet tile and a busy one: neither reaches the pill, and both end
+      // between rows.
       await openMyTile(page);
       await expectClear(page, '[data-testid="tile-panel"]', '[data-testid="map-hud"]');
       await expectWholeRows(page);
@@ -285,9 +308,34 @@ test('small phones and iPads: nothing sits on anything (#621 render-checks)', as
       await expectWholeRows(page);
       const box = (await page.getByTestId('tile-panel').boundingBox())!;
       expect(box.y + box.height).toBeLessThanOrEqual(size.height);
-      // Still room for a few rows under the pill (#138: a phone on its side).
+      // Still room for a few rows (#138: a phone on its side).
       expect(box.height).toBeGreaterThan(180);
       await closePanel(page);
+      // The Build sheet hides the trays: the pill stays up, clear of the sheet.
+      await openBuildable(page);
+      await page.getByTestId('tile-build').tap();
+      await expect(page.getByTestId('build-sheet')).toBeVisible();
+      await expect(hud).toHaveAttribute('data-place', 'top');
+      await expectClear(
+        page,
+        '[data-testid="map-hud"]',
+        '.auth-chip-toggle, [data-testid="tile-panel"]',
+      );
+      await page.getByTestId('build-cancel').tap();
+      await closePanel(page);
+    }
+    await cdp?.send(
+      'Emulation.setSafeAreaInsetsOverride' as never,
+      { insets: { top: 0, bottom: 0, left: 0, right: 0 } } as never,
+    );
+  });
+
+  await test.step('upright phones and iPads: the name pill stays under the corner buttons', async () => {
+    for (const size of [SE, { width: 393, height: 852 }, { width: 1080, height: 810 }]) {
+      await page.setViewportSize(size);
+      const hud = page.getByTestId('map-hud');
+      await expect(hud).not.toHaveAttribute('data-place', 'top');
+      expect((await hud.boundingBox())!.y).toBe(64);
     }
   });
 
