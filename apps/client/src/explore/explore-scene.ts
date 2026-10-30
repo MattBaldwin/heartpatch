@@ -944,7 +944,7 @@ export class ExploreScene implements AmbientTarget {
     };
   }
 
-  /** Counts the glints' moves (a new shot settled, a spot searched): each may need the card placed again. */
+  /** Counts the glints' moves (a new shot settled, a spot searched, a glint nudged aside as the Keeper steps): each may need the card placed again. */
   get glintMoves(): number {
     return this.#glintMoves;
   }

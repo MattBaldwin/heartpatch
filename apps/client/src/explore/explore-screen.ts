@@ -1350,7 +1350,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let needShift = 0;
   /** The scene's `glintMoves` when the card was last placed. */
   let needGlints = 0;
-  /** The spot and glints the card was last laid out afresh for. */
+  /** The front spot and open-spot count the card was last laid out afresh for. */
   let needFor = '';
   /**
    * Slides the missing-tool card up or down so it never sits over the Keeper
@@ -1361,8 +1361,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   function placeNeed(): void {
     needGlints = scene3d?.glintMoves ?? 0;
     if (need.hidden) return;
-    // A new spot, or glints moved: its full shape first again, as a turn does.
-    const fresh = `${String(front?.index)}:${String(needGlints)}`;
+    // A new spot, or one searched: its full shape first again, as a turn
+    // does. (Not on every glint move: those come with the Keeper's steps.)
+    const fresh = `${String(front?.index)}:${String(tile?.spots.filter((x) => !x.done).length)}`;
     if (fresh !== needFor) {
       needFor = fresh;
       need.classList.remove('explore-need-compact');

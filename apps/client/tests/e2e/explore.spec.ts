@@ -134,7 +134,12 @@ async function expectNeedClearOfKeeper(page: Page): Promise<void> {
           const over = (b: Box) => overAt(card, b);
           // Where the card sits unmoved: it never slides onto a glint that place left showing.
           const dy = new DOMMatrix(getComputedStyle(el).transform).m42;
-          const rest = { ...card.toJSON(), top: card.top - dy, bottom: card.bottom - dy } as Box;
+          const rest = {
+            left: card.left,
+            right: card.right,
+            top: card.top - dy,
+            bottom: card.bottom - dy,
+          };
           // With glints all round the Keeper there may be no such place: then
           // it says so, and still keeps clear of him and his glint.
           const crowded = (el as HTMLElement).dataset['glints'] === 'crowded';
