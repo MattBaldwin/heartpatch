@@ -139,6 +139,7 @@ export * from './schemas/lore.js';
 export * from './schemas/keepers.js';
 export * from './schemas/wardrobe.js';
 export * from './schemas/coins.js';
+export * from './schemas/fast-forward.js';
 export * from './schemas/heart-coins.js';
 export * from './schemas/milestones.js';
 export * from './schemas/cinematic.js';

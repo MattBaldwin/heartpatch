@@ -1,22 +1,14 @@
-import { MapIdParamsSchema } from '@heartpatch/shared';
+import {
+  DevFastForwardRequestSchema,
+  DevFastForwardResponseSchema,
+  MapIdParamsSchema,
+} from '@heartpatch/shared';
 import type { FastifyPluginCallback } from 'fastify';
-import { z } from 'zod';
 import { playerRateLimit } from '../../lib/rate-limit.js';
 import type { ZodTypeProvider } from '../../lib/zod.js';
 import { requireUser, type AuthHooks } from '../auth/hooks.js';
 import { FAST_FORWARD_RATE_LIMITS } from './limits.js';
 import type { FastForwardService } from './service.js';
-
-// Dev only, so the schemas stay here: no client code calls this route.
-const DevFastForwardRequestSchema = z.strictObject({
-  day: z.union([z.literal(3), z.literal(10), z.literal(21)]),
-});
-const DevFastForwardResponseSchema = z.object({
-  day: z.number().int(),
-  partnerLevel: z.number().int(),
-  tiles: z.number().int(),
-  added: z.number().int(),
-});
 
 export interface FastForwardRoutesOptions {
   hooks: AuthHooks;
