@@ -176,6 +176,7 @@ Family signup codes (migration 0026, #195).
 | `pvp_mode` | enum `pvp_mode`, default `gentle` | `on` \| `gentle` \| `off` (design doc §11, decision B); the owner changes it |
 | `seed` | text, null | Map generator seed (`crypto.randomBytes`). **Server-only**: never in a response schema (tech spec §8). Null for hand-authored maps |
 | `patch_type` | enum `patch_type`, default `cozy` | `cozy` \| `wild-isle` (#621, migration 0059): chosen at creation, never changed; every older patch is `cozy`. Rules that differ read shared `patchRules` |
+| `long_night_weekday` | smallint, null, default `6` | The Long Night's weekday (#727, migration 0062): 0 is Sunday, 6 Saturday; null is Off. Every older patch got Saturday from the default (owner decision Q5). The owner changes it |
 | `created_at` | timestamptz | |
 
 ### `map_members`
@@ -390,6 +391,23 @@ One row per map per night the Hollow Man came by (#21, design doc §14): the gua
 | `night` | date | The map-local date the nightfall fell on. Unique with `map_id` |
 | `ran_at` | timestamptz | |
 | `outcomes` | jsonb | Every active member's result: `{ userId, taken (squishy id or null), exposed, sheltered }` |
+
+### `long_nights`
+One row per map per Long Night (#727, migration 0062), written in nightfall's own transaction beside `hollow_events`. Server-only (rule 6): the Gap species and the strength percent never leave the server.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete |
+| `night` | date | The map-local date the nightfall fell on. Unique with `map_id` |
+| `ran_at` | timestamptz | |
+| `strike_at` | timestamptz | Nightfall plus `HOLLOW_RULES.show.prowlMinutes` |
+| `held` | boolean | The patch held: every counted Keeper did |
+| `outcomes` | jsonb | Each Keeper's `LongNightOutcome` (`{ userId, counted, held, firesLit, fuelNights, percent, gapSpeciesId }`) plus their Gap claim (`gapClaimedAt`, `gapBattleId`) |
+| `keeper_of_night_user_id` | uuid, null | Keeper of the Night |
+| `gap_opens_at`, `gap_closes_at` | timestamptz, null | Juniper's Gap: open while `gap_opens_at <= now < gap_closes_at`. Both null when the patch didn't hold. Indexed `(map_id, gap_closes_at)` |
+| `seed` | text | Derived from the map seed, for replay |
+| `content_hash` | text | Hash of the Long Night rules and the Gap table the night ran with |
 
 ### `hollow_rescues`
 Rescue expeditions (#21, decision C): which squishy a `rescue` battle is for, and how it went.

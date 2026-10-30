@@ -4,6 +4,7 @@ import { ClothingDropSourceSchema } from './data/clothing.js';
 import { CommunityKindIdSchema } from './data/communities.js';
 import { RelightDepthSchema } from './data/memory-puzzles.js';
 import { ContentIdSchema, RaritySchema } from './data/common.js';
+import { LongNightWeekdaySchema } from './data/long-night.js';
 import { PvpModeSchema } from './maps.js';
 import { PatchTypeSchema } from '../patch-types/patch-type.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
@@ -48,7 +49,41 @@ const MapSettingsSchema = z.strictObject({
   tradingEnabled: z.boolean().optional(),
   /** The owner's friendly-battle switch (#29), when it's what changed (or on any newer update). */
   friendlyChallenges: z.boolean().optional(),
+  /** The owner's Long Night weekday (#727, null: Off), when it's what changed (or on any newer update). */
+  longNightWeekday: LongNightWeekdaySchema.nullable().optional(),
 });
+/**
+ * One Keeper's Long Night (#727), as `long_nights.outcomes` stores it and
+ * `longnight.resolved` records it. Server-only detail: the public event
+ * keeps only who held. `counted` is false for a Keeper away
+ * `LONG_NIGHT_RULES.awayAfterDays` (they can only help the patch hold);
+ * `percent` is the scaled strength their strikes rolled with (replay);
+ * `gapSpeciesId` is their Juniper's Gap encounter, rolled at resolve, or
+ * null when the patch didn't hold or they get none (secret until the
+ * battle starts, rule 6).
+ */
+export const LongNightOutcomeSchema = z.strictObject({
+  userId: z.uuid(),
+  counted: z.boolean(),
+  held: z.boolean(),
+  firesLit: z.number().int().min(0),
+  fuelNights: z.number().int().min(0),
+  percent: z.number().int().min(0),
+  gapSpeciesId: ContentIdSchema.nullable(),
+});
+export type LongNightOutcome = z.infer<typeof LongNightOutcomeSchema>;
+/** The Long Night's result on `hollow.nightfall` (#727): public, like the walks. */
+const longNightResult = (object: typeof z.object | typeof z.strictObject) =>
+  object({
+    /** The patch held: every counted Keeper did. */
+    held: z.boolean(),
+    /** Keepers who held, in member order. */
+    heldBy: z.array(z.uuid()),
+    /** Keeper of the Night (fires lit, then fuel nights, then user id), or null. */
+    keeperOfNight: z.uuid().nullable(),
+    /** When Juniper's Gap closes, or null: the patch didn't hold. */
+    gapClosesAt: z.iso.datetime().nullable(),
+  });
 const DepartedSchema = z.strictObject({
   userId: z.uuid(),
   /** Tiles that went back to neutral (their home base and any land they held). */
@@ -1421,13 +1456,45 @@ export const GAME_EVENTS = {
        * Q7). Optional: nights before #277 have none.
        */
       walks: z.array(walkSchema(z.strictObject)).optional(),
+      /** Tonight was a Long Night (#727). Left out on any other night, and on nights before it. */
+      longNight: longNightResult(z.strictObject).optional(),
     }),
     public: z.object({
       night: LocalDateSchema,
       /** Players who lost a squishy to the Hollow tonight (`z.object` strips which one). */
       taken: z.array(z.object({ userId: z.uuid() })),
       walks: z.array(walkSchema(z.object)).optional(),
+      longNight: longNightResult(z.object).optional(),
     }),
+  },
+  /**
+   * A Long Night was resolved on the patch (#727), written in nightfall's
+   * own transaction after `hollow.nightfall`. Members see who held and
+   * Keeper of the Night; each Keeper's `outcomes` (strength, Gap species)
+   * stay internal.
+   */
+  'longnight.resolved': {
+    internal: z.strictObject({
+      night: LocalDateSchema,
+      held: z.boolean(),
+      heldBy: z.array(z.uuid()),
+      keeperOfNight: z.uuid().nullable(),
+      outcomes: z.array(LongNightOutcomeSchema),
+    }),
+    public: z.object({
+      night: LocalDateSchema,
+      held: z.boolean(),
+      heldBy: z.array(z.uuid()),
+      keeperOfNight: z.uuid().nullable(),
+    }),
+  },
+  /**
+   * Juniper's Gap opened after a Long Night the patch held (#727), so a
+   * reconnecting client can show the banner from replay alone.
+   */
+  'gap.opened': {
+    internal: z.strictObject({ night: LocalDateSchema, closesAt: z.iso.datetime() }),
+    public: z.object({ night: LocalDateSchema, closesAt: z.iso.datetime() }),
   },
   /**
    * The Hollow Man took one of a player's squishies to the Hollow (#21). Only

@@ -99,6 +99,55 @@ describe('game event registry', () => {
     });
   });
 
+  it('registers the Long Night events, keeping strength and Gap species internal (#727)', () => {
+    const night = '2026-10-31';
+    const closesAt = '2026-11-01T23:30:00.000Z';
+    const outcome = {
+      userId,
+      counted: true,
+      held: true,
+      firesLit: 2,
+      fuelNights: 3,
+      percent: 300,
+      gapSpeciesId: 'heartlet',
+    };
+    const result = { held: true, heldBy: [userId], keeperOfNight: userId };
+    const resolved = { night, ...result, outcomes: [outcome] };
+    expect(parseGameEventPayload('longnight.resolved', resolved)).toEqual(resolved);
+    expect(GAME_EVENTS['longnight.resolved'].public.parse(resolved)).toEqual({ night, ...result });
+    expect(() =>
+      parseGameEventPayload('longnight.resolved', {
+        ...resolved,
+        outcomes: [{ ...outcome, gapClaimedAt: null }],
+      }),
+    ).toThrow();
+    expect(parseGameEventPayload('gap.opened', { night, closesAt })).toEqual({ night, closesAt });
+
+    // `longNight` on `hollow.nightfall` is optional, so nights before #727 still parse.
+    const nightfall = { night, taken: [] };
+    expect(parseGameEventPayload('hollow.nightfall', nightfall)).toEqual(nightfall);
+    const longNight = { ...result, gapClosesAt: closesAt };
+    expect(parseGameEventPayload('hollow.nightfall', { ...nightfall, longNight })).toEqual({
+      ...nightfall,
+      longNight,
+    });
+    expect(() =>
+      parseGameEventPayload('hollow.nightfall', {
+        ...nightfall,
+        longNight: { ...longNight, percent: 300 },
+      }),
+    ).toThrow();
+
+    // The owner's weekday rides on `map.updated`; null is Off.
+    for (const longNightWeekday of [0, 6, null]) {
+      const settings = { pvpMode: 'gentle', longNightWeekday };
+      expect(parseGameEventPayload('map.updated', settings)).toEqual(settings);
+    }
+    expect(() =>
+      parseGameEventPayload('map.updated', { pvpMode: 'gentle', longNightWeekday: 7 }),
+    ).toThrow();
+  });
+
   it('declares a plain z.object public schema for every type', () => {
     for (const type of GAME_EVENT_TYPES) {
       expect(GAME_EVENTS[type].public.def.catchall).toBeUndefined();

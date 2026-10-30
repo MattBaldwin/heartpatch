@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { ContentIdSchema } from './data/common.js';
+import { LongNightWeekdaySchema } from './data/long-night.js';
 import { HollowStageSchema, WalkKindSchema } from './hollow-stage.js';
 import { SpeciesSchema } from './data/species.js';
 import { ItemCountsSchema } from './inventory.js';
@@ -174,6 +175,36 @@ export const HollowStatusSchema = z.object({
         at: z.iso.datetime(),
       }),
     )
+    .optional(),
+  /**
+   * The Long Night (#727): the patch's weekday, when the next one falls and
+   * Juniper's Gap after a patch held. Worked out on read (rule 4). Left out
+   * while the Long Night is switched off for me (`HP_LONG_NIGHT`) and by
+   * older servers. How much stronger he is never comes (rule 6).
+   */
+  longNight: z
+    .object({
+      /** The patch's weekday (0 is Sunday), or null: Off on this patch. */
+      weekday: LongNightWeekdaySchema.nullable(),
+      /** The coming (or current) night, `tonight.night`, is a Long Night. */
+      tonight: z.boolean(),
+      /** The next Long Night's nightfall, or null while it's Off. */
+      nextAt: z.iso.datetime().nullable(),
+      /**
+       * Juniper's Gap, from the patch's latest Long Night that held, while
+       * it's open (`opensAt <= now < closesAt`); null otherwise. `available`
+       * says I still have an encounter to claim there; which squishy waits
+       * stays on the server until the battle starts (rule 6).
+       */
+      gap: z
+        .object({
+          night: LocalDateSchema,
+          opensAt: z.iso.datetime(),
+          closesAt: z.iso.datetime(),
+          available: z.boolean(),
+        })
+        .nullable(),
+    })
     .optional(),
   /** The server's clock. */
   now: z.iso.datetime(),

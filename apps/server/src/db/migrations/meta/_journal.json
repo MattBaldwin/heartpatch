@@ -435,6 +435,13 @@
       "when": 1792911331305,
       "tag": "0061_wild_isle_weather",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1793376118608,
+      "tag": "0062_long_night",
+      "breakpoints": true
     }
   ]
 }
