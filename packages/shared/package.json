@@ -31,6 +31,7 @@
     "sim:factory": "tsx scripts/sim/factory-cli.ts",
     "sim:tiles": "tsx scripts/sim/tiles-cli.ts",
     "sim:hollowed": "tsx scripts/sim/hollowed-cli.ts",
+    "sim:long-night": "tsx scripts/sim/long-night-cli.ts",
     "sim:patch-economy": "tsx scripts/sim/patch-economy-cli.ts",
     "sim:wild-isle": "tsx scripts/sim/wild-isle-cli.ts"
   },
