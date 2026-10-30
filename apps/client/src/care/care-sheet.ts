@@ -406,10 +406,13 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       const big = bigFeed(next.result);
       if (big) yums += 1;
       note.textContent = careDoneLine(next.result, big);
+      // The "Yum!" line is a yellow cheer pill, like the mockup's.
+      note.classList.toggle('care-note-yum', big);
       squish('care', big);
     } catch (err) {
       if (mine !== ticket) return;
       note.textContent = messageOf(err);
+      note.classList.remove('care-note-yum');
       // The debounce or the bag changed under us: show the server's view again.
       if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
         const fresh = await api.list(map).catch(() => null);
@@ -486,6 +489,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     panel.hidden = true;
     celebrate.hidden = true;
     note.textContent = '';
+    note.classList.remove('care-note-yum');
     if (wasOpen) options.onClosed?.();
   }
 
@@ -509,6 +513,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
         panel.hidden = false;
         panel.scrollTop = 0;
       }
+      note.classList.remove('care-note-yum');
       note.textContent = messageOf(err);
       render();
       return;
@@ -523,6 +528,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     squishyId = chosen?.id ?? null;
     setReply(list);
     // Asked for one that isn't here (it grew up, or it's in the Hollow): say so.
+    note.classList.remove('care-note-yum');
     note.textContent = !picked && chosen ? CARE_TEXT.notHere : '';
     const opening = panel.hidden;
     panel.hidden = false;

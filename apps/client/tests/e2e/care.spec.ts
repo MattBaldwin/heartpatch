@@ -159,6 +159,8 @@ test('feeds a Pie from the food row, and the Bag opens care with Frosty Treats p
   await expect.poll(async () => (await careState(page))?.yums, slow).toBe(1);
   expect((await careState(page))?.contentment).toBe(Math.min(100, start + 30));
   await slowExpect(page.getByTestId('care-note')).toContainText('Yum yum!');
+  // The mockup's yellow cheer pill, and the reward never orphans "Coin".
+  await expect(page.getByTestId('care-note')).toHaveClass(/care-note-yum/);
   await slowExpect(sheet.locator('[data-care="feed"]')).toContainText('1 Pie');
 
   // Switch to Treats, then Feed: a plain feed, no itemId, the usual squash.
@@ -171,6 +173,7 @@ test('feeds a Pie from the food row, and the Bag opens care with Frosty Treats p
   );
   await sheet.locator('[data-care="feed"]').tap();
   expect((await plain).postDataJSON()).toEqual({ action: 'feed' });
+  await expect(page.getByTestId('care-note')).not.toHaveClass(/care-note-yum/);
   await slowExpect(sheet.locator('[data-care="feed"]')).toContainText('9 Treats');
   expect((await careState(page))?.yums).toBe(1);
   expect(findAvoidedWords((await sheet.textContent()) ?? '')).toEqual([]);

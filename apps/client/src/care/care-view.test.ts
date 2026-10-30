@@ -338,8 +338,10 @@ describe('lines', () => {
   it('cheers a care action, and the coins it earned', () => {
     const result = { action: 'pet', squishyId: squishy().id, contentmentGained: 10 };
     expect(careDoneLine({ ...result, full: true, coins: 1 })).toBe(
-      'So soft! They wiggle happily. +1 Patch Coin',
+      'So soft! They wiggle happily. +1\u00a0Patch\u00a0Coin',
     );
+    // The reward never wraps apart (#748 render check: "Coin" alone on a line).
+    expect(CARE_TEXT.coins(2)).not.toMatch(/ /);
     expect(careDoneLine({ ...result, full: false, coins: 0 })).toBe(CARE_TEXT.lessNow);
   });
 

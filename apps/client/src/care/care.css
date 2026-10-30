@@ -346,6 +346,22 @@
   color: #7a2d55;
 }
 
+/* An extra-yummy feed's "Yum yum!" (the server says it gave extra): the
+   mockup's yellow cheer pill, in the evolution card's colours. */
+.care-note.care-note-yum {
+  align-self: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #ffe08a;
+  box-shadow:
+    0 3px 0 #e0b440,
+    0 0 0 4px #fff4c7;
+  color: #8a4419;
+  font-size: 17px;
+  font-weight: 800;
+  text-wrap: balance;
+}
+
 .care-meter {
   height: 12px;
   overflow: hidden;

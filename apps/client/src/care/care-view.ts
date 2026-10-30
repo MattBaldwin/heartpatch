@@ -67,7 +67,8 @@ export const CARE_TEXT = {
   // A feed the server says gave extra (Pies, or Frosty Treats for a Frost one).
   yum: 'Yum yum! Extra yummy! 💖',
   lessNow: "They're nice and full of love for today!",
-  coins: (n: number) => `+${String(n)} Patch ${n === 1 ? 'Coin' : 'Coins'}`,
+  // No-break spaces: the reward never wraps apart, leaving "Coin" alone on a line.
+  coins: (n: number) => `+${String(n)}\u00a0Patch\u00a0${n === 1 ? 'Coin' : 'Coins'}`,
   infoTitle: 'Levels and evolving',
   // Why care matters (design doc §7), up front in "Levels and evolving".
   whyCare: 'Happy squishies learn more from battles and evolve sooner!',
