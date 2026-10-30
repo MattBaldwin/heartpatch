@@ -2048,3 +2048,17 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 **Coordinator calls**
 - **A render-check FIX about the evidence page goes to the owner as a merge question.** When the game itself meets the owner's conditions and the FIX only concerns the page, the supervisor asks the owner rather than paying for another lane.
 - **A later test-only commit needs its own APPROVE.** When the lane's APPROVE is on an earlier head and a test-only commit follows, a fresh small reviewer checks the delta. Its verdict names the exact head before merge.
+
+## 2026-10-30 — Owner decisions and coordinator calls (supervisor 26)
+
+**Owner decisions**
+- **#721 follow-up: fix lane now** (2026-10-29). The #721 screens showed the SE tile panel still cutting a row, a new iPad cut row, and no Me button over the Build sheet. Merged as #723.
+- **#723 follow-up: fix the Build row now** (2026-10-30). #723's foot fade washed out the Build sheet's "Build!" button. Fix: pin the action row and draw no fade on the Build sheet (#733).
+- **Wild Isle (#621) ships for Halloween, on for everyone** (2026-10-30). This replaces "Wild Isle (#621) is Phase 2". The owner chose `on` over `testers`, knowing the real-device iPad 9th gen check hadn't been done. The coast tables merged as #737, and the switch is #724. The owner sets `HP_WILD_ISLE=on` on the server.
+
+**Coordinator calls**
+- **A tile panel ends between rows** (#723). `panel-fit.ts` caps the panel at the top of the first row it would slice, unless that leaves less than 60% of the CSS cap. A soft fade at its foot shows "more below", using the existing `scroll-hint.js`. The Build sheet keeps its action row pinned and has no fade (#733).
+- **The compact Me button stays over the Build sheet** (#723). The wide "Hi, name! Log out" pill never shows over the map.
+- **Coast tables reuse the lake's water kinds** (#737): Puddlepuff, Bubbletub, Shellnap and Quackle spawn there, and Puddlepuff, Bubbletub and Snoozicle guard. New coast species stay in Wave 2 (W2-6).
+- **Week two issues #725–#732** wait until after the Halloween launch. Big ones get a Fable plan first.
+
