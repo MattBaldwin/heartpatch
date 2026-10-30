@@ -62,6 +62,11 @@ describe('isLongNight (#727)', () => {
     expect(isLongNight(SATURDAY, '2026-11-07', '2026-10-31')).toBe(true);
     expect(isLongNight(SATURDAY, '2026-10-31', '2026-10-31')).toBe(true);
   });
+
+  it('is never a Night before the latest one', () => {
+    expect(isLongNight(SATURDAY, '2026-10-31', '2026-11-07')).toBe(false);
+    expect(isLongNight(SATURDAY, '2026-10-24', '2026-11-07')).toBe(false);
+  });
 });
 
 describe('nextLongNight (#727)', () => {

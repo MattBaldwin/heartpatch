@@ -96,6 +96,9 @@ import { signupCodesRoutes } from './modules/signup-codes/routes.js';
 import { createSignupCodesService } from './modules/signup-codes/service.js';
 import { createMapsService } from './modules/maps/service.js';
 import { wildIsleSwitchOf } from './modules/maps/wild-isle-switch.js';
+import { longNightRoutes } from './modules/long-night/routes.js';
+import { createLongNightService } from './modules/long-night/service.js';
+import { longNightSwitchOf } from './modules/long-night/switch.js';
 import { createHealthService, type ReadinessCheck } from './modules/health/service.js';
 import { tutorialRoutes } from './modules/tutorial/routes.js';
 import { boutiqueRoutes } from './modules/boutique/routes.js';
@@ -150,6 +153,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   const { config } = options;
   const clock = options.clock ?? createClock(config);
   const house = houseSwitchOf(config);
+  // The Long Night (#727), off by default until the client PR (#727e).
+  const longNight = longNightSwitchOf(config);
   // Evolution rolls are seeded with a server secret (#32); config refuses a
   // production start without it.
   setEvolutionSalt(config.HP_EVOLUTION_SALT);
@@ -272,6 +277,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           keeperRequired: config.HP_KEEPER_REQUIRED,
           // Who can make a Wild Isle (#621), off by default.
           wildIsle: wildIsleSwitchOf(config),
+          longNight,
           clock,
           log: app.log,
           ...(wsHub ? { publish: wsHub.publish } : {}),
@@ -524,13 +530,19 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         );
         // The Hollow Man (#21): nightfall runs as a job (`src/index.ts`), and
         // rescues are battles the `hollow` event consumer settles.
-        const hollow = createHollowService({ db, clock, battles, ...publish });
+        const hollow = createHollowService({ db, clock, battles, longNight, ...publish });
         options.onHollow?.(hollow);
         await api.register(
           hollowRoutes(hollow, {
             hooks: authHooks,
             idempotency,
             devTools: config.HP_DEV_SQUISHY_GRANTS,
+          }),
+        );
+        // The Long Night (#727): the owner's weekday; nightfall resolves it.
+        await api.register(
+          longNightRoutes(createLongNightService({ db, clock, longNight, ...publish }), {
+            hooks: authHooks,
           }),
         );
         // The tutorial (#47, #24) runs the Glade on these same modules; its

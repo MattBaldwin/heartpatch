@@ -64,6 +64,13 @@ import { grantItems } from '../inventory/service.js';
 import { createCareRepo } from '../care/repo.js';
 import { checkpointContentment } from '../jobs/contentment.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
+import {
+  longNightStatus,
+  longNightTonight,
+  resolveLongNight,
+  type LongNightKeeper,
+} from '../long-night/service.js';
+import { LONG_NIGHT_OFF, type LongNightSwitch } from '../long-night/switch.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { createTendingRepo } from '../territory/repo.js';
@@ -126,6 +133,8 @@ export interface HollowServiceOptions {
   guardians?: RescueGuardianRules;
   /** The recipes that make clearing tools (#242); tests pass them unhidden. */
   recipes?: readonly Pick<Recipe, 'output' | 'hidden'>[];
+  /** `HP_LONG_NIGHT` (#727): which patches get the Long Night; off when left out. */
+  longNight?: LongNightSwitch;
 }
 
 // Kid-readable messages (style guide §1, §6: "taken to the Hollow", always rescuable).
@@ -156,6 +165,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
   const rules = options.rules ?? HOLLOW_RULES;
   const guardianRules = options.guardians ?? RESCUE_GUARDIANS;
   const recipes = options.recipes ?? GAME_DATA.recipes;
+  const longNightSwitch = options.longNight ?? LONG_NIGHT_OFF;
   const store = createHollowRepo(db);
   const nightRules = { ...HOME_BASE_RULES, ...rules };
   /** After commit only (apps/server/README.md, "Live sync"). */
@@ -265,6 +275,14 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
     const lightable = lightableOn(mapTiles);
     const canTake = gameplayOverrides(map.kind)?.hollowManCanTake ?? true;
     const canStrike = canTake && percent > 0;
+    // A Long Night (#727): the same night, his strength scaled by a secret
+    // multiplier (rule 6). Not where he only watches: a patch an admin
+    // turned off stays off, with no Night to hold.
+    const longNight =
+      canStrike && members.length > 0
+        ? await longNightTonight(tx, longNightSwitch, map, night)
+        : null;
+    const nightPercent = longNight ? longNight.percentOf(percent) : percent;
     // Kid-safety caps (owner decision 2026-10-08): the admin percent never raises them.
     const cap = map.pvpMode === 'gentle' ? rules.strength.gentleCap : rules.strength.cap;
     const asNight = (s: (typeof squishyRows)[number]): NightSquishy => ({
@@ -290,7 +308,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         canTake && !grace
           ? rollStrikes(
               strength.chances,
-              percent,
+              nightPercent,
               cap,
               // Secret, never revealed: derived from the map seed (tech spec §8).
               deriveSeed(seed, 'hollow-strength', night, userId),
@@ -299,7 +317,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       // Where he can't strike (the Glade, or a patch at 0 %) he only watches:
       // the same stage `tonight` shows, and no walk to play.
       const stage = canStrike ? strength.stage : 'watching';
-      return { userId, keeperNight: nightNo, stage, grace, strikes };
+      return { userId, joinedAt, keeperNight: nightNo, stage, grace, strikes };
     });
     const outcomes = nightfall(
       keepers.map(({ userId, grace, strikes }) => ({
@@ -315,6 +333,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
     );
 
     const stored: StoredOutcome[] = [];
+    const longNightKeepers: LongNightKeeper[] = [];
     const taken: GameEventPayload<'hollow.nightfall'>['taken'] = [];
     const walks: NonNullable<GameEventPayload<'hollow.nightfall'>['walks']> = [];
     for (const [i, outcome] of outcomes.entries()) {
@@ -387,6 +406,14 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         },
       });
       walks.push({ userId, stage: keeper.stage, reclaimed: reclaimedAt, walk });
+      // On a Long Night (#727) a Keeper held if he took nothing of theirs and
+      // won back none of their land.
+      longNightKeepers.push({
+        userId,
+        grace: keeper.grace,
+        joinedAt: keeper.joinedAt,
+        held: took.length === 0 && reclaimedAt.length === 0,
+      });
     }
     // A guard taken to the Hollow leaves the watch; its tile falls back to its
     // land's guardians, as with any guard that can't stand watch.
@@ -456,6 +483,19 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
           ).events
         : [];
     await repo.setOutcomes(nightRowId, stored);
+    // The Long Night's row, beside the night's own (#727).
+    const resolved = longNight
+      ? await resolveLongNight(tx, {
+          map,
+          night,
+          at,
+          seed,
+          percent: nightPercent,
+          keepers: longNightKeepers,
+          fires: buildings.filter((b) => b.kind === 'hearthfire'),
+          hollowRules: rules,
+        })
+      : null;
     for (const event of [...postEvents, ...workEvents, ...trainingEvents]) {
       await repo.appendEvent(event);
     }
@@ -472,9 +512,10 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         mapId: map.id,
         type: 'hollow.nightfall',
         actorUserId: null,
-        payload: { night, taken, walks },
+        payload: { night, taken, walks, ...(resolved && { longNight: resolved.result }) },
       });
     }
+    for (const event of resolved?.events ?? []) await repo.appendEvent(event);
     return { taken: taken.length };
   };
 
@@ -682,6 +723,16 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       // The night the show is about: the one that has fallen until morning,
       // else the coming one.
       const showNight = isNightAt(local, nightRules) ? lastNight : tonight;
+      // The Long Night (#727), left out while it's switched off for the patch.
+      const longNight = await longNightStatus(db, longNightSwitch, {
+        map,
+        user,
+        local,
+        at,
+        showNight,
+        fallen: showNight === lastNight,
+        strikes,
+      });
       const speciesIds = new Set([
         ...hollowed.map((s) => s.speciesId),
         ...[...takenRows.values()].map((s) => s.speciesId),
@@ -737,6 +788,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
             ? { day: addDays(local.date, -1), ...trickOrTreaters }
             : null,
         ...(knocks ? { weatherNotes: knocks } : {}),
+        ...(longNight ? { longNight } : {}),
         now: at.toISOString(),
       };
     },

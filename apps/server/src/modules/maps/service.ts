@@ -63,6 +63,8 @@ import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { createMapsRepo, type JoinRequestRow, type MemberRow, type TileViewRow } from './repo.js';
 import { WILD_ISLE_OFF, wildIsleOpenFor, type WildIsleSwitch } from './wild-isle-switch.js';
+import { keeperOfTheNightOn, longNightWeekdayOn } from '../long-night/service.js';
+import { LONG_NIGHT_OFF, type LongNightSwitch } from '../long-night/switch.js';
 
 export interface MapsService {
   myMaps: (user: PublicUser) => Promise<MyMapsResponse>;
@@ -101,6 +103,8 @@ export interface MapsServiceOptions {
   keeperRequired: boolean;
   /** `HP_WILD_ISLE` (#621): who can make a Wild Isle; off when left out. */
   wildIsle?: WildIsleSwitch;
+  /** `HP_LONG_NIGHT` (#727): the weekday in details, the night crown in stats; off when left out. */
+  longNight?: LongNightSwitch;
   clock?: Clock;
   /**
    * Live sync (`wsHub.publish`): called after a command that wrote game events
@@ -249,6 +253,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
   const store = createMapsRepo(db);
   const keepersRepo = createKeepersRepo(db);
   const wildIsle = options.wildIsle ?? WILD_ISLE_OFF;
+  const longNight = options.longNight ?? LONG_NIGHT_OFF;
 
   const assertTutorialDone = async (user: PublicUser) => {
     if (!tutorialRequired) return;
@@ -288,10 +293,12 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
 
   const detail = async (user: PublicUser, mapId: string): Promise<MapDetail> => {
     const { map, role } = await requireMember(db, user, mapId, PATCHES);
-    const [members, starter, patchType] = await Promise.all([
+    const [members, starter, patchType, longNightWeekday] = await Promise.all([
       store.listMembers(mapId),
       starterPick(db, mapId, user.id),
       store.patchTypeOf(mapId),
+      // The Long Night's weekday (#727), left out while it's switched off here.
+      longNightWeekdayOn(db, longNight, mapId),
     ]);
     let admin: MapDetail['admin'] = null;
     if (role === 'owner') {
@@ -314,6 +321,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       tradingEnabled: map.tradingEnabled,
       friendlyChallenges: map.friendlyChallenges,
       patchType,
+      ...(longNightWeekday !== undefined ? { longNightWeekday } : {}),
       role,
       maxPlayers: map.maxPlayers,
       members: members.map(toMember),
@@ -817,8 +825,15 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       const view = await service.view(user, mapId);
       // A moment after the view's snapshot: fine for a stats sheet, and a
       // befriend in between shows up on the next open.
-      const counts = await store.befriendCounts(mapId);
-      return patchStats(view, new Map(counts.map((c) => [c.userId, c])));
+      const [counts, keeperOfTheNight] = await Promise.all([
+        store.befriendCounts(mapId),
+        // The `night` crown (#727), left out while the Long Night is switched off here.
+        keeperOfTheNightOn(db, longNight, mapId),
+      ]);
+      return {
+        ...patchStats(view, new Map(counts.map((c) => [c.userId, c]))),
+        ...(keeperOfTheNight !== undefined ? { keeperOfTheNight } : {}),
+      };
     },
   };
   return service;

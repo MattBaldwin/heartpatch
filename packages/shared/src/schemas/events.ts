@@ -5,6 +5,7 @@ import { CommunityKindIdSchema } from './data/communities.js';
 import { RelightDepthSchema } from './data/memory-puzzles.js';
 import { ContentIdSchema, RaritySchema } from './data/common.js';
 import { LongNightWeekdaySchema } from './data/long-night.js';
+import { HOLLOW_STRENGTH_PERCENT_MAX } from './admin.js';
 import { PvpModeSchema } from './maps.js';
 import { PatchTypeSchema } from '../patch-types/patch-type.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
@@ -68,12 +69,12 @@ export const LongNightOutcomeSchema = z.strictObject({
   held: z.boolean(),
   firesLit: z.number().int().min(0),
   fuelNights: z.number().int().min(0),
-  // `longNightPercent`: the admin strength (0–300) times the secret multiplier (at most 5).
+  // `longNightPercent`: the admin strength times the secret multiplier (at most 5).
   percent: z
     .number()
     .int()
     .min(0)
-    .max(300 * 5),
+    .max(HOLLOW_STRENGTH_PERCENT_MAX * 5),
   gapSpeciesId: ContentIdSchema.nullable(),
 });
 export type LongNightOutcome = z.infer<typeof LongNightOutcomeSchema>;

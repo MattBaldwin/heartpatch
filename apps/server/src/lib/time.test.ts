@@ -1,7 +1,10 @@
+import { HOME_BASE_RULES, nextLongNightAt } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import {
   canonicalTimeZone,
   createClock,
+  instantOfLocal,
+  instantOfLocalDate,
   latestLocalMinute,
   localDate,
   localDateHour,
@@ -238,5 +241,57 @@ describe('latestLocalMinute (#306 2a)', () => {
   it('is the instant itself on the minute', () => {
     const at = new Date('2026-10-19T06:00:00Z');
     expect(latestLocalMinute(at, 'UTC', six).toISOString()).toBe(at.toISOString());
+  });
+});
+
+describe('instantOfLocal across a daylight-saving change (#727)', () => {
+  // New York leaves EDT (UTC−4) for EST (UTC−5) at 2 AM on Sunday 1 Nov 2026.
+  const NY = 'America/New_York';
+  const sevenPm = (date: string) => ({ date, minute: 19 * 60 });
+
+  it('keeps 7 PM at 7 PM on either side of the change', () => {
+    const near = new Date('2026-11-01T12:00:00Z');
+    expect(instantOfLocal(sevenPm('2026-10-31'), NY, near).toISOString()).toBe(
+      '2026-10-31T23:00:00.000Z',
+    );
+    expect(instantOfLocal(sevenPm('2026-11-01'), NY, near).toISOString()).toBe(
+      '2026-11-02T00:00:00.000Z',
+    );
+  });
+
+  it('finds a date weeks from now (instantOfLocalDate)', () => {
+    expect(instantOfLocalDate(sevenPm('2026-11-14'), NY).toISOString()).toBe(
+      '2026-11-15T00:00:00.000Z',
+    );
+    expect(instantOfLocalDate(sevenPm('2026-10-17'), 'Pacific/Kiritimati').toISOString()).toBe(
+      '2026-10-17T05:00:00.000Z',
+    );
+    expect(instantOfLocalDate(sevenPm('2026-10-17'), 'Etc/GMT+12').toISOString()).toBe(
+      '2026-10-18T07:00:00.000Z',
+    );
+  });
+
+  it("puts the next Long Night's nightfall in the zone's own time", () => {
+    const at = (local: { date: string; minute: number }) => instantOfLocalDate(local, NY);
+    // Thursday 29 Oct, noon: Saturday's Night is still EDT.
+    expect(
+      nextLongNightAt(
+        { date: '2026-10-29', minute: 720 },
+        6,
+        null,
+        HOME_BASE_RULES,
+        at,
+      )?.toISOString(),
+    ).toBe('2026-10-31T23:00:00.000Z');
+    // After that Night: the next Saturday is EST.
+    expect(
+      nextLongNightAt(
+        { date: '2026-10-31', minute: 20 * 60 },
+        6,
+        '2026-10-31',
+        HOME_BASE_RULES,
+        at,
+      )?.toISOString(),
+    ).toBe('2026-11-08T00:00:00.000Z');
   });
 });

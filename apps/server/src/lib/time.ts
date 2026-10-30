@@ -212,6 +212,16 @@ export function instantOfLocal(local: MapLocalTime, timeZone: string, near: Date
 }
 
 /**
+ * `instantOfLocal` for a map-local time on any date, near or far (#727: the
+ * next Long Night can be two weeks off). It searches around noon UTC on
+ * `local.date`: every zone's wall clock reads that date within a day of it
+ * (UTC−12 to UTC+14), well inside the search's two days.
+ */
+export function instantOfLocalDate(local: MapLocalTime, timeZone: string): Date {
+  return instantOfLocal(local, timeZone, new Date(`${local.date}T12:00:00Z`));
+}
+
+/**
  * The latest instant at or before `at` when the clock in `timeZone` read
  * `minute` (minutes past midnight, map-local): this morning's start once
  * it's past, else yesterday's (#306 2a: a grey village's spots refill each
