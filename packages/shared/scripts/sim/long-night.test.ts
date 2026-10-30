@@ -9,7 +9,8 @@ import {
 } from './long-night.js';
 
 const casual = LONG_NIGHT_CONFIG.kids.find((k) => k.id === 'casual')!;
-const small = { ...LONG_NIGHT_CONFIG, runs: 60 };
+// Small enough to run twice well inside the 5 s test timeout under CI's coverage run.
+const small = { ...LONG_NIGHT_CONFIG, runs: 20 };
 
 describe('the Long Night model (#727)', () => {
   it('finds four Long Nights in month one, one a week', () => {
