@@ -81,6 +81,23 @@ const ConfigSchema = z.object({
         .map((name) => name.trim().toLowerCase())
         .filter((name) => name.length > 0),
     ),
+  // The Long Night (#727) feature switch: `off` runs every nightfall as an
+  // ordinary night and leaves the Long Night out of every reply, `testers`
+  // runs it only on patches with an `HP_LONG_NIGHT_TESTERS` member (the
+  // whole patch sees it there), `on` everywhere. Off until the client PR (#727e) merges, so a rollback never
+  // strands a client.
+  HP_LONG_NIGHT: z.enum(['off', 'testers', 'on']).default('off'),
+  // Usernames who see the Long Night while `HP_LONG_NIGHT=testers`,
+  // comma-separated (case doesn't matter), as `HP_HOUSE_TESTERS`.
+  HP_LONG_NIGHT_TESTERS: z
+    .string()
+    .default('')
+    .transform((list) =>
+      list
+        .split(',')
+        .map((name) => name.trim().toLowerCase())
+        .filter((name) => name.length > 0),
+    ),
   // Branching evolution (#32): the secret salt evolution rolls are seeded
   // with, so a player who knows a squishy's id can't work out its roll.
   // Required in production; development and tests fall back to a fixed dev

@@ -6,6 +6,7 @@ import {
   MapNameSchema,
   normalizeInviteCode,
   PublicTileSchema,
+  SetLongNightRequestSchema,
 } from './maps.js';
 
 describe('MapNameSchema', () => {
@@ -43,6 +44,18 @@ describe('CreateMapRequestSchema', () => {
     expect(CreateMapRequestSchema.safeParse({ name: 'Nice', timeZone: '+05:00' }).success).toBe(
       false,
     );
+  });
+});
+
+describe('SetLongNightRequestSchema (#727)', () => {
+  it('takes a weekday from Sunday (0) to Saturday (6), or null for Off', () => {
+    for (const weekday of [0, 3, 6, null]) {
+      expect(SetLongNightRequestSchema.parse({ weekday })).toEqual({ weekday });
+    }
+    for (const weekday of [-1, 7, 1.5, 'saturday', undefined]) {
+      expect(SetLongNightRequestSchema.safeParse({ weekday }).success).toBe(false);
+    }
+    expect(SetLongNightRequestSchema.safeParse({ weekday: 6, hour: 19 }).success).toBe(false);
   });
 });
 

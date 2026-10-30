@@ -37,6 +37,19 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ DATABASE_URL, HP_WILD_ISLE: 'yes' })).toThrow(/HP_WILD_ISLE/);
   });
 
+  it('keeps the Long Night switched off unless set (#727)', () => {
+    expect(loadConfig({ DATABASE_URL }).HP_LONG_NIGHT).toBe('off');
+    expect(loadConfig({ DATABASE_URL }).HP_LONG_NIGHT_TESTERS).toEqual([]);
+    const testers = loadConfig({
+      DATABASE_URL,
+      HP_LONG_NIGHT: 'testers',
+      HP_LONG_NIGHT_TESTERS: ' Matt, lee ,,',
+    });
+    expect(testers.HP_LONG_NIGHT).toBe('testers');
+    expect(testers.HP_LONG_NIGHT_TESTERS).toEqual(['matt', 'lee']);
+    expect(() => loadConfig({ DATABASE_URL, HP_LONG_NIGHT: 'yes' })).toThrow(/HP_LONG_NIGHT/);
+  });
+
   it('refuses invalid values and lists every problem', () => {
     expect(() => loadConfig({ PORT: 'abc', PUBLIC_ORIGIN: 'not a url' })).toThrow(
       /PORT[\s\S]*PUBLIC_ORIGIN/,
