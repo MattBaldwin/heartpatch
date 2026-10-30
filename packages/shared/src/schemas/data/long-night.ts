@@ -14,7 +14,7 @@ export type LongNightWeekday = z.infer<typeof LongNightWeekdaySchema>;
  * comes at full strength, and Juniper's Gap after a patch holds. Public: the
  * client shows the countdown, the Gap's window and the rescue reward from
  * them; the server enforces them. How much stronger he is stays server-only
- * (`LongNightSecretsSchema`, CLAUDE.md rule 6).
+ * (the server-only secrets, CLAUDE.md rule 6).
  */
 export const LongNightRulesSchema = z.strictObject({
   /**

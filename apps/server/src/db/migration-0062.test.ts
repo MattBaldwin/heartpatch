@@ -20,7 +20,9 @@ describe('migration 0062 (the Long Night)', () => {
       `ALTER TABLE "maps" ADD COLUMN "long_night_weekday" smallint DEFAULT ${String(LONG_NIGHT_RULES.defaultWeekday)};`,
     );
     expect(maps.longNightWeekday.default).toBe(LONG_NIGHT_RULES.defaultWeekday);
-    expect(migrationSql).not.toMatch(/\bUPDATE\b|\bDROP\b/);
+    // Expand only: no statement rewrites or drops anything.
+    const statements = migrationSql.split('--> statement-breakpoint').map((x) => x.trim());
+    for (const statement of statements) expect(statement).toMatch(/^(CREATE|ALTER TABLE \S+ ADD) /);
   });
 
   it.skipIf(!url)('keeps weekdays and Gap windows sane (needs DATABASE_URL)', async () => {
