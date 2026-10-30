@@ -193,16 +193,21 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 27 handoff, 2026-10-30):** main `7fd01df` (#739), migrations unchanged (through 0061). Phase 1 is due Oct 31. Supervisors 1–26 are archived (§8.4).
-  - **Merged under supervisor 27:** #739 (Layout B1: on a phone held sideways the patch-name pill moves into the top row; screens https://claude.ai/artifact/UcfL92XDDPxdpCPo6beAoo). #733's screens were signed off (https://claude.ai/artifact/ChHuSCSFDTojZK2jFd4SJL).
-  - **Wild Isle switch:** the owner was told (twice) to add `HP_WILD_ISLE=on` to `/opt/heartpatch/.env` and run `docker compose up -d server`, and NOT to copy `.env.prod.example` over `.env` (that would wipe the real secrets). No "done" yet. Ask once more, plainly, only if it's still unconfirmed. Follow-up: log the Wild Isle switch at boot like the house switch (`apps/server/src/index.ts`).
+- **State (supervisor 28 handoff, 2026-10-30 ~16:15 UTC):** main `207bd87` (#745). Migrations through 0061 (0062 is 727a's). Phase 1 is due Oct 31. Supervisors 1–27 are archived (§8.4).
+  - **Merged under supervisor 28:** #742 (docs), #741 (Waystation off the guide), #743 (#736 A, sim firsts), #744 (Frosty Treats, closes #735), #745 (#736 B, dev fast-forward, closes #736).
+  - **Wild Isle switch:** the owner was told twice to add `HP_WILD_ISLE=on` to `/opt/heartpatch/.env` and run `docker compose up -d server`, and NOT to copy `.env.prod.example` over `.env`. There's still no "done". Ask once more, plainly, after launch work. Follow-up: log the Wild Isle switch at boot like the house switch.
 - **Open PRs and lanes at handoff (re-route each lane to the new supervisor, §8.1):**
-  - **#740 Layout B2** (the explore need card clears the swirl pond sparkle on a phone held sideways; head `c999b51`, APPROVE on that head after a test-only lint fix). Code lane `session_01RAEPnGGhRGdcLecFQtBLAF` waits for CI only. A screens lane, `session_01RAEPnDb8btQ164YQcNyn4k`, is shooting before `7fd01df` / after `5946572` (c999b51 only changes a test). Next: your fresh render-check, then ONE owner question before merging (visible change).
-  - **#741 #735 dead content** (`Part of #735`): the Waystation is off the build list; Turkey Feathers, Presents and Fireworks are out of `TRADE_VALUES` and the icons, with their ids kept in the enum; new faucet/sink and season tests. Lane `session_01RAEPnFQJXjtQhUZRv4XyX9`. The Waystation leaving the build list and guide is visible, so a short capture and render-check go to the owner before merge.
+  - **#740 Layout B2** (the explore need card clears the swirl-pond sparkle). Fix lane `session_01RAEPnGbnNqaXHDAVqABCM1` is on its second fix round. Head `021db6c` still fails three asks:
+    1. On the SE upright, the right-edge pebble sparkle is 32% covered vs 16% at rest.
+    2. The card folds to its short shape when that doesn't help.
+    3. The paw button overlaps the card on the iPhone 15 (it needs to go on the avoid list).
+    The lane was asked to push the missing work plus e2e assertions. Screens lane `session_01RAEPnDb8btQ164YQcNyn4k` keeps the shoot script and page source (https://claude.ai/artifact/7dnzm3TfnVsNawzcfZM55T). On the next sha, re-shoot AFTER only, then run your render-check, then ask the owner ONE question.
+  - **727a** (Long Night shared contract + migration 0062), lane `session_01RAEPnHUYKjXBk3pbc1E56c`. It's the only migration lane, and was told to merge main after #745. After its Opus reviewer APPROVEs, run a Fable second reviewer (§2 Big features), then merge.
+  - **Food picker, option C,** lane `session_01RAEPnEy7xEEFYA61mBaH7B`, branch `feat-food-picker-row` (Fix: prefix). Client care UI, item chips, the 4 Frosty Treats nits, and a What's new entry. When it reports ready: captures, render-check, owner question.
 - **Owner decisions queued:** none open. All five #727 questions are answered (DECISIONS, supervisor 27).
 - **Queue (start in this order as lanes free up; code lanes one at a time):**
-  1. **#735 Frosty Treats** (owner, 2026-10-30): a new recipe from Ice that feeds Frost squishies at 150% like Pies. It's a fresh small lane after #741 merges (same data files), with a What's new entry and captures + render-check before the owner sees it. It closes #735.
-  2. **#736** (sim "firsts" gate, the "what pays today" line, PLAYTEST day-N cold play). Docs plus one sim column.
+  1. Done: #735 (#741 + #744), #736 (#743 + #745).
+  2. Owner may pick next (offered 2026-10-30, not yet chosen): the #726 web-push Fable plan (priority 1; 727f waits for it), the #730 curve options page for the owner (sim-only), and the #731 / Layout B mockups.
   3. **#727 Long Night A:** Opus codes the Fable plan (https://github.com/MattBaldwin/heartpatch/issues/727#issuecomment-6520406417; owner answers at #issuecomment-6521599545) in 6 PRs, 727a→727f. 727a is the shared contract + migration 0062: sequence it first, one migration lane at a time. A Fable reviewer is the second reviewer on the first full review (§2 Big features). 727f waits for #726.
   4. Then down the week-two list (#726, #728–#732, #734). Big ones get a Fable plan first. #728 and #729 both move Heart Coins, so run them one after the other.
   5. **Layout B, new from the B1 screens** (pre-existing; the older items are in 6): on the SE held sideways the pill name shortens ("Moonberr…"); a busy panel with extra lines slices a line under its fade; on a portrait SE, Go home/Explore is cut at the panel foot; on a portrait iPhone 15, the Build row is cut and faded.
@@ -264,6 +269,12 @@ The supervisor keeps this list current. Remove items as they land.
   - #696 reviewer nit: the $20 stop applies per lane, not per supervisor.
   - #694 nits: `// TUNE:` markers on the cap/rope ratios; the untested `top` branch of `logCap`.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
+- **Lessons (2026-10-30, supervisor 28):**
+  - **A lane's "fix pushed" can be missing work.** #740's `021db6c` lacked two of the three asks (the paw gap was never committed). The screens lane caught it by checking which commit it served and diffing it. Ask fix lanes to name the commit per ask, and to add the e2e assertion that would catch each one.
+  - **Render-checks failed pages 4 times in one day.** The fails: a BEFORE shot taken on the wrong build, captions claiming things off-frame, a wrong "moved 16px", and side-by-side layout broken at 1440px. Briefs for screens lanes should require a two-column grid capped at phone width, plain language, and a self-render at 1440/390.
+  - **Lanes can't re-run CI**, and lanes keep offering to. Briefs say so; a known flake on a docs/sim-only PR is judged at merge.
+  - **The food-picker gap:** the server accepted `itemId` since #621, but the client never sent it, so Pies were API-only for weeks. When adding content that needs a UI, check the client path exists before the brief.
+  - **Costs:** #741 lane $5.10, #741 screens $2.16, #744 lane $4.31, #744 screens $4.39, #743 $6.55, #745 $6.85, food-picker mockup $2.83; supervisor 28 about $17 at ~320k.
 - **Lessons (2026-10-30, supervisor 27):**
   - **Reviewers don't run e2e; lanes must, before the APPROVE.** B1's first reviewer approved a cap change that broke #264's five-buttons test on the SE held sideways. The lane's own local e2e caught it. Briefs now say the APPROVE must come after the lane's e2e, on the exact head.
   - **Typed lint takes ~20 min and ~5GB.** Run beside e2e, it OOM-restarted a lane's container. Two lanes pushed red `fast` (lint) heads because they ran lint last. Briefs say: run lint separately and before pushing.
