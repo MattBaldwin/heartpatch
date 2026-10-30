@@ -147,6 +147,8 @@ describe.skipIf(!url)('dev fast-forward (needs DATABASE_URL)', () => {
     const after = await mine(mapId, owner.id);
     const partner = after.find((s) => s.id === starterBefore!.id)!;
     expect(partner).toMatchObject({ speciesId: 'kindlebun', level: standing.partnerLevel });
+    // The Partner leads the team (a picked team is the whole team in battle).
+    expect(partner.teamSlot).toBe(0);
     // Care timers don't jump: the Partner was cared for when it was, not 10 days ago.
     expect(partner.lastCaredAt).toEqual(starterBefore!.lastCaredAt);
     for (const mate of standing.team) {

@@ -39,6 +39,8 @@ export interface FastForwardService {
    * Dev only (`HP_DEV_SQUISHY_GRANTS`, #736): my account on this patch stands
    * where the casual kid does at the end of `day` (`FAST_FORWARD_DAYS`). It
    * only ever moves forward, so a second call for the same day changes nothing.
+   * Meant for a fresh account, one day each: a later day on an account seeded
+   * before adds its teammates, but they sit out when the team is full.
    */
   devFastForward: (
     user: PublicUser,
@@ -119,7 +121,8 @@ export function createFastForwardService(options: FastForwardServiceOptions): Fa
 
         // The team: the Partner grows up along its own line; the day's teammates join.
         const squishies = await repo.lockMine(mapId, user.id);
-        const partner = squishies.find((s) => s.id === member.starterSquishyId);
+        const active = squishies.filter((s) => s.active);
+        const partner = active.find((s) => s.id === member.starterSquishyId);
         let partnerLevel = partner?.level ?? 0;
         if (partner && partner.level < standing.partnerLevel) {
           const from = SPECIES.get(partner.speciesId);
@@ -134,16 +137,23 @@ export function createFastForwardService(options: FastForwardServiceOptions): Fa
             partnerLevel = standing.partnerLevel;
           }
         }
+        // Free team slots, Partner first (a picked team is the whole team in battle).
         const taken = new Set(squishies.map((s) => s.teamSlot).filter((s) => s !== null));
-        let added = 0;
-        for (const mate of standing.team) {
-          const have = squishies.some(
-            (s) => s.speciesId === mate.speciesId && s.level >= mate.level,
-          );
-          const species = SPECIES.get(mate.speciesId);
-          if (have || !species) continue;
+        const nextSlot = () => {
           const slot = [...Array(BATTLE_RULES.teamSize).keys()].find((n) => !taken.has(n)) ?? null;
           if (slot !== null) taken.add(slot);
+          return slot;
+        };
+        if (partner?.resting) {
+          const slot = nextSlot();
+          if (slot !== null) await repo.setTeamSlot(partner.id, slot);
+        }
+        let added = 0;
+        for (const mate of standing.team) {
+          const have = active.some((s) => s.speciesId === mate.speciesId && s.level >= mate.level);
+          const species = SPECIES.get(mate.speciesId);
+          if (have || !species) continue;
+          const slot = nextSlot();
           await repo.insertSquishy({
             mapId,
             ownerUserId: user.id,

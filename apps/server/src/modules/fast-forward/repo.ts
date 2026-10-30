@@ -5,7 +5,7 @@
 import { and, asc, eq, inArray, isNull, sql, type AnyColumn } from 'drizzle-orm';
 import type { ElementId, FeelingId } from '@heartpatch/shared';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
-import { mapMembers, squishies, tiles } from '../../db/schema.js';
+import { mapMembers, squishies, tileDefenders, tiles } from '../../db/schema.js';
 
 export interface FastForwardTile {
   id: string;
@@ -23,6 +23,9 @@ export interface FastForwardSquishy {
   speciesId: string;
   level: number;
   teamSlot: number | null;
+  active: boolean;
+  /** No job at all: not working, training, on watch or on the team. */
+  resting: boolean;
 }
 
 const tileColumns = {
@@ -41,6 +44,10 @@ const squishyColumns = {
   speciesId: squishies.speciesId,
   level: squishies.level,
   teamSlot: squishies.teamSlot,
+  active: sql<boolean>`${squishies.state} = 'active'`,
+  resting: sql<boolean>`${squishies.teamSlot} is null and ${squishies.workTileId} is null
+    and ${squishies.trainingBuildingId} is null
+    and not exists (select 1 from ${tileDefenders} where ${tileDefenders.squishyId} = ${squishies.id})`,
 };
 
 /** `column`, or `at` if that's earlier: nothing gets younger. */
@@ -74,18 +81,15 @@ export function createFastForwardRepo(db: Executor) {
         .where(and(eq(tiles.mapId, mapId), inArray(tiles.id, [...ids]), isNull(tiles.ownerUserId)));
     },
 
-    /** Row-locks my active squishies on the map in id order (step 10). */
+    /**
+     * Row-locks all my squishies on the map in id order (step 10), hollowed
+     * and in-trade ones too: they can still hold a team slot.
+     */
     lockMine: (mapId: string, userId: string): Promise<FastForwardSquishy[]> =>
       db
         .select(squishyColumns)
         .from(squishies)
-        .where(
-          and(
-            eq(squishies.mapId, mapId),
-            eq(squishies.ownerUserId, userId),
-            eq(squishies.state, 'active'),
-          ),
-        )
+        .where(and(eq(squishies.mapId, mapId), eq(squishies.ownerUserId, userId)))
         .orderBy(asc(squishies.id))
         .for('no key update'),
 
@@ -98,6 +102,10 @@ export function createFastForwardRepo(db: Executor) {
         .update(squishies)
         .set({ ...growth, xp: 0 })
         .where(eq(squishies.id, id));
+    },
+
+    setTeamSlot: async (id: string, teamSlot: number): Promise<void> => {
+      await db.update(squishies).set({ teamSlot }).where(eq(squishies.id, id));
     },
 
     insertSquishy: async (squishy: {

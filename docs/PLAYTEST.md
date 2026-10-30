@@ -157,7 +157,7 @@ The checklists above ask "does it work?". This one asks "is it fun on day 10?" (
      console.log(await res.json());
      ```
 
-   - The account now matches the casual kid's "end of day N" in `pnpm sim:progression`: its Partner grows (and evolves) to that day's level, that day's two teammates join the team, its land grows to that day's tile count (the nearest free tiles), and it joined the patch N days ago. Care and job timers stay fresh, like a kid who plays every day. It only moves forward, so pasting it twice is safe.
+   - The account now matches the casual kid's "end of day N" in `pnpm sim:progression`: its Partner grows (and evolves) to that day's level, that day's two teammates join the team, its land grows to that day's tile count (the nearest free tiles), and it joined the patch N days ago. Care and job timers stay fresh, like a kid who plays every day. It only moves forward, so pasting it twice is safe. Use a fresh account for each day. The seeded squishies and the Partner's evolutions don't count as seen or evolved (milestones, the species list) until they happen in play, and the new land is the nearest free tiles, so it can leave gaps.
    - Restart the server with `HP_DEV_SQUISHY_GRANTS` off before the kid plays (the dev routes hand out free things).
 2. **Hand one to a kid who hasn't seen that state.** Not the account's own player, and not a kid who's already that far in. Don't explain anything; just watch.
 3. **Write down three things:**
