@@ -24,6 +24,9 @@ export const CARE_RULES: CareRules = {
   foods: {
     treats: 100, // the feed as it's always been
     pies: 150, // TUNE: owner answer Q5 (#621 plan §8)
+    // #735 (owner 2026-10-30): Ice's second use. Like Treats for most
+    // squishies, like Pies for a Frost one.
+    'frosty-treats': { percent: 100, elements: { frost: 150 } }, // TUNE:
   },
 };
 

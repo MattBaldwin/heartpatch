@@ -351,6 +351,8 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
       'building:lantern-fence',
       'building:bramble-hedge',
       'building:ice-wall',
+      // Frosty Treats (#735): Ice and Treats.
+      'recipe:mix-frosty-treats',
       'recipe:leafy-heart-charms',
       'recipe:brave-brew',
       'recipe:cozy-cocoa',

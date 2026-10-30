@@ -31,6 +31,16 @@ export const RECIPES: Recipe[] = [
     craftSeconds: 30 * 60, // TUNE:
     fasterWith: { element: 'frost', percent: 50 }, // TUNE:
   },
+  // #735: Ice's second use (besides the Ice Wall). Year-round, like Ice
+  // itself: a feed Frost squishies love (`CARE_RULES.foods`).
+  {
+    id: 'mix-frosty-treats',
+    name: 'Frosty Treats',
+    description: 'Crunch Ice and Treats into a chilly snack. Frost squishies love these extra!',
+    inputs: { ice: 2, treats: 1 }, // TUNE:
+    output: { resource: 'frosty-treats', quantity: 3 }, // TUNE:
+    craftSeconds: 2 * 60, // TUNE: like Pies
+  },
   // Wild Isle (#621 W1-8b): Flour, Fish and Salt come only from its works,
   // so Pies are a Wild Isle feed (`CARE_RULES.foods`).
   {

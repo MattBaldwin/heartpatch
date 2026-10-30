@@ -47,6 +47,7 @@ export const TRADE_VALUES: TradeValues = {
     flour: 6, // TUNE: two Greens and a mill's work
     salt: 5, // TUNE:
     pies: 8, // TUNE: a third of 2 Flour, 1 Fish and 1 Salt, plus the baking
+    'frosty-treats': 7, // TUNE: a third of 2 Ice and 1 Treat (6), plus the mixing
     heartdust: 15, // TUNE:
     treats: 6, // TUNE:
     pumpkins: 8, // TUNE:
@@ -106,6 +107,7 @@ export const SELL_RULES: SellRules = {
     flour: { lot: 2, coins: 1 }, // TUNE: more than the two Greens it's ground from
     salt: { lot: 3, coins: 1 }, // TUNE:
     pies: { lot: 1, coins: 1 }, // TUNE: a bake's 3 beat its Flour, Fish and Salt's ~2
+    'frosty-treats': { lot: 2, coins: 1 }, // TUNE: a mix's 1.5 beats its Ice and Treat's ~1
     emberwood: { lot: 3, coins: 1 }, // TUNE:
     pumpkins: { lot: 3, coins: 1 }, // TUNE:
     glimmer: { lot: 1, coins: 2 }, // TUNE:

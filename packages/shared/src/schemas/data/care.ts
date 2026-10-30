@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ContentIdSchema } from './common.js';
+import { ElementIdSchema, type ElementId } from './elements.js';
 import { formatDataIssues } from './issues.js';
 
 // Care, contentment and growth rules (design doc §7–8, DECISIONS G). Data, so
@@ -8,6 +9,27 @@ import { formatDataIssues } from './issues.js';
 // (DECISIONS "Battle engine (#11)", bit-identical maths).
 
 const percent = z.number().int().min(0).max(100);
+const foodPercent = z.number().int().min(1).max(1000);
+
+/**
+ * How much of a feed a food gives: one percent for every squishy, or (#735:
+ * Frosty Treats) a percent plus a different one for squishies of some
+ * elements.
+ */
+export const FoodRuleSchema = z.union([
+  foodPercent,
+  z.strictObject({
+    percent: foodPercent,
+    elements: z.partialRecord(ElementIdSchema, foodPercent),
+  }),
+]);
+export type FoodRule = z.infer<typeof FoodRuleSchema>;
+
+/** A food's percent for a squishy of `element` (its plain percent if none). */
+export function foodPercentFor(rule: FoodRule, element?: ElementId): number {
+  if (typeof rule === 'number') return rule;
+  return (element === undefined ? undefined : rule.elements[element]) ?? rule.percent;
+}
 
 /** A contentment band: the soft word players see instead of a number. */
 export const MoodIdSchema = z.enum(['glowing', 'happy', 'calm', 'cuddly']);
@@ -53,11 +75,12 @@ export const CareRulesSchema = z
       .min(1),
     /**
      * What a squishy can be fed (#621 W1-8b): item id → percent of a feeding
-     * action's contentment. A care action whose cost is one food can be paid
-     * with any other food, one for one (`POST …/care` `itemId`). Optional:
-     * left out, care is paid only with its own cost.
+     * action's contentment, or a percent with others by element (#735:
+     * Frosty Treats). A care action whose cost is one food can be paid with
+     * any other food, one for one (`POST …/care` `itemId`). Optional: left
+     * out, care is paid only with its own cost.
      */
-    foods: z.record(ContentIdSchema, z.number().int().min(1).max(1000)).optional(),
+    foods: z.record(ContentIdSchema, FoodRuleSchema).optional(),
   })
   .superRefine((rules, ctx) => {
     if (rules.baselineContentment >= rules.maxContentment) {
