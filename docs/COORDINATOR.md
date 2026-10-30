@@ -192,10 +192,10 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 26 handoff, 2026-10-30):** main `38b6b95` (#737), migrations unchanged (through 0061). Phase 1 is due Oct 31. Supervisor 26 is `session_01RAEPnHqwSTnXgsppNL6R9B`. Supervisors 1–25 are archived (§8.4).
-  - **Merged under supervisor 26:** #721 (already in at handoff; screens https://claude.ai/artifact/FASniQ2VjsQpUPeHCQ4hYD), #723 (whole-row tile panel with a "more below" fade, compact Me button over the Build sheet; screens https://claude.ai/artifact/RYYL9CaQqKnYKK68TvFpNn), #737 (#621 coast spawn and guardian tables, the last Wild Isle Wave 1 code gap).
+- **State (supervisor 26 handoff, 2026-10-30):** main `5d9ed79` (#733), migrations unchanged (through 0061). Phase 1 is due Oct 31. Supervisor 26 is `session_01RAEPnHqwSTnXgsppNL6R9B`. Supervisors 1–25 are archived (§8.4).
+  - **Merged under supervisor 26:** #721 (already in at handoff; screens https://claude.ai/artifact/FASniQ2VjsQpUPeHCQ4hYD), #723 (whole-row tile panel with a "more below" fade, compact Me button over the Build sheet; screens https://claude.ai/artifact/RYYL9CaQqKnYKK68TvFpNn), #737 (#621 coast spawn and guardian tables, the last Wild Isle Wave 1 code gap), #733 (the Build sheet's action row pinned, no fade).
 - **Open PRs at handoff:**
-  - **#733** `Fix: Build sheet's Build! row pinned and unfaded (#723 follow-up)`, branch `fix-build-row`, head `ea71f51`. APPROVE on `1badc77` (code) and test-only APPROVE on `ea71f51`. Merge on green CI. The lane stopped; its `Lane handoff` is on #733 (also notes a local `territory.spec.ts:99` canvas-tap timeout, unconfirmed). **Next:** a screens-only lane (before `38b6b95` or the pre-#733 main, after the merge commit) for the Build sheet on SE and iPhone 15: Build!/Not now whole and unfaded, Me button visible. Then your render-check, then one owner question.
+  - **#733 merged** (`5d9ed79`): the Build sheet's Build!/Not now row is pinned to the sheet's foot and the sheet draws no fade. **Next:** a screens-only lane (before `38b6b95`, after `5d9ed79`) on SE and iPhone 15 with the Build sheet open: Build!/Not now whole and unfaded, Me button visible, plus a normal busy tile panel to show #723's fade still works. Then your render-check, then one owner question.
   - **#724** `Chore: Wild Isle on for everyone (#621 W1-12)` (coordinator-made, branch `chore-wild-isle-on`, head `65d5cf8`): `HP_WILD_ISLE=on` in `infra/compose/.env.prod.example`, DEPLOY.md rows, `changes/621-wild-isle.md`. Reviewer APPROVE on `65d5cf8` (3 rounds, verdict comment on #724). Merge on green. **Then tell the owner** to add `HP_WILD_ISLE=on` to `/opt/heartpatch/.env` on the Lightsail server and restart (the repo file is a template; containers can't SSH). Follow-up: log the Wild Isle switch at boot like the house switch (`apps/server/src/index.ts`).
 - **Owner decisions queued:** none open.
 - **Queue (start in this order as lanes free up; one lane at a time):**
@@ -264,7 +264,7 @@ The supervisor keeps this list current. Remove items as they land.
   - **Layout fixes keep moving the problem.** #721 fixed the tile panel cap but cut a new row on iPad; #723 fixed rows but faded the Build! button. Briefs for layout lanes should name every panel the CSS rule reaches (normal tile panel, Build sheet, landscape) and require a geometry test for each.
   - **Ready-for-review is REST:** `gh api -X POST repos/MattBaldwin/heartpatch/pulls/N/ccr/ready_for_review` (GraphQL 403s).
   - **A What's new Try-it line is plain text** (`whats-new.ts` renders it with `el()`): no markdown; quote button names.
-  - **Costs:** #721 screens $3.23, #723 code $5.08, #723 screens $3.20, coast tables $1.42 (Sonnet), build-row ~$3–4; supervisor 26 about $14 at ~310k.
+  - **Costs:** #721 screens $3.23, #723 code $5.08, #723 screens $3.20, coast tables $1.42 (Sonnet), build-row $5.93; supervisor 26 about $14 at ~310k.
 - **Lessons (2026-10-28, supervisor 25):**
   - **Lanes hit ~130k by about 45 min** (fix-3 202k, fix-4 157k, storm-gold 196k, SE-A 236k, SE-A fix ~150k). The 45-min check plus a "narrow now" message kept each to one PR. The lanes cost $6.10, $6.89, $5.06 and $7.49; the storm screens lane cost $2.92.
   - **Container restarts killed background checks;** one lane sat idle 14 min believing lint was "running". The sweep caught it.
