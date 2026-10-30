@@ -87,6 +87,12 @@ app.log.info(
   { house: config.HP_HOUSE, houseTesters: config.HP_HOUSE_TESTERS.length },
   "the Keeper's house switch",
 );
+// The Long Night switch (#727), logged like the house's: the mode and how
+// many testers, never their names.
+app.log.info(
+  { longNight: config.HP_LONG_NIGHT, longNightTesters: config.HP_LONG_NIGHT_TESTERS.length },
+  'the Long Night switch',
+);
 // The First Patch for accounts that finished the tutorial before milestones
 // existed (#44). Idempotent, so every boot can run it; it never blocks start.
 createMilestonesService({ db: db.db, clock })

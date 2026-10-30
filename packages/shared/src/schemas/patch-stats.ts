@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { PublicUserSchema } from './auth.js';
 import { ContentIdSchema } from './data/common.js';
+import { LocalDateSchema } from './time.js';
 
 // Patch stats (#573, owner decision 2026-10-19): who's winning what on a
 // patch. One crown per category, shared on a tie, and no overall ranking.
@@ -58,5 +59,14 @@ export const PatchStatsSchema = z.object({
   }),
   /** Every member, owner first, then by join time (as `MapView.members`). */
   keepers: z.array(KeeperStatsSchema),
+  /**
+   * The `night` crown (#727): Keeper of the Night from the patch's latest
+   * Long Night, one Keeper and never shared (its tie-break is fires lit,
+   * then fuel nights, then user id). Kept apart from `crowns`, which go to
+   * the top number on the map right now. Null when no Long Night has
+   * crowned anyone yet; left out while the Long Night is switched off and
+   * by older servers.
+   */
+  keeperOfTheNight: z.object({ userId: z.uuid(), night: LocalDateSchema }).nullable().optional(),
 });
 export type PatchStats = z.infer<typeof PatchStatsSchema>;
