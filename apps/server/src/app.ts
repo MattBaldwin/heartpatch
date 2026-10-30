@@ -539,10 +539,12 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
-        // The Long Night (#727): the owner's weekday; nightfall resolves it.
+        // The Long Night (#727): the owner's weekday and Juniper's Gap
+        // encounters (wild battles); nightfall resolves it.
         await api.register(
-          longNightRoutes(createLongNightService({ db, clock, longNight, ...publish }), {
+          longNightRoutes(createLongNightService({ db, clock, longNight, battles, ...publish }), {
             hooks: authHooks,
+            idempotency,
           }),
         );
         // The tutorial (#47, #24) runs the Glade on these same modules; its

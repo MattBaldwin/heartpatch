@@ -1,30 +1,37 @@
 import {
   ApiErrorSchema,
+  BATTLE_RULES,
+  BattleResponseSchema,
   GAME_DATA,
   HOLLOW_RULES,
   HollowResponseSchema,
   hexDistance,
   isTradingPost,
   JoinMapResponseSchema,
+  LONG_NIGHT_RULES,
   LongNightResponseSchema,
   MapResponseSchema,
   parseGameEventPayload,
   PatchStatsSchema,
   type HollowRules,
   type MapDetail,
+  type PlayerBattle,
+  type PlayerBattleAction,
   type PublicUser,
 } from '@heartpatch/shared';
 import { LONG_NIGHT_GAP_TABLE } from '@heartpatch/shared/server';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
+import { runConsumer } from '../../jobs/consumers.js';
 import { buildings, keepers, sessions, squishies, users } from '../../db/schema.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { createBattlesService } from '../battles/service.js';
+import { createHollowConsumer } from '../hollow/consumer.js';
 import { createHollowService } from '../hollow/service.js';
 import { createLongNightRepo } from './repo.js';
 import { longNightNightHash } from './service.js';
@@ -579,6 +586,220 @@ describe.skipIf(!url)('the Long Night, server resolve (#727c, needs DATABASE_URL
       tonight: false,
       // The Wednesday after (MST from 1 Nov: 7 PM is 02:00Z).
       nextAt: '2026-11-12T02:00:00.000Z',
+    });
+  });
+
+  describe("Juniper's Gap encounter (#727d)", () => {
+    const gapPath = (mapId: string) => `/maps/${mapId}/long-night/gap-encounter`;
+    const battleOf = (res: LightMyRequestResponse) => BattleResponseSchema.parse(res.json()).battle;
+    const messageOf = (res: LightMyRequestResponse) => ApiErrorSchema.parse(res.json()).error;
+
+    /** A squishy of `who`'s, active on their team unless `hollowed`. */
+    async function friendOf(
+      mapId: string,
+      who: PublicUser,
+      state: 'active' | 'hollowed' = 'active',
+    ) {
+      const [row] = await db
+        .insert(squishies)
+        .values({
+          mapId,
+          ownerUserId: who.id,
+          speciesId: SPECIES.id,
+          element: SPECIES.element,
+          feeling: SPECIES.feeling,
+          level: 40,
+          state,
+        })
+        .returning({ id: squishies.id });
+      return row!.id;
+    }
+
+    /** A held Long Night for `kid` and `friend`, with the clock a minute into the Gap. */
+    async function heldNight() {
+      const server = await start();
+      const kid = await player();
+      const friend = await player();
+      const mapId = await patch(server, kid, [friend]);
+      await fire(mapId, kid, '2026-11-01');
+      await fire(mapId, friend, '2026-11-01');
+      await friendOf(mapId, kid);
+      await friendOf(mapId, friend);
+      expect(await saturdayNight(mapId)).toEqual({ taken: 0 });
+      const night = (await createLongNightRepo(db).latest(mapId))!;
+      clock.setTime(night.gapOpensAt!.getTime() + 60_000);
+      return { server, kid, friend, mapId, night };
+    }
+
+    const outcomeOf = async (mapId: string, who: PublicUser) =>
+      (await createLongNightRepo(db).latest(mapId))!.outcomes.find((o) => o.userId === who.id)!;
+    const battlesOf = (mapId: string, who: PublicUser) =>
+      db.query.battles.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.playerUserId, who.id)),
+      });
+    const forfeit = (server: FastifyInstance, who: Player, b: PlayerBattle) =>
+      call(server, 'POST', `/battles/${b.id}/actions`, who, {
+        action: { type: 'forfeit' },
+        turn: b.view.turn,
+      });
+
+    it('a Keeper claims one wild battle against their secret species, once per Night', async () => {
+      const { server, kid, mapId } = await heldNight();
+      const before = await outcomeOf(mapId, kid);
+
+      const res = await call(server, 'POST', gapPath(mapId), kid);
+      expect(res.statusCode, res.body).toBe(201);
+      const battle = battleOf(res);
+      expect(battle.kind).toBe('wild');
+      // The server picked the squishy rolled at resolve; the reply is the battle alone.
+      expect(battle.view.sides.b.squishies.map((s) => s.speciesId)).toEqual([before.gapSpeciesId]);
+      expect(res.body).not.toContain('gapSpeciesId');
+      expect(res.body).not.toContain('outcomes');
+      expect(res.body).not.toContain('rescueRewardsMultiplier');
+
+      // The claim is written with the battle, in its transaction.
+      const after = await outcomeOf(mapId, kid);
+      expect(after).toEqual({
+        ...before,
+        gapClaimedAt: clock.toISOString(),
+        gapBattleId: battle.id,
+      });
+      const events = await eventsOf(mapId);
+      expect(events.at(-1)!.type).toBe('battle.started');
+      expect(parseGameEventPayload('battle.started', events.at(-1)!.payload)).toMatchObject({
+        battleId: battle.id,
+        kind: 'wild',
+        opponentSpecies: [before.gapSpeciesId],
+      });
+      // The status's Gap says I've had mine.
+      expect((await statusOf(server, kid, mapId)).hollow.longNight?.gap?.available).toBe(false);
+
+      // Tapping again resumes the battle going.
+      const again = await call(server, 'POST', gapPath(mapId), kid);
+      expect(again.statusCode, again.body).toBe(200);
+      expect(battleOf(again).id).toBe(battle.id);
+
+      // Once it's over, the Gap is spent for this Night.
+      expect((await forfeit(server, kid, battle)).statusCode).toBe(200);
+      const spent = await call(server, 'POST', gapPath(mapId), kid);
+      expect(spent.statusCode, spent.body).toBe(409);
+      expect(messageOf(spent).message).toContain('already');
+      expect(await battlesOf(mapId, kid)).toHaveLength(1);
+      expect(await outcomeOf(mapId, kid)).toEqual(after);
+    });
+
+    it('two taps at once start one battle and claim once', async () => {
+      const { server, kid, mapId } = await heldNight();
+      const replies = await Promise.all([
+        call(server, 'POST', gapPath(mapId), kid),
+        call(server, 'POST', gapPath(mapId), kid),
+      ]);
+      expect(replies.map((r) => r.statusCode).sort()).toEqual([200, 201]);
+      const [one, two] = replies.map(battleOf);
+      expect(one!.id).toBe(two!.id);
+      expect(await battlesOf(mapId, kid)).toHaveLength(1);
+      expect((await outcomeOf(mapId, kid)).gapBattleId).toBe(one!.id);
+    });
+
+    it("two Keepers claiming at once both keep their claim (the Night's row lock)", async () => {
+      const { server, kid, friend, mapId } = await heldNight();
+      const replies = await Promise.all([
+        call(server, 'POST', gapPath(mapId), kid),
+        call(server, 'POST', gapPath(mapId), friend),
+      ]);
+      expect(replies.map((r) => r.statusCode)).toEqual([201, 201]);
+      const [mine, theirs] = replies.map(battleOf);
+      expect((await outcomeOf(mapId, kid)).gapBattleId).toBe(mine!.id);
+      expect((await outcomeOf(mapId, friend)).gapBattleId).toBe(theirs!.id);
+    });
+
+    it('the Gap is closed before it opens, after it closes, and with no Night', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await friendOf(mapId, kid);
+      const none = await call(server, 'POST', gapPath(mapId), kid);
+      expect(none.statusCode, none.body).toBe(409);
+      expect(messageOf(none).message).toContain('closed');
+
+      await fire(mapId, kid, '2026-11-01');
+      await saturdayNight(mapId);
+      const night = (await createLongNightRepo(db).latest(mapId))!;
+      clock.setTime(night.gapOpensAt!.getTime() - 1);
+      expect((await call(server, 'POST', gapPath(mapId), kid)).statusCode).toBe(409);
+      clock.setTime(night.gapClosesAt!.getTime());
+      expect((await call(server, 'POST', gapPath(mapId), kid)).statusCode).toBe(409);
+      expect(await battlesOf(mapId, kid)).toHaveLength(0);
+      expect((await outcomeOf(mapId, kid)).gapClaimedAt).toBeNull();
+    });
+
+    it("a Keeper who joined after the Night isn't one; switched off, there's no Gap", async () => {
+      const { server, kid, mapId } = await heldNight();
+      const late = await player();
+      const detail = await call(server, 'GET', `/maps/${mapId}`, kid);
+      const code = MapResponseSchema.parse(detail.json()).map.admin!.invite!.code;
+      const join = await call(server, 'POST', '/maps/join', late, { code });
+      const request = JoinMapResponseSchema.parse(join.json()).request;
+      await call(server, 'POST', `/maps/${mapId}/requests/${request.id}/approve`, kid);
+      await friendOf(mapId, late);
+
+      const res = await call(server, 'POST', gapPath(mapId), late);
+      expect(res.statusCode, res.body).toBe(403);
+      expect(messageOf(res).message).toContain('Keepers');
+      expect(await battlesOf(mapId, late)).toHaveLength(0);
+
+      await app!.close();
+      const off = await start('off');
+      expect((await call(off, 'POST', gapPath(mapId), kid)).statusCode).toBe(404);
+      expect(await battlesOf(mapId, kid)).toHaveLength(0);
+    });
+
+    it('rescues earn Heartdust more times a day only while the Gap is open', async () => {
+      const { server, kid, mapId, night } = await heldNight();
+      const hollow = hollowService();
+      const perDay = HOLLOW_RULES.rescue.rewardsPerDay;
+      const heartdust = async () =>
+        (
+          await db.query.inventories.findFirst({
+            where: (t, { and, eq }) =>
+              and(eq(t.mapId, mapId), eq(t.userId, kid.id), eq(t.itemId, 'heartdust')),
+          })
+        )?.quantity ?? 0;
+      /** Rescues a squishy from the Hollow: plays it out and settles it. */
+      async function rescueOne() {
+        const lost = await friendOf(mapId, kid, 'hollowed');
+        let current = (await hollow.rescue(kid, mapId, { squishyId: lost })).battle;
+        for (let i = 0; i < BATTLE_RULES.maxTurns + 5 && current.status === 'active'; i++) {
+          const side = current.view.sides[current.mySide];
+          const action: PlayerBattleAction =
+            current.view.phase.type === 'replace'
+              ? { type: 'replace', slot: side.squishies.findIndex((s) => s.energy > 0) }
+              : { type: 'move', move: side.squishies[side.active]!.moves[0]! };
+          const res = await call(server, 'POST', `/battles/${current.id}/actions`, kid, {
+            action,
+            turn: current.view.turn,
+          });
+          expect(res.statusCode, res.body).toBe(200);
+          current = battleOf(res);
+        }
+        expect(current.view.phase).toMatchObject({ type: 'over', result: { winner: 'a' } });
+        await runConsumer(db, createHollowConsumer(hollow), mapId);
+      }
+      const leftToday = async () =>
+        (await statusOf(server, kid, mapId)).hollow.rescue.rewardsLeftToday;
+
+      // Open: the day's cap times the Night's multiplier.
+      const open = perDay * LONG_NIGHT_RULES.rescueRewardsMultiplier;
+      expect(await leftToday()).toBe(open);
+      for (let i = 0; i < open + 1; i++) await rescueOne();
+      expect(await heartdust()).toBe(open * HOLLOW_RULES.rescue.heartdust);
+      expect(await leftToday()).toBe(0);
+
+      // Closed (the next local day, so the day's count starts again): the plain cap.
+      clock.setTime(night.gapClosesAt!.getTime());
+      expect(await leftToday()).toBe(perDay);
+      for (let i = 0; i < perDay + 1; i++) await rescueOne();
+      expect(await heartdust()).toBe((open + perDay) * HOLLOW_RULES.rescue.heartdust);
     });
   });
 });
