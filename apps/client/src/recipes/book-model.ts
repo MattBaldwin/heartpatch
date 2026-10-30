@@ -30,6 +30,7 @@ export const BOOK_TEXT = {
   gatherer: (land: string) => `a squishy gathering on ${land}`,
   bonus: (from: string) => `a surprise bonus when you gather ${from}`,
   madeBy: (what: string) => `or make ${what}`,
+  makeIt: (what: string) => `make ${what} in your recipe book`,
   nowhere: 'Nobody has found any yet. Keep exploring!',
   onlyAt: (season: string) => `Only at ${season}`,
   makes: (n: number, what: string) =>
@@ -89,14 +90,12 @@ export function whereText(resourceId: string): string {
     parts.push(parts.length > 0 ? `or ${bonus}` : bonus);
   }
   if (facts.madeBy.length > 0) {
-    parts.push(
-      BOOK_TEXT.madeBy(
-        listWords(
-          facts.madeBy.map((r) => RECIPE_NAMES.get(r) ?? r),
-          'or',
-        ),
-      ),
+    const recipes = listWords(
+      facts.madeBy.map((r) => RECIPE_NAMES.get(r) ?? r),
+      'or',
     );
+    // Only made, never found (Frosty Treats): where to make it, as a whole line.
+    parts.push(parts.length > 0 ? BOOK_TEXT.madeBy(recipes) : BOOK_TEXT.makeIt(recipes));
   }
   if (parts.length === 0) return BOOK_TEXT.nowhere;
   return sentence(parts.join(', '));
@@ -143,6 +142,8 @@ export interface PageView {
   readonly sealed: boolean;
   /** A sealed page's public hint. */
   readonly hint: string;
+  /** The hint is the page's own (`sealedHints`), not the general line. */
+  readonly ownHint: boolean;
   /** "Makes 1 Heart Charm · 1 min" / "Build it at home" / "Build it on a homestead". */
   readonly meta: string;
   readonly ingredients: readonly IngredientView[];
@@ -291,6 +292,7 @@ export function pageView(page: RecipeBookPage, ctx: BookContext): PageView {
     season,
     sealed,
     hint: sealedHint(page.key) ?? BOOK_TEXT.sealed,
+    ownHint: sealedHint(page.key) !== null,
     meta,
     ingredients,
     canMake,
@@ -408,8 +410,9 @@ export function spreadOf(spreads: readonly string[][], key: string): number {
 
 /**
  * The player's own tile to find `resourceId` on ("Find on map"): one with
- * its node, else one whose gathers can bring it as a bonus; the nearest to
- * their home base first. Null when they have none.
+ * its node, else one whose gathers can bring it as a bonus, else land a
+ * squishy gatherer gets it from (Ice on Mountains); the nearest to their
+ * home base first. Null when they have none.
  */
 export function findSpot(resourceId: string, tiles: readonly PublicTile[], me: string): Hex | null {
   const mine = tiles.filter((t) => t.ownerUserId === me);
@@ -417,14 +420,11 @@ export function findSpot(resourceId: string, tiles: readonly PublicTile[], me: s
   const near = (list: readonly PublicTile[]) =>
     [...list].sort((a, b) => (home ? hexDistance(a, home) - hexDistance(b, home) : 0))[0] ?? null;
   const direct = near(mine.filter((t) => t.nodeResource === resourceId));
+  const facts = whereToFind(resourceId);
   const spot =
     direct ??
-    near(
-      mine.filter(
-        (t) =>
-          t.nodeResource !== null && whereToFind(resourceId).bonusFrom.includes(t.nodeResource),
-      ),
-    );
+    near(mine.filter((t) => t.nodeResource !== null && facts.bonusFrom.includes(t.nodeResource))) ??
+    near(mine.filter((t) => facts.gatheredOn.includes(t.terrain)));
   return spot ? { q: spot.q, r: spot.r } : null;
 }
 

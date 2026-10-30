@@ -319,6 +319,13 @@ const inventory = createInventoryScreen({
   onBagOpen: () => {
     lorebook.refresh();
   },
+  // A food's "Care: Feed" chip: the care sheet, that food picked.
+  onFeed: (itemId) => {
+    const mapId = maps.view?.map.id;
+    if (!mapId) return;
+    inventory.closeBag();
+    void care.openWithFood(mapId, itemId);
+  },
   // What landed flies in from its tile on the map (#419).
   locate: {
     tile: (h) => maps.tileRect(h),

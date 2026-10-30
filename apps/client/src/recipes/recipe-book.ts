@@ -669,10 +669,11 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     ),
     el('h3', { class: 'rbook-name' }, RECIPE_BOOK_TEXT.sealedName),
     el('p', { class: 'rbook-flavour' }, page.hint),
+    // A page with its own hint says it once; the general note is for the rest.
     el(
       'div',
       { class: 'rbook-foot' },
-      el('p', { class: 'rbook-note' }, RECIPE_BOOK_TEXT.sealedNote),
+      ...(page.ownHint ? [] : [el('p', { class: 'rbook-note' }, RECIPE_BOOK_TEXT.sealedNote)]),
     ),
   ];
 

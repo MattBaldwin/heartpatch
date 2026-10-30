@@ -41,6 +41,28 @@ describe('the Bag item card (#241)', () => {
     expect(itemDetail('fireworks', 1).chips.map((c) => c.text)).toEqual(['🎀 A New Year keepsake']);
   });
 
+  it('a made food says what it’s made from and where to make it, like Treats (#735 polish)', () => {
+    const frosty = itemDetail('frosty-treats', 2);
+    expect(frosty.chips.map((c) => c.text)).toEqual([
+      '🥣 Made from Ice and Treats',
+      '🤗 Care: Feed',
+    ]);
+    expect(frosty.where).toBe('Make Frosty Treats in your recipe book.');
+    expect(itemDetail('pies', 1).chips.map((c) => c.text)).toEqual([
+      '🥣 Made from Flour, Fish and more',
+      '🤗 Care: Feed',
+    ]);
+    // A made thing that isn't food keeps its card as it was.
+    expect(itemDetail('hearty-soup', 1).where).toBeNull();
+  });
+
+  it('a food’s Care: Feed chip opens care with it picked (option C)', () => {
+    for (const id of ['treats', 'pies', 'frosty-treats']) {
+      expect(itemDetail(id, 1).chips.find((c) => c.text === '🤗 Care: Feed')?.feed, id).toBe(id);
+    }
+    expect(itemDetail('heartdust', 1).chips.some((c) => c.feed !== undefined)).toBe(false);
+  });
+
   it('an old saved stack of a retired item still reads as a full row (#735)', () => {
     for (const id of RETIRED_RESOURCES) {
       const d = itemDetail(id, 3);

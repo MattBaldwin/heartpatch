@@ -94,6 +94,8 @@ export interface InventoryScreenOptions {
   keyMaps?: HTMLElement;
   /** The Bag opened (the Lorebook looks for new pages). */
   onBagOpen?: () => void;
+  /** A food's "Care: Feed" chip: care with that food picked (the Bag closes first). */
+  onFeed?: (itemId: string) => void;
   /**
    * A reply set the game clock (`gameNow`) to the server's time (#583): what
    * reads it (the map's season, the music) looks again.
@@ -986,9 +988,31 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       el(
         'div',
         { class: 'bag-chips' },
-        ...d.chips.map((c) =>
-          el('span', { class: c.battle ? 'bag-chip bag-chip-battle' : 'bag-chip' }, c.text),
-        ),
+        ...d.chips.map((c) => {
+          // A food's "Care: Feed" opens care with it picked (option C, 2026-10-30).
+          const feed = c.feed;
+          if (feed === undefined || !options.onFeed) {
+            return el(
+              'span',
+              { class: c.battle ? 'bag-chip bag-chip-battle' : 'bag-chip' },
+              c.text,
+            );
+          }
+          const button = el(
+            'button',
+            {
+              type: 'button',
+              class: 'bag-chip bag-chip-feed',
+              'data-testid': 'bag-feed',
+              'data-item': feed,
+            },
+            c.text,
+          );
+          button.addEventListener('click', () => {
+            options.onFeed?.(feed);
+          });
+          return button;
+        }),
       ),
       ...(d.where
         ? [el('p', { class: 'bag-detail-where' }, el('b', {}, TEXT.findIt), ` ${d.where}`)]

@@ -15,6 +15,14 @@ import {
   speciesById,
   type SquishyFace,
 } from './care-view.js';
+import {
+  bestFood,
+  bigFeed,
+  FEED_ACTION,
+  FOOD_TEXT,
+  PLAIN_FOOD,
+  type FoodRow,
+} from './food-pick.js';
 import { moodHeartsEl } from './mood-hearts.js';
 import type { Portraits } from '../procedural/portraits.js';
 import { evolvingMeterEl } from './evolving-meter.js';
@@ -53,12 +61,19 @@ export interface CareDebug {
   readonly celebrating: boolean;
   /** Squash-and-stretch moments played since the page loaded (one per care or evolution). */
   readonly squishes: number;
+  /** The food row's foods (empty with no row) and the one Feed sends now. */
+  readonly foods: readonly string[];
+  readonly food: string | null;
+  /** Big "Yum!" moments: feeds the server says gave extra. */
+  readonly yums: number;
   readonly note: string;
 }
 
 export interface CareSheet {
-  /** Opens the sheet for one of my squishies on this patch. */
-  open: (mapId: string, squishyId: string) => Promise<void>;
+  /** Opens the sheet for one of my squishies on this patch (`food`: pre-picked in the food row). */
+  open: (mapId: string, squishyId: string, food?: string) => Promise<void>;
+  /** Opens the sheet with `food` pre-picked (the Bag's "Care: Feed"), on a squishy it suits. */
+  openWithFood: (mapId: string, food: string) => Promise<void>;
   /** Opens the sheet for my first squishy of a species (from the catalog). */
   openForSpecies: (mapId: string, speciesId: string) => Promise<void>;
   /** If one of my squishies evolved and I haven't seen it, celebrates it. */
@@ -80,6 +95,11 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   let readyTimer: number | undefined;
   let working = false;
   let squishes = 0;
+  let yums = 0;
+  /** The food row's tap (null: the best for this squishy); kept per open. */
+  let foodPick: string | null = null;
+  /** The row as last drawn, so Feed sends what's on screen. */
+  let foods: FoodRow | null = null;
   /** Bumped on every open, close and user change, so a late reply is dropped. */
   let ticket = 0;
 
@@ -87,10 +107,13 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   const blob = el('div', { class: 'care-blob', 'aria-hidden': 'true' }, face.node);
   /** Which squishy (and accessory) the blob shows a picture of, so care doesn't redraw it. */
   let portraitKey = '';
+  const SPARKLES = ['✨', '💖', '✨', '⭐', '✨'];
+  // The "Yum!" burst is mostly hearts.
+  const HEARTS = ['💗', '✨', '💖', '💗', '💖'];
   const sparkles = el(
     'div',
     { class: 'care-sparkles', 'aria-hidden': 'true' },
-    ...['✨', '💖', '✨', '⭐', '✨'].map((s) => el('span', {}, s)),
+    ...SPARKLES.map((s) => el('span', {}, s)),
   );
   const stage = el('div', { class: 'care-stage' }, blob, sparkles);
   const name = el('h1', {
@@ -116,6 +139,16 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   const evolving = evolvingMeterEl('care-evolving');
   // The tutorial's care step spotlights these (Feed, Pet, Play).
   const actions = el('div', { class: 'care-actions', 'data-tutorial-target': 'care-buttons' });
+  // The food row (owner's pick 2026-10-30, option C), right above Feed.
+  const foodTiles = el('div', {
+    class: 'care-foods',
+    role: 'group',
+    'aria-label': FOOD_TEXT.row,
+    'data-testid': 'care-foods',
+  });
+  const foodHint = el('p', { class: 'care-food-hint', 'data-testid': 'care-food-hint' });
+  foodTiles.hidden = true;
+  foodHint.hidden = true;
   const note = el('p', { class: 'care-note', role: 'status', 'data-testid': 'care-note' });
   const treatNote = el('p', { class: 'care-treat', 'data-testid': 'care-treat' });
   const infoList = el('ul', { class: 'care-info' });
@@ -188,6 +221,8 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       evolving.root,
       whisper,
       celebrate,
+      foodTiles,
+      foodHint,
       actions,
       treatNote,
       note,
@@ -215,18 +250,28 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   const current = (): CareSquishy | null =>
     reply?.squishies.find((s) => s.id === squishyId) ?? null;
 
-  /** One squash-and-stretch (and sparkles for an evolution); plays once per event. */
-  function squish(kind: 'care' | 'evolve'): void {
+  /**
+   * One squash-and-stretch (and sparkles for an evolution); plays once per
+   * event. `big`: a feed that gave extra gets a bigger squash and a heart burst.
+   */
+  function squish(kind: 'care' | 'evolve', big = false): void {
     squishes += 1;
-    const cls = kind === 'evolve' ? 'care-stage-evolve' : 'care-stage-squish';
-    stage.classList.remove('care-stage-squish', 'care-stage-evolve');
+    const cls =
+      kind === 'evolve' ? 'care-stage-evolve' : big ? 'care-stage-yum' : 'care-stage-squish';
+    stage.classList.remove('care-stage-squish', 'care-stage-evolve', 'care-stage-yum');
+    const shapes = big ? HEARTS : SPARKLES;
+    [...sparkles.children].forEach((span, i) => {
+      span.textContent = shapes[i] ?? '✨';
+    });
     // A reflow restarts the animation even if the same class was just there.
     stage.getBoundingClientRect();
     stage.classList.add(cls);
     options.onSquish?.(kind);
   }
   stage.addEventListener('animationend', (event) => {
-    if (event.target === blob) stage.classList.remove('care-stage-squish', 'care-stage-evolve');
+    if (event.target === blob) {
+      stage.classList.remove('care-stage-squish', 'care-stage-evolve', 'care-stage-yum');
+    }
   });
 
   function render(): void {
@@ -242,10 +287,14 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       drift.hidden = true;
       houseLine.hidden = true;
       actions.replaceChildren();
+      foods = null;
+      renderFoods();
       return;
     }
     const now = serverNow();
-    const model = careSheet(squishy, reply, now);
+    const model = careSheet(squishy, reply, now, { pick: foodPick });
+    foods = model.foods;
+    renderFoods();
     face.set(faceFor(squishy.speciesId, speciesById(reply)));
     showPortrait(squishy, reply);
     // The drawn blob's colour; the real picture brings its own.
@@ -302,23 +351,62 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     if (wait !== null) readyTimer = window.setTimeout(render, wait + 50);
   }
 
+  /** The food row's tiles: icon, short name and count, the pick pressed. */
+  function renderFoods(): void {
+    foodTiles.hidden = foods === null;
+    foodHint.hidden = foods === null || foods.hint === '';
+    foodHint.textContent = foods?.hint ?? '';
+    foodTiles.replaceChildren(
+      ...(foods?.tiles ?? []).map((tile) => {
+        const button = el(
+          'button',
+          {
+            type: 'button',
+            class: tile.best ? 'care-food care-food-best' : 'care-food',
+            'aria-pressed': String(tile.picked),
+            'aria-label': FOOD_TEXT.tile(tile.name, tile.count),
+            'data-food': tile.id,
+            'data-testid': 'care-food',
+          },
+          el('span', { 'aria-hidden': 'true' }, `${tile.icon} ${tile.short} `),
+          el('b', { 'aria-hidden': 'true' }, String(tile.count)),
+          ...(tile.best
+            ? [el('span', { class: 'care-food-tag', 'aria-hidden': 'true' }, FOOD_TEXT.best)]
+            : []),
+        );
+        button.disabled = working;
+        button.addEventListener('click', () => {
+          foodPick = tile.id;
+          render();
+        });
+        return button;
+      }),
+    );
+  }
+
   async function act(action: string): Promise<void> {
     const id = squishyId;
     const map = mapId;
     if (!id || !map || working) return;
+    // Feed pays with the row's pick; plain Treats (and no row) send no itemId, as before.
+    const food =
+      action === FEED_ACTION && foods && foods.picked !== PLAIN_FOOD ? foods.picked : undefined;
     const mine = ticket;
     working = true;
     render();
     try {
       const next = await sendCommand(
         sendDeps,
-        (key) => api.care(map, id, action, key),
+        (key) => api.care(map, id, action, key, food),
         () => mine === ticket,
       );
       if (!next || mine !== ticket) return;
       setReply(next);
-      note.textContent = careDoneLine(next.result);
-      squish('care');
+      // The server's own number decides the big moment, never a client guess.
+      const big = bigFeed(next.result);
+      if (big) yums += 1;
+      note.textContent = careDoneLine(next.result, big);
+      squish('care', big);
     } catch (err) {
       if (mine !== ticket) return;
       note.textContent = messageOf(err);
@@ -393,6 +481,8 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     mapId = null;
     squishyId = null;
     reply = null;
+    foodPick = null;
+    foods = null;
     panel.hidden = true;
     celebrate.hidden = true;
     note.textContent = '';
@@ -404,6 +494,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     map: string,
     pick: (list: CareListResponse) => CareSquishy | undefined,
     quiet: boolean,
+    food: string | null = null,
   ): Promise<void> {
     const mine = (ticket += 1);
     let list: CareListResponse;
@@ -426,6 +517,8 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     const picked = pick(list);
     const chosen = picked ?? (quiet ? undefined : list.squishies[0]);
     if (!chosen && quiet) return;
+    // A different squishy (or a food asked for) starts from that pick, or the best.
+    if (food !== null || chosen?.id !== squishyId) foodPick = food;
     mapId = map;
     squishyId = chosen?.id ?? null;
     setReply(list);
@@ -441,7 +534,20 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   }
 
   return {
-    open: (map, id) => load(map, (list) => list.squishies.find((s) => s.id === id), false),
+    open: (map, id, food) =>
+      load(map, (list) => list.squishies.find((s) => s.id === id), false, food ?? null),
+    // The first squishy this food is extra yummy for (a Frost one for Frosty
+    // Treats), else the first.
+    openWithFood: (map, food) =>
+      load(
+        map,
+        (list) =>
+          list.squishies.find(
+            (s) => bestFood({ [PLAIN_FOOD]: 1, [food]: 1 }, s.element) === food,
+          ) ?? list.squishies[0],
+        false,
+        food,
+      ),
     openForSpecies: (map, speciesId) =>
       load(map, (list) => list.squishies.find((s) => s.speciesId === speciesId), false),
     celebrateNews: (map) =>
@@ -467,6 +573,9 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
         caredToday: squishy?.caredToday ?? null,
         celebrating: !celebrate.hidden,
         squishes,
+        foods: foods?.tiles.map((t) => t.id) ?? [],
+        food: foods?.picked ?? null,
+        yums,
         note: note.textContent,
       };
     },
