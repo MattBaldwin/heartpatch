@@ -192,11 +192,11 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 26 handoff, 2026-10-30):** main `5d9ed79` (#733), migrations unchanged (through 0061). Phase 1 is due Oct 31. Supervisor 26 is `session_01RAEPnHqwSTnXgsppNL6R9B`. Supervisors 1–25 are archived (§8.4).
-  - **Merged under supervisor 26:** #721 (already in at handoff; screens https://claude.ai/artifact/FASniQ2VjsQpUPeHCQ4hYD), #723 (whole-row tile panel with a "more below" fade, compact Me button over the Build sheet; screens https://claude.ai/artifact/RYYL9CaQqKnYKK68TvFpNn), #737 (#621 coast spawn and guardian tables, the last Wild Isle Wave 1 code gap), #733 (the Build sheet's action row pinned, no fade).
-- **Open PRs at handoff:**
+- **State (supervisor 26 handoff, 2026-10-30):** main `6e99c2d` (#724), migrations unchanged (through 0061). Phase 1 is due Oct 31. Supervisor 26 is `session_01RAEPnHqwSTnXgsppNL6R9B`. Supervisors 1–25 are archived (§8.4).
+  - **Merged under supervisor 26:** #721 (already in at handoff; screens https://claude.ai/artifact/FASniQ2VjsQpUPeHCQ4hYD), #723 (whole-row tile panel with a "more below" fade, compact Me button over the Build sheet; screens https://claude.ai/artifact/RYYL9CaQqKnYKK68TvFpNn), #737 (#621 coast spawn and guardian tables, the last Wild Isle Wave 1 code gap), #733 (the Build sheet's action row pinned, no fade), #724 (Wild Isle on for everyone).
+- **Open PRs at handoff:** none. Merged last:
   - **#733 merged** (`5d9ed79`): the Build sheet's Build!/Not now row is pinned to the sheet's foot and the sheet draws no fade. **Next:** a screens-only lane (before `38b6b95`, after `5d9ed79`) on SE and iPhone 15 with the Build sheet open: Build!/Not now whole and unfaded, Me button visible, plus a normal busy tile panel to show #723's fade still works. Then your render-check, then one owner question.
-  - **#724** `Chore: Wild Isle on for everyone (#621 W1-12)` (coordinator-made, branch `chore-wild-isle-on`, head `65d5cf8`): `HP_WILD_ISLE=on` in `infra/compose/.env.prod.example`, DEPLOY.md rows, `changes/621-wild-isle.md`. Reviewer APPROVE on `65d5cf8` (3 rounds, verdict comment on #724). Merge on green. **Then tell the owner** to add `HP_WILD_ISLE=on` to `/opt/heartpatch/.env` on the Lightsail server and restart (the repo file is a template; containers can't SSH). Follow-up: log the Wild Isle switch at boot like the house switch (`apps/server/src/index.ts`).
+  - **#724 merged** (`6e99c2d`): `HP_WILD_ISLE=on` in `infra/compose/.env.prod.example`, DEPLOY.md rows, `changes/621-wild-isle.md`. **The owner was told (2026-10-30 04:20 UTC, push sent)** to add `HP_WILD_ISLE=on` to `/opt/heartpatch/.env` on the Lightsail server and run `docker compose up -d server` (DEPLOY "Changing a setting"); the repo file is only a template and containers can't SSH. Confirm with the owner that it's done. Follow-up: log the Wild Isle switch at boot like the house switch (`apps/server/src/index.ts`).
 - **Owner decisions queued:** none open.
 - **Queue (start in this order as lanes free up; one lane at a time):**
   1. **#733 screens lane** (above).
