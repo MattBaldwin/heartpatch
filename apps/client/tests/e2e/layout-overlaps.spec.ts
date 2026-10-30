@@ -123,16 +123,17 @@ async function expectBuildRow(page: Page, screenHeight: number): Promise<void> {
   const panel = page.getByTestId('tile-panel');
   await checkBuildRow(page, screenHeight);
   // A sheet taller than the panel (a long note, big text): the row stays pinned.
+  // A style, not a node: the sheet redraws its children on any change.
   await page.evaluate(() => {
-    const tall = document.createElement('div');
-    tall.dataset['testid'] = 'build-tall';
-    tall.style.height = '900px';
-    document.querySelector('.build-actions')!.before(tall);
+    const tall = document.createElement('style');
+    tall.id = 'build-tall';
+    tall.textContent = '.build-detail { min-height: 900px; }';
+    document.head.append(tall);
   });
   await settled(page);
   expect(await panel.evaluate((p) => p.scrollHeight > p.clientHeight + 100)).toBe(true);
   await checkBuildRow(page, screenHeight);
-  await page.evaluate(() => document.querySelector('[data-testid="build-tall"]')?.remove());
+  await page.evaluate(() => document.getElementById('build-tall')?.remove());
 }
 
 async function checkBuildRow(page: Page, screenHeight: number): Promise<void> {
