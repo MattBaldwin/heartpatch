@@ -61,7 +61,7 @@ export const RESOURCES: Resource[] = [
     id: 'ice',
     name: 'Ice',
     description:
-      'Cold and sparkly chunks from the mountains, for building an Ice Wall. They never melt in your bag!',
+      'Cold and sparkly chunks from the mountains, for an Ice Wall or Frosty Treats. They never melt in your bag!',
     kind: 'gathered',
     gather: { seconds: 30 * 60, quantity: 2 }, // TUNE: like Emberwood
   },
@@ -93,6 +93,14 @@ export const RESOURCES: Resource[] = [
     id: 'pies',
     name: 'Pies',
     description: 'Warm, flaky pies of Flour, Fish and Salt. Squishies go wild for these!',
+    kind: 'crafted',
+  },
+  // Made from Ice and Treats (#735, `mix-frosty-treats`): a feed Frost
+  // squishies love as much as Pies (`CARE_RULES.foods`).
+  {
+    id: 'frosty-treats',
+    name: 'Frosty Treats',
+    description: 'Crunchy ice treats. Frost squishies love these extra!',
     kind: 'crafted',
   },
   {

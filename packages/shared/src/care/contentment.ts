@@ -1,5 +1,6 @@
 import type { CareAction } from '../schemas/data/care-actions.js';
-import type { CareRules, MoodId } from '../schemas/data/care.js';
+import { foodPercentFor, type CareRules, type MoodId } from '../schemas/data/care.js';
+import type { ElementId } from '../schemas/data/elements.js';
 
 // Contentment (design doc §7): stored as a checkpoint, the value at one
 // moment plus when that was, and worked out on read from the time since
@@ -156,21 +157,24 @@ export interface FedWith {
 
 /**
  * A care action paid with `itemId` instead of its own food (#621 W1-8b: Pies
- * for a feed): its contentment at the food's `CARE_RULES.foods` percent,
- * floored, and its cost in that food. Null when `itemId` isn't a food or the
- * action isn't paid with exactly one food. Diminishing returns, the debounce
- * and the coin cap then apply as usual (`careGain` on the result).
+ * for a feed): its contentment at the food's `CARE_RULES.foods` percent for a
+ * squishy of `element` (#735: Frosty Treats love Frost), floored, and its
+ * cost in that food. Null when `itemId` isn't a food or the action isn't paid
+ * with exactly one food. Diminishing returns, the debounce and the coin cap
+ * then apply as usual (`careGain` on the result).
  */
 export function fedWith(
   action: Pick<CareAction, 'contentment' | 'cost'>,
   itemId: string,
   rules: Pick<CareRules, 'foods'>,
+  element?: ElementId,
 ): FedWith | null {
   const foods = rules.foods ?? {};
-  const percent = foods[itemId];
+  const rule = foods[itemId];
   const paid = Object.entries(action.cost ?? {});
   const only = paid.length === 1 ? paid[0] : undefined;
-  if (percent === undefined || only === undefined || foods[only[0]] === undefined) return null;
+  if (rule === undefined || only === undefined || foods[only[0]] === undefined) return null;
+  const percent = foodPercentFor(rule, element);
   return {
     contentment: Math.floor((action.contentment * percent) / 100),
     cost: { [itemId]: only[1] },

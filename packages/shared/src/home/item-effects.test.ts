@@ -125,6 +125,8 @@ describe('itemEffects (#241)', () => {
 
   it('says Pies feed a squishy, like Treats (#621 W1-8b)', () => {
     expect(itemEffects('pies')).toEqual([{ kind: 'care', actions: ['feed'] }]);
+    expect(itemEffects('frosty-treats')).toEqual([{ kind: 'care', actions: ['feed'] }]);
+    expect(itemEffects('ice')).toContainEqual({ kind: 'recipes', recipes: ['mix-frosty-treats'] });
     expect(itemEffects('treats')).toContainEqual({ kind: 'care', actions: ['feed'] });
   });
 

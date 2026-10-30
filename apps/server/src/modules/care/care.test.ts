@@ -480,6 +480,43 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
       expect(after.items['pies']).toBe(2);
     });
 
+    it('feeds Frosty Treats at 150 % to a Frost squishy and 100 % to any other (#735)', async () => {
+      expect(SECRET_BASE.element).not.toBe('frost');
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const frost = await squishy(mapId, kid, { element: 'frost' });
+      const other = await squishy(mapId, kid);
+      const feed = (id: string, itemId: string) =>
+        call(server, 'POST', `/maps/${mapId}/squishies/${id}/care`, kid, {
+          action: 'feed',
+          itemId,
+        });
+
+      // Short of them: CONFLICT, and nothing changes.
+      await give(mapId, kid, { treats: 5 });
+      const short = await feed(frost, 'frosty-treats');
+      expect(short.statusCode).toBe(409);
+      expect(errorOf(short).message).toContain('Frosty Treats');
+      expect(await one(server, kid, mapId, frost)).toMatchObject({ contentment: 0, caredToday: 0 });
+
+      await give(mapId, kid, { 'frosty-treats': 3 });
+      const cold = await feed(frost, 'frosty-treats');
+      expect(cold.statusCode, cold.body).toBe(200);
+      const warm = await feed(other, 'frosty-treats');
+      expect(warm.statusCode, warm.body).toBe(200);
+      const [c, w] = [cold, warm].map((r) => CareResponseSchema.parse(r.json()));
+      expect(c!.result).toMatchObject({ contentmentGained: 30, full: true, coins: 1 });
+      expect(w!.result).toMatchObject({ contentmentGained: 20, full: true, coins: 1 });
+      expect(w!.items).toMatchObject({ 'frosty-treats': 1, treats: 5 });
+
+      const ledger = await db.query.resourceLedger.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.reason, 'care')),
+      });
+      expect(ledger).toHaveLength(2);
+      expect(ledger.every((l) => l.itemId === 'frosty-treats' && l.delta === -1)).toBe(true);
+    });
+
     it("won't take a food it can't eat, or a food for care that isn't paid in food", async () => {
       const server = await start();
       const kid = await player();

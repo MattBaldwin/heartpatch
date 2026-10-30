@@ -123,7 +123,7 @@ export interface CareService {
   list: (user: PublicUser, mapId: string) => Promise<CareListResponse>;
   /**
    * One care action (feed, pet or play) on one of my squishies. `itemId`
-   * (#621 W1-8b) pays a feed with another food, Pies; left out, its own cost.
+   * (#621 W1-8b) pays a feed with another food (Pies, Frosty Treats); left out, its own cost.
    */
   care: (
     user: PublicUser,
@@ -491,15 +491,19 @@ export function createCareService(options: CareServiceOptions): CareService {
       // A chosen food changes only how much it gives and what it costs; the
       // debounce, falloff and coin cap below are the same (#376). The bag
       // decides who can pay, not the patch type.
-      const food = itemId === undefined ? null : fedWith(action, itemId, CARE_RULES);
-      if (itemId !== undefined && !food) throw new AppError('VALIDATION_FAILED', MESSAGES.notFood);
-      const fed = food ? { ...action, contentment: food.contentment, cost: food.cost } : action;
+      if (itemId !== undefined && !fedWith(action, itemId, CARE_RULES)) {
+        throw new AppError('VALIDATION_FAILED', MESSAGES.notFood);
+      }
       const at = now();
       const reply = await store.transaction(async (repo, tx) => {
         await requireMember(tx, user, mapId);
         // The account first: the daily coin cap spans every squishy and patch.
         await createMapsRepo(tx).lockUser(user.id);
         const row = await lockMine(repo, user, mapId, squishyId);
+        // How much a food gives can hang on the squishy's element (#735:
+        // Frosty Treats for a Frost one).
+        const food = itemId === undefined ? null : fedWith(action, itemId, CARE_RULES, row.element);
+        const fed = food ? { ...action, contentment: food.contentment, cost: food.cost } : action;
 
         // A short debounce, so one stroke or a double tap counts once.
         const last = (await repo.lastCare([row.id], debounceSince(at))).get(row.id)?.get(action.id);
