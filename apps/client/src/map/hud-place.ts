@@ -51,7 +51,7 @@ function drawn(selector: string): DOMRect | null {
 export function watchHudPlace(hud: HTMLElement): void {
   const onSide = window.matchMedia(LANDSCAPE_PHONE_QUERY);
   const watched = new Set<Element>();
-  const sizes = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => schedule());
+  const sizes = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule);
   let frame = 0;
 
   const place = (): void => {
