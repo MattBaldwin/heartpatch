@@ -133,15 +133,14 @@ describe('buildings guide words (#715)', () => {
       'On a river tile',
       'Next to your land',
     ]);
-    expect(valueLines(entry('waystation').value)[0]).toBe(
+    expect(valueLines([{ kind: 'travel', role: 'waystation', reach: 3 }])[0]).toBe(
       'Keeps land up to 3 tiles away joined to home',
     );
   });
 
-  it('labels the Coming later shelf: season, or not in the game yet', () => {
+  it('labels the Coming later shelf by season', () => {
     expect(gateLabel(entry('pumpkin-barn', [], 'cozy'))).toBe('Back next Halloween');
     expect(gateLabel(entry('pumpkin-barn', ['halloween'], 'cozy'))).toBeNull();
-    expect(gateLabel(entry('waystation'))).toBe('Coming soon!');
   });
 
   it('fits only when the Build sheet offers the card unblocked', () => {
@@ -152,10 +151,6 @@ describe('buildings guide words (#715)', () => {
       reason: 'Needs the river 🌊',
     });
     expect(fitHere(mill, [])).toEqual({ kind: 'no', reason: 'Needs river next door' });
-    expect(fitHere(entry('waystation'), [])).toEqual({
-      kind: 'later',
-      label: 'Coming soon!',
-    });
   });
 
   it('a habitat is built at home, never from a tile sheet', () => {
@@ -174,8 +169,7 @@ describe('buildings guide words (#715)', () => {
   it('shelves by fit, so an offered seasonal card leaves Coming later and counts as fitting', () => {
     const barn = entry('pumpkin-barn', [], 'cozy');
     const den = entry('ember-den');
-    const way = entry('waystation');
-    const entries = [barn, den, way];
+    const entries = [barn, den];
     const fitsOf = (here: readonly BuildCard[]) =>
       new Map(entries.map((e) => [e.id, fitHere(e, here)]));
     const keys = (shelves: readonly { key: string; items: readonly { id: string }[] }[]) =>
@@ -184,13 +178,13 @@ describe('buildings guide words (#715)', () => {
     // Phone date has Halloween over and the sheet doesn't offer it: Coming later.
     const off = guideShelves(entries, fitsOf([]), 'all');
     expect(off.fitting).toBe(0);
-    expect(keys(off.shelves).at(-1)).toEqual(['later', ['pumpkin-barn', 'waystation']]);
+    expect(keys(off.shelves).at(-1)).toEqual(['later', ['pumpkin-barn']]);
 
     // The server's sheet offers it unblocked: off Coming later, into Fits.
     const on = fitsOf([card('pumpkin-barn')]);
     const all = guideShelves(entries, on, 'all');
     expect(all.fitting).toBe(1);
-    expect(keys(all.shelves).at(-1)).toEqual(['later', ['waystation']]);
+    expect(all.shelves.map((s) => s.key)).not.toContain('later');
     expect(all.shelves.find((s) => s.items.includes(barn))).toMatchObject({ fits: 1 });
     expect(keys(guideShelves(entries, on, 'fits').shelves)).toEqual([
       [barn.group, ['pumpkin-barn']],

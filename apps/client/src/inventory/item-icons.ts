@@ -17,9 +17,6 @@ const ICONS: Readonly<Record<string, string>> = {
   pumpkins: '🎃',
   'witch-dust': '🔮',
   'magic-fallen-leaves': '🍂',
-  'turkey-feathers': '🪶',
-  presents: '🎁',
-  fireworks: '🎆',
   'heart-charm': '💗',
   'jack-o-lantern-hearthfire': '🏮',
   // Battle potions (#214).
