@@ -107,6 +107,19 @@ export const SPAWN_TABLES: SpawnTable[] = [
     ],
   },
 
+  // Wild Isle (#621): the coast, a shore of tide pools. Water kinds that
+  // already live by the lake, on the same weights. TUNE: every weight.
+  {
+    id: 'coast',
+    terrains: ['coast'],
+    entries: [
+      { species: 'puddlepuff', weight: 6 },
+      { species: 'bubbletub', weight: 4 },
+      { species: 'shellnap', weight: 3 },
+      { species: 'quackle', weight: 2 },
+    ],
+  },
+
   // Wave 1 (#382): biome-tied kinds, every day of the year, on top of the
   // launch tables above (weights add up across matching tables). Common 4,
   // uncommon 2, rare 1. TUNE: every weight.

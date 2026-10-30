@@ -33,10 +33,8 @@ describe('guardian rules', () => {
       for (const entry of table.entries) expect(species).toContain(entry.species);
     }
     // Trading posts (#269) have no guardians: they can never be claimed. Nor
-    // water (Wild Isle, #621); the coast's tables come with the Wild Isle lanes.
-    const guarded = GAME_DATA.terrains.filter(
-      (t) => t.id !== TRADING_POST_TERRAIN && !isWater(t) && t.id !== 'coast',
-    );
+    // water (Wild Isle, #621).
+    const guarded = GAME_DATA.terrains.filter((t) => t.id !== TRADING_POST_TERRAIN && !isWater(t));
     for (const terrain of guarded) {
       // Year-round: a terrain is guarded outside every season too.
       expect(GUARDIAN_RULES.tables.some((t) => !t.season && t.terrains.includes(terrain.id))).toBe(

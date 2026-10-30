@@ -68,6 +68,15 @@ export const GUARDIAN_RULES: GuardianRules = {
       ],
     },
     {
+      id: 'coast-guardians', // Wild Isle (#621)
+      terrains: ['coast'],
+      entries: [
+        { species: 'puddlepuff', weight: 3 },
+        { species: 'bubbletub', weight: 3 },
+        { species: 'snoozicle', weight: 2 },
+      ],
+    },
+    {
       id: 'gap-guardians',
       terrains: ['junipers-gap'],
       entries: [
