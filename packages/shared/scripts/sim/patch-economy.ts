@@ -530,7 +530,7 @@ export function whatPays(run: PatchEconomyRun, config: PatchEconomyConfig): What
   const buyable = gate.shop.reduce((a, item) => a + item.price * item.perWeek, 0);
   const balance = last?.balance ?? 0;
   const canSpend = Math.min(buyable, balance);
-  const percent = earned === 0 ? 0 : Math.floor((canSpend * 100) / earned);
+  const percent = earned === 0 ? 0 : Math.round((canSpend * 100) / earned);
   return {
     day: last?.day ?? 0,
     balance,

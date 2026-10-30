@@ -69,7 +69,7 @@ const seconds = (performance.now() - started) / 1000;
 
 mkdirSync(outDir, { recursive: true });
 const reportPath = resolve(outDir, 'progression-report.md');
-const facts = firstsFacts(data);
+const facts = firstsFacts(data.species);
 writeFileSync(
   reportPath,
   renderProgression(runs, PROGRESSION_CONFIG, { seconds, odds, journeys, firsts: facts }),

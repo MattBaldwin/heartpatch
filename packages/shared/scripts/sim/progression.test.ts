@@ -155,7 +155,7 @@ describe('the progression report', () => {
     const report = renderProgression(
       runs,
       { ...SMALL, seats: [4] },
-      { seconds: 1, firsts: firstsFacts(data) },
+      { seconds: 1, firsts: firstsFacts(data.species) },
     );
     expect(report).toContain('## Milestones by day');
     expect(report).toContain('## now: 4-seat map');

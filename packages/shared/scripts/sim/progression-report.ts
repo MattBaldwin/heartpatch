@@ -1,7 +1,11 @@
 import { addXp, grantedXp, xpForLevel } from '../../src/care/growth.js';
 import { BATTLE_RULES } from '../../src/data/battle.js';
 import { GUARDIAN_RULES } from '../../src/data/server/guardian-rules.js';
-import type { ProgressionConfig, ProgressionRules } from './progression-config.js';
+import {
+  CURRENT_RULES,
+  type ProgressionConfig,
+  type ProgressionRules,
+} from './progression-config.js';
 import {
   BIG_AND_BOUNCY,
   FIRSTS,
@@ -323,12 +327,12 @@ function renderFirsts(
     ];
   });
   const gated = runs.filter(
-    (r) => r.profile.id === gate.kid && r.rules.label === 'now' && r.seats === config.seats[0],
+    (r) => r.profile.id === gate.kid && r.rules === CURRENT_RULES && r.seats === config.seats[0],
   );
   return [
     '## Firsts (#736)',
     '',
-    `The day each new thing first happens to kid 0. Gate: ${formatFirstsGate(
+    `The day each new thing first happens to kid 0. "Rare befriended" counts only a befriend that joins the team (a late bound); "map full" is the shared map's last neutral tile. Gate: ${formatFirstsGate(
       firstsGate(firstsOf(gated[0] ? lead(gated[0]).days : [], facts), gate),
       gate,
     )} (shipped rules, ${String(config.seats[0])}-seat map).`,

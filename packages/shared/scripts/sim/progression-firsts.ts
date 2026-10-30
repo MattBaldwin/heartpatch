@@ -1,4 +1,6 @@
 import { RaritySchema, type Rarity } from '../../src/schemas/data/common.js';
+import type { Species } from '../../src/schemas/data/species.js';
+import { evolutionStages } from '../../src/trading/value.js';
 import type { ProgressionConfig } from './progression-config.js';
 import type { DayRecord } from './progression.js';
 
@@ -7,36 +9,41 @@ import type { DayRecord } from './progression.js';
  * report asks "what new thing happens on day 10?" and not only "does the kid
  * keep up?". The boredom gate holds the gaps between them to a few days in
  * the first month. Only firsts the progression model has state for get a
- * day; the rest say "not modelled" until a model plays them.
+ * day; the rest say "not modelled" until a model plays them. "Rare
+ * befriended" counts a befriend only when it joins the team (the model's
+ * befriend), so it's a late bound; "map full" is the shared map's last
+ * neutral tile taken.
  */
 
 /** The secret milestone "Big and Bouncy" (a squishy at level 20). */
 export const BIG_AND_BOUNCY = 20;
-/** Evolution steps from a base form to a grown-up (baby → kid → teen → grown-up). */
-const GROWN_UP_STAGE = 3;
+/**
+ * A grown-up's stage (`evolutionStages`: 1 = baby, 2 = kid, 3 = teen, 4 =
+ * grown-up). Every line in today's data has a kid form; a line that skipped
+ * it would reach its grown-up at stage 3 and not count here.
+ */
+const GROWN_UP_STAGE = 4;
 
-/** What the firsts need to know about species: rarity and growth stage (0 = a base form). */
+/** What the firsts need to know about species: rarity and evolution stage (`evolutionStages`). */
 export interface FirstsFacts {
   readonly rarity: (speciesId: string) => Rarity | undefined;
   readonly stage: (speciesId: string) => number;
 }
 
-export function firstsFacts(data: {
-  readonly species: ReadonlyMap<string, { readonly rarity: Rarity }>;
-  readonly evolutions: readonly { readonly from: string; readonly into: string }[];
-}): FirstsFacts {
-  const parent = new Map(data.evolutions.map((e) => [e.into, e.from]));
-  const stage = (id: string): number => {
-    let steps = 0;
-    for (let at = parent.get(id); at !== undefined && steps < 10; at = parent.get(at)) steps += 1;
-    return steps;
+export function firstsFacts(species: ReadonlyMap<string, Species>): FirstsFacts {
+  const stages = evolutionStages([...species.values()]);
+  return {
+    rarity: (id) => species.get(id)?.rarity,
+    stage: (id) => stages.get(id) ?? 1,
   };
-  return { rarity: (id) => data.species.get(id)?.rarity, stage };
 }
 
-const RANKS: readonly Rarity[] = RaritySchema.options;
+/** The rarity ladder, lowest first; `secret` is off it (as `rareFindTier`), so it counts as neither rare nor epic. */
+const LADDER: readonly Rarity[] = RaritySchema.options.filter((r) => r !== 'secret');
 const atLeast = (rarity: Rarity | undefined, floor: Rarity) =>
-  rarity !== undefined && RANKS.indexOf(rarity) >= RANKS.indexOf(floor);
+  rarity !== undefined &&
+  LADDER.includes(rarity) &&
+  LADDER.indexOf(rarity) >= LADDER.indexOf(floor);
 
 type Test = (day: DayRecord, facts: FirstsFacts) => boolean;
 
@@ -74,7 +81,7 @@ export const FIRSTS: readonly FirstDef[] = [
     label: 'grown-up',
     test: (d, f) => d.evolved.some((e) => f.stage(e.into) >= GROWN_UP_STAGE),
   },
-  { id: 'land-full', label: 'land full', test: (d) => d.neutralLeft === 0 },
+  { id: 'map-full', label: 'map full', test: (d) => d.neutralLeft === 0 },
 ];
 
 /** A first's day; null: never within the run; 'not modelled': the model can't tell. */

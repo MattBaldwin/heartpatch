@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GAME_DATA } from '../../src/data/index.js';
 import type { Rarity } from '../../src/schemas/data/common.js';
 import {
   FIRSTS,
@@ -34,37 +35,34 @@ const day = (n: number, over: Partial<DayRecord> = {}): DayRecord => ({
   ...over,
 });
 
-const RARITY: Record<string, Rarity> = {
-  bun: 'common',
-  'bun-kid': 'common',
-  glim: 'rare',
-  'glim-kid': 'rare',
-  'glim-teen': 'rare',
-  'glim-grown': 'epic',
-  star: 'epic',
-  'star-kid': 'epic',
+/** A hand-made line: a teen is a rarity step up, as in the data (design §8). */
+const SPECIES: Record<string, { rarity: Rarity; stage: number }> = {
+  bun: { rarity: 'common', stage: 1 },
+  'bun-kid': { rarity: 'common', stage: 2 },
+  glim: { rarity: 'rare', stage: 1 },
+  'glim-kid': { rarity: 'rare', stage: 2 },
+  'glim-teen': { rarity: 'epic', stage: 3 },
+  'glim-grown': { rarity: 'legendary', stage: 4 },
+  heartlet: { rarity: 'secret', stage: 1 },
+  'heartlet-kid': { rarity: 'secret', stage: 2 },
 };
-const facts: FirstsFacts = firstsFacts({
-  species: new Map(Object.entries(RARITY).map(([id, rarity]) => [id, { rarity }])),
-  evolutions: [
-    { from: 'bun', into: 'bun-kid', level: 8 },
-    { from: 'glim', into: 'glim-kid', level: 12 },
-    { from: 'glim-kid', into: 'glim-teen', level: 20 },
-    { from: 'glim-teen', into: 'glim-grown', level: 32 },
-    { from: 'star', into: 'star-kid', level: 15 },
-  ],
-});
+const facts: FirstsFacts = {
+  rarity: (id) => SPECIES[id]?.rarity,
+  stage: (id) => SPECIES[id]?.stage ?? 1,
+};
 const dayOf = (firsts: readonly First[], id: string) => firsts.find((f) => f.id === id)?.day;
 const gate = { kid: 'casual', windowDays: 30, maxGapDays: 5 };
 const firsts = (days: readonly (number | null)[]): First[] =>
   days.map((d, i) => ({ id: String(i), label: String(i), day: d }));
 
 describe('firstsFacts', () => {
-  it('counts growth stages from the base form', () => {
-    expect(facts.stage('glim')).toBe(0);
-    expect(facts.stage('glim-teen')).toBe(2);
-    expect(facts.stage('glim-grown')).toBe(3);
-    expect(facts.rarity('star')).toBe('epic');
+  it('reads rarity and evolution stage from the species data', () => {
+    const real = firstsFacts(new Map(GAME_DATA.species.map((sp) => [sp.id, sp])));
+    const base = GAME_DATA.species.find((sp) => sp.id === 'emberbun')!;
+    expect(real.stage(base.id)).toBe(1);
+    expect(real.rarity(base.id)).toBe(base.rarity);
+    const into = base.evolutions[0]?.into;
+    expect(into && real.stage(into)).toBe(2);
   });
 });
 
@@ -73,12 +71,15 @@ describe('firstsOf (#736)', () => {
     const days = [
       day(1),
       day(2, { evolved: [{ from: 'bun', into: 'bun-kid' }] }),
-      day(3, { befriended: ['bun'] }),
+      day(3, {
+        befriended: ['bun', 'heartlet'],
+        evolved: [{ from: 'heartlet', into: 'heartlet-kid' }],
+      }),
       day(4, { befriended: ['glim'], levels: [20, 3, 3] }),
       day(5, { gapWins: 1 }),
       day(6, { evolved: [{ from: 'glim', into: 'glim-kid' }] }),
-      day(7, { evolved: [{ from: 'glim-teen', into: 'glim-grown' }] }),
-      day(8, { evolved: [{ from: 'star', into: 'star-kid' }], neutralLeft: 0 }),
+      day(7, { evolved: [{ from: 'glim-kid', into: 'glim-teen' }] }),
+      day(8, { evolved: [{ from: 'glim-teen', into: 'glim-grown' }], neutralLeft: 0 }),
     ];
     const found = firstsOf(days, facts);
     expect(found.map((f) => f.id)).toEqual(FIRSTS.map((f) => f.id));
@@ -90,10 +91,10 @@ describe('firstsOf (#736)', () => {
       'gap-win': 5,
       'factory-l2': 'not modelled',
       'journey-5': 'not modelled',
-      // A rare teen growing up isn't an epic evolving; the epic star is.
+      // A secret (off the rarity ladder) is neither rare nor epic; the epic teen growing up is.
       'epic-evolved': 8,
-      'grown-up': 7,
-      'land-full': 8,
+      'grown-up': 8,
+      'map-full': 8,
     });
   });
 
