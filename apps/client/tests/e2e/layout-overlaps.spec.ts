@@ -184,7 +184,8 @@ async function checkBuildRow(page: Page, screenHeight: number): Promise<void> {
 test('small phones and iPads: nothing sits on anything (#621 render-checks)', async ({
   browser,
 }) => {
-  test.setTimeout(300_000); // seven screens; CI renders in software
+  // Seven screens, then each phone on its side with its Build sheet; CI renders in software.
+  test.setTimeout(480_000);
   const page = await newPlayer(browser, uniqueName('fit'));
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
