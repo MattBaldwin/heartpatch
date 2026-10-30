@@ -505,6 +505,60 @@ export function upkeepPercent(run: PatchEconomyRun, fromDay: number): number {
   return earned === 0 ? 0 : Math.round((paid * 100) / earned);
 }
 
+/** "What pays today" (#736): a run's last week of Heart Coins against what they can buy. */
+export interface WhatPays {
+  readonly day: number;
+  readonly balance: number;
+  /** Earned (play and selling) and paid in upkeep over the week. */
+  readonly earned: number;
+  readonly upkeep: number;
+  /** Everything 💛 buys that week other than upkeep, at its weekly caps. */
+  readonly buyable: number;
+  /** What the kid can spend on it: the buyable total, up to their balance. */
+  readonly canSpend: number;
+  /** `canSpend` as a whole percent of `earned`. */
+  readonly percent: number;
+  readonly pass: boolean;
+}
+
+export function whatPays(run: PatchEconomyRun, config: PatchEconomyConfig): WhatPays {
+  const gate = config.whatPays;
+  const week = run.days.slice(-gate.weekDays);
+  const last = run.days.at(-1);
+  const earned = week.reduce((a, d) => a + d.played + d.sold, 0);
+  const upkeep = week.reduce((a, d) => a + d.upkeep, 0);
+  const buyable = gate.shop.reduce((a, item) => a + item.price * item.perWeek, 0);
+  const balance = last?.balance ?? 0;
+  const canSpend = Math.min(buyable, balance);
+  const percent = earned === 0 ? 0 : Math.floor((canSpend * 100) / earned);
+  return {
+    day: last?.day ?? 0,
+    balance,
+    earned,
+    upkeep,
+    buyable,
+    canSpend,
+    percent,
+    pass: percent >= gate.minSpendPercent,
+  };
+}
+
+/** The "what pays today" line, always marked soft (#729). */
+export function formatWhatPays(
+  result: WhatPays,
+  run: PatchEconomyRun,
+  config: PatchEconomyConfig,
+): string {
+  // TODO(#729): make this a hard gate (fail the script and CI) once #729 merges.
+  const { day, balance, earned, upkeep, buyable, canSpend, percent, pass } = result;
+  return (
+    `what pays today (${String(run.seats)} seats ${run.kid}): ${String(balance)} 💛 on day ${String(day)}; ` +
+    `buyable besides upkeep in days ${String(day - config.whatPays.weekDays + 1)}–${String(day)}: ${String(buyable)} 💛; ` +
+    `earned ${String(earned)} 💛, upkeep ${String(upkeep)} 💛; can spend ${String(canSpend)} 💛 (${String(percent)} % of earned). ` +
+    `Gate (soft until #729; does not fail the run): spend at least ${String(config.whatPays.minSpendPercent)} % of earnings on something other than upkeep: ${pass ? 'PASS' : 'FAIL'}`
+  );
+}
+
 /**
  * Mornings any building paused on while the kid plays every day: not on an
  * away day, nor the morning of the first day back (from `fromDay`).
@@ -644,6 +698,12 @@ export function renderPatchEconomy(
         `| ${String(seats)} | ${String(t.extraItems)} | ${String(t.extraWorth)} | ${String(t.upkeep)} |`,
       ];
     }),
+    '',
+    '## What pays today (#736)',
+    '',
+    ...daily
+      .filter((r) => r.kid === config.whatPays.kid && r.warehouse)
+      .map((r) => `- ${formatWhatPays(whatPays(r, config), r, config)}`),
     '',
     '## Not modelled',
     '',

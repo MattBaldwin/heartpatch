@@ -75,6 +75,8 @@ interface Kid {
   readonly slot: number;
   /** The Partner first, then the teammates (the team picker's default order). */
   readonly team: Member[];
+  /** Evolutions on the team today, in order (the "firsts" report). */
+  readonly evolved: { from: string; into: string }[];
 }
 
 /** How one kid stands at the end of a day. */
@@ -100,6 +102,12 @@ export interface DayRecord {
   readonly wildBattles: number;
   /** XP the Partner got today, after care × habitat. */
   readonly partnerXp: number;
+  /** Every evolution on the team today (training, exploring and battles), in order. */
+  readonly evolved: readonly { readonly from: string; readonly into: string }[];
+  /** Species befriended today that joined the team. */
+  readonly befriended: readonly string[];
+  /** Juniper's Gap tiles won today. */
+  readonly gapWins: number;
 }
 
 export interface KidRun {
@@ -206,17 +214,24 @@ function grant(
     if (won) member.winsToday += 1;
     const gained = grantedXp(base, kid.profile.xpPercent);
     if (member === kid.team[0]) partnerXp += gained;
-    grow(data, member, rules, gained);
+    grow(data, kid, member, rules, gained);
   }
   return partnerXp;
 }
 
 /** Adds XP to one squishy: levels from the curve, then any evolutions (`applyXp`). */
-function grow(data: ModelData, member: Member, rules: ProgressionRules, gained: number): void {
+function grow(
+  data: ModelData,
+  kid: Kid,
+  member: Member,
+  rules: ProgressionRules,
+  gained: number,
+): void {
   const next = addXp(member, gained, rules.growth);
   member.level = next.level;
   member.xp = next.xp;
   for (let step = evolutionAt(member.speciesId, member.level, data.evolutions); step;) {
+    kid.evolved.push({ from: member.speciesId, into: step.into });
     member.speciesId = step.into;
     step = evolutionAt(member.speciesId, member.level, data.evolutions);
   }
@@ -285,6 +300,7 @@ export function runProgression(
         return { id: `friend-${String(i + 1)}`, speciesId, level, xp: 0, winsToday: 0 };
       }),
     ],
+    evolved: [],
   }));
   // Owner by tile: a kid's slot, or null. Empty seats' home rings can never be taken.
   const owner = new Map<HexKey, number | null>();
@@ -311,12 +327,15 @@ export function runProgression(
     const date = dateOf(config, day);
     const guardianWindow = spawnWindowAt({ date, hour: 12 }, GUARDIAN_RULES.windowHours);
     const odds = kids.map((kid) => estimateOdds(data, kid, config, guardianWindow, day));
-    for (const kid of kids) for (const member of kid.team) member.winsToday = 0;
+    for (const kid of kids) {
+      for (const member of kid.team) member.winsToday = 0;
+      kid.evolved.length = 0;
+    }
     // Overnight at the Training Grounds (plain XP: no care multiplier, no falloff).
     if (rules.training) {
       for (const kid of kids) {
         for (const member of kid.team.slice(0, rules.training.slots)) {
-          grow(data, member, rules, rules.training.xpPerDay);
+          grow(data, kid, member, rules, rules.training.xpPerDay);
         }
       }
     }
@@ -330,11 +349,12 @@ export function runProgression(
         const now = Math.min(perDay, spots - (searched[k] ?? 0));
         searched[k] = (searched[k] ?? 0) + now;
         const xp = now * (rules.explore?.xpPerSquishy ?? 0);
-        if (xp > 0) for (const member of kid.team) grow(data, member, rules, xp);
+        if (xp > 0) for (const member of kid.team) grow(data, kid, member, rules, xp);
       });
     }
     const tileBattles = kids.map(() => 0);
     const partnerXp = kids.map(() => 0);
+    const gapWins = kids.map(() => 0);
     const triedToday = new Set<HexKey>();
     const doneWithTiles = kids.map(() => false);
 
@@ -373,7 +393,10 @@ export function runProgression(
         const { won, xp } = play(data, kid, config, opponent, seed);
         partnerXp[k] = (partnerXp[k] ?? 0) + grant(data, kid, rules, xp, won);
         tileBattles[k] = (tileBattles[k] ?? 0) + 1;
-        if (won) owner.set(hexKey(t), k);
+        if (won) {
+          owner.set(hexKey(t), k);
+          if (t.terrain === GAP_TERRAIN) gapWins[k] = (gapWins[k] ?? 0) + 1;
+        }
       });
     }
 
@@ -388,7 +411,7 @@ export function runProgression(
       };
       const land = tiles.filter((t) => owner.get(hexKey(t)) === k);
       const wild = profile.battlesPerDay - (tileBattles[k] ?? 0);
-      let befriended = 0;
+      const befriended: string[] = [];
       for (let i = 0; i < wild; i++) {
         const hour = cycle(WILD_HOURS, i);
         const window = spawnWindowAt({ date, hour }, rules.spawn.windowHours);
@@ -410,7 +433,7 @@ export function runProgression(
         const seed = deriveSeed(config.rootSeed, 'wild-battle', profile.id, k, day, i);
         const { won, xp } = play(data, kid, config, opponent, seed);
         partnerXp[k] = (partnerXp[k] ?? 0) + grant(data, kid, rules, xp, won);
-        if (won && befriended < profile.befriendsPerDay) {
+        if (won && befriended.length < profile.befriendsPerDay) {
           const level = befriendedLevel(
             spawn.speciesId,
             spawn.level,
@@ -424,7 +447,7 @@ export function runProgression(
               level,
             })
           ) {
-            befriended += 1;
+            befriended.push(spawn.speciesId);
           }
         }
       }
@@ -443,6 +466,9 @@ export function runProgression(
         tileBattles: tileBattles[k] ?? 0,
         wildBattles: wild,
         partnerXp: partnerXp[k] ?? 0,
+        evolved: [...kid.evolved],
+        befriended,
+        gapWins: gapWins[k] ?? 0,
       });
     });
   }
@@ -493,6 +519,7 @@ export function wildOdds(
           winsToday: 0,
         })),
       ],
+      evolved: [],
     };
     return {
       team: `${partner} ${String(level)} + friends at ${String(friends)}`,
@@ -550,6 +577,7 @@ export function journeyOdds(
           xp: 0,
           winsToday: 0,
         })),
+        evolved: [],
       };
       return [
         {

@@ -52,6 +52,22 @@ export interface PatchEconomyConfig {
    * the right land, so this checks the build cost against early income only.
    */
   readonly firstHutByDay: Readonly<Record<string, number>>;
+  /**
+   * "What pays today" (#736): the `kid`'s balance on the last day against
+   * everything 💛 buys in the last `weekDays` days other than upkeep (`shop`:
+   * a price and how many a week). Gate: they can spend at least
+   * `minSpendPercent` of that week's earnings on it.
+   */
+  readonly whatPays: {
+    readonly kid: string;
+    readonly weekDays: number;
+    readonly minSpendPercent: number;
+    readonly shop: readonly {
+      readonly id: string;
+      readonly price: number;
+      readonly perWeek: number;
+    }[];
+  };
 }
 
 const fuel = (id: string) => {
@@ -94,4 +110,12 @@ export const PATCH_ECONOMY_CONFIG: PatchEconomyConfig = {
   casualUpkeepMaxPercent: 60,
   engagedUpkeepMaxPercent: 70, // TUNE: a third of a full day's earning is slack
   firstHutByDay: { casual: 10, engaged: 5 },
+  whatPays: {
+    kid: 'casual',
+    weekDays: 7,
+    minSpendPercent: 50, // TUNE: #736, half of what a casual kid earns
+    // TODO(#729): the Post shop's items and weekly caps, read from its data once it ships.
+    // Upkeep is the only thing 💛 buys today.
+    shop: [],
+  },
 };
