@@ -2080,3 +2080,25 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 **Coordinator calls**
 - **A reviewer APPROVE counts only if it comes after the lane's own local e2e on that exact head** (#739: an early APPROVE missed a #264 regression).
 - **#739: the landscape pill moves instead of the panel shrinking.** On the SE held sideways (375px tall), the tile panel and the pill can't stack vertically and still fit #264's five buttons.
+
+## 2026-10-30 — Owner decisions and coordinator calls (supervisor 28)
+
+**Owner decisions**
+- **#741 merged (owner: Merge it, 2026-10-30).** The Waystation is off the Buildings guide (All 35 → 34). Turkey Feathers, Presents and Fireworks are out of trading and the icons, with their ids kept. The "Coming later" shelf stays for seasonal buildings. Screens https://claude.ai/artifact/FUSPGr2ZZdr37L4pppZrEx.
+- **#744 Frosty Treats merged (owner: Merge, polish next, 2026-10-30); closes #735.** 2 Ice + 1 Treat → 3 in 2 min, all `// TUNE:`. Trade value 7, sells 2 for 1 coin. Screens https://claude.ai/artifact/2cVe2PDUvKdhoQ4jHRgt4d. No What's new entry yet, because there's no in-app food picker; the four polish nits go to the picker PR.
+- **Food picker: option C "food row" (owner, 2026-10-30).**
+  - When a kid owns more than plain Treats, a row of their foods sits above Feed. The best food for that squishy is pre-picked, with a "Best" tag and a hint line.
+  - Feeding stays one tap. With only Treats there's no row.
+  - On the SE the card uses a tighter layout.
+  - The item card's "Care: Feed" chip opens care with that food picked.
+  - The PR also fixes the four Frosty Treats nits and adds the Pies + Frosty Treats What's new entry.
+  - Mockup https://claude.ai/artifact/RQ1Qjzeq5kdfn35xEHxy8q.
+- **More lanes (owner, 2026-10-30):** start 727a now. Not picked (yet): the #726 web-push Fable plan, the #730 curve options, and the #731 / Layout B mockups.
+
+**Coordinator calls**
+- **Frosty Treats feed rule:** 150% for a Frost squishy, 100% (like Treats) for any other. `CARE_RULES.foods` entries may be `{ percent, elements: { <element>: percent } }`. Pies and Treats are unchanged, and only the server computes the percent.
+- **#736 split into two PRs:**
+  - A, #743: the sim "firsts" gate and the "what pays today" line. Both gates are soft until #730 and #729 land.
+  - B, #745: the dev fast-forward route behind `HP_DEV_SQUISHY_GRANTS`, with its schema in `packages/shared/src/schemas/fast-forward.ts` beside the other Dev* schemas.
+- **#743 merged with one red e2e shard.** The red shard was `ipad-webkit 6`, `trading-posts.spec.ts:132`, a known flake that's green on main. The PR changes only `packages/shared/scripts/sim/**` and docs, which nothing in src/apps imports.
+- **#740 portrait regression:** a fresh fix lane on the same branch. Rule: the card never covers a sparkle more than it was covered at its resting place, keeps clear of the paw/HUD buttons, and folds to the short card only when folding helps.
