@@ -20,6 +20,7 @@
     "sim:factory": "pnpm --filter @heartpatch/shared sim:factory",
     "sim:tiles": "pnpm --filter @heartpatch/shared sim:tiles",
     "sim:hollowed": "pnpm --filter @heartpatch/shared sim:hollowed",
+    "sim:long-night": "pnpm --filter @heartpatch/shared sim:long-night",
     "sim:patch-economy": "pnpm --filter @heartpatch/shared sim:patch-economy",
     "sim:wild-isle": "pnpm --filter @heartpatch/shared sim:wild-isle",
     "lint": "NODE_OPTIONS=--max-old-space-size=6144 eslint . --max-warnings 0 && node scripts/check-filenames.mjs && node scripts/check-procedural-rules.mjs",

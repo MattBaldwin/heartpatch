@@ -74,6 +74,39 @@ const reply = (extra: Partial<CareListResponse> = {}): CareListResponse => ({
   ...extra,
 });
 
+describe('careSheet with the food row (option C, 2026-10-30)', () => {
+  const frost = squishy({ element: 'frost' });
+  // Pies and Frosty Treats tie for a Frost one: the one there's more of.
+  const bag = { treats: 12, pies: 3, 'frosty-treats': 5 };
+
+  it('feeds with the pick, and shows that food under Feed', () => {
+    const model = careSheet(frost, reply({ items: bag }), undefined, { pick: null });
+    expect(model.foods?.picked).toBe('frosty-treats');
+    expect(model.buttons[0]).toMatchObject({ label: '🍧 Feed', sub: '5 Frosty', note: null });
+    const pies = careSheet(frost, reply({ items: bag }), undefined, { pick: 'pies' });
+    expect(pies.buttons[0]).toMatchObject({ sub: '3 Pies' });
+  });
+
+  it('is exactly as before with only Treats, or without the row (the close-up)', () => {
+    const plain = careSheet(frost, reply({ items: { treats: 2 } }), undefined, { pick: null });
+    expect(plain.foods).toBeNull();
+    expect(plain.buttons[0]).toMatchObject({ label: '🍪 Feed', sub: '2 Treats' });
+    const closeUp = careSheet(frost, reply({ items: bag }));
+    expect(closeUp.foods).toBeNull();
+    expect(closeUp.buttons[0]).toMatchObject({ label: '🍪 Feed', sub: '12 Treats' });
+  });
+
+  it('says "Yum!" for a feed that gave extra', () => {
+    const result = { action: 'feed', squishyId: frost.id, full: true, coins: 1 };
+    expect(careDoneLine({ ...result, contentmentGained: 30 }, true)).toBe(
+      `${CARE_TEXT.yum} ${CARE_TEXT.coins(1)}`,
+    );
+    expect(careDoneLine({ ...result, contentmentGained: 20 })).toBe(
+      `${CARE_TEXT.done['feed'] ?? ''} ${CARE_TEXT.coins(1)}`,
+    );
+  });
+});
+
 describe('careSheet', () => {
   it('shows the mood, hearts, level and XP bar', () => {
     const model = careSheet(squishy(), reply());
@@ -305,8 +338,10 @@ describe('lines', () => {
   it('cheers a care action, and the coins it earned', () => {
     const result = { action: 'pet', squishyId: squishy().id, contentmentGained: 10 };
     expect(careDoneLine({ ...result, full: true, coins: 1 })).toBe(
-      'So soft! They wiggle happily. +1 Patch Coin',
+      'So soft! They wiggle happily. +1\u00a0Patch\u00a0Coin',
     );
+    // The reward never wraps apart (#748 render check: "Coin" alone on a line).
+    expect(CARE_TEXT.coins(2)).not.toMatch(/ /);
     expect(careDoneLine({ ...result, full: false, coins: 0 })).toBe(CARE_TEXT.lessNow);
   });
 

@@ -36,7 +36,8 @@ export const RECIPES: Recipe[] = [
   {
     id: 'mix-frosty-treats',
     name: 'Frosty Treats',
-    description: 'Crunch Ice and Treats into a chilly snack. Frost squishies love these extra!',
+    // The item's own line says Frost squishies love them; the page shows both.
+    description: 'Crunch Ice and Treats into a chilly, sparkly snack.',
     inputs: { ice: 2, treats: 1 }, // TUNE:
     output: { resource: 'frosty-treats', quantity: 3 }, // TUNE:
     craftSeconds: 2 * 60, // TUNE: like Pies

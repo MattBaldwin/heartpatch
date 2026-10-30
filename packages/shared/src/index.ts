@@ -94,6 +94,7 @@ export * from './data/naming.js';
 export * from './data/hollow.js';
 export * from './data/long-night.js';
 export * from './hollow/index.js';
+export * from './long-night/index.js';
 export * from './data/care.js';
 export * from './data/clothing.js';
 export * from './data/raids.js';

@@ -219,6 +219,22 @@
   color: #7a4a12;
 }
 
+/* A food's "Care: Feed": a chip you can tap (44pt tall), opening care. */
+.bag-chip-feed {
+  min-height: 44px;
+  border: 2px solid #f0c674;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  color: #7a4a12;
+  cursor: pointer;
+}
+
+.bag-chip-feed:focus-visible {
+  outline: 3px solid #d99a16;
+  outline-offset: 2px;
+}
+
 .bag-chip-battle {
   background: #eef6e6;
   color: #2f6b3d;

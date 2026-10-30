@@ -68,7 +68,12 @@ export const LongNightOutcomeSchema = z.strictObject({
   held: z.boolean(),
   firesLit: z.number().int().min(0),
   fuelNights: z.number().int().min(0),
-  percent: z.number().int().min(0),
+  // `longNightPercent`: the admin strength (0–300) times the secret multiplier (at most 5).
+  percent: z
+    .number()
+    .int()
+    .min(0)
+    .max(300 * 5),
   gapSpeciesId: ContentIdSchema.nullable(),
 });
 export type LongNightOutcome = z.infer<typeof LongNightOutcomeSchema>;

@@ -216,10 +216,75 @@
   }
 }
 
+/* A feed that gave extra (Pies, Frosty Treats for a Frost one; the server's
+   numbers say so): a bigger squash and a burst of hearts, the evolution's
+   sparkles scaled down to a "Yum!" moment. */
+.care-stage-yum .care-blob {
+  animation: care-yum 760ms ease-out 1;
+}
+
+.care-stage-yum .care-sparkles span {
+  font-size: 28px;
+  animation: care-sparkle 1100ms ease-out 1;
+}
+
+.care-stage-yum .care-sparkles span:nth-child(odd) {
+  font-size: 24px;
+}
+
+.care-stage-yum .care-sparkles span:nth-child(1) {
+  --dx: -96px;
+  --dy: -30px;
+}
+
+.care-stage-yum .care-sparkles span:nth-child(2) {
+  --dx: 90px;
+  --dy: -40px;
+  animation-delay: 60ms;
+}
+
+.care-stage-yum .care-sparkles span:nth-child(3) {
+  --dx: -50px;
+  --dy: -72px;
+  animation-delay: 120ms;
+}
+
+.care-stage-yum .care-sparkles span:nth-child(4) {
+  --dx: 44px;
+  --dy: -80px;
+  animation-delay: 180ms;
+}
+
+.care-stage-yum .care-sparkles span:nth-child(5) {
+  --dx: 0;
+  --dy: -96px;
+  animation-delay: 240ms;
+}
+
+@keyframes care-yum {
+  0% {
+    transform: scale(1, 1);
+  }
+  25% {
+    transform: scale(1.3, 0.72);
+  }
+  55% {
+    transform: scale(0.86, 1.2) translateY(-6px);
+  }
+  80% {
+    transform: scale(1.08, 0.94);
+  }
+  100% {
+    transform: scale(1, 1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .care-stage-squish .care-blob,
   .care-stage-evolve .care-blob,
-  .care-stage-evolve .care-sparkles span {
+  .care-stage-evolve .care-sparkles span,
+  .care-stage-yum .care-blob,
+  .care-stage-yum .care-sparkles span {
     animation-duration: 1ms;
   }
 }
@@ -281,6 +346,22 @@
   color: #7a2d55;
 }
 
+/* An extra-yummy feed's "Yum yum!" (the server says it gave extra): the
+   mockup's yellow cheer pill, in the evolution card's colours. */
+.care-note.care-note-yum {
+  align-self: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #ffe08a;
+  box-shadow:
+    0 3px 0 #e0b440,
+    0 0 0 4px #fff4c7;
+  color: #8a4419;
+  font-size: 17px;
+  font-weight: 800;
+  text-wrap: balance;
+}
+
 .care-meter {
   height: 12px;
   overflow: hidden;
@@ -323,6 +404,72 @@
   font-size: 17px;
   line-height: 1.15;
   white-space: nowrap;
+}
+
+/* The food row (owner's pick 2026-10-30, option C): the bag's foods right
+   above Feed, the pick pressed and the best one tagged gold. */
+.care-foods {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  padding-top: 8px;
+}
+
+.care-foods[hidden],
+.care-food-hint[hidden] {
+  display: none;
+}
+
+.care-food {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 4px;
+  border: 2px solid #f1d6e4;
+  border-radius: 14px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.care-food b {
+  font-weight: 800;
+  color: #8f3360;
+}
+
+.care-food[aria-pressed='true'] {
+  border-color: #b8487a;
+  background: #fbe9f2;
+  box-shadow: 0 0 0 2px #f5c9dd;
+}
+
+.care-food:focus-visible {
+  outline: 3px solid #d99a16;
+  outline-offset: 2px;
+}
+
+.care-food-tag {
+  position: absolute;
+  top: -9px;
+  right: -2px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #ffd36b;
+  color: #5b3a00;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.care-food-hint {
+  margin: 0;
+  color: #8f3360;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .care-action-sub {
@@ -591,5 +738,18 @@
   .care-card .auth-actions > button {
     flex: 1;
     padding-inline: 8px;
+  }
+}
+
+/* An iPhone SE (or a phone on its side): the mockup's tighter layout. The
+   tiles already name the food, so the hint line goes and Feed, Pet and Play
+   stay in reach. */
+@media (max-height: 700px) {
+  .care-card .care-food-hint {
+    display: none;
+  }
+
+  .care-foods {
+    padding-top: 4px;
   }
 }

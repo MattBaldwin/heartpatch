@@ -193,24 +193,26 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 28 handoff, 2026-10-30 ~16:15 UTC):** main `207bd87` (#745). Migrations through 0061 (0062 is 727a's). Phase 1 is due Oct 31. Supervisors 1–27 are archived (§8.4).
-  - **Merged under supervisor 28:** #742 (docs), #741 (Waystation off the guide), #743 (#736 A, sim firsts), #744 (Frosty Treats, closes #735), #745 (#736 B, dev fast-forward, closes #736).
+- **State (supervisor 29 handoff, 2026-10-30 ~18:35 UTC):** main `5d01ed6`. Migrations through 0062. Phase 1 is due Oct 31. Supervisors 1–28 are archived (§8.4).
+  - **Merged under supervisor 29:** #746 (docs, supervisor 28 handoff, `e84ea30`), #747 (727a, Long Night shared contract + migration 0062, `5d01ed6`). #747 had an Opus APPROVE (r2) and a Fable second reviewer APPROVE on `a539dba`. It merged with one red e2e shard (ipad-webkit 1, `recipe-book.spec.ts:135` home-trays timeout on a slow shard), judged unrelated like #743 because the PR has no client files.
   - **Wild Isle switch:** the owner was told twice to add `HP_WILD_ISLE=on` to `/opt/heartpatch/.env` and run `docker compose up -d server`, and NOT to copy `.env.prod.example` over `.env`. There's still no "done". Ask once more, plainly, after launch work. Follow-up: log the Wild Isle switch at boot like the house switch.
-- **Open PRs and lanes at handoff (re-route each lane to the new supervisor, §8.1):**
-  - **#740 Layout B2** (the explore need card clears the swirl-pond sparkle). Fix lane `session_01RAEPnGbnNqaXHDAVqABCM1` is on its second fix round. Head `021db6c` still fails three asks:
-    1. On the SE upright, the right-edge pebble sparkle is 32% covered vs 16% at rest.
-    2. The card folds to its short shape when that doesn't help.
-    3. The paw button overlaps the card on the iPhone 15 (it needs to go on the avoid list).
-    The lane was asked to push the missing work plus e2e assertions. Screens lane `session_01RAEPnDb8btQ164YQcNyn4k` keeps the shoot script and page source (https://claude.ai/artifact/7dnzm3TfnVsNawzcfZM55T). On the next sha, re-shoot AFTER only, then run your render-check, then ask the owner ONE question.
-  - **727a** (Long Night shared contract + migration 0062), lane `session_01RAEPnHUYKjXBk3pbc1E56c`. It's the only migration lane, and was told to merge main after #745. After its Opus reviewer APPROVEs, run a Fable second reviewer (§2 Big features), then merge.
-  - **Food picker, option C,** lane `session_01RAEPnEy7xEEFYA61mBaH7B`, branch `feat-food-picker-row` (Fix: prefix). Client care UI, item chips, the 4 Frosty Treats nits, and a What's new entry. When it reports ready: captures, render-check, owner question.
-- **Owner decisions queued:** none open. All five #727 questions are answered (DECISIONS, supervisor 27).
+  - **727a Fable nits, for 727b+:**
+    - TECH_SPEC §4 `long_nights` lock row (step 9, with the hollow rows), from 727d.
+    - "getUTCDay" wording in `schemas/data/long-night.ts`: the weekday is map-local, so say "0 is Sunday".
+    - `LongNightOutcomeSchema.percent` needs `max(1500)`.
+    - A shared username-list parse helper (`HP_LONG_NIGHT_TESTERS` is the 3rd copy).
+    - `migration-0062.test` should read back after `setWeekday(0)` / null.
+- **Open PRs and lanes at handoff (re-route each lane to the new supervisor, §8.1; lanes report by session id, not `@parent`):**
+  - **#748 food picker,** lane `session_01RAEPnEy7xEEFYA61mBaH7B` (Opus, ~270k context, over the cap but finishing). The owner signed off (DECISIONS, supervisor 29). The re-review asked for one non-visible fix (error text could land in the yellow pill): `99a01db` plus a main merge, head `745e01f`, being pushed after lint, then a fresh reviewer. MERGE when the reviewer APPROVE names the head and CI is green (squash, full sha, verdict comment). Then archive the lane.
+  - **#740 Layout B2 need card.** New fix lane `session_01RAEPnFuCqo2FsX6aThnDnT` (Opus, started 18:12) implements option (b) from the Lane handoff https://github.com/MattBaldwin/heartpatch/pull/740#issuecomment-6530109523. Branch head `e1789f9` is prep `b32635d` plus a main merge (CDP safe-area-inset e2e, crowded checks no longer skip, exact crowded placement, card starts past the paw sideways). Next: the lane's local e2e and reviewer, then the screens lane `session_01RAEPnDb8btQ164YQcNyn4k` re-shoots AFTER only on the new sha, measuring against the UNMOVED rest (it has the shoot script and page source), then a fresh Opus render-check, owner sign-off, merge. The old fix lane `GbnNqa` is archived.
+  - **727b (Long Night pure rules + sim, `packages/shared`),** lane `session_01RAEPnGh1QTAQ8hN1qeer6J` (Opus, started 18:05, branch `issue-727b-long-night-rules`). Check at 45 min (~18:50): context and cost. After its Opus APPROVE, run a Fable second reviewer (Agent, subagent `reviewer`, model fable) as for 727a, then merge. Next is 727c (server resolve) after 727b merges; one migration lane at a time.
+- **Owner decisions queued:** none; no question is pending. The #727 questions are answered (DECISIONS, supervisor 27), and so are #740 and #748 (supervisor 29). The extras the owner was offered (the #726 plan, the #730 page, the #731 / Layout B mockups) are offered but not chosen.
 - **Queue (start in this order as lanes free up; code lanes one at a time):**
-  1. Done: #735 (#741 + #744), #736 (#743 + #745).
+  1. Done: #735 (#741 + #744), #736 (#743 + #745), 727a (#747).
   2. Owner may pick next (offered 2026-10-30, not yet chosen): the #726 web-push Fable plan (priority 1; 727f waits for it), the #730 curve options page for the owner (sim-only), and the #731 / Layout B mockups.
-  3. **#727 Long Night A:** Opus codes the Fable plan (https://github.com/MattBaldwin/heartpatch/issues/727#issuecomment-6520406417; owner answers at #issuecomment-6521599545) in 6 PRs, 727a→727f. 727a is the shared contract + migration 0062: sequence it first, one migration lane at a time. A Fable reviewer is the second reviewer on the first full review (§2 Big features). 727f waits for #726.
+  3. **#727 Long Night A:** Opus codes the Fable plan (https://github.com/MattBaldwin/heartpatch/issues/727#issuecomment-6520406417; owner answers at #issuecomment-6521599545) in 6 PRs, 727a→727f. 727a is done (#747). Next is 727b (in flight), then 727c–e, one migration lane at a time. A Fable reviewer is the second reviewer on each full review (§2 Big features). 727f waits for #726. The 727a nits are listed in the State bullet.
   4. Then down the week-two list (#726, #728–#732, #734). Big ones get a Fable plan first. #728 and #729 both move Heart Coins, so run them one after the other.
-  5. **Layout B, new from the B1 screens** (pre-existing; the older items are in 6): on the SE held sideways the pill name shortens ("Moonberr…"); a busy panel with extra lines slices a line under its fade; on a portrait SE, Go home/Explore is cut at the panel foot; on a portrait iPhone 15, the Build row is cut and faded.
+  5. **Layout B, new from the B1 screens** (pre-existing; the older items are in 6): on the SE held sideways the pill name shortens ("Moonberr…"); a busy panel with extra lines slices a line under its fade; on a portrait SE, Go home/Explore is cut at the panel foot; on a portrait iPhone 15, the Build row is cut and faded. **New (from the #748 screens):** on the SE held sideways, the always-on auth chip (`.auth-chip`, fixed top right) covers the Evolving bar and its "0%" once the care sheet is scrolled. `care-layout.spec` checks name/rarity/mood, not Level/XP/Evolving.
   6. **Layout B, older notes** (the rest of the old SE item). Done: the landscape pill (#739) and the need card (#740). Left: dark-spots and night pills show through panels; from #694 the explore HUD (joystick, Dive/Lift) sits over spots, the dive card covers the pool, the Shovel chip stays on shells, the walk hint is hidden in landscape; from #698 the iPhone 15 top bar and bottom buttons may sit in the safe-area bands (verify with emulated insets) and the disabled Build! button looks filled. Split into small lanes.
   7. **Works follow-ups (#698/#707):** replace the emoji `buildingIcon` lists in `home-view.ts` with rendered portraits (owner A for the card; same look everywhere); Seawall rings read as life rings, mooring ring faint; Pier deck slim; River Well stream reads as a pond; Collect never pictured; SE card scrolls.
   8. **#715 follow-ups:** the "Show me" map highlight; per-level detail; level/day unlock gates (need an owner call).
@@ -269,6 +271,12 @@ The supervisor keeps this list current. Remove items as they land.
   - #696 reviewer nit: the $20 stop applies per lane, not per supervisor.
   - #694 nits: `// TUNE:` markers on the cap/rope ratios; the untested `top` branch of `logCap`.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
+- **Lessons (2026-10-30, supervisor 29):**
+  - **A green e2e can skip exactly the failing case.** #740's crowded-scene branch skipped the cover check, and its viewport (393x659) and inset-free Chromium hid the paw overlap. Before a 4th fix round, have the screens lane send its measurement method to the code lane and make the e2e reproduce the failure first. Chromium CDP `Emulation.setSafeAreaInsetsOverride` gives real iPhone insets.
+  - **Agree the baseline before measuring.** The screens lane measured "at rest" against the Before build; the code used the unmoved place. Name the baseline in the brief.
+  - **Render-checks this round:** #748 FIX x2 (landscape chip overlap mis-captioned, random Yum burst, Pie counts / mixed accounts), #740 FIX x2 (list numbers differ from ring numbers, a contradicting line, baseline wording). Every FIX was real; text-only rounds are cheap.
+  - **I opened a page before its render-check once** (#740 v4). Hold the `open` until PASS.
+  - **Costs:** 727a lane $12.32 (308k at the end); #748 screens $3.77 (Sonnet, 80 min, 4 page versions); old #740 fix lane $3.87; supervisor 29 about $15 at ~300k.
 - **Lessons (2026-10-30, supervisor 28):**
   - **A lane's "fix pushed" can be missing work.** #740's `021db6c` lacked two of the three asks (the paw gap was never committed). The screens lane caught it by checking which commit it served and diffing it. Ask fix lanes to name the commit per ask, and to add the e2e assertion that would catch each one.
   - **Render-checks failed pages 4 times in one day.** The fails: a BEFORE shot taken on the wrong build, captions claiming things off-frame, a wrong "moved 16px", and side-by-side layout broken at 1440px. Briefs for screens lanes should require a two-column grid capped at phone width, plain language, and a self-render at 1440/390.

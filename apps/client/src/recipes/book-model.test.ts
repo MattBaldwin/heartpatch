@@ -78,6 +78,17 @@ describe('recipe book pages', () => {
     expect(jack.canMake).toBe(false);
     expect(jack.note).toBeNull();
     expect(jack.hint).toMatch(/Emberwood and Pumpkin/);
+    // Its own hint, so the page doesn't add the general note too (#735 polish).
+    expect(jack.ownHint).toBe(true);
+    expect(view('recipe:mix-frosty-treats').ownHint).toBe(true);
+  });
+
+  it('says Frost squishies love Frosty Treats once on its page (#735 polish)', () => {
+    const frosty = view('recipe:mix-frosty-treats', {
+      unlocked: new Set(['recipe:mix-frosty-treats']),
+    });
+    const said = `${frosty.flavour} ${frosty.effect?.purpose ?? ''}`;
+    expect(said.match(/Frost squishies love/g)).toHaveLength(1);
   });
 
   it("say what a recipe's item does, from its data (#241)", () => {
@@ -240,6 +251,8 @@ describe('where to find it', () => {
     // The nesting economy (#238): land a gatherer works, unless its spots say it already.
     expect(whereText('ice')).toBe('A squishy gathering on Mountains, or make Frozen Water.');
     expect(whereText('greens')).toBe('Forest, or a squishy gathering on Meadow.');
+    // Only ever made (#735 polish): where to make it, as a whole line.
+    expect(whereText('frosty-treats')).toBe('Make Frosty Treats in your recipe book.');
     expect(whereText('pumpkins')).toBe('Pumpkin Fields and your home ring.');
     expect(whereText('magic-fallen-leaves')).toBe(
       'Your home ring, or a surprise bonus when you gather Timber.',
@@ -303,6 +316,12 @@ describe('finding a spot on the map', () => {
 
   it('falls back to a tile whose gathers bring it as a bonus', () => {
     expect(findSpot('witch-dust', tiles, me)).toEqual({ q: 0, r: 1 });
+  });
+
+  it('falls back to my land a squishy gatherer gets it from (Ice on Mountains)', () => {
+    const peaks = [...tiles, { ...tile(3, 0, null), terrain: 'mountains' }];
+    expect(findSpot('ice', peaks, me)).toEqual({ q: 3, r: 0 });
+    expect(findSpot('ice', tiles, me)).toBeNull();
   });
 
   it('ignores land that isn’t mine', () => {
