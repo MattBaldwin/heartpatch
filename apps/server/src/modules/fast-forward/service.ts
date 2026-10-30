@@ -10,7 +10,7 @@ import {
   type PublicUser,
   type Species,
 } from '@heartpatch/shared';
-import { withTransaction, type Executor } from '../../db/client.js';
+import type { Executor } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
 import { createMapsRepo } from '../maps/repo.js';
@@ -92,7 +92,7 @@ export function createFastForwardService(options: FastForwardServiceOptions): Fa
   return {
     devFastForward: async (user, mapId, day) => {
       const standing = FAST_FORWARD_DAYS[day];
-      const result = await withTransaction(db, async (tx) => {
+      const result = await createFastForwardRepo(db).transaction(async (tx) => {
         await requireMember(tx, user, mapId, ['multiplayer']);
         const repo = createFastForwardRepo(tx);
         const at = now();

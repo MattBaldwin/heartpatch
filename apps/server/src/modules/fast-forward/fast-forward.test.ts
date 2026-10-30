@@ -1,11 +1,10 @@
 import { BATTLE_RULES, GAME_DATA, MapResponseSchema, type MapDetail } from '@heartpatch/shared';
-import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
-import { keepers, mapMembers, sessions, squishies, tiles, users } from '../../db/schema.js';
+import { keepers, sessions, users } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { FAST_FORWARD_DAYS } from './days.js';
@@ -106,17 +105,16 @@ describe.skipIf(!url)('dev fast-forward (needs DATABASE_URL)', () => {
   }
 
   const mine = (mapId: string, userId: string) =>
-    db
-      .select()
-      .from(squishies)
-      .where(and(eq(squishies.mapId, mapId), eq(squishies.ownerUserId, userId)));
+    db.query.squishies.findMany({
+      where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.ownerUserId, userId)),
+    });
 
   const landOf = async (mapId: string, userId: string) =>
     (
-      await db
-        .select({ id: tiles.id })
-        .from(tiles)
-        .where(and(eq(tiles.mapId, mapId), eq(tiles.ownerUserId, userId)))
+      await db.query.tiles.findMany({
+        columns: { id: true },
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.ownerUserId, userId)),
+      })
     ).length;
 
   it('is not there at all without HP_DEV_SQUISHY_GRANTS', async () => {
@@ -159,10 +157,10 @@ describe.skipIf(!url)('dev fast-forward (needs DATABASE_URL)', () => {
     }
     const since = Date.parse(START) - 10 * DAY_MS;
     for (const row of after) expect(row.createdAt.getTime()).toBeLessThanOrEqual(since);
-    const [member] = await db
-      .select({ joinedAt: mapMembers.joinedAt })
-      .from(mapMembers)
-      .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, owner.id)));
+    const member = await db.query.mapMembers.findFirst({
+      columns: { joinedAt: true },
+      where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, owner.id)),
+    });
     expect(member!.joinedAt.getTime()).toBeLessThanOrEqual(since);
 
     // A second seed for the same day changes nothing.

@@ -4,7 +4,7 @@
  */
 import { and, asc, eq, inArray, isNull, sql, type AnyColumn } from 'drizzle-orm';
 import type { ElementId, FeelingId } from '@heartpatch/shared';
-import type { Executor } from '../../db/client.js';
+import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { mapMembers, squishies, tiles } from '../../db/schema.js';
 
 export interface FastForwardTile {
@@ -49,6 +49,9 @@ const noLaterThan = (column: AnyColumn, at: Date) =>
 
 export function createFastForwardRepo(db: Executor) {
   return {
+    /** Runs `fn` in one transaction (the service keeps tech spec §7's lock order). */
+    transaction: <T>(fn: (tx: Transaction) => Promise<T>): Promise<T> => withTransaction(db, fn),
+
     listTiles: (mapId: string): Promise<FastForwardTile[]> =>
       db.select(tileColumns).from(tiles).where(eq(tiles.mapId, mapId)),
 
