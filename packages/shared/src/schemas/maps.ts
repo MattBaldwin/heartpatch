@@ -7,6 +7,7 @@ import { CommunityViewSchema } from './communities.js';
 import { PublicFenceSchema } from './fences.js';
 import { ContentIdSchema, DisplayNameSchema, RaritySchema } from './data/common.js';
 import { FeelingIdSchema } from './data/elements.js';
+import { LongNightWeekdaySchema } from './data/long-night.js';
 import { PublicKeeperSchema } from './data/keepers.js';
 import { SpeciesVisualSchema } from './data/species.js';
 import { TimeZoneSchema } from './time.js';
@@ -119,6 +120,20 @@ export type SetFriendlyChallengesRequest = z.infer<typeof SetFriendlyChallengesR
 export const FriendlyChallengesResponseSchema = z.object({ friendlyChallenges: z.boolean() });
 export type FriendlyChallengesResponse = z.infer<typeof FriendlyChallengesResponseSchema>;
 
+/**
+ * `POST /api/v1/maps/:mapId/long-night` (#727): the patch owner picks the
+ * Long Night's weekday (0 is Sunday), or null for Off. Patch-mates hear it
+ * as `map.updated` with `longNightWeekday`.
+ */
+export const SetLongNightRequestSchema = z.strictObject({
+  weekday: LongNightWeekdaySchema.nullable(),
+});
+export type SetLongNightRequest = z.infer<typeof SetLongNightRequestSchema>;
+export const LongNightResponseSchema = z.object({
+  longNightWeekday: LongNightWeekdaySchema.nullable(),
+});
+export type LongNightResponse = z.infer<typeof LongNightResponseSchema>;
+
 /** `POST /api/v1/maps/:mapId/pvp-mode` */
 export const SetPvpModeRequestSchema = z.object({ pvpMode: PvpModeSchema });
 export type SetPvpModeRequest = z.infer<typeof SetPvpModeRequestSchema>;
@@ -216,6 +231,12 @@ export const MapDetailSchema = z.object({
   friendlyChallenges: z.boolean().optional(),
   /** Cozy Patch or Wild Isle (#621). Optional so older servers' details parse (read as cozy). */
   patchType: PatchTypeSchema.optional(),
+  /**
+   * The Long Night's weekday (#727, 0 is Sunday), or null: Off on this
+   * patch. Left out while the Long Night is switched off (`HP_LONG_NIGHT`)
+   * and by older servers.
+   */
+  longNightWeekday: LongNightWeekdaySchema.nullable().optional(),
   role: MapRoleSchema,
   maxPlayers: z.number().int(),
   members: z.array(MapMemberSchema),

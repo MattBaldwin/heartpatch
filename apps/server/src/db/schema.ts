@@ -332,12 +332,18 @@ export const maps = pgTable(
     // Cozy Patch or Wild Isle (#621): fixed at creation; `HP_WILD_ISLE` gates
     // making a Wild Isle.
     patchType: patchType('patch_type').notNull().default('cozy'),
+    // The Long Night's weekday (#727, 0 is Sunday): that day's nightfall
+    // comes at full strength. Null is Off; the owner changes it. The default
+    // is `LONG_NIGHT_RULES.defaultWeekday` (owner decision Q5: Saturday for
+    // every patch, old and new); a test keeps the two the same.
+    longNightWeekday: smallint('long_night_weekday').default(6),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
     check('maps_event_seq_nonnegative', sql`${t.eventSeq} >= 0`),
     check('maps_max_players_range', sql`${t.maxPlayers} between 1 and 6`),
     check('maps_hollow_strength_range', sql`${t.hollowStrengthPercent} between 0 and 300`),
+    check('maps_long_night_weekday_range', sql`${t.longNightWeekday} between 0 and 6`),
   ],
 );
 
@@ -1483,6 +1489,47 @@ export const hollowEvents = pgTable(
     outcomes: jsonb('outcomes').notNull().default([]),
   },
   (t) => [unique('hollow_events_map_id_night_key').on(t.mapId, t.night)],
+);
+
+/**
+ * One row per map per Long Night (#727): the result nightfall wrote in its
+ * own transaction, beside `hollow_events`. `night` is the map-local date the
+ * nightfall fell on. `outcomes` holds each Keeper's `LongNightOutcomeRow`
+ * (their outcome plus their Juniper's Gap claim, `gapClaimedAt` and
+ * `gapBattleId`), validated on read. The Gap is open while `gap_opens_at <= now < gap_closes_at` (both
+ * null when the patch didn't hold); nothing closes it. `seed` and
+ * `content_hash` let a replay re-run the night. Server-only (rule 6): the
+ * Gap species and the strength percent never leave the server.
+ */
+export const longNights = pgTable(
+  'long_nights',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    night: date('night', { mode: 'string' }).notNull(),
+    ranAt: timestamptz('ran_at').notNull(),
+    // Nightfall plus `HOLLOW_RULES.show.prowlMinutes`: when he strikes.
+    strikeAt: timestamptz('strike_at').notNull(),
+    held: boolean('held').notNull(),
+    outcomes: jsonb('outcomes').notNull().default([]),
+    keeperOfNightUserId: uuid('keeper_of_night_user_id'),
+    gapOpensAt: timestamptz('gap_opens_at'),
+    gapClosesAt: timestamptz('gap_closes_at'),
+    seed: text('seed').notNull(),
+    contentHash: text('content_hash').notNull(),
+  },
+  (t) => [
+    unique('long_nights_map_id_night_key').on(t.mapId, t.night),
+    index('long_nights_map_id_gap_closes_at_idx').on(t.mapId, t.gapClosesAt),
+    check(
+      'long_nights_gap_window',
+      sql`(${t.gapOpensAt} is null and ${t.gapClosesAt} is null) or (${t.gapOpensAt} is not null and ${t.gapClosesAt} is not null and ${t.gapOpensAt} < ${t.gapClosesAt})`,
+    ),
+    // Juniper's Gap opens only after a Night the patch held.
+    check('long_nights_gap_only_when_held', sql`${t.held} or ${t.gapOpensAt} is null`),
+  ],
 );
 
 /**
