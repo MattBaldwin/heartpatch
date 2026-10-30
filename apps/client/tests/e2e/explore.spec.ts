@@ -143,8 +143,9 @@ async function expectNeedClearOfKeeper(page: Page): Promise<void> {
           const x = (glint.left + glint.right) / 2;
           const y = (glint.top + glint.bottom) / 2;
           const hit = document.elementFromPoint(x, y);
-          if (hit?.closest('[data-testid="explore-ground"]') === null) {
-            return `a tap on the glint lands on ${hit?.className ?? 'nothing'}`;
+          if (!hit) return 'a tap on the glint lands on nothing';
+          if (!hit.closest('[data-testid="explore-ground"]')) {
+            return `a tap on the glint lands on ${hit.className}`;
           }
           // Whole on screen, clear of the side insets and the bottom band.
           const probe = document.createElement('div');
