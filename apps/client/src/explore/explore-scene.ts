@@ -2,6 +2,7 @@ import { Material } from '@babylonjs/core/Materials/material';
 import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
+import type { Camera } from '@babylonjs/core/Cameras/camera';
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
 import { CreatePickingRay } from '@babylonjs/core/Culling/ray.core';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
@@ -384,6 +385,10 @@ export class ExploreScene implements AmbientTarget {
   #framed = '';
   /** Each open spot's glint's x, as last drawn (redrawn only when one moves). */
   #glintNudge: number[] = [];
+  /** Times the glints were redrawn somewhere new: the missing-tool card places itself again. */
+  #glintMoves = 0;
+  /** Each open spot's glint as last placed (world units), by spot index. */
+  readonly #glintAt = new Map<number, { x: number; y: number; z: number; scale: number }>();
   readonly #halo: Mesh;
   /** The halo's own colour, when its biome tints it with the time of day. */
   #haloTint: { readonly mat: StandardMaterial; readonly base: Color3 } | null = null;
@@ -913,6 +918,37 @@ export class ExploreScene implements AmbientTarget {
     return this.#keeperBox();
   }
 
+  /**
+   * An unsearched spot's glint on screen, CSS px (its star and a little
+   * halo), as last drawn; null when it has none or can't be placed. The
+   * missing-tool card keeps clear of the glint of the spot it's about.
+   */
+  glintOnScreen(index: number): ScreenBox | null {
+    const g = this.#glintAt.get(index);
+    if (!g || !this.screenOf(this.#at)) return null; // also reads the canvas box and shot
+    const camera = this.#scene.activeCamera;
+    const box = this.#box;
+    if (!camera || !box) return null;
+    const half = (EXPLORE_VIEW.glintSize * g.scale * EXPLORE_FADE.glintHalo) / 2;
+    const corners = [
+      this.#project(camera, box, g.x - half, g.y + half, g.z),
+      this.#project(camera, box, g.x + half, g.y - half, g.z),
+    ];
+    const [a, b] = corners;
+    if (!a || !b) return null;
+    return {
+      left: Math.min(a.x, b.x),
+      right: Math.max(a.x, b.x),
+      top: Math.min(a.y, b.y),
+      bottom: Math.max(a.y, b.y),
+    };
+  }
+
+  /** Counts the glints' moves (a new shot settled, a spot searched): each may need the card placed again. */
+  get glintMoves(): number {
+    return this.#glintMoves;
+  }
+
   /** The Keeper's height, world units (feet to the top of its hair). */
   get keeperTall(): number {
     return this.#keeper ? this.#keeper.params.height * EXPLORE_VIEW.keeperScale : 0;
@@ -1260,10 +1296,21 @@ export class ExploreScene implements AmbientTarget {
     }
     this.#applyCamera();
     const at = this.#world(p);
+    return this.#project(camera, box, at.x, this.#groundAt(p) + lift, at.z);
+  }
+
+  /** `screenOf` for a point already in world units, the camera's shot applied. */
+  #project(
+    camera: Camera,
+    box: DOMRect,
+    x: number,
+    y: number,
+    z: number,
+  ): { x: number; y: number } | null {
     // (toGlobalToRef returns the camera's own viewport, not the one it fills.)
     camera.viewport.toGlobalToRef(box.width, box.height, SCREEN_VIEWPORT);
     const s = Vector3.ProjectToRef(
-      SCREEN_FROM.set(at.x, this.#groundAt(p) + lift, at.z),
+      SCREEN_FROM.set(x, y, z),
       Matrix.IdentityReadOnly,
       camera.getTransformationMatrix(),
       SCREEN_VIEWPORT,
@@ -1462,6 +1509,7 @@ export class ExploreScene implements AmbientTarget {
     const keeper = { ...this.#world(this.#at), y: this.#groundAt(this.#at) };
     const half = (size * EXPLORE_FADE.glintHalo) / 2;
     const open = this.#tile.spots.filter((s) => !s.done);
+    this.#glintAt.clear();
     const places = open.map((s) => {
       const at = this.#world(s);
       // Off to one side of the prop, as on the boards.
@@ -1482,13 +1530,16 @@ export class ExploreScene implements AmbientTarget {
       else this.#glintSide.set(s.index, Math.sign(slide + glint.x - keeper.x));
       // The cellar key's glint (#306) twinkles bigger than the rest: same mesh, no extra draw.
       const scale = s.kind === KEY_SPOT.kind ? EXPLORE_VIEW.keyGlintScale : 1;
-      return { ...glint, x: glint.x + Math.round(slide * 100) / 100, scale };
+      const placed = { ...glint, x: glint.x + Math.round(slide * 100) / 100, scale };
+      this.#glintAt.set(s.index, placed);
+      return placed;
     });
     const nudge = places.map((p) => p.x);
     const same =
       nudge.length === this.#glintNudge.length && nudge.every((n, i) => n === this.#glintNudge[i]);
     if (same && this.#glints.thinInstanceCount === open.length) return;
     this.#glintNudge = nudge;
+    this.#glintMoves++;
     setInstances(
       this.#glints,
       places.map((p) =>

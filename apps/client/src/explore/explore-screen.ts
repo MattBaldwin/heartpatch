@@ -68,7 +68,7 @@ import {
 } from './explore-view.js';
 import {
   besideSpot,
-  clearOfKeeper,
+  clearOf,
   needRoom,
   showcaseStance,
   CAVE_STAGE,
@@ -229,6 +229,8 @@ export interface ExploreDebug {
   readonly hint: ToolId | null;
   /** The Keeper's box on screen, CSS px, or null (the missing-tool card keeps clear of it). */
   readonly keeperOnScreen: ScreenBox | null;
+  /** A spot's glint's box on screen, CSS px, or null (the missing-tool card keeps clear of its spot's). */
+  glintOnScreen: (index: number) => ScreenBox | null;
   readonly scene: ExploreSceneStats | null;
   /**
    * Batch uploads since the page opened (`batchUploads`): each makes fresh
@@ -717,7 +719,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (playing) feed({ type: 'tick', t: now });
     const animating = s.step(now);
     renderDark();
-    if (moved || animating) placeNeed();
+    if (moved || animating || s.glintMoves !== needGlints) placeNeed();
     // Only a change redraws: a finger resting on the stick, or pushing
     // against a rock or the tile's edge, moves nothing (the gestures and the
     // lantern's dark are DOM; a tool's swing animates through `step`).
@@ -1345,20 +1347,25 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
 
   /** How far the missing-tool card is moved off its place (CSS px, up is negative). */
   let needShift = 0;
+  /** The scene's `glintMoves` when the card was last placed. */
+  let needGlints = 0;
   /**
-   * Slides the missing-tool card up or down so it never sits over the Keeper.
-   * Where neither fits (a phone held sideways) it folds into its short shape
-   * and tries again.
+   * Slides the missing-tool card up or down so it never sits over the Keeper
+   * or the glint of the spot it's about (Layout B2). Where nothing fits (a
+   * phone held sideways) it folds into its short shape and tries again.
    */
   function placeNeed(): void {
+    needGlints = scene3d?.glintMoves ?? 0;
     if (need.hidden) return;
     const keeper = scene3d?.keeperOnScreen();
     if (!keeper) return;
-    let shift = needShiftFor(keeper);
+    const glint = front ? scene3d?.glintOnScreen(front.index) : null;
+    const keep = glint ? [keeper, glint] : [keeper];
+    let shift = needShiftFor(keep);
     if (shift === undefined) return; // hidden by a gesture: nothing to place
     if (shift === null && !need.classList.contains('explore-need-compact')) {
       need.classList.add('explore-need-compact');
-      shift = needShiftFor(keeper);
+      shift = needShiftFor(keep);
       if (shift === undefined) return;
     }
     // Still no room either side (a screen too short for both): as high as it may go.
@@ -1387,11 +1394,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     );
   }
 
-  /** `clearOfKeeper` for the card as it's laid out now; undefined when it isn't shown. */
-  function needShiftFor(keeper: ScreenBox): number | null | undefined {
+  /** `clearOf` for the card as it's laid out now; undefined when it isn't shown. */
+  function needShiftFor(keep: readonly ScreenBox[]): number | null | undefined {
     const card = needAtRest();
     if (card.bottom - card.top === 0) return undefined;
-    return clearOfKeeper(card, keeper, needRoomNow(), EXPLORE_VIEW.needGap);
+    return clearOf(card, keep, needRoomNow(), EXPLORE_VIEW.needGap);
   }
 
   // Turning the phone (or resizing the window) lays the card out afresh: its
@@ -2029,6 +2036,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         toast: toast ? [toast.main, toast.extra].filter((x) => x).join(' · ') : null,
         hint: need.hidden ? null : ((need.dataset['tool'] as ToolId | undefined) ?? null),
         keeperOnScreen: s?.keeperOnScreen() ?? null,
+        glintOnScreen: (index: number) => s?.glintOnScreen(index) ?? null,
         scene: s?.stats ?? null,
         batchUploads: batchUploads.count,
         tierChanges,

@@ -385,23 +385,41 @@ export function needRoom(
 
 /**
  * How far to move the missing-tool card up or down the screen (CSS px,
- * negative is up) so it never covers the Keeper: 0 when its own place is
- * already clear; else just above the Keeper's head, or below its feet when
- * there's no room above. `room` is the band the card may use (`needRoom`).
- * Null when neither fits: the caller makes the card smaller and asks again.
+ * negative is up) so it never covers any of `keep`: the Keeper, and the
+ * glint of the spot the card is about (Layout B2: a phone held sideways had
+ * the card over the swirly eddy's glint). 0 when its own place is already
+ * clear; else the nearest move up that clears them all (just above one of
+ * them), else the nearest move down. `room` is the band the card may use
+ * (`needRoom`). Null when nothing fits: the caller makes the card smaller and
+ * asks again.
  */
-export function clearOfKeeper(
+export function clearOf(
   card: ScreenBox,
-  keeper: ScreenBox,
+  keep: readonly ScreenBox[],
   room: { readonly top: number; readonly bottom: number },
   gap: number,
 ): number | null {
-  if (coverShare(card, keeper) === 0) return 0;
-  const up = keeper.top - gap - card.bottom;
-  if (card.top + up >= room.top) return up;
-  const down = keeper.bottom + gap - card.top;
-  if (card.bottom + down <= room.bottom) return down;
-  return null;
+  const covers = (dy: number) =>
+    keep.some(
+      (b) =>
+        card.left < b.right &&
+        card.right > b.left &&
+        card.top + dy < b.bottom &&
+        card.bottom + dy > b.top,
+    );
+  if (!covers(0)) return 0;
+  const fits = (dy: number) =>
+    card.top + dy >= room.top && card.bottom + dy <= room.bottom && !covers(dy);
+  const up = keep
+    .map((b) => b.top - gap - card.bottom)
+    .filter((dy) => dy < 0 && fits(dy))
+    .sort((a, b) => b - a);
+  if (up.length > 0) return up[0] ?? null;
+  const down = keep
+    .map((b) => b.bottom + gap - card.top)
+    .filter((dy) => dy > 0 && fits(dy))
+    .sort((a, b) => a - b);
+  return down[0] ?? null;
 }
 
 /**

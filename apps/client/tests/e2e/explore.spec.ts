@@ -2,6 +2,7 @@ import { findAvoidedWords, houseTile } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { selectTile, tapCanvas } from './claim-land.js';
 import { api, hook } from './dev-hook.js';
+import { still } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { keeperStill, nearestFirst, walkTo, waypoint } from './explore-walk.js';
 import { realTapAt } from './touch.js';
@@ -103,24 +104,80 @@ interface ExploreDebug {
 
 const exploreState = (page: Page) => hook<ExploreDebug>(page, 'explore');
 
-/** The missing-tool card never sits over the Keeper in a close-up (polish of #621). */
+/**
+ * The missing-tool card never sits over the Keeper in a close-up (polish of
+ * #621), nor over the glint of the spot it's about (Layout B2): a tap on that
+ * glint lands on the ground, not the card. The card is whole on screen and
+ * clear of the notch's side insets and the bottom safe-area band.
+ */
 async function expectNeedClearOfKeeper(page: Page): Promise<void> {
+  await still(page, '[data-testid="explore-need"]');
   await expect
-    .poll(async () => {
-      const keeper = (await exploreState(page))?.keeperOnScreen;
-      const card = await page.getByTestId('explore-need').boundingBox();
-      if (!keeper || !card) return 'not shown';
-      const clear =
-        card.x >= keeper.right ||
-        card.x + card.width <= keeper.left ||
-        card.y >= keeper.bottom ||
-        card.y + card.height <= keeper.top;
-      return clear
-        ? 'clear'
-        : `card ${JSON.stringify(card)} over the Keeper ${JSON.stringify(keeper)}`;
-    }, slow)
+    .poll(
+      () =>
+        page.evaluate(() => {
+          type Box = { left: number; right: number; top: number; bottom: number };
+          type Hook = {
+            explore?: () => {
+              near: number | null;
+              keeperOnScreen: Box | null;
+              glintOnScreen: (index: number) => Box | null;
+            };
+          };
+          const e = (window as unknown as { __heartpatch?: Hook }).__heartpatch?.explore?.();
+          const el = document.querySelector('[data-testid="explore-need"]');
+          if (!e?.keeperOnScreen || !el || e.near === null) return 'not shown';
+          const card = el.getBoundingClientRect();
+          const over = (b: Box) =>
+            card.left < b.right &&
+            card.right > b.left &&
+            card.top < b.bottom &&
+            card.bottom > b.top;
+          if (over(e.keeperOnScreen)) {
+            return `card ${JSON.stringify(card)} over the Keeper ${JSON.stringify(e.keeperOnScreen)}`;
+          }
+          const glint = e.glintOnScreen(e.near);
+          if (!glint) return 'no glint';
+          if (over(glint))
+            return `card ${JSON.stringify(card)} over the glint ${JSON.stringify(glint)}`;
+          const x = (glint.left + glint.right) / 2;
+          const y = (glint.top + glint.bottom) / 2;
+          const hit = document.elementFromPoint(x, y);
+          if (hit?.closest('[data-testid="explore-ground"]') === null) {
+            return `a tap on the glint lands on ${hit?.className ?? 'nothing'}`;
+          }
+          // Whole on screen, clear of the side insets and the bottom band.
+          const probe = document.createElement('div');
+          probe.style.cssText =
+            'position:fixed;left:env(safe-area-inset-left);right:env(safe-area-inset-right);bottom:env(safe-area-inset-bottom);top:0;pointer-events:none';
+          document.body.append(probe);
+          const safe = probe.getBoundingClientRect();
+          probe.remove();
+          if (
+            card.left < safe.left ||
+            card.right > safe.right ||
+            card.top < 0 ||
+            card.bottom > safe.bottom
+          ) {
+            return `card ${JSON.stringify(card)} outside the safe area ${JSON.stringify(safe)}`;
+          }
+          return 'clear';
+        }),
+      slow,
+    )
     .toBe('clear');
 }
+
+/** Phones held sideways: iPhone 15 (full screen and under the browser's bars) and SE. */
+const SIDEWAYS = [
+  { width: 852, height: 393 }, // iPhone 15 held sideways, installed
+  { width: 734, height: 343 }, // iPhone 15 held sideways (the reviewer's repro)
+  { width: 667, height: 375 }, // iPhone SE held sideways
+] as const;
+
+/** The card's box, to check a turn back to portrait leaves it as it was. */
+const needBox = (page: Page) => page.getByTestId('explore-need').boundingBox();
+
 const frameCap = (page: Page) => hook<{ fps: number }>(page, 'frameCap');
 
 /** Frames drawn so far and the page's clock, to read a drawn frame rate between two readings. */
@@ -975,16 +1032,43 @@ test('enters a river tile on its dry bank, with its mossy logs, pebble bars and 
 
     // A phone turned on its side: the card lays itself out again, still clear of him.
     const portrait = page.viewportSize();
-    if (portrait && portrait.width < portrait.height && portrait.width < 500) {
-      for (const size of [
-        { width: 734, height: 343 }, // iPhone 15 held sideways (the reviewer's repro)
-        { width: 667, height: 375 }, // iPhone SE held sideways
-      ]) {
+    const sideways = portrait && portrait.width < portrait.height && portrait.width < 500;
+    if (sideways) {
+      for (const size of SIDEWAYS) {
         await page.setViewportSize(size);
         await expectNeedClearOfKeeper(page);
       }
       await page.setViewportSize(portrait);
       await expectNeedClearOfKeeper(page);
+    }
+
+    // At a swirly eddy (Layout B2) the card keeps clear of its glint too, in
+    // every shape; turned back upright it's where it was.
+    const eddies = state.spots.filter((s) => s.kind === 'eddy');
+    reached = false;
+    for (const spot of nearestFirst(eddies, (await exploreState(page))!.keeper).slice(0, 4)) {
+      if (
+        (reached = await walkTo(
+          page,
+          spot.index,
+          eddies.map((s) => s.index),
+        ))
+      )
+        break;
+    }
+    expect(reached, 'walked up to a swirly eddy').toBe(true);
+    await expect.poll(async () => (await exploreState(page))?.hint, slow).toBe('net');
+    await keeperStill(page);
+    await expectNeedClearOfKeeper(page);
+    const upright = await needBox(page);
+    if (sideways) {
+      for (const size of SIDEWAYS) {
+        await page.setViewportSize(size);
+        await expectNeedClearOfKeeper(page);
+      }
+      await page.setViewportSize(portrait);
+      await expectNeedClearOfKeeper(page);
+      expect(await needBox(page)).toEqual(upright);
     }
     expect(errors).toEqual([]);
   } finally {
