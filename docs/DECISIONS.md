@@ -2062,3 +2062,21 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 - **Coast tables reuse the lake's water kinds** (#737): Puddlepuff, Bubbletub, Shellnap and Quackle spawn there, and Puddlepuff, Bubbletub and Snoozicle guard. New coast species stay in Wave 2 (W2-6).
 - **Week two issues #725–#732** wait until after the Halloween launch. Big ones get a Fable plan first.
 
+## 2026-10-30 — Owner decisions and coordinator calls (supervisor 27)
+
+**Owner decisions**
+- **#733 Build sheet signed off for Halloween (A, 2026-10-30).** Screens https://claude.ai/artifact/ChHuSCSFDTojZK2jFd4SJL (before 38b6b95, after 5d9ed79, SE and iPhone 15, tier=high): Build!/Not now whole and unfaded, compact Me button over the sheet, busy tile panel still ends between rows with its fade. Screens lane $3.07.
+- **#739 Layout B1 merged (owner: Merge now, 2026-10-30).** On a phone held sideways the patch-name pill moves into the top row's gap (hud-place.ts measures it; the pill stays put under 160px). The tile panel keeps its height, because capping it under the pill broke #264's five buttons on the SE held sideways. Screens https://claude.ai/artifact/UcfL92XDDPxdpCPo6beAoo. Follow-up: on the SE held sideways the name shortens ("Moonberr…"). Lanes: B1 $1.31, B1b $4.32, screens (n/a).
+- Pre-existing nits from the B1 screens: an extra-lines busy panel slices a line under its fade; portrait SE Go home/Explore is cut at the panel foot; portrait iPhone 15 Build row is cut and faded.
+- **Week two order (owner, 2026-10-30):** #735 (hide dead content) first, then #736 (sim boredom gate, PLAYTEST day-N), then #727 (Long Night A, big: Fable plan first, started 10:12), then work down the list. Code lanes run one at a time.
+- **#727 Q1 Night hour (owner, A):** patches pick only the weekday (default Saturday, or Off); the Night is that day's normal 7:00 PM nightfall (`longNight` flag on `hollow.nightfall`). A per-map hour is #734.
+- **#727 Q2 Absent Keepers (owner, A):** an absent Keeper can hold through the week's fuel and AI guards, resolved like today's `fall`. No presence rule in A.
+- **#727 Q3 Solo patch (owner, A):** the Long Night runs, and the Gap can open, for a one-member patch. No two-member gate.
+- **#727 Q4 Gap prize (owner, A):** Keepers in that Night's `outcomes` (graced) get a Gap encounter, in the resolve's own transaction. A mid-Night joiner waits until the next week (no join-time write path, no hop-in exploit).
+- **#727 Q5 Default day (owner, A):** `maps.long_night_weekday` defaults to Saturday for every patch, old and new (column default, no backfill); owners can change it or pick Off.
+- **#735 Ice Cutter (owner, 2026-10-30): add Frosty Treats.** A new recipe made from Ice that feeds Frost squishies at 150%, like Pies, so the Ice Cutter's output has a second use. It's a separate small lane after #741 merges (same data files). It needs a What's new entry and captures before the owner sees it.
+- **#727 plan final** (Fable, $10.51): plan https://github.com/MattBaldwin/heartpatch/issues/727#issuecomment-6520406417, owner answers https://github.com/MattBaldwin/heartpatch/issues/727#issuecomment-6521599545. Six PRs, 727a→727f: 727a shared contract + migration 0062 (`longNight` on `hollow.nightfall`, new `long-night.resolved` and `gap.opened` events, the `maps.long_night_weekday` column; the coordinator sequences these shared-contract items first), 727b pure rules + sim, 727c server resolve, 727d Gap encounter, 727e client, 727f push (after #726).
+
+**Coordinator calls**
+- **A reviewer APPROVE counts only if it comes after the lane's own local e2e on that exact head** (#739: an early APPROVE missed a #264 regression).
+- **#739: the landscape pill moves instead of the panel shrinking.** On the SE held sideways (375px tall), the tile panel and the pill can't stack vertically and still fit #264's five buttons.
