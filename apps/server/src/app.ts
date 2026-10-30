@@ -102,6 +102,8 @@ import { boutiqueRoutes } from './modules/boutique/routes.js';
 import { createBoutiqueService } from './modules/boutique/service.js';
 import { coinsRoutes } from './modules/coins/routes.js';
 import { createCoinsService } from './modules/coins/service.js';
+import { fastForwardRoutes } from './modules/fast-forward/routes.js';
+import { createFastForwardService } from './modules/fast-forward/service.js';
 import { heartCoinsRoutes } from './modules/heart-coins/routes.js';
 import { createHeartCoinsService } from './modules/heart-coins/service.js';
 import { setDevDropChance } from './modules/wardrobe/drops.js';
@@ -569,6 +571,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // Heart Coins (#601): per player per patch, earned by playing there.
         await api.register(
           heartCoinsRoutes(createHeartCoinsService({ db, clock }), {
+            hooks: authHooks,
+            devGrants: config.HP_DEV_SQUISHY_GRANTS,
+          }),
+        );
+        // The day-N playtest seed (#736): dev only, no route at all otherwise.
+        await api.register(
+          fastForwardRoutes(createFastForwardService({ db, clock, ...publish }), {
             hooks: authHooks,
             devGrants: config.HP_DEV_SQUISHY_GRANTS,
           }),
