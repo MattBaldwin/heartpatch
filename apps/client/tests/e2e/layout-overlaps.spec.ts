@@ -8,7 +8,8 @@ import { newPlayer, uniqueName, visitPatch } from './players.js';
 // button over "My patches", a busy tile panel cut off in a short window, the
 // "Log out" chip over the map while the Build sheet is up, and the iPad's tile
 // panel over the map's name pill. Then (#721 follow-up) the panel ends between
-// rows, and the Build sheet keeps the round Me button. Each is checked on the
+// rows, and the Build sheet keeps the round Me button, then its Build! row is
+// pinned whole and unfaded at the panel's foot. Each is checked on the
 // game's own boxes.
 
 const SE = { width: 375, height: 667 };
@@ -113,6 +114,64 @@ async function expectWholeRows(page: Page): Promise<void> {
   expect(fit.fade).toBe(fit.scrolls);
 }
 
+/**
+ * The Build sheet's Build! and Not now are pinned whole at the panel's foot,
+ * scrolled to the top or the bottom, with no "more below" fade over them
+ * (#723 follow-up: the fade washed Build! out, so it read as switched off).
+ */
+async function expectBuildRow(page: Page, screenHeight: number): Promise<void> {
+  const panel = page.getByTestId('tile-panel');
+  await checkBuildRow(page, screenHeight);
+  // A sheet taller than the panel (a long note, big text): the row stays pinned.
+  // A style, not a node: the sheet redraws its children on any change.
+  await page.evaluate(() => {
+    const tall = document.createElement('style');
+    tall.id = 'build-tall';
+    tall.textContent = '.build-detail { min-height: 200dvh; }';
+    document.head.append(tall);
+  });
+  await settled(page);
+  expect(await panel.evaluate((p) => p.scrollHeight > p.clientHeight + 100)).toBe(true);
+  await checkBuildRow(page, screenHeight);
+  await page.evaluate(() => document.getElementById('build-tall')?.remove());
+}
+
+async function checkBuildRow(page: Page, screenHeight: number): Promise<void> {
+  const panel = page.getByTestId('tile-panel');
+  for (const to of ['top', 'bottom'] as const) {
+    await panel.evaluate((p, end) => {
+      p.scrollTop = end === 'top' ? 0 : p.scrollHeight;
+    }, to);
+    await settled(page);
+    const fit = await panel.evaluate((p) => {
+      const box = p.getBoundingClientRect();
+      const inner = { top: box.top + p.clientTop, bottom: box.top + p.clientTop + p.clientHeight };
+      const row = p.querySelector('.build-actions')!.getBoundingClientRect();
+      const buttons = ['build-go', 'build-cancel'].map((id) => {
+        const b = p.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect();
+        return { id, top: b.top, bottom: b.bottom, height: b.height };
+      });
+      return {
+        inner,
+        row: { top: row.top, bottom: row.bottom },
+        buttons,
+        more: p.dataset['more'],
+        fade: getComputedStyle(p, '::after').content !== 'none',
+      };
+    });
+    expect(fit.more, to).toBe('none');
+    expect(fit.fade, to).toBe(false);
+    // The row sits on the panel's foot, its buttons whole inside it with room below.
+    expect(Math.abs(fit.row.bottom - fit.inner.bottom), to).toBeLessThanOrEqual(1);
+    for (const b of fit.buttons) {
+      expect(b.height, `${b.id} ${to}`).toBeGreaterThan(0);
+      expect(b.top, `${b.id} ${to}`).toBeGreaterThanOrEqual(fit.inner.top);
+      expect(b.bottom, `${b.id} ${to}`).toBeLessThanOrEqual(fit.inner.bottom - 8);
+      expect(b.bottom, `${b.id} ${to}`).toBeLessThanOrEqual(screenHeight);
+    }
+  }
+}
+
 test('small phones and iPads: nothing sits on anything (#621 render-checks)', async ({
   browser,
 }) => {
@@ -204,7 +263,12 @@ test('small phones and iPads: nothing sits on anything (#621 render-checks)', as
     }
   });
 
-  for (const screen of [SE, { width: 393, height: 852 }, { width: 1080, height: 810 }]) {
+  for (const screen of [
+    SE,
+    { width: 393, height: 852 },
+    { width: 1080, height: 810 },
+    { width: 820, height: 1180 },
+  ]) {
     await test.step(`${String(screen.width)}×${String(screen.height)}: the Build sheet`, async () => {
       await page.setViewportSize(screen);
       await openBuildable(page);
@@ -223,12 +287,8 @@ test('small phones and iPads: nothing sits on anything (#621 render-checks)', as
       await expect(page.getByRole('button', { name: 'Log out' })).toBeVisible();
       await me.tap();
       await expect(page.getByRole('button', { name: 'Log out' })).toBeHidden();
-      await expectWholeRows(page);
-      // Build! and Not now are on screen.
-      for (const id of ['build-go', 'build-cancel']) {
-        const b = (await page.getByTestId(id).boundingBox())!;
-        expect(b.y + b.height).toBeLessThanOrEqual(screen.height);
-      }
+      // Build! and Not now are whole, unfaded, on screen at the panel's foot.
+      await expectBuildRow(page, screen.height);
       await page.getByTestId('build-cancel').tap();
       await expect(page.getByTestId('build-sheet')).toBeHidden();
       await expect(me).toBeVisible();
