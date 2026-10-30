@@ -4,6 +4,7 @@ import {
   awayWindow,
   buildIncome,
   buildPlan,
+  formatWhatPays,
   levelDays,
   pausedWhilePlaying,
   playCoins,
@@ -13,6 +14,7 @@ import {
   upkeepPercent,
   warehouseTrip,
   warehouseTripRuns,
+  whatPays,
   type PatchEconomyRun,
 } from './patch-economy.js';
 import { PROGRESSION_CONFIG } from './progression-config.js';
@@ -164,5 +166,45 @@ describe('a kid who never sells (#601: pause and wake)', () => {
     expect(woke).toBe(true);
     // It still makes things between pauses.
     expect(run.days.slice(-5).some((d) => d.output > 0)).toBe(true);
+  });
+});
+
+describe('what pays today (#736)', () => {
+  const run = runPatchEconomy(CONFIG, PROGRESSION_CONFIG).find(
+    (r) => r.kid === CONFIG.whatPays.kid && r.away.length === 0 && r.warehouse,
+  )!;
+  const shop = (items: { id: string; price: number; perWeek: number }[]) => ({
+    ...CONFIG,
+    whatPays: { ...CONFIG.whatPays, shop: items },
+  });
+
+  it('sums the last week against the day-30 balance', () => {
+    const result = whatPays(run, CONFIG);
+    const week = run.days.slice(-CONFIG.whatPays.weekDays);
+    expect(result.day).toBe(CONFIG.days);
+    expect(result.balance).toBe(run.days.at(-1)!.balance);
+    expect(result.earned).toBe(week.reduce((a, d) => a + d.played + d.sold, 0));
+    expect(result.upkeep).toBe(week.reduce((a, d) => a + d.upkeep, 0));
+  });
+
+  it('fails (softly) while upkeep is the only thing Heart Coins buy', () => {
+    const result = whatPays(run, CONFIG);
+    expect(result).toMatchObject({ buyable: 0, canSpend: 0, percent: 0, pass: false });
+    expect(formatWhatPays(result, run, CONFIG)).toContain('soft until #729');
+  });
+
+  it('passes once the week offers enough to buy, up to the balance', () => {
+    const rich = whatPays(
+      run,
+      shop([
+        { id: 'lure', price: 120, perWeek: 2 },
+        { id: 'kit', price: 50, perWeek: 7 },
+      ]),
+    );
+    expect(rich.buyable).toBe(590);
+    expect(rich.canSpend).toBe(Math.min(590, rich.balance));
+    expect(rich.pass).toBe(rich.percent >= CONFIG.whatPays.minSpendPercent);
+    const cheap = whatPays(run, shop([{ id: 'pack', price: 1, perWeek: 1 }]));
+    expect(cheap).toMatchObject({ buyable: 1, canSpend: 1, pass: false });
   });
 });

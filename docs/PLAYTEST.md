@@ -135,6 +135,20 @@ Watch the story with each tester, paying special attention to **shot 4, "The Hol
 - [ ] Ask: "Was any part too scary?" If a tester says yes, note the moment and their age.
 - [ ] The Hollow Man's night visits on the map feel the same way, and the morning report says the squishy can be rescued.
 
+## Day-N cold play (owner, weekly, 20 minutes)
+
+The checklists above ask "does it work?". This one asks "is it fun on day 10?" (#736). Once a week, play one account that's already a few days in, through fresh eyes.
+
+1. **Seed three accounts** that stand where a kid would be on **day 3, day 10 and day 21**. Until the dev fast-forward route lands (#736 part B), seed by playing, or ask the coordinator.
+2. **Hand one to a kid who hasn't seen that state.** Not the account's own player, and not a kid who's already that far in. Don't explain anything; just watch.
+3. **Write down three things:**
+   - [ ] the first thing they tried to do,
+   - [ ] the first moment they put the phone down,
+   - [ ] what they said they wanted.
+4. **File each one** as a GitHub issue titled `Playtest: day N: <quote>`, using their own words, like `Playtest: day 10: "I want a sparkly one"`.
+
+Compare with the "firsts" row in `pnpm sim:progression`: what new thing should that kid have been meeting around day N?
+
 ## Performance (owner)
 
 The frame-rate badge only shows in a **dev build**, so do this pass on a local playtest (DEPLOY.md, "Playtesting"), not on the real server. The badge in the corner reads, part by part, frame rate · renderer · quality tier · render scale · draws · triangles, like `58 fps · WebGL2 · high · 2.00x · 42 draws · 120k tris`; `idle` means nothing is moving, so nothing is being drawn. Test on a recent iPhone and the **oldest iPad** you have. The dev build isn't minified like the real one, so the real game runs at least this fast.

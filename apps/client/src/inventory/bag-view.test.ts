@@ -1,4 +1,10 @@
-import { findAvoidedWords, GAME_DATA, type Craft, type Gather } from '@heartpatch/shared';
+import {
+  findAvoidedWords,
+  GAME_DATA,
+  RETIRED_RESOURCES,
+  type Craft,
+  type Gather,
+} from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import {
   bagCrafts,
@@ -36,8 +42,11 @@ describe('bag', () => {
     ]);
   });
 
-  it('has a picture for every item in the game data', () => {
-    for (const r of GAME_DATA.resources) expect(itemIcon(r.id), r.id).not.toBe(FALLBACK_ICON);
+  it('has a picture for every item in the game data, but the retired ones (#735)', () => {
+    for (const r of GAME_DATA.resources) {
+      const retired = RETIRED_RESOURCES.includes(r.id);
+      expect(itemIcon(r.id) === FALLBACK_ICON, r.id).toBe(retired);
+    }
   });
 
   it('says what a gather or craft gives', () => {

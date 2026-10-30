@@ -20,6 +20,13 @@ import {
 import { JOURNEY_RULES } from '../../src/data/journeys.js';
 import { journeyGateMisses, renderProgression, summarise } from './progression-report.js';
 import {
+  firstsFacts,
+  firstsGate,
+  firstsOf,
+  formatFirst,
+  formatFirstsGate,
+} from './progression-firsts.js';
+import {
   journeyOdds,
   modelData,
   runProgression,
@@ -62,7 +69,11 @@ const seconds = (performance.now() - started) / 1000;
 
 mkdirSync(outDir, { recursive: true });
 const reportPath = resolve(outDir, 'progression-report.md');
-writeFileSync(reportPath, renderProgression(runs, PROGRESSION_CONFIG, { seconds, odds, journeys }));
+const facts = firstsFacts(data.species);
+writeFileSync(
+  reportPath,
+  renderProgression(runs, PROGRESSION_CONFIG, { seconds, odds, journeys, firsts: facts }),
+);
 
 console.log(`${String(runs.length)} runs in ${seconds.toFixed(1)} s.`);
 for (const s of runs.map((run) => summarise(run, PROGRESSION_CONFIG))) {
@@ -82,4 +93,17 @@ const misses = journeyGateMisses(journeys);
 console.log(
   misses.length === 0 ? '  journey gate: passes' : `  journey gate MISSES: ${misses.join('; ')}`,
 );
+// Firsts (#736): the shipped rules, kid 0 of each run.
+const gate = PROGRESSION_CONFIG.firstsGate;
+for (const run of runs.filter((r) => r.rules === CURRENT_RULES)) {
+  const firsts = firstsOf(run.kids[0]?.days ?? [], facts);
+  console.log(
+    `  firsts ${String(run.seats)} seats ${run.profile.id.padEnd(7)} ` +
+      firsts.map((f) => `${f.label} ${formatFirst(f.day, PROGRESSION_CONFIG.days)}`).join(', '),
+  );
+  if (run.profile.id === gate.kid && run.seats === PROGRESSION_CONFIG.seats[0]) {
+    // TODO(#730): exit non-zero on a FAIL once #730 merges; soft until then.
+    console.log(`  ${formatFirstsGate(firstsGate(firsts, gate), gate)}`);
+  }
+}
 console.log(`Report: ${reportPath}`);

@@ -75,7 +75,6 @@ export const GUIDE_TEXT = {
   later: 'Coming later',
   laterNote: "Can't build these yet",
   laterChip: 'Later',
-  notYet: 'Coming soon!',
   backNext: (season: string) => `Back next ${season}`,
   nothingFits: 'Nothing fits this tile yet. Peek at All!',
   groups: {
@@ -213,7 +212,6 @@ export function placeChips(place: readonly GuidePlace[]): string[] {
 /** The "Coming later" shelf's label, or null for a building you can build now. */
 export function gateLabel(entry: Pick<BuildingGuideEntry, 'gate'>): string | null {
   if (!entry.gate) return null;
-  if (entry.gate.kind === 'not-yet') return GUIDE_TEXT.notYet;
   return GUIDE_TEXT.backNext(SEASON_NAMES.get(entry.gate.season) ?? entry.gate.season);
 }
 

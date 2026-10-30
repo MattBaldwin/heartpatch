@@ -17,9 +17,6 @@ const ICONS: Readonly<Record<string, string>> = {
   pumpkins: '🎃',
   'witch-dust': '🔮',
   'magic-fallen-leaves': '🍂',
-  'turkey-feathers': '🪶',
-  presents: '🎁',
-  fireworks: '🎆',
   'heart-charm': '💗',
   'jack-o-lantern-hearthfire': '🏮',
   // Battle potions (#214).
@@ -40,6 +37,7 @@ const ICONS: Readonly<Record<string, string>> = {
   flour: '🌾',
   salt: '🧂',
   pies: '🥧', // Baked from all three (W1-8b).
+  'frosty-treats': '🍧', // Mixed from Ice and Treats (#735).
   // Explore tools (#199).
   shovel: TOOL_WORDS.shovel.icon,
   net: TOOL_WORDS.net.icon,

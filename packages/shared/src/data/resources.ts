@@ -61,7 +61,7 @@ export const RESOURCES: Resource[] = [
     id: 'ice',
     name: 'Ice',
     description:
-      'Cold and sparkly chunks from the mountains, for building an Ice Wall. They never melt in your bag!',
+      'Cold and sparkly chunks from the mountains, for an Ice Wall or Frosty Treats. They never melt in your bag!',
     kind: 'gathered',
     gather: { seconds: 30 * 60, quantity: 2 }, // TUNE: like Emberwood
   },
@@ -93,6 +93,14 @@ export const RESOURCES: Resource[] = [
     id: 'pies',
     name: 'Pies',
     description: 'Warm, flaky pies of Flour, Fish and Salt. Squishies go wild for these!',
+    kind: 'crafted',
+  },
+  // Made from Ice and Treats (#735, `mix-frosty-treats`): a feed Frost
+  // squishies love as much as Pies (`CARE_RULES.foods`).
+  {
+    id: 'frosty-treats',
+    name: 'Frosty Treats',
+    description: 'Crunchy ice treats. Frost squishies love these extra!',
     kind: 'crafted',
   },
   {
@@ -133,12 +141,14 @@ export const RESOURCES: Resource[] = [
     season: 'thanksgiving',
     gather: { seconds: 20 * 60, quantity: 3 }, // TUNE: a home leaf pile, like the farm plot
   },
+  // #735: `RETIRED_RESOURCES` until their season's lane gives them a use.
   {
     id: 'turkey-feathers',
     name: 'Turkey Feathers',
     description: 'Fluffy feathers in every autumn color.',
     kind: 'seasonal',
     season: 'thanksgiving',
+    tradable: false,
   },
   {
     id: 'presents',
@@ -146,6 +156,7 @@ export const RESOURCES: Resource[] = [
     description: 'Wrapped surprises. What could be inside?',
     kind: 'seasonal',
     season: 'christmas',
+    tradable: false,
   },
   {
     id: 'fireworks',
@@ -153,6 +164,7 @@ export const RESOURCES: Resource[] = [
     description: 'Big, bright and very loud. Great for a party!',
     kind: 'seasonal',
     season: 'new-year',
+    tradable: false,
   },
   {
     id: 'heart-charm',
@@ -286,3 +298,11 @@ export const RESOURCES: Resource[] = [
     tradable: false, // worn in uses, it stays with its Keeper
   },
 ];
+
+/**
+ * Resources with no way in and no way out yet (#735), kept only so saved
+ * bags load: not tradable, no trade value, no icon. `content.test.ts` checks
+ * every other resource has both; each season's lane takes its own off this
+ * list (Fireworks: #41).
+ */
+export const RETIRED_RESOURCES: readonly string[] = ['turkey-feathers', 'presents', 'fireworks'];

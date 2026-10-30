@@ -10,6 +10,7 @@ import {
 } from './progression-config.js';
 import { JOURNEY_RULES } from '../../src/data/journeys.js';
 import { gapWin, journeyGateMisses, renderProgression, summarise } from './progression-report.js';
+import { firstsFacts } from './progression-firsts.js';
 import { journeyOdds, modelData, runProgression, wildOdds } from './progression.js';
 
 /** A short run: the same model, a few days and a small odds estimate. */
@@ -151,9 +152,17 @@ describe('the progression report', () => {
     const summary = summarise(runs[1]!, SMALL);
     expect(summary).toMatchObject({ rules: 'now', seats: 4, kid: 'engaged' });
     expect(summary.evolves).not.toBeNull();
-    const report = renderProgression(runs, { ...SMALL, seats: [4] }, { seconds: 1 });
+    const report = renderProgression(
+      runs,
+      { ...SMALL, seats: [4] },
+      { seconds: 1, firsts: firstsFacts(data.species) },
+    );
     expect(report).toContain('## Milestones by day');
     expect(report).toContain('## now: 4-seat map');
+    // #736: the firsts table and its soft gate.
+    expect(report).toContain('## Firsts (#736)');
+    expect(report).toContain('soft until #730');
+    expect(report).toContain('| now | 4 | engaged | day 1 |');
   });
 
   it('works out what a Gap win pays from the curve', () => {

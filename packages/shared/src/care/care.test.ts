@@ -6,7 +6,12 @@ import { SPECIES } from '../data/species.js';
 import { findAvoidedWords } from '../data/avoided-words.js';
 import { HOUSE_DATA } from '../data/house.js';
 import { residentDrainPercent } from '../house/index.js';
-import { checkCareRules, checkGrowthRules, type CareRules } from '../schemas/data/care.js';
+import {
+  checkCareRules,
+  checkGrowthRules,
+  foodPercentFor,
+  type CareRules,
+} from '../schemas/data/care.js';
 import {
   careCoins,
   careGain,
@@ -97,6 +102,7 @@ describe('fedWith (#621 W1-8b)', () => {
     for (const food of Object.keys(CARE_RULES.foods ?? {}))
       expect(resources.has(food), food).toBe(true);
     expect(CARE_RULES.foods).toMatchObject({ treats: 100, pies: 150 });
+    expect(resources.has('frosty-treats')).toBe(true);
     expect(feed.cost).toEqual({ treats: 1 });
   });
 
@@ -139,6 +145,42 @@ describe('fedWith (#621 W1-8b)', () => {
 
   it('rejects a food worth nothing', () => {
     expect(checkCareRules({ ...CARE_RULES, foods: { pies: 0 } }).join('\n')).toContain('foods');
+    const bad = { 'frosty-treats': { percent: 100, elements: { frost: 0 } } };
+    expect(checkCareRules({ ...CARE_RULES, foods: bad }).join('\n')).toContain('foods');
+    const notAnElement = { 'frosty-treats': { percent: 100, elements: { lava: 150 } } };
+    expect(checkCareRules({ ...CARE_RULES, foods: notAnElement }).join('\n')).toContain('foods');
+  });
+
+  it('feeds Frosty Treats at 150 % to a Frost squishy, 100 % to any other (#735)', () => {
+    expect(CARE_RULES.foods?.['frosty-treats']).toEqual({ percent: 100, elements: { frost: 150 } });
+    const frosty = { contentment: 30, cost: { 'frosty-treats': 1 } };
+    expect(fedWith(feed, 'frosty-treats', CARE_RULES, 'frost')).toEqual(frosty);
+    for (const element of ['fire', 'water', undefined] as const) {
+      expect(fedWith(feed, 'frosty-treats', CARE_RULES, element), element).toEqual({
+        ...frosty,
+        contentment: feed.contentment,
+      });
+    }
+    // Pies and Treats don't care about elements.
+    for (const element of ['frost', 'fire', undefined] as const) {
+      expect(fedWith(feed, 'pies', CARE_RULES, element)).toEqual({
+        contentment: 30,
+        cost: { pies: 1 },
+      });
+      expect(fedWith(feed, 'treats', CARE_RULES, element)).toEqual({
+        contentment: feed.contentment,
+        cost: feed.cost,
+      });
+    }
+  });
+
+  it('reads a food rule for an element, else its plain percent', () => {
+    expect(foodPercentFor(150)).toBe(150);
+    expect(foodPercentFor(150, 'frost')).toBe(150);
+    const rule = { percent: 100, elements: { frost: 150 } };
+    expect(foodPercentFor(rule)).toBe(100);
+    expect(foodPercentFor(rule, 'frost')).toBe(150);
+    expect(foodPercentFor(rule, 'fire')).toBe(100);
   });
 });
 

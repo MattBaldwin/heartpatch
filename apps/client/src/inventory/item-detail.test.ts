@@ -1,6 +1,7 @@
-import { findAvoidedWords, GAME_DATA } from '@heartpatch/shared';
+import { findAvoidedWords, GAME_DATA, RETIRED_RESOURCES } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { itemDetail } from './item-detail.js';
+import { FALLBACK_ICON } from './item-icons.js';
 
 describe('the Bag item card (#241)', () => {
   it('says what a made thing is for, with chips from its data', () => {
@@ -38,6 +39,17 @@ describe('the Bag item card (#241)', () => {
     expect(treats).toContain('🥣 Made from Greens and Pumpkins');
     expect(treats.find((t) => t.startsWith('🍳'))).toMatch(/and more$/);
     expect(itemDetail('fireworks', 1).chips.map((c) => c.text)).toEqual(['🎀 A New Year keepsake']);
+  });
+
+  it('an old saved stack of a retired item still reads as a full row (#735)', () => {
+    for (const id of RETIRED_RESOURCES) {
+      const d = itemDetail(id, 3);
+      expect(d.name).not.toBe(id);
+      expect(d.icon).toBe(FALLBACK_ICON);
+      expect(d.have).toBe('You have 3');
+      expect(d.purpose).not.toBe('');
+      expect(d.chips.map((c) => c.text)).toEqual([expect.stringMatching(/^🎀 A .+ keepsake$/)]);
+    }
   });
 
   it('gives every item a line and chips in kind words', () => {
