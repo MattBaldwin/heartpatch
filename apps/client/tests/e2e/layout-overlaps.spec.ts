@@ -127,7 +127,7 @@ async function expectBuildRow(page: Page, screenHeight: number): Promise<void> {
   await page.evaluate(() => {
     const tall = document.createElement('style');
     tall.id = 'build-tall';
-    tall.textContent = '.build-detail { min-height: 900px; }';
+    tall.textContent = '.build-detail { min-height: 200dvh; }';
     document.head.append(tall);
   });
   await settled(page);
