@@ -833,8 +833,8 @@ describe('the missing-tool card never moves onto a glint its own place left show
     const at = { ...card, top: card.top + dy, bottom: card.bottom + dy };
     expect(coverShare(at, keeper) + coverShare(at, front)).toBe(0);
     expect(at.top).toBeGreaterThanOrEqual(room.top);
-    // Just over the Keeper's head it covers both; just over the eddy's glint, one.
-    expect(at.bottom).toBe(front.top - 12);
+    // Just over the Keeper's head it covers both; over the eddy's glint, one.
+    expect(at.bottom).toBeLessThanOrEqual(front.top - 12);
     expect([high, low].filter((b) => coverShare(at, b) > 0)).toEqual([high]);
   });
 
@@ -878,8 +878,7 @@ describe('the missing-tool card never moves onto a glint its own place left show
   it('keeps its gap under the 🐾 button (iPhone 15 upright)', () => {
     const front = { left: 230, right: 260, top: 520, bottom: 550 };
     const paw = { left: 16, right: 64, top: 127, bottom: 175 };
-    // The caller widens the button by the gap, so no place comes nearer.
-    const near = { left: 4, right: 76, top: 115, bottom: 187 };
+    const near = paw;
     const keeper = { left: 175, right: 215, top: 300, bottom: 360 };
     const over = { ...card, top: 340, bottom: 450 };
     // Without the button it sits just over the Keeper's head, 3px under it.

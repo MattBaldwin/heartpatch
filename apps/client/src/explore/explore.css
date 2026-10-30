@@ -809,6 +809,13 @@ body:has(.explore:not([hidden])) .auth-chip {
     right: calc(env(safe-area-inset-right) + 150px);
   }
 
+  /* The missing-tool card starts a gap past the 🐾 button under Back
+     (squishies-entry.css: 16px in, 48px wide, centred past 672px), so on a
+     wide phone held sideways it can rise beside it, never under it (Layout B2). */
+  .explore-need {
+    left: calc(env(safe-area-inset-left) + max(150px, 76px + max(0px, (100vw - 672px) / 2)));
+  }
+
   .explore-play {
     bottom: calc(env(safe-area-inset-bottom) + 12px);
     gap: 8px;

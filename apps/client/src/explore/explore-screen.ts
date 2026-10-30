@@ -233,6 +233,11 @@ export interface ExploreDebug {
   readonly keeperOnScreen: ScreenBox | null;
   /** A spot's glint's box on screen, CSS px, or null (the missing-tool card keeps clear of its spot's). */
   glintOnScreen: (index: number) => ScreenBox | null;
+  /** The missing-tool card's last placement and the band it had, or null (Layout B2). */
+  readonly needPlan: {
+    readonly place: NeedPlace | null;
+    readonly room: { readonly top: number; readonly bottom: number };
+  } | null;
   readonly scene: ExploreSceneStats | null;
   /**
    * Batch uploads since the page opened (`batchUploads`): each makes fresh
@@ -1359,6 +1364,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let needGlints = 0;
   /** The front spot and open-spot count the card was last laid out afresh for. */
   let needFor = '';
+  /** The card's last placement, for the dev hook's `needPlan`. */
+  let needPlan: ExploreDebug['needPlan'] = null;
   /** Fresh layouts so far (a new spot, a spot searched, a turn, the scene settling). */
   let needLayouts = 0;
   /** The layout where folding short didn't help, so it isn't tried again. */
@@ -1391,15 +1398,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     // its gap from it, as from the bars.
     const paw = document.querySelector<HTMLElement>('.squishies-open-explore');
     const pawBox = paw && !paw.hidden ? paw.getBoundingClientRect() : null;
-    if (pawBox && pawBox.width > 0) {
-      const g = EXPLORE_VIEW.needGap;
-      keep.push({
-        left: pawBox.left - g,
-        right: pawBox.right + g,
-        top: pawBox.top - g,
-        bottom: pawBox.bottom + g,
-      });
-    }
+    if (pawBox && pawBox.width > 0) keep.push(pawBox);
     const spare = (tile?.spots ?? [])
       .filter((s) => !s.done && s.index !== front?.index)
       .map((s) => glintOf(s.index))
@@ -1426,10 +1425,16 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     // No place misses the other glints (or none even clears the Keeper):
     // it's crowded, and over as little more of the rest as it can.
     need.dataset['glints'] = place === null || place.hides > 0 ? 'crowded' : 'clear';
-    // Still no room either side (a screen too short for both): as high as it may go.
-    const dy = Math.round(
-      place?.dy ?? needRoomNow().top - (need.getBoundingClientRect().top - needShift),
-    );
+    // Still no room either side (a screen too short for both): as high as it
+    // may go, though never up under the 🐾 button.
+    const room = needRoomNow();
+    const rest = needAtRest();
+    const under =
+      pawBox && pawBox.width > 0 && pawBox.left < rest.right && pawBox.right > rest.left
+        ? pawBox.bottom + EXPLORE_VIEW.needGap
+        : -Infinity;
+    needPlan = { place, room };
+    const dy = Math.round(place?.dy ?? Math.max(room.top, under) - rest.top);
     if (dy === needShift) return;
     needShift = dy;
     need.style.transform = dy === 0 ? '' : `translateY(${String(dy)}px)`;
@@ -2099,6 +2104,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         hint: need.hidden ? null : ((need.dataset['tool'] as ToolId | undefined) ?? null),
         keeperOnScreen: s?.keeperOnScreen() ?? null,
         glintOnScreen: (index: number) => s?.glintOnScreen(index) ?? null,
+        needPlan: need.hidden ? null : needPlan,
         scene: s?.stats ?? null,
         batchUploads: batchUploads.count,
         tierChanges,

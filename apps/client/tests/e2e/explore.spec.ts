@@ -123,6 +123,10 @@ async function expectNeedClearOfKeeper(page: Page): Promise<void> {
               keeperOnScreen: Box | null;
               glintOnScreen: (index: number) => Box | null;
               spots: readonly { index: number; done: boolean }[];
+              needPlan: {
+                place: { dy: number; hides: number; area: number } | null;
+                room: { top: number; bottom: number };
+              } | null;
             };
           };
           const e = (window as unknown as { __heartpatch?: Hook }).__heartpatch?.explore?.();
@@ -145,8 +149,63 @@ async function expectNeedClearOfKeeper(page: Page): Promise<void> {
             Math.max(0, Math.min(c.right, b.right) - Math.max(c.left, b.left)) *
             Math.max(0, Math.min(c.bottom, b.bottom) - Math.max(c.top, b.top));
           // With glints all round the Keeper there may be no such place: then
-          // it says so, and still keeps clear of him and his glint.
+          // it says so, and takes the place (in its band, clear of the Keeper,
+          // his glint and the 🐾 button) over the least more of the others.
           const crowded = (el as HTMLElement).dataset['glints'] === 'crowded';
+          const front = e.glintOnScreen(e.near);
+          const pawEl = document.querySelector<HTMLElement>('.squishies-open-explore');
+          const pawAt = pawEl && !pawEl.hidden ? pawEl.getBoundingClientRect() : null;
+          const others = e.spots
+            .filter((x) => !x.done && x.index !== e.near)
+            .map((x) => e.glintOnScreen(x.index))
+            .filter((b) => b !== null);
+          if (crowded && e.needPlan) {
+            // Each kept a gap off, as the card's own places are.
+            const grow = (b: Box) => ({
+              left: b.left - 12,
+              right: b.right + 12,
+              top: b.top - 12,
+              bottom: b.bottom + 12,
+            });
+            const keep = [e.keeperOnScreen, ...(front ? [front] : [])].map(grow);
+            if (pawAt && pawAt.width > 0) keep.push(grow(pawAt));
+            const at = (d: number) => ({ ...rest, top: rest.top + d, bottom: rest.bottom + d });
+            const score = (c: Box) => {
+              let hides = 0;
+              let area = 0;
+              for (const b of others) {
+                const more = cover(c, b) - cover(rest, b);
+                if (more > 0) {
+                  hides++;
+                  area += more;
+                }
+              }
+              return { hides, area };
+            };
+            let best: { hides: number; area: number } | null = null;
+            const { room, place } = e.needPlan;
+            for (let d = Math.ceil(room.top - rest.top); d <= room.bottom - rest.bottom; d++) {
+              if (keep.some((b) => cover(at(d), b) > 0)) continue;
+              const sc = score(at(d));
+              if (
+                !best ||
+                sc.hides < best.hides ||
+                (sc.hides === best.hides && sc.area < best.area)
+              )
+                best = sc;
+            }
+            if (!place && best) return `no place, but ${JSON.stringify(best)} fits`;
+            // Its places sit a gap off each box, so allow a little more than the scan's best.
+            const slack = Math.max(0, ...others.map((b) => b.right - b.left)) * 12;
+            if (
+              place &&
+              best &&
+              (place.hides > best.hides ||
+                (place.hides === best.hides && place.area > best.area + slack))
+            ) {
+              return `crowded place ${JSON.stringify(place)} worse than ${JSON.stringify(best)}`;
+            }
+          }
           for (const spot of crowded ? [] : e.spots) {
             if (spot.done || spot.index === e.near) continue;
             const other = e.glintOnScreen(spot.index);
@@ -216,11 +275,35 @@ async function expectNeedClearOfKeeper(page: Page): Promise<void> {
 
 /** Phones held sideways: iPhone 15 (full screen and under the browser's bars) and SE; then SE upright. */
 const SIDEWAYS = [
-  { width: 852, height: 393 }, // iPhone 15 held sideways, installed
+  // iPhone 15 held sideways, installed: the notch's insets either side.
+  { width: 852, height: 393, insets: { left: 59, right: 59, bottom: 21 } },
   { width: 734, height: 343 }, // iPhone 15 held sideways (the reviewer's repro)
   { width: 667, height: 375 }, // iPhone SE held sideways
-  { width: 375, height: 667 }, // iPhone SE upright (its pebble glint, Layout B2)
+  { width: 375, height: 667, insets: { top: 20 } }, // iPhone SE upright, installed
+  { width: 393, height: 852, insets: { top: 59, bottom: 34 } }, // iPhone 15 upright, installed
 ] as const;
+
+type Turn = {
+  readonly width: number;
+  readonly height: number;
+  readonly insets?: {
+    readonly top?: number;
+    readonly bottom?: number;
+    readonly left?: number;
+    readonly right?: number;
+  };
+};
+
+/** Turns (or resizes) the screen, with its safe-area insets (none unless given; Chromium only). */
+async function turnTo(page: Page, size: Turn): Promise<void> {
+  const cdp = await page.context().newCDPSession(page);
+  const i = size.insets ?? {};
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+    insets: { top: i.top ?? 0, bottom: i.bottom ?? 0, left: i.left ?? 0, right: i.right ?? 0 },
+  });
+  await cdp.detach();
+  await page.setViewportSize({ width: size.width, height: size.height });
+}
 
 /** The card's box, to check a turn back to portrait leaves it as it was. */
 const needBox = (page: Page) => page.getByTestId('explore-need').boundingBox();
@@ -1088,10 +1171,10 @@ test('enters a river tile on its dry bank, with its mossy logs, pebble bars and 
         : [];
     if (portrait) {
       for (const size of turns) {
-        await page.setViewportSize(size);
+        await turnTo(page, size);
         await expectNeedClearOfKeeper(page);
       }
-      await page.setViewportSize(portrait);
+      await turnTo(page, portrait);
       await expectNeedClearOfKeeper(page);
     }
 
@@ -1116,10 +1199,10 @@ test('enters a river tile on its dry bank, with its mossy logs, pebble bars and 
     const upright = await needBox(page);
     if (portrait) {
       for (const size of turns) {
-        await page.setViewportSize(size);
+        await turnTo(page, size);
         await expectNeedClearOfKeeper(page);
       }
-      await page.setViewportSize(portrait);
+      await turnTo(page, portrait);
       await expectNeedClearOfKeeper(page);
       expect(await needBox(page)).toEqual(upright);
     }

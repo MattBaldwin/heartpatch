@@ -425,19 +425,34 @@ export function placeNeedCard(
     });
     return { dy, hides, area };
   };
+  // A gap off everything it keeps clear of.
+  const kept = keep.map((b) => ({
+    left: b.left - gap,
+    right: b.right + gap,
+    top: b.top - gap,
+    bottom: b.bottom + gap,
+  }));
   const fits = (dy: number) =>
-    card.top + dy >= room.top &&
-    card.bottom + dy <= room.bottom &&
-    keep.every((b) => overlap(dy, b) === 0);
-  const all = [...keep, ...spare];
-  const up = all
-    .map((b) => b.top - gap - card.bottom)
-    .filter((dy) => dy < 0 && fits(dy))
-    .sort((x, y) => y - x);
-  const down = all
-    .map((b) => b.bottom + gap - card.top)
-    .filter((dy) => dy > 0 && fits(dy))
-    .sort((x, y) => x - y);
+    card.top + dy >= room.top - 0.01 &&
+    card.bottom + dy <= room.bottom + 0.01 &&
+    kept.every((b) => overlap(dy, b) < 0.01);
+  // A gap off each box, and (as how much of a glint it covers changes only
+  // where an edge meets an edge) flush with each glint's edges and the band's.
+  const moves = [
+    ...keep.flatMap((b) => [b.top - gap - card.bottom, b.bottom + gap - card.top]),
+    ...spare.flatMap((b) => [
+      b.top - gap - card.bottom,
+      b.bottom + gap - card.top,
+      b.top - card.bottom,
+      b.bottom - card.top,
+      b.top - card.top,
+      b.bottom - card.bottom,
+    ]),
+    room.top - card.top,
+    room.bottom - card.bottom,
+  ];
+  const up = moves.filter((dy) => dy < 0 && fits(dy)).sort((x, y) => y - x);
+  const down = moves.filter((dy) => dy > 0 && fits(dy)).sort((x, y) => x - y);
   let best: NeedPlace | null = null;
   for (const p of [...up, ...down].map(place)) {
     if (!best || needBetter(p, best)) best = p;
