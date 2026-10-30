@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { api, hook } from './dev-hook.js';
 import { expectClear, settled, still } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
@@ -46,6 +47,13 @@ test('the Keeper chip never covers the care sheet, and the sheet scrolls as one 
   await slowExpect(lobby).toBeHidden();
   await (await trayButton(page, 'battle-dev-grant')).tap();
   await slowExpect(page.locator('.battle-entry-note')).toContainText('joined you');
+  // Every food in the bag (option C, 2026-10-30): the food row above Feed is
+  // the tallest the card gets, so every size is measured with it.
+  const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
+  const granted = await api(page, 'POST', `/maps/${mapId}/dev/items`, {
+    items: { treats: 5, pies: 2, 'frosty-treats': 2 },
+  });
+  expect(granted.status).toBe(201);
   await (await trayButton(page, 'home-open')).tap();
   const sheet = page.getByTestId('care');
   const openSheet = async () => {
@@ -94,6 +102,27 @@ test('the Keeper chip never covers the care sheet, and the sheet scrolls as one 
           .map(({ el }) => el.textContent.trim()),
       );
       expect.soft(small, 'every button is at least 44pt each way').toEqual([]);
+
+      // The food row sits right above Feed, its tiles side by side; the
+      // hint line under it goes on an iPhone SE (the mockup's tighter layout).
+      const foods = page.getByTestId('care-foods');
+      await expect(foods).toBeVisible();
+      const tiles = await foods
+        .locator('button')
+        .evaluateAll((els) => els.map((el) => el.getBoundingClientRect()));
+      expect(tiles).toHaveLength(3);
+      for (const t of tiles) {
+        expect.soft(t.top, 'the food tiles share one row').toBeCloseTo(tiles[0]!.top, 0);
+        expect.soft(t.right, 'the food tiles fit the card').toBeLessThanOrEqual(size.width);
+      }
+      const hint = page.getByTestId('care-food-hint');
+      if (size.height <= 700) await expect(hint).toBeHidden();
+      else await expect(hint).toBeVisible();
+      const [rowBox, feedBox] = await Promise.all([
+        foods.evaluate((el) => el.getBoundingClientRect()),
+        page.locator('[data-care="feed"]').evaluate((el) => el.getBoundingClientRect()),
+      ]);
+      expect.soft(rowBox.bottom, 'the food row is above Feed').toBeLessThanOrEqual(feedBox.top);
 
       // Feed, Pet and Play are on screen without scrolling (a phone on its
       // side shows the top of the sheet and scrolls once).

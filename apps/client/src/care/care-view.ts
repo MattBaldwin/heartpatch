@@ -14,6 +14,7 @@ import {
 } from '@heartpatch/shared';
 import { itemName } from '../inventory/bag-view.js';
 import { itemIcon } from '../inventory/item-icons.js';
+import { FEED_ACTION, foodCount, foodRow, PLAIN_FOOD, type FoodRow } from './food-pick.js';
 
 /*
  * The care sheet's model (#19, design doc §7–8): one squishy's mood, level
@@ -63,8 +64,11 @@ export const CARE_TEXT = {
   wait: 'Just a sec…',
   done: DONE_LINES,
   fallbackDone: 'They loved that!',
+  // A feed the server says gave extra (Pies, or Frosty Treats for a Frost one).
+  yum: 'Yum yum! Extra yummy! 💖',
   lessNow: "They're nice and full of love for today!",
-  coins: (n: number) => `+${String(n)} Patch ${n === 1 ? 'Coin' : 'Coins'}`,
+  // No-break spaces: the reward never wraps apart, leaving "Coin" alone on a line.
+  coins: (n: number) => `+${String(n)}\u00a0Patch\u00a0${n === 1 ? 'Coin' : 'Coins'}`,
   infoTitle: 'Levels and evolving',
   // Why care matters (design doc §7), up front in "Levels and evolving".
   whyCare: 'Happy squishies learn more from battles and evolve sooner!',
@@ -210,6 +214,8 @@ export interface CareSheetModel {
   readonly whisper: CareWhisper | null;
   /** The celebration's "brand-new form!" chip (#32): it grew into a branch form. */
   readonly newForm: boolean;
+  /** The food row above Feed (option C, 2026-10-30), or null: Feed pays with Treats. */
+  readonly foods: FoodRow | null;
 }
 
 /** The evolving meter's words and fill (#205). */
@@ -241,13 +247,23 @@ export function evolvingBar(percent: number | null): EvolvingBar | null {
 /**
  * The sheet for one squishy. `now` is the server's time (ms) as the client
  * reckons it, so a debounced button comes back on; it defaults to the reply's.
+ * With `food`, the sheet offers the food row and Feed pays with its pick
+ * (the player's tap, or null for the best); without it, Feed is plain Treats.
  */
 export function careSheet(
   squishy: CareSquishy,
   reply: Pick<CareListResponse, 'speciesDefs' | 'items' | 'now'>,
   now = Date.parse(reply.now),
+  food?: { readonly pick: string | null },
 ): CareSheetModel {
   const species = speciesById(reply);
+  const foods = food
+    ? foodRow(
+        reply.items,
+        { name: squishyName(squishy, species), element: squishy.element },
+        food.pick,
+      )
+    : null;
   // A rare treat shows once the bag has any of what it costs (one Heartdust
   // from a rescue), so it's taught when it's in reach (style guide §3.1).
   const actions = GAME_DATA.careActions.filter(
@@ -257,6 +273,19 @@ export function careSheet(
   );
   const buttons = actions.map((action): CareButton => {
     const readyAt = squishy.nextCareAt[action.id];
+    // Fed with the row's pick, Feed shows (and is short of) that food instead.
+    const fedWith =
+      action.id === FEED_ACTION && foods && foods.picked !== PLAIN_FOOD ? foods.picked : null;
+    if (fedWith !== null) {
+      const n = reply.items[fedWith] ?? 0;
+      return {
+        action: action.id,
+        label: `${itemIcon(fedWith)} ${action.name}`,
+        sub: foodCount(fedWith, n),
+        note: readyAt !== undefined && Date.parse(readyAt) > now ? CARE_TEXT.wait : null,
+        special: false,
+      };
+    }
     const costs = Object.entries(action.cost ?? {});
     const short = costs.some(([id, n]) => (reply.items[id] ?? 0) < n);
     const special = action.outsideDailyCare === true;
@@ -320,14 +349,17 @@ export function careSheet(
     evolving: evolvingBar(squishy.evolving?.percent ?? null),
     whisper: squishy.whisper,
     newForm: squishy.newEvolution?.branch === true,
+    foods,
   };
 }
 
-/** The line after a care action. */
-export function careDoneLine(result: CareResult): string {
-  const line = result.full
-    ? (CARE_TEXT.done[result.action] ?? CARE_TEXT.fallbackDone)
-    : CARE_TEXT.lessNow;
+/** The line after a care action (`big`: a feed that gave extra, `bigFeed`). */
+export function careDoneLine(result: CareResult, big = false): string {
+  const line = !result.full
+    ? CARE_TEXT.lessNow
+    : big
+      ? CARE_TEXT.yum
+      : (CARE_TEXT.done[result.action] ?? CARE_TEXT.fallbackDone);
   return result.coins > 0 ? `${line} ${CARE_TEXT.coins(result.coins)}` : line;
 }
 

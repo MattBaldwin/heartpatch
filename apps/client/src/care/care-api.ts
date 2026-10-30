@@ -11,10 +11,17 @@ export const careApi = {
   list: (mapId: string): Promise<CareListResponse> =>
     apiCallFor(`/maps/${mapId}/care`, { method: 'GET', schema: CareListResponseSchema }),
 
-  care: (mapId: string, squishyId: string, action: string, key: string): Promise<CareResponse> =>
+  /** `itemId` pays a feed with another food (#621 W1-8b: Pies, #735: Frosty Treats). */
+  care: (
+    mapId: string,
+    squishyId: string,
+    action: string,
+    key: string,
+    itemId?: string,
+  ): Promise<CareResponse> =>
     apiCallFor(`/maps/${mapId}/squishies/${squishyId}/care`, {
       method: 'POST',
-      body: { action },
+      body: itemId === undefined ? { action } : { action, itemId },
       schema: CareResponseSchema,
       headers: { 'idempotency-key': key },
     }),

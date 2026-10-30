@@ -1,9 +1,9 @@
 import { CARE_RULES, findAvoidedWords, moodFor } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { hook } from './dev-hook.js';
+import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
-import { careFromRoster } from './roster.js';
+import { careFromRoster, closeRoster } from './roster.js';
 
 /** Server replies and scene builds can be slow on a busy CI runner (software rendering). */
 const slowExpect = expect.configure({ timeout: 30_000 });
@@ -26,6 +26,9 @@ interface CareDebug {
   celebrating: boolean;
   squishes: number;
   note: string;
+  foods: string[];
+  food: string | null;
+  yums: number;
 }
 
 const careState = (page: Page) => hook<CareDebug>(page, 'care');
@@ -103,6 +106,96 @@ test('cares for a squishy from home base: pet, play and feed', async ({ browser 
 
   await sheet.getByTestId('care-close').tap();
   await slowExpect(sheet).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('feeds a Pie from the food row, and the Bag opens care with Frosty Treats picked', async ({
+  browser,
+}) => {
+  test.setTimeout(150_000);
+  const page = await newPlayer(browser, uniqueName('foods'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  await playerWithFriend(page);
+  const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
+
+  // Only Treats: no row, Feed as it's always been.
+  await (await trayButton(page, 'home-open')).tap();
+  await expect.poll(() => homeOpen(page), slow).toBe(true);
+  let sheet = await careFromRoster(page);
+  await slowExpect(sheet.locator('[data-care="feed"]')).toContainText('10 Treats');
+  await expect(sheet.getByTestId('care-foods')).toBeHidden();
+  await sheet.getByTestId('care-close').tap();
+  await slowExpect(sheet).toBeHidden();
+
+  const granted = await api(page, 'POST', `/maps/${mapId}/dev/items`, {
+    items: { pies: 2, 'frosty-treats': 2 },
+  });
+  expect(granted.status).toBe(201);
+
+  // The row: every food, the best (Pies: as yummy as it gets, and the first
+  // of a tie) pre-picked with a gold tag, and Feed shows it.
+  sheet = await careFromRoster(page);
+  const row = sheet.getByTestId('care-foods');
+  await slowExpect(row).toBeVisible();
+  await expect
+    .poll(async () => (await careState(page))?.foods, slow)
+    .toEqual(['treats', 'pies', 'frosty-treats']);
+  expect((await careState(page))?.food).toBe('pies');
+  const pies = row.locator('[data-food="pies"]');
+  await expect(pies).toHaveAttribute('aria-pressed', 'true');
+  await expect(pies).toContainText('Best');
+  await expect(sheet.getByTestId('care-food-hint')).toContainText('loves Pies!');
+  await expect(sheet.locator('[data-care="feed"]')).toContainText('2 Pies');
+
+  // One tap feeds the Pie: the request names it, the server's bigger gain
+  // brings the big "Yum!" moment.
+  const start = (await careState(page))!.contentment!;
+  const fed = page.waitForRequest(
+    (r) => r.method() === 'POST' && /\/squishies\/[^/]+\/care$/.test(r.url()),
+  );
+  await sheet.locator('[data-care="feed"]').tap();
+  expect((await fed).postDataJSON()).toEqual({ action: 'feed', itemId: 'pies' });
+  await expect.poll(async () => (await careState(page))?.yums, slow).toBe(1);
+  expect((await careState(page))?.contentment).toBe(Math.min(100, start + 30));
+  await slowExpect(page.getByTestId('care-note')).toContainText('Yum yum!');
+  // The mockup's yellow cheer pill, and the reward never orphans "Coin".
+  await expect(page.getByTestId('care-note')).toHaveClass(/care-note-yum/);
+  await slowExpect(sheet.locator('[data-care="feed"]')).toContainText('1 Pie');
+
+  // Switch to Treats, then Feed: a plain feed, no itemId, the usual squash.
+  await row.locator('[data-food="treats"]').tap();
+  await expect(row.locator('[data-food="treats"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(sheet.getByTestId('care-food-hint')).toBeHidden();
+  await slowExpect(sheet.locator('[data-care="feed"]')).toBeEnabled();
+  const plain = page.waitForRequest(
+    (r) => r.method() === 'POST' && /\/squishies\/[^/]+\/care$/.test(r.url()),
+  );
+  await sheet.locator('[data-care="feed"]').tap();
+  expect((await plain).postDataJSON()).toEqual({ action: 'feed' });
+  await expect(page.getByTestId('care-note')).not.toHaveClass(/care-note-yum/);
+  await slowExpect(sheet.locator('[data-care="feed"]')).toContainText('9 Treats');
+  expect((await careState(page))?.yums).toBe(1);
+  expect(findAvoidedWords((await sheet.textContent()) ?? '')).toEqual([]);
+  await sheet.getByTestId('care-close').tap();
+  await slowExpect(sheet).toBeHidden();
+
+  // The Bag: Frosty Treats' card says what they're made from, and its
+  // "Care: Feed" opens care with them picked.
+  await closeRoster(page);
+  await page.getByTestId('home-back').tap();
+  await expect.poll(() => homeOpen(page), slow).toBe(false);
+  await (await trayButton(page, 'bag-open')).tap();
+  const bag = page.getByTestId('bag');
+  await bag.locator('[data-item="frosty-treats"]').tap();
+  await expect(bag).toContainText('Made from Ice and Treats');
+  await expect(bag).toContainText('Make Frosty Treats in your recipe book.');
+  await bag.getByTestId('bag-feed').tap();
+  await slowExpect(page.getByTestId('care')).toBeVisible();
+  await expect.poll(async () => (await careState(page))?.food, slow).toBe('frosty-treats');
+  await expect(
+    page.getByTestId('care-foods').locator('[data-food="frosty-treats"]'),
+  ).toHaveAttribute('aria-pressed', 'true');
   expect(errors).toEqual([]);
 });
 
