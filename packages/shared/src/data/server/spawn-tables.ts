@@ -332,3 +332,21 @@ export const SPAWN_TABLES: SpawnTable[] = [
     entries: [{ species: 'heartlet', weight: 1 }], // TUNE:
   },
 ];
+
+/**
+ * Juniper's Gap after a Long Night the patch held (#727): each Keeper's one
+ * encounter (`rollGapEncounter`). Secret (CLAUDE.md rule 6). Kept out of
+ * `SPAWN_TABLES` so the ordinary spawn roll never sees it. Legendary and
+ * secret base forms only: the legendary line's Thunderpuff, and the
+ * Heartlet at a raised weight (1 in 27 Gap night spawns on an ordinary
+ * night, 1 in 3 here).
+ */
+export const LONG_NIGHT_GAP_TABLE: SpawnTable = {
+  id: 'long-night-gap',
+  terrains: ['junipers-gap'],
+  timeOfDay: 'night',
+  entries: [
+    { species: 'thunderpuff', weight: 2 }, // TUNE:
+    { species: 'heartlet', weight: 1 }, // TUNE: raised from the Gap night table's 1 in 27
+  ],
+};

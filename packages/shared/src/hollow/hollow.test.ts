@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { HOLLOW_RULES } from '../data/hollow.js';
 import { HOME_BASE_RULES } from '../data/home-base.js';
+import { LONG_NIGHT_SECRETS } from '../data/server/long-night.js';
 import { RESCUE_GUARDIANS } from '../data/server/rescue-guardians.js';
 import { SECRET_SPECIES } from '../data/server/secret-species.js';
 import { GAME_DATA } from '../data/index.js';
@@ -30,6 +31,7 @@ import {
   shelterOf,
   type NightSquishy,
 } from './index.js';
+import { longNightPercent } from '../long-night/index.js';
 import { resolveRescueGuardians } from './rescue-guardians.js';
 
 const RULES = { ...HOME_BASE_RULES, ...HOLLOW_RULES };
@@ -386,6 +388,29 @@ describe('the Hollow Man grows bolder (#277, owner decisions 2026-10-08)', () =>
     for (let i = 0; i < 1000; i++) hits += rollStrikes([25], 100, 3, `n${i}`);
     expect(hits).toBeGreaterThan(180);
     expect(hits).toBeLessThan(320);
+  });
+
+  it("plays the Long Night's 3x through the stage odds, never past the cap (#727)", () => {
+    const percent = longNightPercent(100, LONG_NIGHT_SECRETS.strengthMultiplier);
+    const { cap, gentleCap } = HOLLOW_RULES.strength;
+    let curious = 0;
+    let bold = 0;
+    for (let i = 0; i < 2000; i++) {
+      const seed = `ln${String(i)}`;
+      // Curious 25 -> 75, bold [100, 15] -> [100, 45], boldest [100, 100, 50] -> all 100.
+      curious += rollStrikes([25], percent, cap, seed);
+      bold += rollStrikes([100, 15], percent, cap, seed) - 1;
+      expect(rollStrikes([100, 100, 50], percent, cap, seed)).toBe(cap);
+      expect(rollStrikes([100, 100, 100, 100], percent, cap, seed)).toBe(cap);
+      // A gentle patch keeps its one strike.
+      expect(rollStrikes([100, 100, 50], percent, gentleCap, seed)).toBe(gentleCap);
+      // An admin's 0 % stays off.
+      expect(rollStrikes([100], longNightPercent(0, 3), cap, seed)).toBe(0);
+    }
+    expect(curious / 2000).toBeGreaterThan(0.7);
+    expect(curious / 2000).toBeLessThan(0.8);
+    expect(bold / 2000).toBeGreaterThan(0.4);
+    expect(bold / 2000).toBeLessThan(0.5);
   });
 
   it('takes up to the strikes, never the same one twice, and always leaves a friend', () => {
