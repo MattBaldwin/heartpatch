@@ -351,6 +351,12 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     if (wait !== null) readyTimer = window.setTimeout(render, wait + 50);
   }
 
+  /** The line under the buttons; only an extra-yummy feed's wears the cheer pill. */
+  function setNote(text: string, yum = false): void {
+    note.textContent = text;
+    note.classList.toggle('care-note-yum', yum);
+  }
+
   /** The food row's tiles: icon, short name and count, the pick pressed. */
   function renderFoods(): void {
     foodTiles.hidden = foods === null;
@@ -405,14 +411,12 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       // The server's own number decides the big moment, never a client guess.
       const big = bigFeed(next.result);
       if (big) yums += 1;
-      note.textContent = careDoneLine(next.result, big);
       // The "Yum!" line is a yellow cheer pill, like the mockup's.
-      note.classList.toggle('care-note-yum', big);
+      setNote(careDoneLine(next.result, big), big);
       squish('care', big);
     } catch (err) {
       if (mine !== ticket) return;
-      note.textContent = messageOf(err);
-      note.classList.remove('care-note-yum');
+      setNote(messageOf(err));
       // The debounce or the bag changed under us: show the server's view again.
       if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
         const fresh = await api.list(map).catch(() => null);
@@ -442,7 +446,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
         }
       })
       .catch((err: unknown) => {
-        if (mine === ticket) note.textContent = messageOf(err);
+        if (mine === ticket) setNote(messageOf(err));
       });
   });
 
@@ -488,8 +492,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     foods = null;
     panel.hidden = true;
     celebrate.hidden = true;
-    note.textContent = '';
-    note.classList.remove('care-note-yum');
+    setNote('');
     if (wasOpen) options.onClosed?.();
   }
 
@@ -513,8 +516,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
         panel.hidden = false;
         panel.scrollTop = 0;
       }
-      note.classList.remove('care-note-yum');
-      note.textContent = messageOf(err);
+      setNote(messageOf(err));
       render();
       return;
     }
@@ -528,8 +530,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     squishyId = chosen?.id ?? null;
     setReply(list);
     // Asked for one that isn't here (it grew up, or it's in the Hollow): say so.
-    note.classList.remove('care-note-yum');
-    note.textContent = !picked && chosen ? CARE_TEXT.notHere : '';
+    setNote(!picked && chosen ? CARE_TEXT.notHere : '');
     const opening = panel.hidden;
     panel.hidden = false;
     // The sheet keeps its scroll while hidden: a sheet closed from the bottom
