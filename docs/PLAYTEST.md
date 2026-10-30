@@ -139,7 +139,26 @@ Watch the story with each tester, paying special attention to **shot 4, "The Hol
 
 The checklists above ask "does it work?". This one asks "is it fun on day 10?" (#736). Once a week, play one account that's already a few days in, through fresh eyes.
 
-1. **Seed three accounts** that stand where a kid would be on **day 3, day 10 and day 21**. Until the dev fast-forward route lands (#736 part B), seed by playing, or ask the coordinator.
+1. **Seed three accounts** that stand where a kid would be on **day 3, day 10 and day 21**, with the dev fast-forward (#736). It only runs on a local playtest with `HP_DEV_SQUISHY_GRANTS=true` (DEPLOY.md, "Playtesting"), never on the real server.
+   - Sign up a fresh account for each day, make a patch (or join one), and pick a first squishy.
+   - Signed in as that account, on a computer, open the game, then the browser's console, and paste this (change `10` to `3` or `21`; the patch is the account's first one, or put its name in `name`):
+
+     ```js
+     const name = null; // or 'My Patch'
+     const day = 10;
+     const headers = { 'content-type': 'application/json', 'x-requested-with': 'heartpatch' };
+     const { maps } = await (await fetch('/api/v1/maps', { headers })).json();
+     const map = maps.find((m) => name === null || m.name === name);
+     const res = await fetch(`/api/v1/maps/${map.id}/dev/fast-forward`, {
+       method: 'POST',
+       headers,
+       body: JSON.stringify({ day }),
+     });
+     console.log(await res.json());
+     ```
+
+   - The account now matches the casual kid's "end of day N" in `pnpm sim:progression`: its Partner grows (and evolves) to that day's level, that day's two teammates join the team, its land grows to that day's tile count (the nearest free tiles), and it joined the patch N days ago. Care and job timers stay fresh, like a kid who plays every day. It only moves forward, so pasting it twice is safe.
+   - Restart the server with `HP_DEV_SQUISHY_GRANTS` off before the kid plays (the dev routes hand out free things).
 2. **Hand one to a kid who hasn't seen that state.** Not the account's own player, and not a kid who's already that far in. Don't explain anything; just watch.
 3. **Write down three things:**
    - [ ] the first thing they tried to do,
