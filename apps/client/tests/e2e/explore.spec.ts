@@ -135,11 +135,14 @@ async function expectNeedClearOfKeeper(page: Page): Promise<void> {
           // Where the card sits unmoved: it never slides onto a glint that place left showing.
           const dy = new DOMMatrix(getComputedStyle(el).transform).m42;
           const rest = { ...card.toJSON(), top: card.top - dy, bottom: card.bottom - dy } as Box;
-          for (const spot of e.spots) {
+          // With glints all round the Keeper there may be no such place: then
+          // it says so, and still keeps clear of him and his glint.
+          const crowded = (el as HTMLElement).dataset['glints'] === 'crowded';
+          for (const spot of crowded ? [] : e.spots) {
             if (spot.done || spot.index === e.near) continue;
             const other = e.glintOnScreen(spot.index);
             if (other && over(other) && !overAt(rest, other)) {
-              return `card ${JSON.stringify(card)} moved onto glint ${String(spot.index)} ${JSON.stringify(other)}`;
+              return `card ${JSON.stringify(card)} (moved ${String(dy)}px, ${el.className}) moved onto glint ${String(spot.index)} ${JSON.stringify(other)}; Keeper ${JSON.stringify(e.keeperOnScreen)}, front ${JSON.stringify(e.near === null ? null : e.glintOnScreen(e.near))}`;
             }
           }
           if (over(e.keeperOnScreen)) {
@@ -176,6 +179,13 @@ async function expectNeedClearOfKeeper(page: Page): Promise<void> {
       slow,
     )
     .toBe('clear');
+  // Which rule placed it, in the report: every glint, or (crowded) the Keeper and his glint.
+  const glints = await page.getByTestId('explore-need').getAttribute('data-glints');
+  const size = page.viewportSize();
+  test.info().annotations.push({
+    type: 'need-glints',
+    description: `${String(size?.width)}x${String(size?.height)}: ${String(glints)}`,
+  });
 }
 
 /** Phones held sideways: iPhone 15 (full screen and under the browser's bars) and SE. */

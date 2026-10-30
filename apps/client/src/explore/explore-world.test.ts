@@ -10,6 +10,7 @@ import { startInteraction } from './interactions.js';
 import { clampToTile, insideTile } from './explore-view.js';
 import {
   clearOf,
+  clearOfMost,
   needRoom,
   coverShare,
   glintNudge,
@@ -815,6 +816,31 @@ describe('the missing-tool card never moves onto a glint its own place left show
     const front = { left: 230, right: 260, top: 520, bottom: 550 };
     const wall = { left: 300, right: 330, top: 72, bottom: 440 };
     expect(clearOf(card, [keeper, front], room, 12, [wall])).toBeNull();
+  });
+
+  it('when crowded, keeps clear of the Keeper and its glint on the fewest others', () => {
+    // A phone held sideways (734x343), short card: every place clear of the
+    // Keeper and the eddy's glint is on some other glint.
+    const room = { top: 72, bottom: 323 };
+    const keeper = { left: 347, right: 387, top: 186, bottom: 241 };
+    const front = { left: 402, right: 441, top: 174, bottom: 208 };
+    const card = { left: 150, right: 584, top: 235, bottom: 323 };
+    const high = { left: 257, right: 288, top: 92, bottom: 118 };
+    const low = { left: 500, right: 530, top: 164, bottom: 172 };
+    expect(clearOf(card, [keeper, front], room, 12, [high, low])).toBeNull();
+    const dy = clearOfMost(card, [keeper, front], room, 12, [high, low]) ?? NaN;
+    const at = { ...card, top: card.top + dy, bottom: card.bottom + dy };
+    expect(coverShare(at, keeper) + coverShare(at, front)).toBe(0);
+    expect(at.top).toBeGreaterThanOrEqual(room.top);
+    // Just over the Keeper's head it covers both; just over the eddy's glint, one.
+    expect(at.bottom).toBe(front.top - 12);
+    expect([high, low].filter((b) => coverShare(at, b) > 0)).toEqual([high]);
+  });
+
+  it('when crowded, is null only when the Keeper and its glint leave no room', () => {
+    const tall = { left: 100, right: 120, top: 60, bottom: 640 };
+    const front = { left: 230, right: 260, top: 520, bottom: 550 };
+    expect(clearOfMost(card, [tall, front], room, 12, [])).toBeNull();
   });
 });
 

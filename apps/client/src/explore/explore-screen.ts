@@ -69,6 +69,7 @@ import {
 import {
   besideSpot,
   clearOf,
+  clearOfMost,
   needRoom,
   showcaseStance,
   CAVE_STAGE,
@@ -1374,9 +1375,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       shift = needShiftFor(keep, spare);
       if (shift === undefined) return;
     }
-    // No place misses the other glints too: keep clear of the Keeper and its glint at least.
+    // No place misses the other glints too: clear of the Keeper and its
+    // glint, on as few of the rest as it can.
+    need.dataset['glints'] = shift === null ? 'crowded' : 'clear';
     if (shift === null) {
-      shift = needShiftFor(keep);
+      shift = needShiftFor(keep, spare, true);
       if (shift === undefined) return;
     }
     // Still no room either side (a screen too short for both): as high as it may go.
@@ -1408,11 +1411,18 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   /** `clearOf` for the card as it's laid out now; undefined when it isn't shown. */
   function needShiftFor(
     keep: readonly ScreenBox[],
-    spare: readonly ScreenBox[] = [],
+    spare: readonly ScreenBox[],
+    crowded = false,
   ): number | null | undefined {
     const card = needAtRest();
     if (card.bottom - card.top === 0) return undefined;
-    return clearOf(card, keep, needRoomNow(), EXPLORE_VIEW.needGap, spare);
+    return (crowded ? clearOfMost : clearOf)(
+      card,
+      keep,
+      needRoomNow(),
+      EXPLORE_VIEW.needGap,
+      spare,
+    );
   }
 
   // Turning the phone (or resizing the window) lays the card out afresh: its

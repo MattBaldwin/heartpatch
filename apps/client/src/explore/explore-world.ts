@@ -402,25 +402,59 @@ export function clearOf(
   gap: number,
   spare: readonly ScreenBox[] = [],
 ): number | null {
+  const places = needPlaces(card, keep, room, gap, spare);
+  return places.find((p) => p.hides === 0)?.dy ?? null;
+}
+
+/**
+ * `clearOf` for a screen too crowded to miss every glint (a phone held
+ * sideways, with glints all round the Keeper): still clear of `keep`, on the
+ * fewest glints that showed, nearest first. Null when even `keep` won't fit.
+ */
+export function clearOfMost(
+  card: ScreenBox,
+  keep: readonly ScreenBox[],
+  room: { readonly top: number; readonly bottom: number },
+  gap: number,
+  spare: readonly ScreenBox[],
+): number | null {
+  const places = needPlaces(card, keep, room, gap, spare);
+  const fewest = Math.min(...places.map((p) => p.hides));
+  return places.find((p) => p.hides === fewest)?.dy ?? null;
+}
+
+/**
+ * The card's places clear of `keep`, nearest up first, then nearest down,
+ * each with how many glints that showed (`spare` its own place misses) it
+ * hides. Its own place alone when that's already clear of `keep`.
+ */
+function needPlaces(
+  card: ScreenBox,
+  keep: readonly ScreenBox[],
+  room: { readonly top: number; readonly bottom: number },
+  gap: number,
+  spare: readonly ScreenBox[],
+): { dy: number; hides: number }[] {
   const over = (dy: number, b: ScreenBox) =>
     card.left < b.right &&
     card.right > b.left &&
     card.top + dy < b.bottom &&
     card.bottom + dy > b.top;
-  if (!keep.some((b) => over(0, b))) return 0;
-  const all = [...keep, ...spare.filter((b) => !over(0, b))];
+  if (!keep.some((b) => over(0, b))) return [{ dy: 0, hides: 0 }];
+  const showing = spare.filter((b) => !over(0, b));
+  const all = [...keep, ...showing];
   const fits = (dy: number) =>
-    card.top + dy >= room.top && card.bottom + dy <= room.bottom && !all.some((b) => over(dy, b));
+    card.top + dy >= room.top && card.bottom + dy <= room.bottom && !keep.some((b) => over(dy, b));
+  const place = (dy: number) => ({ dy, hides: showing.filter((b) => over(dy, b)).length });
   const up = all
     .map((b) => b.top - gap - card.bottom)
     .filter((dy) => dy < 0 && fits(dy))
-    .sort((a, b) => b - a);
-  if (up.length > 0) return up[0] ?? null;
+    .sort((x, y) => y - x);
   const down = all
     .map((b) => b.bottom + gap - card.top)
     .filter((dy) => dy > 0 && fits(dy))
-    .sort((a, b) => a - b);
-  return down[0] ?? null;
+    .sort((x, y) => x - y);
+  return [...up, ...down].map(place);
 }
 
 /**
