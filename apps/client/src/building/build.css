@@ -159,6 +159,29 @@
   }
 }
 
+/* Build! and Not now are pinned to the sheet's foot (#723 follow-up): as its
+   last ordinary row, the panel's scroll fade (map/map.css) washed out Build!
+   and the panel's foot cut its edge. The row brings the panel's bottom padding
+   with it, on the panel's colour (99%, as the panel: map/map.css #389), and
+   the panel draws no fade while the sheet is up (map/panel-fit.ts). // TUNE: */
+.tile-panel.tile-panel-building:has(.build-sheet:not([hidden])) {
+  padding-bottom: 0;
+}
+
+.tile-panel-building .build-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin: 0 -12px;
+  padding: 6px 12px 12px;
+  background: color-mix(in srgb, var(--tile-panel-bg, rgb(255 250 252)) 99%, transparent);
+}
+
+/* A note under the pinned row keeps the padding the panel gave up. */
+.tile-panel-building .build-note {
+  padding-bottom: 12px;
+}
+
 .tile-panel-building .tile-panel-head,
 .tile-panel-building .tile-panel-guardians,
 .tile-panel-building .tile-panel-gatherer,
