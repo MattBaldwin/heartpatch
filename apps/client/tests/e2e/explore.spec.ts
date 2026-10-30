@@ -142,7 +142,7 @@ async function expectNeedClearOfKeeper(page: Page): Promise<void> {
             if (spot.done || spot.index === e.near) continue;
             const other = e.glintOnScreen(spot.index);
             if (other && over(other) && !overAt(rest, other)) {
-              return `card ${JSON.stringify(card)} (moved ${String(dy)}px, ${el.className}) moved onto glint ${String(spot.index)} ${JSON.stringify(other)}; Keeper ${JSON.stringify(e.keeperOnScreen)}, front ${JSON.stringify(e.near === null ? null : e.glintOnScreen(e.near))}`;
+              return `card ${JSON.stringify(card)} (moved ${String(dy)}px, ${el.className}) moved onto glint ${String(spot.index)} ${JSON.stringify(other)}; Keeper ${JSON.stringify(e.keeperOnScreen)}, front ${JSON.stringify(e.glintOnScreen(e.near))}`;
             }
           }
           if (over(e.keeperOnScreen)) {
