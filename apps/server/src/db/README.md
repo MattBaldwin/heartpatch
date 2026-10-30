@@ -403,7 +403,7 @@ One row per map per Long Night (#727, migration 0062), written in nightfall's ow
 | `ran_at` | timestamptz | |
 | `strike_at` | timestamptz | Nightfall plus `HOLLOW_RULES.show.prowlMinutes` |
 | `held` | boolean | The patch held: every counted Keeper did |
-| `outcomes` | jsonb | Each Keeper's `LongNightOutcome` (`{ userId, counted, held, firesLit, fuelNights, percent, gapSpeciesId }`) plus their Gap claim (`gapClaimedAt`, `gapBattleId`) |
+| `outcomes` | jsonb | Each Keeper's `LongNightOutcomeRow`: their `LongNightOutcome` (`{ userId, counted, held, firesLit, fuelNights, percent, gapSpeciesId }`) plus their Gap claim (`gapClaimedAt`, `gapBattleId`) |
 | `keeper_of_night_user_id` | uuid, null | Keeper of the Night |
 | `gap_opens_at`, `gap_closes_at` | timestamptz, null | Juniper's Gap: open while `gap_opens_at <= now < gap_closes_at`. Both null when the patch didn't hold. Indexed `(map_id, gap_closes_at)` |
 | `seed` | text | Derived from the map seed, for replay |

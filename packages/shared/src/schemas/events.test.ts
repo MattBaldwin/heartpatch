@@ -3,6 +3,7 @@ import {
   GAME_EVENT_TYPES,
   GAME_EVENTS,
   GameEventTypeSchema,
+  LongNightOutcomeRowSchema,
   isGameEventType,
   parseGameEventPayload,
 } from './events.js';
@@ -122,6 +123,12 @@ describe('game event registry', () => {
       }),
     ).toThrow();
     expect(parseGameEventPayload('gap.opened', { night, closesAt })).toEqual({ night, closesAt });
+    // The stored row adds the Gap claim; the event never carries it.
+    const unclaimed = { ...outcome, gapClaimedAt: null, gapBattleId: null };
+    expect(LongNightOutcomeRowSchema.parse(unclaimed)).toEqual(unclaimed);
+    const claimed = { ...outcome, gapClaimedAt: closesAt, gapBattleId: userId };
+    expect(LongNightOutcomeRowSchema.parse(claimed)).toEqual(claimed);
+    expect(LongNightOutcomeRowSchema.safeParse(outcome).success).toBe(false);
 
     // `longNight` on `hollow.nightfall` is optional, so nights before #727 still parse.
     const nightfall = { night, taken: [] };

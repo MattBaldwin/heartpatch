@@ -1494,9 +1494,9 @@ export const hollowEvents = pgTable(
 /**
  * One row per map per Long Night (#727): the result nightfall wrote in its
  * own transaction, beside `hollow_events`. `night` is the map-local date the
- * nightfall fell on. `outcomes` holds each Keeper's `LongNightOutcome` plus
- * their Juniper's Gap claim (`gapClaimedAt`, `gapBattleId`), validated on
- * read. The Gap is open while `gap_opens_at <= now < gap_closes_at` (both
+ * nightfall fell on. `outcomes` holds each Keeper's `LongNightOutcomeRow`
+ * (their outcome plus their Juniper's Gap claim, `gapClaimedAt` and
+ * `gapBattleId`), validated on read. The Gap is open while `gap_opens_at <= now < gap_closes_at` (both
  * null when the patch didn't hold); nothing closes it. `seed` and
  * `content_hash` let a replay re-run the night. Server-only (rule 6): the
  * Gap species and the strength percent never leave the server.

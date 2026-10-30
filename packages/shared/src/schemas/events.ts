@@ -72,6 +72,16 @@ export const LongNightOutcomeSchema = z.strictObject({
   gapSpeciesId: ContentIdSchema.nullable(),
 });
 export type LongNightOutcome = z.infer<typeof LongNightOutcomeSchema>;
+/**
+ * One Keeper's entry in `long_nights.outcomes` (#727): their outcome, plus
+ * their Juniper's Gap claim (both null until they claim it). Server-only;
+ * the event records the outcome alone.
+ */
+export const LongNightOutcomeRowSchema = LongNightOutcomeSchema.extend({
+  gapClaimedAt: z.iso.datetime().nullable(),
+  gapBattleId: z.uuid().nullable(),
+});
+export type LongNightOutcomeRow = z.infer<typeof LongNightOutcomeRowSchema>;
 /** The Long Night's result on `hollow.nightfall` (#727): public, like the walks. */
 const longNightResult = (object: typeof z.object | typeof z.strictObject) =>
   object({
