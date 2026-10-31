@@ -2137,3 +2137,13 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 - **727c split of `rescueReward`:** the rescue-reward doubling moved from 727c to 727d (#753). It raises the daily reward cap (`rewardsPerDay`) while the Gap is open, not the pay per rescue.
 - **727d error codes:** the Gap claim uses the generic `CONFLICT` / `FORBIDDEN` / `NOT_FOUND` codes with kid-readable messages, so no shared-contract change.
 
+## 2026-10-31 — Owner decisions and coordinator calls (supervisor 31)
+
+**Owner decisions**
+- **727e After screens signed off as built (owner, 2026-10-31), merged as #755.** Screens v3: https://claude.ai/artifact/5MPxqMyKedhUTRWpKEBKEY.
+- **Rescue list while Juniper's Gap is open:** it shows the server's `rewardsLeftToday` count ("1 rescue reward left today") instead of the "first rescue" line.
+
+**Coordinator calls**
+- **727e shipped with a device cache for a past Night's result,** because no REST read carried it. 727e2 (#756) replaced it with the additive optional `HollowStatus.longNight.last { night, held, heldBy, keeperOfNight }`, left out while the Long Night is off for the map. Ruled not big (additive optional field).
+- **The dev `POST /maps/:id/dev/gap-now` route** registers only under `HP_DEV_SQUISHY_GRANTS`, which config refuses in production.
+- **The `wardrobe.spec.ts:203` failure on #755 was a timing flake,** fixed by waiting on a game signal (no skip).
