@@ -56,4 +56,21 @@ describe('statsPage (#573)', () => {
     expect(page.keepers[1]?.cheer).toBe('Just getting started!');
     expect(JSON.stringify(page)).not.toMatch(/last|loser|1st|2nd|3rd/i);
   });
+
+  it('puts Keeper of the Night first, ringed, whenever the server names one (#727)', () => {
+    const night = statsPage({ ...stats, keeperOfTheNight: { userId: B, night: '2026-10-31' } }, A);
+    const [ada, bo] = night.keepers;
+    expect(bo?.crowns).toEqual([{ emoji: '🌙', label: 'Keeper of the Night', night: true }]);
+    expect(bo?.cheer).toBeNull();
+    expect(ada?.crowns.map((c) => c.label)).toEqual(['Most land', 'Best builder']);
+    const first = statsPage({ ...stats, keeperOfTheNight: { userId: A, night: '2026-10-31' } }, A)
+      .keepers[0];
+    expect(first?.crowns.map((c) => c.label)).toEqual([
+      'Keeper of the Night',
+      'Most land',
+      'Best builder',
+    ]);
+    // No Night yet, or the Long Night switched off: no crown.
+    expect(statsPage({ ...stats, keeperOfTheNight: null }, A).keepers[1]?.crowns).toEqual([]);
+  });
 });

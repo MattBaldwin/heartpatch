@@ -310,3 +310,46 @@
   justify-content: center;
   margin: 0 0 4px;
 }
+
+/* The Long Night's weekday (#727): seven days and Off, 4 across upright, 8 when wide. */
+.lobby-days {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+@media (min-width: 560px) {
+  .lobby-days {
+    grid-template-columns: repeat(8, 1fr);
+  }
+}
+
+.lobby-day {
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  padding: 8px 4px;
+  border: 2px solid #ecd3e2;
+  border-radius: 14px;
+  background: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  color: #4a3150;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.lobby-day[aria-checked='true'] {
+  border-color: #b8487a;
+  background: #fdf0f6;
+  color: #8f3360;
+}
+
+.lobby-day:disabled {
+  cursor: default;
+}
+
+.lobby-day:disabled:not([aria-checked='true']) {
+  opacity: 0.6;
+}

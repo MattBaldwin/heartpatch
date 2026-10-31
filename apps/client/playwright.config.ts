@@ -113,6 +113,7 @@ const E2E_GROUPS = [
     'far-hollow-house',
     'heart-coins',
     'layout-overlaps',
+    'long-night',
     'map',
     'raids',
     'territory',
@@ -188,6 +189,10 @@ process.env['HP_HOUSE'] ??= 'on';
 // Wild Isle (#621) ships behind HP_WILD_ISLE (off by default); lobby.spec.ts
 // needs it on to make one, and stands in a patch list without it for the off case.
 process.env['HP_WILD_ISLE'] ??= 'on';
+// The Long Night (#727) ships behind HP_LONG_NIGHT (off by default; testers
+// after merge); long-night.spec.ts needs it on. The dev clock's Tuesday is
+// days from the default Saturday, so other specs' nights stay ordinary.
+process.env['HP_LONG_NIGHT'] ??= 'on';
 // Live battles (#29): short turns and a short away-grace, so friendly.spec.ts
 // can try a timeout and a disconnect without waiting 30 s and 60 s (20 s still
 // leaves a slow software-rendered phone time to play a turn back). Dev and
