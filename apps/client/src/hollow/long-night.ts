@@ -1,5 +1,6 @@
 import { LONG_NIGHT_RULES, type HollowStatus, type LongNightWeekday } from '@heartpatch/shared';
 import { DUSK_MINUTES } from './hollow-config.js';
+import { HOLLOW_TEXT } from './hollow-report.js';
 
 // The Long Night on the client (#727, owner-approved mockups v5): the week's
 // big night told over the map. The chips count down to it, a calm sheet says
@@ -136,6 +137,22 @@ function dateFormat(zone: string | undefined): Intl.DateTimeFormat {
 }
 
 /** A map-local date (YYYY-MM-DD) for an instant, in `timeZone` (the device's when unknown). */
+/**
+ * The rescue list's reward lines. While the Gap is open the boost raises the
+ * daily cap, not the pay, so it says how many are left (the server's count),
+ * and the boost line only shows while one is (#727).
+ */
+export function rescueReward(
+  rescue: { readonly rewardsLeftToday: number; readonly heartdust: number },
+  gapOpen: boolean,
+): { readonly boost: boolean; readonly line: string } {
+  const left = rescue.rewardsLeftToday;
+  if (left <= 0) return { boost: false, line: HOLLOW_TEXT.noReward };
+  return gapOpen
+    ? { boost: true, line: LONG_NIGHT_TEXT.rewardsLeft(left) }
+    : { boost: false, line: HOLLOW_TEXT.reward(rescue.heartdust) };
+}
+
 export function localDate(at: number, timeZone: string | null): string {
   try {
     return dateFormat(timeZone ?? undefined).format(new Date(at));

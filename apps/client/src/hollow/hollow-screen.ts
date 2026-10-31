@@ -55,6 +55,7 @@ import {
   noticeChip,
   noticeChipText,
   reportLines,
+  rescueReward,
   revealCard,
   weekdayName,
   type LongNightLine,
@@ -1181,14 +1182,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
 
     sheet.hidden = !on || !sheetOpen || !reportBox.hidden || heldBack || strengthOpen || lnUp;
     if (!sheet.hidden && status) {
-      // While the Gap is open the boost raises the daily cap, not the pay (#727), so say how many are left.
-      const left = status.rescue.rewardsLeftToday;
-      const reward =
-        left <= 0
-          ? HOLLOW_TEXT.noReward
-          : status.longNight?.gap
-            ? LONG_NIGHT_TEXT.rewardsLeft(left)
-            : HOLLOW_TEXT.reward(status.rescue.heartdust);
+      const reward = rescueReward(status.rescue, Boolean(status.longNight?.gap));
       sheet.replaceChildren(
         el('h2', { class: 'hollow-title', id: 'hollow-sheet-title' }, HOLLOW_TEXT.sheetTitle),
         el(
@@ -1196,7 +1190,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
           { class: 'hollow-line' },
           hollowed.length > 0 ? HOLLOW_TEXT.sheetIntro : HOLLOW_TEXT.empty,
         ),
-        ...(hollowed.length > 0 && status.longNight?.gap
+        ...(hollowed.length > 0 && reward.boost
           ? [
               // While the Gap is open more rescues earn a reward (#727): the number already says so.
               el(
@@ -1206,7 +1200,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
               ),
             ]
           : []),
-        ...(hollowed.length > 0 ? [el('p', { class: 'hollow-sub' }, reward)] : []),
+        ...(hollowed.length > 0 ? [el('p', { class: 'hollow-sub' }, reward.line)] : []),
         ...(hollowed.length > 0 && HOLLOW_TEXT.saveUp !== ''
           ? [el('p', { class: 'hollow-sub' }, HOLLOW_TEXT.saveUp)]
           : []),

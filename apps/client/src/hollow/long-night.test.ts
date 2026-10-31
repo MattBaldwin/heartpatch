@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { findAvoidedWords } from '@heartpatch/shared';
+import { HOLLOW_TEXT } from './hollow-report.js';
 import {
   closingWords,
   daysBetween,
@@ -11,6 +12,7 @@ import {
   noticeChip,
   noticeChipText,
   reportLines,
+  rescueReward,
   revealCard,
   type LongNightStatus,
 } from './long-night.js';
@@ -264,6 +266,18 @@ describe('the Long Night words (#727)', () => {
   it('counts rescue rewards left, one or many', () => {
     expect(LONG_NIGHT_TEXT.rewardsLeft(1)).toBe('1 rescue reward left today.');
     expect(LONG_NIGHT_TEXT.rewardsLeft(2)).toBe('2 rescue rewards left today.');
+  });
+
+  it("words the rescue list's reward from the server's count, boosted only while one is left", () => {
+    const rescue = (left: number) => ({ rewardsLeftToday: left, heartdust: 1 });
+    expect(rescueReward(rescue(2), true)).toEqual({
+      boost: true,
+      line: '2 rescue rewards left today.',
+    });
+    expect(rescueReward(rescue(1), false)).toEqual({ boost: false, line: HOLLOW_TEXT.reward(1) });
+    // No "more rescues earn rewards" over "No more Heartdust today".
+    expect(rescueReward(rescue(0), true)).toEqual({ boost: false, line: HOLLOW_TEXT.noReward });
+    expect(rescueReward(rescue(0), false)).toEqual({ boost: false, line: HOLLOW_TEXT.noReward });
   });
 
   it('keep to the style guide (no avoided words)', () => {
