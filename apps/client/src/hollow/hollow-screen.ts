@@ -761,8 +761,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     // and the gold Gap chip while my look waits. With one up front, his
     // stage shrinks to its moon, still a tap away.
     const notice = lnNotice();
-    const longTonight =
-      (ln()?.tonight ?? false) || lastResult()?.night === status.tonight.night;
+    const longTonight = (ln()?.tonight ?? false) || lastResult()?.night === status.tonight.night;
     const front = [
       ...(notice
         ? [
