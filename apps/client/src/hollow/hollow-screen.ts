@@ -680,7 +680,10 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     if (!status || glade()) return null;
     const told = stored(revealKey);
     const live = lnResult;
-    if (live && told !== live.night) {
+    // Only while it's still current: tonight's, or the Night whose Gap is open.
+    const current =
+      live !== null && (live.night === status.tonight.night || ln()?.gap?.night === live.night);
+    if (live && current && told !== live.night) {
       const tonight = live.night === status.tonight.night;
       const landed =
         !tonight ||
@@ -730,6 +733,15 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     };
   }
 
+  /**
+   * The device's cache of the latest Long Night's result seen live (#727):
+   * the only way a not-held Night reaches the morning, until the status
+   * carries it (727e2 swaps this out). With no cache nothing is told but
+   * what the status says (an open Gap means it held).
+   */
+  const saveResult = (result: LongNightResult): void => {
+    store(resultKey, JSON.stringify(result));
+  };
   const loadResult = (): LongNightResult | null => {
     const raw = stored(resultKey);
     if (!raw) return null;
@@ -797,6 +809,8 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
               noticeChipText(notice),
               () => {
                 noticeOpen = true;
+                gapOpen = false;
+                gapMessage = null;
                 render();
               },
               'long-night-chip',
@@ -810,6 +824,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
               () => {
                 gapOpen = true;
                 gapMessage = null;
+                noticeOpen = false;
                 render();
               },
               'gap-chip',
@@ -1010,6 +1025,9 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     const stormLine = weatherNotesLine(weatherNote.note()?.notes ?? []);
     renderChips();
     // The Long Night's cards (#727) come first: one card at a time.
+    // A sheet whose chip has gone (Off, or the Gap closed) closes first.
+    if (noticeOpen && (!weekdayName(ln()) || !lnNotice())) noticeOpen = false;
+    if (gapOpen && gapNow() !== 'available') gapOpen = false;
     const lnCard = lnBlocked(heldBack);
     const revealing = revealDue() !== null && !lnCard;
     const lnUp = revealing || noticeOpen || gapUp();
@@ -1794,7 +1812,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         const lnFell = result.success ? result.data.longNight : undefined;
         if (result.success && lnFell) {
           lnResult = { night: result.data.night, ...lnFell };
-          if (user && mapId) store(resultKey, JSON.stringify(lnResult));
+          saveResult(lnResult);
         }
         // Live, not a replay after reconnecting: the show plays every
         // Keeper's walk from nightfall (#277), and the report follows when

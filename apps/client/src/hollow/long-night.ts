@@ -229,7 +229,12 @@ export function revealCard(input: {
   const { result, me, ln, now, timeZone } = input;
   const next = nextNightDay(ln);
   if (result.held) {
-    const closes = ln?.gap?.closesAt ?? result.gapClosesAt;
+    // The status's Gap, or the event's while it hasn't closed (never a past time).
+    const fallback =
+      result.gapClosesAt !== null && Date.parse(result.gapClosesAt) > now
+        ? result.gapClosesAt
+        : null;
+    const closes = ln?.gap?.closesAt ?? fallback;
     return {
       title: LONG_NIGHT_TEXT.heldTitle,
       lead: LONG_NIGHT_TEXT.heldLead,

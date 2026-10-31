@@ -102,7 +102,8 @@ export function domCaption(
           el('li', { class: mine ? 'night-feed-line night-feed-mine' : 'night-feed-line' }, line),
         );
         while (feed.children.length > FEED_LINES) feed.firstElementChild?.remove();
-        pics.replaceChildren(...(withTokens ? tokens() : []));
+        // Another Keeper's line keeps my greyed tokens (who he took) on the card.
+        if (withTokens) pics.replaceChildren(...tokens());
         card.hidden = false;
         return;
       }

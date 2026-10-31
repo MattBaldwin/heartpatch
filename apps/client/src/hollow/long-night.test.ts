@@ -130,6 +130,19 @@ describe('revealCard (#727)', () => {
     });
   });
 
+  it('never says a closed Gap is open (a stale result, days later)', () => {
+    const late = at('2026-11-04T15:00:00Z');
+    const card = revealCard({
+      result: result(true),
+      me: ME,
+      ln: ln({ nextAt: '2026-11-07T23:00:00.000Z' }),
+      now: late,
+      timeZone: NY,
+    });
+    expect(card.line).toBe('');
+    expect(card.goLook).toBe(false);
+  });
+
   it('leaves Go look out once my look is had, or for a Keeper not in the Night', () => {
     const had = ln({ ...open, gap: open.gap && { ...open.gap, available: false } });
     expect(revealCard({ result: result(true), me: ME, ln: had, now, timeZone: NY }).goLook).toBe(
