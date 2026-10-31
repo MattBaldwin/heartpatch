@@ -36,14 +36,11 @@ export function latestResult(
   live: LongNightResult | null,
 ): LongNightResult | null {
   const last = ln?.last;
+  const gap = ln?.gap ?? null;
   if (live && (!last || live.night > last.night)) return live;
   if (!last) return null;
   const gapClosesAt =
-    ln?.gap?.night === last.night
-      ? ln.gap.closesAt
-      : live?.night === last.night
-        ? live.gapClosesAt
-        : null;
+    gap?.night === last.night ? gap.closesAt : live?.night === last.night ? live.gapClosesAt : null;
   return { ...last, gapClosesAt };
 }
 
