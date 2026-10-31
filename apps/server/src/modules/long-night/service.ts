@@ -13,6 +13,7 @@ import {
   patchHeld,
   protectsNight,
   daysBetween,
+  GROWTH_RULES,
   type GameEventPayload,
   type HollowRules,
   type HollowStatus,
@@ -29,14 +30,17 @@ import {
   LONG_NIGHT_SECRETS,
   longNightContentHash,
   rollGapEncounter,
+  SPAWN_RULES,
 } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { instantOfLocalDate, onGameClock, type Clock } from '../../lib/time.js';
+import type { BattlesService, StartResult } from '../battles/service.js';
 import type { BuildingRow } from '../buildings/repo.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
+import { createSpawnsRepo } from '../spawns/repo.js';
 import { createLongNightRepo, type LongNightRow } from './repo.js';
 import { LONG_NIGHT_OFF, longNightOnFor, type LongNightSwitch } from './switch.js';
 
@@ -56,6 +60,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MESSAGES = {
   notOwner: 'Only the patch owner can change that.',
   noMap: "We couldn't find that patch.",
+  gapClosed: "Juniper's Gap is closed. Hold a Long Night together to open it!",
+  gapClaimed: "You already went through Juniper's Gap this week. See you next Long Night!",
+  notAKeeper: "Juniper's Gap is for Keepers who stood through the Long Night. Next time!",
 } as const;
 
 /** Only multiplayer patches have Long Nights: the Glade's night is scripted. */
@@ -313,6 +320,39 @@ export async function longNightStatus(
   };
 }
 
+/**
+ * How many times the day's rewarded rescues a Keeper gets (#727d): the
+ * Long Night's `rescueRewardsMultiplier` while the patch's Juniper's Gap is
+ * open at `at` (game clock), else 1. A plain read: a Night's window never
+ * changes once written. Server-only (rule 6).
+ */
+export async function rescueRewardsMultiplierOn(
+  db: Executor,
+  longNight: LongNightSwitch,
+  mapId: string,
+  at: Date,
+): Promise<number> {
+  if (!(await longNightOnMap(db, longNight, mapId))) return 1;
+  const latest = await createLongNightRepo(db).latest(mapId);
+  const window = latest ? windowOf(latest) : null;
+  return window && isGapOpen(window, at) ? LONG_NIGHT_RULES.rescueRewardsMultiplier : 1;
+}
+
+/**
+ * A Gap squishy's level: the Keeper's Partner's, as the top of a wild
+ * spawn's `partnerOffset` (a rare one is a step harder, owner decision
+ * 2026-10-07), else the top of the plain range. No roll: the species was
+ * the roll.
+ */
+// TUNE: the top of the wild range; data-driven through `SPAWN_RULES`.
+const gapLevel = (partnerLevel: number | null) =>
+  partnerLevel === null
+    ? SPAWN_RULES.levels.max
+    : Math.max(
+        SPAWN_RULES.levels.min,
+        Math.min(GROWTH_RULES.maxLevel, partnerLevel + (SPAWN_RULES.partnerOffset?.max ?? 0)),
+      );
+
 /** Map details' `longNightWeekday` (#727): undefined while switched off for the patch. */
 export async function longNightWeekdayOn(
   db: Executor,
@@ -347,6 +387,8 @@ export interface LongNightServiceOptions {
   clock?: Clock;
   /** Live sync (`wsHub.publish`), called after commit. Never rejects. */
   publish?: (mapId: string) => Promise<void>;
+  /** Juniper's Gap encounters are wild battles (#727d). */
+  battles: Pick<BattlesService, 'startEncounter'>;
 }
 
 export interface LongNightService {
@@ -356,6 +398,12 @@ export interface LongNightService {
     mapId: string,
     weekday: LongNightWeekday | null,
   ) => Promise<LongNightWeekday | null>;
+  /**
+   * Claims my Juniper's Gap encounter (#727d): a wild battle against the
+   * species rolled for me at resolve, once per Long Night while the Gap is
+   * open; or resumes the battle going. The species is never sent before.
+   */
+  claimGap: (user: PublicUser, mapId: string) => Promise<StartResult>;
 }
 
 export function createLongNightService(options: LongNightServiceOptions): LongNightService {
@@ -393,6 +441,44 @@ export function createLongNightService(options: LongNightServiceOptions): LongNi
       });
       if (changed) published(mapId);
       return weekday;
+    },
+
+    claimGap: async (user, mapId) => {
+      await requireMember(db, user, mapId, PATCHES);
+      if (!(await longNightOnMap(db, longNight, mapId))) {
+        throw new AppError('NOT_FOUND', MESSAGES.noMap);
+      }
+      // One transaction (rule 7): the battle starts and the claim is written
+      // under the Night's row lock (step 9), so two taps start one battle.
+      // The battle's own coins and finds come from its finish, as any wild
+      // battle's; nothing is credited here.
+      return options.battles.startEncounter(user, mapId, async (tx, { at }) => {
+        const repo = createLongNightRepo(tx);
+        const night = await repo.lockLatest(mapId);
+        const window = night ? windowOf(night) : null;
+        if (!night || !window || !isGapOpen(window, at)) {
+          throw new AppError('CONFLICT', MESSAGES.gapClosed);
+        }
+        const mine = night.outcomes.find((o) => o.userId === user.id);
+        if (!mine?.gapSpeciesId) throw new AppError('FORBIDDEN', MESSAGES.notAKeeper);
+        if (mine.gapClaimedAt !== null) throw new AppError('CONFLICT', MESSAGES.gapClaimed);
+        const level = gapLevel(await createSpawnsRepo(tx).partnerLevel(mapId, user.id));
+        return {
+          squishies: [{ id: 'wild-1', speciesId: mine.gapSpeciesId, level }],
+          started: async (startTx, battle) => {
+            await createLongNightRepo(startTx).setOutcomes(
+              night.id,
+              night.outcomes.map((o) =>
+                o.userId === user.id
+                  ? { ...o, gapClaimedAt: at.toISOString(), gapBattleId: battle.id }
+                  : o,
+              ),
+            );
+            // `battle.started` says it all; the claim itself stays server-side.
+            return [];
+          },
+        };
+      });
     },
   };
 }

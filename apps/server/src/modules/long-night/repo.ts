@@ -56,6 +56,13 @@ export interface LongNightRepo {
   usernames: (mapId: string) => Promise<{ username: string }[]>;
   /** The patch's newest Long Night, or null before its first. */
   latest: (mapId: string) => Promise<LongNightRow | null>;
+  /**
+   * The patch's newest Long Night, row-locked `FOR UPDATE` (tech spec §7
+   * step 9, with the Hollow's rows): a Gap claim (#727d) holds it until commit.
+   */
+  lockLatest: (mapId: string) => Promise<LongNightRow | null>;
+  /** Writes a Night's `outcomes` (a Gap claim, under `lockLatest`). */
+  setOutcomes: (id: string, outcomes: readonly LongNightOutcomeRow[]) => Promise<void>;
   /** Records a Night (nightfall's own transaction; the `(map_id, night)` key makes it once). */
   insert: (row: NewLongNightRow) => Promise<void>;
   /**
@@ -112,6 +119,24 @@ export function createLongNightRepo(db: Executor): LongNightRepo {
         .limit(1);
       // jsonb is checked on the way out, so a hand-edited row fails loudly.
       return row ? { ...row, outcomes: OutcomesSchema.parse(row.outcomes) } : null;
+    },
+
+    lockLatest: async (mapId) => {
+      const [row] = await db
+        .select(rowColumns)
+        .from(longNights)
+        .where(eq(longNights.mapId, mapId))
+        .orderBy(desc(longNights.night))
+        .limit(1)
+        .for('update');
+      return row ? { ...row, outcomes: OutcomesSchema.parse(row.outcomes) } : null;
+    },
+
+    setOutcomes: async (id, outcomes) => {
+      await db
+        .update(longNights)
+        .set({ outcomes: OutcomesSchema.parse(outcomes) })
+        .where(eq(longNights.id, id));
     },
 
     insert: async (row) => {

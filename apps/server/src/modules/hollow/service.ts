@@ -67,6 +67,7 @@ import { landTraining, leaveWork } from '../jobs/service.js';
 import {
   longNightStatus,
   longNightTonight,
+  rescueRewardsMultiplierOn,
   resolveLongNight,
   type LongNightKeeper,
 } from '../long-night/service.js';
@@ -166,6 +167,11 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
   const guardianRules = options.guardians ?? RESCUE_GUARDIANS;
   const recipes = options.recipes ?? GAME_DATA.recipes;
   const longNightSwitch = options.longNight ?? LONG_NIGHT_OFF;
+  /** The rescue rules at `at`: while Juniper's Gap is open (#727d), more rescues a day are rewarded. */
+  const rescueRules = async (on: Executor, mapId: string, at: Date) => {
+    const times = await rescueRewardsMultiplierOn(on, longNightSwitch, mapId, at);
+    return { rescue: { ...rules.rescue, rewardsPerDay: rules.rescue.rewardsPerDay * times } };
+  };
   const store = createHollowRepo(db);
   const nightRules = { ...HOME_BASE_RULES, ...rules };
   /** After commit only (apps/server/README.md, "Live sync"). */
@@ -762,7 +768,10 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         }),
         rescue: {
           heartdust: rules.rescue.heartdust,
-          rewardsLeftToday: Math.max(0, rules.rescue.rewardsPerDay - rewarded),
+          rewardsLeftToday: Math.max(
+            0,
+            (await rescueRules(db, map.id, at)).rescue.rewardsPerDay - rewarded,
+          ),
         },
         fireHint,
         homeFirePacked: packed
@@ -903,7 +912,10 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       }
       const day = localDate(at, map.timeZone);
       const heartdust = home
-        ? rescueReward(await repo.rewardedOn(map.id, rescue.userId, day, map.timeZone), rules)
+        ? rescueReward(
+            await repo.rewardedOn(map.id, rescue.userId, day, map.timeZone),
+            await rescueRules(tx, map.id, at),
+          )
         : 0;
       if (heartdust > 0) {
         await grantItems(

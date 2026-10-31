@@ -293,6 +293,22 @@ export interface JourneyBattlePort {
   noContest: (tx: Executor, battle: BattleRow, at: Date) => Promise<NewGameEvent[]>;
 }
 
+/**
+ * A wild squishy another module picks in the start transaction (Juniper's
+ * Gap, #727d), not a tile's spawn: it checks its own rows under their locks
+ * first and throws `AppError` to refuse (then nothing is used up). Runs only
+ * when there's no battle going to resume.
+ */
+export type PrepareEncounterBattle = (
+  tx: Executor,
+  context: { map: MapRow; at: Date },
+) => Promise<{
+  /** The wild side's team, as `WildEncounter.squishies`. */
+  squishies: BattleSquishySetup[];
+  /** After the battle row, in the same transaction: the module's own claim. Events go after `battle.started`. */
+  started: (tx: Executor, battle: BattleRow) => Promise<NewGameEvent[]>;
+}>;
+
 /** What a capture try costs (design doc §6): one Heart Charm. */
 export const HEART_CHARM = 'heart-charm';
 
@@ -311,6 +327,12 @@ export interface BattlesService {
   ) => Promise<StartResult>;
   /** Starts a wild battle against a given team (spawns, and the dev route). */
   startAgainst: (user: PublicUser, mapId: string, encounter: WildEncounter) => Promise<StartResult>;
+  /** Starts a wild battle against what `prepare` picks (Juniper's Gap, #727d), or resumes the battle going. */
+  startEncounter: (
+    user: PublicUser,
+    mapId: string,
+    prepare: PrepareEncounterBattle,
+  ) => Promise<StartResult>;
   /**
    * Starts a battle for a tile (#15) against what `prepare` builds, or
    * resumes the battle already going (`created: false`).
@@ -1496,22 +1518,25 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     };
   };
 
+  /** A wild battle's other side. */
+  const wildOpponent = (map: MapRow, encounter: WildEncounter): Opponent => {
+    // Tutorial maps script the opponent (tech spec §7 `tutorialOverrides`).
+    const overrides = gameplayOverrides(map.kind);
+    const policy = overrides?.opponent.ai ?? 'wild';
+    const wild = encounter.squishies.map((s) =>
+      overrides ? { ...s, level: overrides.opponent.level } : s,
+    );
+    return {
+      kind: 'wild',
+      side: { controller: { type: 'ai', policy }, squishies: wild },
+      spawn: encounter.spawn ?? null,
+      // The tile the wild squishy spawned on; the dev route's has none.
+      tile: encounter.spawn ? { q: encounter.spawn.q, r: encounter.spawn.r } : null,
+    };
+  };
+
   const startAgainst: BattlesService['startAgainst'] = (user, mapId, encounter) =>
-    startWith(user, mapId, (_tx, map) => {
-      // Tutorial maps script the opponent (tech spec §7 `tutorialOverrides`).
-      const overrides = gameplayOverrides(map.kind);
-      const policy = overrides?.opponent.ai ?? 'wild';
-      const wild = encounter.squishies.map((s) =>
-        overrides ? { ...s, level: overrides.opponent.level } : s,
-      );
-      return Promise.resolve({
-        kind: 'wild',
-        side: { controller: { type: 'ai', policy }, squishies: wild },
-        spawn: encounter.spawn ?? null,
-        // The tile the wild squishy spawned on; the dev route's has none.
-        tile: encounter.spawn ? { q: encounter.spawn.q, r: encounter.spawn.r } : null,
-      });
-    });
+    startWith(user, mapId, (_tx, map) => Promise.resolve(wildOpponent(map, encounter)));
 
   return {
     current: async (user, mapId) => {
@@ -1550,6 +1575,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     },
 
     startAgainst,
+
+    startEncounter: (user, mapId, prepare) =>
+      startWith(user, mapId, async (tx, map, at) => {
+        const { squishies, started } = await prepare(tx, { map, at });
+        return { ...wildOpponent(map, { squishies }), started };
+      }),
 
     startTile: (user, mapId, prepare) =>
       startWith(user, mapId, async (tx, map, at, team) => {

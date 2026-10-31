@@ -8,6 +8,11 @@ export const LONG_NIGHT_RATE_LIMITS = {
     perIp: { max: 60, windowMs: MINUTE_MS }, // TUNE: guess, as friendly battles' switch
     perUser: { max: 20, windowMs: MINUTE_MS }, // TUNE: guess
   },
+  // Juniper's Gap (#727d): a battle start, as wild battles' own.
+  gap: {
+    perIp: { max: 60, windowMs: MINUTE_MS }, // TUNE: guess
+    perUser: { max: 20, windowMs: MINUTE_MS }, // TUNE: guess
+  },
 } as const satisfies RateLimitTable;
 
 export type LongNightAction = keyof typeof LONG_NIGHT_RATE_LIMITS;
