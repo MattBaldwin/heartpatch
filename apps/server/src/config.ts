@@ -72,7 +72,7 @@ const ConfigSchema = z.object({
   // Wild Isle (#621) feature switch: `off` refuses `wild-isle` patches for
   // everyone (creating one is FORBIDDEN and the lobby hides the choice),
   // `testers` lets only `HP_WILD_ISLE_TESTERS` make one, `on` every player.
-  // Off until the coordinator's `Chore: Wild Isle on` (W1-12).
+  // Off by default; production sets `on` in docker-compose.prod.yml (#752).
   HP_WILD_ISLE: z.enum(['off', 'testers', 'on']).default('off'),
   // Usernames who can make a Wild Isle while `HP_WILD_ISLE=testers`,
   // comma-separated (case doesn't matter), as `HP_HOUSE_TESTERS`.
