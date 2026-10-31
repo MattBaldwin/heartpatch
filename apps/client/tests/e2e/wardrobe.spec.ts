@@ -1,6 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { api, hook } from './dev-hook.js';
+import { api, hook, LIVE_MAP_TIMEOUT } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
 
@@ -202,7 +202,7 @@ test('wears a #261 costume over everything and takes it off again', async ({ bro
 
 test('other players see the outfit on the map, live', async ({ browser }) => {
   // Two players, two map builds and a home scene; CI's software WebKit has taken
-  // past 150 s here (836c7b3's run), so the budget covers the work. // TUNE:
+  // past 150 s here (836c7b3's run), so the budget covers the work.
   test.setTimeout(240_000);
   const owner = await newPlayer(browser, uniqueName('host'));
   const friend = await newPlayer(browser, uniqueName('pal'));
@@ -259,7 +259,7 @@ test('other players see the outfit on the map, live', async ({ browser }) => {
   // The owner's map has drawn its Keepers before the tray is pressed, so the tap
   // doesn't land while the build holds the page.
   await expect
-    .poll(async () => (await mapState(owner))?.keepers ?? 0, { timeout: 60_000 })
+    .poll(async () => (await mapState(owner))?.keepers ?? 0, { timeout: LIVE_MAP_TIMEOUT })
     .toBeGreaterThan(0);
   await (await trayButton(owner, 'home-open')).tap();
   await expect

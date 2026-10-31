@@ -136,7 +136,6 @@ function dateFormat(zone: string | undefined): Intl.DateTimeFormat {
   return format;
 }
 
-/** A map-local date (YYYY-MM-DD) for an instant, in `timeZone` (the device's when unknown). */
 /**
  * The rescue list's reward lines. While the Gap is open the boost raises the
  * daily cap, not the pay, so it says how many are left (the server's count),
@@ -153,6 +152,7 @@ export function rescueReward(
     : { boost: false, line: HOLLOW_TEXT.reward(rescue.heartdust) };
 }
 
+/** A map-local date (YYYY-MM-DD) for an instant, in `timeZone` (the device's when unknown). */
 export function localDate(at: number, timeZone: string | null): string {
   try {
     return dateFormat(timeZone ?? undefined).format(new Date(at));
