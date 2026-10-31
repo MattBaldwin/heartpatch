@@ -2,6 +2,7 @@ import { findAvoidedWords, houseTile } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { selectTile, tapCanvas } from './claim-land.js';
 import { api, hook } from './dev-hook.js';
+import { still } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { keeperStill, nearestFirst, walkTo, waypoint } from './explore-walk.js';
 import { realTapAt } from './touch.js';
@@ -103,24 +104,223 @@ interface ExploreDebug {
 
 const exploreState = (page: Page) => hook<ExploreDebug>(page, 'explore');
 
-/** The missing-tool card never sits over the Keeper in a close-up (polish of #621). */
+/**
+ * The missing-tool card never sits over the Keeper in a close-up (polish of
+ * #621), nor over the glint of the spot it's about (Layout B2): a tap on that
+ * glint lands on the ground, not the card. The card is whole on screen and
+ * clear of the notch's side insets and the bottom safe-area band.
+ */
 async function expectNeedClearOfKeeper(page: Page): Promise<void> {
+  await still(page, '[data-testid="explore-need"]');
   await expect
-    .poll(async () => {
-      const keeper = (await exploreState(page))?.keeperOnScreen;
-      const card = await page.getByTestId('explore-need').boundingBox();
-      if (!keeper || !card) return 'not shown';
-      const clear =
-        card.x >= keeper.right ||
-        card.x + card.width <= keeper.left ||
-        card.y >= keeper.bottom ||
-        card.y + card.height <= keeper.top;
-      return clear
-        ? 'clear'
-        : `card ${JSON.stringify(card)} over the Keeper ${JSON.stringify(keeper)}`;
-    }, slow)
+    .poll(
+      () =>
+        page.evaluate(() => {
+          type Box = { left: number; right: number; top: number; bottom: number };
+          type Hook = {
+            explore?: () => {
+              near: number | null;
+              keeperOnScreen: Box | null;
+              glintOnScreen: (index: number) => Box | null;
+              spots: readonly { index: number; done: boolean }[];
+              needPlan: {
+                place: { dy: number; hides: number; area: number } | null;
+                room: { top: number; bottom: number };
+              } | null;
+            };
+          };
+          const e = (window as unknown as { __heartpatch?: Hook }).__heartpatch?.explore?.();
+          const el = document.querySelector('[data-testid="explore-need"]');
+          if (!e?.keeperOnScreen || !el || e.near === null) return 'not shown';
+          const card = el.getBoundingClientRect();
+          const overAt = (c: Box, b: Box) =>
+            c.left < b.right && c.right > b.left && c.top < b.bottom && c.bottom > b.top;
+          const over = (b: Box) => overAt(card, b);
+          // Where the card sits unmoved: it never covers more of any glint
+          // than that place does (1px of rounding allowed).
+          const dy = new DOMMatrix(getComputedStyle(el).transform).m42;
+          const rest = {
+            left: card.left,
+            right: card.right,
+            top: card.top - dy,
+            bottom: card.bottom - dy,
+          };
+          const cover = (c: Box, b: Box) =>
+            Math.max(0, Math.min(c.right, b.right) - Math.max(c.left, b.left)) *
+            Math.max(0, Math.min(c.bottom, b.bottom) - Math.max(c.top, b.top));
+          // With glints all round the Keeper there may be no such place: then
+          // it says so, and takes the place (in its band, clear of the Keeper,
+          // his glint and the 🐾 button) over the least more of the others.
+          const crowded = (el as HTMLElement).dataset['glints'] === 'crowded';
+          // Never folded short while the phone is upright (owner, option (b)).
+          if (innerWidth <= innerHeight && el.classList.contains('explore-need-compact')) {
+            return `card short upright at ${String(innerWidth)}x${String(innerHeight)}`;
+          }
+          const front = e.glintOnScreen(e.near);
+          const pawEl = document.querySelector<HTMLElement>('.squishies-open-explore');
+          const pawAt = pawEl && !pawEl.hidden ? pawEl.getBoundingClientRect() : null;
+          const others = e.spots
+            .filter((x) => !x.done && x.index !== e.near)
+            .map((x) => e.glintOnScreen(x.index))
+            .filter((b) => b !== null);
+          if (crowded && e.needPlan) {
+            // Each kept a gap off, as the card's own places are.
+            const grow = (b: Box) => ({
+              left: b.left - 12,
+              right: b.right + 12,
+              top: b.top - 12,
+              bottom: b.bottom + 12,
+            });
+            const keep = [e.keeperOnScreen, ...(front ? [front] : [])].map(grow);
+            if (pawAt && pawAt.width > 0) keep.push(grow(pawAt));
+            const at = (d: number) => ({ ...rest, top: rest.top + d, bottom: rest.bottom + d });
+            // A glint counts as covered more past a 1px row of it: the card
+            // moves in whole px.
+            const score = (c: Box) => {
+              let hides = 0;
+              let area = 0;
+              for (const b of others) {
+                const more = cover(c, b) - cover(rest, b);
+                if (more > b.right - b.left) {
+                  hides++;
+                  area += more;
+                }
+              }
+              return { hides, area };
+            };
+            let best: { hides: number; area: number } | null = null;
+            const { room, place } = e.needPlan;
+            for (let d = Math.ceil(room.top - rest.top); d <= room.bottom - rest.bottom; d++) {
+              if (keep.some((b) => cover(at(d), b) > 0)) continue;
+              const sc = score(at(d));
+              if (
+                !best ||
+                sc.hides < best.hides ||
+                (sc.hides === best.hides && sc.area < best.area)
+              )
+                best = sc;
+            }
+            if (!place && best) return `no place, but ${JSON.stringify(best)} fits`;
+            // The card where it sits covers no more extra than any place the
+            // scan finds clear of the Keeper, his glint and the 🐾 button.
+            const mine = score(card);
+            const slack = others.reduce((sum, b) => sum + (b.right - b.left), 0);
+            if (
+              best &&
+              (mine.hides > best.hides ||
+                (mine.hides === best.hides && mine.area > best.area + slack))
+            ) {
+              return `crowded card ${JSON.stringify(mine)} (plan ${JSON.stringify(place)}) covers more than ${JSON.stringify(best)}`;
+            }
+          }
+          for (const spot of crowded ? [] : e.spots) {
+            if (spot.done || spot.index === e.near) continue;
+            const other = e.glintOnScreen(spot.index);
+            if (other && cover(card, other) > cover(rest, other) + (other.right - other.left)) {
+              return `card ${JSON.stringify(card)} (moved ${String(dy)}px, ${el.className}) covers more of glint ${String(spot.index)} ${JSON.stringify(other)} than at rest; Keeper ${JSON.stringify(e.keeperOnScreen)}, front ${JSON.stringify(e.glintOnScreen(e.near))}`;
+            }
+          }
+          // The 🐾 button under Back: never under it, and its gap kept.
+          const paw = document.querySelector<HTMLElement>('.squishies-open-explore');
+          if (paw && !paw.hidden) {
+            const p = paw.getBoundingClientRect();
+            const gap = Math.max(
+              p.left - card.right,
+              card.left - p.right,
+              p.top - card.bottom,
+              card.top - p.bottom,
+            );
+            if (p.width > 0 && gap < 11) {
+              return `card ${JSON.stringify(card)} ${String(gap)}px from the 🐾 button ${JSON.stringify(p)}`;
+            }
+          }
+          if (over(e.keeperOnScreen)) {
+            return `card ${JSON.stringify(card)} over the Keeper ${JSON.stringify(e.keeperOnScreen)}`;
+          }
+          const glint = e.glintOnScreen(e.near);
+          if (!glint) return 'no glint';
+          if (over(glint))
+            return `card ${JSON.stringify(card)} over the glint ${JSON.stringify(glint)}`;
+          const x = (glint.left + glint.right) / 2;
+          const y = (glint.top + glint.bottom) / 2;
+          const hit = document.elementFromPoint(x, y);
+          if (!hit) return 'a tap on the glint lands on nothing';
+          if (!hit.closest('[data-testid="explore-ground"]')) {
+            return `a tap on the glint lands on ${hit.className}`;
+          }
+          // Whole on screen, clear of the side insets and the bottom band.
+          const probe = document.createElement('div');
+          probe.style.cssText =
+            'position:fixed;left:env(safe-area-inset-left);right:env(safe-area-inset-right);bottom:env(safe-area-inset-bottom);top:0;pointer-events:none';
+          document.body.append(probe);
+          const safe = probe.getBoundingClientRect();
+          probe.remove();
+          if (
+            card.left < safe.left ||
+            card.right > safe.right ||
+            card.top < 0 ||
+            card.bottom > safe.bottom
+          ) {
+            return `card ${JSON.stringify(card)} outside the safe area ${JSON.stringify(safe)}`;
+          }
+          return 'clear';
+        }),
+      slow,
+    )
     .toBe('clear');
+  // Which rule placed it, in the report: every glint, or (crowded) the Keeper and his glint.
+  const glints = await page.getByTestId('explore-need').getAttribute('data-glints');
+  const short = await page
+    .getByTestId('explore-need')
+    .evaluate((n) => n.classList.contains('explore-need-compact'));
+  const size = page.viewportSize();
+  test.info().annotations.push({
+    type: 'need-glints',
+    description: `${String(size?.width)}x${String(size?.height)}: ${String(glints)}${short ? ', short' : ''}`,
+  });
 }
+
+/** Phones held sideways: iPhone 15 (full screen and under the browser's bars) and SE; then SE upright. */
+const SIDEWAYS = [
+  // iPhone 15 held sideways, installed: the notch's insets either side.
+  { width: 852, height: 393, insets: { left: 59, right: 59, bottom: 21 } },
+  { width: 734, height: 343 }, // iPhone 15 held sideways (the reviewer's repro)
+  { width: 667, height: 375 }, // iPhone SE held sideways
+  { width: 375, height: 667, insets: { top: 20 } }, // iPhone SE upright, installed
+  { width: 393, height: 852, insets: { top: 59, bottom: 34 } }, // iPhone 15 upright, installed
+] as const;
+
+type Turn = {
+  readonly width: number;
+  readonly height: number;
+  readonly insets?: {
+    readonly top?: number;
+    readonly bottom?: number;
+    readonly left?: number;
+    readonly right?: number;
+  };
+};
+
+/**
+ * Turns (or resizes) the screen, with its safe-area insets (none unless
+ * given). Insets need CDP, so only Chromium gets them; WebKit (CI) turns
+ * without.
+ */
+async function turnTo(page: Page, size: Turn): Promise<void> {
+  if (page.context().browser()?.browserType().name() === 'chromium') {
+    const cdp = await page.context().newCDPSession(page);
+    const i = size.insets ?? {};
+    await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+      insets: { top: i.top ?? 0, bottom: i.bottom ?? 0, left: i.left ?? 0, right: i.right ?? 0 },
+    });
+    await cdp.detach();
+  }
+  await page.setViewportSize({ width: size.width, height: size.height });
+}
+
+/** The card's box, to check a turn back to portrait leaves it as it was. */
+const needBox = (page: Page) => page.getByTestId('explore-need').boundingBox();
+
 const frameCap = (page: Page) => hook<{ fps: number }>(page, 'frameCap');
 
 /** Frames drawn so far and the page's clock, to read a drawn frame rate between two readings. */
@@ -975,16 +1175,49 @@ test('enters a river tile on its dry bank, with its mossy logs, pebble bars and 
 
     // A phone turned on its side: the card lays itself out again, still clear of him.
     const portrait = page.viewportSize();
-    if (portrait && portrait.width < portrait.height && portrait.width < 500) {
-      for (const size of [
-        { width: 734, height: 343 }, // iPhone 15 held sideways (the reviewer's repro)
-        { width: 667, height: 375 }, // iPhone SE held sideways
-      ]) {
-        await page.setViewportSize(size);
+    const sideways = portrait && portrait.width < portrait.height && portrait.width < 500;
+    // An iPad turned on its side too (Layout B2: every glint, both ways up).
+    const turns = sideways
+      ? SIDEWAYS
+      : portrait
+        ? [{ width: portrait.height, height: portrait.width }]
+        : [];
+    if (portrait) {
+      for (const size of turns) {
+        await turnTo(page, size);
         await expectNeedClearOfKeeper(page);
       }
-      await page.setViewportSize(portrait);
+      await turnTo(page, portrait);
       await expectNeedClearOfKeeper(page);
+    }
+
+    // At a swirly eddy (Layout B2) the card keeps clear of its glint too, in
+    // every shape; turned back upright it's where it was.
+    const eddies = state.spots.filter((s) => s.kind === 'eddy');
+    reached = false;
+    for (const spot of nearestFirst(eddies, (await exploreState(page))!.keeper).slice(0, 4)) {
+      if (
+        (reached = await walkTo(
+          page,
+          spot.index,
+          eddies.map((s) => s.index),
+        ))
+      )
+        break;
+    }
+    expect(reached, 'walked up to a swirly eddy').toBe(true);
+    await expect.poll(async () => (await exploreState(page))?.hint, slow).toBe('net');
+    await keeperStill(page);
+    await expectNeedClearOfKeeper(page);
+    const upright = await needBox(page);
+    if (portrait) {
+      for (const size of turns) {
+        await turnTo(page, size);
+        await expectNeedClearOfKeeper(page);
+      }
+      await turnTo(page, portrait);
+      await expectNeedClearOfKeeper(page);
+      expect(await needBox(page)).toEqual(upright);
     }
     expect(errors).toEqual([]);
   } finally {

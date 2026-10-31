@@ -68,7 +68,8 @@ import {
 } from './explore-view.js';
 import {
   besideSpot,
-  clearOfKeeper,
+  needFolds,
+  placeNeedCard,
   needRoom,
   showcaseStance,
   CAVE_STAGE,
@@ -86,6 +87,7 @@ import {
   toCaveStage,
   yawToward,
   type Collider,
+  type NeedPlace,
   type ScreenBox,
   type TapWalk,
 } from './explore-world.js';
@@ -229,6 +231,13 @@ export interface ExploreDebug {
   readonly hint: ToolId | null;
   /** The Keeper's box on screen, CSS px, or null (the missing-tool card keeps clear of it). */
   readonly keeperOnScreen: ScreenBox | null;
+  /** A spot's glint's box on screen, CSS px, or null (the missing-tool card keeps clear of its spot's). */
+  glintOnScreen: (index: number) => ScreenBox | null;
+  /** The missing-tool card's last placement and the band it had, or null (Layout B2). */
+  readonly needPlan: {
+    readonly place: NeedPlace | null;
+    readonly room: { readonly top: number; readonly bottom: number };
+  } | null;
   readonly scene: ExploreSceneStats | null;
   /**
    * Batch uploads since the page opened (`batchUploads`): each makes fresh
@@ -717,7 +726,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (playing) feed({ type: 'tick', t: now });
     const animating = s.step(now);
     renderDark();
-    if (moved || animating) placeNeed();
+    // Settled (the Keeper and camera still), the card picks its shape afresh
+    // once, as a turn does; while they move it only slides.
+    const stirring = moved || animating;
+    if (stirring || needStirring || s.glintMoves !== needGlints) placeNeed(!stirring);
+    needStirring = stirring;
     // Only a change redraws: a finger resting on the stick, or pushing
     // against a rock or the tile's edge, moves nothing (the gestures and the
     // lantern's dark are DOM; a tool's swing animates through `step`).
@@ -1345,26 +1358,86 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
 
   /** How far the missing-tool card is moved off its place (CSS px, up is negative). */
   let needShift = 0;
+  /** Whether the Keeper or camera moved last frame: the frame they stop, the card is laid out afresh. */
+  let needStirring = false;
+  /** The scene's `glintMoves` when the card was last placed. */
+  let needGlints = 0;
+  /** The front spot and open-spot count the card was last laid out afresh for. */
+  let needFor = '';
+  /** The card's last placement, for the dev hook's `needPlan`. */
+  let needPlan: ExploreDebug['needPlan'] = null;
+  /** Fresh layouts so far (a new spot, a spot searched, a turn, the scene settling). */
+  let needLayouts = 0;
+  /** The layout where folding short didn't help, so it isn't tried again. */
+  let needFoldTried = -1;
   /**
-   * Slides the missing-tool card up or down so it never sits over the Keeper.
-   * Where neither fits (a phone held sideways) it folds into its short shape
-   * and tries again.
+   * Slides the missing-tool card up or down so it never sits over the Keeper
+   * or the glint of the spot it's about (Layout B2), nor onto another glint
+   * its own place left showing. Where nothing fits it lets the other glints go,
+   * over as little more of them as it can; held sideways it may fold short first.
    */
-  function placeNeed(): void {
+  function placeNeed(settled = false): void {
+    needGlints = scene3d?.glintMoves ?? 0;
     if (need.hidden) return;
+    // A new spot, one searched, or the scene settled: its full shape first
+    // again, as a turn does. (Not on every step: glints nudge as he walks.)
+    const fresh = `${String(front?.index)}:${String(tile?.spots.filter((x) => !x.done).length)}`;
+    if (fresh !== needFor || settled) {
+      needFor = fresh;
+      needLayouts++;
+      need.classList.remove('explore-need-compact');
+      needShift = 0;
+      need.style.transform = '';
+    }
+    // Never short while the phone is upright (Layout B2, option (b)).
+    const sideways = window.innerWidth > window.innerHeight;
+    if (!sideways) need.classList.remove('explore-need-compact');
     const keeper = scene3d?.keeperOnScreen();
     if (!keeper) return;
-    let shift = needShiftFor(keeper);
-    if (shift === undefined) return; // hidden by a gesture: nothing to place
-    if (shift === null && !need.classList.contains('explore-need-compact')) {
+    const glintOf = (index: number) => scene3d?.glintOnScreen(index) ?? null;
+    const glint = front ? glintOf(front.index) : null;
+    const keep = glint ? [keeper, glint] : [keeper];
+    // The 🐾 button under Back (main.ts puts it over explore): the card keeps
+    // its gap from it, as from the bars.
+    const paw = document.querySelector<HTMLElement>('.squishies-open-explore');
+    const pawBox = paw && !paw.hidden ? paw.getBoundingClientRect() : null;
+    if (pawBox && pawBox.width > 0) keep.push(pawBox);
+    const spare = (tile?.spots ?? [])
+      .filter((s) => !s.done && s.index !== front?.index)
+      .map((s) => glintOf(s.index))
+      .filter((b) => b !== null);
+    let place = needPlaceFor(keep, spare);
+    if (place === undefined) return; // hidden by a gesture: nothing to place
+    // Folded short only held sideways, and only when that covers strictly
+    // less (once per layout, so a walk doesn't fold and unfold it every frame).
+    const full = place;
+    if (
+      needFolds(sideways, full) &&
+      needFoldTried !== needLayouts &&
+      !need.classList.contains('explore-need-compact')
+    ) {
       need.classList.add('explore-need-compact');
-      shift = needShiftFor(keeper);
-      if (shift === undefined) return;
+      const short = needPlaceFor(keep, spare);
+      if (short === undefined) return;
+      if (needFolds(sideways, full, short)) place = short;
+      else if (full !== null) {
+        needFoldTried = needLayouts;
+        need.classList.remove('explore-need-compact');
+      }
     }
-    // Still no room either side (a screen too short for both): as high as it may go.
-    const dy = Math.round(
-      shift ?? needRoomNow().top - (need.getBoundingClientRect().top - needShift),
-    );
+    // No place misses the other glints (or none even clears the Keeper):
+    // it's crowded, and over as little more of the rest as it can.
+    need.dataset['glints'] = place === null || place.hides > 0 ? 'crowded' : 'clear';
+    // Still no room either side (a screen too short for both): as high as it
+    // may go, though never up under the 🐾 button.
+    const room = needRoomNow();
+    const rest = needAtRest();
+    const under =
+      pawBox && pawBox.width > 0 && pawBox.left < rest.right && pawBox.right > rest.left
+        ? pawBox.bottom + EXPLORE_VIEW.needGap
+        : -Infinity;
+    needPlan = { place, room };
+    const dy = Math.round(place?.dy ?? Math.max(room.top, under) - rest.top);
     if (dy === needShift) return;
     needShift = dy;
     need.style.transform = dy === 0 ? '' : `translateY(${String(dy)}px)`;
@@ -1387,11 +1460,14 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     );
   }
 
-  /** `clearOfKeeper` for the card as it's laid out now; undefined when it isn't shown. */
-  function needShiftFor(keeper: ScreenBox): number | null | undefined {
+  /** `placeNeedCard` for the card as it's laid out now; undefined when it isn't shown. */
+  function needPlaceFor(
+    keep: readonly ScreenBox[],
+    spare: readonly ScreenBox[],
+  ): NeedPlace | null | undefined {
     const card = needAtRest();
     if (card.bottom - card.top === 0) return undefined;
-    return clearOfKeeper(card, keeper, needRoomNow(), EXPLORE_VIEW.needGap);
+    return placeNeedCard(card, keep, needRoomNow(), EXPLORE_VIEW.needGap, spare);
   }
 
   // Turning the phone (or resizing the window) lays the card out afresh: its
@@ -1402,6 +1478,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   const replaceNeed = (): void => {
     if (need.hidden) return;
     requestAnimationFrame(() => {
+      needFor = ''; // a fresh layout, folding tried again
       need.classList.remove('explore-need-compact');
       needShift = 0;
       need.style.transform = '';
@@ -2029,6 +2106,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         toast: toast ? [toast.main, toast.extra].filter((x) => x).join(' · ') : null,
         hint: need.hidden ? null : ((need.dataset['tool'] as ToolId | undefined) ?? null),
         keeperOnScreen: s?.keeperOnScreen() ?? null,
+        glintOnScreen: (index: number) => s?.glintOnScreen(index) ?? null,
+        needPlan: need.hidden ? null : needPlan,
         scene: s?.stats ?? null,
         batchUploads: batchUploads.count,
         tierChanges,
