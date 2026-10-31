@@ -40,6 +40,13 @@ body:has(.tile-panel:not([hidden])) .night-chips {
   visibility: hidden;
 }
 
+/* Two rows of chips stand taller than the 84 px a bottom card sits up (an SE
+   and an iPhone 15 upright alike), so a card would half-cover them: they step
+   aside while any Hollow card is up and come back when it closes (#727). */
+body:has(.hollow-card:not([hidden])) .night-chips {
+  visibility: hidden;
+}
+
 /* A short phone held upright (an iPhone SE): a morning card with a storm
    line reaches up past the side trays' handles (centred at 55%), so they
    step aside while it's open instead of showing half a label. */
@@ -48,16 +55,6 @@ body:has(.tile-panel:not([hidden])) .night-chips {
   body:has(.long-night-notice:not([hidden])) .tray-handle,
   body:has(.long-night-reveal:not([hidden])) .tray-handle,
   body:has(.long-night-gap:not([hidden])) .tray-handle {
-    visibility: hidden;
-  }
-
-  /* There the night's chips can wrap taller than the 84 px the cards sit up,
-     so a card would half-cover them: they step aside too, as they do for the
-     tile panel, and come back when it closes (#727). */
-  body:has(.hollow-report:not([hidden])) .night-chips,
-  body:has(.long-night-notice:not([hidden])) .night-chips,
-  body:has(.long-night-reveal:not([hidden])) .night-chips,
-  body:has(.long-night-gap:not([hidden])) .night-chips {
     visibility: hidden;
   }
 }
@@ -189,7 +186,7 @@ body:has(.tile-panel:not([hidden])) .night-chips {
 }
 
 /* The night's chips sit at the bottom middle, under the cards (84 px up) and
-   the tile panel, which cover them while open. The top middle is the gather
+   the tile panel, which hide them while open. The top middle is the gather
    countdown's (108 px), and a chip mid-screen would catch a pinch's finger
    on a short phone on its side. They wrap rather than hang off a narrow phone. */
 .night-chips {
