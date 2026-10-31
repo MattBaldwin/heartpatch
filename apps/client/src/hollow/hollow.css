@@ -44,7 +44,10 @@ body:has(.tile-panel:not([hidden])) .night-chips {
    line reaches up past the side trays' handles (centred at 55%), so they
    step aside while it's open instead of showing half a label. */
 @media (orientation: portrait) and (max-height: 740px) {
-  body:has(.hollow-report:not([hidden])) .tray-handle {
+  body:has(.hollow-report:not([hidden])) .tray-handle,
+  body:has(.long-night-notice:not([hidden])) .tray-handle,
+  body:has(.long-night-reveal:not([hidden])) .tray-handle,
+  body:has(.long-night-gap:not([hidden])) .tray-handle {
     visibility: hidden;
   }
 }
@@ -464,7 +467,8 @@ body:has(.tile-panel:not([hidden])) .night-chips {
 .hollow-card.long-night-reveal {
   border: 1px solid rgb(255 255 255 / 14%);
   border-radius: 20px;
-  background: rgb(29 24 48 / 94%);
+  /* Near opaque: tutorial tips and map labels mustn't ghost through. */
+  background: rgb(29 24 48 / 98%);
   box-shadow: 0 8px 28px rgb(29 24 48 / 40%);
   color: #fff8ec;
 }
