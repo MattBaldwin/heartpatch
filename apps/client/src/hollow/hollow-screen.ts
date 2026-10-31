@@ -301,8 +301,9 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   let gapOpen = false;
   /** The Gap card's words for now: the server's message, or "one battle at a time". */
   let gapMessage: { title: string; line: string } | null = null;
-  /** I just had my look: the Gap says so once. */
-  let hadLook = false;
+  /** The map I just had my look on: the Gap says so once. Kept through
+   *  the battle (it leaves the map and comes back), dropped on dismiss. */
+  let hadLookOn: string | null = null;
   /** Keeper of the Night from patch stats, for a held Night this device didn't see live. */
   let statsKeeper: { userId: string; night: string } | null = null;
   let askedKeeper: string | null = null;
@@ -1261,7 +1262,9 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     !mapId || !status || show.playing || visitPlaying || replaying || strengthOpen || heldBack;
   /** The Gap card is up: its sheet, a message, or "you've had your look". */
   const gapUp = (): boolean =>
-    gapMessage !== null || (hadLook && gapNow() === 'had') || (gapOpen && gapNow() === 'available');
+    gapMessage !== null ||
+    (hadLookOn !== null && hadLookOn === mapId && gapNow() === 'had') ||
+    (gapOpen && gapNow() === 'available');
   /** The night of the Long Night block on the report card now (null: none). */
   let lnReportNight: string | null = null;
 
@@ -1378,7 +1381,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     const shutGap = () => {
       gapOpen = false;
       gapMessage = null;
-      hadLook = false;
+      hadLookOn = null;
       render();
     };
     const closes = ln()?.gap?.closesAt;
@@ -1577,7 +1580,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       if (battle && stillHere()) {
         const reply = gapReply({ battle });
         if (reply.kind === 'battle') {
-          hadLook = true;
+          hadLookOn = id;
           options.openBattle(battle);
         } else if (reply.kind === 'message') gapMessage = reply;
       }
@@ -1736,7 +1739,6 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       noticeOpen = false;
       gapOpen = false;
       gapMessage = null;
-      hadLook = false;
       statsKeeper = null;
       askedKeeper = null;
       lnResult = loadResult();
@@ -1764,7 +1766,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       noticeOpen = false;
       gapOpen = false;
       gapMessage = null;
-      hadLook = false;
+      hadLookOn = null;
       statsKeeper = null;
       askedKeeper = null;
       lnResult = loadResult();

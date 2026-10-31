@@ -173,6 +173,7 @@ body:has(.tile-panel:not([hidden])) .night-chips {
 .night-chips[hidden],
 .night-caption[hidden],
 .night-caption.night-caption-held,
+.night-caption.night-caption-feed.night-caption-held,
 .dark-moon[hidden] {
   display: none;
 }

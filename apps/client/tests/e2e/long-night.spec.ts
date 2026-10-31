@@ -99,6 +99,13 @@ test('a Long Night: the countdown, the live feed, the reveal and the crown', asy
   await expect
     .poll(async () => (await hollowState(page))?.show.feed.join('|'), { timeout: 30_000 })
     .toContain(`${name}'s`);
+  // A new account's tray hint is still up: the feed waits behind it (on a
+  // short phone on its side it would cover "Got it!"), then comes back.
+  const caption = page.getByTestId('night-caption');
+  await expect(page.getByTestId('tray-hint')).toBeVisible();
+  await expect(caption).toBeHidden();
+  await page.getByTestId('tray-hint-ok').tap();
+  await expect(caption).toBeVisible();
   await expect(page.getByTestId('night-feed')).toBeVisible();
   await page.getByTestId('night-show-skip').tap();
   await expect.poll(() => idle(page), { timeout: 30_000 }).toBe(true);
