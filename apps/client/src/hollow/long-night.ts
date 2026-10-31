@@ -100,6 +100,9 @@ export const LONG_NIGHT_TEXT = {
   oneBattleLine: 'Finish your other battle first, then come back to the Gap!',
   // The Hollow rescue list while the Gap is open.
   rescueBoost: "✨ Juniper's Gap is open: more rescues earn rewards today! 💗",
+  /** Under the boost line, in place of "Your first rescue today earns…": the server's count. */
+  rewardsLeft: (n: number) =>
+    n === 1 ? '1 rescue reward left today.' : `${String(n)} rescue rewards left today.`,
   // The morning report.
   reportTag: '🌑 Long Night',
   reportHeld: (when: string | null) =>

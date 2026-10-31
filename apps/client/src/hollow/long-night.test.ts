@@ -261,6 +261,11 @@ describe('gapReply (#727)', () => {
 });
 
 describe('the Long Night words (#727)', () => {
+  it('counts rescue rewards left, one or many', () => {
+    expect(LONG_NIGHT_TEXT.rewardsLeft(1)).toBe('1 rescue reward left today.');
+    expect(LONG_NIGHT_TEXT.rewardsLeft(2)).toBe('2 rescue rewards left today.');
+  });
+
   it('keep to the style guide (no avoided words)', () => {
     const words = Object.values(LONG_NIGHT_TEXT).map((v) =>
       typeof v === 'function' ? (v as (a: never) => string)('Maya' as never) : v,

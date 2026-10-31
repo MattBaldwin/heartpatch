@@ -1181,10 +1181,14 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
 
     sheet.hidden = !on || !sheetOpen || !reportBox.hidden || heldBack || strengthOpen || lnUp;
     if (!sheet.hidden && status) {
+      // While the Gap is open the boost raises the daily cap, not the pay (#727), so say how many are left.
+      const left = status.rescue.rewardsLeftToday;
       const reward =
-        status.rescue.rewardsLeftToday > 0
-          ? HOLLOW_TEXT.reward(status.rescue.heartdust)
-          : HOLLOW_TEXT.noReward;
+        left <= 0
+          ? HOLLOW_TEXT.noReward
+          : status.longNight?.gap
+            ? LONG_NIGHT_TEXT.rewardsLeft(left)
+            : HOLLOW_TEXT.reward(status.rescue.heartdust);
       sheet.replaceChildren(
         el('h2', { class: 'hollow-title', id: 'hollow-sheet-title' }, HOLLOW_TEXT.sheetTitle),
         el(

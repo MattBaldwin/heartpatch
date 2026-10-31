@@ -50,6 +50,16 @@ body:has(.tile-panel:not([hidden])) .night-chips {
   body:has(.long-night-gap:not([hidden])) .tray-handle {
     visibility: hidden;
   }
+
+  /* There the night's chips can wrap taller than the 84 px the cards sit up,
+     so a card would half-cover them: they step aside too, as they do for the
+     tile panel, and come back when it closes (#727). */
+  body:has(.hollow-report:not([hidden])) .night-chips,
+  body:has(.long-night-notice:not([hidden])) .night-chips,
+  body:has(.long-night-reveal:not([hidden])) .night-chips,
+  body:has(.long-night-gap:not([hidden])) .night-chips {
+    visibility: hidden;
+  }
 }
 
 .hollow-title {
