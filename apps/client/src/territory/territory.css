@@ -67,3 +67,9 @@
 .territory-reason {
   scroll-margin-block: 8px;
 }
+
+/* The week of a Long Night (#727): when he comes, after the dark-land line. */
+.territory-dark-soon {
+  font-weight: 800;
+  color: #7a2d55;
+}

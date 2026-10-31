@@ -167,6 +167,11 @@
   color: #7a5200;
 }
 
+.patch-stats-crown-night {
+  /* This week's Keeper of the Night (#727): a thin gold ring. */
+  box-shadow: 0 0 0 2px #ffc94d;
+}
+
 .patch-stats-cheer {
   background: #eef6ea;
   color: #4b6b3e;

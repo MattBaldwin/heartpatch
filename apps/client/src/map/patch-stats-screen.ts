@@ -47,7 +47,10 @@ function keeperItem(card: KeeperCard): HTMLElement {
     ...card.crowns.map((c) =>
       el(
         'li',
-        { class: 'patch-stats-crown', 'data-testid': 'patch-stats-crown' },
+        {
+          class: c.night ? 'patch-stats-crown patch-stats-crown-night' : 'patch-stats-crown',
+          'data-testid': c.night ? 'patch-stats-night-crown' : 'patch-stats-crown',
+        },
         `👑 ${c.emoji} ${c.label}`,
       ),
     ),

@@ -40,11 +40,21 @@ body:has(.tile-panel:not([hidden])) .night-chips {
   visibility: hidden;
 }
 
+/* Two rows of chips stand taller than the 84 px a bottom card sits up (an SE
+   and an iPhone 15 upright alike), so a card would half-cover them: they step
+   aside while any Hollow card is up and come back when it closes (#727). */
+body:has(.hollow-card:not([hidden])) .night-chips {
+  visibility: hidden;
+}
+
 /* A short phone held upright (an iPhone SE): a morning card with a storm
    line reaches up past the side trays' handles (centred at 55%), so they
    step aside while it's open instead of showing half a label. */
 @media (orientation: portrait) and (max-height: 740px) {
-  body:has(.hollow-report:not([hidden])) .tray-handle {
+  body:has(.hollow-report:not([hidden])) .tray-handle,
+  body:has(.long-night-notice:not([hidden])) .tray-handle,
+  body:has(.long-night-reveal:not([hidden])) .tray-handle,
+  body:has(.long-night-gap:not([hidden])) .tray-handle {
     visibility: hidden;
   }
 }
@@ -170,12 +180,13 @@ body:has(.tile-panel:not([hidden])) .night-chips {
 .night-chips[hidden],
 .night-caption[hidden],
 .night-caption.night-caption-held,
+.night-caption.night-caption-feed.night-caption-held,
 .dark-moon[hidden] {
   display: none;
 }
 
 /* The night's chips sit at the bottom middle, under the cards (84 px up) and
-   the tile panel, which cover them while open. The top middle is the gather
+   the tile panel, which hide them while open. The top middle is the gather
    countdown's (108 px), and a chip mid-screen would catch a pinch's finger
    on a short phone on its side. They wrap rather than hang off a narrow phone. */
 .night-chips {
@@ -404,5 +415,179 @@ body:has(.tile-panel:not([hidden])) .night-chips {
   .night-caption-tokens .hollow-token {
     animation: none;
     opacity: 0.6;
+  }
+}
+
+/* The Long Night (#727, owner-approved mockups v5): the Gap chip's gold
+   edge, the live feed, the dark 7:30 reveal, Juniper's Gap and the
+   morning's block. A short sideways phone drops the longer half-lines. */
+.night-chip-gold {
+  box-shadow:
+    0 0 0 2px #ffc94d,
+    0 4px 14px rgb(46 42 77 / 25%);
+}
+
+.night-feed[hidden],
+.night-caption-line[hidden] {
+  display: none;
+}
+
+.night-caption.night-caption-feed {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 10px;
+}
+
+.night-caption-feed .night-caption-text {
+  grid-column: 1;
+}
+
+.night-caption-feed .night-caption-skip {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.night-feed {
+  grid-column: 1;
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.night-feed-line {
+  opacity: 0.55;
+}
+
+.night-feed-line:last-child {
+  opacity: 1;
+}
+
+.night-feed-mine {
+  color: #ffc94d;
+}
+
+.hollow-card.long-night-reveal {
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 20px;
+  /* Near opaque: tutorial tips and map labels mustn't ghost through. */
+  background: rgb(29 24 48 / 98%);
+  box-shadow: 0 8px 28px rgb(29 24 48 / 40%);
+  color: #fff8ec;
+}
+
+.long-night-reveal .hollow-sub {
+  color: #cdbfe6;
+}
+
+.long-night-reveal .hp-button-quiet {
+  color: #fff8ec;
+}
+
+.long-night-who {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #ffc94d;
+}
+
+.long-night-tag {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #2e2a4d;
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffc94d;
+}
+
+.long-night-lines {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.long-night-rule {
+  margin: 12px 0 8px;
+  border: 0;
+  border-top: 1px solid #e3d9f4;
+}
+
+.long-night-boost {
+  color: #8a5a00;
+}
+
+.long-night-gap .hollow-title,
+.long-night-gap .hollow-line,
+.long-night-gap .hollow-sub {
+  text-align: center;
+}
+
+.long-night-gate {
+  position: relative;
+  width: 74px;
+  height: 70px;
+  margin: 0 auto 10px;
+}
+
+.long-night-gate i {
+  position: absolute;
+  inset: 14px 8px 0;
+  border-radius: 40px 40px 8px 8px;
+  background: radial-gradient(ellipse at 50% 60%, #ffe9a6 0%, #ffc94d 38%, #5b4a8a 75%);
+  box-shadow: 0 0 18px #ffc94d99;
+}
+
+.long-night-gate s {
+  position: absolute;
+  font-size: 15px;
+  text-decoration: none;
+}
+
+.long-night-spark-a {
+  left: 0;
+  top: 8px;
+}
+
+.long-night-spark-b {
+  right: 2px;
+  top: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .long-night-gate i {
+    animation: long-night-pulse 3s ease-in-out infinite;
+  }
+}
+
+@keyframes long-night-pulse {
+  50% {
+    box-shadow: 0 0 28px #ffc94dcc;
+  }
+}
+
+.long-night-short {
+  display: none;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .long-night-wide,
+  .long-night-gate {
+    display: none;
+  }
+
+  .long-night-short {
+    display: inline;
   }
 }

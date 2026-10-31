@@ -13,6 +13,14 @@ export const CROWNS: Readonly<Record<PatchCrown, { emoji: string; label: string 
   collector: { emoji: '🌈', label: 'Collector' },
 };
 
+/**
+ * Keeper of the Night (#727): the patch's latest Long Night's crown, kept
+ * apart from `crowns` (`PatchStats.keeperOfTheNight`). It sits first, with
+ * a thin gold ring while it's this week's, until the next Night crowns
+ * someone.
+ */
+export const NIGHT_CROWN = { emoji: '🌙', label: 'Keeper of the Night', night: true } as const;
+
 /** Shown where a number isn't counted yet (villages, until #306 PR 3). */
 export const SOON = 'soon';
 
@@ -27,7 +35,8 @@ export interface KeeperCard {
   readonly name: string;
   readonly mine: boolean;
   readonly homeSlot: number | null;
-  readonly crowns: readonly { emoji: string; label: string }[];
+  /** `night`: Keeper of the Night (#727), drawn with its gold ring. */
+  readonly crowns: readonly { emoji: string; label: string; night?: boolean }[];
   /** A cheer for a Keeper with no crown yet, never a rank. */
   readonly cheer: string | null;
   readonly lines: readonly StatLine[];
@@ -45,15 +54,19 @@ const count = (n: number | null): string => (n === null ? SOON : String(n));
 const buildingName = (id: string): string =>
   GAME_DATA.buildings.find((b) => b.id === id)?.name ?? id;
 
-function keeperCard(k: KeeperStats, userId: string | null): KeeperCard {
+function keeperCard(k: KeeperStats, userId: string | null, nightKeeper: string | null): KeeperCard {
   const mine = k.user.id === userId;
+  const crowns = [
+    ...(k.user.id === nightKeeper ? [NIGHT_CROWN] : []),
+    ...k.crowns.map((c) => CROWNS[c]),
+  ];
   return {
     userId: k.user.id,
     name: mine ? `${k.user.username} (you)` : k.user.username,
     mine,
     homeSlot: k.homeSlot,
-    crowns: k.crowns.map((c) => CROWNS[c]),
-    cheer: k.crowns.length === 0 ? 'Just getting started!' : null,
+    crowns,
+    cheer: crowns.length === 0 ? 'Just getting started!' : null,
     lines: [
       { emoji: '🏰', label: 'Land', value: count(k.tiles) },
       { emoji: '🌾', label: 'Homesteads', value: count(k.homesteads) },
@@ -76,6 +89,8 @@ export function statsPage(stats: PatchStats, userId: string | null): StatsPage {
       { emoji: '🏮', label: 'Lit', value: count(totals.lit) },
       { emoji: '🏘️', label: 'Hollows restored', value: count(totals.villages) },
     ],
-    keepers: stats.keepers.map((k) => keeperCard(k, userId)),
+    keepers: stats.keepers.map((k) =>
+      keeperCard(k, userId, stats.keeperOfTheNight?.userId ?? null),
+    ),
   };
 }

@@ -610,4 +610,46 @@ describe('the night show', () => {
       'me:leave',
     ]);
   });
+
+  it("narrates every Keeper's walk in one feed on a Long Night, never naming lost land (#727)", () => {
+    const t = rig();
+    const feed = (name: string) => (beat: { kind: string }) =>
+      beat.kind === 'enter'
+        ? `He's sniffing around ${name}'s meadow…`
+        : beat.kind === 'recoil'
+          ? `${name}'s fire is too bright! He backs away.`
+          : beat.kind === 'strike' && name !== 'Maya'
+            ? 'He found a dark spot…'
+            : null;
+    const theirs = { ...mine, userId: userId(2), story: null, feed: feed('Theo') };
+    t.show.play([{ ...mine, feed: feed('Maya') }, theirs], t.now(), PROWL, () => undefined);
+    t.advance(0);
+    expect(t.show.debug.feed).toEqual([
+      "He's sniffing around Maya's meadow…",
+      "He's sniffing around Theo's meadow…",
+    ]);
+    // Gathered as it plays: the feed clears when the show is over.
+    const lines = new Set<string>();
+    for (let ms = 0; ms < PROWL + 60_000; ms += 1_000) {
+      t.advance(1_000);
+      for (const l of t.show.debug.feed) lines.add(l);
+    }
+    expect(t.show.playing).toBe(false);
+    const all = [...lines];
+    expect(all).toContain("Theo's fire is too bright! He backs away.");
+    expect(all).toContain('He found a dark spot…');
+    // My own strikes keep my story (who was taken, and that I can rescue them).
+    expect(all.some((l) => l.includes('You can rescue them!'))).toBe(true);
+    expect(all.filter((l) => l.includes('Theo')).every((l) => !/dark spot|wild/.test(l))).toBe(
+      true,
+    );
+  });
+
+  it('keeps the single narrator line on an ordinary night', () => {
+    const t = rig();
+    t.show.play([mine], t.now(), PROWL, () => undefined);
+    t.advance(0);
+    expect(t.show.debug.feed).toEqual([]);
+    expect(t.show.debug.line).toBe(SHOW_TEXT.enter);
+  });
 });

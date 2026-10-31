@@ -1,4 +1,5 @@
 import { friendlyApi } from '../../friendly/friendly-api.js';
+import { dayName, LONG_NIGHT_TEXT, WEEKDAY_SHORT } from '../../hollow/long-night.js';
 import { FRIENDLY_TEXT } from '../../friendly/friendly-model.js';
 import {
   CreateMapRequestSchema,
@@ -832,6 +833,68 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
         pvp,
       ),
     );
+
+    // The Long Night (#727): the owner's weekday, or Off, like Challenges.
+    // Left out while it's switched off (`longNightWeekday` not sent).
+    if (map.longNightWeekday !== undefined) {
+      const picked = map.longNightWeekday;
+      const days = el('div', {
+        class: 'lobby-days',
+        role: 'radiogroup',
+        'aria-label': LONG_NIGHT_TEXT.heading,
+        'data-testid': 'lobby-long-night',
+      });
+      const choices: { weekday: number | null; label: string; name: string }[] = [
+        ...WEEKDAY_SHORT.map((label, weekday) => ({ weekday, label, name: dayName(weekday) })),
+        { weekday: null, label: LONG_NIGHT_TEXT.off, name: LONG_NIGHT_TEXT.off },
+      ];
+      for (const choice of choices) {
+        const selected = picked === choice.weekday;
+        const option = el(
+          'button',
+          {
+            type: 'button',
+            class: 'lobby-day',
+            role: 'radio',
+            'aria-checked': String(selected),
+            'aria-label': choice.name,
+            'data-testid': `lobby-long-night-${choice.weekday === null ? 'off' : String(choice.weekday)}`,
+            ...(isOwner ? {} : { disabled: '' }),
+          },
+          // The picked one says so in words too, not only by its border (#146).
+          selected ? `✓ ${choice.label}` : choice.label,
+        );
+        if (isOwner && !selected) {
+          option.addEventListener('click', () => {
+            act(status, option, async () => {
+              await lobbyApi.setLongNight(map.id, choice.weekday);
+              await showMap(map.id, LONG_NIGHT_TEXT.picked(choice.name));
+            });
+          });
+        }
+        days.append(option);
+      }
+      sections.push(
+        el(
+          'div',
+          { class: 'lobby-section' },
+          el('h2', { class: 'lobby-heading' }, LONG_NIGHT_TEXT.heading),
+          ...(isOwner ? [] : [el('p', { class: 'auth-hint' }, LONG_NIGHT_TEXT.ownerPicks)]),
+          days,
+          ...(isOwner
+            ? [
+                el(
+                  'p',
+                  { class: 'auth-hint', 'data-testid': 'lobby-long-night-hint' },
+                  picked === null
+                    ? LONG_NIGHT_TEXT.hintOff
+                    : `${LONG_NIGHT_TEXT.hintDay(dayName(picked))} ${LONG_NIGHT_TEXT.skipWeek}`,
+                ),
+              ]
+            : []),
+        ),
+      );
+    }
 
     // Friendly battles (#29): the owner's on/off switch, like Challenges.
     const friendlyOn = map.friendlyChallenges !== false;

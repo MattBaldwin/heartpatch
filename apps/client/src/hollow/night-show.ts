@@ -31,6 +31,12 @@ export interface ShowWalk {
   readonly seed: Hex | null;
   /** My walk's story, read at each stop (null: not mine, not narrated). */
   readonly story: (() => Narration) | null;
+  /**
+   * A Long Night's feed (#727): this Keeper's line for a stop, by place and
+   * name, or null to leave it out (mine falls back to my own story). When
+   * any walk has one, the narrator keeps every walk's lines in one feed.
+   */
+  readonly feed?: ((beat: Beat) => string | null) | null;
 }
 
 /** What the show moves on the map (the Hollow layer and the map screen). */
@@ -53,7 +59,10 @@ export interface ShowStage {
 
 /** The narrator's card: a line (and who he took, greyed) or nothing. */
 export interface ShowCaption {
-  say: (line: string, withTokens: boolean) => void;
+  /** In a feed (`setFeed`), the line is added under the others; `mine` stays gold. */
+  say: (line: string, withTokens: boolean, mine?: boolean) => void;
+  /** A Long Night's feed (#727): the card keeps the last few lines, not one. */
+  setFeed?: (on: boolean) => void;
   hide: () => void;
   readonly shown: boolean;
 }
@@ -67,6 +76,9 @@ export function domCaption(
   const who = el('span', { class: 'night-caption-who' }, SHOW_TEXT.narrator);
   const text = el('span', { class: 'night-caption-line', 'data-testid': 'night-caption-line' });
   const pics = el('span', { class: 'night-caption-tokens' });
+  const feed = el('ul', { class: 'night-feed', 'data-testid': 'night-feed' });
+  feed.hidden = true;
+  let feeding = false;
   const skip = el(
     'button',
     { type: 'button', class: 'night-caption-skip', 'data-testid': 'night-show-skip' },
@@ -77,12 +89,24 @@ export function domCaption(
     'div',
     { class: 'night-caption', role: 'status', 'data-testid': 'night-caption' },
     el('p', { class: 'night-caption-text' }, who, text, pics),
+    feed,
     skip,
   );
   card.hidden = true;
   root.append(card);
   return {
-    say: (line, withTokens) => {
+    say: (line, withTokens, mine = false) => {
+      if (feeding) {
+        // Older lines fade; the newest is bright; mine stay gold (mockup "Live feed").
+        feed.append(
+          el('li', { class: mine ? 'night-feed-line night-feed-mine' : 'night-feed-line' }, line),
+        );
+        while (feed.children.length > FEED_LINES) feed.firstElementChild?.remove();
+        // Another Keeper's line keeps my greyed tokens (who he took) on the card.
+        if (withTokens) pics.replaceChildren(...tokens());
+        card.hidden = false;
+        return;
+      }
       text.textContent = line;
       pics.replaceChildren(...(withTokens ? tokens() : []));
       card.hidden = false;
@@ -91,6 +115,14 @@ export function domCaption(
       card.hidden = true;
       text.textContent = '';
       pics.replaceChildren();
+      feed.replaceChildren();
+    },
+    setFeed: (on) => {
+      feeding = on;
+      feed.hidden = !on;
+      text.hidden = on;
+      card.classList.toggle('night-caption-feed', on);
+      if (!on) feed.replaceChildren();
     },
     get shown() {
       return !card.hidden;
@@ -102,8 +134,13 @@ export function domCaption(
   };
 }
 
+/** A Long Night's feed keeps this many lines on the card (mockup: three or four). */
+const FEED_LINES = 4;
+
 export interface NightShowDebug {
   readonly playing: boolean;
+  /** A Long Night's feed lines so far (#727), oldest first. */
+  readonly feed: readonly string[];
   readonly mode: 'live' | 'replay' | null;
   /** The narrator's line on screen ('' when none). */
   readonly line: string;
@@ -173,6 +210,9 @@ export function createNightShow(options: {
   let myBeats: Beat[] = [];
   let myBeat = -1;
   let line = '';
+  /** A Long Night's feed is on (#727), and its lines so far. */
+  let feeding = false;
+  let feedLines: string[] = [];
   /** Walks still to reach their `leave`. */
   let walking = 0;
 
@@ -180,10 +220,15 @@ export function createNightShow(options: {
     finish(true);
   });
 
-  const say = (next: string, withTokens: boolean) => {
+  const say = (next: string, withTokens: boolean, mine = false) => {
     line = next;
-    if (next === '') caption.hide();
-    else caption.say(next, withTokens);
+    if (next === '') {
+      feedLines = [];
+      caption.hide();
+    } else {
+      if (feeding) feedLines.push(next);
+      caption.say(next, withTokens, mine);
+    }
   };
 
   const release = (keeper: string, tiles: readonly HexKey[]) => {
@@ -209,6 +254,8 @@ export function createNightShow(options: {
     myBeat = -1;
     walking = 0;
     say('', false);
+    feeding = false;
+    caption.setFeed?.(false);
   };
 
   function finish(skipped: boolean): void {
@@ -233,6 +280,9 @@ export function createNightShow(options: {
       if (plans.length === 0) return false;
       mode = prowlMs === null ? 'replay' : 'live';
       ending = onEnd;
+      feeding = plans.some((p) => p.w.feed);
+      feedLines = [];
+      caption.setFeed?.(feeding);
       const elapsed = Math.max(0, now() - startedAt);
       const fresh = elapsed < SHOW.freshMs;
       held = new Map();
@@ -258,13 +308,15 @@ export function createNightShow(options: {
           const beat = beats[i];
           if (!beat || mode === null) return;
           const tell = w.story;
+          const fed = w.feed?.(beat) ?? null;
+          if (!tell && fed) say(fed, false);
           if (tell) {
             myBeat = i;
             const story = tell();
             // Who he took is told (with their greyed tokens) on the last strike.
             const lastStrike =
               beat.kind === 'strike' && !beats.slice(i + 1).some((b) => b.kind === 'strike');
-            say(narrate(beats, i, story), lastStrike && story.taken.length > 0);
+            say(fed ?? narrate(beats, i, story), lastStrike && story.taken.length > 0, true);
             if (!still) stage.cue?.(beat.kind);
             if (!still && (mode === 'replay' || (beat.kind === 'enter' && fresh)))
               stage.pan?.(beat);
@@ -322,6 +374,7 @@ export function createNightShow(options: {
         playing: mode !== null,
         mode,
         line,
+        feed: [...feedLines],
         beat: myBeat,
         beats: myBeats.length,
         held: held.size,

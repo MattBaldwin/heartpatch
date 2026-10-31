@@ -42,6 +42,8 @@ export interface TerritoryScreenOptions {
   now?: () => number;
   /** My supply line on a Wild Isle (#621), for what counts as next to my land; none on a Cozy Patch. */
   supply?: (view: MapView) => Supply | undefined;
+  /** The week of a Long Night (#727): "He'll come looking on Saturday 🔥", added to the dark-land line. */
+  darkSoon?: () => string | null;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -220,6 +222,13 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
 
   const line = (text: string, testId?: string) =>
     el('p', { class: 'tile-action-note', ...(testId ? { 'data-testid': testId } : {}) }, text);
+  /** It's dark here at night, and the week of a Long Night, when he comes (#727). */
+  const darkLine = () => {
+    const p = line(TERRITORY_TEXT.watchDark, 'territory-dark');
+    const soon = options.darkSoon?.() ?? null;
+    if (soon) p.append(' ', el('span', { class: 'territory-dark-soon' }, soon));
+    return p;
+  };
 
   /** A line counting down to `until`; at zero it calls `done` once. */
   const countdownLine = (
@@ -436,7 +445,7 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
       case 'watch':
         if (picking) {
           if (watchInTheDark(tile, view)) {
-            children.push(line(TERRITORY_TEXT.watchDark, 'territory-dark'));
+            children.push(darkLine());
           }
           children.push(...picker(tile, picking));
         } else {
@@ -451,9 +460,7 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
                 : TERRITORY_TEXT.watchNone,
               'territory-watch',
             ),
-            ...(watchInTheDark(tile, view)
-              ? [line(TERRITORY_TEXT.watchDark, 'territory-dark')]
-              : []),
+            ...(watchInTheDark(tile, view) ? [darkLine()] : []),
             button(
               TERRITORY_TEXT.pick,
               () => {
