@@ -7,6 +7,7 @@ import {
   MyMapsResponseSchema,
   MySignupCodesResponseSchema,
   PvpModeResponseSchema,
+  LongNightResponseSchema,
   type CreateMapRequest,
   type CreateSignupCodeResponse,
   type Invite,
@@ -65,6 +66,16 @@ export const lobbyApi = {
   leave: async (mapId: string): Promise<void> => {
     await apiCall(`/maps/${mapId}/leave`, { method: 'POST', schema: null });
   },
+
+  /** The Long Night's weekday (#727, 0 is Sunday; null: Off). Owner only. */
+  setLongNight: async (mapId: string, weekday: number | null): Promise<number | null> =>
+    (
+      await apiCallFor(`/maps/${mapId}/long-night`, {
+        method: 'POST',
+        body: { weekday },
+        schema: LongNightResponseSchema,
+      })
+    ).longNightWeekday,
 
   setPvpMode: async (mapId: string, pvpMode: PvpMode): Promise<PvpMode> =>
     (

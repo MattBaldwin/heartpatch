@@ -51,6 +51,7 @@ import { onPanelFocus } from './building/panel-focus.js';
 import { createTileBuild } from './building/tile-build.js';
 import { createBuildingsGuide } from './building/buildings-guide.js';
 import { combineTileActions } from './map/tile-actions.js';
+import { mapApi } from './map/map-api.js';
 import { createMapScreen, type MapLayer } from './map/map-screen.js';
 import { seasonsOn } from './map/map-dressing.js';
 import { createTileMarks } from './map/tile-marks.js';
@@ -595,6 +596,8 @@ const territory = withFences(
       },
       // A Wild Isle's "next to my land" follows my supply line (#621).
       supply: (view) => roads.supply(view),
+      // The week of a Long Night, the dark-land line says when he comes (#727).
+      darkSoon: () => hollow.darkSoon(),
     }),
     raidReport,
   ),
@@ -842,15 +845,22 @@ const hollow = createHollowScreen({
       .filter((name) => name !== '');
   },
   pvpMode: () => maps.view?.map.pvpMode ?? null,
+  // The Long Night (#727): names for its feed and crown, the map's day, and its crown.
+  memberName: (userId) =>
+    maps.view?.members.find((m) => m.user.id === userId)?.user.username ?? null,
+  timeZone: () => maps.view?.map.timeZone ?? null,
+  nightKeeper: async (mapId) => (await mapApi.stats(mapId)).keeperOfTheNight ?? null,
   isGlade: (mapId) => mapId === glade,
   onStatus: () => {
     land.redraw();
   },
   // One card at a time (#277): the narrator and the nudge wait while
-  // something else is up over the map.
+  // something else is up over the map, Sprout's tray hint included (on a
+  // short phone on its side the feed would cover its "Got it!").
   mapBusy: () =>
     (maps.debug?.selected ?? null) !== null ||
     trays.debug.open !== null ||
+    trays.debug.hint ||
     care.isOpen ||
     closeUp.isOpen ||
     homeOpen() ||

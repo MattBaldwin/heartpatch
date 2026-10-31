@@ -40,7 +40,10 @@ test('at dusk, dark land gets a nudge to light a fire', async ({ browser }) => {
   const nudge = page.getByTestId('night-nudge');
   // Home alone is always safe: no nudge, even at dusk.
   await expect.poll(async () => (await hollowState(page))?.mapId).toBe(mapId);
-  await expect.poll(async () => (await hollowState(page))?.chips[0]).toMatch(/Night in \d+ min/);
+  // A Long Night's notice chip (#727) may come first in the week of one: look for the countdown.
+  const countdown = (chips: readonly string[] | undefined) =>
+    (chips ?? []).some((c) => /^🌇 Night in \d+ min/.test(c));
+  await expect.poll(async () => countdown((await hollowState(page))?.chips)).toBe(true);
   await expect(nudge).toBeHidden();
 
   // Land outside home with no fire. Claiming old forest finds a lore page,
@@ -57,7 +60,7 @@ test('at dusk, dark land gets a nudge to light a fire', async ({ browser }) => {
   await expect.poll(async () => (await hollowState(page))?.darkSpots).toBe(1);
   const state = (await hollowState(page))!;
   expect(state.night).toBe(false);
-  expect(state.chips[0]).toMatch(/Night in \d+ min/);
+  expect(countdown(state.chips)).toBe(true);
   await expect(nudge).toBeVisible();
   await expect(nudge).toContainText('dark tonight!');
   expect(findAvoidedWords((await nudge.textContent()) ?? '')).toEqual([]);

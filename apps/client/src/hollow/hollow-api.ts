@@ -25,6 +25,17 @@ export const hollowApi = {
       headers: { 'idempotency-key': key },
     }).then((res) => res.battle),
 
+  /**
+   * My one look in Juniper's Gap (#727): starts its wild battle, or resumes
+   * the battle going (which may be another kind).
+   */
+  gapEncounter: (mapId: string, key: string): Promise<PlayerBattle> =>
+    apiCallFor(`/maps/${mapId}/long-night/gap-encounter`, {
+      method: 'POST',
+      schema: BattleResponseSchema,
+      headers: { 'idempotency-key': key },
+    }).then((res) => res.battle),
+
   /** Dev/test only: the next night falls now. */
   devNightfall: (mapId: string): Promise<DevNightfallResponse> =>
     apiCallFor(`/maps/${mapId}/dev/nightfall`, {

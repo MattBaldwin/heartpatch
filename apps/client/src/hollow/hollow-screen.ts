@@ -20,6 +20,7 @@ import { describeItems } from '../inventory/bag-view.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { buttonClass } from '../ui/button/button.js';
+import { ApiRequestError } from '../net/api.js';
 import { el, messageOf } from '../ui/dom.js';
 import { hollowApi, type HollowApi } from './hollow-api.js';
 import { VISIT_FRESH_MS } from './hollow-config.js';
@@ -45,7 +46,22 @@ import {
   weatherNotesLine,
 } from './night-text.js';
 import type { UpkeepPaused } from '../heart-coins/heart-coins.js';
-import type { BeatKind, Narration } from './show-timeline.js';
+import type { Beat, BeatKind, Narration } from './show-timeline.js';
+import {
+  closingWords,
+  gapReply,
+  gapState,
+  LONG_NIGHT_TEXT,
+  noticeChip,
+  noticeChipText,
+  reportLines,
+  rescueReward,
+  revealCard,
+  weekdayName,
+  type LongNightLine,
+  type LongNightResult,
+  type LongNightStatus,
+} from './long-night.js';
 import './hollow.css';
 
 // The Hollow Man on the client (#21, design doc §14): the night look on the
@@ -114,6 +130,32 @@ export interface HollowScreenOptions {
    * may have changed.
    */
   upkeepPaused?: () => UpkeepPaused | null;
+  /** A patch-mate's name (the map's members), for the Long Night's feed and crown (#727). */
+  memberName?: (userId: string) => string | null;
+  /** The map's time zone, for the Long Night's "tonight" and "tomorrow" (#727). */
+  timeZone?: () => string | null;
+  /** The patch's Keeper of the Night (patch stats), for a morning not seen live (#727). */
+  nightKeeper?: (mapId: string) => Promise<{ userId: string; night: string } | null>;
+}
+
+/** The Long Night's cards and chips as they read (#727). */
+export interface LongNightDebug {
+  /** The notice chip's words by day, or null. */
+  readonly chip: string | null;
+  readonly notice: boolean;
+  /** The reveal's title on screen, or null. */
+  readonly reveal: string | null;
+  /** The reveal offers "Go look". */
+  readonly revealGoLook: boolean;
+  readonly gap: 'none' | 'available' | 'had';
+  /** The Gap card's title on screen, or null. */
+  readonly gapCard: string | null;
+  /** The Gap card's line (a server message shows here as sent). */
+  readonly gapLine: string | null;
+  /** The morning report's Long Night lines. */
+  readonly report: readonly string[];
+  /** The Hollow rescue list's boost line shows. */
+  readonly rescueBoost: boolean;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -144,6 +186,7 @@ export interface HollowDebug {
   readonly darkSpots: number;
   /** Keepers he's out walking for on the map (the show's figures). */
   readonly walking: number;
+  readonly longNight: LongNightDebug;
 }
 
 export interface HollowScreen {
@@ -158,6 +201,11 @@ export interface HollowScreen {
   upkeepChanged: () => void;
   /** The map on screen redrew (my dark land may have changed): the chips and the nudge follow. */
   viewChanged: () => void;
+  /**
+   * The week of a Long Night (#727), the line a tile panel's dark-land
+   * warning adds: "He'll come looking on Saturday 🔥"; null otherwise.
+   */
+  darkSoon: () => string | null;
   /** He won this land of mine back on `night` (#277): his report tells it. */
   reclaimed: (night: string, h: Hex) => boolean;
   readonly debug: HollowDebug | null;
@@ -189,6 +237,12 @@ const weatherKey = (userId: string, mapId: string) =>
   `heartpatch.hollow.weather-knocks.${userId}.${mapId}`;
 const upkeepKey = (userId: string, mapId: string) =>
   `heartpatch.hollow.upkeep-paused.${userId}.${mapId}`;
+/** The last Long Night whose result this device told (the reveal or the morning's block, #727). */
+const revealKey = (userId: string, mapId: string) =>
+  `heartpatch.long-night.told.${userId}.${mapId}`;
+/** The latest Long Night's result this device saw live (#727): the morning tells it. */
+const resultKey = (userId: string, mapId: string) =>
+  `heartpatch.long-night.result.${userId}.${mapId}`;
 /** The live show's prowl: he strikes this long after nightfall. */
 const PROWL_MS = HOLLOW_RULES.show.prowlMinutes * 60_000;
 /** How often the night's cards look whether something else is up over the map. */
@@ -241,6 +295,19 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   let pendingFall: { night: string; at: number; receivedAt: number; walks: ShowWalk[] } | null =
     null;
   const serverNow = () => now() + clockOffset;
+  /** The latest Long Night's result seen live on this device (#727), or null. */
+  let lnResult: LongNightResult | null = null;
+  /** The notice sheet (the Long Night chip tapped) and the Gap sheet are open. */
+  let noticeOpen = false;
+  let gapOpen = false;
+  /** The Gap card's words for now: the server's message, or "one battle at a time". */
+  let gapMessage: { title: string; line: string } | null = null;
+  /** The map I just had my look on: the Gap says so once. Kept through
+   *  the battle (it leaves the map and comes back), dropped on dismiss. */
+  let hadLookOn: string | null = null;
+  /** Keeper of the Night from patch stats, for a held Night this device didn't see live. */
+  let statsKeeper: { userId: string; night: string } | null = null;
+  let askedKeeper: string | null = null;
 
   const openButton = el(
     'button',
@@ -320,7 +387,29 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     'data-testid': 'night-strength',
   });
   strength.hidden = true;
-  options.root.append(chips, nudge, strength);
+  // The Long Night (#727): the notice sheet, the 7:30 reveal and Juniper's Gap.
+  const noticeBox = el('div', {
+    class: 'hollow-card long-night-notice',
+    role: 'dialog',
+    'aria-labelledby': 'long-night-notice-title',
+    'data-testid': 'long-night-notice',
+  });
+  noticeBox.hidden = true;
+  const revealBox = el('div', {
+    class: 'hollow-card long-night-reveal',
+    role: 'dialog',
+    'aria-labelledby': 'long-night-reveal-title',
+    'data-testid': 'long-night-reveal',
+  });
+  revealBox.hidden = true;
+  const gapBox = el('div', {
+    class: 'hollow-card long-night-gap',
+    role: 'dialog',
+    'aria-labelledby': 'long-night-gap-title',
+    'data-testid': 'long-night-gap',
+  });
+  gapBox.hidden = true;
+  options.root.append(chips, nudge, strength, noticeBox, revealBox, gapBox);
   /** The narrator's card: it steps back while another Hollow card is open. */
   let caption: ReturnType<typeof domCaption> | null = null;
   const show = createNightShow({
@@ -551,6 +640,121 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   };
   const glade = () => mapId !== null && (options.isGlade?.(mapId) ?? false);
 
+  // The Long Night (#727): every day and time from the status and the map's zone.
+  const ln = (): LongNightStatus | undefined => status?.longNight;
+  const zone = (): string | null => options.timeZone?.() ?? null;
+  const lnNotice = () =>
+    status && !glade()
+      ? noticeChip({ ln: ln(), isNight: status.night.isNight, now: serverNow(), timeZone: zone() })
+      : null;
+  const gapNow = () => gapState(ln(), serverNow());
+  const nameOfKeeper = (userId: string): string | null =>
+    userId === user?.id ? user.username : (options.memberName?.(userId) ?? null);
+
+  /** A Long Night's feed line for a Keeper's stop (#727): by place and name; lost land never named. */
+  const feedFor =
+    (userId: string) =>
+    (beat: Beat): string | null => {
+      const name = nameOfKeeper(userId);
+      if (!name) return null;
+      const tile = options.show?.tileAt(beat);
+      switch (beat.kind) {
+        case 'enter':
+          return LONG_NIGHT_TEXT.feedAt(name, placeOf(tile).replace(/^your /, ''));
+        case 'recoil':
+          return (tile?.homeSlot ?? null) !== null
+            ? LONG_NIGHT_TEXT.feedHome(name)
+            : LONG_NIGHT_TEXT.feedRecoil(name);
+        case 'strike':
+          // Mine keeps my own story (who was taken, and the rescue).
+          return userId === user?.id ? null : LONG_NIGHT_TEXT.feedFound;
+        case 'leave':
+          return null;
+      }
+    };
+
+  /**
+   * The Long Night to reveal on this device (#727): the result seen live,
+   * once the strike has landed (or the show was watched or skipped), or a
+   * held Night told by the status's open Gap while it's still night.
+   */
+  function revealDue(): LongNightResult | null {
+    if (!status || glade()) return null;
+    const told = stored(revealKey);
+    const live = lnResult;
+    // Only while it's still current: tonight's, or the Night whose Gap is open.
+    const current =
+      live !== null && (live.night === status.tonight.night || ln()?.gap?.night === live.night);
+    if (live && current && told !== live.night) {
+      const tonight = live.night === status.tonight.night;
+      const landed =
+        !tonight ||
+        serverNow() >= Date.parse(status.tonight.strikeAt) ||
+        stored(watchedKey) === live.night;
+      if (landed) return live;
+      return null;
+    }
+    const gap = ln()?.gap;
+    if (gap && status.night.isNight && told !== gap.night && gapNow() !== 'none') {
+      return {
+        night: gap.night,
+        held: true,
+        heldBy: [],
+        keeperOfNight: null,
+        gapClosesAt: gap.closesAt,
+      };
+    }
+    return null;
+  }
+
+  /** The morning report's Long Night block (#727), for an unseen report's Long Night. */
+  function reportLongNight(): { night: string; lines: LongNightLine[]; goLook: boolean } | null {
+    if (!status) return null;
+    const gapNight = ln()?.gap?.night ?? null;
+    const night = report.find((r) => r.night === lnResult?.night || r.night === gapNight)?.night;
+    if (!night || stored(revealKey) === night) return null;
+    const live = lnResult?.night === night ? lnResult : null;
+    const held = live ? live.held : true;
+    const keeper = live
+      ? live.keeperOfNight
+      : statsKeeper?.night === night
+        ? statsKeeper.userId
+        : null;
+    return {
+      night,
+      lines: reportLines({
+        held,
+        keeperOfNight: keeper,
+        me: user?.id ?? null,
+        nameOf: nameOfKeeper,
+        ln: ln(),
+        now: serverNow(),
+        timeZone: zone(),
+      }),
+      goLook: held && gapNow() === 'available',
+    };
+  }
+
+  /**
+   * The device's cache of the latest Long Night's result seen live (#727):
+   * the only way a not-held Night reaches the morning, until the status
+   * carries it (727e2 swaps this out). With no cache nothing is told but
+   * what the status says (an open Gap means it held).
+   */
+  const saveResult = (result: LongNightResult): void => {
+    store(resultKey, JSON.stringify(result));
+  };
+  const loadResult = (): LongNightResult | null => {
+    const raw = stored(resultKey);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as LongNightResult;
+      return typeof parsed.night === 'string' && Array.isArray(parsed.heldBy) ? parsed : null;
+    } catch {
+      return null;
+    }
+  };
+
   function chip(label: string, onClick: (() => void) | null, testId: string): HTMLElement {
     if (!onClick) return el('span', { class: 'night-chip', 'data-testid': testId }, label);
     const b = el(
@@ -593,20 +797,66 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       minutes,
       darkCount: spots.length,
     });
-    const row = kinds.flatMap((kind): HTMLElement[] => {
-      switch (kind) {
-        case 'night':
-          return [chip(NIGHT_TEXT.night, null, 'night-time-chip')];
-        case 'night-in':
-          return [chip(NIGHT_TEXT.nightIn(minutes ?? 0), null, 'night-time-chip')];
-        case 'dark':
-          return darkChip ? [darkChip] : [];
-        case 'stage':
-          return [stageChip];
-        case 'moon':
-          return [moonChip];
-      }
-    });
+    // The Long Night (#727): its notice chip by day (its minutes stand in
+    // for "Night in N min", so never a second chip), "Long Night" at night,
+    // and the gold Gap chip while my look waits. With one up front, his
+    // stage shrinks to its moon, still a tap away.
+    const notice = lnNotice();
+    const longTonight =
+      (ln()?.tonight ?? false) || (lnResult !== null && lnResult.night === status.tonight.night);
+    const front = [
+      ...(notice
+        ? [
+            chip(
+              noticeChipText(notice),
+              () => {
+                noticeOpen = true;
+                gapOpen = false;
+                gapMessage = null;
+                render();
+              },
+              'long-night-chip',
+            ),
+          ]
+        : []),
+      ...(gapNow() === 'available'
+        ? [
+            chip(
+              LONG_NIGHT_TEXT.gapChip,
+              () => {
+                gapOpen = true;
+                gapMessage = null;
+                noticeOpen = false;
+                render();
+              },
+              'gap-chip',
+            ),
+          ]
+        : []),
+    ];
+    front.find((c) => c.dataset['testid'] === 'gap-chip')?.classList.add('night-chip-gold');
+    const lnKinds = front.length > 0 ? kinds.map((k) => (k === 'stage' ? 'moon' : k)) : kinds;
+    const row = [
+      ...front,
+      ...lnKinds.flatMap((kind): HTMLElement[] => {
+        switch (kind) {
+          case 'night':
+            return [
+              chip(longTonight ? LONG_NIGHT_TEXT.night : NIGHT_TEXT.night, null, 'night-time-chip'),
+            ];
+          case 'night-in':
+            return notice?.kind === 'minutes'
+              ? []
+              : [chip(NIGHT_TEXT.nightIn(minutes ?? 0), null, 'night-time-chip')];
+          case 'dark':
+            return darkChip ? [darkChip] : [];
+          case 'stage':
+            return [stageChip];
+          case 'moon':
+            return [moonChip];
+        }
+      }),
+    ];
     const labels = row.map((c) => c.textContent).join('|');
     if (chips.dataset['labels'] !== labels) {
       chips.dataset['labels'] = labels;
@@ -776,6 +1026,13 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     const upkeepLine = upkeep ? upkeepPausedLine(upkeep.buildings) : null;
     const stormLine = weatherNotesLine(weatherNote.note()?.notes ?? []);
     renderChips();
+    // The Long Night's cards (#727) come first: one card at a time.
+    // A sheet whose chip has gone (Off, or the Gap closed) closes first.
+    if (noticeOpen && (!weekdayName(ln()) || !lnNotice())) noticeOpen = false;
+    if (gapOpen && gapNow() !== 'available') gapOpen = false;
+    const lnCard = lnBlocked(heldBack);
+    const revealing = revealDue() !== null && !lnCard;
+    const lnUp = revealing || noticeOpen || gapUp();
     reportBox.hidden =
       !on ||
       (report.length === 0 &&
@@ -789,7 +1046,9 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       visitPlaying ||
       show.playing ||
       strengthOpen ||
+      lnUp ||
       heldBack;
+    lnReportNight = null;
     if (!reportBox.hidden) {
       const told =
         report.length > 0
@@ -813,7 +1072,43 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       const rescueFirst = waiting[0];
       const replayOf = replayable();
       const darkFirst = dark()[0];
+      const lnBlock = reportLongNight();
+      lnReportNight = lnBlock?.night ?? null;
       reportBox.replaceChildren(
+        ...(lnBlock
+          ? [
+              el('span', { class: 'long-night-tag' }, LONG_NIGHT_TEXT.reportTag),
+              el(
+                'ul',
+                { class: 'long-night-lines', 'data-testid': 'long-night-report' },
+                ...lnBlock.lines.map((l) =>
+                  el(
+                    'li',
+                    { class: 'hollow-line hollow-line-icon' },
+                    el('span', { class: 'hollow-line-pic', 'aria-hidden': 'true' }, l.icon),
+                    el('span', {}, l.text),
+                  ),
+                ),
+              ),
+              ...(lnBlock.goLook
+                ? [
+                    el(
+                      'div',
+                      { class: 'hollow-row' },
+                      button(
+                        LONG_NIGHT_TEXT.goLook,
+                        () => {
+                          dismissReport();
+                          void goLook();
+                        },
+                        { 'data-testid': 'long-night-report-go' },
+                      ),
+                    ),
+                  ]
+                : []),
+              el('hr', { class: 'long-night-rule' }),
+            ]
+          : []),
         el('h2', { class: 'hollow-title', id: 'hollow-report-title' }, title),
         ...(replayOf
           ? [
@@ -885,12 +1180,9 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       );
     }
 
-    sheet.hidden = !on || !sheetOpen || !reportBox.hidden || heldBack || strengthOpen;
+    sheet.hidden = !on || !sheetOpen || !reportBox.hidden || heldBack || strengthOpen || lnUp;
     if (!sheet.hidden && status) {
-      const reward =
-        status.rescue.rewardsLeftToday > 0
-          ? HOLLOW_TEXT.reward(status.rescue.heartdust)
-          : HOLLOW_TEXT.noReward;
+      const reward = rescueReward(status.rescue, Boolean(status.longNight?.gap));
       sheet.replaceChildren(
         el('h2', { class: 'hollow-title', id: 'hollow-sheet-title' }, HOLLOW_TEXT.sheetTitle),
         el(
@@ -898,7 +1190,17 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
           { class: 'hollow-line' },
           hollowed.length > 0 ? HOLLOW_TEXT.sheetIntro : HOLLOW_TEXT.empty,
         ),
-        ...(hollowed.length > 0 ? [el('p', { class: 'hollow-sub' }, reward)] : []),
+        ...(hollowed.length > 0 && reward.boost
+          ? [
+              // While the Gap is open more rescues earn a reward (#727): the number already says so.
+              el(
+                'p',
+                { class: 'hollow-note long-night-boost', 'data-testid': 'long-night-boost' },
+                LONG_NIGHT_TEXT.rescueBoost,
+              ),
+            ]
+          : []),
+        ...(hollowed.length > 0 ? [el('p', { class: 'hollow-sub' }, reward.line)] : []),
         ...(hollowed.length > 0 && HOLLOW_TEXT.saveUp !== ''
           ? [el('p', { class: 'hollow-sub' }, HOLLOW_TEXT.saveUp)]
           : []),
@@ -953,14 +1255,216 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     renderNight();
   }
 
+  /** What holds the Long Night's cards back: the show, his visit, another card. */
+  const lnBlocked = (heldBack: boolean): boolean =>
+    !mapId || !status || show.playing || visitPlaying || replaying || strengthOpen || heldBack;
+  /** The Gap card is up: its sheet, a message, or "you've had your look". */
+  const gapUp = (): boolean =>
+    gapMessage !== null ||
+    (hadLookOn !== null && hadLookOn === mapId && gapNow() === 'had') ||
+    (gapOpen && gapNow() === 'available');
+  /** The night of the Long Night block on the report card now (null: none). */
+  let lnReportNight: string | null = null;
+
+  function renderLongNight(heldBack: boolean): void {
+    const blocked = lnBlocked(heldBack);
+    // The reveal first, then a sheet the kid opened.
+    const result = blocked ? null : revealDue();
+    revealBox.hidden = result === null;
+    if (result) {
+      const card = revealCard({
+        result,
+        me: user?.id ?? null,
+        ln: ln(),
+        now: serverNow(),
+        timeZone: zone(),
+      });
+      const drawn = `${JSON.stringify(card)}|${String(working)}`;
+      if (revealBox.dataset['drawn'] !== drawn) {
+        revealBox.dataset['drawn'] = drawn;
+        const close = () => {
+          store(revealKey, result.night);
+          render();
+        };
+        revealBox.replaceChildren(
+          el('span', { class: 'long-night-who' }, LONG_NIGHT_TEXT.who),
+          el('h2', { class: 'hollow-title', id: 'long-night-reveal-title' }, card.title),
+          el(
+            'p',
+            { class: 'hollow-line', 'data-testid': 'long-night-reveal-line' },
+            ...(card.lead ? [el('span', { class: 'long-night-wide' }, card.lead)] : []),
+            card.line,
+          ),
+          ...(card.sub ? [el('p', { class: 'hollow-sub' }, card.sub)] : []),
+          el(
+            'div',
+            { class: 'hollow-row' },
+            ...(card.goLook
+              ? [
+                  button(
+                    LONG_NIGHT_TEXT.goLook,
+                    () => {
+                      close();
+                      void goLook();
+                    },
+                    { 'data-testid': 'long-night-go' },
+                  ),
+                  quietButton(LONG_NIGHT_TEXT.later, close, 'long-night-later'),
+                ]
+              : [button(LONG_NIGHT_TEXT.okay, close, { 'data-testid': 'long-night-ok' })]),
+          ),
+        );
+      }
+    } else delete revealBox.dataset['drawn'];
+
+    const sheetsBlocked = blocked || result !== null || !reportBox.hidden;
+    const day = weekdayName(ln());
+    if (noticeOpen && (!day || !lnNotice())) noticeOpen = false;
+    noticeBox.hidden = !noticeOpen || sheetsBlocked;
+    const first = dark()[0];
+    // Only a change redraws, so a tap mid-press isn't lost to a rebuild.
+    const noticeDrawn = `${day ?? ''}|${first ? hexKey(first) : ''}|${String(working)}`;
+    if (noticeBox.hidden) delete noticeBox.dataset['drawn'];
+    if (!noticeBox.hidden && day && noticeBox.dataset['drawn'] !== noticeDrawn) {
+      noticeBox.dataset['drawn'] = noticeDrawn;
+      const shut = () => {
+        noticeOpen = false;
+        render();
+      };
+      noticeBox.replaceChildren(
+        el(
+          'h2',
+          { class: 'hollow-title', id: 'long-night-notice-title' },
+          LONG_NIGHT_TEXT.noticeTitle(day),
+        ),
+        el('p', { class: 'hollow-line' }, LONG_NIGHT_TEXT.noticeLine(day)),
+        el(
+          'p',
+          { class: 'hollow-sub' },
+          LONG_NIGHT_TEXT.noticeSubHold,
+          el('span', { class: 'long-night-wide' }, LONG_NIGHT_TEXT.noticeSubWhole),
+          LONG_NIGHT_TEXT.noticeSub,
+          el('span', { class: 'long-night-wide' }, LONG_NIGHT_TEXT.noticeSubWide),
+          el('span', { class: 'long-night-short' }, LONG_NIGHT_TEXT.noticeSubShort),
+        ),
+        el(
+          'div',
+          { class: 'hollow-row' },
+          ...(first
+            ? [
+                button(
+                  LONG_NIGHT_TEXT.lightMyLand,
+                  () => {
+                    noticeOpen = false;
+                    options.showTile?.(first, true);
+                    render();
+                  },
+                  { 'data-testid': 'long-night-notice-light' },
+                  true,
+                ),
+              ]
+            : []),
+          button(LONG_NIGHT_TEXT.okay, shut, { 'data-testid': 'long-night-notice-ok' }),
+        ),
+      );
+    }
+
+    const state = gapNow();
+    if (gapOpen && state !== 'available') gapOpen = false;
+    gapBox.hidden = !gapUp() || sheetsBlocked;
+    if (gapBox.hidden) {
+      delete gapBox.dataset['drawn'];
+      return;
+    }
+    const shutGap = () => {
+      gapOpen = false;
+      gapMessage = null;
+      hadLookOn = null;
+      render();
+    };
+    const closes = ln()?.gap?.closesAt;
+    const when = closes ? closingWords(closes, serverNow(), zone()) : LONG_NIGHT_TEXT.closesTonight;
+    const gapDrawn = `${state}|${gapMessage?.line ?? ''}|${when}|${String(working)}`;
+    if (gapBox.dataset['drawn'] === gapDrawn) return;
+    gapBox.dataset['drawn'] = gapDrawn;
+    if (gapMessage || state !== 'available') {
+      const title = gapMessage?.title ?? LONG_NIGHT_TEXT.hadLookTitle;
+      const line = gapMessage?.line ?? LONG_NIGHT_TEXT.hadLookLine(when);
+      gapBox.replaceChildren(
+        el('h2', { class: 'hollow-title', id: 'long-night-gap-title' }, title),
+        el('p', { class: 'hollow-line', 'data-testid': 'long-night-gap-line' }, line),
+        el(
+          'div',
+          { class: 'hollow-row' },
+          button(LONG_NIGHT_TEXT.okay, shutGap, { 'data-testid': 'long-night-gap-ok' }),
+        ),
+      );
+      return;
+    }
+    gapBox.replaceChildren(
+      el(
+        'div',
+        { class: 'long-night-gate', 'aria-hidden': 'true' },
+        el('i', {}),
+        el('s', { class: 'long-night-spark-a' }, '✨'),
+        el('s', { class: 'long-night-spark-b' }, '✨'),
+      ),
+      el('h2', { class: 'hollow-title', id: 'long-night-gap-title' }, LONG_NIGHT_TEXT.gapTitle),
+      el(
+        'p',
+        { class: 'hollow-line', 'data-testid': 'long-night-gap-line' },
+        LONG_NIGHT_TEXT.gapLine,
+      ),
+      el(
+        'p',
+        { class: 'hollow-sub' },
+        LONG_NIGHT_TEXT.gapOneLook,
+        el('span', { class: 'long-night-wide' }, LONG_NIGHT_TEXT.gapCount),
+        LONG_NIGHT_TEXT.gapTill(when),
+      ),
+      el('p', { class: 'hollow-sub long-night-boost' }, LONG_NIGHT_TEXT.gapRescue),
+      el(
+        'div',
+        { class: 'hollow-row' },
+        button(
+          LONG_NIGHT_TEXT.goLook,
+          () => {
+            gapOpen = false;
+            void goLook();
+          },
+          { 'data-testid': 'long-night-gap-go' },
+        ),
+        quietButton(LONG_NIGHT_TEXT.notNow, shutGap, 'long-night-gap-later'),
+      ),
+    );
+  }
+
+  function quietButton(label: string, onClick: () => void, testId: string): HTMLElement {
+    const b = el(
+      'button',
+      {
+        type: 'button',
+        class: buttonClass({ variant: 'quiet', small: true }),
+        'data-testid': testId,
+      },
+      label,
+    );
+    b.disabled = working;
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
   function renderNight(): void {
     const heldBack = options.otherReportOpen?.() ?? false;
     const busy = options.mapBusy?.() ?? false;
     busyBefore = busy;
-    caption?.setHeld(strengthOpen || !sheet.hidden || heldBack || busy);
+    renderLongNight(heldBack);
+    const lnShown = !revealBox.hidden || !noticeBox.hidden || !gapBox.hidden;
+    caption?.setHeld(strengthOpen || !sheet.hidden || heldBack || busy || lnShown);
     renderStrength(heldBack || replaying);
     renderNudge(
       heldBack ||
+        lnShown ||
         busy ||
         show.playing ||
         strengthOpen ||
@@ -973,6 +1477,8 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   function dismissReport(): void {
     const newest = report[0];
     if (newest) markSeen(newest.night);
+    // The morning's Long Night block told it: no reveal for it after.
+    if (lnReportNight) store(revealKey, lnReportNight);
     firesNote.markSeen();
     groundsNote.markSeen();
     tidyNote.markSeen();
@@ -1020,6 +1526,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         startFall(fresh, fall);
       }
       joinTonight(fresh);
+      askNightKeeper(fresh);
       options.onStatus?.();
     } catch (err) {
       if (at === generation) note = messageOf(err);
@@ -1029,6 +1536,62 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       }
     }
     if (at === generation) render();
+  }
+
+  /**
+   * A held Night this device didn't see live (#727): Keeper of the Night
+   * comes from patch stats, asked once per Night.
+   */
+  function askNightKeeper(fresh: HollowStatus): void {
+    const id = mapId;
+    const night = fresh.longNight?.gap?.night;
+    if (!id || !night || !options.nightKeeper) return;
+    if (lnResult?.night === night || askedKeeper === night) return;
+    askedKeeper = night;
+    const at = generation;
+    options
+      .nightKeeper(id)
+      .then((keeper) => {
+        if (at !== generation) return;
+        statsKeeper = keeper;
+        render();
+      })
+      .catch(() => undefined);
+  }
+
+  /**
+   * My one look in Juniper's Gap (#727): an ordinary wild battle starts. A
+   * resumed battle of another kind waits to be finished first; a stale read
+   * (closed, claimed, not a Keeper) shows the server's own words, and the
+   * Gap switched off just hides it all. The status is asked again after.
+   */
+  async function goLook(): Promise<void> {
+    const id = mapId;
+    if (!id || working) return;
+    const at = generation;
+    const stillHere = () => at === generation && mapId === id;
+    working = true;
+    gapMessage = null;
+    render();
+    try {
+      const battle = await sendCommand(sendDeps, (key) => api.gapEncounter(id, key), stillHere);
+      if (battle && stillHere()) {
+        const reply = gapReply({ battle });
+        if (reply.kind === 'battle') {
+          hadLookOn = id;
+          options.openBattle(battle);
+        } else if (reply.kind === 'message') gapMessage = reply;
+      }
+    } catch (err) {
+      const reply = gapReply(
+        err instanceof ApiRequestError ? err : { code: 'INTERNAL', message: messageOf(err) },
+      );
+      if (stillHere() && reply.kind === 'message') gapMessage = reply;
+    } finally {
+      working = false;
+      gapOpen = false;
+      if (stillHere()) await refresh();
+    }
   }
 
   /** His old visit: night fell with no walk to show. */
@@ -1171,6 +1734,12 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       replaying = false;
       outNames = null;
       pendingFall = null;
+      noticeOpen = false;
+      gapOpen = false;
+      gapMessage = null;
+      statsKeeper = null;
+      askedKeeper = null;
+      lnResult = loadResult();
       if (!next) options.layer.setNight(false);
       render();
       await refresh();
@@ -1192,8 +1761,20 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       replaying = false;
       outNames = null;
       pendingFall = null;
+      noticeOpen = false;
+      gapOpen = false;
+      gapMessage = null;
+      hadLookOn = null;
+      statsKeeper = null;
+      askedKeeper = null;
+      lnResult = loadResult();
       options.layer.setNight(false);
       render();
+    },
+
+    darkSoon: () => {
+      const day = weekdayName(ln());
+      return day && lnNotice() ? LONG_NIGHT_TEXT.darkSoon(day) : null;
     },
 
     reclaimed: (night, h) =>
@@ -1225,6 +1806,14 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     liveEvent: (event) => {
       if (event.mapId !== mapId) return;
       if (event.type === 'hollow.nightfall') {
+        // A Long Night's result (#727), live or replayed after reconnecting:
+        // the reveal and the morning tell it.
+        const result = GAME_EVENTS['hollow.nightfall'].public.safeParse(event.data);
+        const lnFell = result.success ? result.data.longNight : undefined;
+        if (result.success && lnFell) {
+          lnResult = { night: result.data.night, ...lnFell };
+          saveResult(lnResult);
+        }
         // Live, not a replay after reconnecting: the show plays every
         // Keeper's walk from nightfall (#277), and the report follows when
         // it's over. A night with no walk at all is his old visit.
@@ -1244,12 +1833,20 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
                 reclaimed: w.reclaimed,
                 seed: options.show?.seedOf(w.userId) ?? null,
                 story: w.userId === user?.id ? storyFor(night) : null,
+                // A Long Night narrates every Keeper's walk in one feed (#727).
+                feed: lnFell ? feedFor(w.userId) : null,
               })),
             };
           } else visit();
         }
         void refresh();
-      } else if (event.type === 'squishy.hollowed' || event.type === 'squishy.rescued') {
+      } else if (
+        event.type === 'squishy.hollowed' ||
+        event.type === 'squishy.rescued' ||
+        event.type === 'gap.opened' ||
+        // The owner moved the Long Night (#727): when it comes is worked out again.
+        (event.type === 'map.updated' && 'longNightWeekday' in event.data)
+      ) {
         void refresh();
       } else if (user && changesMyNight(event, user.id)) {
         // A fire, gatherer or guard of mine changed: the "light a fire" hint
@@ -1282,6 +1879,25 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         replay: !reportBox.hidden && reportBox.querySelector('.hollow-replay') !== null,
         darkSpots: dark().length,
         walking: layer.walking,
+        longNight: {
+          chip: (() => {
+            const n = lnNotice();
+            return n ? noticeChipText(n) : null;
+          })(),
+          notice: !noticeBox.hidden,
+          reveal: revealBox.hidden ? null : (revealBox.querySelector('h2')?.textContent ?? null),
+          revealGoLook:
+            !revealBox.hidden && revealBox.querySelector('[data-testid="long-night-go"]') !== null,
+          gap: gapNow(),
+          gapCard: gapBox.hidden ? null : (gapBox.querySelector('h2')?.textContent ?? null),
+          gapLine: gapBox.hidden
+            ? null
+            : (gapBox.querySelector('[data-testid="long-night-gap-line"]')?.textContent ?? null),
+          report: reportBox.hidden
+            ? []
+            : [...reportBox.querySelectorAll('.long-night-lines li')].map((li) => li.textContent),
+          rescueBoost: !sheet.hidden && sheet.querySelector('.long-night-boost') !== null,
+        },
       };
     },
   };
