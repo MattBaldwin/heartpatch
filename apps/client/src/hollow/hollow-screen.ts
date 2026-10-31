@@ -1827,10 +1827,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         event.type === 'squishy.rescued' ||
         event.type === 'gap.opened' ||
         // The owner moved the Long Night (#727): when it comes is worked out again.
-        (event.type === 'map.updated' &&
-          typeof event.data === 'object' &&
-          event.data !== null &&
-          'longNightWeekday' in event.data)
+        (event.type === 'map.updated' && 'longNightWeekday' in event.data)
       ) {
         void refresh();
       } else if (user && changesMyNight(event, user.id)) {

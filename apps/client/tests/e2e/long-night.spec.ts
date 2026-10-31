@@ -8,10 +8,11 @@ import { newPlayer, uniqueName, visitPatch } from './players.js';
  * works out when it comes, rule 4); the chip over the map counts down to it
  * by day. Tonight's nightfall is a Long Night: the live show narrates every
  * Keeper's walk in one feed by name, the reveal says the patch held (a new
- * patch's Keepers are graced, so they hold), and Keeper of the Night is
- * crowned. "Go look" itself needs the map's clock past 7:30 PM, which the
- * dev route can't move (the unit tests in hollow.test.ts tap it). Asserts on
- * game signals (the dev hook), not pixels.
+ * patch's Keepers are graced, so they hold), and the Gap says it's closed
+ * in the server's words until it opens. "Go look" itself needs the map's
+ * clock past 7:30 PM, which the dev route can't move: `gapReply` in
+ * long-night.test.ts covers its replies. Asserts on game signals (the dev
+ * hook), not pixels.
  */
 
 interface LongNightDebug {
@@ -124,12 +125,13 @@ test('a Long Night: the countdown, the live feed, the reveal and the crown', asy
   );
   expect(early.status).toBe(409);
   expect(early.body.error.message).toContain("Juniper's Gap is closed");
-  // I'm Keeper of the Night: the patch stats crown names me.
-  const stats = await api<{ keeperOfTheNight: { userId: string } | null }>(
+  // Keeper of the Night goes by fires lit: a new patch has none, so nobody
+  // is crowned yet and the stats say so (the crown row is unit-tested).
+  const stats = await api<{ keeperOfTheNight?: { userId: string } | null }>(
     page,
     'GET',
     `/maps/${mapId}/stats`,
   );
-  const me = (await api<{ user: { id: string } }>(page, 'GET', '/me')).body.user.id;
-  expect(stats.body.keeperOfTheNight?.userId).toBe(me);
+  expect(stats.status).toBe(200);
+  expect(stats.body.keeperOfTheNight ?? null).toBeNull();
 });
