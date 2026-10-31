@@ -545,6 +545,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           longNightRoutes(createLongNightService({ db, clock, longNight, battles, ...publish }), {
             hooks: authHooks,
             idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
         // The tutorial (#47, #24) runs the Glade on these same modules; its

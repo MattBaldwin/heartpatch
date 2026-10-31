@@ -51,6 +51,7 @@ import {
   closingWords,
   gapReply,
   gapState,
+  latestResult,
   LONG_NIGHT_TEXT,
   noticeChip,
   noticeChipText,
@@ -134,8 +135,6 @@ export interface HollowScreenOptions {
   memberName?: (userId: string) => string | null;
   /** The map's time zone, for the Long Night's "tonight" and "tomorrow" (#727). */
   timeZone?: () => string | null;
-  /** The patch's Keeper of the Night (patch stats), for a morning not seen live (#727). */
-  nightKeeper?: (mapId: string) => Promise<{ userId: string; night: string } | null>;
 }
 
 /** The Long Night's cards and chips as they read (#727). */
@@ -240,9 +239,6 @@ const upkeepKey = (userId: string, mapId: string) =>
 /** The last Long Night whose result this device told (the reveal or the morning's block, #727). */
 const revealKey = (userId: string, mapId: string) =>
   `heartpatch.long-night.told.${userId}.${mapId}`;
-/** The latest Long Night's result this device saw live (#727): the morning tells it. */
-const resultKey = (userId: string, mapId: string) =>
-  `heartpatch.long-night.result.${userId}.${mapId}`;
 /** The live show's prowl: he strikes this long after nightfall. */
 const PROWL_MS = HOLLOW_RULES.show.prowlMinutes * 60_000;
 /** How often the night's cards look whether something else is up over the map. */
@@ -295,19 +291,20 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   let pendingFall: { night: string; at: number; receivedAt: number; walks: ShowWalk[] } | null =
     null;
   const serverNow = () => now() + clockOffset;
-  /** The latest Long Night's result seen live on this device (#727), or null. */
-  let lnResult: LongNightResult | null = null;
+  /**
+   * A Long Night's result just heard live on this map (#727), or null: it
+   * stands in until the status's `last` carries it (727e2), and keeps the
+   * event's `gapClosesAt`, which the status leaves out.
+   */
+  let lnLive: LongNightResult | null = null;
   /** The notice sheet (the Long Night chip tapped) and the Gap sheet are open. */
   let noticeOpen = false;
   let gapOpen = false;
   /** The Gap card's words for now: the server's message, or "one battle at a time". */
   let gapMessage: { title: string; line: string } | null = null;
-  /** The map I just had my look on: the Gap says so once. Kept through
-   *  the battle (it leaves the map and comes back), dropped on dismiss. */
-  let hadLookOn: string | null = null;
-  /** Keeper of the Night from patch stats, for a held Night this device didn't see live. */
-  let statsKeeper: { userId: string; night: string } | null = null;
-  let askedKeeper: string | null = null;
+  /** The map and Night I just had my look on: the Gap says so once. Kept
+   *  through the battle (it leaves the map and comes back), dropped on dismiss. */
+  let hadLookOn: { mapId: string; night: string } | null = null;
 
   const openButton = el(
     'button',
@@ -673,58 +670,40 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       }
     };
 
+  const lastResult = (): LongNightResult | null => latestResult(ln(), lnLive);
+
   /**
-   * The Long Night to reveal on this device (#727): the result seen live,
-   * once the strike has landed (or the show was watched or skipped), or a
-   * held Night told by the status's open Gap while it's still night.
+   * The Long Night to reveal on this device (#727): the latest Night's
+   * result, once the strike has landed (or the show was watched or
+   * skipped), while it's still current, and once per device.
    */
   function revealDue(): LongNightResult | null {
     if (!status || glade()) return null;
-    const told = stored(revealKey);
-    const live = lnResult;
+    const last = lastResult();
     // Only while it's still current: tonight's, or the Night whose Gap is open.
     const current =
-      live !== null && (live.night === status.tonight.night || ln()?.gap?.night === live.night);
-    if (live && current && told !== live.night) {
-      const tonight = live.night === status.tonight.night;
-      const landed =
-        !tonight ||
-        serverNow() >= Date.parse(status.tonight.strikeAt) ||
-        stored(watchedKey) === live.night;
-      if (landed) return live;
-      return null;
-    }
-    const gap = ln()?.gap;
-    if (gap && status.night.isNight && told !== gap.night && gapNow() !== 'none') {
-      return {
-        night: gap.night,
-        held: true,
-        heldBy: [],
-        keeperOfNight: null,
-        gapClosesAt: gap.closesAt,
-      };
-    }
-    return null;
+      last !== null && (last.night === status.tonight.night || ln()?.gap?.night === last.night);
+    if (!last || !current || stored(revealKey) === last.night) return null;
+    const tonight = last.night === status.tonight.night;
+    const landed =
+      !tonight ||
+      serverNow() >= Date.parse(status.tonight.strikeAt) ||
+      stored(watchedKey) === last.night;
+    return landed ? last : null;
   }
 
   /** The morning report's Long Night block (#727), for an unseen report's Long Night. */
   function reportLongNight(): { night: string; lines: LongNightLine[]; goLook: boolean } | null {
     if (!status) return null;
-    const gapNight = ln()?.gap?.night ?? null;
-    const night = report.find((r) => r.night === lnResult?.night || r.night === gapNight)?.night;
-    if (!night || stored(revealKey) === night) return null;
-    const live = lnResult?.night === night ? lnResult : null;
-    const held = live ? live.held : true;
-    const keeper = live
-      ? live.keeperOfNight
-      : statsKeeper?.night === night
-        ? statsKeeper.userId
-        : null;
+    const last = lastResult();
+    const night = report.find((r) => r.night === last?.night)?.night;
+    if (!last || !night || stored(revealKey) === night) return null;
+    const { held } = last;
     return {
       night,
       lines: reportLines({
         held,
-        keeperOfNight: keeper,
+        keeperOfNight: last.keeperOfNight,
         me: user?.id ?? null,
         nameOf: nameOfKeeper,
         ln: ln(),
@@ -734,26 +713,6 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       goLook: held && gapNow() === 'available',
     };
   }
-
-  /**
-   * The device's cache of the latest Long Night's result seen live (#727):
-   * the only way a not-held Night reaches the morning, until the status
-   * carries it (727e2 swaps this out). With no cache nothing is told but
-   * what the status says (an open Gap means it held).
-   */
-  const saveResult = (result: LongNightResult): void => {
-    store(resultKey, JSON.stringify(result));
-  };
-  const loadResult = (): LongNightResult | null => {
-    const raw = stored(resultKey);
-    if (!raw) return null;
-    try {
-      const parsed = JSON.parse(raw) as LongNightResult;
-      return typeof parsed.night === 'string' && Array.isArray(parsed.heldBy) ? parsed : null;
-    } catch {
-      return null;
-    }
-  };
 
   function chip(label: string, onClick: (() => void) | null, testId: string): HTMLElement {
     if (!onClick) return el('span', { class: 'night-chip', 'data-testid': testId }, label);
@@ -802,8 +761,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     // and the gold Gap chip while my look waits. With one up front, his
     // stage shrinks to its moon, still a tap away.
     const notice = lnNotice();
-    const longTonight =
-      (ln()?.tonight ?? false) || (lnResult !== null && lnResult.night === status.tonight.night);
+    const longTonight = (ln()?.tonight ?? false) || lastResult()?.night === status.tonight.night;
     const front = [
       ...(notice
         ? [
@@ -1261,7 +1219,10 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   /** The Gap card is up: its sheet, a message, or "you've had your look". */
   const gapUp = (): boolean =>
     gapMessage !== null ||
-    (hadLookOn !== null && hadLookOn === mapId && gapNow() === 'had') ||
+    (hadLookOn !== null &&
+      hadLookOn.mapId === mapId &&
+      hadLookOn.night === ln()?.gap?.night &&
+      gapNow() === 'had') ||
     (gapOpen && gapNow() === 'available');
   /** The night of the Long Night block on the report card now (null: none). */
   let lnReportNight: string | null = null;
@@ -1526,7 +1487,6 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         startFall(fresh, fall);
       }
       joinTonight(fresh);
-      askNightKeeper(fresh);
       options.onStatus?.();
     } catch (err) {
       if (at === generation) note = messageOf(err);
@@ -1536,27 +1496,6 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       }
     }
     if (at === generation) render();
-  }
-
-  /**
-   * A held Night this device didn't see live (#727): Keeper of the Night
-   * comes from patch stats, asked once per Night.
-   */
-  function askNightKeeper(fresh: HollowStatus): void {
-    const id = mapId;
-    const night = fresh.longNight?.gap?.night;
-    if (!id || !night || !options.nightKeeper) return;
-    if (lnResult?.night === night || askedKeeper === night) return;
-    askedKeeper = night;
-    const at = generation;
-    options
-      .nightKeeper(id)
-      .then((keeper) => {
-        if (at !== generation) return;
-        statsKeeper = keeper;
-        render();
-      })
-      .catch(() => undefined);
   }
 
   /**
@@ -1578,7 +1517,8 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       if (battle && stillHere()) {
         const reply = gapReply({ battle });
         if (reply.kind === 'battle') {
-          hadLookOn = id;
+          const night = ln()?.gap?.night;
+          if (night) hadLookOn = { mapId: id, night };
           options.openBattle(battle);
         } else if (reply.kind === 'message') gapMessage = reply;
       }
@@ -1737,9 +1677,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       noticeOpen = false;
       gapOpen = false;
       gapMessage = null;
-      statsKeeper = null;
-      askedKeeper = null;
-      lnResult = loadResult();
+      lnLive = null;
       if (!next) options.layer.setNight(false);
       render();
       await refresh();
@@ -1765,9 +1703,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       gapOpen = false;
       gapMessage = null;
       hadLookOn = null;
-      statsKeeper = null;
-      askedKeeper = null;
-      lnResult = loadResult();
+      lnLive = null;
       options.layer.setNight(false);
       render();
     },
@@ -1811,8 +1747,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         const result = GAME_EVENTS['hollow.nightfall'].public.safeParse(event.data);
         const lnFell = result.success ? result.data.longNight : undefined;
         if (result.success && lnFell) {
-          lnResult = { night: result.data.night, ...lnFell };
-          saveResult(lnResult);
+          lnLive = { night: result.data.night, ...lnFell };
         }
         // Live, not a replay after reconnecting: the show plays every
         // Keeper's walk from nightfall (#277), and the report follows when

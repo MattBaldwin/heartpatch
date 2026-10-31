@@ -61,6 +61,8 @@ export interface LongNightRepo {
    * step 9, with the Hollow's rows): a Gap claim (#727d) holds it until commit.
    */
   lockLatest: (mapId: string) => Promise<LongNightRow | null>;
+  /** Moves a Night's Gap window (the dev "Gap now" route alone, under `lockLatest`). */
+  setGapWindow: (id: string, opensAt: Date, closesAt: Date) => Promise<void>;
   /** Writes a Night's `outcomes` (a Gap claim, under `lockLatest`). */
   setOutcomes: (id: string, outcomes: readonly LongNightOutcomeRow[]) => Promise<void>;
   /** Records a Night (nightfall's own transaction; the `(map_id, night)` key makes it once). */
@@ -130,6 +132,13 @@ export function createLongNightRepo(db: Executor): LongNightRepo {
         .limit(1)
         .for('update');
       return row ? { ...row, outcomes: OutcomesSchema.parse(row.outcomes) } : null;
+    },
+
+    setGapWindow: async (id, opensAt, closesAt) => {
+      await db
+        .update(longNights)
+        .set({ gapOpensAt: opensAt, gapClosesAt: closesAt })
+        .where(eq(longNights.id, id));
     },
 
     setOutcomes: async (id, outcomes) => {

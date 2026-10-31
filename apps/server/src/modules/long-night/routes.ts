@@ -1,5 +1,6 @@
 import {
   BattleResponseSchema,
+  DevGapNowResponseSchema,
   LongNightResponseSchema,
   MapIdParamsSchema,
   SetLongNightRequestSchema,
@@ -16,6 +17,8 @@ export interface LongNightRoutesOptions {
   hooks: AuthHooks;
   /** `Idempotency-Key` support (`registerIdempotency`). */
   idempotency: (fastify: Parameters<FastifyPluginCallback>[0]) => Idempotency;
+  /** Dev/test only (`HP_DEV_SQUISHY_GRANTS`): the route that opens the Gap now. */
+  devTools?: boolean;
 }
 
 export const longNightRoutes =
@@ -63,6 +66,20 @@ export const longNightRoutes =
         return reply.code(result.created ? 201 : 200).send({ battle: result.battle });
       },
     );
+
+    // Dev/test only (727e2): the latest held Night's Gap opens now, so an
+    // e2e can go look by day. Never registered in production (the config
+    // refuses `HP_DEV_SQUISHY_GRANTS` there).
+    if (options.devTools) {
+      app.post(
+        '/maps/:mapId/dev/gap-now',
+        {
+          schema: { params: MapIdParamsSchema, response: { 200: DevGapNowResponseSchema } },
+          preHandler: [requireAuth, rateLimit('dev')],
+        },
+        async (request) => service.devGapNow(requireUser(request), request.params.mapId),
+      );
+    }
 
     done();
   };

@@ -9,10 +9,9 @@ import { newPlayer, uniqueName, visitPatch } from './players.js';
  * by day. Tonight's nightfall is a Long Night: the live show narrates every
  * Keeper's walk in one feed by name, the reveal says the patch held (a new
  * patch's Keepers are graced, so they hold), and the Gap says it's closed
- * in the server's words until it opens. "Go look" itself needs the map's
- * clock past 7:30 PM, which the dev route can't move: `gapReply` in
- * long-night.test.ts covers its replies. Asserts on game signals (the dev
- * hook), not pixels.
+ * in the server's words until it opens. The dev "Gap now" route (727e2)
+ * then opens the Gap by day, and "Go look 👀" starts my Gap encounter.
+ * Asserts on game signals (the dev hook), not pixels.
  */
 
 interface LongNightDebug {
@@ -31,7 +30,14 @@ interface HollowDebug {
 }
 interface HollowStatus {
   tonight: { night: string };
-  longNight?: { weekday: number | null; gap: { available: boolean } | null };
+  longNight?: {
+    weekday: number | null;
+    gap: { night: string; available: boolean } | null;
+    last?: { night: string; held: boolean };
+  };
+}
+interface BattleDebug {
+  id: string;
 }
 
 const hollowState = (page: Page) => hook<HollowDebug>(page, 'hollow');
@@ -141,4 +147,40 @@ test('a Long Night: the countdown, the live feed, the reveal and the crown', asy
   );
   expect(stats.status).toBe(200);
   expect(stats.body.keeperOfTheNight ?? null).toBeNull();
+  // The status carries the Night's result for a Keeper who missed it (727e2).
+  expect((await read()).longNight?.last).toMatchObject({ night: fell.body.night, held: true });
+
+  // The morning report follows the reveal. The reveal already told the
+  // Night on this device, so the report carries no Long Night block.
+  const report = page.getByTestId('hollow-report');
+  await expect(report).toBeVisible({ timeout: 30_000 });
+  await expect(report.getByTestId('long-night-report')).toHaveCount(0);
+  await report.getByTestId('hollow-report-ok').tap();
+  await expect(report).toBeHidden();
+
+  // Dev "Gap now" (727e2): the held Night's Gap opens by day. The gold chip
+  // opens the Gap sheet, and "Go look 👀" starts my one Gap encounter.
+  const gapNow = await api<{ night: string }>(page, 'POST', `/maps/${mapId}/dev/gap-now`);
+  expect(gapNow.status, JSON.stringify(gapNow.body)).toBe(200);
+  expect(gapNow.body.night).toBe(fell.body.night);
+  await expect
+    .poll(async () => (await hollowState(page))?.longNight.gap, { timeout: 30_000 })
+    .toBe('available');
+  const gapChip = page.getByTestId('gap-chip');
+  await expect(gapChip).toHaveText("✨ Juniper's Gap is open");
+  await gapChip.tap();
+  const gapSheet = page.getByTestId('long-night-gap');
+  await expect(gapSheet).toBeVisible();
+  expect(findAvoidedWords((await gapSheet.textContent()) ?? '')).toEqual([]);
+  const goLook = gapSheet.getByTestId('long-night-gap-go');
+  await expect(goLook).toHaveText('Go look 👀');
+  await goLook.tap();
+  // The Gap encounter: a battle opens, and the server has my look claimed.
+  await expect
+    .poll(async () => (await hook<BattleDebug>(page, 'battle'))?.id ?? null, { timeout: 30_000 })
+    .not.toBeNull();
+  expect((await read()).longNight?.gap).toMatchObject({
+    night: fell.body.night,
+    available: false,
+  });
 });

@@ -7,6 +7,7 @@ import {
   gapBattleOk,
   gapReply,
   gapState,
+  latestResult,
   LONG_NIGHT_TEXT,
   localDate,
   noticeChip,
@@ -101,6 +102,66 @@ describe('gapState (#727)', () => {
   it('treats only a wild battle as the Gap battle', () => {
     expect(gapBattleOk({ kind: 'wild' })).toBe(true);
     expect(gapBattleOk({ kind: 'tile' })).toBe(false);
+  });
+});
+
+describe('latestResult (727e2)', () => {
+  const GAP = {
+    night: '2026-10-31',
+    opensAt: '2026-10-31T23:30:00.000Z',
+    closesAt: '2026-11-01T23:30:00.000Z',
+    available: true,
+  };
+  const last = (held: boolean) => ({
+    night: '2026-10-31',
+    held,
+    heldBy: held ? [ME, MAYA] : [ME],
+    keeperOfNight: held ? MAYA : null,
+  });
+  const live = (night: string, held: boolean) => ({
+    night,
+    held,
+    heldBy: [],
+    keeperOfNight: null,
+    gapClosesAt: held ? '2026-11-01T23:30:00.000Z' : null,
+  });
+
+  it('is nothing before any Night, heard or stored', () => {
+    expect(latestResult(undefined, null)).toBeNull();
+    expect(latestResult(ln(), null)).toBeNull();
+  });
+
+  it("tells a Keeper who wasn't online a Night that didn't hold, as the server says", () => {
+    expect(latestResult(ln({ last: last(false) }), null)).toEqual({
+      ...last(false),
+      gapClosesAt: null,
+    });
+  });
+
+  it("takes a held Night's closing time from the open Gap", () => {
+    expect(latestResult(ln({ last: last(true), gap: GAP }), null)).toEqual({
+      ...last(true),
+      gapClosesAt: GAP.closesAt,
+    });
+  });
+
+  it('uses a Night just heard live until the status catches up, then the status', () => {
+    const heard = live('2026-11-07', false);
+    expect(latestResult(ln({ last: last(true) }), heard)).toBe(heard);
+    expect(latestResult(ln(), heard)).toBe(heard);
+    // Same Night: the status's word, with the event's closing time.
+    expect(latestResult(ln({ last: last(true) }), live('2026-10-31', true))).toEqual({
+      ...last(true),
+      gapClosesAt: '2026-11-01T23:30:00.000Z',
+    });
+  });
+
+  it('never turns a stored "didn\'t hold" into a held one from an older live result', () => {
+    const result = latestResult(
+      ln({ last: { ...last(false), night: '2026-11-07' } }),
+      live('2026-10-31', true),
+    );
+    expect(result).toMatchObject({ night: '2026-11-07', held: false, gapClosesAt: null });
   });
 });
 

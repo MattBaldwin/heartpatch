@@ -2,6 +2,7 @@ import {
   ApiErrorSchema,
   BATTLE_RULES,
   BattleResponseSchema,
+  DevGapNowResponseSchema,
   GAME_DATA,
   HOLLOW_RULES,
   HollowResponseSchema,
@@ -91,12 +92,13 @@ describe.skipIf(!url)('the Long Night, server resolve (#727c, needs DATABASE_URL
     clock.setTime(Date.parse(START));
   });
 
-  async function start(longNight: 'off' | 'testers' | 'on' = 'on', testers = '') {
+  async function start(longNight: 'off' | 'testers' | 'on' = 'on', testers = '', dev = false) {
     const config = loadConfig({
       NODE_ENV: 'test',
       DATABASE_URL: url!,
       HP_LONG_NIGHT: longNight,
       HP_LONG_NIGHT_TESTERS: testers,
+      ...(dev && { HP_DEV_SQUISHY_GRANTS: 'true' }),
     });
     app = await buildApp({ config, db, clock: () => clock, logger: false });
     return app;
@@ -317,10 +319,19 @@ describe.skipIf(!url)('the Long Night, server resolve (#727c, needs DATABASE_URL
         closesAt: row!.gapClosesAt!.toISOString(),
         available: true,
       },
+      // The Night's result, for a Keeper who missed it live (727e2).
+      last: {
+        night: SATURDAY,
+        held: true,
+        heldBy: [kid.id, friend.id].sort(),
+        keeperOfNight: friend.id,
+      },
     });
-    // After it closes, it's gone.
+    // After it closes, it's gone; the result stays until the next Night.
     clock.setTime(row!.gapClosesAt!.getTime());
-    expect((await statusOf(server, kid, mapId)).hollow.longNight?.gap).toBeNull();
+    const closed = (await statusOf(server, kid, mapId)).hollow.longNight;
+    expect(closed?.gap).toBeNull();
+    expect(closed?.last).toMatchObject({ night: SATURDAY, held: true });
 
     // The `night` crown.
     const stats = await call(server, 'GET', `/maps/${mapId}/stats`, kid);
@@ -382,6 +393,21 @@ describe.skipIf(!url)('the Long Night, server resolve (#727c, needs DATABASE_URL
     const stats = await call(server, 'GET', `/maps/${mapId}/stats`, kid);
     expect(stats.body).not.toMatch(secret);
     expect(PatchStatsSchema.parse(stats.json()).keeperOfTheNight).toBeNull();
+
+    // A Keeper who missed it live reads how it went from the status (727e2):
+    // not held, the land that stood, no crown.
+    expect((await statusOf(server, friend, mapId)).hollow.longNight?.last).toEqual({
+      night: SATURDAY,
+      held: false,
+      heldBy: [kid.id],
+      keeperOfNight: null,
+    });
+    // Switched off, the whole block (its result too) is left out.
+    await app!.close();
+    const off = await start('off');
+    const quiet = await statusOf(off, friend, mapId);
+    expect(quiet.hollow.longNight).toBeUndefined();
+    expect(quiet.body).not.toContain('heldBy');
   });
 
   it("a Keeper away two weeks doesn't count, and can't break the hold", async () => {
@@ -507,6 +533,8 @@ describe.skipIf(!url)('the Long Night, server resolve (#727c, needs DATABASE_URL
       nextAt: NIGHTFALL,
       gap: null,
     });
+    // No Night has run yet: no result.
+    expect((await statusOf(server, kid, mapId)).hollow.longNight).not.toHaveProperty('last');
     // Saturday afternoon: tonight's the Night.
     clock.setTime(Date.parse(START));
     expect((await statusOf(server, kid, mapId)).hollow.longNight).toMatchObject({
@@ -711,6 +739,64 @@ describe.skipIf(!url)('the Long Night, server resolve (#727c, needs DATABASE_URL
       const [mine, theirs] = replies.map(battleOf);
       expect((await outcomeOf(mapId, kid)).gapBattleId).toBe(mine!.id);
       expect((await outcomeOf(mapId, friend)).gapBattleId).toBe(theirs!.id);
+    });
+
+    it('dev "Gap now" opens a held Night\'s Gap from now, and only in dev', async () => {
+      const devPath = (mapId: string) => `/maps/${mapId}/dev/gap-now`;
+      // Without the dev tools the route isn't there at all.
+      const plain = await start();
+      const kid = await player();
+      const friend = await player();
+      const mapId = await patch(plain, kid, [friend]);
+      expect((await call(plain, 'POST', devPath(mapId), kid)).statusCode).toBe(404);
+      await app!.close();
+
+      const server = await start('on', '', true);
+      // No Night yet: nothing to open.
+      expect((await call(server, 'POST', devPath(mapId), kid)).statusCode).toBe(409);
+      await fire(mapId, kid, '2026-11-01');
+      await friendOf(mapId, kid);
+      await saturdayNight(mapId);
+      const night = (await createLongNightRepo(db).latest(mapId))!;
+      // An hour before the strike, the Gap isn't open yet.
+      const at = night.gapOpensAt!.getTime() - 60 * 60_000;
+      clock.setTime(at);
+      expect((await call(server, 'POST', gapPath(mapId), kid)).statusCode).toBe(409);
+
+      const res = await call(server, 'POST', devPath(mapId), kid);
+      expect(res.statusCode, res.body).toBe(200);
+      const opened = DevGapNowResponseSchema.parse(res.json());
+      expect(opened).toEqual({
+        night: SATURDAY,
+        opensAt: new Date(at).toISOString(),
+        // A Gap's usual length, from now.
+        closesAt: new Date(at + DAY_MS).toISOString(),
+      });
+      // The Night's result is untouched, live clients hear the Gap open, and I can go look.
+      const moved = (await createLongNightRepo(db).latest(mapId))!;
+      expect(moved).toMatchObject({ held: true, outcomes: night.outcomes });
+      const events = await eventsOf(mapId);
+      expect(events.at(-1)?.type).toBe('gap.opened');
+      expect((await statusOf(server, kid, mapId)).hollow.longNight?.gap).toEqual({
+        night: SATURDAY,
+        opensAt: opened.opensAt,
+        closesAt: opened.closesAt,
+        available: true,
+      });
+      expect((await call(server, 'POST', gapPath(mapId), kid)).statusCode).toBe(201);
+    });
+
+    it('dev "Gap now" never opens a Gap for a Night he broke', async () => {
+      const server = await start('on', '', true);
+      const kid = await player();
+      const friend = await player();
+      const mapId = await patch(server, kid, [friend]);
+      await dark(mapId, friend);
+      await saturdayNight(mapId);
+      expect((await nightOf(mapId))[0]!.held).toBe(false);
+      const res = await call(server, 'POST', `/maps/${mapId}/dev/gap-now`, kid);
+      expect(res.statusCode).toBe(409);
+      expect((await statusOf(server, kid, mapId)).hollow.longNight?.gap).toBeNull();
     });
 
     it('the Gap is closed before it opens, after it closes, and with no Night', async () => {
