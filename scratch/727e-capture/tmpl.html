@@ -1,0 +1,55 @@
+<title>Long Night After screens</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@400;700;800&display=swap">
+<style>
+/* Layout: a review sheet. Version and facts first, the fixed overlaps next, then one row of real screenshots per state. */
+:root {
+  --bg:#f7f2f6; --panel:#ffffff; --fg:#3b2640; --muted:#7c6580; --line:#e6d3e2; --accent:#b8487a; --warn-bg:#fff1c2; --stub:#5b4a9e; --frame:#0c0a12;
+  --display:'Fredoka', ui-rounded, system-ui, sans-serif; --body:'Nunito', ui-rounded, system-ui, sans-serif; --mono:ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#17111b; --panel:#231a28; --fg:#f1e6f2; --muted:#b69fba; --line:#3d2d43; --accent:#e27aa8; --warn-bg:#3e3015; --stub:#b9a8ff; --frame:#000; color-scheme:dark; } }
+:root[data-theme="dark"] { --bg:#17111b; --panel:#231a28; --fg:#f1e6f2; --muted:#b69fba; --line:#3d2d43; --accent:#e27aa8; --warn-bg:#3e3015; --stub:#b9a8ff; --frame:#000; color-scheme:dark; }
+* { box-sizing:border-box; }
+body { background:var(--bg); color:var(--fg); font:400 16px/1.5 var(--body); padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block:28px 64px; }
+main { max-width:1200px; margin:0 auto; display:grid; gap:48px; }
+h1,h2 { font-family:var(--display); font-weight:600; margin:0; text-wrap:balance; }
+h1 { font-size:clamp(30px,6vw,42px); line-height:1.1; } h2 { font-size:24px; }
+p { margin:0; max-width:72ch; }
+code { font:13px var(--mono); }
+.ver { font:700 14px var(--mono); color:var(--fg); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px 12px; justify-self:start; }
+.eyebrow { font:800 12px var(--body); letter-spacing:.1em; text-transform:uppercase; color:var(--accent); }
+.lede { color:var(--muted); }
+.top { display:grid; gap:12px; }
+.facts { display:grid; gap:6px 16px; grid-template-columns:max-content 1fr; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px 16px; font-size:15px; margin:0; }
+.facts dt { color:var(--muted); font-weight:800; } .facts dd { margin:0; min-width:0; }
+@media (max-width:520px) { .facts { grid-template-columns:1fr; } }
+nav { display:flex; flex-wrap:wrap; gap:8px; }
+nav a { color:var(--fg); text-decoration:none; border:2px solid var(--line); background:var(--panel); border-radius:999px; padding:6px 14px; font-weight:800; font-size:14px; }
+nav a:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+section { display:grid; gap:14px; min-width:0; scroll-margin-top:16px; }
+section header { display:grid; gap:4px; }
+.note { background:var(--warn-bg); color:var(--fg); border-radius:10px; padding:10px 12px; font-size:15px; }
+.strip { display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start; }
+.shot { margin:0; display:grid; gap:8px; width:240px; max-width:100%; }
+.shot.land { width:420px; }
+.shot img { width:100%; height:auto; display:block; border-radius:18px; border:3px solid var(--frame); }
+figcaption { display:grid; font-size:13px; color:var(--muted); min-width:0; overflow-wrap:anywhere; } figcaption b { color:var(--fg); font-size:14px; }
+.stub { color:var(--stub); font-weight:700; }
+</style>
+<main>
+<div class="top">
+<p class="ver">@@VER@@</p>
+<p class="eyebrow">#727e · PR #755 · branch issue-727e-long-night-client</p>
+<h1>Long Night After screens</h1>
+<p class="lede">Captures of the Long Night client, for checking against the owner-approved mockups (v5). The client only draws what the server sends, so states the dev routes can't reach by day use stubbed server replies. Each of those shots is marked “Stubbed” in purple, with what was changed.</p>
+<dl class="facts">
+<dt>Captured</dt><dd>Playwright in Chromium (iphone-chromium project) against the local dev servers, with the dev HUD hidden. Sessions can’t run WebKit.</dd>
+<dt>Safe areas</dt><dd>iPhone 15 shots emulate real insets with CDP <code>Emulation.setSafeAreaInsetsOverride</code> (upright: top 59, bottom 34). The SE has none. No iPhone 15 sideways shots were taken this round.</dd>
+<dt>Quality tier</dt><dd>Each caption names the tier at capture. The container draws WebGL in software, so the map tier falls to <code>low</code> on some shots.</dd>
+<dt>Dev clock</dt><dd>Map time is pinned to late morning. Any day-lit sky or “tonight!” chip after a strike comes from the dev route, not the client. At night the chip reads “🌙 Long Night”.</dd>
+<dt>Not shown</dt><dd>iPhone 15 sideways. The patch-mate chooser on iPhone 15 and SE sideways.</dd>
+</dl>
+<nav aria-label="States">@@NAV@@</nav>
+</div>
+@@SECS@@
+</main>
