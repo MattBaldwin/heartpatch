@@ -1382,7 +1382,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       render();
     };
     const closes = ln()?.gap?.closesAt;
-    const when = closes ? closingWords(closes, serverNow(), zone()) : 'tonight';
+    const when = closes ? closingWords(closes, serverNow(), zone()) : LONG_NIGHT_TEXT.closesTonight;
     const gapDrawn = `${state}|${gapMessage?.line ?? ''}|${when}|${String(working)}`;
     if (gapBox.dataset['drawn'] === gapDrawn) return;
     gapBox.dataset['drawn'] = gapDrawn;

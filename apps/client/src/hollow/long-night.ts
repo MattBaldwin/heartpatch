@@ -109,22 +109,36 @@ export const LONG_NIGHT_TEXT = {
   crownMine: "You're Keeper of the Night!",
   crownOf: (name: string) => `${name} is Keeper of the Night 🔥`,
   tryAgain: (day: string) => `Try again next ${day}!`,
+  // When the Gap closes (closingWords).
+  closesTonight: 'tonight',
+  closesTomorrow: 'tomorrow night',
 } as const;
 
-/** A map-local date (YYYY-MM-DD) for an instant, in `timeZone` (the device's when unknown). */
-export function localDate(at: number, timeZone: string | null): string {
-  const format = (zone: string | undefined) =>
-    new Intl.DateTimeFormat('en-CA', {
+/** One formatter per zone: `localDate` runs on every chip tick and render. */
+const dateFormats = new Map<string, Intl.DateTimeFormat>();
+
+function dateFormat(zone: string | undefined): Intl.DateTimeFormat {
+  const key = zone ?? '';
+  let format = dateFormats.get(key);
+  if (!format) {
+    format = new Intl.DateTimeFormat('en-CA', {
       timeZone: zone,
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
-    }).format(new Date(at));
+    });
+    dateFormats.set(key, format);
+  }
+  return format;
+}
+
+/** A map-local date (YYYY-MM-DD) for an instant, in `timeZone` (the device's when unknown). */
+export function localDate(at: number, timeZone: string | null): string {
   try {
-    return format(timeZone ?? undefined);
+    return dateFormat(timeZone ?? undefined).format(new Date(at));
   } catch {
     // An unknown zone name: the device's own day is close enough for words.
-    return format(undefined);
+    return dateFormat(undefined).format(new Date(at));
   }
 }
 
@@ -189,7 +203,7 @@ export function noticeChipText(chip: NoticeChip): string {
  */
 export function closingWords(closesAt: string, now: number, timeZone: string | null): string {
   const days = daysBetween(localDate(now, timeZone), localDate(Date.parse(closesAt), timeZone));
-  return days >= 1 ? 'tomorrow night' : 'tonight';
+  return days >= 1 ? LONG_NIGHT_TEXT.closesTomorrow : LONG_NIGHT_TEXT.closesTonight;
 }
 
 /** The Gap's sheet state: a look to have, or had (window still open). */

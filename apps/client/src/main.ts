@@ -855,10 +855,12 @@ const hollow = createHollowScreen({
     land.redraw();
   },
   // One card at a time (#277): the narrator and the nudge wait while
-  // something else is up over the map.
+  // something else is up over the map, Sprout's tray hint included (on a
+  // short phone on its side the feed would cover its "Got it!").
   mapBusy: () =>
     (maps.debug?.selected ?? null) !== null ||
     trays.debug.open !== null ||
+    trays.debug.hint ||
     care.isOpen ||
     closeUp.isOpen ||
     homeOpen() ||
