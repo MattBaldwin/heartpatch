@@ -2118,3 +2118,22 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 - **#740 baseline:** "at rest" means the card's unmoved resting place (the code's `needAtRest`), not the Before build.
 - **#747 merged with one red e2e shard.** The red shard was `ipad-webkit 1`, `recipe-book.spec.ts:135`, a home-trays timeout on a slow shard. The PR has no client files, so it was judged unrelated, like #743.
 - **727a e2e waiver:** the 727a lane touched no client or e2e paths, so no local e2e run was required before the APPROVE counted.
+
+## 2026-10-31 — Owner decisions and coordinator calls (supervisor 30)
+
+**Owner decisions**
+- **#740 need card: signed off on option (b) as built (owner, 2026-10-30), merged as #740.** Screens v10: https://claude.ai/artifact/7dnzm3TfnVsNawzcfZM55T. The accepted trade: the card stays off the Keeper and the Keeper-spot swirl, and covers more pebble sparkle instead (SE upright 49%, iPhone 15 upright 70%, iPhone 15 sideways +13%). No spot between the paw and the Keeper covers less.
+- **Long Night Gap encounter: every Keeper (owner, 2026-10-30).** When the patch holds, every Keeper in the Night's outcomes gets a Gap encounter, away Keepers and those who lost land included. As built in #751.
+- **No Long Night at 0% (owner, 2026-10-30).** At 0% Hollow strength the week has no Long Night: no `long_nights` row, no Gap, and `nextAt` is null (no countdown). As built in #751.
+- **Gap squishy level: the Partner's level (owner, 2026-10-31).** It's an even fight; with no Partner, the top of the species' wild range. One Gap claim per Keeper per week, saved at battle start, so a lost Gap battle can't be retried that week. As built in #753.
+- **Wild Isle on via deploy (owner, 2026-10-30), #752.** The prod compose file sets `HP_WILD_ISLE: ${HP_WILD_ISLE:-on}`; a value in `.env` wins.
+- **727e mockups approved (owner, 2026-10-31):** v5 https://claude.ai/artifact/Cag9yBxCf2gQz5oEmayade, with the 3 recommendations:
+  - "Go look 👀" goes in the 7:30 reveal as the one plum button, with a quiet "Later". The map banner stays as the way back.
+  - A Keeper of the Night crown shows whenever the server sends one, held or not.
+  - No extra map chip for the rescue boost; it's mentioned on the Gap sheet and in the rescue list.
+
+**Coordinator calls**
+- **#749 merged with `fast` cancelled at its 25-min limit** (slow runner). Every step that ran passed, and the PR is docs-only.
+- **727c split of `rescueReward`:** the rescue-reward doubling moved from 727c to 727d (#753). It raises the daily reward cap (`rewardsPerDay`) while the Gap is open, not the pay per rescue.
+- **727d error codes:** the Gap claim uses the generic `CONFLICT` / `FORBIDDEN` / `NOT_FOUND` codes with kid-readable messages, so no shared-contract change.
+
