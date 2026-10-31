@@ -344,6 +344,7 @@ export async function rescueRewardsMultiplierOn(
  * 2026-10-07), else the top of the plain range. No roll: the species was
  * the roll.
  */
+// TUNE: the top of the wild range; data-driven through `SPAWN_RULES`.
 const gapLevel = (partnerLevel: number | null) =>
   partnerLevel === null
     ? SPAWN_RULES.levels.max
