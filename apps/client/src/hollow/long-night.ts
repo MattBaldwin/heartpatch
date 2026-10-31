@@ -14,13 +14,37 @@ import { HOLLOW_TEXT } from './hollow-report.js';
 /** The status's Long Night block (left out while it's switched off for me). */
 export type LongNightStatus = NonNullable<HollowStatus['longNight']>;
 
-/** A Long Night's result, from `hollow.nightfall.longNight` (the live event). */
+/** A Long Night's result: the status's `longNight.last`, or `hollow.nightfall.longNight` (live). */
 export interface LongNightResult {
   readonly night: string;
   readonly held: boolean;
   readonly heldBy: readonly string[];
   readonly keeperOfNight: string | null;
   readonly gapClosesAt: string | null;
+}
+
+/**
+ * The patch's latest Long Night's result (727e2): the status's `last`, so a
+ * Keeper who wasn't online for it still hears how it went, or a newer one
+ * just heard live (`hollow.nightfall`) that the status hasn't caught up
+ * with. Whether it held is always the server's word, never a guess. The
+ * Gap's closing time comes from the status's open Gap, else the live
+ * event's for that Night (the status's `last` leaves it out).
+ */
+export function latestResult(
+  ln: LongNightStatus | undefined,
+  live: LongNightResult | null,
+): LongNightResult | null {
+  const last = ln?.last;
+  if (live && (!last || live.night > last.night)) return live;
+  if (!last) return null;
+  const gapClosesAt =
+    ln?.gap?.night === last.night
+      ? ln.gap.closesAt
+      : live?.night === last.night
+        ? live.gapClosesAt
+        : null;
+  return { ...last, gapClosesAt };
 }
 
 export const WEEKDAY_NAMES: readonly string[] = [

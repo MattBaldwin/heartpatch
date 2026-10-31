@@ -204,6 +204,23 @@ export const HollowStatusSchema = z.object({
           available: z.boolean(),
         })
         .nullable(),
+      /**
+       * The patch's latest Long Night's result (727e2), from its stored row,
+       * so a Keeper who wasn't online for it still hears how it went: the
+       * reveal and the morning block. It's on the row from nightfall, before
+       * the strike lands; the client waits for 7:30 to tell it. Left out
+       * before the patch's first Long Night (and by older servers).
+       * `heldBy` is the Keepers he took nothing from, in member order;
+       * `keeperOfNight` the crown, or null.
+       */
+      last: z
+        .object({
+          night: LocalDateSchema,
+          held: z.boolean(),
+          heldBy: z.array(z.uuid()),
+          keeperOfNight: z.uuid().nullable(),
+        })
+        .optional(),
     })
     .optional(),
   /** The server's clock. */
@@ -232,3 +249,15 @@ export const DevNightfallResponseSchema = z.object({
   taken: z.number().int().min(0),
 });
 export type DevNightfallResponse = z.infer<typeof DevNightfallResponseSchema>;
+
+/**
+ * `POST /maps/:mapId/dev/gap-now` (dev/test only, 727e2): the patch's latest
+ * held Long Night opens Juniper's Gap from now, for as long as a Gap stays
+ * open, so an e2e can go look by day. The Night's result is untouched.
+ */
+export const DevGapNowResponseSchema = z.object({
+  night: LocalDateSchema,
+  opensAt: z.iso.datetime(),
+  closesAt: z.iso.datetime(),
+});
+export type DevGapNowResponse = z.infer<typeof DevGapNowResponseSchema>;

@@ -63,6 +63,7 @@ const MESSAGES = {
   gapClosed: "Juniper's Gap is closed. Hold a Long Night together to open it!",
   gapClaimed: "You already went through Juniper's Gap this week. See you next Long Night!",
   notAKeeper: "Juniper's Gap is for Keepers who stood through the Long Night. Next time!",
+  noHeldNight: 'No held Long Night to open the Gap for. Make night fall on one first.',
 } as const;
 
 /** Only multiplayer patches have Long Nights: the Glade's night is scripted. */
@@ -317,6 +318,16 @@ export async function longNightStatus(
               mine !== undefined && mine.gapSpeciesId !== null && mine.gapClaimedAt === null,
           }
         : null,
+    // The Night's result for a Keeper who missed it live (727e2). The
+    // row's outcomes are in member order, as the event's `heldBy`.
+    ...(latest && {
+      last: {
+        night: latest.night,
+        held: latest.held,
+        heldBy: latest.outcomes.filter((o) => o.held).map((o) => o.userId),
+        keeperOfNight: latest.keeperOfNightUserId,
+      },
+    }),
   };
 }
 
@@ -404,11 +415,21 @@ export interface LongNightService {
    * open; or resumes the battle going. The species is never sent before.
    */
   claimGap: (user: PublicUser, mapId: string) => Promise<StartResult>;
+  /**
+   * Dev/test only (727e2, `POST /maps/:id/dev/gap-now`): the patch's latest
+   * Long Night, if it held, opens its Gap from now for a Gap's usual
+   * length, so an e2e can go look by day. Nothing else of the Night moves.
+   */
+  devGapNow: (
+    user: PublicUser,
+    mapId: string,
+  ) => Promise<{ night: LocalDate; opensAt: string; closesAt: string }>;
 }
 
 export function createLongNightService(options: LongNightServiceOptions): LongNightService {
   const { db } = options;
   const longNight = options.longNight ?? LONG_NIGHT_OFF;
+  const now = options.clock ?? (() => new Date());
   const published = (mapId: string) => {
     void options.publish?.(mapId);
   };
@@ -479,6 +500,38 @@ export function createLongNightService(options: LongNightServiceOptions): LongNi
           },
         };
       });
+    },
+
+    devGapNow: async (user, mapId) => {
+      await requireMember(db, user, mapId, PATCHES);
+      if (!(await longNightOnMap(db, longNight, mapId))) {
+        throw new AppError('NOT_FOUND', MESSAGES.noMap);
+      }
+      const opened = await createLongNightRepo(db).transaction(async (repo) => {
+        const night = await repo.lockLatest(mapId);
+        const window = night ? windowOf(night) : null;
+        // Only a Night that held has a Gap: never one for a Night he broke.
+        if (!night?.held || !window) throw new AppError('CONFLICT', MESSAGES.noHeldNight);
+        const opensAt = now();
+        const closesAt = new Date(
+          opensAt.getTime() + window.closesAt.getTime() - window.opensAt.getTime(),
+        );
+        await repo.setGapWindow(night.id, opensAt, closesAt);
+        // Live clients ask for the status again, as at the real strike.
+        await repo.appendEvent({
+          mapId,
+          type: 'gap.opened',
+          actorUserId: null,
+          payload: { night: night.night, closesAt: closesAt.toISOString() },
+        });
+        return {
+          night: night.night,
+          opensAt: opensAt.toISOString(),
+          closesAt: closesAt.toISOString(),
+        };
+      });
+      published(mapId);
+      return opened;
     },
   };
 }

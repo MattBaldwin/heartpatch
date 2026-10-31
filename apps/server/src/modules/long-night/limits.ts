@@ -13,6 +13,11 @@ export const LONG_NIGHT_RATE_LIMITS = {
     perIp: { max: 60, windowMs: MINUTE_MS }, // TUNE: guess
     perUser: { max: 20, windowMs: MINUTE_MS }, // TUNE: guess
   },
+  // Dev/test only (727e2): Juniper's Gap opens now.
+  dev: {
+    perIp: { max: 600, windowMs: MINUTE_MS }, // TUNE: guess, as the dev nightfall; e2e runs from one IP
+    perUser: { max: 60, windowMs: MINUTE_MS }, // TUNE: guess
+  },
 } as const satisfies RateLimitTable;
 
 export type LongNightAction = keyof typeof LONG_NIGHT_RATE_LIMITS;
