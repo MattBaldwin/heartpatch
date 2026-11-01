@@ -98,6 +98,7 @@ export const MAP_GEN: MapGenSettings = {
     lakes: { count: [2, 4], size: [3, 7] }, // TUNE:
     isles: { count: [2, 3], size: [3, 5], offshore: 1 }, // TUNE:
     minRegionLand: 50, // TUNE:
+    minPieceLand: 30, // TUNE: no tiny pockets between a river and the coast
     landBandPercent: 15, // TUNE: claimable land per home within ±15 % of the average
     attempts: 60, // TUNE: water layouts tried before a RangeError
   },

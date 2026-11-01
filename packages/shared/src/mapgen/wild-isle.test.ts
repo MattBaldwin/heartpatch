@@ -64,7 +64,7 @@ describe('generateMap: Wild Isle', () => {
     // Tiles are stored, so a change only moves islands not made yet: update
     // the hash on purpose.
     expect(hashString(JSON.stringify(generate('pinned-seed')))).toBe(
-      'd458a776507800bd891c5595ad53ba95',
+      '600ca124daf728e5d30243afad5dbc8b',
     );
   });
 
@@ -129,7 +129,8 @@ describe('generateMap: Wild Isle', () => {
       const rivers = bodies(map, [rules.riverTerrain, rules.lakeTerrain]).filter((b) =>
         b.some((h) => byKey.get(hexKey(h))!.terrain === rules.riverTerrain),
       );
-      // Six homes, three rivers (owner decision 2026-11-01).
+      // Six homes, three rivers (owner decision 2026-11-01). Only the 6-seat
+      // layout exists; another layout groups homes differently (`riverGroups`).
       expect(rivers).toHaveLength(map.homes.length / 2);
       for (const river of rivers) {
         // Two mouths on opposite sides: coast tiles that touch the sea, far apart.
@@ -138,7 +139,16 @@ describe('generateMap: Wild Isle', () => {
         );
         const [a, ...rest] = mouths;
         expect(rest.length).toBeGreaterThanOrEqual(1);
-        expect(Math.max(...rest.map((m) => hexDistance(a!, m)))).toBeGreaterThan(coastRadius);
+        expect(Math.max(...rest.map((m) => hexDistance(a!, m)))).toBeGreaterThanOrEqual(
+          coastRadius,
+        );
+        // It crosses the middle, never running along the coast: past the
+        // land's edge only at its two mouths (the coast tile and the step in).
+        const byCoast = river.filter(
+          (h) =>
+            byKey.get(hexKey(h))!.terrain === rules.riverTerrain && hexDistance(h, center) >= landR,
+        );
+        expect(byCoast.length).toBeLessThanOrEqual(4);
       }
       for (const t of map.tiles) {
         if (!water(t) || t.terrain === rules.oceanTerrain) continue;
@@ -156,11 +166,17 @@ describe('generateMap: Wild Isle', () => {
       const isLand = landOf(map);
       const land = map.tiles.filter(isLand);
       const seen = new Set<string>();
+      const homeKeys = new Set(map.homes.map(hexKey));
       let pieces = 0;
       for (const t of land) {
         if (seen.has(hexKey(t))) continue;
-        for (const k of hexBfs([t], isLand).keys()) seen.add(k);
+        const piece = [...hexBfs([t], isLand).keys()];
+        for (const k of piece) seen.add(k);
         pieces++;
+        // No pockets: a piece with no home is a real place to bridge to.
+        if (!piece.some((k) => homeKeys.has(k))) {
+          expect(piece.length).toBeGreaterThanOrEqual(rules.minPieceLand);
+        }
       }
       // Rivers keep `apart` steps from each other, so no piece between two is a sliver.
       const byKey = byKeyOf(map);

@@ -132,6 +132,8 @@ export const WildIsleMapGenSchema = z
     }),
     /** Every home's land (non-water steps from its seed) holds at least this many tiles. */
     minRegionLand: z.number().int().min(1),
+    /** Land the rivers cut off with no home on it (a bridge away) holds at least this many tiles. */
+    minPieceLand: z.number().int().min(1),
     /** Each home's share of the claimable land is within this % of the average. */
     landBandPercent: z.number().int().min(0).max(100),
     /** Water layouts tried before giving up with a `RangeError`. */

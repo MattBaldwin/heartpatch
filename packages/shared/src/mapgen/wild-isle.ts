@@ -87,7 +87,7 @@ interface Waterways {
 
 /** Why a try at the water failed (each one means: roll again). */
 type WildIsleFailure =
-  'river' | 'lake' | 'water-near-home' | 'region' | 'balance' | 'posts' | 'communities';
+  'river' | 'lake' | 'water-near-home' | 'region' | 'sliver' | 'balance' | 'posts' | 'communities';
 
 /**
  * Generates a Wild Isle (#621) from its seed: Juniper's Gap at the centre,
@@ -381,7 +381,9 @@ function alongOf(h: Hex, axis: Hex): number {
  * across it share a river, which runs along the grain. Six homes make three
  * rivers: one through the middle (past the axis home and the home opposite)
  * and one either side, past the two homes there. Each group is ordered down
- * the grain, so its river passes them in turn.
+ * the grain, so its river passes them in turn. Other seat counts group
+ * differently (4 seats: one, two, one; 3 seats: one each), so a new layout
+ * should revisit the river count and the tests.
  */
 function riverGroups(homes: readonly Hex[], axis: Hex): number[][] {
   const order = homes
@@ -548,7 +550,14 @@ function tryWaterways(input: WaterwayInput): Waterways | WildIsleFailure {
       );
     const start = mouth(first, -1);
     const end = mouth(last, 1);
-    if (start === undefined || end === undefined) return null;
+    // Mouths on far-apart coasts, so the river crosses the island.
+    if (start === undefined || end === undefined || hexDistance(start, end) < coastRadius) {
+      return null;
+    }
+    /** Beside the coast only for the step into a mouth, so no river runs along it. */
+    const inland = (h: Hex) =>
+      ringOf(h) < landR ||
+      (ringOf(h) === landR && (hexDistance(h, start) === 1 || hexDistance(h, end) === 1));
     const path: Hex[] = [start];
     const own = new Set<HexKey>([hexKey(start)]);
     for (const goal of [...passes, end]) {
@@ -557,17 +566,19 @@ function tryWaterways(input: WaterwayInput): Waterways | WildIsleFailure {
       // Inland tiles (or this leg's goal) this river may take that touch
       // none of its earlier tiles but the one it sets off from.
       const open = (h: Hex) =>
-        (hexKey(h) === goalKey || ringOf(h) <= landR) &&
+        (hexKey(h) === goalKey || inland(h)) &&
         !own.has(hexKey(h)) &&
         riverCanTake(h, b) &&
         hexNeighbors(h).every((n) => !own.has(hexKey(n)) || hexKey(n) === hexKey(from));
       if (!open(goal)) return null;
       const stepsTo = hexBfs([goal], open);
-      const first = Math.min(...hexNeighbors(from).map((n) => stepsTo.get(hexKey(n)) ?? Infinity));
-      if (first === Infinity) return null;
+      const stepsLeft = Math.min(
+        ...hexNeighbors(from).map((n) => stepsTo.get(hexKey(n)) ?? Infinity),
+      );
+      if (stepsLeft === Infinity) return null;
       // Each step goes one nearer the goal, so the leg is a shortest walk.
       let at = from;
-      for (let left = first; left >= 0; left--) {
+      for (let left = stepsLeft; left >= 0; left--) {
         const here = at;
         at = rng.pick(hexNeighbors(here).filter((n) => stepsTo.get(hexKey(n)) === left));
         path.push(at);
@@ -615,7 +626,8 @@ interface CheckInput {
 
 /**
  * Is this water layout fair? Every home has a river within `homeWaterSteps`,
- * at least `minRegionLand` land it can walk to without a bridge, a land share within
+ * at least `minRegionLand` land it can walk to without a bridge, every
+ * piece of land with no home holds at least `minPieceLand`, a land share within
  * `landBandPercent` of the average, and a trading post on its own land; and
  * the villages fit. Returns the posts and villages, or why not.
  */
@@ -635,6 +647,14 @@ function checkIsland(
   }
   const regions = homes.map((home) => hexBfs([home], isLand));
   if (regions.some((r) => r.size < rules.minRegionLand)) return 'region';
+  // Land with no home on it (a bridge away) is a real piece, never a pocket.
+  const reached = new Set(regions.flatMap((r) => [...r.keys()]));
+  for (const h of input.tiles) {
+    if (!isLand(h) || reached.has(hexKey(h))) continue;
+    const piece = hexBfs([h], isLand);
+    if (piece.size < rules.minPieceLand) return 'sliver';
+    for (const key of piece.keys()) reached.add(key);
+  }
   const shares = landShares(homes, input.tiles.filter(isLand));
   const total = shares.reduce((a, b) => a + b, 0);
   const band = rules.landBandPercent;
