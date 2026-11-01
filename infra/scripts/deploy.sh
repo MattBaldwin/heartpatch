@@ -84,6 +84,16 @@ for key in POSTGRES_PASSWORD HP_SIGNUP_CODE PUBLIC_ORIGIN HP_EVOLUTION_SALT HP_V
   [[ -n $(env_value "$key") ]] || fail "$key is empty in $HP_DIR/.env (see .env.prod.example)"
 done
 
+# A HP_LONG_NIGHT line in .env beats the compose default (on), so an old
+# `HP_LONG_NIGHT=off` line can keep the Long Night off. That is also the owner's
+# deliberate no-release off switch (#758), so this only warns: it never edits
+# .env or fails the deploy. Empty counts as unset, as in compose's `:-on`.
+long_night=$(env_value HP_LONG_NIGHT)
+if [[ -n $long_night && $long_night != on ]]; then
+  log "WARNING: $HP_DIR/.env sets HP_LONG_NIGHT=$long_night, so the Long Night is not on for everyone in production. The compose default is on; delete that line from $HP_DIR/.env to use it."
+fi
+unset long_night
+
 previous_tag=$(env_value HEARTPATCH_TAG)
 site=$(env_value HP_SITE_ADDRESS)
 site=${site:-play.pumpkinpatchgames.com}
