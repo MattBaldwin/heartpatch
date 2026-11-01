@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from 'node:crypto';
 import { readdirSync } from 'node:fs';
 import { defineConfig, devices } from '@playwright/test';
 import { pinMapTime } from './tests/e2e/map-time.js';
@@ -115,6 +116,7 @@ const E2E_GROUPS = [
     'layout-overlaps',
     'long-night',
     'map',
+    'push',
     'raids',
     'territory',
     'wardrobe',
@@ -194,6 +196,29 @@ process.env['HP_WILD_ISLE'] ??= 'on';
 // Tuesday, 4 days from the default Saturday (past its 3-day notice), so other
 // specs' nights stay ordinary and no "He'll come looking" line joins them.
 process.env['HP_LONG_NIGHT'] ??= 'on';
+/** A VAPID pair as web-push wants it: the P-256 public point and private scalar, base64url. */
+function e2eVapidPair(): { publicKey: string; privateKey: string } {
+  const jwk = generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).privateKey.export({
+    format: 'jwk',
+  });
+  const point = Buffer.concat([
+    Buffer.from([4]),
+    Buffer.from(jwk.x ?? '', 'base64url'),
+    Buffer.from(jwk.y ?? '', 'base64url'),
+  ]);
+  return { publicKey: point.toString('base64url'), privateKey: jwk.d ?? '' };
+}
+// Push nudges (#726) ship behind HP_PUSH (off by default; testers after the
+// owner's real-phone test); push.spec.ts needs it on, with a VAPID pair made
+// fresh for the run (the server refuses push on without one). A browser can't
+// receive a real push, so the spec stands in the push service in the page.
+if (process.env['HP_PUSH'] === undefined) {
+  process.env['HP_PUSH'] = 'on';
+  const vapid = e2eVapidPair();
+  process.env['HP_VAPID_PUBLIC_KEY'] ??= vapid.publicKey;
+  process.env['HP_VAPID_PRIVATE_KEY'] ??= vapid.privateKey;
+  process.env['HP_VAPID_SUBJECT'] ??= 'mailto:e2e@example.com';
+}
 // Live battles (#29): short turns and a short away-grace, so friendly.spec.ts
 // can try a timeout and a disconnect without waiting 30 s and 60 s (20 s still
 // leaves a slow software-rendered phone time to play a turn back). Dev and

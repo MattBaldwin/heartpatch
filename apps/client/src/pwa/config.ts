@@ -26,3 +26,9 @@ export const PUSH_READY_TIMEOUT_MS = 5000;
 
 // TUNE: logout waits at most this long to unsubscribe this device's push.
 export const PUSH_LOGOUT_TIMEOUT_MS = 1500;
+
+/** localStorage key: the nudge offer card (#726) was answered on this device; it never asks again. */
+export const PUSH_OFFERED_KEY = 'heartpatch.pushOffered';
+
+// TUNE: how often a nudge offer that found the screen busy looks again.
+export const PUSH_OFFER_RETRY_MS = 3000;

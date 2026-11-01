@@ -208,6 +208,8 @@ declare global {
       whatsNew?(): WhatsNewDebug;
       /** The patch line (#391): the line showing, how many wait, and whether it's held back now. */
       patchLine?(): { showing: string | null; waiting: number; busy: boolean };
+      /** Push nudges (#726): the offer's state and whether its card is up. */
+      push?(): { offer: 'idle' | 'checking' | 'waiting' | 'showing' | 'done'; card: boolean };
     };
   }
 }
