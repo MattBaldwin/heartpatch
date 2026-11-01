@@ -271,7 +271,7 @@ test('dresses the map for the server’s season, not the phone’s date (#583)',
   test.setTimeout(120_000); // shader compiles; CI renders in software
   const page = await newPlayer(browser, uniqueName('clock'));
   // The phone's calendar says Nov 20, past the Halloween window; the server's
-  // game clock (HP_DEV_NOW, 2026-10-20) is inside it. A cold start: the map's
+  // game clock (map-local 2026-10-20, playwright.config.ts) is inside it. A cold start: the map's
   // first build must already be dressed by the server's date.
   await page.clock.setFixedTime(new Date('2026-11-20T12:00:00'));
   await page.reload();

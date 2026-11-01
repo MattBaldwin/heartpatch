@@ -1,4 +1,4 @@
-import type { SignupCodeStatus, SignupCodeSummary } from '@heartpatch/shared';
+import { signupCodeShape, type SignupCodeStatus, type SignupCodeSummary } from '@heartpatch/shared';
 
 // Words for the owner's "Family codes" section (#195). Pure, so the lines are
 // tested without a DOM. Copy follows docs/STYLE_GUIDE.md.
@@ -51,4 +51,16 @@ export function familyCodeUsedBy(code: SignupCodeSummary): string | null {
 /** Live codes count against the owner's cap. */
 export function liveFamilyCodes(codes: readonly SignupCodeSummary[]): number {
   return codes.filter((c) => c.status === 'live').length;
+}
+
+/** Shown under a fresh family code: it makes accounts, it doesn't join a patch. */
+export const FAMILY_CODE_ACCOUNTS_ONLY =
+  "It's only for new accounts. Friends who already play need the patch's invite code.";
+
+const FAMILY_CODE_IN_JOIN =
+  "That's a family code! It's for making a new account. To join a patch, ask for its 8-letter invite code.";
+
+/** A kind nudge when a family code is typed into "Join a patch"; null for anything else. */
+export function joinCodeNudge(typed: string): string | null {
+  return signupCodeShape(typed) === 'family' ? FAMILY_CODE_IN_JOIN : null;
 }
