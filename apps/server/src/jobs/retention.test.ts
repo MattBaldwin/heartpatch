@@ -1,14 +1,15 @@
-import { GAME_EVENT_TYPES } from '@heartpatch/shared';
+import { GAME_EVENT_TYPES, PUSH_RULES } from '@heartpatch/shared';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDbClient, type Database, type DbClient } from '../db/client.js';
 import { appendRawGameEvent } from '../db/game-events.js';
-import { maps } from '../db/schema.js';
+import { maps, pushSends, users } from '../db/schema.js';
 import { REPLAY_WINDOW } from '../ws/limits.js';
 import { EVENT_RETENTION_DAYS, EVENT_RETENTION_SHORT_DAYS } from './limits.js';
 import {
   isShortLived,
   keepFromSeq,
   pruneGameEvents,
+  prunePushSends,
   SHORT_LIVED_EVENT_TYPES,
   type PruneOptions,
 } from './retention.js';
@@ -235,5 +236,72 @@ describe.skipIf(!url)('pruneGameEvents (needs DATABASE_URL)', () => {
 
     expect((await prune([mine])).deleted).toBe(2);
     expect(await seqs(theirs)).toEqual(range(1, 4));
+  });
+});
+
+describe.skipIf(!url)('prunePushSends (#726c, needs DATABASE_URL)', () => {
+  let client: DbClient;
+  let db: Database;
+  // Long before any other test's send log (the tables are shared): only these rows are old.
+  const LONG_AGO = new Date('2020-01-31T12:00:00Z');
+  const before = (days: number) => new Date(LONG_AGO.getTime() - days * DAY_MS);
+  let pruned = 0;
+
+  beforeAll(() => {
+    client = createDbClient(url!, { max: 2 });
+    db = client.db;
+  });
+  afterAll(() => client.close());
+
+  async function sends(claimedAt: readonly Date[]): Promise<string> {
+    const [user] = await db
+      .insert(users)
+      .values({
+        username: `pruned_${String((pruned += 1))}_${String(Date.now() % 1e9)}`,
+        passwordHash: 'not-a-hash',
+        birthYear: 2014,
+        timeZone: 'UTC',
+      })
+      .returning({ id: users.id });
+    await db.insert(pushSends).values(
+      claimedAt.map((at, i) => ({
+        userId: user!.id,
+        kind: 'gatherers',
+        dedupeKey: `day-${String(i)}`,
+        mapId: null,
+        claimedAt: at,
+        devices: 1,
+      })),
+    );
+    return user!.id;
+  }
+  const keysOf = async (userId: string) =>
+    (
+      await db.query.pushSends.findMany({
+        columns: { dedupeKey: true },
+        where: (t, { eq }) => eq(t.userId, userId),
+        orderBy: (t, { asc }) => asc(t.dedupeKey),
+      })
+    ).map((r) => r.dedupeKey);
+
+  it('deletes sends claimed more than sendLogDays ago and keeps the rest', async () => {
+    const days = PUSH_RULES.sendLogDays;
+    const userId = await sends([before(days + 2), before(days + 1), before(days - 1), LONG_AGO]);
+    expect(await prunePushSends(db, { now: LONG_AGO })).toEqual({
+      deleted: 2,
+      batches: 1,
+      capped: false,
+    });
+    expect(await keysOf(userId)).toEqual(['day-2', 'day-3']);
+  });
+
+  it('deletes in bounded batches; a capped run leaves the rest to the next', async () => {
+    const old = before(PUSH_RULES.sendLogDays + 1);
+    const userId = await sends(Array.from({ length: 5 }, () => old));
+    const options = { now: LONG_AGO, batchSize: 2, maxBatches: 2 };
+    expect(await prunePushSends(db, options)).toEqual({ deleted: 4, batches: 2, capped: true });
+    expect(await keysOf(userId)).toHaveLength(1);
+    expect(await prunePushSends(db, options)).toEqual({ deleted: 1, batches: 1, capped: false });
+    expect(await keysOf(userId)).toEqual([]);
   });
 });

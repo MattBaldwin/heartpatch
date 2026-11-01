@@ -101,7 +101,7 @@ import { createLongNightService } from './modules/long-night/service.js';
 import { longNightSwitchOf } from './modules/long-night/switch.js';
 import { pushRoutes } from './modules/push/routes.js';
 import { createWebPushSender, vapidOf } from './modules/push/sender.js';
-import { createPushService } from './modules/push/service.js';
+import { createPushService, type PushService } from './modules/push/service.js';
 import { pushSwitchOf } from './modules/push/switch.js';
 import { createHealthService, type ReadinessCheck } from './modules/health/service.js';
 import { tutorialRoutes } from './modules/tutorial/routes.js';
@@ -150,6 +150,11 @@ export interface BuildAppOptions {
    * rescue consumer next to the app. Called once the service exists.
    */
   onHollow?: (hollow: HollowService) => void;
+  /**
+   * Push nudges (#726) for `src/index.ts`, which runs their sweep job next to
+   * the app. Called once the service exists, with whether push is on at all.
+   */
+  onPush?: (push: PushService, enabled: boolean) => void;
 }
 
 /** Builds the Fastify app without listening, so tests can use `app.inject()`. */
@@ -556,23 +561,22 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // Config makes sure the VAPID keys are there whenever it isn't off.
         const vapid = vapidOf(config);
         const pushSwitch = pushSwitchOf(config);
-        await api.register(
-          pushRoutes(
-            createPushService({
-              db,
-              clock,
-              log: app.log,
-              push: pushSwitch,
-              vapid,
-              // No sender (and no subject warning at boot) while push is off.
-              sender:
-                vapid && pushSwitch.mode !== 'off'
-                  ? createWebPushSender(vapid, { log: app.log })
-                  : null,
-            }),
-            { hooks: authHooks },
-          ),
-        );
+        const pushService = createPushService({
+          db,
+          clock,
+          log: app.log,
+          push: pushSwitch,
+          vapid,
+          // No sender (and no subject warning at boot) while push is off.
+          sender:
+            vapid && pushSwitch.mode !== 'off'
+              ? createWebPushSender(vapid, { log: app.log })
+              : null,
+          // The sweep's gatherers nudge skips a player who's on that patch now.
+          ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
+        });
+        await api.register(pushRoutes(pushService, { hooks: authHooks }));
+        options.onPush?.(pushService, pushSwitch.mode !== 'off');
         // The tutorial (#47, #24) runs the Glade on these same modules; its
         // scripted night is the Hollow's own nightfall.
         const tutorial = createTutorialService({

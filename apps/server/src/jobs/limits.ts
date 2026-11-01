@@ -29,6 +29,13 @@ export const NIGHTFALL_CONCURRENCY = 2; // TUNE: guess; fits pg-boss's and the a
 export const NIGHTFALL_RETRY_LIMIT = 5; // TUNE: guess
 export const NIGHTFALL_RETRY_DELAY_SECONDS = 30; // TUNE: guess, doubles each time
 
+/** How often the push sweep (#726c) looks for nudges due (cron). */
+export const PUSH_SWEEP_CRON = '* * * * *'; // TUNE: every minute, so a dusk window is never missed while up
+
+/** Send-log rows (`push_sends`) the retention job deletes per statement, and statements per run. */
+export const PUSH_SENDS_RETENTION_BATCH = 1000; // TUNE: guess
+export const PUSH_SENDS_RETENTION_MAX_BATCHES = 20; // TUNE: guess
+
 /** How often the `game_events` retention job runs (cron, UTC). */
 export const EVENT_RETENTION_CRON = '41 * * * *'; // TUNE: hourly, off the hour
 

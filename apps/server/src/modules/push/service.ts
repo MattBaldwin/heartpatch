@@ -22,6 +22,7 @@ import {
   type VapidKeys,
 } from './sender.js';
 import { PUSH_OFF, pushOnFor, type PushSwitch } from './switch.js';
+import { createPushSweep, type PushSweepResult } from './sweep.js';
 
 /*
  * Push nudges (#726 plan, "Server"). A player's phone can subscribe,
@@ -57,6 +58,12 @@ export interface PushService {
     payload: PushPayload,
     options: PushSendOptions,
   ) => Promise<PushDelivery>;
+  /**
+   * The sweep (#726c, `jobs/push.ts`, every minute): sends the dusk and
+   * gatherers nudges due at `now` (the clock by default), each at most once.
+   * Does nothing while push is off.
+   */
+  sweep: (now?: Date) => Promise<PushSweepResult>;
 }
 
 /** How a `deliver` went: `devices` tried, `delivered` took it. */
@@ -75,6 +82,8 @@ export interface PushServiceOptions {
   vapid?: VapidKeys | null;
   /** `createWebPushSender(vapid, …)`; tests pass a fake. Required unless push is off. */
   sender?: PushSender | null;
+  /** `wsHub.isOnline`, for the sweep's "not while you're playing there". No hub: nobody is online. */
+  isOnline?: (mapId: string, userId: string) => boolean;
 }
 
 export function createPushService(options: PushServiceOptions): PushService {
@@ -96,6 +105,54 @@ export function createPushService(options: PushServiceOptions): PushService {
     if (!pushOnFor(push, user) || vapid === null) throw new AppError('NOT_FOUND');
     return vapid;
   };
+
+  const deliver: PushService['deliver'] = async (user, payload, sendOptions) => {
+    if (sender === null || !pushOnFor(push, user)) return { devices: 0, delivered: 0 };
+    const checked = PushPayloadSchema.parse(payload);
+    const targets = await repo.targets(user.id, clock());
+    // One device at a time: an account has at most five.
+    const ok: string[] = [];
+    for (const target of targets) {
+      const result = await sender.send(target, checked, sendOptions);
+      switch (result.outcome) {
+        case 'ok':
+          ok.push(target.id);
+          break;
+        case 'gone':
+          await repo.remove(target.id);
+          log.info(
+            {
+              kind: checked.kind,
+              host: endpointHost(target.endpoint),
+              statusCode: result.statusCode,
+            },
+            'push: subscription gone, deleted',
+          );
+          break;
+        case 'failed':
+          if (await repo.recordFailure(target.id)) {
+            log.info(
+              { kind: checked.kind, host: endpointHost(target.endpoint) },
+              'push: subscription failed too often, deleted',
+            );
+          }
+          break;
+        case 'dropped':
+          // Our side's fault (logged by the sender); the device keeps its count.
+          break;
+      }
+    }
+    await repo.recordOk(ok, clock());
+    return { devices: targets.length, delivered: ok.length };
+  };
+  const sweep = createPushSweep({
+    db,
+    repo,
+    log,
+    push,
+    deliver,
+    ...(options.isOnline ? { isOnline: options.isOnline } : {}),
+  });
 
   return {
     status: async (user) => ({
@@ -144,44 +201,8 @@ export function createPushService(options: PushServiceOptions): PushService {
       return repo.patchSettings(user.id, patch, clock());
     },
 
-    deliver: async (user, payload, sendOptions) => {
-      if (sender === null || !pushOnFor(push, user)) return { devices: 0, delivered: 0 };
-      const checked = PushPayloadSchema.parse(payload);
-      const targets = await repo.targets(user.id, clock());
-      // One device at a time: an account has at most five.
-      const ok: string[] = [];
-      for (const target of targets) {
-        const result = await sender.send(target, checked, sendOptions);
-        switch (result.outcome) {
-          case 'ok':
-            ok.push(target.id);
-            break;
-          case 'gone':
-            await repo.remove(target.id);
-            log.info(
-              {
-                kind: checked.kind,
-                host: endpointHost(target.endpoint),
-                statusCode: result.statusCode,
-              },
-              'push: subscription gone, deleted',
-            );
-            break;
-          case 'failed':
-            if (await repo.recordFailure(target.id)) {
-              log.info(
-                { kind: checked.kind, host: endpointHost(target.endpoint) },
-                'push: subscription failed too often, deleted',
-              );
-            }
-            break;
-          case 'dropped':
-            // Our side's fault (logged by the sender); the device keeps its count.
-            break;
-        }
-      }
-      await repo.recordOk(ok, clock());
-      return { devices: targets.length, delivered: ok.length };
-    },
+    deliver,
+
+    sweep: (at) => sweep(at ?? clock()),
   };
 }

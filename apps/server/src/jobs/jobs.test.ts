@@ -507,5 +507,46 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
       );
       expect(Number([...rows][0]!.n)).toBeGreaterThanOrEqual(1);
     });
+
+    it('ensures the push sweep queue and sweeps at boot only while push is on (#726c)', async () => {
+      const swept: number[] = [];
+      const result = { due: 0, claimed: 0, delivered: 0, quiet: 0, capped: 0 };
+      const runner = (enabled: boolean) => ({
+        enabled,
+        sweep: () => {
+          swept.push(1);
+          return Promise.resolve(result);
+        },
+      });
+      jobs = await startJobs({
+        connectionString: url!,
+        db,
+        consumers: [],
+        logger,
+        schedule: false,
+        push: runner(false),
+      });
+      // Off: the queue is there (so `ensureQueue` stays stable), the sweep does nothing.
+      const queues = await db.execute<{ name: string }>(
+        `select name from pgboss.queue where name = 'push.sweep'`,
+      );
+      expect([...queues]).toHaveLength(1);
+      expect(swept).toEqual([]);
+      expect(await jobs.pushSweep()).toBeNull();
+      await jobs.stop();
+
+      jobs = await startJobs({
+        connectionString: url!,
+        db,
+        consumers: [],
+        logger,
+        schedule: false,
+        push: runner(true),
+      });
+      // On: once at boot, and again on demand.
+      expect(swept).toHaveLength(1);
+      expect(await jobs.pushSweep()).toEqual(result);
+      expect(swept).toHaveLength(2);
+    });
   });
 });
