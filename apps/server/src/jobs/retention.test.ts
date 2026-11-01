@@ -245,6 +245,7 @@ describe.skipIf(!url)('prunePushSends (#726c, needs DATABASE_URL)', () => {
   // Long before any other test's send log (the tables are shared): only these rows are old.
   const LONG_AGO = new Date('2020-01-31T12:00:00Z');
   const before = (days: number) => new Date(LONG_AGO.getTime() - days * DAY_MS);
+  let pruned = 0;
 
   beforeAll(() => {
     client = createDbClient(url!, { max: 2 });
@@ -256,7 +257,7 @@ describe.skipIf(!url)('prunePushSends (#726c, needs DATABASE_URL)', () => {
     const [user] = await db
       .insert(users)
       .values({
-        username: `pruned_${String(Date.now() % 1e9)}_${String(Math.random()).slice(2, 8)}`,
+        username: `pruned_${String((pruned += 1))}_${String(Date.now() % 1e9)}`,
         passwordHash: 'not-a-hash',
         birthYear: 2014,
         timeZone: 'UTC',
