@@ -86,8 +86,12 @@ export async function relayoutHomes(
   db: Executor,
   clock: Clock,
   onError: (owner: { mapId: string; userId: string }, err: unknown) => void,
+  /** Only these maps (tests, which share one database); every map when left out. */
+  mapIds?: readonly string[],
 ): Promise<HomesTidied> {
-  const rows = await createBuildingsRepo(db).listPlacements();
+  const scan = await createBuildingsRepo(db).listPlacements();
+  // Tests tidy only their own patches (they share one database).
+  const rows = scan.filter((row) => !mapIds || mapIds.includes(row.mapId));
   const owners = new Map<string, { mapId: string; userId: string }>();
   for (const row of rows) {
     if (row.homeSlot === null || !outOfPlace(row.buildingId, row.spot)) continue;
