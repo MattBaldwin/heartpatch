@@ -251,6 +251,47 @@ describe.skipIf(!url)('storm knocks (needs DATABASE_URL)', () => {
     return { id, endsAt: to };
   }
 
+  /**
+   * Holds `userId`'s lowest-id home tile `FOR SHARE` until the returned
+   * release, and returns it. The home tidy (`relayoutHomes`, which
+   * fires.test.ts runs over every patch in the shared test database) locks
+   * every home tile in id order before it reads what to pack, so it waits on
+   * this one, holding nothing, instead of packing a hut this test put on
+   * another home tile. A settle locks only the tiles it banks from, so the
+   * hut's tile stays free for it.
+   */
+  async function holdFirstHomeTile(mapId: string, userId: string) {
+    let locked!: (id: string) => void;
+    let release!: () => void;
+    const isLocked = new Promise<string>((resolve) => (locked = resolve));
+    const released = new Promise<void>((resolve) => (release = resolve));
+    const held = withTransaction(db, async (tx) => {
+      const [first] = [
+        ...(await tx.execute<{ id: string }>(
+          `select id from tiles where map_id = '${mapId}' and owner_user_id = '${userId}'
+           and home_slot is not null and community_id is null order by id limit 1 for share`,
+        )),
+      ];
+      expect(first, 'a home tile to hold').toBeDefined();
+      locked(first!.id);
+      await released;
+    });
+    // `held` only settles early when the lock fails, so its error surfaces here.
+    const tileId = await Promise.race([
+      isLocked,
+      held.then((): never => {
+        throw new Error('holdFirstHomeTile: let go before it locked');
+      }),
+    ]);
+    return {
+      tileId,
+      release: async () => {
+        release();
+        await held;
+      },
+    };
+  }
+
   const rowOf = async (rowId: string) =>
     (await db.query.buildings.findFirst({ where: (t, { eq }) => eq(t.id, rowId) }))!;
   const knocksOn = async (mapId: string) =>
@@ -335,19 +376,32 @@ describe.skipIf(!url)('storm knocks (needs DATABASE_URL)', () => {
     const { server, kid, mapId, seed, row } = await setup();
     // Only the hut at home stands, so nothing else under the storm can be knocked.
     await db.execute(`delete from buildings where id = '${row}'`);
-    const [ring] = [
-      ...(await db.execute<{ id: string; q: number; r: number }>(
-        `select t.id, t.q, t.r from tiles t where t.map_id = '${mapId}' and t.owner_user_id = '${kid.id}'
-         and t.home_slot is not null and not exists (select 1 from buildings b where b.tile_id = t.id)
-         order by t.id limit 1`,
-      )),
-    ];
-    const atHome = await place(mapId, kid, ring!, HUT.id, 'resource');
-    const plot = { id: ring!.id, q: ring!.q, r: ring!.r, terrain: 'forest' };
-    await storm(mapId, seed, plot, atHome);
-    expect(await sweep(mapId)).toBe(0);
-    expect((await settle(server, kid, mapId)).weather).toEqual({ knocked: [] });
-    expect((await rowOf(atHome)).damagedAt).toBe(null);
+    // The home tidy packs a hut at home, and other test files run it over
+    // every patch in this shared database: keep it off this home meanwhile.
+    const hold = await holdFirstHomeTile(mapId, kid.id);
+    try {
+      const [ring] = [
+        ...(await db.execute<{ id: string; q: number; r: number }>(
+          `select t.id, t.q, t.r from tiles t where t.map_id = '${mapId}' and t.owner_user_id = '${kid.id}'
+           and t.home_slot is not null and t.community_id is null and t.id > '${hold.tileId}'
+           and not exists (select 1 from buildings b where b.tile_id = t.id)
+           order by t.id limit 1`,
+        )),
+      ];
+      expect(ring, 'a free home tile for the hut').toBeDefined();
+      const atHome = await place(mapId, kid, ring!, HUT.id, 'resource');
+      const plot = { id: ring!.id, q: ring!.q, r: ring!.r, terrain: 'forest' };
+      await storm(mapId, seed, plot, atHome);
+      expect(await sweep(mapId)).toBe(0);
+      expect((await settle(server, kid, mapId)).weather).toEqual({ knocked: [] });
+      const hut = await db.query.buildings.findFirst({ where: (t, { eq }) => eq(t.id, atHome) });
+      expect(hut, 'the hut at home is still standing').toMatchObject({
+        tileId: ring!.id,
+        damagedAt: null,
+      });
+    } finally {
+      await hold.release();
+    }
   });
 
   it('banks what a knocked building made up to the knock, and nothing after', async () => {
