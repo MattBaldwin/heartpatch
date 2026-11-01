@@ -426,18 +426,20 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
       const lantern = await old('jack-o-lantern-hearthfire', 'hearthfire', await tileId(ring2!), 4);
 
       const errors: unknown[] = [];
-      // It scans every patch in the database (other tests' too), so only this
-      // patch's rows and events are checked.
+      // On this patch only: test files share one database, and others put
+      // buildings at home on purpose.
       await Promise.all([
         relayoutHomes(
           db,
           () => clock,
           (_owner, err) => errors.push(err),
+          [mapId],
         ),
         relayoutHomes(
           db,
           () => clock,
           (_owner, err) => errors.push(err),
+          [mapId],
         ),
       ]);
       expect(errors).toEqual([]);
@@ -470,6 +472,7 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
         db,
         () => clock,
         () => undefined,
+        [mapId],
       );
       expect(await eventsOf(mapId)).toHaveLength(events.length);
     });
@@ -515,6 +518,7 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
       db,
       () => clock,
       (_owner, err) => errors.push(err),
+      [mapId],
     );
     expect(errors).toEqual([]);
     expect(
@@ -547,8 +551,53 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
       db,
       () => clock,
       () => undefined,
+      [mapId],
     );
     expect(await eventsOf(mapId)).toHaveLength(events.length);
+  });
+
+  it('tidies only the patches it is given, leaving every other one alone', async () => {
+    const server = await start();
+    const fireAtHome = async () => {
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const { tiles } = await home(server, kid, mapId);
+      const [ring] = tiles.filter((t) => !t.heartSeed);
+      const tile = (await db.query.tiles.findFirst({
+        where: (x, { and, eq }) => and(eq(x.mapId, mapId), eq(x.q, ring!.q), eq(x.r, ring!.r)),
+      }))!;
+      const [row] = await db
+        .insert(buildings)
+        .values({
+          mapId,
+          ownerUserId: kid.id,
+          tileId: tile.id,
+          buildingId: 'hearthfire',
+          kind: 'hearthfire',
+          spot: 3,
+        })
+        .returning({ id: buildings.id });
+      return { mapId, rowId: row!.id };
+    };
+    const mine = await fireAtHome();
+    const theirs = await fireAtHome();
+    const rowOf = (id: string) =>
+      db.query.buildings.findFirst({ where: (t, { eq }) => eq(t.id, id) });
+
+    const errors: unknown[] = [];
+    await relayoutHomes(
+      db,
+      () => clock,
+      (_owner, err) => errors.push(err),
+      [mine.mapId],
+    );
+    expect(errors).toEqual([]);
+    expect(await rowOf(mine.rowId)).toBeUndefined();
+    // The other patch's fire still stands, with nothing written there.
+    expect(await rowOf(theirs.rowId)).toBeDefined();
+    expect(await eventsOf(theirs.mapId)).not.toContainEqual(
+      expect.objectContaining({ type: 'building.removed' }),
+    );
   });
 
   it("doesn't go up where a squishy gathers or a clear is running (#295, #242)", async () => {
