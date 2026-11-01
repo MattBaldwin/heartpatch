@@ -728,6 +728,27 @@ The opening story (design doc §25; issue #46; DECISIONS "The opening cinematic 
 
 Both need a session. Only `seen` is rate limited (`modules/cinematic/limits.ts`): 120 per IP and 30 per player per 10 minutes (`// TUNE:` guesses; a family shares one IP). The client marks it once, when the story ends watched or skipped.
 
+## Push nudges
+
+Web push to a Home Screen app (#726, plan on the issue). `modules/push/`: `routes → service → repo`, `sender.ts` (the only file that imports `web-push`) and `switch.ts`. The player's phone can subscribe, unsubscribe and set four switches; **no route sends a nudge**, dev tools included. The server decides every send: the sweep (#726c) and the friend hook (#726d) call `PushService.deliver`.
+
+**The switch:** `HP_PUSH` is `off` (the default), `testers` (`HP_PUSH_TESTERS`, per account, not per patch) or `on`. While it's off for a player every `/push` route is `NOT_FOUND` with the words of an unknown route, and `deliver` sends nothing. Anything but `off` needs the VAPID pair (config refuses to start otherwise, in tests too: `newVapidPair()` in `tests/vapid.ts`).
+
+**API** (`requireAuth`, `X-Requested-With`, rate limited per IP and per player, `limits.ts`):
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/push` | → `PushStatusResponse { vapidPublicKey, settings }`; no `push_settings` row reads as every switch on |
+| `PUT /api/v1/push/subscription` | `PushSubscribeRequest` (`PushSubscription.toJSON()`, plus `replaces`) → `{ ok: true }`. Only a known push service (`PUSH_SERVICE_HOSTS` in `sender.ts`: Apple, FCM, Mozilla, WNS, plain `https` on 443), else `VALIDATION_FAILED`: the server never POSTs to a URL a player picked. Stored for **this session** (the cookie's own live `sessions` row, and that row's user), so logout or a password reset ends the device's nudges by cascade. Upsert by endpoint: a sibling logging in on the same iPad takes the row over (new user, session, keys, failures reset, and the old account's `last_ok_at` gone). `replaces` deletes that endpoint if it's mine. Past `PUSH_RULES.maxDevicesPerAccount` (5) my least recently working device goes (`coalesce(last_ok_at, created_at)`), never the one just sent. A session that ended mid-request is `UNAUTHENTICATED` |
+| `DELETE /api/v1/push/subscription` | `{ endpoint }` → `{ ok: true }`; my own row only, idempotent |
+| `PUT /api/v1/push/settings` | `PushSettingsPatch` (at least one of `dusk`, `gatherers`, `friend`, `longNight`) → all four; an upsert, so they follow the account across devices |
+
+**Sending** (`deliver(user, payload, { ttlSeconds, topic?, urgency? })`): reads my devices whose session is live (`sessions.expires_at > now`: expiry deletes no session row) and whose own `expires_at` hasn't passed (those are deleted), sends to each one at a time outside any transaction, and keeps the books: a 2xx sets `last_ok_at` and resets `fail_count`; 404 or 410 (or an endpoint off the host list) deletes the row; a 413, an oversized payload (`PUSH_RULES.maxPayloadBytes`), a network error or timeout or an unusable subject counts nothing (our fault, logged); anything else (429, 5xx, 401/403 after a key change, keys that won't encrypt) adds one to `fail_count`, and the row goes at `PUSH_RULES.maxFailures` (8). Apple's `Retry-After` is logged, not honoured. It returns `{ devices, delivered }` for the caller's `push_sends` row. The payload is checked against the shared `PushPayloadSchema` first, so nothing else reaches a phone.
+
+**The sender** signs with `HP_VAPID_PUBLIC_KEY` / `HP_VAPID_PRIVATE_KEY` and `HP_VAPID_SUBJECT`, falling back to `PUBLIC_ORIGIN`. Push services take only a `mailto:` or a non-localhost `https:` subject, so a dev server on `http://localhost` warns once at boot and sends nothing until `HP_VAPID_SUBJECT=mailto:…` is set. Logs carry the push service's host, never a whole endpoint (it's a capability) or the private key.
+
+**Tables:** the three leaves of migration 0063 (tech spec §4). Written only here, outside every command transaction, never locked (§7).
+
 ## Perf reports
 
 When a player's drawn frames stay under 10 fps for 5 s, the client posts one row (issue #501; `apps/client/src/engine/perf-report.ts`), at most once a minute. `src/modules/perf` only logs it: no table, no flag, any logged-in player on the live site.

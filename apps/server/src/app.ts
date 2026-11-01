@@ -99,6 +99,10 @@ import { wildIsleSwitchOf } from './modules/maps/wild-isle-switch.js';
 import { longNightRoutes } from './modules/long-night/routes.js';
 import { createLongNightService } from './modules/long-night/service.js';
 import { longNightSwitchOf } from './modules/long-night/switch.js';
+import { pushRoutes } from './modules/push/routes.js';
+import { createWebPushSender, vapidOf } from './modules/push/sender.js';
+import { createPushService } from './modules/push/service.js';
+import { pushSwitchOf } from './modules/push/switch.js';
 import { createHealthService, type ReadinessCheck } from './modules/health/service.js';
 import { tutorialRoutes } from './modules/tutorial/routes.js';
 import { boutiqueRoutes } from './modules/boutique/routes.js';
@@ -547,6 +551,27 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             idempotency,
             devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
+        );
+        // Push nudges (#726), off by default until the client lane (#726e).
+        // Config makes sure the VAPID keys are there whenever it isn't off.
+        const vapid = vapidOf(config);
+        const pushSwitch = pushSwitchOf(config);
+        await api.register(
+          pushRoutes(
+            createPushService({
+              db,
+              clock,
+              log: app.log,
+              push: pushSwitch,
+              vapid,
+              // No sender (and no subject warning at boot) while push is off.
+              sender:
+                vapid && pushSwitch.mode !== 'off'
+                  ? createWebPushSender(vapid, { log: app.log })
+                  : null,
+            }),
+            { hooks: authHooks },
+          ),
         );
         // The tutorial (#47, #24) runs the Glade on these same modules; its
         // scripted night is the Hollow's own nightfall.
