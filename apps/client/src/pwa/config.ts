@@ -13,3 +13,16 @@ export const UPDATE_APPLY_AFTER_HIDDEN_MS = 5 * 60_000;
 
 /** localStorage key: the Add to Home Screen guide was dismissed on this browser. */
 export const INSTALL_GUIDE_SEEN_KEY = 'heartpatch.installGuideSeen';
+
+/** localStorage key: when this device last re-sent its push subscription (#726 self-heal). */
+export const PUSH_HEALED_AT_KEY = 'heartpatch.pushHealedAt';
+
+// TUNE: the start-up self-heal re-sends the subscription at most this often.
+export const PUSH_HEAL_INTERVAL_MS = 24 * 60 * 60_000;
+
+// TUNE: how long push helpers wait for the service worker before giving up
+// (it never comes on the dev server).
+export const PUSH_READY_TIMEOUT_MS = 5000;
+
+// TUNE: logout waits at most this long to unsubscribe this device's push.
+export const PUSH_LOGOUT_TIMEOUT_MS = 1500;

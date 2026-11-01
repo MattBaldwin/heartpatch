@@ -9,6 +9,8 @@ import {
   type SignupRequest,
 } from '@heartpatch/shared';
 import { apiCall, apiCallFor } from '../../net/api.js';
+import { PUSH_LOGOUT_TIMEOUT_MS } from '../../pwa/config.js';
+import { pushClient } from '../../pwa/push-client.js';
 
 export const authApi = {
   me: async (): Promise<PublicUser | null> =>
@@ -24,6 +26,10 @@ export const authApi = {
     apiCallFor('/auth/recover', { method: 'POST', body, schema: RecoveryCodeResponseSchema }),
 
   logout: async (): Promise<void> => {
+    // Stop this device's nudges first (#726): best effort and time-boxed, so
+    // it never holds up or fails the logout. The server deletes the row with
+    // the session either way.
+    await pushClient.forgetDevice(PUSH_LOGOUT_TIMEOUT_MS);
     await apiCall('/auth/logout', { method: 'POST', schema: null });
   },
 };

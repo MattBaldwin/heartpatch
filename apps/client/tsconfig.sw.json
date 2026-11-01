@@ -9,5 +9,11 @@
     "types": [],
     "noEmit": true
   },
-  "include": ["src/pwa/sw.ts", "src/pwa/messages.ts", "src/pwa/shell-strategy.ts"]
+  "include": [
+    "src/pwa/sw.ts",
+    "src/pwa/messages.ts",
+    "src/pwa/shell-strategy.ts",
+    "src/pwa/push-payload.ts",
+    "src/pwa/push-subscription.ts"
+  ]
 }
