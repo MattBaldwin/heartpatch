@@ -1,3 +1,4 @@
+import { MAP_NAME_MAX_LENGTH } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { selectTile } from './claim-land.js';
 import { api, hook } from './dev-hook.js';
@@ -11,6 +12,13 @@ import { newPlayer, uniqueName, visitPatch } from './players.js';
 // rows, and the Build sheet keeps the round Me button, then its Build! row is
 // pinned whole and unfaded at the panel's foot. Each is checked on the
 // game's own boxes.
+
+/**
+ * The widest name a patch can have: the longest allowed, in its widest letter,
+ * so the name pill is checked at its widest and can't pass on a short name
+ * (it shortens with … in the top row on a phone on its side).
+ */
+const WIDEST_NAME = 'W'.repeat(MAP_NAME_MAX_LENGTH);
 
 const SE = { width: 375, height: 667 };
 const PHONES = [
@@ -191,7 +199,7 @@ test('small phones and iPads: nothing sits on anything (#621 render-checks)', as
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   // A Wild Isle, as the render-checks were (its home tiles take a Build sheet).
   await lobby.getByTestId('lobby-patch-type-wild-isle').tap();
-  await lobby.getByLabel('Patch name').fill('Fit Cove');
+  await lobby.getByLabel('Patch name').fill(WIDEST_NAME);
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
@@ -299,6 +307,13 @@ test('small phones and iPads: nothing sits on anything (#621 render-checks)', as
       expect(pill.x).toBeGreaterThanOrEqual(side);
       expect(pill.x + pill.width).toBeLessThanOrEqual(size.width - side);
       expect(pill.y + pill.height).toBeLessThanOrEqual(64);
+      // The widest name shortens with … ("Moonberr…"); the 💛 count stays whole, in the pill.
+      const name = hud.locator('.map-hud-name');
+      expect(await name.evaluate((n) => n.scrollWidth > n.clientWidth)).toBe(true);
+      await expect(name).toHaveCSS('text-overflow', 'ellipsis');
+      const coins = (await hud.getByTestId('heart-coins').boundingBox())!;
+      expect(coins.width).toBeGreaterThan(0);
+      expect(coins.x + coins.width).toBeLessThanOrEqual(pill.x + pill.width);
       // A quiet tile and a busy one: neither reaches the pill, and both end
       // between rows.
       await openMyTile(page);
@@ -324,6 +339,13 @@ test('small phones and iPads: nothing sits on anything (#621 render-checks)', as
       );
       await page.getByTestId('build-cancel').tap();
       await closePanel(page);
+      // The trays come back: the pill moves back out from under the round buttons.
+      await expect(page.locator('.tray-top-right > button').first()).toBeVisible();
+      await expectClear(
+        page,
+        '[data-testid="map-hud"]',
+        '.tray-top-left, .tray-top-right > button, .auth-chip-toggle',
+      );
     }
     await cdp?.send(
       'Emulation.setSafeAreaInsetsOverride' as never,
