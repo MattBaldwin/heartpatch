@@ -148,8 +148,8 @@ export interface PushRepo {
   // written one short statement at a time, outside every game transaction.
 
   /**
-   * Played multiplayer patches (an active member) with the Hollow Man's
-   * strength above 0, in id order: where dusk can matter.
+   * Multiplayer patches with an active member who has a subscription, and
+   * the Hollow Man's strength above 0, in id order: where dusk can matter.
    */
   duskMaps: () => Promise<PushDuskMap[]>;
   /** The patch's active members a nudge with this switch can reach now, in id order. */
@@ -339,8 +339,11 @@ export function createPushRepo(db: Executor): PushRepo {
         from maps m
         where m.kind = 'multiplayer'
           and m.hollow_strength_percent > 0
+          -- Only patches where someone could get a nudge (the sweep runs every minute).
           and exists (
-            select 1 from map_members mm where mm.map_id = m.id and mm.status = 'active'
+            select 1 from map_members mm
+            join push_subscriptions sub on sub.user_id = mm.user_id
+            where mm.map_id = m.id and mm.status = 'active'
           )
         order by m.id`);
       return rows.map((r) => ({ ...r }));
