@@ -192,8 +192,10 @@ async function checkBuildRow(page: Page, screenHeight: number): Promise<void> {
 test('small phones and iPads: nothing sits on anything (#621 render-checks)', async ({
   browser,
 }) => {
-  // Seven screens, then each phone on its side with its Build sheet; CI renders in software.
-  test.setTimeout(480_000);
+  // Seven screens, then each phone on its side with its Build sheet; CI renders in
+  // software. iPad WebKit took 5.2 min on main and ran past 8 min in its last
+  // step on a slower runner (#726), so it has 10.
+  test.setTimeout(600_000);
   const page = await newPlayer(browser, uniqueName('fit'));
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
