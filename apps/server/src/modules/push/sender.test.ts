@@ -9,6 +9,7 @@ import { newSessionToken } from '../auth/secrets.js';
 import { createPushRepo } from './repo.js';
 import {
   createWebPushSender,
+  isPushServiceEndpoint,
   vapidOf,
   type PushSendResult,
   type PushSender,
@@ -49,6 +50,35 @@ function replyError(statusCode: number, headers: Record<string, string> = {}): E
 const target = (endpoint = 'https://web.push.apple.com/QGsecret-device-token') => ({
   endpoint,
   ...newDeviceKeys(),
+});
+
+describe('isPushServiceEndpoint', () => {
+  it.each([
+    'https://web.push.apple.com/QGabc',
+    'https://api.push.apple.com/x',
+    'https://fcm.googleapis.com/fcm/send/abc:def',
+    'https://updates.push.services.mozilla.com/wpush/v2/abc',
+    'https://wns2-by3p.notify.windows.com/w/?token=abc',
+    'https://WEB.PUSH.APPLE.COM/QGabc',
+  ])('takes %s', (endpoint) => {
+    expect(isPushServiceEndpoint(endpoint)).toBe(true);
+  });
+
+  it.each([
+    'http://web.push.apple.com/QGabc',
+    'https://web.push.apple.com:8443/QGabc',
+    'https://user:pw@web.push.apple.com/QGabc',
+    'https://web.push.apple.com.evil.example/QGabc',
+    'https://evilpush.apple.com/x',
+    'https://evil.example/web.push.apple.com',
+    'https://localhost/x',
+    'https://127.0.0.1/x',
+    'https://169.254.169.254/latest/meta-data',
+    'https://heartpatch-db/x',
+    'not a url',
+  ])('refuses %s', (endpoint) => {
+    expect(isPushServiceEndpoint(endpoint)).toBe(false);
+  });
 });
 
 describe('vapidOf', () => {
@@ -148,6 +178,7 @@ describe('the web-push sender', () => {
       () => Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }),
       { outcome: 'dropped', reason: 'unreachable' },
     ],
+    ['a timeout', () => new Error('Socket timeout'), { outcome: 'dropped', reason: 'unreachable' }],
     [
       'keys that will not encrypt',
       () => new Error('The subscription p256dh value should be 65 bytes long.'),
@@ -170,6 +201,16 @@ describe('the web-push sender', () => {
     await sender.send(target(), PAYLOAD, OPTIONS);
     expect(lines.join('\n')).toMatch(/"host":"web\.push\.apple\.com"/);
     expect(lines.join('\n')).toMatch(/"retryAfter":"120"/);
+  });
+
+  it('never posts to a host that is not a push service', async () => {
+    const fake = vi.fn<SendNotification>();
+    const { sender } = senderWith(fake);
+    expect(await sender.send(target('https://10.0.0.5/internal'), PAYLOAD, OPTIONS)).toEqual({
+      outcome: 'gone',
+      statusCode: null,
+    });
+    expect(fake).not.toHaveBeenCalled();
   });
 
   it('never sends a payload over the size cap', async () => {

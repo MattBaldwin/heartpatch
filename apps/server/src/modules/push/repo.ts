@@ -131,6 +131,9 @@ export function createPushRepo(db: Executor): PushRepo {
               auth: subscription.auth,
               expiresAt: subscription.expiresAt,
               failCount: 0,
+              // A takeover by another account starts fresh (the device cap's order).
+              lastOkAt: sql`case when ${pushSubscriptions.userId} = ${session.userId}::uuid then ${pushSubscriptions.lastOkAt} else null end`,
+              createdAt: sql`case when ${pushSubscriptions.userId} = ${session.userId}::uuid then ${pushSubscriptions.createdAt} else ${now.toISOString()}::timestamptz end`,
             },
           })
           .returning({ id: pushSubscriptions.id });

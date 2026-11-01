@@ -14,7 +14,13 @@ import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
 import { hashSessionToken } from '../auth/secrets.js';
 import { createPushRepo } from './repo.js';
-import { endpointHost, type PushSendOptions, type PushSender, type VapidKeys } from './sender.js';
+import {
+  endpointHost,
+  isPushServiceEndpoint,
+  type PushSendOptions,
+  type PushSender,
+  type VapidKeys,
+} from './sender.js';
 import { PUSH_OFF, pushOnFor, type PushSwitch } from './switch.js';
 
 /*
@@ -100,6 +106,8 @@ export function createPushService(options: PushServiceOptions): PushService {
     subscribe: async (user, sessionToken, request) => {
       requireOn(user);
       if (sessionToken === undefined) throw new AppError('UNAUTHENTICATED');
+      // Only a real push service: the server never POSTs to a URL a player picked.
+      if (!isPushServiceEndpoint(request.endpoint)) throw new AppError('VALIDATION_FAILED');
       const stored = await repo.subscribe({
         userId: user.id,
         sessionTokenHash: hashSessionToken(sessionToken),

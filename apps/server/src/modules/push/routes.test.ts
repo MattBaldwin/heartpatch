@@ -246,9 +246,28 @@ describe.skipIf(!url)('push nudges: subscribe and settings (#726b, needs DATABAS
     const little = await player();
     const ipad = subscription();
     await call(server, 'PUT', '/push/subscription', big, ipad);
+    await db.execute(
+      `update push_subscriptions set last_ok_at = '${START}' where endpoint = '${ipad.endpoint}'`,
+    );
+    // Big sibling's app starts again: same account, history kept.
+    await call(server, 'PUT', '/push/subscription', big, ipad);
+    expect(
+      (
+        await db.query.pushSubscriptions.findFirst({
+          columns: { lastOkAt: true },
+          where: (t, { eq }) => eq(t.endpoint, ipad.endpoint),
+        })
+      )?.lastOkAt,
+    ).toEqual(new Date(START));
     expect((await call(server, 'PUT', '/push/subscription', little, ipad)).statusCode).toBe(200);
     expect(await rowsOf(big.id)).toEqual([]);
     expect((await rowsOf(little.id)).map((r) => r.sessionId)).toEqual([little.sessionId]);
+    // The big sibling's history doesn't come with it.
+    const [row] = await db.query.pushSubscriptions.findMany({
+      columns: { lastOkAt: true },
+      where: (t, { eq }) => eq(t.endpoint, ipad.endpoint),
+    });
+    expect(row?.lastOkAt).toBeNull();
   });
 
   it('replaces deletes my old endpoint, never someone else’s', async () => {
@@ -300,6 +319,12 @@ describe.skipIf(!url)('push nudges: subscribe and settings (#726b, needs DATABAS
       { endpoint: endpoint(), keys: { ...keys, extra: 'x' } },
       { endpoint: endpoint() },
       { ...subscription(), replaces: 'javascript:alert(1)' },
+      // Only a real push service: never a URL the server would POST to for a player.
+      { endpoint: 'https://localhost/push', keys },
+      { endpoint: 'https://169.254.169.254/latest/meta-data', keys },
+      { endpoint: 'https://heartpatch-db:5432/x', keys },
+      { endpoint: 'https://web.push.apple.com.evil.example/x', keys },
+      { endpoint: 'https://web.push.apple.com:8443/x', keys },
     ]) {
       expect((await call(server, 'PUT', '/push/subscription', me, body)).statusCode).toBe(400);
     }

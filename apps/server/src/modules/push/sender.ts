@@ -60,7 +60,8 @@ export interface PushSendOptions {
 /**
  * What became of one send, for the bookkeeping in `service.deliver`:
  * - `ok`: the push service took it (2xx). Resets the failure count.
- * - `gone`: 404 or 410, the subscription is dead. Delete it.
+ * - `gone`: 404 or 410, or an endpoint off `PUSH_SERVICE_HOSTS`: the
+ *   subscription is dead. Delete it.
  * - `failed`: anything else the subscription might be to blame for (429,
  *   5xx, 401/403 after a key change, keys that won't encrypt). Counts toward
  *   `PUSH_RULES.maxFailures`.
@@ -69,7 +70,7 @@ export interface PushSendOptions {
  */
 export type PushSendResult =
   | { outcome: 'ok' }
-  | { outcome: 'gone'; statusCode: number }
+  | { outcome: 'gone'; statusCode: number | null }
   | { outcome: 'failed'; statusCode: number | null }
   | { outcome: 'dropped'; reason: 'too-big' | 'unreachable' | 'no-subject' };
 
@@ -103,6 +104,34 @@ export function endpointHost(endpoint: string): string {
   }
 }
 
+/**
+ * The push services a subscription may point at (#726b review): the browsers'
+ * own, matched on the host or a subdomain of it. A player can't make the
+ * server POST to a URL of their choosing (an internal host, localhost):
+ * checked when a device subscribes and again before every send.
+ */
+export const PUSH_SERVICE_HOSTS: readonly string[] = [
+  'push.apple.com', // Safari and Home Screen apps on iPhone, iPad and Mac (web.push.apple.com)
+  'fcm.googleapis.com', // Chrome, Edge on Android, Samsung Internet
+  'push.services.mozilla.com', // Firefox (updates.push.services.mozilla.com)
+  'notify.windows.com', // Edge on Windows (*.notify.windows.com)
+];
+
+/** True when the endpoint is plain https on port 443 at a known push service. */
+export function isPushServiceEndpoint(endpoint: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'https:' || url.port !== '' || url.username !== '' || url.password !== '') {
+    return false;
+  }
+  const host = url.hostname.toLowerCase();
+  return PUSH_SERVICE_HOSTS.some((known) => host === known || host.endsWith(`.${known}`));
+}
+
 /** A subject push services accept (the library throws on anything else). */
 function usableSubject(subject: string): boolean {
   try {
@@ -116,12 +145,20 @@ function usableSubject(subject: string): boolean {
 
 /** A Node network error (`ECONNREFUSED`, `ETIMEDOUT`, …): no reply from the service. */
 function isNetworkError(error: unknown): boolean {
+  // web-push rejects a timeout with a bare Error('Socket timeout'): no reply either.
+  if (error instanceof Error && error.message === 'Socket timeout') return true;
   return (
     error instanceof Error &&
     'code' in error &&
     typeof error.code === 'string' &&
     !('statusCode' in error)
   );
+}
+
+function codeOf(error: unknown): string | undefined {
+  return error instanceof Error && 'code' in error && typeof error.code === 'string'
+    ? error.code
+    : undefined;
 }
 
 function statusOf(error: unknown): number | null {
@@ -149,6 +186,8 @@ export function createWebPushSender(vapid: VapidKeys, options: WebPushSenderOpti
     send: async (target, payload, sendOptions) => {
       const host = endpointHost(target.endpoint);
       if (!subjectOk) return { outcome: 'dropped', reason: 'no-subject' };
+      // Subscribe refuses these; a row from before a host left the list is dead.
+      if (!isPushServiceEndpoint(target.endpoint)) return { outcome: 'gone', statusCode: null };
       const body = JSON.stringify(PushPayloadSchema.parse(payload));
       if (Buffer.byteLength(body) > PUSH_RULES.maxPayloadBytes) {
         options.log.error(
@@ -182,7 +221,7 @@ export function createWebPushSender(vapid: VapidKeys, options: WebPushSenderOpti
         }
         if (statusCode === null && isNetworkError(error)) {
           options.log.warn(
-            { kind: payload.kind, host, code: (error as { code: string }).code },
+            { kind: payload.kind, host, code: codeOf(error) },
             'push: the push service is unreachable',
           );
           return { outcome: 'dropped', reason: 'unreachable' };
