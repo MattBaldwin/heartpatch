@@ -1,3 +1,4 @@
+import { createECDH } from 'node:crypto';
 import { ShortCommitSchema } from '@heartpatch/shared';
 import { z } from 'zod';
 
@@ -86,6 +87,43 @@ const ConfigSchema = z.object({
   // Usernames who see the Long Night while `HP_LONG_NIGHT=testers`,
   // comma-separated (case doesn't matter), as `HP_HOUSE_TESTERS`.
   HP_LONG_NIGHT_TESTERS: usernameList(),
+  // Push nudges (#726) feature switch: `off` answers every `/push` route
+  // NOT_FOUND and sends nothing, `testers` subscribes and nudges only
+  // `HP_PUSH_TESTERS` (each account decides for itself, not its patch), `on`
+  // every player. Off by default; the prod compose file doesn't turn it on.
+  HP_PUSH: z.enum(['off', 'testers', 'on']).default('off'),
+  // Usernames who get nudges while `HP_PUSH=testers`, comma-separated (case
+  // doesn't matter), as `HP_HOUSE_TESTERS`.
+  HP_PUSH_TESTERS: usernameList(),
+  // The VAPID pair (RFC 8292) push services check every nudge against,
+  // base64url as `web-push`'s `generateVAPIDKeys()` makes them: the public
+  // key is the 65-byte uncompressed P-256 point, the private key its 32-byte
+  // scalar. `deploy.sh` generates them on the first deploy (owner answer 4,
+  // #726). Changing them ends every phone's subscription. Required (and must
+  // match) whenever `HP_PUSH` isn't `off`. Never commit or log the private key.
+  HP_VAPID_PUBLIC_KEY: z.preprocess(
+    unsetIfEmpty,
+    z
+      .string()
+      .regex(/^B[A-Za-z0-9_-]{86}$/, 'a base64url uncompressed P-256 public key')
+      .optional(),
+  ),
+  HP_VAPID_PRIVATE_KEY: z.preprocess(
+    unsetIfEmpty,
+    z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{43}$/, 'a base64url 32-byte P-256 private key')
+      .optional(),
+  ),
+  // Who the push services can contact about our nudges: a `mailto:` or an
+  // `https:` URL. Unset uses `PUBLIC_ORIGIN`.
+  HP_VAPID_SUBJECT: z.preprocess(
+    unsetIfEmpty,
+    z
+      .string()
+      .regex(/^(?:mailto:[^\s@]+@[^\s@]+|https:\/\/\S+)$/, 'a mailto: or https: URL')
+      .optional(),
+  ),
   // Branching evolution (#32): the secret salt evolution rolls are seeded
   // with, so a player who knows a squishy's id can't work out its roll.
   // Required in production; development and tests fall back to a fixed dev
@@ -163,7 +201,39 @@ const ServerConfigSchema = ConfigSchema.refine(
   .refine((c) => c.NODE_ENV !== 'production' || !c.HP_SEED_ALLOW_REMOTE, {
     path: ['HP_SEED_ALLOW_REMOTE'],
     message: 'development and tests only',
+  })
+  // Push (#726, owner answer 4): a switch that's on with no keys could never
+  // send, so the server refuses to start rather than fail on every nudge.
+  // In every environment: a dev or test server with push on needs keys too.
+  .refine((c) => (c.HP_VAPID_PUBLIC_KEY === undefined) === (c.HP_VAPID_PRIVATE_KEY === undefined), {
+    path: ['HP_VAPID_PRIVATE_KEY'],
+    message: 'set both VAPID keys or neither',
+  })
+  .refine((c) => c.HP_PUSH === 'off' || c.HP_VAPID_PRIVATE_KEY !== undefined, {
+    path: ['HP_VAPID_PUBLIC_KEY'],
+    message: 'required while HP_PUSH is not off (deploy.sh generates them)',
+  })
+  .refine((c) => vapidPairMatches(c.HP_VAPID_PUBLIC_KEY, c.HP_VAPID_PRIVATE_KEY), {
+    path: ['HP_VAPID_PUBLIC_KEY'],
+    message: "isn't the public half of HP_VAPID_PRIVATE_KEY",
   });
+
+/**
+ * True when the public key is the private key's own (or either is unset):
+ * a mismatched pair would sign every nudge with a key no phone subscribed
+ * to, and every one would fail. Never reports the keys.
+ */
+function vapidPairMatches(publicKey: string | undefined, privateKey: string | undefined): boolean {
+  if (publicKey === undefined || privateKey === undefined) return true;
+  try {
+    const ecdh = createECDH('prime256v1');
+    ecdh.setPrivateKey(Buffer.from(privateKey, 'base64url'));
+    return ecdh.getPublicKey().toString('base64url') === publicKey;
+  } catch {
+    // Not a valid scalar on the curve (zero, or past the group order).
+    return false;
+  }
+}
 
 export type Config = z.infer<typeof ConfigSchema>;
 
