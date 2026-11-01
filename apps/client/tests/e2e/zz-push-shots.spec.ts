@@ -64,6 +64,7 @@ for (const vp of ['iphone15', 'se', 'seSide'] as Vp[]) {
     await card.getByRole('button', { name: 'Yes please' }).tap();
     await expect(page.getByTestId('patch-line')).toHaveText('Nudges on! 🔔');
     if (vp === 'iphone15') await shot(page, vp, `line-${vp}`, 'Patch line after Yes please');
+    await page.waitForTimeout(5000);
     let s = await settings(page);
     await expect(s).toHaveAttribute('data-state', 'on');
     await shot(page, vp, `settings-on-${vp}`, 'Settings Nudges, on');
@@ -89,3 +90,27 @@ for (const vp of ['iphone15', 'se', 'seSide'] as Vp[]) {
     await page.context().close();
   });
 }
+
+test('settings right after Yes please', async ({ browser }) => {
+  test.setTimeout(240_000);
+  const page = await newPlayer(browser, uniqueName('nsquick'));
+  await stubPush(page);
+  await page.reload();
+  await frame(page, 'iphone15');
+  await makePatch(page);
+  const card = page.getByTestId('push-offer');
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  await card.getByRole('button', { name: 'Yes please' }).tap();
+  const t0 = Date.now();
+  await page.getByTestId('keeper-menu').tap();
+  await page.getByRole('button', { name: 'Settings' }).tap();
+  const s = page.getByTestId('lobby').getByTestId('push-settings');
+  await expect(s).toBeVisible({ timeout: 20_000 });
+  await s.scrollIntoViewIfNeeded();
+  const ms = Date.now() - t0;
+  await page.addStyleTag({ content: '.dev-status{display:none !important}' });
+  const tier = (await hook<{ tier: string }>(page, 'quality'))?.tier;
+  await page.screenshot({ path: `${OUT}/settings-quick-iphone15.png` });
+  manifest.push({ name: 'settings-quick-iphone15', device: 'iPhone 15', vp: 'iphone15', tier, note: `Settings open ${ms} ms after Yes please` });
+  writeFileSync(`${OUT}/manifest.json`, JSON.stringify(manifest, null, 1));
+});
