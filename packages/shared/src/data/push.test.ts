@@ -61,6 +61,8 @@ describe('push nudges’ words (#726, rule 9)', () => {
     });
     // The other kinds ignore a name.
     expect(pushLineFor('dusk', 'Moonberry')).toEqual(PUSH_TEXT.dusk);
+    // A name is always literal, never a replacement pattern.
+    expect(pushLineFor('friend', '$&$&').title).toBe('$&$& is in your patch! 👋');
   });
 
   it('refuses avoided words, stray names and unknown placeholders', () => {

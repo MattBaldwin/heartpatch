@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { findAvoidedWords } from '../../data/avoided-words.js';
-import { PushKindSchema, type PushKind } from '../push.js';
+import { PushKindSchema } from '../push.js';
 import { formatDataIssues } from './issues.js';
 
 /** A minute of the day, 0 (midnight) to 1439 (11:59 PM), in the player's time zone. */
@@ -27,8 +27,10 @@ export const PushRulesSchema = z
     dailyCap: z.number().int().min(1).max(10),
     /** When the cap is near, the sweep sends the earliest kind here first. Every kind, once. */
     priority: z.array(PushKindSchema).length(PushKindSchema.options.length),
-    /** The dusk nudge (and the Long Night's "coming" call) goes this long before nightfall. */
+    /** The dusk nudge goes this long before nightfall. */
     duskLeadMinutes: z.number().int().min(5).max(180),
+    /** The Long Night's "coming" call goes this long before its nightfall. */
+    longNightLeadMinutes: z.number().int().min(5).max(180),
     /** The Long Night's "begun" call goes within this long after nightfall, or not at all. */
     longNightStartWindowMinutes: z.number().int().min(1).max(60),
     /** Gatherers are done this long before the nudge (so a kid who's about to look isn't nagged). */
@@ -40,11 +42,7 @@ export const PushRulesSchema = z
     /** One friend nudge per recipient per arriver in this many hours. */
     friendRepeatHours: z.number().int().min(1).max(24),
     /** How long a push service keeps trying to deliver each kind (Web Push `TTL`), in seconds. */
-    ttlSeconds: z.strictObject(
-      Object.fromEntries(
-        PushKindSchema.options.map((kind) => [kind, z.number().int().min(60).max(86_400)]),
-      ) as Record<PushKind, z.ZodNumber>,
-    ),
+    ttlSeconds: z.record(PushKindSchema, z.number().int().min(60).max(86_400)),
     /** A player's devices; past this the one heard from least recently goes. */
     maxDevicesPerAccount: z.number().int().min(1).max(20),
     /** A subscription that failed this many times in a row is deleted. */
@@ -77,12 +75,7 @@ export type PushLine = z.infer<typeof PushLineSchema>;
  * server filter at signup (owner answer 1). No other placeholder exists, so
  * nothing else user-typed can reach a lock screen.
  */
-export const PushTextSchema = z.strictObject(
-  Object.fromEntries(PushKindSchema.options.map((kind) => [kind, PushLineSchema])) as Record<
-    PushKind,
-    typeof PushLineSchema
-  >,
-);
+export const PushTextSchema = z.record(PushKindSchema, PushLineSchema);
 export type PushText = z.infer<typeof PushTextSchema>;
 
 /** The one placeholder a nudge may hold. */

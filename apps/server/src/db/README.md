@@ -418,7 +418,7 @@ Push nudges (#726, migration 0063). Leaf tables: written only by the push module
 |---|---|---|
 | `id` | uuid PK | |
 | `user_id` | uuid → users | Cascade delete |
-| `session_id` | uuid → sessions | Cascade delete: logout, a password reset or expiry ends the device's nudges |
+| `session_id` | uuid → sessions | Cascade delete: logout or a password reset ends the device's nudges. Expiry doesn't delete the session row, so sends join a live session (`expires_at > now`) |
 | `endpoint` | text | The push service URL. Unique (a device moving to another account takes the row over); `https://`, at most 2048 characters |
 | `p256dh`, `auth` | text | The device's keys, base64url |
 | `expires_at` | timestamptz | `PushSubscription.expirationTime`; usually null |

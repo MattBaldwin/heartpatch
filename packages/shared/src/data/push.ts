@@ -16,6 +16,7 @@ export const PUSH_RULES: PushRules = {
   // TUNE: the Long Night calls first, then dusk (a squishy at risk), then chores, then friends.
   priority: ['long-night-start', 'long-night-soon', 'dusk', 'gatherers', 'friend'],
   duskLeadMinutes: 60, // TUNE: an hour before nightfall, time to light a fire
+  longNightLeadMinutes: 60, // TUNE: the Long Night's "coming" call, an hour ahead
   longNightStartWindowMinutes: 10, // TUNE: a late "begun" call is noise
   gatherersIdleMinutes: 30, // TUNE: done half an hour before we nudge
   friendAwayMinutes: 10, // TUNE: only patch-mates who've been gone a while
@@ -56,10 +57,9 @@ export const PUSH_TEXT: PushText = {
  */
 export function pushLineFor(kind: PushKind, name = '', text: PushText = PUSH_TEXT): PushLine {
   const line = text[kind];
-  return {
-    title: line.title.replaceAll(PUSH_NAME_PLACEHOLDER, name),
-    body: line.body.replaceAll(PUSH_NAME_PLACEHOLDER, name),
-  };
+  if (kind !== 'friend') return { ...line };
+  // A replacer function, so `$&`-style patterns in a name stay literal.
+  return { title: line.title.replaceAll(PUSH_NAME_PLACEHOLDER, () => name), body: line.body };
 }
 
 /**

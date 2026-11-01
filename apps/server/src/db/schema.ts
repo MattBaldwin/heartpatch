@@ -2727,8 +2727,11 @@ export const communityPieces = pgTable(
 /**
  * One row per device that agreed to nudges (#726): its push service URL and
  * keys (`PushSubscription.toJSON()`), the account and the login session it
- * came from. The session cascade ends a device's nudges at logout, password
- * reset or expiry, so a shared family iPad never nudges the next sibling.
+ * came from. The session cascade ends a device's nudges at logout or a
+ * password reset, so a shared family iPad never nudges the next sibling.
+ * Expiry alone doesn't delete a session row (`session-cleanup` isn't built),
+ * so the push module (#726b/c) only sends to a subscription whose session
+ * is live (`sessions.expires_at > now`).
  * `endpoint` is unique: a device moving to another account takes the row
  * over. `last_ok_at` is the push service's latest 2xx; `fail_count` counts
  * failures since, and the row goes at `PUSH_RULES.maxFailures`.
