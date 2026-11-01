@@ -1,8 +1,6 @@
 import {
   HOME_BASE_RULES,
-  pushLineFor,
   PUSH_RULES,
-  quietHoursContain,
   tonightOf,
   type LocalDate,
   type PushKind,
@@ -14,8 +12,9 @@ import { instantOfLocal, localDate, mapLocalTime, MINUTE_MS } from '../../lib/ti
 import { squishiesInTheDarkTonight } from '../hollow/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { workAt } from '../jobs/work.js';
-import type { PushRecipient, PushRepo } from './repo.js';
-import type { PushDelivery, PushService } from './service.js';
+import type { PushRepo } from './repo.js';
+import { createPushSend, type PushCandidate, type PushSendTally } from './send.js';
+import type { PushService } from './service.js';
 import { pushOnFor, type PushSwitch } from './switch.js';
 
 /*
@@ -40,28 +39,13 @@ import { pushOnFor, type PushSwitch } from './switch.js';
  * (`lock: false`, as the fire hint reads them); push rows are leaves.
  */
 
-/** One nudge the sweep would like to send. */
-export interface PushCandidate {
-  user: PushRecipient;
-  kind: PushKind;
-  /** `push_sends.dedupe_key`: dusk `mapId/night`, gatherers the account day. */
-  dedupeKey: string;
-  /** The patch the nudge opens. */
-  mapId: string;
-}
+// Moved to `send.ts` (#726d); still exported here for the sweep's callers.
+export { accountDayStart } from './send.js';
 
 /** What one sweep did. */
-export interface PushSweepResult {
+export interface PushSweepResult extends PushSendTally {
   /** Candidates found (before the switch, quiet hours and the cap). */
   due: number;
-  /** Claimed in `push_sends` and handed to `deliver`. */
-  claimed: number;
-  /** Claimed and taken by at least one device. */
-  delivered: number;
-  /** Dropped in quiet hours. */
-  quiet: number;
-  /** Dropped at the daily cap. */
-  capped: number;
 }
 
 /** The dusk window a patch is in at `now`, or null outside it. */
@@ -101,11 +85,6 @@ export function duskWindowOf(
   // makes this `long-night-soon` and suppresses dusk; `long-night-start` gets
   // its own window from nightfall. Only `dusk` is sent until then.
   return { kind: 'dusk', night };
-}
-
-/** When the account's day began (midnight in its zone): the daily cap counts from here. */
-export function accountDayStart(now: Date, timeZone: string): Date {
-  return instantOfLocal({ date: localDate(now, timeZone), minute: 0 }, timeZone, now);
 }
 
 export interface PushSweepOptions {
@@ -178,55 +157,8 @@ export function createPushSweep(
     return [...found.values()];
   };
 
-  /** 3. Quiet hours, the cap, the claim, then the send. */
-  const send = async (
-    candidate: PushCandidate,
-    now: Date,
-    result: PushSweepResult,
-  ): Promise<void> => {
-    const { user, kind } = candidate;
-    if (quietHoursContain(mapLocalTime(now, user.timeZone).minute, rules.quietHours)) {
-      result.quiet += 1;
-      return;
-    }
-    const dayStart = accountDayStart(now, user.timeZone);
-    if ((await repo.claimedSince(user.id, dayStart)) >= rules.dailyCap) {
-      result.capped += 1;
-      return;
-    }
-    const claimId = await repo.claim(
-      {
-        userId: user.id,
-        kind,
-        dedupeKey: candidate.dedupeKey,
-        mapId: candidate.mapId,
-        now,
-        dayStart,
-      },
-      rules.dailyCap,
-    );
-    // Sent already (or the cap filled since the count): nothing to do.
-    if (claimId === null) return;
-    result.claimed += 1;
-    let delivery: PushDelivery = { devices: 0, delivered: 0 };
-    try {
-      delivery = await deliver(
-        user,
-        {
-          v: 1,
-          kind,
-          ...pushLineFor(kind),
-          mapId: candidate.mapId,
-          tag: `${kind}:${candidate.mapId}`,
-        },
-        { ttlSeconds: rules.ttlSeconds[kind], topic: kind },
-      );
-    } finally {
-      // Even when `deliver` failed partway: the claim records it went (at most once).
-      await repo.markSent(claimId, delivery.delivered > 0 ? now : null, delivery.devices);
-    }
-    if (delivery.delivered > 0) result.delivered += 1;
-  };
+  /** 3. Quiet hours, the cap, the claim, then the send (`send.ts`). */
+  const send = createPushSend({ repo, deliver, rules });
 
   return async (now) => {
     const result: PushSweepResult = { due: 0, claimed: 0, delivered: 0, quiet: 0, capped: 0 };

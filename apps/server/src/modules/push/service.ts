@@ -1,4 +1,5 @@
 import {
+  PUSH_RULES,
   PushPayloadSchema,
   type PublicUser,
   type PushOkResponse,
@@ -11,7 +12,7 @@ import {
 import type { FastifyBaseLogger } from 'fastify';
 import type { Executor } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
-import type { Clock } from '../../lib/time.js';
+import { MINUTE_MS, type Clock } from '../../lib/time.js';
 import { hashSessionToken } from '../auth/secrets.js';
 import { createPushRepo } from './repo.js';
 import {
@@ -21,6 +22,7 @@ import {
   type PushSender,
   type VapidKeys,
 } from './sender.js';
+import { createPushSend, type PushSendTally } from './send.js';
 import { PUSH_OFF, pushOnFor, type PushSwitch } from './switch.js';
 import { createPushSweep, type PushSweepResult } from './sweep.js';
 
@@ -28,7 +30,7 @@ import { createPushSweep, type PushSweepResult } from './sweep.js';
  * Push nudges (#726 plan, "Server"). A player's phone can subscribe,
  * unsubscribe and set four switches; nothing here takes a "send me this"
  * command (dev tools included). The server decides every send: the sweep
- * (#726c) and the friend hook (#726d) call `deliver`, which nudges every live
+ * (#726c) and the friend hook (#726d, `friendArrived`) call `deliver`, which nudges every live
  * device of one account and keeps each subscription's books.
  */
 
@@ -64,6 +66,23 @@ export interface PushService {
    * Does nothing while push is off.
    */
   sweep: (now?: Date) => Promise<PushSweepResult>;
+  /**
+   * "Moonberry is in your patch! 👋" (#726d): the hub's `onSubscribed` says
+   * a player arrived on a patch; each patch-mate who is away from it (not
+   * online there, and gone `PUSH_RULES.friendAwayMinutes` or for an unknown
+   * time) gets one nudge per arriver per `friendRepeatHours`, through the
+   * same quiet hours, cap and claim as the sweep. Never the arriver. One
+   * recipient's failure is logged and never stops the others; the promise
+   * only rejects if the recipients can't be read. Does nothing while push is
+   * off.
+   */
+  friendArrived: (mapId: string, arriverUserId: string, now?: Date) => Promise<PushFriendResult>;
+}
+
+/** What one arrival did. */
+export interface PushFriendResult extends PushSendTally {
+  /** Patch-mates it could go to (after presence and the switch; before quiet hours and the cap). */
+  due: number;
 }
 
 /** How a `deliver` went: `devices` tried, `delivered` took it. */
@@ -84,6 +103,8 @@ export interface PushServiceOptions {
   sender?: PushSender | null;
   /** `wsHub.isOnline`, for the sweep's "not while you're playing there". No hub: nobody is online. */
   isOnline?: (mapId: string, userId: string) => boolean;
+  /** `wsHub.lastOfflineAt`, for the friend nudge's "away a while". No hub: unknown (long ago). */
+  lastOfflineAt?: (mapId: string, userId: string) => Date | null;
 }
 
 export function createPushService(options: PushServiceOptions): PushService {
@@ -96,6 +117,8 @@ export function createPushService(options: PushServiceOptions): PushService {
     throw new Error('push is on but has no VAPID keys or sender');
   }
   const repo = createPushRepo(db);
+  const isOnline = options.isOnline ?? (() => false);
+  const lastOfflineAt = options.lastOfflineAt ?? (() => null);
 
   /**
    * NOT_FOUND unless push is on for me, with the same words as an unknown
@@ -153,6 +176,46 @@ export function createPushService(options: PushServiceOptions): PushService {
     deliver,
     ...(options.isOnline ? { isOnline: options.isOnline } : {}),
   });
+  const send = createPushSend({ repo, deliver, rules: PUSH_RULES });
+
+  const friendArrived: PushService['friendArrived'] = async (mapId, arriverUserId, now) => {
+    const result: PushFriendResult = { due: 0, claimed: 0, delivered: 0, quiet: 0, capped: 0 };
+    if (push.mode === 'off') return result;
+    const at = now ?? clock();
+    const { arriver, recipients } = await repo.friendRecipients(mapId, arriverUserId, at);
+    if (arriver === null) return result;
+    const awaySince = at.getTime() - PUSH_RULES.friendAwayMinutes * MINUTE_MS;
+    const away = recipients.filter((user) => {
+      if (user.id === arriverUserId || !pushOnFor(push, user) || isOnline(mapId, user.id)) {
+        return false;
+      }
+      // Unknown (not seen since the server started) counts as long ago.
+      const left = lastOfflineAt(mapId, user.id);
+      return left === null || left.getTime() <= awaySince;
+    });
+    result.due = away.length;
+    // One per arriver per window: the bucket is the repeat guard, in `push_sends`.
+    const bucket = Math.floor(at.getTime() / (PUSH_RULES.friendRepeatHours * 60 * MINUTE_MS));
+    for (const user of away) {
+      try {
+        await send(
+          {
+            user,
+            kind: 'friend',
+            dedupeKey: `${mapId}/${arriverUserId}/${bucket}`,
+            mapId,
+            name: arriver,
+          },
+          at,
+          result,
+        );
+      } catch (err) {
+        // One patch-mate's trouble never stops the others' nudges.
+        log.error({ err, kind: 'friend', userId: user.id, mapId }, 'push: a friend nudge failed');
+      }
+    }
+    return result;
+  };
 
   return {
     status: async (user) => ({
@@ -204,5 +267,7 @@ export function createPushService(options: PushServiceOptions): PushService {
     deliver,
 
     sweep: (at) => sweep(at ?? clock()),
+
+    friendArrived,
   };
 }

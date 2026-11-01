@@ -5,6 +5,7 @@ import {
   WS_PROTOCOL_VERSION,
   WsClientMessageSchema,
   WsEventTypeSchema,
+  PUSH_RULES,
   type ErrorCode,
   type PublicUser,
   type WsClientMessage,
@@ -12,6 +13,7 @@ import {
 } from '@heartpatch/shared';
 import type { FastifyBaseLogger } from 'fastify';
 import type { GameEvent } from '../db/game-events.js';
+import { MINUTE_MS, type Clock } from '../lib/time.js';
 import {
   CLIENT_MESSAGE_LIMIT,
   HEARTBEAT_MS,
@@ -59,6 +61,13 @@ export interface WsHub {
    * like the sockets; iOS closes them when the app goes to the background.
    */
   isOnline: (mapId: string, userId: string) => boolean;
+  /**
+   * When this player was last seen leaving this map (#726d, the friend
+   * nudge): the latest close of a socket of theirs that had been subscribed
+   * there (`ws.subscribed` sent). Null when unknown: never seen since this
+   * process started, which callers read as "long ago". In-process only.
+   */
+  lastOfflineAt: (mapId: string, userId: string) => Date | null;
   /** Stops the heartbeat, closes every socket and waits for in-flight reads. */
   close: () => Promise<void>;
 }
@@ -73,6 +82,17 @@ export interface WsHubOptions {
   heartbeatMs?: number;
   replayWindow?: number;
   replayBatch?: number;
+  /**
+   * A player arrived on a map (#726d): called right after `ws.subscribed`
+   * when they had no other socket on it and had been away at least
+   * `PUSH_RULES.friendArriverAwayMinutes` (`awayMs`), or for an unknown time
+   * (`null`: not seen since this process started, so a reconnect right after
+   * a deploy counts as an arrival). Synchronous and must not hold anything:
+   * callers start their own work (fire-and-forget). A throw is logged.
+   */
+  onSubscribed?: (mapId: string, userId: string, awayMs: number | null) => void;
+  /** For `lastOfflineAt` and the away time; the game clock in the app. */
+  clock?: Clock;
 }
 
 interface Connection {
@@ -96,6 +116,10 @@ interface Subscription {
   gen: number;
   /** `ws.subscribed` is still owed once the subscriber catches up. */
   needsAck: boolean;
+  /** `ws.subscribed` went out at least once: the player was here (`lastOfflineAt`). */
+  seen: boolean;
+  /** An arrival to report with the first `ws.subscribed` (`onSubscribed`); null when not one. */
+  arrival: { awayMs: number | null } | null;
 }
 
 // Kid-readable (style guide §6).
@@ -103,6 +127,8 @@ const NOT_MEMBER_MESSAGE = "That map isn't one of yours. Ask its owner for an in
 
 export function createWsHub(options: WsHubOptions): WsHub {
   const { repo, views, logger } = options;
+  const clock = options.clock ?? (() => new Date());
+  const arriverAwayMs = PUSH_RULES.friendArriverAwayMinutes * MINUTE_MS;
   const replayWindow = options.replayWindow ?? REPLAY_WINDOW;
   const replayBatch = options.replayBatch ?? REPLAY_BATCH;
   // A type the client can't parse would be ignored there, leave a gap and
@@ -118,7 +144,12 @@ export function createWsHub(options: WsHubOptions): WsHub {
   const channels = new Map<string, Set<Subscription>>();
   /** A running catch-up per map; `again` asks it to go round once more. */
   const pumps = new Map<string, { again: boolean; done: Promise<void> }>();
+  /** userId → mapId → when a subscribed socket of theirs last left it (ms). */
+  const offlineAt = new Map<string, Map<string, number>>();
   let closed = false;
+
+  const hasSubscription = (mapId: string, userId: string): boolean =>
+    [...(byUser.get(userId) ?? [])].some((conn) => conn.subscription?.mapId === mapId);
 
   const send = (conn: Connection, message: WsServerMessage): void => {
     const { socket } = conn;
@@ -149,6 +180,26 @@ export function createWsHub(options: WsHubOptions): WsHub {
     const channel = channels.get(sub.mapId);
     channel?.delete(sub);
     if (channel?.size === 0) channels.delete(sub.mapId);
+    // Only a subscription that got `ws.subscribed` counts as having been
+    // here: one refused or sent to resync before that leaves the old time, so
+    // a long-away player whose first try needs a resync still arrives.
+    if (sub.seen) {
+      const mine = offlineAt.get(conn.userId) ?? new Map<string, number>();
+      mine.set(sub.mapId, clock().getTime());
+      offlineAt.set(conn.userId, mine);
+    }
+  };
+
+  /** Tells `onSubscribed` about an arrival; never throws into the hub. */
+  const reportArrival = (sub: Subscription): void => {
+    const arrival = sub.arrival;
+    sub.arrival = null;
+    if (arrival === null || !options.onSubscribed) return;
+    try {
+      options.onSubscribed(sub.mapId, sub.conn.userId, arrival.awayMs);
+    } catch (err) {
+      logger.error({ err, mapId: sub.mapId }, 'live sync onSubscribed failed');
+    }
   };
 
   /** Ends a subscription the server can't continue, telling the client why. */
@@ -231,12 +282,14 @@ export function createWsHub(options: WsHubOptions): WsHub {
           behind.push(target);
         } else if (sub.needsAck) {
           sub.needsAck = false;
+          sub.seen = true;
           send(sub.conn, {
             v: WS_PROTOCOL_VERSION,
             type: 'ws.subscribed',
             mapId,
             seq: sub.cursor,
           });
+          reportArrival(sub);
         }
       }
       if (behind.length === 0) return;
@@ -292,7 +345,23 @@ export function createWsHub(options: WsHubOptions): WsHub {
       current.needsAck = true;
     } else {
       unsubscribe(conn);
-      const sub: Subscription = { conn, mapId, cursor: afterSeq, gen: 0, needsAck: true };
+      // An arrival: no other socket of theirs on this map, and away long
+      // enough (or for an unknown time) that it isn't just the app resuming.
+      let arrival: Subscription['arrival'] = null;
+      if (!hasSubscription(mapId, conn.userId)) {
+        const leftAt = offlineAt.get(conn.userId)?.get(mapId);
+        const awayMs = leftAt === undefined ? null : clock().getTime() - leftAt;
+        if (awayMs === null || awayMs >= arriverAwayMs) arrival = { awayMs };
+      }
+      const sub: Subscription = {
+        conn,
+        mapId,
+        cursor: afterSeq,
+        gen: 0,
+        needsAck: true,
+        seen: false,
+        arrival,
+      };
       conn.subscription = sub;
       const channel = channels.get(mapId) ?? new Set<Subscription>();
       channel.add(sub);
@@ -394,8 +463,12 @@ export function createWsHub(options: WsHubOptions): WsHub {
   return {
     publish: (mapId) => (channels.has(mapId) ? pump(mapId) : Promise.resolve()),
 
-    isOnline: (mapId, userId) =>
-      [...(byUser.get(userId) ?? [])].some((conn) => conn.subscription?.mapId === mapId),
+    isOnline: hasSubscription,
+
+    lastOfflineAt: (mapId, userId) => {
+      const at = offlineAt.get(userId)?.get(mapId);
+      return at === undefined ? null : new Date(at);
+    },
 
     accept: (socket, user, sessionToken) => {
       const conn: Connection = {
