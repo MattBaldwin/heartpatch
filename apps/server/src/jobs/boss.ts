@@ -14,6 +14,8 @@ import {
 import { startNightfall, type NightfallRunner } from './nightfall.js';
 import { ensureQueue } from './queues.js';
 import { createJobsRepo, pgBossOnTransaction } from './repo.js';
+import type { PushSweepResult } from '../modules/push/sweep.js';
+import { startPushSweep, type PushSweepRunner } from './push.js';
 import { startRetention } from './retention.js';
 import { startWeather, type WeatherRunner } from './weather.js';
 
@@ -42,6 +44,8 @@ export interface JobsOptions {
   nightfall?: NightfallRunner;
   /** Wild Isle storms (#621, `jobs/weather.ts`); none without it. */
   weather?: WeatherRunner;
+  /** Push nudges' sweep (#726c, `jobs/push.ts`); none without it. */
+  push?: PushSweepRunner;
 }
 
 export interface Jobs {
@@ -51,6 +55,8 @@ export interface Jobs {
   nightfallSweep: () => Promise<number>;
   /** Enqueues a weather sweep for every Wild Isle now (also hourly). 0 without `weather`. */
   weatherScan: () => Promise<number>;
+  /** Sends the push nudges due now (also every minute, and at start). Null without `push` or while it's off. */
+  pushSweep: () => Promise<PushSweepResult | null>;
   /** Stops taking jobs, waits for running ones, and stops enqueuing wake-ups. */
   stop: () => Promise<void>;
 }
@@ -62,7 +68,8 @@ export interface Jobs {
  * applies events with `runConsumer`; the wake-up `appendGameEvent` enqueues
  * inside each command's transaction; the periodic catch-up job; the
  * `game_events` retention job (`retention.ts`); and, given a runner, the
- * Hollow Man's nightfall (`nightfall.ts`) and Wild Isle storms (`weather.ts`).
+ * Hollow Man's nightfall (`nightfall.ts`), Wild Isle storms (`weather.ts`)
+ * and push nudges' sweep (`push.ts`).
  *
  * Why `short` and not `stately`: `stately` also allows only one *active* job
  * per key, enforced by a unique index on the job table. pg-boss's fetch only
@@ -180,10 +187,15 @@ export async function startJobs(options: JobsOptions): Promise<Jobs> {
     ? await startWeather(boss, options.weather, logger, options.schedule ?? true)
     : null;
 
+  const push = options.push
+    ? await startPushSweep(boss, options.push, logger, options.schedule ?? true)
+    : null;
+
   return {
     catchUp,
     nightfallSweep: () => nightfall?.sweep() ?? Promise.resolve(0),
     weatherScan: () => weather?.scan() ?? Promise.resolve(0),
+    pushSweep: () => push?.sweep() ?? Promise.resolve(null),
     stop: async () => {
       setEventWakeup(null);
       await boss.stop({ graceful: true, timeout: JOBS_STOP_TIMEOUT_MS });

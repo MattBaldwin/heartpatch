@@ -747,6 +747,13 @@ Web push to a Home Screen app (#726, plan on the issue). `modules/push/`: `route
 
 **The sender** signs with `HP_VAPID_PUBLIC_KEY` / `HP_VAPID_PRIVATE_KEY` and `HP_VAPID_SUBJECT`, falling back to `PUBLIC_ORIGIN`. Push services take only a `mailto:` or a non-localhost `https:` subject, so a dev server on `http://localhost` warns once at boot and sends nothing until `HP_VAPID_SUBJECT=mailto:…` is set. Logs carry the push service's host, never a whole endpoint (it's a capability) or the private key.
 
+**The sweep** (#726c, `sweep.ts`; `jobs/push.ts` runs `service.sweep` as `push.sweep` every minute and once at boot, and does nothing while `HP_PUSH` is off). It works out whose nudge is due from stored timestamps:
+
+- **dusk**, per patch (multiplayer, Hollow Man above 0 %): from `PUSH_RULES.duskLeadMinutes` before nightfall until nightfall in the patch's zone (`duskWindowOf`), to each active member with a live device, `dusk` on, and a squishy sleeping in the dark tonight (`squishiesInTheDarkTonight` in `hollow/service.ts`, the fire hint's own check without its first-visit gate; read with no locks). Key `mapId/night`. A window missed while the server was down sends nothing.
+- **gatherers**, per account: a node gather ready, a Factory batch finished (`banked < total`, still running) or a squishy gatherer whose basket was full (`workAt` at that moment), each `gatherersIdleMinutes` ago, on a patch where the player isn't online now (`wsHub.isOnline`). One a day: key = the account day.
+
+Then, most important first (`PUSH_RULES.priority`): dropped in quiet hours in `users.time_zone` (`quietHoursContain`; dropped, not delayed), dropped at `dailyCap` claims since the account's midnight, else claimed in `push_sends` (one `INSERT … ON CONFLICT DO NOTHING` statement that also re-checks the cap), then `deliver`ed outside any transaction and marked (`sent_at` when a device took it, `devices`). A claim whose devices all fail, or a crash after the claim, loses that nudge: at most once, never twice. The `game-events.retention` hour also deletes `push_sends` rows older than `sendLogDays` (`prunePushSends`, bounded batches). The Long Night calls join `duskWindowOf` in #726f; the friend nudge comes from the hub in #726d.
+
 **Tables:** the three leaves of migration 0063 (tech spec §4). Written only here, outside every command transaction, never locked (§7).
 
 ## Perf reports

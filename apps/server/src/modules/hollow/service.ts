@@ -57,7 +57,7 @@ import type { GameEvent, NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { instantOfLocal, localDate, mapLocalTime, MINUTE_MS, type Clock } from '../../lib/time.js';
 import type { BattlesService, StartResult } from '../battles/service.js';
-import { createBuildingsRepo } from '../buildings/repo.js';
+import { createBuildingsRepo, type BuildingRow } from '../buildings/repo.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
 import { addNightWatchLean } from '../care/evolution.js';
 import { grantItems } from '../inventory/service.js';
@@ -84,6 +84,7 @@ import {
   createHollowTxRepo,
   type HollowRepo,
   type HollowTxRepo,
+  type NightSquishyRow,
   type NightTileRow,
   type StoredOutcome,
 } from './repo.js';
@@ -159,6 +160,70 @@ const MAX_FIRE_RADIUS = Math.max(
 
 /** Safety: dev nightfall looks this many nights ahead for one that hasn't come. */
 const DEV_NIGHTS_AHEAD = 366;
+
+/**
+ * The land a lit fire (or a won village's lights) keeps safe on `tonight`,
+ * plus every home tile: what nightfall and the fire nudges go by. A fire with
+ * no nights left is unlit.
+ */
+export function safeTilesTonight(
+  buildings: readonly BuildingRow[],
+  homeTiles: readonly { q: number; r: number }[],
+  tonight: LocalDate,
+  villageLights: readonly SafeFire[],
+): Set<HexKey> {
+  return litSafeTiles(
+    buildings.filter((b) => b.kind === 'hearthfire'),
+    homeTiles,
+    { date: tonight, minute: 0 },
+    villageLights,
+  );
+}
+
+/**
+ * The players with an active squishy sleeping out of the light tonight: a
+ * guard on its post on its owner's own land, a gatherer on its tile, a
+ * trainee on its homestead (#277). Home is always safe (owner decisions
+ * 2026-10-07). The in-app fire hint and the dusk nudge (#726) both ask this.
+ */
+export function ownersInTheDark(
+  squishyRows: readonly NightSquishyRow[],
+  safeTonight: ReadonlySet<HexKey>,
+): Set<string> {
+  const owners = new Set<string>();
+  for (const s of squishyRows) {
+    if (s.state !== 'active' || owners.has(s.ownerUserId)) continue;
+    // On watch on its owner's own land: it spends the night on its post.
+    if (s.postOwnerUserId === s.ownerUserId && s.post) {
+      if (!safeTonight.has(hexKey(s.post))) owners.add(s.ownerUserId);
+      continue;
+    }
+    // A gatherer on its tile, a trainee on its homestead (#277).
+    const out = s.work ?? s.training;
+    if (out !== null && !safeTonight.has(hexKey(out))) owners.add(s.ownerUserId);
+  }
+  return owners;
+}
+
+/**
+ * `ownersInTheDark` for one map's `tonight`, read from the database without
+ * locking anything (a read never waits on or blocks a command's squishy
+ * locks). For the dusk nudge's sweep (#726c), outside any transaction.
+ */
+export async function squishiesInTheDarkTonight(
+  db: Executor,
+  mapId: string,
+  tonight: LocalDate,
+): Promise<Set<string>> {
+  const store = createHollowRepo(db);
+  const [buildings, homeTiles, squishyRows, lights] = await Promise.all([
+    createBuildingsRepo(db).listOnMap(mapId),
+    store.homeTiles(mapId),
+    store.nightSquishies(mapId, { lock: false }),
+    villageLightsOn(db, mapId),
+  ]);
+  return ownersInTheDark(squishyRows, safeTilesTonight(buildings, homeTiles, tonight, lights));
+}
 
 export function createHollowService(options: HollowServiceOptions): HollowService {
   const { db } = options;
@@ -665,20 +730,10 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       const firstVisit = joinedAt
         ? firstHollowNight(mapLocalTime(joinedAt, map.timeZone), nightRules)
         : null;
-      const safeTonight = litSafeTiles(
-        buildings.filter((b) => b.kind === 'hearthfire'),
-        homeTiles,
-        { date: tonight, minute: 0 },
-        await villageLightsOn(db, mapId),
-      );
-      const inTheDark = squishyRows.some((s) => {
-        if (s.ownerUserId !== user.id || s.state !== 'active') return false;
-        // On watch on my own land: it spends the night on its post.
-        if (s.postOwnerUserId === user.id && s.post) return !safeTonight.has(hexKey(s.post));
-        // A gatherer on its tile, a trainee on its homestead (#277).
-        const out = s.work ?? s.training;
-        return out !== null && !safeTonight.has(hexKey(out));
-      });
+      const inTheDark = ownersInTheDark(
+        squishyRows,
+        safeTilesTonight(buildings, homeTiles, tonight, await villageLightsOn(db, mapId)),
+      ).has(user.id);
       const mine = nights.flatMap((n) => {
         const outcome = reportOf(n.outcomes, user.id);
         return outcome ? [{ night: n.night, outcome }] : [];

@@ -1,7 +1,8 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { PgBoss } from 'pg-boss';
-import { GAME_EVENT_TYPES, type GameEventType } from '@heartpatch/shared';
+import { GAME_EVENT_TYPES, PUSH_RULES, type GameEventType } from '@heartpatch/shared';
 import type { Executor } from '../db/client.js';
+import { createPushRepo } from '../modules/push/repo.js';
 import { REPLAY_WINDOW } from '../ws/limits.js';
 import type { EventConsumer } from './consumers.js';
 import {
@@ -10,6 +11,8 @@ import {
   EVENT_RETENTION_DAYS,
   EVENT_RETENTION_MAX_BATCHES,
   EVENT_RETENTION_SHORT_DAYS,
+  PUSH_SENDS_RETENTION_BATCH,
+  PUSH_SENDS_RETENTION_MAX_BATCHES,
 } from './limits.js';
 import { ensureQueue } from './queues.js';
 import { createJobsRepo, type RetentionMap } from './repo.js';
@@ -126,10 +129,38 @@ export async function pruneGameEvents(
   return result;
 }
 
+/**
+ * Deletes push nudges' send log (`push_sends`, #726) claimed more than
+ * `PUSH_RULES.sendLogDays` ago, `batchSize` rows a statement, at most
+ * `maxBatches` full ones a run (the next run carries on). The rows are
+ * leaves: nothing references them and nothing locks them, so each short
+ * delete waits on nothing (TECH_SPEC §7). The push repo owns the statement.
+ */
+export async function prunePushSends(
+  db: Executor,
+  options: { now: Date; batchSize?: number; maxBatches?: number },
+): Promise<PruneResult> {
+  const repo = createPushRepo(db);
+  const batchSize = options.batchSize ?? PUSH_SENDS_RETENTION_BATCH;
+  const maxBatches = options.maxBatches ?? PUSH_SENDS_RETENTION_MAX_BATCHES;
+  const before = new Date(options.now.getTime() - PUSH_RULES.sendLogDays * DAY_MS);
+  const result: PruneResult = { deleted: 0, batches: 0, capped: false };
+  for (;;) {
+    if (result.batches >= maxBatches) {
+      result.capped = true;
+      return result;
+    }
+    const deleted = await repo.pruneSends(before, batchSize);
+    result.batches += 1;
+    result.deleted += deleted;
+    if (deleted < batchSize) return result;
+  }
+}
+
 export const RETENTION_QUEUE = 'game-events.retention';
 
 /**
- * The `game-events.retention` job: `pruneGameEvents` on `EVENT_RETENTION_CRON`
+ * The `game-events.retention` job: `pruneGameEvents`, then `prunePushSends`, on `EVENT_RETENTION_CRON`
  * (`short`, so a slow run never stacks a second one behind it).
  */
 export async function startRetention(
@@ -143,6 +174,9 @@ export async function startRetention(
   await boss.work(RETENTION_QUEUE, async () => {
     const pruned = await pruneGameEvents(db, consumers, { now: new Date() });
     if (pruned.deleted > 0) logger.info(pruned, 'pruned old game events');
+    // Push nudges' send log (#726) is pruned in the same hour.
+    const sends = await prunePushSends(db, { now: new Date() });
+    if (sends.deleted > 0) logger.info(sends, 'pruned old push sends');
   });
   if (schedule) await boss.schedule(RETENTION_QUEUE, EVENT_RETENTION_CRON);
 }
