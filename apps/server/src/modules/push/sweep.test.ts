@@ -1,6 +1,7 @@
 import {
   isTradingPost,
   hexDistance,
+  weekdayOf,
   MapResponseSchema,
   PUSH_RULES,
   PUSH_TEXT,
@@ -10,7 +11,7 @@ import {
 import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
 import type { FastifyInstance } from 'fastify';
 import { pino } from 'pino';
-import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
@@ -19,6 +20,7 @@ import {
   factoryQueues,
   gatherJobs,
   keepers,
+  longNights,
   pushSends,
   pushSettings,
   pushSubscriptions,
@@ -32,7 +34,8 @@ import { newSessionToken } from '../auth/secrets.js';
 import type { PushSendResult, PushSender } from './sender.js';
 import { createPushRepo } from './repo.js';
 import { createPushService, type PushService } from './service.js';
-import { accountDayStart, duskWindowOf } from './sweep.js';
+import { longNightSwitchOf } from '../long-night/switch.js';
+import { accountDayStart, duskWindowOf, longNightWindowOf } from './sweep.js';
 import { pushSwitchOf } from './switch.js';
 
 const url = inject('testDatabaseUrl');
@@ -47,6 +50,11 @@ const ZONE = 'America/Denver';
 const DUSK = '2026-10-14T00:30:00Z'; // 6:30 PM in Denver
 const TONIGHT = '2026-10-13';
 const NOON = '2026-10-14T18:00:00Z'; // noon in Denver, Oct 14
+// A Saturday (a new patch's default Long Night weekday, 6) with no clock
+// change: nightfall in Denver is 01:00Z on Oct 18.
+const LONG_NIGHT = '2026-10-17';
+const LN_SOON = '2026-10-18T00:30:00Z'; // 6:30 PM in Denver
+const LN_START = '2026-10-18T01:05:00Z'; // 7:05 PM: the Night has begun
 const TEST_KEEPER = {
   base: 'pip',
   hairColor: 'honey',
@@ -80,6 +88,32 @@ describe('duskWindowOf', () => {
     const at = (iso: string) => duskWindowOf({ timeZone: ZONE }, new Date(iso));
     expect(at('2026-11-02T00:30:00Z')).toBeNull(); // 5:30 PM MST
     expect(at('2026-11-02T01:30:00Z')).toEqual({ kind: 'dusk', night: '2026-11-01' });
+  });
+});
+
+describe('longNightWindowOf', () => {
+  it('calls "soon" in the hour before nightfall and "start" for ten minutes from it', () => {
+    expect(weekdayOf(LONG_NIGHT)).toBe(6);
+    const at = (iso: string) => longNightWindowOf({ timeZone: ZONE }, new Date(iso));
+    expect(at('2026-10-17T23:59:00Z')).toBeNull(); // 5:59 PM
+    expect(at('2026-10-18T00:00:00Z')).toEqual({ kind: 'long-night-soon', night: LONG_NIGHT });
+    expect(at('2026-10-18T00:59:00Z')).toEqual({ kind: 'long-night-soon', night: LONG_NIGHT });
+    // From nightfall "tonight" is tomorrow, but the Night that began is today's.
+    expect(at('2026-10-18T01:00:00Z')).toEqual({ kind: 'long-night-start', night: LONG_NIGHT });
+    expect(at('2026-10-18T01:09:00Z')).toEqual({ kind: 'long-night-start', night: LONG_NIGHT });
+    expect(at('2026-10-18T01:10:00Z')).toBeNull(); // a late call is noise
+    expect(at('2026-10-17T18:00:00Z')).toBeNull(); // noon
+  });
+
+  it('follows the wall clock across a daylight-saving change', () => {
+    // Nov 1 2026: Denver is on MST (UTC−7) by nightfall, 02:00Z on Nov 2.
+    const at = (iso: string) => longNightWindowOf({ timeZone: ZONE }, new Date(iso));
+    expect(at('2026-11-02T00:59:00Z')).toBeNull();
+    expect(at('2026-11-02T01:00:00Z')).toEqual({ kind: 'long-night-soon', night: '2026-11-01' });
+    expect(at('2026-11-02T02:00:00Z')).toEqual({
+      kind: 'long-night-start',
+      night: '2026-11-01',
+    });
   });
 });
 
@@ -148,7 +182,13 @@ describe.skipIf(!url)(
     /** The push service with a fake sender; `online` holds `mapId/userId` pairs. */
     function pushService(
       sender: PushSender,
-      options: { mode?: 'on' | 'off' | 'testers'; testers?: string[]; online?: Set<string> } = {},
+      options: {
+        mode?: 'on' | 'off' | 'testers';
+        testers?: string[];
+        online?: Set<string>;
+        longNight?: 'on' | 'off' | 'testers';
+        longNightTesters?: string[];
+      } = {},
     ): PushService {
       const online = options.online ?? new Set<string>();
       return createPushService({
@@ -161,6 +201,10 @@ describe.skipIf(!url)(
         }),
         vapid: VAPID,
         sender,
+        longNight: longNightSwitchOf({
+          HP_LONG_NIGHT: options.longNight ?? 'off',
+          HP_LONG_NIGHT_TESTERS: options.longNightTesters ?? [],
+        }),
         isOnline: (mapId, userId) => online.has(`${mapId}/${userId}`),
       });
     }
@@ -695,6 +739,203 @@ describe.skipIf(!url)(
       );
       await pushService(fakeSender()).sweep();
       expect((await sendsOf(kid.id)).map((r) => r.kind)).toEqual(['friend', 'friend', 'dusk']);
+    });
+
+    describe('the Long Night calls (#726f)', () => {
+      // Squishies set to work at the test's own dusk (no full basket, no gatherers nudge).
+      beforeEach(() => {
+        clock.setTime(Date.parse(LN_SOON));
+      });
+      /** The dusk and Long Night sends, as `kind dedupeKey`. */
+      const kindsOf = async (who: Pick<Player, 'id'>) =>
+        (await sendsOf(who.id))
+          .filter((r) => r.kind !== 'gatherers')
+          .map((r) => `${r.kind} ${r.dedupeKey}`);
+      /** A Night the patch already ran (nightfall's row), on `night`. */
+      const ranOn = (mapId: string, night: string) =>
+        db.insert(longNights).values({
+          mapId,
+          night,
+          ranAt: new Date(`${night}T01:00:00Z`),
+          strikeAt: new Date(`${night}T01:05:00Z`),
+          held: true,
+          seed: 'test-seed',
+          contentHash: 'test-hash',
+        });
+
+      it('calls "soon" instead of dusk and "start" at nightfall, each once per Night', async () => {
+        const server = await start();
+        const kid = await player();
+        const friend = await player();
+        const mapId = await patch(server, kid, [friend]);
+        // The kid has a squishy in the dark (dusk would nudge them); the friend doesn't.
+        await inTheDark(mapId, kid);
+        const sender = fakeSender();
+        const push = pushService(sender, { longNight: 'on' });
+
+        clock.setTime(Date.parse(LN_SOON));
+        await push.sweep();
+        await push.sweep();
+        for (const who of [kid, friend]) {
+          expect(await kindsOf(who), who.username).toEqual([
+            `long-night-soon ${mapId}/${LONG_NIGHT}`,
+          ]);
+        }
+        expect(sentTo(sender, kid)).toEqual([
+          {
+            endpoint: kid.endpoint,
+            payload: {
+              v: 1,
+              kind: 'long-night-soon',
+              ...PUSH_TEXT['long-night-soon'],
+              mapId,
+              tag: `long-night-soon:${mapId}`,
+            },
+            ttlSeconds: PUSH_RULES.ttlSeconds['long-night-soon'],
+          },
+        ]);
+
+        // Nightfall ran and recorded the Night: it's still that Night a minute on.
+        await ranOn(mapId, LONG_NIGHT);
+        clock.setTime(Date.parse(LN_START));
+        await push.sweep();
+        await pushService(sender, { longNight: 'on' }).sweep();
+        for (const who of [kid, friend]) {
+          expect(await kindsOf(who), who.username).toEqual([
+            `long-night-soon ${mapId}/${LONG_NIGHT}`,
+            `long-night-start ${mapId}/${LONG_NIGHT}`,
+          ]);
+        }
+        expect(sentTo(sender, friend).map((s) => [s.payload.kind, s.ttlSeconds])).toEqual([
+          ['long-night-soon', PUSH_RULES.ttlSeconds['long-night-soon']],
+          ['long-night-start', PUSH_RULES.ttlSeconds['long-night-start']],
+        ]);
+
+        // Past the start window: nothing more.
+        clock.setTime(Date.parse('2026-10-18T01:15:00Z'));
+        await push.sweep();
+        expect(await sendsOf(friend.id)).toHaveLength(2);
+      });
+
+      it('leaves dusk alone on any other night: another weekday, Off, or the switch off', async () => {
+        const server = await start();
+        const kid = await player();
+        const mapId = await patch(server, kid);
+        // Friday: not the patch's weekday.
+        clock.setTime(Date.parse(LN_SOON) - DAY_MS);
+        await inTheDark(mapId, kid);
+        const sender = fakeSender();
+        await pushService(sender, { longNight: 'on' }).sweep();
+        expect(await kindsOf(kid)).toEqual([`dusk ${mapId}/2026-10-16`]);
+
+        // Saturday with HP_LONG_NIGHT off: dusk as any night, and no "start".
+        clock.setTime(Date.parse(LN_SOON));
+        await pushService(sender, { longNight: 'off' }).sweep();
+        clock.setTime(Date.parse(LN_START));
+        await pushService(sender, { longNight: 'off' }).sweep();
+        expect(await kindsOf(kid)).toEqual([
+          `dusk ${mapId}/2026-10-16`,
+          `dusk ${mapId}/${LONG_NIGHT}`,
+        ]);
+
+        // The next Saturday with the patch's Long Night set to Off: dusk again.
+        await db.execute(`update maps set long_night_weekday = null where id = '${mapId}'`);
+        clock.setTime(Date.parse(LN_SOON) + 7 * DAY_MS);
+        await pushService(sender, { longNight: 'on' }).sweep();
+        expect((await kindsOf(kid)).at(-1)).toBe(`dusk ${mapId}/2026-10-24`);
+      });
+
+      it('on testers, calls only on a patch with a tester among its members', async () => {
+        const server = await start();
+        const tester = await player();
+        const other = await player();
+        const testersPatch = await patch(server, tester);
+        const otherPatch = await patch(server, other);
+        await inTheDark(testersPatch, tester);
+        await inTheDark(otherPatch, other);
+        clock.setTime(Date.parse(LN_SOON));
+        await pushService(fakeSender(), {
+          longNight: 'testers',
+          longNightTesters: [tester.username],
+        }).sweep();
+        expect(await kindsOf(tester)).toEqual([`long-night-soon ${testersPatch}/${LONG_NIGHT}`]);
+        expect(await kindsOf(other)).toEqual([`dusk ${otherPatch}/${LONG_NIGHT}`]);
+      });
+
+      it('no second Long Night in a week: a Night 3 days ago (weekday moved) means dusk', async () => {
+        const server = await start();
+        const kid = await player();
+        const mapId = await patch(server, kid);
+        await inTheDark(mapId, kid);
+        await ranOn(mapId, '2026-10-14'); // Wednesday, before the owner moved it to Saturday
+        const sender = fakeSender();
+        clock.setTime(Date.parse(LN_SOON));
+        await pushService(sender, { longNight: 'on' }).sweep();
+        clock.setTime(Date.parse(LN_START));
+        await pushService(sender, { longNight: 'on' }).sweep();
+        expect(await kindsOf(kid)).toEqual([`dusk ${mapId}/${LONG_NIGHT}`]);
+      });
+
+      it('the long_night setting off sends neither call (and no dusk in its place)', async () => {
+        const server = await start();
+        const kid = await player();
+        const duskOff = await player();
+        const mapId = await patch(server, kid, [duskOff]);
+        await inTheDark(mapId, kid);
+        await inTheDark(mapId, duskOff);
+        const settings = (userId: string, dusk: boolean, longNight: boolean) => ({
+          userId,
+          dusk,
+          gatherers: true,
+          friend: true,
+          longNight,
+          updatedAt: clock,
+        });
+        await db
+          .insert(pushSettings)
+          .values([settings(kid.id, true, false), settings(duskOff.id, false, true)]);
+        const sender = fakeSender();
+        for (const at of [LN_SOON, LN_START]) {
+          clock.setTime(Date.parse(at));
+          await pushService(sender, { longNight: 'on' }).sweep();
+        }
+        expect(await kindsOf(kid)).toEqual([]);
+        // Dusk off doesn't stop the Long Night's calls.
+        expect(await kindsOf(duskOff)).toEqual([
+          `long-night-soon ${mapId}/${LONG_NIGHT}`,
+          `long-night-start ${mapId}/${LONG_NIGHT}`,
+        ]);
+      });
+
+      it('the Long Night comes before dusk when only one fits under the cap', async () => {
+        const server = await start();
+        const kid = await player();
+        const host = await player();
+        const longNightPatch = await patch(server, kid);
+        // Another patch of the kid's, with its Long Night Off: dusk there tonight.
+        const otherPatch = await patch(server, host, [kid]);
+        await db.execute(`update maps set long_night_weekday = null where id = '${otherPatch}'`);
+        await inTheDark(otherPatch, kid);
+        clock.setTime(Date.parse(LN_SOON));
+        await db.insert(pushSends).values(
+          ['a', 'b'].map((key) => ({
+            userId: kid.id,
+            kind: 'friend',
+            dedupeKey: key,
+            mapId: otherPatch,
+            claimedAt: minutesAgo(5),
+            devices: 1,
+          })),
+        );
+        const result = await pushService(fakeSender(), { longNight: 'on' }).sweep();
+        expect(result.capped).toBeGreaterThanOrEqual(1);
+        expect((await sendsOf(kid.id)).map((r) => r.kind)).toEqual([
+          'friend',
+          'friend',
+          'long-night-soon',
+        ]);
+        expect((await sendsOf(kid.id)).at(-1)?.mapId).toBe(longNightPatch);
+      });
     });
   },
 );
