@@ -2147,3 +2147,23 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 - **727e shipped with a device cache for a past Night's result,** because no REST read carried it. 727e2 (#756) replaced it with the additive optional `HollowStatus.longNight.last { night, held, heldBy, keeperOfNight }`, left out while the Long Night is off for the map. Ruled not big (additive optional field).
 - **The dev `POST /maps/:id/dev/gap-now` route** registers only under `HP_DEV_SQUISHY_GRANTS`, which config refuses in production.
 - **The `wardrobe.spec.ts:203` failure on #755 was a timing flake,** fixed by waiting on a game signal (no skip).
+
+## 2026-11-01 — Owner decisions and coordinator calls (supervisor 32)
+
+**Owner decisions**
+- **Long Night on for everyone (owner, 2026-10-31):** answered "Turn it on for everyone" when offered testers. It shipped as a compose default, `HP_LONG_NIGHT: ${HP_LONG_NIGHT:-on}` (#758), and a value in `.env` still wins.
+- **Long Night start (owner, 2026-11-01):** "merge after tonight". Every map's Long Night weekday defaults to Saturday, and Oct 31 was a Saturday. #758 merged after Hawaii's 7 PM nightfall, so no patch got a surprise Long Night on Halloween night. The first one is Sat Nov 7, with the 3-day notice.
+- **#726 web push first (owner, 2026-11-01),** chosen over the #730 curve page and the #731 / Layout B mockups. The owner approved the Fable plan with all five recommendations (#726 comment 6552149611):
+  - the friend nudge names the patch-mate;
+  - the dusk nudge fires only when one of my squishies sleeps in the dark;
+  - fixed quiet hours 9 PM–7 AM (data);
+  - `deploy.sh` generates the VAPID keys;
+  - the offer card shows the first time a patch is on screen after graduation, in a Home Screen app only.
+- **Wild Isle rivers run sea to sea (owner, 2026-11-01),** about 3 per island, with every Heart Seed within 3 steps of one. **Crossings are by bridge only:** rivers split the island, with no fords and no starter bridges. This applies to new Wild Isles only. Captures v3 approved: https://claude.ai/artifact/5KWjteoeX3FR4njZhuZ2ND (#760).
+- **Family code in Join a patch (owner, 2026-11-01):** the client says it's a family code, for new accounts, and to ask for the 8-letter invite code. The family-code screen says it's only for new accounts (#761).
+
+**Coordinator calls**
+- **Land shares stay "nearest Heart Seed in a straight line"** (`landShares`), not "split by walkable piece". A river is a wall only until it's bridged.
+- **`relayoutHomes(…, mapIds?)`** mirrors `relayoutTileUses`, so tests can scope it (#764). Production call sites are unchanged.
+- **The e2e map clock starts on Oct 20 in the chosen zone** (#762), so CI no longer depends on the hour it runs. It found no product bug.
+- **726a ruled big** (new tables): it had Opus + Fable reviewers. 726f doubles as 727f.
