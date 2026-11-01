@@ -28,7 +28,9 @@ describe('push nudges’ rules (#726)', () => {
       }),
     ).not.toEqual([]);
     expect(checkPushRules({ ...PUSH_RULES, priority: ['dusk'] })).not.toEqual([]);
-    const { friend: _friend, ...ttlWithoutFriend } = PUSH_RULES.ttlSeconds;
+    const ttlWithoutFriend = Object.fromEntries(
+      Object.entries(PUSH_RULES.ttlSeconds).filter(([kind]) => kind !== 'friend'),
+    );
     expect(checkPushRules({ ...PUSH_RULES, ttlSeconds: ttlWithoutFriend })).not.toEqual([]);
     expect(checkPushRules({ ...PUSH_RULES, sendNow: true })).not.toEqual([]);
   });
@@ -78,7 +80,9 @@ describe('push nudges’ words (#726, rule 9)', () => {
     expect(checkPushText(withLine('gatherers', '{squishy} is done!'))).toEqual([
       'gatherers.title: unknown placeholder {squishy}',
     ]);
-    const { dusk: _dusk, ...withoutDusk } = PUSH_TEXT;
+    const withoutDusk = Object.fromEntries(
+      Object.entries(PUSH_TEXT).filter(([kind]) => kind !== 'dusk'),
+    );
     expect(checkPushText(withoutDusk)).not.toEqual([]);
   });
 
@@ -98,7 +102,9 @@ describe('push nudges’ words (#726, rule 9)', () => {
         tag: `${kind}/0199a000-0000-7000-8000-000000000000`,
       };
       expect(PushPayloadSchema.parse(payload)).toEqual(payload);
-      expect(Buffer.byteLength(JSON.stringify(payload))).toBeLessThan(PUSH_RULES.maxPayloadBytes);
+      expect(new TextEncoder().encode(JSON.stringify(payload)).length).toBeLessThan(
+        PUSH_RULES.maxPayloadBytes,
+      );
     }
   });
 });
