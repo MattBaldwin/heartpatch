@@ -2717,3 +2717,104 @@ export const communityPieces = pgTable(
     check('community_pieces_pieces_positive', sql`${t.pieces} >= 1`),
   ],
 );
+
+/*
+ * Push nudges (#726, migration 0063). Three leaf tables, written only by the
+ * push module, outside every game command's transaction and never locked
+ * (TECH_SPEC §7). Nothing in a core table points at them.
+ */
+
+/**
+ * One row per device that agreed to nudges (#726): its push service URL and
+ * keys (`PushSubscription.toJSON()`), the account and the login session it
+ * came from. The session cascade ends a device's nudges at logout, password
+ * reset or expiry, so a shared family iPad never nudges the next sibling.
+ * `endpoint` is unique: a device moving to another account takes the row
+ * over. `last_ok_at` is the push service's latest 2xx; `fail_count` counts
+ * failures since, and the row goes at `PUSH_RULES.maxFailures`.
+ */
+export const pushSubscriptions = pgTable(
+  'push_subscriptions',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    // `PushSubscription.expirationTime`; browsers almost always send null.
+    expiresAt: timestamptz('expires_at'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    lastOkAt: timestamptz('last_ok_at'),
+    failCount: smallint('fail_count').notNull().default(0),
+  },
+  (t) => [
+    unique('push_subscriptions_endpoint_key').on(t.endpoint),
+    index('push_subscriptions_user_id_idx').on(t.userId),
+    // Mirrors the shared `PushEndpointSchema` (https, at most 2048 characters).
+    check(
+      'push_subscriptions_endpoint_https',
+      sql`${t.endpoint} like 'https://%' and length(${t.endpoint}) <= 2048`,
+    ),
+    check('push_subscriptions_fail_count_nonnegative', sql`${t.failCount} >= 0`),
+  ],
+);
+
+/**
+ * A player's nudge switches (#726), one row per account, following them
+ * across devices. No row means every switch is on. `long_night` covers both
+ * Long Night calls.
+ */
+export const pushSettings = pgTable('push_settings', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  dusk: boolean('dusk').notNull().default(true),
+  gatherers: boolean('gatherers').notNull().default(true),
+  friend: boolean('friend').notNull().default(true),
+  longNight: boolean('long_night').notNull().default(true),
+  updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+});
+
+/**
+ * The nudge send log (#726): one row per nudge the server decided to send,
+ * claimed before the send. Unique `(user_id, kind, dedupe_key)` is at once
+ * the guard against a second send after a restart or an overlapping sweep,
+ * and with `claimed_at` the daily cap and the friend window. `sent_at` is set
+ * after at least one device took it; null means every device failed or the
+ * process stopped mid-send (at most once is the rule). `map_id` has no
+ * foreign key, so writing a row never takes a lock on `maps`. Pruned after
+ * `PUSH_RULES.sendLogDays`. Holds no text: the words come from `PUSH_TEXT`.
+ */
+export const pushSends = pgTable(
+  'push_sends',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    dedupeKey: text('dedupe_key').notNull(),
+    mapId: uuid('map_id'),
+    claimedAt: timestamptz('claimed_at').notNull(),
+    sentAt: timestamptz('sent_at'),
+    devices: smallint('devices').notNull().default(0),
+  },
+  (t) => [
+    unique('push_sends_user_id_kind_dedupe_key_key').on(t.userId, t.kind, t.dedupeKey),
+    index('push_sends_user_id_claimed_at_idx').on(t.userId, t.claimedAt),
+    // Pruning walks the oldest rows first.
+    index('push_sends_claimed_at_idx').on(t.claimedAt),
+    // Mirrors the shared `PushKindSchema`.
+    check(
+      'push_sends_kind_known',
+      sql`${t.kind} in ('dusk', 'gatherers', 'friend', 'long-night-soon', 'long-night-start')`,
+    ),
+    check('push_sends_devices_nonnegative', sql`${t.devices} >= 0`),
+    check('push_sends_dedupe_key_length', sql`length(${t.dedupeKey}) between 1 and 200`),
+  ],
+);
