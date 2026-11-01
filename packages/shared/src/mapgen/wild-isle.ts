@@ -83,8 +83,6 @@ export function landShares(homes: readonly Hex[], land: readonly Hex[]): number[
 interface Waterways {
   /** Every water tile on the land, by key: the river and lake ids. */
   readonly water: ReadonlyMap<HexKey, string>;
-  /** Spring tiles (each river's first), whose ring turns to hills. */
-  readonly springs: readonly Hex[];
 }
 
 /** Why a try at the water failed (each one means: roll again). */
@@ -94,7 +92,8 @@ type WildIsleFailure =
 /**
  * Generates a Wild Isle (#621) from its seed: Juniper's Gap at the centre,
  * homes evenly spaced as on a Cozy Patch, patchy terrain over the land, then
- * rivers and lakes (each home gets one within `homeWaterSteps`), a coast
+ * rivers that run from the sea right across to the sea on another side
+ * (each home has one within `homeWaterSteps`) and a few lakes, a coast
  * ring, the sea and its offshore isles, nodes and guardians, and finally
  * trading posts and villages on the land. A water layout that leaves a home
  * short of land, water or a post is re-rolled up to `attempts` times, then
@@ -122,7 +121,6 @@ export function generateWildIsle(data: MapGenData, options: GenerateMapOptions):
   const coast = terrainOf(rules.coastTerrain);
   const river = terrainOf(rules.riverTerrain);
   const lake = terrainOf(rules.lakeTerrain);
-  const springTerrain = terrainOf(rules.rivers.sourceTerrain);
   const gapTerrain = terrainOf(mapGen.gapTerrain);
   const homeTerrain = terrainOf(mapGen.homeTerrain);
   if (!isWater(ocean) || !isWater(river) || !isWater(lake) || isWater(coast)) {
@@ -203,7 +201,6 @@ export function generateWildIsle(data: MapGenData, options: GenerateMapOptions):
   for (let attempt = 0; attempt < rules.attempts && picked === null; attempt++) {
     const tried = tryWaterways({
       rules,
-      layout,
       homes,
       seed: deriveSeed(seed, 'wild-isle-water', attempt),
       ringOf,
@@ -215,14 +212,6 @@ export function generateWildIsle(data: MapGenData, options: GenerateMapOptions):
     if (typeof tried === 'string') continue;
     const terrain = new Map(baseTerrain);
     for (const [key, id] of tried.water) terrain.set(key, id === 'lake' ? lake : river);
-    for (const spring of tried.springs) {
-      for (const h of hexRing(spring, 1)) {
-        const key = hexKey(h);
-        if (landKeys.has(key) && !tried.water.has(key) && !homeSlot.has(key)) {
-          terrain.set(key, springTerrain);
-        }
-      }
-    }
     const result = checkIsland({
       terrain,
       tiles,
@@ -364,7 +353,6 @@ function isleTerrain(seed: string, key: HexKey, scatterable: readonly Terrain[])
 
 interface WaterwayInput {
   readonly rules: WildIsleMapGen;
-  readonly layout: WildIsleLayout;
   readonly homes: readonly Hex[];
   readonly seed: string;
   readonly ringOf: (h: Hex) => number;
@@ -375,13 +363,59 @@ interface WaterwayInput {
 }
 
 /**
- * One try at the rivers and lakes. Each river runs from a spring inside the
- * home ring, past one home (within `homeWaterSteps`), straight-ish out to
- * the coast's nearest tile, so it always reaches the sea; some widen into a
- * lake on the way and keep flowing out of its far side. Every other home
- * gets a lake of its own. Water never comes within `waterMinFromSeed` of a
- * Heart Seed, never touches the Gap, and separate rivers and lakes never
- * touch each other, so lake bodies stay apart.
+ * Where `h` sits against the line from the centre through `axis`, in whole
+ * numbers: `side` is the signed offset across it (axial cross product) and
+ * `along` the distance down it (the dot product of the pixel positions,
+ * times 4/3 so it stays whole). Only compared, never converted to steps.
+ */
+function sideOf(h: Hex, axis: Hex): number {
+  return h.q * axis.r - axis.q * h.r;
+}
+function alongOf(h: Hex, axis: Hex): number {
+  return (2 * h.q + h.r) * (2 * axis.q + axis.r) + 3 * h.r * axis.r;
+}
+
+/**
+ * The homes each river runs past: a line from the centre through one home
+ * (picked at random) is the island's grain, and homes the same distance
+ * across it share a river, which runs along the grain. Six homes make three
+ * rivers: one through the middle (past the axis home and the home opposite)
+ * and one either side, past the two homes there. Each group is ordered down
+ * the grain, so its river passes them in turn.
+ */
+function riverGroups(homes: readonly Hex[], axis: Hex): number[][] {
+  const order = homes
+    .map((_, i) => i)
+    .sort((a, b) => {
+      const bySide = sideOf(homes[a] as Hex, axis) - sideOf(homes[b] as Hex, axis);
+      return bySide !== 0 ? bySide : a - b;
+    });
+  const sides = order.map((i) => sideOf(homes[i] as Hex, axis));
+  const spread = (sides[sides.length - 1] ?? 0) - (sides[0] ?? 0);
+  const groups: number[][] = [];
+  order.forEach((slot, i) => {
+    // A new group when the gap to the last home is a real step across, not
+    // the hex grid's rounding (a quarter of the whole spread or more).
+    const gap = i === 0 ? Infinity : (sides[i] ?? 0) - (sides[i - 1] ?? 0);
+    if (gap * 4 > spread) groups.push([slot]);
+    else groups[groups.length - 1]?.push(slot);
+  });
+  for (const group of groups) {
+    group.sort((a, b) => alongOf(homes[a] as Hex, axis) - alongOf(homes[b] as Hex, axis));
+  }
+  return groups;
+}
+
+/**
+ * One try at the rivers and lakes. Rivers run sea to sea: each starts on
+ * the coast, passes its homes `homeWaterSteps` away, and runs on to the
+ * coast on the far side, so it cuts the island right through (there are no
+ * fords: kids build bridges). Some widen into a lake on the way and keep
+ * flowing out of its far side; a few more lakes lie about the land. Water
+ * never comes within `waterMinFromSeed` of a Heart Seed, never touches the
+ * Gap or the ring of land round it, and separate rivers and lakes never
+ * touch each other, so no two rivers cross or join; rivers keep
+ * `rivers.apart` steps apart, so the land between two is never a sliver.
  */
 function tryWaterways(input: WaterwayInput): Waterways | WildIsleFailure {
   const { rules, homes, ringOf, toSeed, isGap, coastRadius, landR } = input;
@@ -389,7 +423,6 @@ function tryWaterways(input: WaterwayInput): Waterways | WildIsleFailure {
   const water = new Map<HexKey, string>();
   /** Which river or lake each water tile belongs to, so a body may touch itself. */
   const bodyOf = new Map<HexKey, number>();
-  const springs: Hex[] = [];
   let body = 0;
   const dry = (h: Hex) =>
     ringOf(h) <= coastRadius &&
@@ -412,30 +445,50 @@ function tryWaterways(input: WaterwayInput): Waterways | WildIsleFailure {
     water.set(hexKey(h), id);
     bodyOf.set(hexKey(h), b);
   };
+  /**
+   * The river (or -1: more than one) within `rivers.apart - 1` steps of each
+   * tile, so a river keeps that far from the others.
+   */
+  const nearRiver = new Map<HexKey, number>();
+  /** Can river `b` take `h`: as `canTake`, and no other river this close? */
+  const riverCanTake = (h: Hex, b: number) => {
+    const near = nearRiver.get(hexKey(h));
+    return (near === undefined || near === b) && canTake(h, b);
+  };
+  /** A random pick among the `wiggle` best of `tiles` (highest score first). */
+  const pickBest = (tiles: readonly Hex[], score: (h: Hex) => number): Hex | undefined => {
+    const ranked = [...tiles].sort((a, b) => score(b) - score(a));
+    return ranked.length === 0
+      ? undefined
+      : rng.pick(ranked.slice(0, Math.min(ranked.length, rules.rivers.wiggle)));
+  };
 
-  const slots = shuffled(
-    rng,
-    homes.map((_, i) => i),
-  );
-  const riverCount = Math.min(homes.length, rng.int(...rules.rivers.count));
+  const axis = homes[rng.int(0, homes.length - 1)] as Hex;
+  const groups = shuffled(rng, riverGroups(homes, axis));
+  const coastRing = hexRing(hex(0, 0), coastRadius);
   let lakes = 0;
   const riverPaths: Hex[][] = [];
-  for (let i = 0; i < riverCount; i++) {
-    const home = homes[slots[i] as number] as Hex;
+  for (const group of groups) {
     const b = body++;
-    const path = riverPast(home, b);
+    const path = riverAcross(group, b);
     if (path === null) return 'river';
-    for (const h of path) add(h, 'river', b);
-    springs.push(path[0] as Hex);
+    for (const h of path) {
+      add(h, 'river', b);
+      for (const n of hexSpiral(h, rules.rivers.apart - 1)) {
+        const key = hexKey(n);
+        const near = nearRiver.get(key);
+        nearRiver.set(key, near === undefined || near === b ? b : -1);
+      }
+    }
     riverPaths.push(path);
   }
-  const lakeHomes = slots.slice(riverCount);
-  // River lakes, while the lake budget leaves room for every home's own.
+  // River lakes first, then any more the count still wants.
+  const wanted = rng.int(...rules.lakes.count);
   for (const path of riverPaths) {
-    if (lakeHomes.length + lakes >= rules.lakes.count[1]) break;
+    if (lakes >= wanted) break;
     if (!rng.chance(rules.rivers.lakePercent)) continue;
-    // Away from the spring and the mouth, so the river runs in and out.
-    const middle = path.filter((h, i) => i > 1 && ringOf(h) < landR);
+    // Away from both mouths, so the river runs in and out.
+    const middle = path.filter((h) => ringOf(h) < landR - 1);
     if (middle.length === 0) continue;
     const at = rng.pick(middle);
     const b = bodyOf.get(hexKey(at)) as number;
@@ -444,19 +497,6 @@ function tryWaterways(input: WaterwayInput): Waterways | WildIsleFailure {
     for (const h of grown) add(h, 'lake', b);
     lakes++;
   }
-  // A lake for every home with no river, then any the count still wants.
-  for (const slot of lakeHomes) {
-    const home = homes[slot] as Hex;
-    const b = body++;
-    const centres = hexRing(home, rules.homeWaterSteps).filter(
-      (h) => ringOf(h) < landR && canTake(h, b),
-    );
-    const grown = centres.length === 0 ? null : growLake(rng.pick(centres), b, false);
-    if (grown === null) return 'lake';
-    for (const h of grown) add(h, 'lake', b);
-    lakes++;
-  }
-  const wanted = rng.int(...rules.lakes.count);
   for (let tries = 0; lakes < wanted && tries < 20; tries++) {
     const b = body++;
     const centres = hexSpiral(hex(0, 0), landR - 1).filter((h) => canTake(h, b));
@@ -467,50 +507,69 @@ function tryWaterways(input: WaterwayInput): Waterways | WildIsleFailure {
     lakes++;
   }
   if (lakes < rules.lakes.count[0]) return 'lake';
-  return { water, springs };
+  return { water };
 
   /**
-   * A river for `home`: spring → a tile `homeWaterSteps` from the home, beside
-   * it → the nearest coast tile. Each step goes to a random neighbour nearer
-   * the next goal that the river may take, never touching its own earlier
-   * tiles (so it's one tile wide), or null when it's boxed in.
+   * The river past the homes in `group`: from a coast tile up the grain,
+   * past a tile `homeWaterSteps` from each home on one side of it (the same
+   * side for the whole river), to a coast tile down the grain. Each leg is
+   * one of the shortest walks between its ends over tiles the river may
+   * take, picked step by step at random, and never touches the river's
+   * earlier tiles, so it's one tile wide. Null when it's boxed in.
    */
-  function riverPast(home: Hex, b: number): Hex[] | null {
-    const byHome = hexRing(home, rules.homeWaterSteps).filter(
-      (h) => Math.abs(ringOf(h) - input.layout.homeDistance) <= 1 && canTake(h, b),
-    );
-    if (byHome.length === 0) return null;
-    const pass = rng.pick(byHome);
-    const [minRing, maxRing] = rules.rivers.sourceRing;
-    const sources = hexSpiral(hex(0, 0), maxRing).filter(
-      (h) =>
-        ringOf(h) >= minRing &&
-        canTake(h, b) &&
-        hexDistance(h, pass) >= 3 &&
-        springs.every((s) => hexDistance(s, h) > 3),
-    );
-    if (sources.length === 0) return null;
-    // The nearest springs to the pass tile, so the river runs past the home.
-    const nearest = Math.min(...sources.map((h) => hexDistance(h, pass)));
-    const spring = rng.pick(sources.filter((h) => hexDistance(h, pass) <= nearest + 1));
-    const coastRing = hexRing(hex(0, 0), coastRadius);
-    const toCoast = Math.min(...coastRing.map((h) => hexDistance(h, pass)));
-    const mouth = rng.pick(coastRing.filter((h) => hexDistance(h, pass) === toCoast));
-    const path: Hex[] = [spring];
-    const own = new Set<HexKey>([hexKey(spring)]);
-    for (const goal of [pass, mouth]) {
-      let at = path[path.length - 1] as Hex;
-      while (hexDistance(at, goal) > 0) {
-        const from = at;
-        const steps = hexNeighbors(from).filter(
-          (n) =>
-            hexDistance(n, goal) < hexDistance(from, goal) &&
-            !own.has(hexKey(n)) &&
-            canTake(n, b) &&
-            hexNeighbors(n).every((m) => !own.has(hexKey(m)) || hexKey(m) === hexKey(from)),
-        );
-        if (steps.length === 0) return null;
-        at = rng.pick(steps);
+  function riverAcross(group: readonly number[], b: number): Hex[] | null {
+    // A river off the middle passes its homes on the inland side, so it
+    // crosses the island instead of hugging the coast; the middle one picks.
+    const across = group.reduce((sum, slot) => sum + sideOf(homes[slot] as Hex, axis), 0);
+    const side = across > 0 ? -1 : across < 0 ? 1 : rng.chance(50) ? 1 : -1;
+    const passes: Hex[] = [];
+    for (const slot of group) {
+      const home = homes[slot] as Hex;
+      const homeSide = sideOf(home, axis);
+      const toSide = (h: Hex) => side * (sideOf(h, axis) - homeSide);
+      const pass = pickBest(
+        hexRing(home, rules.homeWaterSteps).filter(
+          (h) => toSide(h) > 0 && ringOf(h) < landR && riverCanTake(h, b),
+        ),
+        toSide,
+      );
+      if (pass === undefined) return null;
+      passes.push(pass);
+    }
+    const first = passes[0] as Hex;
+    const last = passes[passes.length - 1] as Hex;
+    /** The coast tile straight on from `from`, up (-1) or down (+1) the grain. */
+    const mouth = (from: Hex, way: number) =>
+      pickBest(
+        coastRing.filter(
+          (h) => way * (alongOf(h, axis) - alongOf(from, axis)) > 0 && riverCanTake(h, b),
+        ),
+        (h) => -Math.abs(sideOf(h, axis) - sideOf(from, axis)),
+      );
+    const start = mouth(first, -1);
+    const end = mouth(last, 1);
+    if (start === undefined || end === undefined) return null;
+    const path: Hex[] = [start];
+    const own = new Set<HexKey>([hexKey(start)]);
+    for (const goal of [...passes, end]) {
+      const from = path[path.length - 1] as Hex;
+      const goalKey = hexKey(goal);
+      // Inland tiles (or this leg's goal) this river may take that touch
+      // none of its earlier tiles but the one it sets off from.
+      const open = (h: Hex) =>
+        (hexKey(h) === goalKey || ringOf(h) <= landR) &&
+        !own.has(hexKey(h)) &&
+        riverCanTake(h, b) &&
+        hexNeighbors(h).every((n) => !own.has(hexKey(n)) || hexKey(n) === hexKey(from));
+      if (!open(goal)) return null;
+      const stepsTo = hexBfs([goal], open);
+      const first = Math.min(...hexNeighbors(from).map((n) => stepsTo.get(hexKey(n)) ?? Infinity));
+      if (first === Infinity) return null;
+      // Each step goes one nearer the goal, so the leg is a shortest walk.
+      let at = from;
+      for (let left = first; left >= 0; left--) {
+        const here = at;
+        at = rng.pick(hexNeighbors(here).filter((n) => stepsTo.get(hexKey(n)) === left));
         path.push(at);
         own.add(hexKey(at));
       }
@@ -555,8 +614,8 @@ interface CheckInput {
 }
 
 /**
- * Is this water layout fair? Every home has water within `homeWaterSteps`,
- * at least `minRegionLand` land it can walk to, a land share within
+ * Is this water layout fair? Every home has a river within `homeWaterSteps`,
+ * at least `minRegionLand` land it can walk to without a bridge, a land share within
  * `landBandPercent` of the average, and a trading post on its own land; and
  * the villages fit. Returns the posts and villages, or why not.
  */
@@ -567,10 +626,11 @@ function checkIsland(
   const terrainAt = (h: Hex) => terrain.get(hexKey(h));
   const isLand = (h: Hex) => input.onIsland(h) && !isWater(terrainAt(h));
   for (const home of homes) {
-    const near = hexSpiral(home, rules.homeWaterSteps).some((h) => {
-      const t = terrainAt(h);
-      return isWater(t) && t?.water !== 'deep';
-    });
+    // A river, not just a lake: a lake grown over the river's pass tile
+    // could leave a home with only a lake close by.
+    const near = hexSpiral(home, rules.homeWaterSteps).some(
+      (h) => terrainAt(h)?.id === rules.riverTerrain,
+    );
     if (!near) return 'water-near-home';
   }
   const regions = homes.map((home) => hexBfs([home], isLand));

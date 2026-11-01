@@ -24,7 +24,8 @@ const generate = (seed: string) =>
     cellarKeys: CELLAR_RULES.keyFromVillage,
     patchType: 'wild-isle',
   });
-// Plan revision 1 asks for 200 seeds: every rule below holds on each.
+// Plan revision 1 asks for 200 seeds: every rule below holds on each (the
+// sea-to-sea rivers were also swept over 500 seeds with no failures).
 const SEEDS = Array.from({ length: 200 }, (_, i) => `wild-isle-${i}`);
 const maps = SEEDS.map(generate);
 
@@ -63,7 +64,7 @@ describe('generateMap: Wild Isle', () => {
     // Tiles are stored, so a change only moves islands not made yet: update
     // the hash on purpose.
     expect(hashString(JSON.stringify(generate('pinned-seed')))).toBe(
-      'eb41d1f5d69a53d0c77bcab23465f8eb',
+      'd458a776507800bd891c5595ad53ba95',
     );
   });
 
@@ -122,19 +123,22 @@ describe('generateMap: Wild Isle', () => {
     }
   });
 
-  it('runs every river to the sea, clear of homes, the Gap and the posts', () => {
+  it('runs every river sea to sea, one per pair of homes, clear of homes and the Gap', () => {
     for (const map of maps) {
       const byKey = byKeyOf(map);
       const rivers = bodies(map, [rules.riverTerrain, rules.lakeTerrain]).filter((b) =>
         b.some((h) => byKey.get(hexKey(h))!.terrain === rules.riverTerrain),
       );
-      expect(rivers.length).toBeGreaterThanOrEqual(rules.rivers.count[0]);
-      expect(rivers.length).toBeLessThanOrEqual(rules.rivers.count[1]);
+      // Six homes, three rivers (owner decision 2026-11-01).
+      expect(rivers).toHaveLength(map.homes.length / 2);
       for (const river of rivers) {
-        const mouth = river.some((h) =>
+        // Two mouths on opposite sides: coast tiles that touch the sea, far apart.
+        const mouths = river.filter((h) =>
           hexNeighbors(h).some((n) => byKey.get(hexKey(n))?.terrain === rules.oceanTerrain),
         );
-        expect(mouth).toBe(true);
+        const [a, ...rest] = mouths;
+        expect(rest.length).toBeGreaterThanOrEqual(1);
+        expect(Math.max(...rest.map((m) => hexDistance(a!, m)))).toBeGreaterThan(coastRadius);
       }
       for (const t of map.tiles) {
         if (!water(t) || t.terrain === rules.oceanTerrain) continue;
@@ -147,14 +151,50 @@ describe('generateMap: Wild Isle', () => {
     }
   });
 
-  it('gives every home a river or lake within reach', () => {
+  it('splits the island: each river is a wall until someone builds a bridge', () => {
+    for (const map of maps) {
+      const isLand = landOf(map);
+      const land = map.tiles.filter(isLand);
+      const seen = new Set<string>();
+      let pieces = 0;
+      for (const t of land) {
+        if (seen.has(hexKey(t))) continue;
+        for (const k of hexBfs([t], isLand).keys()) seen.add(k);
+        pieces++;
+      }
+      // Rivers keep `apart` steps from each other, so no piece between two is a sliver.
+      const byKey = byKeyOf(map);
+      const riverBodies = bodies(map, [rules.riverTerrain, rules.lakeTerrain]).filter((b) =>
+        b.some((h) => byKey.get(hexKey(h))!.terrain === rules.riverTerrain),
+      );
+      riverBodies.forEach((a, i) => {
+        for (const b of riverBodies.slice(i + 1)) {
+          const rivers = (body: Hex[]) =>
+            body.filter((h) => byKey.get(hexKey(h))!.terrain === rules.riverTerrain);
+          const closest = Math.min(
+            ...rivers(a).flatMap((h) => rivers(b).map((k) => hexDistance(h, k))),
+          );
+          expect(closest).toBeGreaterThanOrEqual(rules.rivers.apart);
+        }
+      });
+      // Three rivers that never cross cut the island into at least four pieces.
+      expect(pieces).toBeGreaterThanOrEqual(map.homes.length / 2 + 1);
+      // A home's never-fade ring is all on its own piece, with its Heart Seed.
+      for (const home of map.homes) {
+        const region = hexBfs([home], isLand);
+        for (const h of land.filter((t) => hexDistance(t, home) < rules.waterMinFromSeed)) {
+          expect(region.has(hexKey(h))).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('gives every home a river within reach', () => {
     for (const map of maps) {
       const byKey = byKeyOf(map);
       for (const home of map.homes) {
         const near = map.tiles.some(
-          (t) =>
-            (t.terrain === rules.riverTerrain || t.terrain === rules.lakeTerrain) &&
-            hexDistance(t, home) <= rules.homeWaterSteps,
+          (t) => t.terrain === rules.riverTerrain && hexDistance(t, home) <= rules.homeWaterSteps,
         );
         expect(near).toBe(true);
         expect(byKey.get(hexKey(home))!.terrain).toBe(GAME_DATA.mapGen.homeTerrain);
@@ -238,7 +278,8 @@ describe('generateMap: Wild Isle', () => {
   });
 
   it('keeps the terrain mix in its bands', () => {
-    // About 1027 tiles: 222 sea, 96 coast, the rest land with some water.
+    // About 1027 tiles: 222 sea, 96 coast, the rest land with some water
+    // (three sea-to-sea rivers are about 25 tiles each, plus the lakes).
     const ringTiles = (from: number, to: number) =>
       Array.from({ length: to - from + 1 }, (_, i) => hexRing(center, from + i).length).reduce(
         (a, b) => a + b,
@@ -249,10 +290,10 @@ describe('generateMap: Wild Isle', () => {
       const isles = map.tiles.filter((t) => t.isle !== undefined).length;
       expect(count(rules.oceanTerrain)).toBe(ringTiles(coastRadius + 1, layout.radius) - isles);
       const land = map.tiles.filter(landOf(map)).length;
-      expect(land).toBeGreaterThanOrEqual(700);
-      expect(land).toBeLessThanOrEqual(800);
-      expect(count(rules.riverTerrain) + count(rules.lakeTerrain)).toBeGreaterThanOrEqual(15);
-      expect(count(rules.riverTerrain) + count(rules.lakeTerrain)).toBeLessThanOrEqual(80);
+      expect(land).toBeGreaterThanOrEqual(680);
+      expect(land).toBeLessThanOrEqual(760);
+      expect(count(rules.riverTerrain) + count(rules.lakeTerrain)).toBeGreaterThanOrEqual(70);
+      expect(count(rules.riverTerrain) + count(rules.lakeTerrain)).toBeLessThanOrEqual(140);
     }
   });
 });

@@ -91,9 +91,11 @@ export const MAP_GEN: MapGenSettings = {
     riverTerrain: 'river',
     lakeTerrain: 'wild-lake',
     waterMinFromSeed: 3, // TUNE: past TERRITORY_RULES keepRadius (2), so the never-fade zone is land
-    homeWaterSteps: 3, // TUNE: every home has a river or lake this close
-    rivers: { count: [2, 3], sourceRing: [4, 7], sourceTerrain: 'mountains', lakePercent: 50 }, // TUNE:
-    lakes: { count: [3, 5], size: [3, 7] }, // TUNE:
+    homeWaterSteps: 3, // TUNE: every home has a river this close
+    // Owner decision 2026-11-01: rivers run sea to sea and split the island
+    // (bridges only, no fords); about three on six seats, one past every home.
+    rivers: { wiggle: 3, apart: 4, lakePercent: 50 }, // TUNE: apart 4 keeps the land between rivers 3+ wide
+    lakes: { count: [2, 4], size: [3, 7] }, // TUNE:
     isles: { count: [2, 3], size: [3, 5], offshore: 1 }, // TUNE:
     minRegionLand: 50, // TUNE:
     landBandPercent: 15, // TUNE: claimable land per home within ±15 % of the average
