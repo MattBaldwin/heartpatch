@@ -93,6 +93,17 @@ app.log.info(
   { longNight: config.HP_LONG_NIGHT, longNightTesters: config.HP_LONG_NIGHT_TESTERS.length },
   'the Long Night switch',
 );
+// The push switch (#726), logged like the house's: the mode, how many
+// testers and the public key's first 8 characters (to spot a key change),
+// never the private key or a tester's name.
+app.log.info(
+  {
+    push: config.HP_PUSH,
+    pushTesters: config.HP_PUSH_TESTERS.length,
+    vapidPublicKey: config.HP_VAPID_PUBLIC_KEY?.slice(0, 8) ?? null,
+  },
+  'the push switch',
+);
 // The Wild Isle switch (#621), logged like the house's: the mode and how
 // many testers, never their names.
 app.log.info(

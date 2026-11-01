@@ -409,6 +409,37 @@ One row per map per Long Night (#727, migration 0062), written in nightfall's ow
 | `seed` | text | Derived from the map seed, for replay |
 | `content_hash` | text | Hash of the Long Night rules and the Gap table the night ran with |
 
+### `push_subscriptions`, `push_settings`, `push_sends`
+Push nudges (#726, migration 0063). Leaf tables: written only by the push module, outside every game command's transaction, never locked (TECH_SPEC §7). Nothing points at them, and no nudge goes in `game_events`.
+
+`push_subscriptions`, one row per device that said yes:
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid → users | Cascade delete |
+| `session_id` | uuid → sessions | Cascade delete: logout or a password reset ends the device's nudges. Expiry doesn't delete the session row, so sends join a live session (`expires_at > now`) |
+| `endpoint` | text | The push service URL. Unique (a device moving to another account takes the row over); `https://`, at most 2048 characters |
+| `p256dh`, `auth` | text | The device's keys, base64url |
+| `expires_at` | timestamptz | `PushSubscription.expirationTime`; usually null |
+| `created_at`, `last_ok_at` | timestamptz | `last_ok_at`: the push service's latest 2xx (null before the first) |
+| `fail_count` | smallint | Failures since `last_ok_at`; the row goes at `PUSH_RULES.maxFailures` |
+
+`push_settings`, one row per account (no row: all on): `user_id` (PK → users, cascade), `dusk`, `gatherers`, `friend`, `long_night` (boolean, default true), `updated_at`.
+
+`push_sends`, the send log, claimed before each send:
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid → users | Cascade delete |
+| `kind` | text | A shared `PushKind` (checked) |
+| `dedupe_key` | text | Unique with `user_id` and `kind`: dusk and Long Night `mapId/night`, gatherers the account-local day, friend `mapId/arriver/2-hour bucket` |
+| `map_id` | uuid | No foreign key, so a claim never locks `maps` |
+| `claimed_at` | timestamptz | Written before the send. Indexed with `user_id` (the daily cap, the friend window) and alone (pruning after `PUSH_RULES.sendLogDays`) |
+| `sent_at` | timestamptz | After a device took it; null means nobody did (at most once) |
+| `devices` | smallint | How many subscriptions it went to |
+
 ### `hollow_rescues`
 Rescue expeditions (#21, decision C): which squishy a `rescue` battle is for, and how it went.
 

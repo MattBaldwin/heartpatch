@@ -49,7 +49,38 @@ if [[ -z $(env_value HP_EVOLUTION_SALT) ]]; then
   log "generated HP_EVOLUTION_SALT"
 fi
 
-for key in POSTGRES_PASSWORD HP_SIGNUP_CODE PUBLIC_ORIGIN HP_EVOLUTION_SALT; do
+# The push nudges' VAPID pair (#726, owner answer 4) is made here on the
+# first deploy and kept for good, like the salt: changing it ends every
+# phone's nudge subscription. OpenSSL's P-256 key in SEC1 DER is 121 bytes:
+# a 7-byte header, the 32-byte private scalar, the curve, then the 65-byte
+# uncompressed public point at the end. Both halves go in base64url, as
+# `web-push` makes them. The keys stay in memory and .env; only their names
+# are logged. Half a pair is never overwritten: the server refuses it.
+base64url() { base64 -w0 | tr '+/' '-_' | tr -d '='; }
+vapid_public=$(env_value HP_VAPID_PUBLIC_KEY)
+vapid_private=$(env_value HP_VAPID_PRIVATE_KEY)
+if [[ -z $vapid_public && -z $vapid_private ]]; then
+  der=$(openssl ecparam -name prime256v1 -genkey -noout -outform DER | base64 -w0)
+  header=$(printf '%s' "$der" | base64 -d | head -c 7 | od -An -tx1 | tr -d ' \n')
+  size=$(printf '%s' "$der" | base64 -d | wc -c)
+  [[ $header == 30770201010420 && $size -eq 121 ]] || fail "openssl made a VAPID key in an unexpected shape"
+  vapid_private=$(printf '%s' "$der" | base64 -d | head -c 39 | tail -c 32 | base64url)
+  vapid_public=$(printf '%s' "$der" | base64 -d | tail -c 65 | base64url)
+  unset der
+  [[ $vapid_public =~ ^B[A-Za-z0-9_-]{86}$ && $vapid_private =~ ^[A-Za-z0-9_-]{43}$ ]] ||
+    fail "openssl made a VAPID key in an unexpected shape"
+  tmp=$(mktemp "$HP_DIR/.env.XXXXXX")
+  grep -v -e '^HP_VAPID_PUBLIC_KEY=' -e '^HP_VAPID_PRIVATE_KEY=' .env >"$tmp" || true
+  printf 'HP_VAPID_PUBLIC_KEY=%s\nHP_VAPID_PRIVATE_KEY=%s\n' "$vapid_public" "$vapid_private" >>"$tmp"
+  chmod 600 "$tmp"
+  mv "$tmp" .env
+  log "generated HP_VAPID_PUBLIC_KEY and HP_VAPID_PRIVATE_KEY"
+elif [[ -z $vapid_public || -z $vapid_private ]]; then
+  fail "only one of HP_VAPID_PUBLIC_KEY and HP_VAPID_PRIVATE_KEY is set in $HP_DIR/.env (restore both from the .env backup)"
+fi
+unset vapid_public vapid_private
+
+for key in POSTGRES_PASSWORD HP_SIGNUP_CODE PUBLIC_ORIGIN HP_EVOLUTION_SALT HP_VAPID_PUBLIC_KEY HP_VAPID_PRIVATE_KEY; do
   [[ -n $(env_value "$key") ]] || fail "$key is empty in $HP_DIR/.env (see .env.prod.example)"
 done
 

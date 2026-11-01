@@ -1,3 +1,4 @@
+import { createECDH } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { loadConfig, loadServerConfig } from './config.js';
 
@@ -48,6 +49,19 @@ describe('loadConfig', () => {
     expect(testers.HP_LONG_NIGHT).toBe('testers');
     expect(testers.HP_LONG_NIGHT_TESTERS).toEqual(['matt', 'lee']);
     expect(() => loadConfig({ DATABASE_URL, HP_LONG_NIGHT: 'yes' })).toThrow(/HP_LONG_NIGHT/);
+  });
+
+  it('keeps push switched off unless set (#726)', () => {
+    expect(loadConfig({ DATABASE_URL }).HP_PUSH).toBe('off');
+    expect(loadConfig({ DATABASE_URL }).HP_PUSH_TESTERS).toEqual([]);
+    const testers = loadConfig({
+      DATABASE_URL,
+      HP_PUSH: 'testers',
+      HP_PUSH_TESTERS: ' Matt, lee ,,',
+    });
+    expect(testers.HP_PUSH).toBe('testers');
+    expect(testers.HP_PUSH_TESTERS).toEqual(['matt', 'lee']);
+    expect(() => loadConfig({ DATABASE_URL, HP_PUSH: 'yes' })).toThrow(/HP_PUSH/);
   });
 
   it('refuses invalid values and lists every problem', () => {
@@ -256,4 +270,113 @@ describe('loadServerConfig', () => {
       /HP_SIGNUP_CODE/,
     );
   });
+
+  it('needs a matching VAPID pair whenever push is on (#726, owner answer 4)', () => {
+    const pair = newVapidPair();
+    const dev = { DATABASE_URL, NODE_ENV: 'development' };
+    // Off needs no keys, and leaves empty ones (the .env template) unset.
+    const off = loadServerConfig({ ...dev, HP_VAPID_PUBLIC_KEY: '', HP_VAPID_PRIVATE_KEY: '' });
+    expect([off.HP_PUSH, off.HP_VAPID_PUBLIC_KEY, off.HP_VAPID_PRIVATE_KEY]).toEqual([
+      'off',
+      undefined,
+      undefined,
+    ]);
+    // On or testers without keys refuses to start, in every environment.
+    for (const mode of ['on', 'testers']) {
+      expect(() => loadServerConfig({ ...dev, HP_PUSH: mode })).toThrow(/HP_VAPID_PUBLIC_KEY/);
+      expect(() =>
+        loadServerConfig({
+          DATABASE_URL,
+          HP_SIGNUP_CODE: 'family-code',
+          HP_EVOLUTION_SALT: SALT,
+          HP_PUSH: mode,
+        }),
+      ).toThrow(/HP_VAPID_PUBLIC_KEY/);
+    }
+    // Half a pair is refused even while off.
+    expect(() => loadServerConfig({ ...dev, HP_VAPID_PUBLIC_KEY: pair.publicKey })).toThrow(
+      /HP_VAPID_PRIVATE_KEY: set both/,
+    );
+    // A whole, matching pair starts, in production too.
+    const on = loadServerConfig({
+      DATABASE_URL,
+      HP_SIGNUP_CODE: 'family-code',
+      HP_EVOLUTION_SALT: SALT,
+      HP_PUSH: 'on',
+      HP_VAPID_PUBLIC_KEY: pair.publicKey,
+      HP_VAPID_PRIVATE_KEY: pair.privateKey,
+    });
+    expect(on.HP_VAPID_PUBLIC_KEY).toBe(pair.publicKey);
+    expect(on.HP_VAPID_SUBJECT).toBe(undefined);
+    // Someone else's public key is refused, without printing either key.
+    const other = newVapidPair();
+    let message = '';
+    try {
+      loadServerConfig({
+        ...dev,
+        HP_PUSH: 'testers',
+        HP_VAPID_PUBLIC_KEY: other.publicKey,
+        HP_VAPID_PRIVATE_KEY: pair.privateKey,
+      });
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toMatch(/HP_VAPID_PUBLIC_KEY: isn't the public half/);
+    expect(message).not.toContain(pair.privateKey);
+    expect(message).not.toContain(other.publicKey);
+  });
+
+  it('refuses VAPID keys and subjects in the wrong shape (#726)', () => {
+    const pair = newVapidPair();
+    const dev = { DATABASE_URL, NODE_ENV: 'development' };
+    expect(() =>
+      loadServerConfig({
+        ...dev,
+        HP_VAPID_PUBLIC_KEY: 'abc',
+        HP_VAPID_PRIVATE_KEY: pair.privateKey,
+      }),
+    ).toThrow(/HP_VAPID_PUBLIC_KEY/);
+    expect(() =>
+      loadServerConfig({
+        ...dev,
+        HP_VAPID_PUBLIC_KEY: pair.publicKey,
+        HP_VAPID_PRIVATE_KEY: `${pair.privateKey}=`,
+      }),
+    ).toThrow(/HP_VAPID_PRIVATE_KEY/);
+    // An all-zero scalar is the right length but not a key.
+    expect(() =>
+      loadServerConfig({
+        ...dev,
+        HP_VAPID_PUBLIC_KEY: pair.publicKey,
+        HP_VAPID_PRIVATE_KEY: Buffer.alloc(32).toString('base64url'),
+      }),
+    ).toThrow(/HP_VAPID_PUBLIC_KEY/);
+    expect(
+      loadConfig({ DATABASE_URL, HP_VAPID_SUBJECT: 'mailto:hi@example.com' }).HP_VAPID_SUBJECT,
+    ).toBe('mailto:hi@example.com');
+    expect(
+      loadConfig({ DATABASE_URL, HP_VAPID_SUBJECT: 'https://play.example.com' }).HP_VAPID_SUBJECT,
+    ).toBe('https://play.example.com');
+    for (const subject of ['http://play.example.com', 'hi@example.com', 'mailto:nobody']) {
+      expect(() => loadConfig({ DATABASE_URL, HP_VAPID_SUBJECT: subject })).toThrow(
+        /HP_VAPID_SUBJECT/,
+      );
+    }
+  });
 });
+
+/** A fresh VAPID pair in `web-push`'s shape (base64url, 32-byte scalar). */
+function newVapidPair(): { publicKey: string; privateKey: string } {
+  for (;;) {
+    const ecdh = createECDH('prime256v1');
+    ecdh.generateKeys();
+    const privateKey = ecdh.getPrivateKey();
+    // Node drops a leading zero byte; web-push pads it back. Keep it simple: retry.
+    if (privateKey.length === 32) {
+      return {
+        publicKey: ecdh.getPublicKey().toString('base64url'),
+        privateKey: privateKey.toString('base64url'),
+      };
+    }
+  }
+}
