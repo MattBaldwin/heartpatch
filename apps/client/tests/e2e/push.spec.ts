@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
+import { expectClear } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { pushStubCounts, setPushStub, stubPush } from './push-stub.js';
 
@@ -23,6 +24,49 @@ async function offerDone(page: Page): Promise<void> {
   await expect
     .poll(async () => (await hook<{ offer: string }>(page, 'push'))?.offer, { timeout: 30_000 })
     .toBe('done');
+}
+
+const HANDLES = ['adventure', 'heartpatch'] as const;
+
+/**
+ * The card stays under the top row (the name pill and the corner buttons) on
+ * an iPhone 15, an SE and an SE on its side, with its buttons on screen
+ * (scrolling inside where it must). Insets as iOS has them (Chromium fakes
+ * them, as layout-overlaps does; WebKit can't).
+ */
+async function cardClearOfTheTopRow(page: Page): Promise<void> {
+  const chromium = page.context().browser()?.browserType().name() === 'chromium';
+  const cdp = chromium ? await page.context().newCDPSession(page) : null;
+  const card = page.getByTestId('push-offer');
+  for (const { size, insets } of [
+    { size: { width: 393, height: 852 }, insets: { top: 59, bottom: 34 } },
+    { size: { width: 375, height: 667 }, insets: { top: 20, bottom: 0 } },
+    { size: { width: 667, height: 375 }, insets: { top: 0, bottom: 0 } },
+  ]) {
+    await cdp?.send(
+      'Emulation.setSafeAreaInsetsOverride' as never,
+      { insets: { ...insets, left: 0, right: 0 } } as never,
+    );
+    await page.setViewportSize(size);
+    await expectClear(
+      page,
+      '[data-testid="push-offer"]',
+      '[data-testid="map-hud"], .tray-top-left, .tray-top-right > button, .auth-chip-toggle',
+    );
+    const box = (await card.boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(size.height);
+    for (const name of ['Yes please', 'Not now']) {
+      const button = card.getByRole('button', { name });
+      await button.scrollIntoViewIfNeeded();
+      const b = (await button.boundingBox())!;
+      expect(b.y).toBeGreaterThanOrEqual(box.y);
+      expect(b.y + b.height).toBeLessThanOrEqual(Math.min(box.y + box.height, size.height));
+    }
+  }
+  await cdp?.send(
+    'Emulation.setSafeAreaInsetsOverride' as never,
+    { insets: { top: 0, bottom: 0, left: 0, right: 0 } } as never,
+  );
 }
 
 async function openSettings(page: Page): Promise<ReturnType<Page['getByTestId']>> {
@@ -51,12 +95,28 @@ test('the offer shows once in a Home Screen app, and Yes please turns nudges on'
   await card.getByRole('button', { name: 'Yes please' }).tap();
   await put;
   await expect(card).toBeHidden();
-  await expect(page.getByTestId('patch-line')).toHaveText('Nudges on! 🔔');
+  const line = page.getByTestId('patch-line');
+  await expect(line).toHaveText('Nudges on! 🔔');
   expect(await pushStubCounts(page)).toEqual({ requests: 1, subscribes: 1 });
 
   // Settings shows the real state: on, with the switches (and the Long Night's,
   // since a new patch has a Long Night day).
   const settings = await openSettings(page);
+  // Opened while the line is still up (it shows 4 s): it steps aside at once,
+  // and nothing sits on the Music slider. Checked once, not waited for, since
+  // the line goes by itself after its 4 s.
+  const music = page.getByTestId('audio-music-volume');
+  await expect(music).toBeVisible();
+  const under = await hook<{ showing: string | null }>(page, 'patchLine');
+  expect(under?.showing).toBe('Nudges on! 🔔');
+  expect(await line.isVisible()).toBe(false);
+  expect(
+    await music.evaluate((slider) => {
+      const box = slider.getBoundingClientRect();
+      const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return top === slider || slider.contains(top);
+    }),
+  ).toBe(true);
   await expect(settings).toHaveAttribute('data-state', 'on');
   const friend = settings.getByRole('button', { name: 'A friend is here' });
   await expect(friend).toHaveAttribute('aria-pressed', 'true');
@@ -133,8 +193,13 @@ test('no offer in a plain tab; Not now is for good; Settings shows each state', 
   await page.reload();
   const card = page.getByTestId('push-offer');
   await expect(card).toBeVisible({ timeout: 30_000 });
+  await cardClearOfTheTopRow(page);
+  // The side trays' handles step aside while it's up, and come back after.
+  await page.setViewportSize({ width: 375, height: 667 });
+  for (const side of HANDLES) await expect(page.getByTestId(`tray-handle-${side}`)).toBeHidden();
   await card.getByRole('button', { name: 'Not now' }).tap();
   await expect(card).toBeHidden();
+  for (const side of HANDLES) await expect(page.getByTestId(`tray-handle-${side}`)).toBeVisible();
   expect(await pushStubCounts(page)).toEqual({ requests: 0, subscribes: 0 });
   await page.reload();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');

@@ -2079,6 +2079,8 @@ const whatsNew = createWhatsNew({
 const TOP_NOTES = '.land-toast, .tray-say, .friendly-toast, .wardrobe-toast';
 const patchLineBusy = (): boolean =>
   hudMapId === null ||
+  // The lobby (its list, or Settings over a patch) owns the screen (#726).
+  lobby.isOpen ||
   battles.debug !== null ||
   whatsNewOpen ||
   pushOfferOpen ||
@@ -2213,6 +2215,8 @@ mountAuth(document.body, {
     // The lobby and tutorial wait for a Keeper and the story (`onReady` above).
     keeper.setUser(user);
     if (!user) {
+      // The nudge offer is this player's question: it never waits for the next one.
+      pushOffer.cancel();
       lobbyCoins.set(null);
       lobby.setUser(null);
       tutorial.setUser(null);

@@ -5,6 +5,13 @@
   display: none;
 }
 
+/* A line already up steps aside under the lobby (Settings over a patch, #726):
+   it starts only when the lobby is closed (main.ts `patchLineBusy`), but one
+   showing when Settings opens would sit on its sliders. */
+body:has(.lobby:not([hidden])) .patch-line {
+  visibility: hidden;
+}
+
 .patch-line {
   position: fixed;
   z-index: 4;

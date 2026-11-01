@@ -39,6 +39,8 @@ export interface Nudges {
    * save fails or push turned off. Resolves the value it ends on.
    */
   toggle: (key: NudgeSwitch, on: boolean) => Promise<boolean>;
+  /** A switch's save is out: a second tap waits for it (no racing saves). */
+  saving: (key: NudgeSwitch) => boolean;
 }
 
 /**
@@ -51,6 +53,7 @@ export async function loadNudges(deps: NudgesDeps): Promise<Nudges | null> {
   const status = await client.status();
   if (status.state !== 'available') return null;
   let settings: PushSettings = { ...status.settings };
+  const out = new Set<NudgeSwitch>();
   const nudges = (
     state: NudgesState,
     turnOn: Nudges['turnOn'] = () => Promise.resolve('failed'),
@@ -63,16 +66,24 @@ export async function loadNudges(deps: NudgesDeps): Promise<Nudges | null> {
     turnOn,
     turnOff,
     toggle: async (key, on) => {
+      // Two quick taps: the second changes nothing while the first is out.
+      if (out.has(key)) return settings[key];
+      out.add(key);
       const before = settings[key];
       settings = { ...settings, [key]: on };
-      const saved = await client.saveSettings({ [key]: on });
-      if (saved === null || saved === 'off') {
-        settings = { ...settings, [key]: before };
-        return before;
+      try {
+        const saved = await client.saveSettings({ [key]: on });
+        if (saved === null || saved === 'off') {
+          settings = { ...settings, [key]: before };
+          return before;
+        }
+        settings = { ...saved };
+        return saved[key];
+      } finally {
+        out.delete(key);
       }
-      settings = { ...saved };
-      return saved[key];
     },
+    saving: (key) => out.has(key),
   });
   if (!client.supported()) return deps.standalone() ? null : nudges('install');
   const permission = client.permission();

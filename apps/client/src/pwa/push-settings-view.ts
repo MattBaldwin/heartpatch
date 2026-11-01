@@ -111,9 +111,19 @@ export function pushSettingsView(options: PushSettingsViewOptions): Node[] {
     };
     show(nudges.settings[key]);
     toggle.addEventListener('click', () => {
+      if (nudges.saving(key)) return;
       const next = !nudges.settings[key];
       show(next); // optimistic; goes back if the save fails
-      void nudges.toggle(key, next).then(show);
+      // One save at a time: the switch rests while its save is out.
+      toggle.disabled = true;
+      void nudges
+        .toggle(key, next)
+        .then(show, () => {
+          show(nudges.settings[key]);
+        })
+        .finally(() => {
+          toggle.disabled = false;
+        });
     });
     return el(
       'div',

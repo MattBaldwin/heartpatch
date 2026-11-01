@@ -105,6 +105,8 @@ export interface PushOffer {
   maybeOffer: () => void;
   /** Settings turned nudges on or off: never offer again. */
   settle: () => void;
+  /** Signed out: an open card closes, unanswered, and a wait stops. */
+  cancel: () => void;
   readonly debug: { readonly state: 'idle' | 'checking' | 'waiting' | 'showing' | 'done' };
 }
 
@@ -194,6 +196,11 @@ export function createPushOffer(deps: PushOfferDeps): PushOffer {
     settle: () => {
       if (state === 'showing') deps.hide();
       finish();
+    },
+    cancel: () => {
+      if (state === 'showing') deps.hide();
+      // Unanswered, so not marked offered; once per launch still holds.
+      if (state !== 'done') state = 'idle';
     },
     get debug() {
       return { state };

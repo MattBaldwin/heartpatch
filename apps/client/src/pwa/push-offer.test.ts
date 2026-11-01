@@ -235,6 +235,29 @@ describe('answering the card', () => {
     expect(t.offered()).toBe(true);
     expect(t.offer.debug.state).toBe('done');
   });
+  it('signing out closes an open card unanswered, and stops a wait', async () => {
+    const t = setup();
+    t.offer.maybeOffer();
+    await settle();
+    expect(t.offer.debug.state).toBe('showing');
+    t.offer.cancel();
+    expect(t.hidden()).toBe(1);
+    expect(t.offered()).toBe(false);
+    expect(t.offer.debug.state).toBe('idle');
+    // Once per launch: the next patch doesn't ask again.
+    t.offer.maybeOffer();
+    expect(t.offer.debug.state).toBe('done');
+
+    const w = setup({ busy: [true] });
+    w.offer.maybeOffer();
+    await settle();
+    expect(w.offer.debug.state).toBe('waiting');
+    w.offer.cancel();
+    expect(w.hidden()).toBe(0);
+    w.timers.shift()?.();
+    expect(w.shown).toHaveLength(0);
+    expect(w.offer.debug.state).toBe('idle');
+  });
 });
 
 describe('subscribeOnTap (subscribe while the prompt is open)', () => {

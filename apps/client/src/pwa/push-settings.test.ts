@@ -92,6 +92,20 @@ describe('the four switches', () => {
     expect(nudges?.settings).toEqual({ ...SETTINGS, friend: false });
   });
 
+  it('take one save at a time: a second tap while one is out changes nothing', async () => {
+    const t = load({ permission: 'granted', subscribed: true });
+    const nudges = await t.nudges;
+    const first = nudges?.toggle('friend', false);
+    expect(nudges?.saving('friend')).toBe(true);
+    expect(nudges?.saving('dusk')).toBe(false);
+    const second = nudges?.toggle('friend', true);
+    expect(nudges?.settings.friend).toBe(false);
+    expect(await first).toBe(false);
+    expect(await second).toBe(false);
+    expect(nudges?.saving('friend')).toBe(false);
+    expect(t.log.filter((line) => line.startsWith('save '))).toEqual(['save {"friend":false}']);
+  });
+
   it('go back when the save fails', async () => {
     const t = load({ permission: 'granted', subscribed: true, saved: () => null });
     const nudges = await t.nudges;
