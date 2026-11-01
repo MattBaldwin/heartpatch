@@ -555,15 +555,20 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // Push nudges (#726), off by default until the client lane (#726e).
         // Config makes sure the VAPID keys are there whenever it isn't off.
         const vapid = vapidOf(config);
+        const pushSwitch = pushSwitchOf(config);
         await api.register(
           pushRoutes(
             createPushService({
               db,
               clock,
               log: app.log,
-              push: pushSwitchOf(config),
+              push: pushSwitch,
               vapid,
-              sender: vapid ? createWebPushSender(vapid, { log: app.log }) : null,
+              // No sender (and no subject warning at boot) while push is off.
+              sender:
+                vapid && pushSwitch.mode !== 'off'
+                  ? createWebPushSender(vapid, { log: app.log })
+                  : null,
             }),
             { hooks: authHooks },
           ),

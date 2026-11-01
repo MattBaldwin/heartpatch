@@ -325,6 +325,8 @@ describe.skipIf(!url)('push nudges: subscribe and settings (#726b, needs DATABAS
       { endpoint: 'https://heartpatch-db:5432/x', keys },
       { endpoint: 'https://web.push.apple.com.evil.example/x', keys },
       { endpoint: 'https://web.push.apple.com:8443/x', keys },
+      // An integer past what a Date can hold.
+      { ...subscription(), expirationTime: Number.MAX_SAFE_INTEGER },
     ]) {
       expect((await call(server, 'PUT', '/push/subscription', me, body)).statusCode).toBe(400);
     }

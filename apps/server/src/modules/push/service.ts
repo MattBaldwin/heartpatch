@@ -108,6 +108,14 @@ export function createPushService(options: PushServiceOptions): PushService {
       if (sessionToken === undefined) throw new AppError('UNAUTHENTICATED');
       // Only a real push service: the server never POSTs to a URL a player picked.
       if (!isPushServiceEndpoint(request.endpoint)) throw new AppError('VALIDATION_FAILED');
+      // A safe integer can still be past what a Date holds (8.64e15 ms).
+      const expiresAt =
+        request.expirationTime === undefined || request.expirationTime === null
+          ? null
+          : new Date(request.expirationTime);
+      if (expiresAt !== null && Number.isNaN(expiresAt.getTime())) {
+        throw new AppError('VALIDATION_FAILED');
+      }
       const stored = await repo.subscribe({
         userId: user.id,
         sessionTokenHash: hashSessionToken(sessionToken),
@@ -115,10 +123,7 @@ export function createPushService(options: PushServiceOptions): PushService {
           endpoint: request.endpoint,
           p256dh: request.keys.p256dh,
           auth: request.keys.auth,
-          expiresAt:
-            request.expirationTime === undefined || request.expirationTime === null
-              ? null
-              : new Date(request.expirationTime),
+          expiresAt,
         },
         replaces: request.replaces,
         now: clock(),

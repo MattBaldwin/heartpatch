@@ -161,6 +161,17 @@ function codeOf(error: unknown): string | undefined {
     : undefined;
 }
 
+/** A push service's `Retry-After` header, from web-push's error. */
+function retryAfterOf(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('headers' in error)) return undefined;
+  const { headers } = error;
+  if (typeof headers !== 'object' || headers === null || !('retry-after' in headers)) {
+    return undefined;
+  }
+  const value = headers['retry-after'];
+  return typeof value === 'string' ? value : undefined;
+}
+
 function statusOf(error: unknown): number | null {
   if (typeof error !== 'object' || error === null || !('statusCode' in error)) return null;
   return typeof error.statusCode === 'number' ? error.statusCode : null;
@@ -227,10 +238,7 @@ export function createWebPushSender(vapid: VapidKeys, options: WebPushSenderOpti
           return { outcome: 'dropped', reason: 'unreachable' };
         }
         // Apple's Retry-After is logged, not honoured in this slice (plan).
-        const retryAfter =
-          typeof error === 'object' && error !== null && 'headers' in error
-            ? (error.headers as Record<string, unknown> | undefined)?.['retry-after']
-            : undefined;
+        const retryAfter = retryAfterOf(error);
         options.log.warn(
           {
             kind: payload.kind,
