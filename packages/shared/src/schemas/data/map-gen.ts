@@ -104,20 +104,22 @@ export const WildIsleMapGenSchema = z
     lakeTerrain: ContentIdSchema,
     /** No water this close to a Heart Seed: the home ring and the never-fade ring stay land. */
     waterMinFromSeed: z.number().int().min(2),
-    /** Every Heart Seed has a river or lake at most this many steps away. */
+    /** Every Heart Seed has a river at most this many steps away. */
     homeWaterSteps: z.number().int().min(2),
     rivers: z.strictObject({
-      /** Rivers on the island; each one runs past its own home on the way to the sea. */
-      count: IntRangeSchema,
-      /** Centre steps a river's spring may sit at. */
-      sourceRing: IntRangeSchema,
-      /** The spring's ring of hills: this terrain. */
-      sourceTerrain: ContentIdSchema,
-      /** Chance (%) a river widens into a lake on its way down. */
+      /**
+       * Rivers run sea to sea, one per group of homes the same distance across
+       * the island's grain (three on six seats): at each waypoint (a mouth, or
+       * the tile it passes a home by) it picks among this many best tiles.
+       */
+      wiggle: z.number().int().min(1),
+      /** Steps between two rivers' nearest tiles, at least (2 is just not touching). */
+      apart: z.number().int().min(2),
+      /** Chance (%) a river widens into a lake on its way across. */
       lakePercent: z.number().int().min(0).max(100),
     }),
     lakes: z.strictObject({
-      /** Lakes on the island, the river lakes included. */
+      /** Lakes on the island, the river lakes included (extras: no home needs one). */
       count: IntRangeSchema,
       /** Tiles in one lake. */
       size: IntRangeSchema,
@@ -130,6 +132,8 @@ export const WildIsleMapGenSchema = z
     }),
     /** Every home's land (non-water steps from its seed) holds at least this many tiles. */
     minRegionLand: z.number().int().min(1),
+    /** Land the rivers cut off with no home on it (a bridge away) holds at least this many tiles. */
+    minPieceLand: z.number().int().min(1),
     /** Each home's share of the claimable land is within this % of the average. */
     landBandPercent: z.number().int().min(0).max(100),
     /** Water layouts tried before giving up with a `RangeError`. */
