@@ -47,6 +47,17 @@ function shareIcon(): SVGSVGElement {
   return svg;
 }
 
+/** The three Add to Home Screen steps (the guide card, and Settings › Nudges, #726). */
+export function installSteps(): HTMLOListElement {
+  return el(
+    'ol',
+    { class: 'pwa-guide-steps' },
+    el('li', {}, 'Tap Share ', shareIcon(), '. No Share? Tap ••• first.'),
+    el('li', {}, 'Pick “Add to Home Screen”.'),
+    el('li', {}, 'Open Heartpatch from your home screen!'),
+  );
+}
+
 export interface InstallGuide {
   /** The guide for the lobby's patch list, until dismissed; empty when it shouldn't show. */
   cards: () => Node[];
@@ -74,13 +85,7 @@ export function createInstallGuide(): InstallGuide {
         'data-testid': 'install-guide',
       },
       el('h2', { class: 'pwa-guide-title', id: 'pwa-guide-title' }, 'Make Heartpatch an app!'),
-      el(
-        'ol',
-        { class: 'pwa-guide-steps' },
-        el('li', {}, 'Tap Share ', shareIcon(), '. No Share? Tap ••• first.'),
-        el('li', {}, 'Pick “Add to Home Screen”.'),
-        el('li', {}, 'Open Heartpatch from your home screen!'),
-      ),
+      installSteps(),
       close,
     );
     close.addEventListener('click', () => {

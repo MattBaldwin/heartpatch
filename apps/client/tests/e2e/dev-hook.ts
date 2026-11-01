@@ -49,6 +49,7 @@ export type HookName =
   | 'post'
   | 'whatsNew'
   | 'patchLine'
+  | 'push'
   | 'frameCap'
   | 'testScenes'
   | 'hitchesExpected';

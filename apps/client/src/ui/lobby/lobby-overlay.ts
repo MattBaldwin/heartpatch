@@ -78,6 +78,11 @@ export interface Lobby {
   stepOut: () => void;
   /** Opens the Settings screen (the Keeper menu over the map). */
   showSettings: () => void;
+  /**
+   * Opens a patch as "Visit patch" does (a tapped nudge, #726). False when
+   * nobody is signed in or it didn't open (`onOpen` says why).
+   */
+  openPatch: (mapId: string) => Promise<boolean>;
   /** True while the lobby's panel is up (over the map, or on its own). */
   readonly isOpen: boolean;
   /**
@@ -1336,6 +1341,22 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       setMode('away');
     },
     showSettings,
+    openPatch: async (mapId) => {
+      const who = user;
+      const { onOpen } = options;
+      if (!who || !onOpen) return false;
+      try {
+        await onOpen(mapId);
+      } catch {
+        return false;
+      }
+      if (user !== who) return false;
+      rememberPatch(who.id, mapId);
+      releaseUpdates?.();
+      releaseUpdates = null;
+      setMode('map');
+      return true;
+    },
     get isOpen() {
       return !panel.hidden;
     },

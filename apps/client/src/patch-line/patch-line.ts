@@ -117,6 +117,8 @@ export interface PatchLineOptions {
 
 export interface PatchLine {
   liveEvent: (event: WsEventMessage) => void;
+  /** One of the game's own lines for the patch on screen ("Nudges on! 🔔", #726), in turn. */
+  say: (text: string) => void;
   readonly debug: { readonly showing: string | null; readonly waiting: number };
   dispose: () => void;
 }
@@ -167,6 +169,12 @@ export function createPatchLine(options: PatchLineOptions): PatchLine {
       const text = lineFor(news, { player: options.playerName, kind: options.kindName });
       if (text === null) return;
       queue.add(text, news.at, now(), mapId);
+      if (showing === null) pump();
+    },
+    say: (text) => {
+      const mapId = options.mapId();
+      if (mapId === null) return;
+      queue.add(text, now(), now(), mapId);
       if (showing === null) pump();
     },
     get debug() {

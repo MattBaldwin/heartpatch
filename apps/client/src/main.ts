@@ -85,6 +85,11 @@ import { createRecipeBook } from './recipes/recipe-book.js';
 import { appUpdates } from './pwa/app-updates.js';
 import { CLIENT_BUILD } from './pwa/build-info.js';
 import { startPwa } from './pwa/pwa.js';
+import { PUSH_OFFER_RETRY_MS } from './pwa/config.js';
+import { browserPushEnv, pushClient } from './pwa/push-client.js';
+import { createPushOffer, offeredStore } from './pwa/push-offer.js';
+import { createPushOfferCard } from './pwa/push-offer-card.js';
+import { pushSettingsView } from './pwa/push-settings-view.js';
 import { mountVersionMenu } from './pwa/version-menu.js';
 import { createWhatsNew } from './whats-new/whats-new.js';
 import { createPatchLine } from './patch-line/patch-line.js';
@@ -566,6 +571,8 @@ const closeUp = createCloseUpScreen({
 let raidReportOpen = false;
 /** What's new (#220) is open: the other cards wait for it (one card at a time, #129). */
 let whatsNewOpen = false;
+/** The nudge offer (#726) is open: the other cards wait for it (one card at a time, #129). */
+let pushOfferOpen = false;
 // Territory (#15): Claim, Challenge and guards in the tile panel. A tile
 // battle opens the battle screen, unless another screen sits over the map.
 // The raid report (#16) rides along with territory onto every map: challenges
@@ -870,6 +877,7 @@ const hollow = createHollowScreen({
   otherReportOpen: () =>
     raidReportOpen ||
     whatsNewOpen ||
+    pushOfferOpen ||
     lorebook.debug.showing !== null ||
     lorebook.isOpen ||
     milestones.debug.showing !== null,
@@ -1434,6 +1442,8 @@ const maps = createMapScreen({
     if (mapId !== null) heartCoinsOn(mapId);
     // The map is up: a new build's What's new may pop up now (#220).
     if (mapId !== null) whatsNew.maybePop();
+    // The first patch after graduation offers nudges, once (#726, owner answer 5).
+    if (mapId !== null) pushOffer.maybeOffer();
     trays.setVisible(mapId !== null);
     mapSquishies.hidden = mapId === null || mapId === glade;
     recipeBook.setMap(mapId);
@@ -1589,6 +1599,7 @@ const lorebook = createLorebook({
     milestones.debug.showing !== null ||
     hollowReportOpen() ||
     whatsNewOpen ||
+    pushOfferOpen ||
     lobby.formOpen ||
     // Exploring has its own find card, which says where the page went (#307):
     // the found-page card waits for Back.
@@ -1624,6 +1635,7 @@ const milestones = createMilestoneCelebration({
     lorebook.isOpen ||
     hollowReportOpen() ||
     whatsNewOpen ||
+    pushOfferOpen ||
     (care.debug?.celebrating ?? false) ||
     (wardrobe.debug?.open ?? false) ||
     trickOrTreat.isOpen ||
@@ -1995,6 +2007,7 @@ const lobby = mountLobby(document.body, {
   },
   settings: () => [
     ...audio.settings(),
+    ...pushSettings(),
     ...keeper.settings(),
     ...cinematic.settings(),
     ...tutorial.settings(),
@@ -2025,30 +2038,32 @@ const menuRow = (icon: string, label: string, onTap: () => void): HTMLButtonElem
 // up once over the map: never with no map up, over a battle, the tutorial,
 // Sprout's tray hint, a screen over the map, another card (#129) or a held
 // screen (#47). Those cards wait for it in turn (`whatsNewOpen`).
+/** Something owns the map (or none is up): a card that pops up by itself waits. */
+const mapCovered = (): boolean =>
+  hudMapId === null ||
+  updateHold.held ||
+  lobby.isOpen ||
+  battles.debug !== null ||
+  (tutorial.debug !== null && tutorial.debug.phase !== 'closed') ||
+  trays.debug.hint ||
+  catalog.isOpen ||
+  care.isOpen ||
+  closeUp.isOpen ||
+  house.isOpen ||
+  (wardrobe.debug?.open ?? false) ||
+  recipeBook.isOpen ||
+  postScreen.isOpen ||
+  heartCoins.isOpen ||
+  raidReportOpen ||
+  (land.debug?.welcome ?? false) ||
+  lorebook.debug.showing !== null ||
+  lorebook.isOpen ||
+  milestones.debug.showing !== null ||
+  hollowReportOpen();
 const whatsNew = createWhatsNew({
   root: document.body,
   client: CLIENT_BUILD,
-  busy: () =>
-    hudMapId === null ||
-    updateHold.held ||
-    lobby.isOpen ||
-    battles.debug !== null ||
-    (tutorial.debug !== null && tutorial.debug.phase !== 'closed') ||
-    trays.debug.hint ||
-    catalog.isOpen ||
-    care.isOpen ||
-    closeUp.isOpen ||
-    house.isOpen ||
-    (wardrobe.debug?.open ?? false) ||
-    recipeBook.isOpen ||
-    postScreen.isOpen ||
-    heartCoins.isOpen ||
-    raidReportOpen ||
-    (land.debug?.welcome ?? false) ||
-    lorebook.debug.showing !== null ||
-    lorebook.isOpen ||
-    milestones.debug.showing !== null ||
-    hollowReportOpen(),
+  busy: () => mapCovered() || pushOfferOpen,
   onChange: () => {
     whatsNewOpen = whatsNew.debug.open;
     hollow.otherReportChanged();
@@ -2064,8 +2079,11 @@ const whatsNew = createWhatsNew({
 const TOP_NOTES = '.land-toast, .tray-say, .friendly-toast, .wardrobe-toast';
 const patchLineBusy = (): boolean =>
   hudMapId === null ||
+  // The lobby (its list, or Settings over a patch) owns the screen (#726).
+  lobby.isOpen ||
   battles.debug !== null ||
   whatsNewOpen ||
+  pushOfferOpen ||
   raidReportOpen ||
   hollowReportOpen() ||
   trays.debug.hint ||
@@ -2083,6 +2101,59 @@ const patchLine = createPatchLine({
   playerName: (userId) =>
     maps.view?.members.find((m) => m.user.id === userId)?.user.username ?? null,
   kindName: (speciesId) => GAME_DATA.species.find((s) => s.id === speciesId)?.name ?? null,
+});
+// Push nudges (#726): the offer card, the first time a patch is on screen
+// after graduation in a Home Screen app, in its turn (one card at a time,
+// #129), and Settings › Nudges. Tapping a nudge while the app is open opens
+// its patch as "Visit patch" does; a cold start opens / and lands on the last
+// patch (#160).
+const pushOfferCard = createPushOfferCard(document.body, () => {
+  pushOfferOpen = pushOfferCard.isOpen;
+  hollow.otherReportChanged();
+});
+const pushOffer = createPushOffer({
+  client: pushClient,
+  offered: offeredStore(() => window.localStorage),
+  tutorial: () => tutorialApi.state(),
+  patch: () => (hudMapId !== null && hudMapId !== glade ? hudMapId : null),
+  busy: () => mapCovered() || whatsNewOpen,
+  show: (offer) => {
+    pushOfferCard.show(offer);
+  },
+  hide: () => {
+    pushOfferCard.hide();
+  },
+  toast: (text) => {
+    patchLine.say(text);
+  },
+  setTimer: (task, ms) => setTimeout(task, ms),
+  retryMs: PUSH_OFFER_RETRY_MS,
+});
+const pushSettings = (): Node[] =>
+  signedIn
+    ? pushSettingsView({
+        client: pushClient,
+        standalone: () => browserPushEnv().standalone(),
+        // The patch behind Settings has a Long Night day (#727); the map view doesn't carry it.
+        longNight: async () => {
+          const mapId = patchOnScreen();
+          if (mapId === null || mapId === glade) return false;
+          const detail = await lobbyApi.get(mapId).catch(() => null);
+          return typeof detail?.longNightWeekday === 'number';
+        },
+        onAnswered: () => {
+          pushOffer.settle();
+        },
+      })
+    : [];
+pushClient.onOpenMap((mapId) => {
+  if (mapId === null || !signedIn || mapId === hudMapId) return;
+  // Only from the bare map or the patch list on its own: never under a home
+  // base, close-up, house, battle, the tutorial or a half-typed form (bringing
+  // the app to the front is enough then).
+  const listAlone = lobby.isOpen && !lobby.formOpen && patchOnScreen() === null;
+  if (!listAlone && mapCovered()) return;
+  void lobby.openPatch(mapId);
 });
 // The game's version under the name, and "Update now" when one is ready (#198).
 const version = mountVersionMenu({
@@ -2144,6 +2215,8 @@ mountAuth(document.body, {
     // The lobby and tutorial wait for a Keeper and the story (`onReady` above).
     keeper.setUser(user);
     if (!user) {
+      // The nudge offer is this player's question: it never waits for the next one.
+      pushOffer.cancel();
       lobbyCoins.set(null);
       lobby.setUser(null);
       tutorial.setUser(null);
@@ -2266,6 +2339,7 @@ if (import.meta.env.DEV) {
     defense: () => defense.debug,
     whatsNew: () => whatsNew.debug,
     patchLine: () => ({ ...patchLine.debug, busy: patchLineBusy() }),
+    push: () => ({ offer: pushOffer.debug.state, card: pushOfferCard.isOpen }),
     audio: () => audio.debug,
   };
 }

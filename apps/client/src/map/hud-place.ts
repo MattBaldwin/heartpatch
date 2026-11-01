@@ -102,5 +102,10 @@ export function watchHudPlace(hud: HTMLElement): void {
   // Shown or hidden, a new name or coins: its width changes where it fits.
   new MutationObserver(schedule).observe(hud, { attributeFilter: ['hidden'] });
   sizes?.observe(hud);
+  // The screen itself: a size notice comes after layout has the new width.
+  // WebKit in CI once left the pill placed for the screen before (852pt wide
+  // on a 667pt one): `resize` ran it too soon, and a phone on its side turned
+  // to another phone on its side changes no media query, button or pill size.
+  sizes?.observe(document.documentElement);
   schedule();
 }
