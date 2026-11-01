@@ -342,12 +342,19 @@ describe.skipIf(!url)('storm knocks (needs DATABASE_URL)', () => {
          order by t.id limit 1`,
       )),
     ];
+    expect(ring, 'a free home tile for the hut').toBeDefined();
     const atHome = await place(mapId, kid, ring!, HUT.id, 'resource');
     const plot = { id: ring!.id, q: ring!.q, r: ring!.r, terrain: 'forest' };
     await storm(mapId, seed, plot, atHome);
     expect(await sweep(mapId)).toBe(0);
     expect((await settle(server, kid, mapId)).weather).toEqual({ knocked: [] });
-    expect((await rowOf(atHome)).damagedAt).toBe(null);
+    // Still standing where it was put, unknocked (the home tidy packs a hut
+    // at home, so any pass over this patch would show up here).
+    const hut = await db.query.buildings.findFirst({ where: (t, { eq }) => eq(t.id, atHome) });
+    expect(hut, 'the hut at home is still standing').toMatchObject({
+      tileId: ring!.id,
+      damagedAt: null,
+    });
   });
 
   it('banks what a knocked building made up to the knock, and nothing after', async () => {

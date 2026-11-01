@@ -62,6 +62,10 @@ services:
       # deploy rather than a hand edit. A value in .env still wins, so the
       # operator can set `off` or `testers` there without a release.
       HP_WILD_ISLE: ${HP_WILD_ISLE:-on}
+      # The Long Night is on for every patch (owner decision 2026-10-31),
+      # shipped the same way. A value in .env still wins (`off`, or `testers`
+      # with HP_LONG_NIGHT_TESTERS).
+      HP_LONG_NIGHT: ${HP_LONG_NIGHT:-on}
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
