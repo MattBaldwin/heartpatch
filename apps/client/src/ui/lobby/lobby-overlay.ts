@@ -26,7 +26,9 @@ import {
   codeLifeLeft,
   familyCodeBadge,
   familyCodeMeta,
+  FAMILY_CODE_ACCOUNTS_ONLY,
   familyCodeUsedBy,
+  joinCodeNudge,
   liveFamilyCodes,
 } from './family-codes.js';
 import { forgetPatch, patchToResume, rememberPatch } from './last-patch.js';
@@ -627,6 +629,8 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       },
       submitLabel: 'Ask to join',
       submit: async (code) => {
+        const nudge = joinCodeNudge(code);
+        if (nudge) return nudge;
         const parsed = InviteCodeSchema.safeParse(code);
         if (!parsed.success) return parsed.error.issues[0]?.message ?? 'Check the code!';
         const request = await lobbyApi.join(parsed.data);
@@ -1219,6 +1223,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
         { class: 'auth-hint' },
         `It works for ${String(signupCode.maxUses)} people and ${codeDays(signupCode.expiresAt, now())}. They type it on the sign-up screen.`,
       ),
+      el('p', { class: 'auth-hint' }, FAMILY_CODE_ACCOUNTS_ONLY),
       el(
         'div',
         { class: 'auth-actions' },
