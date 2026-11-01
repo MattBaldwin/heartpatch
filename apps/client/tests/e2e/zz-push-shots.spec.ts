@@ -69,7 +69,7 @@ for (const vp of ['iphone15', 'se', 'seSide'] as Vp[]) {
     await expect(s).toHaveAttribute('data-state', 'on');
     await shot(page, vp, `settings-on-${vp}`, 'Settings Nudges, on');
     if (vp === 'iphone15') {
-      await s.getByRole('button', { name: 'Turn nudges off' }).tap();
+      await s.getByTestId('push-toggle').tap();
       await expect(s).toHaveAttribute('data-state', 'off');
       await shot(page, vp, `settings-off-${vp}`, 'Settings Nudges, off');
       await setPushStub(page, { permission: 'denied' });
