@@ -134,7 +134,7 @@ Nudges only work in the Home Screen app (iOS 16.4 or later). Turn them on for yo
 - [ ] In Safari (not the Home Screen app), no nudge card shows, and Settings › Nudges says "Add to Home Screen first" with "Show me how".
 - [ ] Open the Home Screen app on a patch, after Sprout's tutorial. "Want a nudge when night falls? 🔥" shows **once**, and not over another card.
 - [ ] "Yes please" brings up the iPhone's own "Allow notifications?" question. "Allow" shows "Nudges on! 🔔" on the patch.
-- [ ] Reopen the app: the card never comes back (the same after "Not now" on a second account).
+- [ ] Reopen the app: the card never comes back. (It's once per iPhone, not per account: try "Not now" on a second device.)
 - [ ] **A friend is here:** a second account opens your patch after you've been away 10 minutes. You get "<name> is in your patch! 👋".
 - [ ] Tap the nudge with the app open in the background: it opens that patch. The red dot on the app icon goes away.
 - [ ] Settings › Nudges shows "On" and four switches (the Long Night one only on a patch with a Long Night day). Turn "A friend is here" off: no more friend nudges.

@@ -56,6 +56,7 @@ function setup(
     ...fake,
     offer,
     store,
+    offered: () => store !== 'blocked' && store.has(PUSH_OFFERED_KEY),
     shown,
     toasts,
     timers,
@@ -196,7 +197,7 @@ describe('answering the card', () => {
     await t.shown[0]?.yes();
     expect(t.toasts).toEqual([PUSH_OFFER_TEXT.on]);
     expect(t.hidden()).toBe(1);
-    expect(t.store.has(PUSH_OFFERED_KEY)).toBe(true);
+    expect(t.offered()).toBe(true);
     expect(t.offer.debug.state).toBe('done');
   });
 
@@ -208,7 +209,7 @@ describe('answering the card', () => {
       expect(await t.shown[0]?.yes()).toBe(outcome);
       expect(t.toasts).toEqual([]);
       expect(t.hidden()).toBe(1);
-      expect(t.store.has(PUSH_OFFERED_KEY)).toBe(true);
+      expect(t.offered()).toBe(true);
       t.offer.maybeOffer();
       await settle();
       expect(t.shown).toHaveLength(1);
@@ -231,7 +232,7 @@ describe('answering the card', () => {
     await settle();
     t.offer.settle();
     expect(t.hidden()).toBe(1);
-    expect(t.store.has(PUSH_OFFERED_KEY)).toBe(true);
+    expect(t.offered()).toBe(true);
     expect(t.offer.debug.state).toBe('done');
   });
 });

@@ -57,23 +57,29 @@ export async function stubPush(page: Page, start: Partial<PushStub> = {}): Promi
             } as MediaQueryList)
           : matchMedia(query);
 
-      class FakeNotification {
-        static get permission(): NotificationPermission {
+      const FakeNotification = {
+        get permission(): NotificationPermission {
           return read().permission;
-        }
-        static requestPermission(): Promise<NotificationPermission> {
-          counts.requests++;
+        },
+        requestPermission(): Promise<NotificationPermission> {
           const now = read();
-          if (now.permission === 'default') write({ permission: now.answer });
+          // Only a `default` permission brings up iOS's question.
+          if (now.permission === 'default') {
+            counts.requests++;
+            write({ permission: now.answer });
+          }
           return Promise.resolve(read().permission);
-        }
-      }
+        },
+      };
       Object.defineProperty(window, 'Notification', {
         configurable: true,
         value: FakeNotification,
       });
       if (!('PushManager' in window)) {
-        Object.defineProperty(window, 'PushManager', { configurable: true, value: class {} });
+        Object.defineProperty(window, 'PushManager', {
+          configurable: true,
+          value: function PushManager() {},
+        });
       }
 
       // A 65-byte P-256 point and a 16-byte secret, base64url: the shapes the server checks.
@@ -114,7 +120,7 @@ export async function stubPush(page: Page, start: Partial<PushStub> = {}): Promi
       } else {
         Object.defineProperty(navigator, 'serviceWorker', {
           configurable: true,
-          value: { ready, addEventListener: () => undefined },
+          value: Object.assign(new EventTarget(), { ready }),
         });
       }
     },
@@ -133,7 +139,7 @@ export async function setPushStub(page: Page, patch: Partial<PushStub>): Promise
   );
 }
 
-/** How often the app asked for permission and subscribed on this load. */
+/** How often iOS's question came up, and how often the app subscribed, on this load. */
 export async function pushStubCounts(
   page: Page,
 ): Promise<{ requests: number; subscribes: number }> {

@@ -2131,7 +2131,7 @@ const pushSettings = (): Node[] =>
   signedIn
     ? pushSettingsView({
         client: pushClient,
-        standalone: browserPushEnv().standalone,
+        standalone: () => browserPushEnv().standalone(),
         // The patch behind Settings has a Long Night day (#727); the map view doesn't carry it.
         longNight: async () => {
           const mapId = patchOnScreen();
@@ -2145,14 +2145,12 @@ const pushSettings = (): Node[] =>
       })
     : [];
 pushClient.onOpenMap((mapId) => {
-  // Never over a battle or the tutorial; the app coming to the front is enough then.
-  if (mapId === null || !signedIn || battles.debug !== null) return;
-  if (tutorial.debug !== null && tutorial.debug.phase !== 'closed') return;
-  // The patch is behind the lobby already: step aside for it.
-  if (mapId === patchOnScreen()) {
-    if (lobby.isOpen) lobby.hide();
-    return;
-  }
+  if (mapId === null || !signedIn || mapId === hudMapId) return;
+  // Only from the bare map or the patch list on its own: never under a home
+  // base, close-up, house, battle, the tutorial or a half-typed form (bringing
+  // the app to the front is enough then).
+  const listAlone = lobby.isOpen && !lobby.formOpen && patchOnScreen() === null;
+  if (!listAlone && mapCovered()) return;
   void lobby.openPatch(mapId);
 });
 // The game's version under the name, and "Update now" when one is ready (#198).

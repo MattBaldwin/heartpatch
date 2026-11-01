@@ -16,8 +16,6 @@ export const PUSH_SETTINGS_TEXT = {
   row: 'Nudges',
   on: 'On',
   off: 'Off',
-  turnOn: 'Turn nudges on',
-  turnOff: 'Turn nudges off',
   blocked: 'Off in iPhone Settings',
   blockedHow: 'To turn them on: Settings › Notifications › Heartpatch.',
   install: 'Add to Home Screen first',
@@ -71,7 +69,7 @@ export function pushSettingsView(options: PushSettingsViewOptions): Node[] {
       {
         type: 'button',
         class: 'auth-button auth-button-soft auth-button-small audio-toggle',
-        'aria-label': on ? PUSH_SETTINGS_TEXT.turnOff : PUSH_SETTINGS_TEXT.turnOn,
+        'aria-label': PUSH_SETTINGS_TEXT.row,
         'aria-pressed': String(on),
         'data-testid': 'push-toggle',
       },

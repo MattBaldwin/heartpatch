@@ -72,11 +72,13 @@ test('the offer shows once in a Home Screen app, and Yes please turns nudges on'
   const gone = page.waitForRequest(
     (r) => r.url().endsWith('/api/v1/push/subscription') && r.method() === 'DELETE',
   );
-  await settings.getByRole('button', { name: 'Turn nudges off' }).tap();
+  await settings.getByTestId('push-toggle').tap();
   await gone;
   await expect(settings).toHaveAttribute('data-state', 'off');
-  await settings.getByRole('button', { name: 'Turn nudges on' }).tap();
+  await settings.getByTestId('push-toggle').tap();
   await expect(settings).toHaveAttribute('data-state', 'on');
+  // No second iPhone question: permission was granted already.
+  expect(await pushStubCounts(page)).toEqual({ requests: 1, subscribes: 2 });
   // The switch kept what was saved.
   await expect(settings.getByRole('button', { name: 'A friend is here' })).toHaveAttribute(
     'aria-pressed',
@@ -142,7 +144,7 @@ test('no offer in a plain tab; Not now is for good; Settings shows each state', 
   // Not asked yet (or granted, after a logout): Off, offering On.
   settings = await openSettings(page);
   await expect(settings).toHaveAttribute('data-state', 'off');
-  await expect(settings.getByRole('button', { name: 'Turn nudges on' })).toBeVisible();
+  await expect(settings.getByTestId('push-toggle')).toHaveText('Off');
 
   // iOS said no: "Off in iPhone Settings", and where to change it. No control.
   await setPushStub(page, { permission: 'denied' });
