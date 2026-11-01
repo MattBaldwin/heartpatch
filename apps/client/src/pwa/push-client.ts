@@ -301,9 +301,11 @@ export function createPushClient(env: PushEnv) {
     /**
      * Logout (#726 plan, "Logout"): unsubscribe this device locally, best
      * effort and bounded by `timeoutMs`; the server's session cascade deletes
-     * the row. Never throws.
+     * the row. "Off" was the old player's (`HP_PUSH=testers` is per account),
+     * so the next one to sign in asks again. Never throws.
      */
     async forgetDevice(timeoutMs: number): Promise<void> {
+      off = false;
       // A subscription is only ever made in a Home Screen app with push.
       if (!supported()) return;
       const work = (async () => {

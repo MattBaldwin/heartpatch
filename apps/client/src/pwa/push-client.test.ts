@@ -324,6 +324,21 @@ describe('heal (start-up self-heal)', () => {
 });
 
 describe('forgetDevice (logout)', () => {
+  it('forgets "off", so the next player on this iPad asks again', async () => {
+    let calls = 0;
+    const f = fakeEnv({
+      reply: () =>
+        ++calls === 1
+          ? notFound
+          : { status: 200, body: { vapidPublicKey: VAPID_KEY, settings: SETTINGS } },
+    });
+    const client = createPushClient(f.env);
+    expect(await client.status()).toEqual({ state: 'off' });
+    await client.forgetDevice(1000);
+    expect(client.isOff()).toBe(false);
+    expect((await client.status()).state).toBe('available');
+  });
+
   it('unsubscribes locally and calls no route', async () => {
     const f = fakeEnv({ existing: true });
     await createPushClient(f.env).forgetDevice(1000);

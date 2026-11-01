@@ -1,6 +1,19 @@
-import { PUSH_RULES, PUSH_TEXT, PushKindSchema, pushLineFor } from '@heartpatch/shared';
+import {
+  PUSH_RULES,
+  PUSH_TEXT,
+  PushKindSchema,
+  PushPayloadSchema,
+  pushLineFor,
+} from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { FALLBACK_NUDGE, mapIdOf, notificationOf, nudgeFor } from './push-payload.js';
+import {
+  FALLBACK_NUDGE,
+  MAX_PAYLOAD_BYTES,
+  PUSH_KINDS,
+  mapIdOf,
+  notificationOf,
+  nudgeFor,
+} from './push-payload.js';
 
 const MAP_ID = '0b7c6f1e-3f4a-4c1b-9d2e-5a6b7c8d9e0f';
 
@@ -87,4 +100,43 @@ describe('mapIdOf', () => {
       expect(mapIdOf(data)).toBeNull();
     },
   );
+});
+
+describe('the worker’s hand check matches the shared schema', () => {
+  it('knows the same kinds and payload limit', () => {
+    expect(PUSH_KINDS).toEqual(PushKindSchema.options);
+    expect(MAX_PAYLOAD_BYTES).toBe(PUSH_RULES.maxPayloadBytes);
+  });
+
+  const cases: unknown[] = [
+    payload(),
+    payload({ mapId: null }),
+    payload({ extra: 'ignored' }),
+    ...PushKindSchema.options.map((kind) => payload({ kind })),
+    ...['title', 'body', 'tag', 'kind', 'mapId', 'v'].map((key) =>
+      Object.fromEntries(Object.entries(payload()).filter(([k]) => k !== key)),
+    ),
+    payload({ v: 2 }),
+    payload({ v: '1' }),
+    payload({ kind: 'hollow-man' }),
+    payload({ title: '' }),
+    payload({ title: 'x'.repeat(80) }),
+    payload({ title: 'x'.repeat(81) }),
+    payload({ body: 'x'.repeat(160) }),
+    payload({ body: 'x'.repeat(161) }),
+    payload({ tag: 'x'.repeat(128) }),
+    payload({ tag: 'x'.repeat(129) }),
+    payload({ title: 7 }),
+    payload({ mapId: 'my-patch' }),
+    payload({ mapId: MAP_ID.toUpperCase() }),
+    payload({ mapId: 42 }),
+    null,
+    [],
+    'dusk',
+    42,
+  ];
+
+  it.each(cases.map((c, i) => [i, c] as const))('case %i', (_i, value) => {
+    expect(notificationOf(value) !== null).toBe(PushPayloadSchema.safeParse(value).success);
+  });
 });
