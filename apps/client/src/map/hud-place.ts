@@ -52,10 +52,10 @@ export function watchHudPlace(hud: HTMLElement): void {
   const onSide = window.matchMedia(LANDSCAPE_PHONE_QUERY);
   const watched = new Set<Element>();
   const sizes = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule);
-  // The Build sheet hides the trays (and the 🐾 comes and goes) with `hidden`.
-  // Sizes alone missed the trays coming back on WebKit: the pill stayed where
-  // it went while they were away, centred under the 🐾 on an iPhone SE. So
-  // their `hidden` is watched too.
+  // A corner button shown or hidden (the trays under the Build sheet, the 🐾)
+  // re-places the pill without waiting on a size notice: on WebKit in CI the
+  // pill was once left placed as if the round buttons weren't there, centred
+  // under the 🐾 on an iPhone SE.
   const shown = new MutationObserver(schedule);
   let frame = 0;
 
@@ -67,7 +67,7 @@ export function watchHudPlace(hud: HTMLElement): void {
         sizes?.observe(node);
         shown.observe(node, { subtree: true, attributeFilter: ['hidden'] });
         const trays = node.closest('.trays');
-        if (trays && trays !== node) shown.observe(trays, { attributeFilter: ['hidden'] });
+        if (trays) shown.observe(trays, { attributeFilter: ['hidden'] });
       }
     }
     // Over the Build sheet only the Me button shows (main.ts onPanelFocus): the

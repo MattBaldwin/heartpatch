@@ -307,7 +307,7 @@ test('small phones and iPads: nothing sits on anything (#621 render-checks)', as
       expect(pill.x).toBeGreaterThanOrEqual(side);
       expect(pill.x + pill.width).toBeLessThanOrEqual(size.width - side);
       expect(pill.y + pill.height).toBeLessThanOrEqual(64);
-      // The widest name shortens with … ("Moonberr…"); the 💛 count stays whole, in the pill.
+      // The widest name shortens with …; the 💛 count stays whole, in the pill.
       const name = hud.locator('.map-hud-name');
       expect(await name.evaluate((n) => n.scrollWidth > n.clientWidth)).toBe(true);
       await expect(name).toHaveCSS('text-overflow', 'ellipsis');
