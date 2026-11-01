@@ -190,8 +190,9 @@ process.env['HP_HOUSE'] ??= 'on';
 // needs it on to make one, and stands in a patch list without it for the off case.
 process.env['HP_WILD_ISLE'] ??= 'on';
 // The Long Night (#727) ships behind HP_LONG_NIGHT (off by default; testers
-// after merge); long-night.spec.ts needs it on. The dev clock's Tuesday is
-// days from the default Saturday, so other specs' nights stay ordinary.
+// after merge); long-night.spec.ts needs it on. The map-local day below is a
+// Tuesday, 4 days from the default Saturday (past its 3-day notice), so other
+// specs' nights stay ordinary and no "He'll come looking" line joins them.
 process.env['HP_LONG_NIGHT'] ??= 'on';
 // Live battles (#29): short turns and a short away-grace, so friendly.spec.ts
 // can try a timeout and a disconnect without waiting 30 s and 60 s (20 s still
@@ -199,12 +200,13 @@ process.env['HP_LONG_NIGHT'] ??= 'on';
 // tests only.
 process.env['HP_DEV_LIVE_TURN_SECONDS'] ??= '20';
 process.env['HP_DEV_LIVE_GRACE_SECONDS'] ??= '6';
-// The game clock starts on a fixed day inside the 2026 Halloween window
-// (Oct 1 to Nov 9; packages/shared seasons), so the seasonal specs
+// The game clock starts on a fixed map-local day inside the 2026 Halloween
+// window (Oct 1 to Nov 9; packages/shared seasons), so the seasonal specs
 // (trick-or-treat, recipe-book's Pumpkin Treats, the bag's Heart Charms) pass
-// all year, not only while today is in season (#561). The server inherits it,
-// and pinMapTime below reads its lead to keep map time in daylight. Dev and
-// tests only.
+// all year, not only while today is in season (#561). pinMapTime sets
+// HP_DEV_NOW to that day in the suite's zone (a day either side of it in UTC
+// near midnight UTC), so the map's weekday never hangs on the hour CI runs.
+// The server inherits it. Dev and tests only.
 // It keeps today's real UTC time of day, so the game clock is a whole number
 // of days off the device's (less the few seconds the server takes to start):
 // some client screens read map time from the device clock (the explore sky
@@ -212,10 +214,9 @@ process.env['HP_DEV_LIVE_GRACE_SECONDS'] ??= '6';
 // that way they agree with the server's map time and with pinMapTime's zone.
 // Set once here in the main process; workers inherit it. An explicit
 // HP_DEV_NOW still wins (a reused local server: see .env.example).
-process.env['HP_DEV_NOW'] ??= `2026-10-20T${new Date().toISOString().slice(11)}`;
 // Map time is the game clock in the patch's time zone, which the client takes
 // from the device: pin the browser's zone so specs never meet dusk (#326).
-const timezoneId = pinMapTime();
+const timezoneId = pinMapTime('2026-10-20'); // a Tuesday
 
 // iPad runs are slower than iPhone ones on CI: in one run (#429), five of the six iPad groups took
 // 1.1-1.7 times as long as the same-numbered iPhone group (the sixth was shorter), and 19 of the 26

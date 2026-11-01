@@ -51,9 +51,8 @@ function localMinute(at: number, timeZone: string): number {
   return part('hour') * 60 + part('minute');
 }
 
-/** The zone whose map time is in `[from, to)` now, with the most of it left (null: none). */
-function zoneWithin(from: number, to: number): string | null {
-  const at = gameNow();
+/** The zone whose map time is in `[from, to)` at `at`, with the most of it left (null: none). */
+function zoneWithin(from: number, to: number, at = gameNow()): string | null {
   let best: { zone: string; left: number } | null = null;
   for (const zone of ZONES) {
     const minute = localMinute(at, zone);
@@ -64,17 +63,49 @@ function zoneWithin(from: number, to: number): string | null {
   return best?.zone ?? null;
 }
 
+/** The calendar day (YYYY-MM-DD) at `at` in `timeZone`. */
+function localDay(at: number, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone }).format(at);
+}
+
+const DAY_MS = 24 * 60 * 60_000;
+
 /**
- * The suite's time zone (playwright.config.ts): late morning map time. Set
- * once in the main process, so every worker and device shares it.
+ * The suite's time zone (playwright.config.ts): late morning map time, on
+ * `mapDay` in that zone. Set once in the main process, so every worker and
+ * device shares it.
+ *
+ * The zone hangs on the hour alone (late morning somewhere), so near
+ * midnight UTC it's a day ahead of UTC (UTC+11 at 23:30) or behind it. A
+ * game clock on `mapDay` in UTC would then put the map on the day after or
+ * before, and a spec that leans on the day (no Long Night notice this
+ * week) would pass or fail by the hour CI ran it. So unless `HP_DEV_NOW` is
+ * set already, it starts the game clock on `mapDay` in the chosen zone, at
+ * today's real UTC time of day: a whole number of days off the device's
+ * clock (see playwright.config.ts), and the same map-local day at any hour.
  */
-export function pinMapTime(): string {
+export function pinMapTime(mapDay: string): string {
+  const zoneAt = (at: number) => {
+    const zone = process.env['HP_E2E_TIME_ZONE'] ?? zoneWithin(DAY.from, DAY.to, at);
+    if (zone === null) throw new Error('No time zone has daytime map time now');
+    return zone;
+  };
+  if (process.env['HP_DEV_NOW'] === undefined) {
+    const now = Date.now();
+    // Whole days off the device's clock keep the time of day, so the zone is the same one.
+    const zone = zoneAt(now);
+    process.env['HP_E2E_TIME_ZONE'] = zone;
+    let at = Date.parse(`${mapDay}T${new Date(now).toISOString().slice(11)}`);
+    const day = localDay(at, zone);
+    if (day > mapDay) at -= DAY_MS;
+    else if (day < mapDay) at += DAY_MS;
+    process.env['HP_DEV_NOW'] = new Date(at).toISOString();
+  }
   if (process.env['HP_E2E_CLOCK_LEAD_MS'] === undefined) {
     const devNow = process.env['HP_DEV_NOW'];
     process.env['HP_E2E_CLOCK_LEAD_MS'] = String(devNow ? Date.parse(devNow) - Date.now() : 0);
   }
-  const zone = process.env['HP_E2E_TIME_ZONE'] ?? zoneWithin(DAY.from, DAY.to);
-  if (zone === null) throw new Error('No time zone has daytime map time now');
+  const zone = zoneAt(gameNow());
   process.env['HP_E2E_TIME_ZONE'] = zone;
   return zone;
 }
