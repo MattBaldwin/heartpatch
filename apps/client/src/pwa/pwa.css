@@ -105,8 +105,11 @@ html {
   text-align: center;
 }
 
-/* The side trays' handles (centred at 55%) would peek out at its edges. */
-body:has(.push-offer:not([hidden])) .tray-handle {
+/* The side trays' handles (centred at 55%) would peek out at its edges, and
+   the night's chips (hollow.css, bottom middle) under its foot on a phone on
+   its side: they step aside while it's up, as for the Hollow's cards. */
+body:has(.push-offer:not([hidden])) .tray-handle,
+body:has(.push-offer:not([hidden])) .night-chips {
   visibility: hidden;
 }
 

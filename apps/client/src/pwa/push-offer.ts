@@ -114,6 +114,8 @@ export function createPushOffer(deps: PushOfferDeps): PushOffer {
   let state: PushOffer['debug']['state'] = 'idle';
   /** Blocked storage still asks at most once per launch. */
   let askedThisLaunch = false;
+  /** Bumped by `cancel()`: a check or wait from before a sign-out stops. */
+  let run = 0;
 
   const finish = () => {
     state = 'done';
@@ -129,8 +131,8 @@ export function createPushOffer(deps: PushOfferDeps): PushOffer {
     deps.client.supported() &&
     deps.client.permission() === 'default';
 
-  function showWhenFree(device: PushDevice, key: string): void {
-    if (state !== 'waiting') return;
+  function showWhenFree(device: PushDevice, key: string, mine: number): void {
+    if (state !== 'waiting' || mine !== run) return;
     if (!stillWanted()) {
       // Asked already, or the patch went away (a later one may ask).
       state = askedThisLaunch || deps.offered.read() ? 'done' : 'idle';
@@ -138,7 +140,7 @@ export function createPushOffer(deps: PushOfferDeps): PushOffer {
     }
     if (deps.busy()) {
       deps.setTimer(() => {
-        showWhenFree(device, key);
+        showWhenFree(device, key, mine);
       }, deps.retryMs);
       return;
     }
@@ -171,26 +173,30 @@ export function createPushOffer(deps: PushOfferDeps): PushOffer {
       }
       if (!stillWanted()) return;
       state = 'checking';
+      const mine = run;
       void (async () => {
         const tutorial = await deps.tutorial().catch(() => null);
+        if (mine !== run) return;
         if (!tutorial || !graduated(tutorial)) {
           state = 'idle';
           return;
         }
         // Both before the card shows: the tap handler may not await (tap rule).
         const status = await deps.client.status();
+        if (mine !== run) return;
         if (status.state !== 'available') {
           // Off for this player: never. Unreachable: a later patch tries again.
           state = status.state === 'off' ? 'done' : 'idle';
           return;
         }
         const device = await deps.client.device();
+        if (mine !== run) return;
         if (!device) {
           state = 'idle';
           return;
         }
         state = 'waiting';
-        showWhenFree(device, status.vapidPublicKey);
+        showWhenFree(device, status.vapidPublicKey, mine);
       })();
     },
     settle: () => {
@@ -198,6 +204,7 @@ export function createPushOffer(deps: PushOfferDeps): PushOffer {
       finish();
     },
     cancel: () => {
+      run++;
       if (state === 'showing') deps.hide();
       // Unanswered, so not marked offered; once per launch still holds.
       if (state !== 'done') state = 'idle';

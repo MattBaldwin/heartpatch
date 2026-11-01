@@ -197,9 +197,14 @@ test('no offer in a plain tab; Not now is for good; Settings shows each state', 
   // The side trays' handles step aside while it's up, and come back after.
   await page.setViewportSize({ width: 375, height: 667 });
   for (const side of HANDLES) await expect(page.getByTestId(`tray-handle-${side}`)).toBeHidden();
+  // So do the night's chips ("He's watching tonight" peeked out under its foot
+  // on an SE on its side). Read as CSS: by day the row has no chips to show.
+  const nightChips = page.locator('.night-chips');
+  await expect(nightChips).toHaveCSS('visibility', 'hidden');
   await card.getByRole('button', { name: 'Not now' }).tap();
   await expect(card).toBeHidden();
   for (const side of HANDLES) await expect(page.getByTestId(`tray-handle-${side}`)).toBeVisible();
+  await expect(nightChips).toHaveCSS('visibility', 'visible');
   expect(await pushStubCounts(page)).toEqual({ requests: 0, subscribes: 0 });
   await page.reload();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');

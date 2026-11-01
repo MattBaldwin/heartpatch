@@ -3,7 +3,13 @@ import { hpButton } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import { installSteps } from './install-guide.js';
 import type { SubscribeOutcome } from './push-client.js';
-import { loadNudges, type Nudges, type NudgesDeps, type NudgeSwitch } from './push-settings.js';
+import {
+  loadNudges,
+  type Nudges,
+  type NudgesDeps,
+  type NudgesState,
+  type NudgeSwitch,
+} from './push-settings.js';
 import './pwa.css';
 
 // Settings › Nudges (#726 plan, "Client UI flow"): a "Nudges" row with its
@@ -37,6 +43,23 @@ export interface PushSettingsViewOptions extends NudgesDeps {
 }
 
 /** The group for the Settings list: an empty box until the row's state is read. */
+/**
+ * Whether The Long Night's switch shows: nudges on, and the patch behind
+ * Settings has a Long Night day (`longNight` asks; a failed ask is no).
+ */
+export async function longNightShown(
+  state: NudgesState,
+  longNight: () => Promise<boolean>,
+): Promise<boolean> {
+  return state === 'on' && (await longNight().catch(() => false));
+}
+
+/** The switches under the On control, in order: none unless nudges are on. */
+export function nudgeSwitches(state: NudgesState, longNight: boolean): NudgeSwitch[] {
+  if (state !== 'on') return [];
+  return longNight ? ['dusk', 'gatherers', 'friend', 'longNight'] : ['dusk', 'gatherers', 'friend'];
+}
+
 export function pushSettingsView(options: PushSettingsViewOptions): Node[] {
   const box = el('div', { class: 'push-settings-box' });
 
@@ -46,8 +69,7 @@ export function pushSettingsView(options: PushSettingsViewOptions): Node[] {
       box.replaceChildren();
       return;
     }
-    const longNight = nudges.state === 'on' && (await options.longNight().catch(() => false));
-    box.replaceChildren(group(nudges, note, longNight));
+    box.replaceChildren(group(nudges, note, await longNightShown(nudges.state, options.longNight)));
   }
 
   const after = (outcome: SubscribeOutcome | null) => {
@@ -160,11 +182,7 @@ export function pushSettingsView(options: PushSettingsViewOptions): Node[] {
     if (note !== null) {
       parts.push(el('p', { class: 'push-note', role: 'status' }, note));
     }
-    if (nudges.state === 'on') {
-      const keys: NudgeSwitch[] = ['dusk', 'gatherers', 'friend'];
-      if (longNight) keys.push('longNight');
-      parts.push(...keys.map((key) => switchRow(nudges, key)));
-    }
+    parts.push(...nudgeSwitches(nudges.state, longNight).map((key) => switchRow(nudges, key)));
     return el(
       'div',
       { class: 'push-settings', 'data-testid': 'push-settings', 'data-state': nudges.state },

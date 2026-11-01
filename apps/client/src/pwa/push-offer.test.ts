@@ -235,6 +235,17 @@ describe('answering the card', () => {
     expect(t.offered()).toBe(true);
     expect(t.offer.debug.state).toBe('done');
   });
+  it('signing out mid-check: the old check never shows a card', async () => {
+    const t = setup();
+    t.offer.maybeOffer();
+    expect(t.offer.debug.state).toBe('checking');
+    t.offer.cancel();
+    expect(t.offer.debug.state).toBe('idle');
+    await settle();
+    expect(t.shown).toHaveLength(0);
+    expect(t.offer.debug.state).toBe('idle');
+  });
+
   it('signing out closes an open card unanswered, and stops a wait', async () => {
     const t = setup();
     t.offer.maybeOffer();
