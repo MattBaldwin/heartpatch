@@ -94,6 +94,25 @@ export function longNightNightHash(hollowRules: HollowRules): string {
 }
 
 /**
+ * Is `night` a Long Night on this map: a multiplayer patch, switched on
+ * there (`HP_LONG_NIGHT`), on its weekday and not one in the 6 nights
+ * before? Only a yes or no, so it's safe for callers that must never see
+ * the Night's secrets (the push sweep, #726f; CLAUDE.md rule 6). Still yes
+ * once nightfall has recorded that Night (`isLongNight` counts it).
+ */
+export async function isLongNightOn(
+  db: Executor,
+  longNight: LongNightSwitch,
+  map: Pick<MapRow, 'id' | 'kind'>,
+  night: LocalDate,
+): Promise<boolean> {
+  if (!PATCHES.includes(map.kind) || !(await longNightOnMap(db, longNight, map.id))) return false;
+  const repo = createLongNightRepo(db);
+  const [weekday, latest] = await Promise.all([repo.weekday(map.id), repo.latest(map.id)]);
+  return weekday !== undefined && isLongNight(weekday, night, latest?.night ?? null);
+}
+
+/**
  * Tonight on a map is a Long Night: what nightfall needs to run it. Null on
  * any other night (switched off, Off on the patch, not its weekday, one in
  * the last 6 nights, or the Glade).
@@ -104,10 +123,7 @@ export async function longNightTonight(
   map: Pick<MapRow, 'id' | 'kind'>,
   night: LocalDate,
 ): Promise<{ percentOf: (percent: number) => number } | null> {
-  if (!PATCHES.includes(map.kind) || !(await longNightOnMap(db, longNight, map.id))) return null;
-  const repo = createLongNightRepo(db);
-  const [weekday, latest] = await Promise.all([repo.weekday(map.id), repo.latest(map.id)]);
-  if (weekday === undefined || !isLongNight(weekday, night, latest?.night ?? null)) return null;
+  if (!(await isLongNightOn(db, longNight, map, night))) return null;
   return {
     // Secret (rule 6): only `rollStrikes` and the server-only row see it.
     percentOf: (percent) => longNightPercent(percent, LONG_NIGHT_SECRETS.strengthMultiplier),

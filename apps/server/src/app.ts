@@ -572,6 +572,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           log: app.log,
           push: pushSwitch,
           vapid,
+          // The sweep's Long Night calls follow the Night's own switch.
+          longNight,
           // No sender (and no subject warning at boot) while push is off.
           sender:
             vapid && pushSwitch.mode !== 'off'

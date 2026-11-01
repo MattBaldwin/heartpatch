@@ -14,6 +14,7 @@ import type { Executor } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
 import { MINUTE_MS, type Clock } from '../../lib/time.js';
 import { hashSessionToken } from '../auth/secrets.js';
+import type { LongNightSwitch } from '../long-night/switch.js';
 import { createPushRepo } from './repo.js';
 import {
   endpointHost,
@@ -61,7 +62,7 @@ export interface PushService {
     options: PushSendOptions,
   ) => Promise<PushDelivery>;
   /**
-   * The sweep (#726c, `jobs/push.ts`, every minute): sends the dusk and
+   * The sweep (#726c, `jobs/push.ts`, every minute): sends the dusk, Long Night and
    * gatherers nudges due at `now` (the clock by default), each at most once.
    * Does nothing while push is off.
    */
@@ -101,6 +102,8 @@ export interface PushServiceOptions {
   vapid?: VapidKeys | null;
   /** `createWebPushSender(vapid, …)`; tests pass a fake. Required unless push is off. */
   sender?: PushSender | null;
+  /** `longNightSwitchOf(config)`: the sweep's Long Night calls (#726f). Off by default. */
+  longNight?: LongNightSwitch;
   /** `wsHub.isOnline`, for the sweep's "not while you're playing there". No hub: nobody is online. */
   isOnline?: (mapId: string, userId: string) => boolean;
   /** `wsHub.lastOfflineAt`, for the friend nudge's "away a while". No hub: unknown (long ago). */
@@ -174,6 +177,7 @@ export function createPushService(options: PushServiceOptions): PushService {
     log,
     push,
     deliver,
+    ...(options.longNight ? { longNight: options.longNight } : {}),
     ...(options.isOnline ? { isOnline: options.isOnline } : {}),
   });
   const send = createPushSend({ repo, deliver, rules: PUSH_RULES });
