@@ -52,6 +52,11 @@ export function watchHudPlace(hud: HTMLElement): void {
   const onSide = window.matchMedia(LANDSCAPE_PHONE_QUERY);
   const watched = new Set<Element>();
   const sizes = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule);
+  // A corner button shown or hidden (the trays under the Build sheet, the 🐾)
+  // re-places the pill without waiting on a size notice: on WebKit in CI the
+  // pill was once left placed as if the round buttons weren't there, centred
+  // under the 🐾 on an iPhone SE.
+  const shown = new MutationObserver(schedule);
   let frame = 0;
 
   const place = (): void => {
@@ -60,6 +65,9 @@ export function watchHudPlace(hud: HTMLElement): void {
       if (!watched.has(node)) {
         watched.add(node);
         sizes?.observe(node);
+        shown.observe(node, { subtree: true, attributeFilter: ['hidden'] });
+        const trays = node.closest('.trays');
+        if (trays) shown.observe(trays, { attributeFilter: ['hidden'] });
       }
     }
     // Over the Build sheet only the Me button shows (main.ts onPanelFocus): the
