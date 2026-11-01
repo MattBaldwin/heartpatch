@@ -5,7 +5,9 @@ import {
   codeLifeLeft,
   familyCodeBadge,
   familyCodeMeta,
+  FAMILY_CODE_ACCOUNTS_ONLY,
   familyCodeUsedBy,
+  joinCodeNudge,
   liveFamilyCodes,
 } from './family-codes.js';
 
@@ -67,5 +69,24 @@ describe('days left on a code (#583)', () => {
     expect(codeLifeLeft(new Date(NOW + DAY_MS).toISOString(), NOW)).toBe(
       'Works until tomorrow at the latest.',
     );
+  });
+});
+
+describe('joinCodeNudge', () => {
+  it('explains a family code typed into Join a patch, however it is typed', () => {
+    for (const typed of ['K7PQM3TRHXWA', 'k7pq-m3tr-hxwa', ' k7pq m3tr hxwa ']) {
+      expect(joinCodeNudge(typed)).toContain('family code');
+      expect(joinCodeNudge(typed)).toContain('8-letter invite code');
+    }
+  });
+
+  it('leaves real invite codes and typos to the normal check', () => {
+    expect(joinCodeNudge('K7PQ-M3TR')).toBeNull();
+    expect(joinCodeNudge('K7PQ')).toBeNull();
+    expect(joinCodeNudge('')).toBeNull();
+  });
+
+  it('tells a new family code owner it is for new accounts only', () => {
+    expect(FAMILY_CODE_ACCOUNTS_ONLY).toContain('new accounts');
   });
 });
