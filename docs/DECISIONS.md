@@ -2167,3 +2167,15 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 - **`relayoutHomes(…, mapIds?)`** mirrors `relayoutTileUses`, so tests can scope it (#764). Production call sites are unchanged.
 - **The e2e map clock starts on Oct 20 in the chosen zone** (#762), so CI no longer depends on the hour it runs. It found no product bug.
 - **726a ruled big** (new tables): it had Opus + Fable reviewers. 726f doubles as 727f.
+
+## 2026-11-01 — Owner decisions and coordinator calls (supervisor 33)
+
+**Owner decisions**
+- **Long Night deploy warning (owner, 2026-11-01):** `deploy.sh` warns when `/opt/heartpatch/.env` sets `HP_LONG_NIGHT` to anything but `on`, naming the value and saying to delete the line for the compose default. It only warns: it never edits `.env` and never fails the deploy, because the `.env` value is the owner's deliberate no-release off switch (#758). Shipped in #768. The `64f3b13` Deploy log has no warning, so the Long Night is on in production; the first one is Sat Nov 7.
+
+**Coordinator calls**
+- **726c one-over-cap race accepted** (#769): under READ COMMITTED two overlapping sweeps (the boot sweep and a scheduled one) can each claim a different kind and go one nudge over `PUSH_RULES.dailyCap`. A real guard needs an advisory or row lock on push rows, which TECH_SPEC §7 forbids (push rows are leaves, never locked). The unique key `(user_id, kind, dedupe_key)` still stops every duplicate send.
+- **The dusk window uses `tonightOf`, not the plan's `lastNightOf`** (#769): inside `[nightfall − 60 min, nightfall)` the current time is before nightfall, so `lastNightOf` would name yesterday's night. Same `tonight` the in-app fire hint uses.
+- **Push payload `tag` is `kind:mapId` and `topic` is the kind** (#769); gatherers nudges count multiplayer patches only (the Glade's gathers are scripted).
+- **No `lock-order.test.ts` case for the sweep** (#769): its helpers watch the order of row locks a transaction takes, and the sweep takes none.
+- **726d ruled small** (not big): additive hub hook and one new service path on 726c's pipeline; one Opus reviewer per round.
