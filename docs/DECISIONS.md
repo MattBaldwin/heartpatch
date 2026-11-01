@@ -2179,3 +2179,11 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 - **Push payload `tag` is `kind:mapId` and `topic` is the kind** (#769); gatherers nudges count multiplayer patches only (the Glade's gathers are scripted).
 - **No `lock-order.test.ts` case for the sweep** (#769): its helpers watch the order of row locks a transaction takes, and the sweep takes none.
 - **726d ruled small** (not big): additive hub hook and one new service path on 726c's pipeline; one Opus reviewer per round.
+- **726e split into 726e1 (plumbing) and 726e2 (UI)**, both big (Opus codes; Opus + Fable reviewers on the first round).
+- **The worker checks the push payload by hand, not with zod** (#772): bundling zod took `sw.js` from 13 KB to 107 KB; a parity test holds it to the shared `PushPayloadSchema`. The VAPID public key is kept in Cache Storage `heartpatch-push`. **No cold-start deep link** from a nudge: with the app open it opens the patch through the lobby's "Visit patch" path; a cold start opens `/` (the last patch, #160).
+- **`changes/726-nudges.md` is held out of #773** and ships with the PR that flips the prod compose default to `HP_PUSH=on`, so What's new never points at a hidden Settings group.
+- **The offer card hides the tray handles and the night chips while it is up** (the Hollow cards' pattern) and anchors below the top row like What's new; **the patch line pauses while the lobby overlay (Settings) is open** and `patchLineBusy` counts it as busy (#773, from the render-checks). An existing subscription with permission granted reads as On in Settings. The friend nudge's 2-hour bucket key is accepted for this slice.
+
+**Owner decisions (later)**
+- **Nudges screens approved (owner, 2026-11-01 21:56):** "Approve, merge on green" for https://claude.ai/artifact/FMmnLR2SonyLyYhvBQzVes v6 (PR #773, head `f956f9e`): the offer card, "Nudges on! 🔔", Settings › Nudges in four states with the audio-toggle On/Off buttons.
+- **Supervisors run on Opus (owner, 2026-11-01):** supervisor 33 ran on Fable because the owner's iOS session was created with that model and nobody checked. The next supervisor checks `configured_model` at takeover.
