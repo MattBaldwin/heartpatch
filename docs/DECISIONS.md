@@ -2179,4 +2179,3 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 - **Push payload `tag` is `kind:mapId` and `topic` is the kind** (#769); gatherers nudges count multiplayer patches only (the Glade's gathers are scripted).
 - **No `lock-order.test.ts` case for the sweep** (#769): its helpers watch the order of row locks a transaction takes, and the sweep takes none.
 - **726d ruled small** (not big): additive hub hook and one new service path on 726c's pipeline; one Opus reviewer per round.
-
