@@ -34,7 +34,7 @@ export class ApiRequestError extends Error {
 export async function apiCall<T>(
   path: string,
   options: {
-    method: 'GET' | 'POST';
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE';
     body?: unknown;
     schema: Schema<T> | null;
     signal?: AbortSignal;
@@ -81,7 +81,7 @@ export async function apiCall<T>(
 export async function apiCallFor<T>(
   path: string,
   options: {
-    method: 'GET' | 'POST';
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE';
     body?: unknown;
     schema: Schema<T>;
     signal?: AbortSignal;

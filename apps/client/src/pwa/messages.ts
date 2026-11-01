@@ -24,3 +24,18 @@ export function isWorkerRequest(data: unknown): data is WorkerRequest {
   const { type, path } = data as { type?: unknown; path?: unknown };
   return type === 'skip-waiting' || (type === 'describe' && typeof path === 'string');
 }
+
+/**
+ * Worker → page (#726): a nudge was tapped while the app was open, so the
+ * page should open this patch (`null`: just come to the front).
+ */
+export interface PageMessage {
+  type: 'open-map';
+  mapId: string | null;
+}
+
+export function isPageMessage(data: unknown): data is PageMessage {
+  if (typeof data !== 'object' || data === null) return false;
+  const { type, mapId } = data as { type?: unknown; mapId?: unknown };
+  return type === 'open-map' && (mapId === null || typeof mapId === 'string');
+}
