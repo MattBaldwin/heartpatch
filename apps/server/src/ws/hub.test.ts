@@ -1,6 +1,7 @@
 import type { WebSocket } from '@fastify/websocket';
 import type { WsServerMessage } from '@heartpatch/shared';
 import type { FastifyBaseLogger } from 'fastify';
+import { PUSH_RULES } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import type { GameEvent } from '../db/game-events.js';
@@ -79,6 +80,11 @@ class FakeSocket {
   }
   terminate(): void {
     this.readyState = 3;
+  }
+  /** The phone went away: the socket's `close` event. */
+  emitClose(): void {
+    this.readyState = 3;
+    this.handlers.get('close')?.();
   }
 }
 
@@ -218,5 +224,123 @@ describe('WsHub catch-up races', () => {
     expect(() =>
       createWsHub({ repo, views, sessionIsValid: () => Promise.resolve(true), logger: silent }),
     ).toThrow(/invalid event type/);
+  });
+});
+
+describe('WsHub arrivals (#726d, the friend nudge)', () => {
+  const MINUTE = 60_000;
+
+  function arrivals() {
+    const { repo } = gatedRepo(0);
+    const clock = new Date('2026-10-14T18:00:00Z');
+    const seen: { mapId: string; userId: string; awayMs: number | null }[] = [];
+    const errors: unknown[] = [];
+    const logger = {
+      error: (obj: unknown) => errors.push(obj),
+      warn: () => undefined,
+    } as unknown as FastifyBaseLogger;
+    let throws = false;
+    const hub = createWsHub({
+      repo,
+      views: VIEWS,
+      sessionIsValid: () => Promise.resolve(true),
+      logger,
+      clock: () => clock,
+      onSubscribed: (mapId, userId, awayMs) => {
+        seen.push({ mapId, userId, awayMs });
+        if (throws) throw new Error('push is having a day');
+      },
+    });
+    /** A new socket for USER, subscribed to `mapId` (`afterSeq` 0 is caught up). */
+    const arrive = async (mapId = MAP_A, afterSeq = 0) => {
+      const socket = new FakeSocket();
+      hub.accept(socket as unknown as WebSocket, USER, 'token');
+      socket.receive({ v: 1, type: 'subscribe', mapId, afterSeq });
+      await until(() =>
+        socket.sent.some((m) => m.type === 'ws.subscribed' || m.type === 'ws.resync'),
+      );
+      return socket;
+    };
+    const later = (minutes: number) => {
+      clock.setTime(clock.getTime() + minutes * MINUTE);
+    };
+    return { hub, seen, errors, arrive, later, clock, throwing: () => (throws = true) };
+  }
+
+  it('counts the first arrival since the server started as long ago (awayMs null)', async () => {
+    const { hub, seen, arrive } = arrivals();
+    expect(hub.lastOfflineAt(MAP_A, USER.id)).toBeNull();
+    await arrive();
+    expect(seen).toEqual([{ mapId: MAP_A, userId: USER.id, awayMs: null }]);
+    await hub.close();
+  });
+
+  it('remembers when the last socket left, and fires only after the away threshold', async () => {
+    const { hub, seen, arrive, later, clock } = arrivals();
+    const first = await arrive();
+    later(1);
+    first.emitClose();
+    expect(hub.lastOfflineAt(MAP_A, USER.id)).toEqual(clock);
+
+    // A quick reconnect (the app resuming) is not an arrival.
+    later(PUSH_RULES.friendArriverAwayMinutes - 1);
+    const resumed = await arrive();
+    expect(seen).toHaveLength(1);
+    resumed.emitClose();
+
+    // Back after the threshold: an arrival, with how long they were gone.
+    later(PUSH_RULES.friendArriverAwayMinutes);
+    await arrive();
+    expect(seen).toEqual([
+      { mapId: MAP_A, userId: USER.id, awayMs: null },
+      { mapId: MAP_A, userId: USER.id, awayMs: PUSH_RULES.friendArriverAwayMinutes * MINUTE },
+    ]);
+    await hub.close();
+  });
+
+  it('a second device on the same map is not an arrival, and a replay is not either', async () => {
+    const { hub, seen, arrive } = arrivals();
+    const phone = await arrive();
+    await arrive();
+    phone.receive({ v: 1, type: 'subscribe', mapId: MAP_A, afterSeq: 0 });
+    await until(() => phone.sent.filter((m) => m.type === 'ws.subscribed').length === 2);
+    expect(seen).toHaveLength(1);
+    await hub.close();
+  });
+
+  it('switching maps leaves the old one (its time is kept) and arrives on the new one', async () => {
+    const { hub, seen, arrive, clock } = arrivals();
+    const socket = await arrive(MAP_A);
+    socket.receive({ v: 1, type: 'subscribe', mapId: MAP_B, afterSeq: 0 });
+    await until(() => seen.length === 2);
+    expect(seen[1]).toEqual({ mapId: MAP_B, userId: USER.id, awayMs: null });
+    expect(hub.lastOfflineAt(MAP_A, USER.id)).toEqual(clock);
+    expect(hub.lastOfflineAt(MAP_B, USER.id)).toBeNull();
+    await hub.close();
+  });
+
+  it('a subscription sent to resync before ws.subscribed keeps the old time', async () => {
+    const { hub, seen, arrive } = arrivals();
+    // Its cursor is ahead of the map's head: resync, never subscribed.
+    const stale = await arrive(MAP_A, 5);
+    expect(stale.sent.map((m) => m.type)).toContain('ws.resync');
+    expect(seen).toEqual([]);
+    expect(hub.lastOfflineAt(MAP_A, USER.id)).toBeNull();
+    // The client's fresh subscribe right after is still the arrival.
+    stale.receive({ v: 1, type: 'subscribe', mapId: MAP_A, afterSeq: 0 });
+    await until(() => seen.length === 1);
+    expect(seen[0]!.awayMs).toBeNull();
+    await hub.close();
+  });
+
+  it('logs an onSubscribed that throws and carries on', async () => {
+    const { hub, seen, errors, arrive, throwing } = arrivals();
+    throwing();
+    const socket = await arrive();
+    expect(seen).toHaveLength(1);
+    expect(errors).toEqual([expect.objectContaining({ mapId: MAP_A })]);
+    socket.receive({ v: 1, type: 'ping' });
+    await until(() => socket.sent.some((m) => m.type === 'ws.pong'));
+    await hub.close();
   });
 });

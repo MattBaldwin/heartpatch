@@ -206,6 +206,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   // Looks a session up without renewing it (see `WsRoutesOptions.sessionUser`).
   const sessionUser = async (token: string) =>
     (await authRepo?.findSession(hashSessionToken(token), clock()))?.user ?? null;
+  // The friend nudge (#726d): the hub reports a player arriving on a patch;
+  // the push service, built with the game routes below, takes it from there.
+  let onArrival: ((mapId: string, userId: string) => void) | null = null;
   const wsHub =
     db && authRepo
       ? createWsHub({
@@ -213,6 +216,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           views: PUBLIC_VIEWS,
           sessionIsValid: async (token) => (await sessionUser(token)) !== null,
           logger: app.log,
+          clock,
+          onSubscribed: (mapId, userId) => onArrival?.(mapId, userId),
           ...options.wsHubOptions,
         })
       : null;
@@ -572,9 +577,16 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             vapid && pushSwitch.mode !== 'off'
               ? createWebPushSender(vapid, { log: app.log })
               : null,
-          // The sweep's gatherers nudge skips a player who's on that patch now.
-          ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
+          // The sweep's gatherers nudge skips a player who's on that patch now;
+          // the friend nudge also asks when they left it.
+          ...(wsHub ? { isOnline: wsHub.isOnline, lastOfflineAt: wsHub.lastOfflineAt } : {}),
         });
+        // Fire-and-forget: the hub never waits on (or hears about) a send.
+        onArrival = (mapId, userId) => {
+          void pushService.friendArrived(mapId, userId).catch((err: unknown) => {
+            app.log.error({ err, mapId }, 'push: friend nudge failed');
+          });
+        };
         await api.register(pushRoutes(pushService, { hooks: authHooks }));
         options.onPush?.(pushService, pushSwitch.mode !== 'off');
         // The tutorial (#47, #24) runs the Glade on these same modules; its

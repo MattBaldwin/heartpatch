@@ -87,6 +87,7 @@ export interface PushClaim {
 const SETTING_COLUMN = {
   dusk: sql.raw('dusk'),
   gatherers: sql.raw('gatherers'),
+  friend: sql.raw('friend'),
   longNight: sql.raw('long_night'),
 } as const;
 
@@ -158,6 +159,17 @@ export interface PushRepo {
     setting: 'dusk' | 'longNight',
     now: Date,
   ) => Promise<PushRecipient[]>;
+  /**
+   * The friend nudge (#726d): the arriver's username and the patch's other
+   * active members with `friend` on and a live device, in id order. Nothing
+   * (`arriver: null`) unless the patch is multiplayer and the arriver is an
+   * active member of it. The caller still checks presence and the switch.
+   */
+  friendRecipients: (
+    mapId: string,
+    arriverUserId: string,
+    now: Date,
+  ) => Promise<{ arriver: string | null; recipients: PushRecipient[] }>;
   /**
    * Active members, on multiplayer patches, with `gatherers` on and a live
    * device, holding a gather ready since `idleBefore`, a factory batch
@@ -357,6 +369,24 @@ export function createPushRepo(db: Executor): PushRepo {
         where mm.map_id = ${mapId} and mm.status = 'active' and ${reachable(setting, now)}
         order by u.id`);
       return rows.map((r) => ({ ...r }));
+    },
+
+    friendRecipients: async (mapId, arriverUserId, now) => {
+      const [arriver] = await db.execute<{ username: string }>(sql`
+        select u.username
+        from map_members mm
+        join users u on u.id = mm.user_id
+        join maps m on m.id = mm.map_id and m.kind = 'multiplayer'
+        where mm.map_id = ${mapId} and mm.user_id = ${arriverUserId} and mm.status = 'active'`);
+      if (!arriver) return { arriver: null, recipients: [] };
+      const rows = await db.execute<{ id: string; username: string; timeZone: string }>(sql`
+        select u.id, u.username, u.time_zone as "timeZone"
+        from map_members mm
+        join users u on u.id = mm.user_id
+        where mm.map_id = ${mapId} and mm.status = 'active' and u.id <> ${arriverUserId}
+          and ${reachable('friend', now)}
+        order by u.id`);
+      return { arriver: arriver.username, recipients: rows.map((r) => ({ ...r })) };
     },
 
     gathererCandidates: async (now, idleBefore) => {
