@@ -96,8 +96,9 @@ export function pinMapTime(mapDay: string): string {
     const zone = zoneAt(now);
     process.env['HP_E2E_TIME_ZONE'] = zone;
     let at = Date.parse(`${mapDay}T${new Date(now).toISOString().slice(11)}`);
-    if (localDay(at, zone) > mapDay) at -= DAY_MS;
-    else if (localDay(at, zone) < mapDay) at += DAY_MS;
+    const day = localDay(at, zone);
+    if (day > mapDay) at -= DAY_MS;
+    else if (day < mapDay) at += DAY_MS;
     process.env['HP_DEV_NOW'] = new Date(at).toISOString();
   }
   if (process.env['HP_E2E_CLOCK_LEAD_MS'] === undefined) {
