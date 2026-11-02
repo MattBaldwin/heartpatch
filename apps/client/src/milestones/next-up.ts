@@ -21,9 +21,10 @@ import './next-up.css';
 // Goals row opens the same sheet. On a patch that's only you, both say why
 // milestones wait and put the invite code one tap away.
 //
-// Read on patch switch and when a milestone party arrives, never on a loop
-// (CLAUDE.md rule 4). Hidden while the tile panel, the lobby's Back pill or
-// the night's chips are up (next-up.css), and never on the Tutorial Glade.
+// Read on patch switch, when a milestone party arrives and when a friend
+// joins or leaves the patch, never on a loop (CLAUDE.md rule 4). Hidden while
+// the tile panel, the lobby's Back pill, an open tray or the Hollow's cards
+// are up (next-up.css); it sits above the night's chips; never on the Glade.
 
 /** What the solo card needs to show the patch's code. */
 export interface NextUpInvite {
@@ -78,6 +79,8 @@ export interface NextUp {
 const SPROUT_MS = 5_000; // TUNE:
 /** How soon a Sprout line that found the screen busy tries again. */
 const SPROUT_RETRY_MS = 2_500; // TUNE:
+/** How many busy looks before Sprout waits for the next read (about a minute). */
+const SPROUT_TRIES = 24; // TUNE:
 /** How long "Copied!" shows before the button reads "Copy code" again. */
 const COPIED_MS = 2_000; // TUNE:
 
@@ -101,6 +104,10 @@ export function createNextUp(options: NextUpOptions): NextUp {
   let readNo = 0;
   let sproutPending = false;
   let sproutTimerSet = false;
+  /** Busy looks left before Sprout waits for the next read instead. */
+  let sproutTries = 0;
+  /** What opened the sheet, so closing it hands focus back. */
+  let opener: HTMLElement | null = null;
 
   // ── The chip ────────────────────────────────────────────────────────────
   const ringIcon = el('span', { class: 'next-up-ring-icon', 'aria-hidden': 'true' });
@@ -134,6 +141,8 @@ export function createNextUp(options: NextUpOptions): NextUp {
   sprout.hidden = true;
 
   // ── The tray row (same look as the sheet's rows) ────────────────────────
+  // Built here, not with trays.ts's `trayRow()`: its sub line and count change
+  // with every read, and `trayRow()` makes a fixed row.
   const rowSub = el('span', { class: 'tray-row-sub', 'data-testid': 'next-up-row-sub' });
   const rowCount = el('span', { class: 'next-up-row-count', 'aria-hidden': 'true' });
   const row = el(
@@ -391,7 +400,8 @@ export function createNextUp(options: NextUpOptions): NextUp {
       rowCount.hidden = rv?.count == null;
     }
     if (view === null && sheetOpen) shut();
-    if (view !== null && user) offerSprout(user.id);
+    // Only once there's a real goal to point at (not the solo card).
+    if (view !== null && state.kind !== 'solo' && user) offerSprout(user.id);
     else hideSprout();
   };
 
@@ -411,7 +421,8 @@ export function createNextUp(options: NextUpOptions): NextUp {
     if (!sprout.hidden || said(accountId)) return;
     if (options.busy() || !chipOnScreen()) {
       sproutPending = true;
-      if (!sproutTimerSet) {
+      if (!sproutTimerSet && sproutTries < SPROUT_TRIES) {
+        sproutTries += 1;
         sproutTimerSet = true;
         setTimer(() => {
           sproutTimerSet = false;
@@ -439,6 +450,7 @@ export function createNextUp(options: NextUpOptions): NextUp {
   const read = () => {
     const forMap = mapId;
     const no = ++readNo;
+    sproutTries = 0;
     if (forMap === null || user === null) {
       response = null;
       state = { kind: 'none' };
@@ -465,6 +477,7 @@ export function createNextUp(options: NextUpOptions): NextUp {
 
   const open = () => {
     if (state.kind === 'none') return;
+    opener = document.activeElement instanceof HTMLElement ? document.activeElement : chip;
     fillSheet();
     scrim.hidden = false;
     hideSprout();
@@ -475,6 +488,10 @@ export function createNextUp(options: NextUpOptions): NextUp {
     if (scrim.hidden) return;
     scrim.hidden = true;
     render();
+    // Back to the chip or row that opened it, if it's still there to hold focus.
+    const back = opener;
+    opener = null;
+    if (back && !back.hidden && back.isConnected) back.focus();
   };
 
   return {

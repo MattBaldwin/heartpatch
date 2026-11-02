@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { tapCanvas } from './claim-land.js';
-import { hook, waitForLiveMap } from './dev-hook.js';
+import { api, hook, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 // The Next-up chip (#731): a patch that's only you shows the share-your-code
@@ -58,9 +58,8 @@ test('a solo patch shows the share-your-code card, then real goals once a friend
   const chip = owner.getByTestId('next-up-chip');
   await expect(chip).toBeVisible();
   await expect(chip.getByTestId('next-up-line')).toHaveText('Invite a friend to start');
-  // After graduation's patch, Sprout says it once (owner decision 4).
-  await expect.poll(() => nextUp(owner).then((n) => n?.sprout), { timeout: 15_000 }).toBe(true);
-  await expect(owner.getByTestId('next-up-sprout')).toHaveText('Ooh, a goal!');
+  // Sprout keeps "Ooh, a goal!" for a real goal, not the solo card.
+  expect((await nextUp(owner))?.sprout).toBe(false);
   await chip.tap();
   const sheet = owner.getByTestId('next-up-sheet');
   await expect(sheet).toBeVisible();
@@ -87,25 +86,31 @@ test('a solo patch shows the share-your-code card, then real goals once a friend
   await expect(chip).toBeVisible();
 
   // A friend asks to join and the owner says yes from the lobby.
-  const friendName = uniqueName('pal');
-  const friend = await newPlayer(browser, friendName);
+  const friend = await newPlayer(browser, uniqueName('pal'));
   const friendLobby = friend.getByTestId('lobby');
   await friendLobby.getByRole('button', { name: 'Join with a code' }).tap();
   await friendLobby.getByLabel('Invite code').fill(code);
   await friendLobby.getByRole('button', { name: 'Ask to join' }).tap();
   await expect(friendLobby.getByTestId('lobby-waiting')).toBeVisible();
-  await owner.getByTestId('lobby-open').tap();
-  await ownerLobby.getByRole('button', { name: /Goal Patch/ }).tap();
-  await ownerLobby.getByTestId('lobby-requests').getByRole('button', { name: 'Yes!' }).tap();
-  await expect(ownerLobby.getByTestId('lobby-notice')).toContainText(`${friendName} joined`);
+  // The owner says yes while still on the patch (the lobby's Yes! button
+  // calls the same route): the chip changes by itself, with no revisit.
+  const mapId = (await nextUp(owner))?.mapId ?? '';
+  const detail = await api<{ map: { admin: { requests: { id: string }[] } | null } }>(
+    owner,
+    'GET',
+    `/maps/${mapId}`,
+  );
+  const requestId = detail.body.map.admin?.requests[0]?.id ?? '';
+  expect(requestId).not.toBe('');
+  const yes = await api(owner, 'POST', `/maps/${mapId}/requests/${requestId}/approve`);
+  expect(yes.status).toBeLessThan(300);
   await friend.context().close();
-
-  // Back on the patch, it reads again: now milestones count, so real goals.
-  await visitPatch(ownerLobby);
-  await expect(owner.getByTestId('map-hud')).toContainText('Goal Patch');
   await expect.poll(() => nextUp(owner).then((n) => n?.state), { timeout: 20_000 }).toBe('goals');
   await expect(chip).toBeVisible();
   await expect(chip.getByTestId('next-up-kicker')).toContainText('Next up');
+  // Now there's a real goal: Sprout says it once (owner decision 4).
+  await expect.poll(() => nextUp(owner).then((n) => n?.sprout), { timeout: 15_000 }).toBe(true);
+  await expect(owner.getByTestId('next-up-sprout')).toHaveText('Ooh, a goal!');
   const goals = (await nextUp(owner))?.goals ?? [];
   expect(goals.length).toBe(3);
   await chip.tap();

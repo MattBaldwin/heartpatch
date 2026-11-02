@@ -1493,6 +1493,13 @@ const maps = createMapScreen({
     trickOrTreat.liveEvent(event);
     postScreen.liveEvent(event);
     defense.liveEvent(event);
+    // A friend joined or left the patch on screen: whether milestones count may have changed (#731).
+    if (
+      event.type === 'member.joined' ||
+      event.type === 'member.left' ||
+      event.type === 'member.removed'
+    )
+      nextUp.refresh();
     // A patch-mate's Legendary friend (#391).
     patchLine.liveEvent(event);
   },
