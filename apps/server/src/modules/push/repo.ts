@@ -81,7 +81,19 @@ export interface PushClaim {
   now: Date;
   /** The start of the account's day: the daily cap counts claims since. */
   dayStart: Date;
+  /**
+   * A repeat window instead of a fixed key (the friend nudge, #726d): nothing
+   * if a send of this kind whose key starts `dedupeKey/` was claimed after
+   * `repeatSince`; else the row's key is `dedupeKey/<n>`, one past the
+   * highest `n` stored. Two callers at once pick the same `n`, so the unique
+   * key still lets only one in.
+   */
+  repeatSince?: Date;
 }
+
+/** How a claim went: claimed (its id), sent already (or inside the repeat window), or at the cap. */
+export type PushClaimResult =
+  { outcome: 'claimed'; id: string } | { outcome: 'sent' } | { outcome: 'capped' };
 
 /** `push_settings` columns by switch (SQL), for the candidate queries. */
 const SETTING_COLUMN = {
@@ -174,18 +186,21 @@ export interface PushRepo {
    * Active members, on multiplayer patches, with `gatherers` on and a live
    * device, holding a gather ready since `idleBefore`, a factory batch
    * finished by then, or a squishy gatherer at work since then (maybe full:
-   * the caller checks), by user, map and source.
+   * the caller checks), by user, map and source. Not an account that already
+   * has today's `gatherers` claim (its key: the date in its zone at `now`,
+   * as `localDate`), so the sweep doesn't re-check them every minute.
    */
   gathererCandidates: (now: Date, idleBefore: Date) => Promise<PushGathererRow[]>;
   /** How many sends this account has claimed since `since` (the daily cap). */
   claimedSince: (userId: string, since: Date) => Promise<number>;
   /**
    * Claims a send (`INSERT … ON CONFLICT DO NOTHING`, one statement, no other
-   * lock): its id, or null when it was claimed already or the account has
+   * lock): its id; `sent` when it was claimed already (or, with
+   * `repeatSince`, one was inside the window); `capped` when the account has
    * `PUSH_RULES.dailyCap` claims since `dayStart` (the cap again, so two
    * sweeps at once can't both pass it on a stale count).
    */
-  claim: (claim: PushClaim, dailyCap?: number) => Promise<string | null>;
+  claim: (claim: PushClaim, dailyCap?: number) => Promise<PushClaimResult>;
   /** After `deliver`: how many devices it went to, and when one took it (else null). */
   markSent: (id: string, sentAt: Date | null, devices: number) => Promise<void>;
   /**
@@ -429,6 +444,12 @@ export function createPushRepo(db: Executor): PushRepo {
         join map_members mm
           on mm.map_id = d.map_id and mm.user_id = d.user_id and mm.status = 'active'
         where ${reachable('gatherers', now)}
+          -- Once an account day: today's claim (the sweep's key, localDate) settles it.
+          and not exists (
+            select 1 from push_sends ps
+            where ps.user_id = u.id and ps.kind = 'gatherers'
+              and ps.dedupe_key = to_char(${now.toISOString()}::timestamptz at time zone u.time_zone, 'YYYY-MM-DD')
+          )
         order by "userId", "mapId", d.source, "squishyId"`);
       return rows.map((r) => ({
         user: { id: r.userId, username: r.username, timeZone: r.userTimeZone },
@@ -447,19 +468,43 @@ export function createPushRepo(db: Executor): PushRepo {
     },
 
     claim: async (
-      { userId, kind, dedupeKey, mapId, now, dayStart },
+      { userId, kind, dedupeKey, mapId, now, dayStart, repeatSince },
       dailyCap = PUSH_RULES.dailyCap,
     ) => {
-      const rows = await db.execute<{ id: string }>(sql`
-        insert into push_sends (id, user_id, kind, dedupe_key, map_id, claimed_at, devices)
-        select ${uuidv7()}::uuid, ${userId}::uuid, ${kind}, ${dedupeKey}, ${mapId}::uuid, ${now.toISOString()}::timestamptz, 0
-        where (
-          select count(*) from push_sends
+      // This kind's rows for this account whose key is `dedupeKey/…`.
+      const repeats = sql`
+        from push_sends
+        where user_id = ${userId}::uuid and kind = ${kind}
+          and left(dedupe_key, ${dedupeKey.length + 1}) = ${`${dedupeKey}/`}`;
+      // With a repeat window the key is the next number after the prefix: two
+      // claims at once read the same highest number, so the unique key still
+      // stops the second. A non-numeric suffix is ignored.
+      const key =
+        repeatSince === undefined
+          ? sql`${dedupeKey}`
+          : sql`${`${dedupeKey}/`} || (
+              select coalesce(max(case when substr(dedupe_key, ${dedupeKey.length + 2}) ~ '^[0-9]{1,18}$'
+                then substr(dedupe_key, ${dedupeKey.length + 2})::bigint end), -1) + 1
+              ${repeats}
+            )::text`;
+      const fresh =
+        repeatSince === undefined
+          ? sql`true`
+          : sql`not exists (select 1 ${repeats} and claimed_at > ${repeatSince.toISOString()}::timestamptz)`;
+      const [row] = await db.execute<{ id: string | null; underCap: boolean }>(sql`
+        with under_cap as (
+          select count(*) < ${dailyCap} as ok from push_sends
           where user_id = ${userId}::uuid and claimed_at >= ${dayStart.toISOString()}::timestamptz
-        ) < ${dailyCap}
-        on conflict (user_id, kind, dedupe_key) do nothing
-        returning id`);
-      return rows[0]?.id ?? null;
+        ), claimed as (
+          insert into push_sends (id, user_id, kind, dedupe_key, map_id, claimed_at, devices)
+          select ${uuidv7()}::uuid, ${userId}::uuid, ${kind}, ${key}, ${mapId}::uuid, ${now.toISOString()}::timestamptz, 0
+          where (select ok from under_cap) and ${fresh}
+          on conflict (user_id, kind, dedupe_key) do nothing
+          returning id
+        )
+        select (select id from claimed) as id, (select ok from under_cap) as "underCap"`);
+      if (row?.id) return { outcome: 'claimed', id: row.id };
+      return row?.underCap === false ? { outcome: 'capped' } : { outcome: 'sent' };
     },
 
     markSent: async (id, sentAt, devices) => {
