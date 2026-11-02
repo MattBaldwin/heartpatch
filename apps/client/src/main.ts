@@ -1703,6 +1703,8 @@ const nextUp = createNextUp({
     }
   },
   busy: () => mapCovered(),
+  // The Hollow's night chips (and a Long Night's) keep the bottom edge.
+  liftOver: () => document.querySelector<HTMLElement>('.night-chips'),
   canCopy: 'clipboard' in navigator,
   // async: a missing clipboard (an http page) rejects instead of throwing.
   copy: async (text) => navigator.clipboard.writeText(text),

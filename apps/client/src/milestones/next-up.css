@@ -14,7 +14,7 @@
   position: fixed;
   z-index: 3;
   left: 50%;
-  bottom: calc(env(safe-area-inset-bottom) + 14px);
+  bottom: max(calc(env(safe-area-inset-bottom) + 14px), var(--next-up-lift));
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -41,32 +41,23 @@
    reads 0, as the night's chips are (hollow.css). // TUNE: */
 @media (orientation: portrait) and (min-height: 740px) {
   .next-up-chip {
-    bottom: calc(max(env(safe-area-inset-bottom), 22px) + 14px);
+    bottom: max(calc(max(env(safe-area-inset-bottom), 22px) + 14px), var(--next-up-lift));
   }
 
   .next-up-sprout {
-    bottom: calc(max(env(safe-area-inset-bottom), 22px) + 76px);
+    bottom: max(
+      calc(max(env(safe-area-inset-bottom), 22px) + 76px),
+      calc(var(--next-up-lift) + 62px)
+    );
   }
 }
 
-/* At night the Hollow's chips have the bottom edge (44 px, 12 px up): the
-   chip and Sprout's line step up over them. // TUNE: */
-body:has(.night-chips:not([hidden]):not(:empty)) .next-up-chip {
-  bottom: calc(env(safe-area-inset-bottom) + 64px);
-}
-
-body:has(.night-chips:not([hidden]):not(:empty)) .next-up-sprout {
-  bottom: calc(env(safe-area-inset-bottom) + 126px);
-}
-
-@media (orientation: portrait) and (min-height: 740px) {
-  body:has(.night-chips:not([hidden]):not(:empty)) .next-up-chip {
-    bottom: calc(max(env(safe-area-inset-bottom), 22px) + 64px);
-  }
-
-  body:has(.night-chips:not([hidden]):not(:empty)) .next-up-sprout {
-    bottom: calc(max(env(safe-area-inset-bottom), 22px) + 126px);
-  }
+/* At night the Hollow's chips have the bottom edge, one row or two (a Long
+   Night adds its own): next-up.ts measures them into --next-up-lift and the
+   chip and Sprout's line sit just above. */
+.next-up-chip,
+.next-up-sprout {
+  --next-up-lift: 0px;
 }
 
 /* Off the map, and while something else owns the bottom middle (owner
@@ -153,7 +144,7 @@ body:not(.hp-trays-on) .next-up-sprout,
   position: fixed;
   z-index: 3;
   left: 50%;
-  bottom: calc(env(safe-area-inset-bottom) + 76px);
+  bottom: max(calc(env(safe-area-inset-bottom) + 76px), calc(var(--next-up-lift) + 62px));
   transform: translateX(-50%);
   display: flex;
   align-items: center;

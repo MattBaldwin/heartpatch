@@ -48,6 +48,11 @@ export interface NextUpOptions {
   onGo: (go: NextUpGo) => void;
   /** True while Sprout's line would be in the way (another card, the trays' hint). */
   busy: () => boolean;
+  /**
+   * What owns the very bottom edge when it's up (the Hollow's night chips):
+   * the chip sits just above it, however many rows it wraps to.
+   */
+  liftOver?: () => HTMLElement | null;
   canCopy: boolean;
   copy: (text: string) => Promise<void>;
   storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
@@ -198,6 +203,30 @@ export function createNextUp(options: NextUpOptions): NextUp {
     if (e.key === 'Escape') shut();
   });
   options.root.append(chip, sprout, scrim);
+
+  // ── Above the night's chips ─────────────────────────────────────────────
+  /** Gap between the chips below and this one. // TUNE: */
+  const LIFT_GAP_PX = 8;
+  let liftWatched: HTMLElement | null = null;
+  const lift = () => {
+    const over = liftWatched;
+    const box =
+      over && !over.hidden && over.childElementCount > 0 ? over.getBoundingClientRect() : null;
+    const px = box && box.height > 0 ? Math.max(0, window.innerHeight - box.top) + LIFT_GAP_PX : 0;
+    const value = `${String(Math.round(px))}px`;
+    for (const node of [chip, sprout]) {
+      if (node.style.getPropertyValue('--next-up-lift') !== value)
+        node.style.setProperty('--next-up-lift', value);
+    }
+  };
+  const liftObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(lift);
+  /** Starts watching what's below once it exists (it's made with the Hollow). */
+  const watchLift = () => {
+    if (liftWatched) return;
+    liftWatched = options.liftOver?.() ?? null;
+    if (liftWatched) liftObserver?.observe(liftWatched);
+  };
+  window.addEventListener('resize', lift);
 
   const goalCard = (goal: NextUpGoal, waiting: boolean): HTMLElement => {
     const bar = el('span', { class: 'next-up-bar-fill' });
@@ -383,6 +412,8 @@ export function createNextUp(options: NextUpOptions): NextUp {
 
   // ── Drawing ─────────────────────────────────────────────────────────────
   const render = () => {
+    watchLift();
+    lift();
     const view = mapId === null ? null : chipView(state);
     const sheetOpen = !scrim.hidden;
     chip.hidden = view === null || sheetOpen;
