@@ -132,17 +132,24 @@ interface Player {
   endpoint: string;
 }
 
-/** A sender that returns outcomes (never throws, like the real one) and remembers what it sent. */
+/**
+ * A sender that returns outcomes and remembers what it sent. It never throws
+ * (like the real one) unless the endpoint is in `throwsFor`.
+ */
 function fakeSender(): PushSender & {
   sent: { endpoint: string; payload: PushPayload; ttlSeconds: number }[];
   results: Map<string, PushSendResult>;
+  throwsFor: Set<string>;
 } {
   const sent: { endpoint: string; payload: PushPayload; ttlSeconds: number }[] = [];
   const results = new Map<string, PushSendResult>();
+  const throwsFor = new Set<string>();
   return {
     sent,
     results,
+    throwsFor,
     send: (target, payload, options) => {
+      if (throwsFor.has(target.endpoint)) return Promise.reject(new Error('push service on fire'));
       sent.push({ endpoint: target.endpoint, payload, ttlSeconds: options.ttlSeconds });
       return Promise.resolve(results.get(target.endpoint) ?? { outcome: 'ok' });
     },
@@ -188,13 +195,22 @@ describe.skipIf(!url)(
         online?: Set<string>;
         longNight?: 'on' | 'off' | 'testers';
         longNightTesters?: string[];
+        /** Collects what goes to `log.error`. */
+        errors?: unknown[];
       } = {},
     ): PushService {
       const online = options.online ?? new Set<string>();
+      const log = pino({ level: 'silent' });
+      if (options.errors) {
+        const errors = options.errors;
+        log.error = (obj: unknown) => {
+          errors.push(obj);
+        };
+      }
       return createPushService({
         db,
         clock: () => clock,
-        log: pino({ level: 'silent' }),
+        log,
         push: pushSwitchOf({
           HP_PUSH: options.mode ?? 'on',
           HP_PUSH_TESTERS: options.testers ?? [],
@@ -384,6 +400,34 @@ describe.skipIf(!url)(
         ]);
       });
 
+      it('one account whose send throws is logged, and the rest of the sweep still goes', async () => {
+        const server = await start();
+        const first = await player();
+        const second = await player();
+        const mapId = await patch(server, first, [second]);
+        await inTheDark(mapId, first);
+        await inTheDark(mapId, second);
+        // Whichever comes first in id order fails.
+        const [broken, fine] = first.id < second.id ? [first, second] : [second, first];
+        const sender = fakeSender();
+        sender.throwsFor.add(broken.endpoint);
+        const errors: unknown[] = [];
+
+        await pushService(sender, { errors }).sweep();
+
+        expect(sentTo(sender, fine)).toHaveLength(1);
+        expect(await sendsOf(fine.id)).toEqual([
+          expect.objectContaining({ kind: 'dusk', sentAt: clock, devices: 1 }),
+        ]);
+        expect(errors).toContainEqual(
+          expect.objectContaining({ kind: 'dusk', userId: broken.id, mapId }),
+        );
+        // Still claimed (at most once), marked as reaching nobody.
+        expect(await sendsOf(broken.id)).toEqual([
+          expect.objectContaining({ kind: 'dusk', sentAt: null, devices: 0 }),
+        ]);
+      });
+
       it('sends nothing when a lit fire keeps the squishy safe, or the Hollow Man is at 0 %', async () => {
         const server = await start();
         const kid = await player();
@@ -555,12 +599,15 @@ describe.skipIf(!url)(
           now: clock,
           dayStart: accountDayStart(clock, ZONE),
         };
-        expect(await createPushRepo(db).claim(claim)).toBeNull();
-        expect(await createPushRepo(db).claim(claim, PUSH_RULES.dailyCap + 1)).toEqual(
-          expect.any(String),
-        );
+        expect(await createPushRepo(db).claim(claim)).toEqual({ outcome: 'capped' });
+        expect(await createPushRepo(db).claim(claim, PUSH_RULES.dailyCap + 1)).toEqual({
+          outcome: 'claimed',
+          id: expect.any(String),
+        });
         // And the unique key: the same send claimed twice is claimed once.
-        expect(await createPushRepo(db).claim(claim, PUSH_RULES.dailyCap + 2)).toBeNull();
+        expect(await createPushRepo(db).claim(claim, PUSH_RULES.dailyCap + 2)).toEqual({
+          outcome: 'sent',
+        });
       });
     });
 
@@ -606,6 +653,18 @@ describe.skipIf(!url)(
         clock.setTime(clock.getTime() + 60 * MINUTE_MS);
         await push.sweep();
         expect(await sendsOf(kid.id)).toHaveLength(1);
+        // Not even a candidate any more today (the sweep doesn't re-check it each minute)…
+        const repo = createPushRepo(db);
+        const idleBefore = minutesAgo(PUSH_RULES.gatherersIdleMinutes);
+        const candidateIds = async () =>
+          (await repo.gathererCandidates(clock, idleBefore)).map((row) => row.user.id);
+        expect(await candidateIds()).not.toContain(kid.id);
+        // …until its day turns over (midnight in Denver, 06:00Z): one again tomorrow.
+        clock.setTime(Date.parse('2026-10-15T06:00:00Z'));
+        expect(await candidateIds()).toContain(kid.id);
+        clock.setTime(Date.parse('2026-10-15T05:59:00Z'));
+        expect(await candidateIds()).not.toContain(kid.id);
+        clock.setTime(Date.parse(NOON) + 61 * MINUTE_MS);
 
         // Collected: nothing left to nudge about tomorrow.
         await db.execute(

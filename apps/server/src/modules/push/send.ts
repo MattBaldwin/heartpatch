@@ -18,10 +18,12 @@ export interface PushCandidate {
   user: PushRecipient;
   kind: PushKind;
   /**
-   * `push_sends.dedupe_key`: dusk `mapId/night`, gatherers the account day,
-   * friend `mapId/arriverUserId/<repeat bucket>`.
+   * `push_sends.dedupe_key`: dusk `mapId/night`, gatherers the account day;
+   * friend `mapId/arriverUserId`, a prefix (with `repeatSince`).
    */
   dedupeKey: string;
+  /** No nudge if one with this key prefix was claimed after this (`PushClaim.repeatSince`). */
+  repeatSince?: Date;
   /** The patch the nudge opens. */
   mapId: string;
   /** The friend's username, for the friend kind's title (`pushLineFor`). */
@@ -36,7 +38,7 @@ export interface PushSendTally {
   delivered: number;
   /** Dropped in quiet hours. */
   quiet: number;
-  /** Dropped at the daily cap. */
+  /** Dropped at the daily cap (the count before the claim, or the claim's own re-check). */
   capped: number;
 }
 
@@ -65,7 +67,7 @@ export function createPushSend(options: {
       tally.capped += 1;
       return;
     }
-    const claimId = await repo.claim(
+    const claim = await repo.claim(
       {
         userId: user.id,
         kind,
@@ -73,11 +75,18 @@ export function createPushSend(options: {
         mapId: candidate.mapId,
         now,
         dayStart,
+        ...(candidate.repeatSince ? { repeatSince: candidate.repeatSince } : {}),
       },
       rules.dailyCap,
     );
-    // Sent already (or the cap filled since the count): nothing to do.
-    if (claimId === null) return;
+    // The cap filled since the count (another sweep, a friend nudge): dropped there.
+    if (claim.outcome === 'capped') {
+      tally.capped += 1;
+      return;
+    }
+    // Sent already: nothing to do.
+    if (claim.outcome === 'sent') return;
+    const claimId = claim.id;
     tally.claimed += 1;
     let delivery: PushDelivery = { devices: 0, delivered: 0 };
     try {
