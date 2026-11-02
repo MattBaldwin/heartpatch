@@ -538,6 +538,81 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
     expect(trackOf(await milestones(server, kid), 'rescuer')?.progress).toBe(0);
   });
 
+  it('says whether milestones count on the patch on screen (countsHere, #731)', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch([kid]);
+    const here = async (who: Player, id: string) => {
+      const res = await call(server, 'GET', `/milestones?mapId=${id}`, who);
+      expect(res.statusCode).toBe(200);
+      return MilestonesResponseSchema.parse(res.json()).countsHere;
+    };
+
+    // Without `mapId` the field is left out, as before.
+    expect(await milestones(server, kid)).not.toHaveProperty('countsHere');
+    // Alone on the patch: nothing counts yet.
+    expect(await here(kid, mapId)).toBe(false);
+
+    // A friend joins: now it counts, for both of them.
+    const pal = await player();
+    await db.insert(mapMembers).values({
+      mapId,
+      userId: pal.id,
+      role: 'member',
+      joinedAt: new Date(clock.getTime() - 60_000),
+    });
+    expect(await here(kid, mapId)).toBe(true);
+    expect(await here(pal, mapId)).toBe(true);
+
+    // A member who left doesn't count.
+    const other = await player();
+    const left = await patch([other]);
+    await db
+      .insert(mapMembers)
+      .values({ mapId: left, userId: pal.id, role: 'member', status: 'removed' });
+    expect(await here(other, left)).toBe(false);
+
+    // Nor does one whose join is still ahead on the game clock.
+    const later = await player();
+    const soon = await patch([later]);
+    await db.insert(mapMembers).values({
+      mapId: soon,
+      userId: kid.id,
+      role: 'member',
+      joinedAt: new Date(clock.getTime() + 60_000),
+    });
+    expect(await here(later, soon)).toBe(false);
+
+    // The Tutorial Glade never counts.
+    const glade = await patch([kid, pal], 'tutorial');
+    expect(await here(kid, glade)).toBe(false);
+  });
+
+  it("won't say whether milestones count on a patch I'm not in", async () => {
+    const server = await start();
+    const kid = await player();
+    const pal = await player();
+    const mapId = await patch([kid, pal]);
+    const stranger = await player();
+    const notMine = await call(server, 'GET', `/milestones?mapId=${mapId}`, stranger);
+    expect(notMine.statusCode).toBe(404);
+    expect(notMine.json()).toMatchObject({ error: { code: 'NOT_FOUND' } });
+    // A patch that doesn't exist answers the same way.
+    const gone = await call(server, 'GET', `/milestones?mapId=${randomUUID()}`, kid);
+    expect(gone.statusCode).toBe(404);
+    expect(gone.json()).toMatchObject({ error: { code: 'NOT_FOUND' } });
+    // A member who was removed is a stranger now.
+    const removed = await player();
+    await db
+      .insert(mapMembers)
+      .values({ mapId, userId: removed.id, role: 'member', status: 'removed' });
+    expect((await call(server, 'GET', `/milestones?mapId=${mapId}`, removed)).statusCode).toBe(404);
+    // Not a patch id at all: the query schema turns it away.
+    const bad = await call(server, 'GET', '/milestones?mapId=not-a-uuid', kid);
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json()).toMatchObject({ error: { code: 'VALIDATION_FAILED' } });
+  });
+
   it('counts nothing on the Tutorial Glade, except The First Patch', async () => {
     const server = await start();
     const kid = await player();

@@ -63,8 +63,20 @@ export const MilestonesResponseSchema = z.object({
   equippedTitleId: ContentIdSchema.nullable(),
   /** Earned and not celebrated yet, oldest first. */
   news: z.array(MilestoneNewsSchema),
+  /**
+   * Only on `GET /milestones?mapId=`: whether milestones count on that patch
+   * for me right now (a multiplayer patch with `MILESTONE_RULES.minMembers`
+   * active members; never the Tutorial Glade). Absent without `mapId`.
+   */
+  countsHere: z.boolean().optional(),
 });
 export type MilestonesResponse = z.infer<typeof MilestonesResponseSchema>;
+
+/** `GET /api/v1/milestones?mapId=`: also say whether milestones count on the patch on screen. */
+export const MilestonesQuerySchema = z.object({
+  mapId: z.uuid().optional(),
+});
+export type MilestonesQuery = z.infer<typeof MilestonesQuerySchema>;
 
 /** `POST /api/v1/milestones/seen`: these were celebrated. */
 export const MilestonesSeenRequestSchema = z.strictObject({

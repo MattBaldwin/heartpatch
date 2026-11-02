@@ -11,6 +11,7 @@ import type { Transaction } from '../../db/client.js';
 import type { GameEvent } from '../../db/game-events.js';
 import type { EventConsumer } from '../../jobs/consumers.js';
 import { localDate, onGameClock, type Clock } from '../../lib/time.js';
+import { milestonesCount } from './counts.js';
 import { createMilestonesRepo } from './repo.js';
 import {
   awardTutorialMilestones,
@@ -83,7 +84,7 @@ export function createMilestonesConsumer(options: MilestonesConsumerOptions = {}
         }
         return;
       }
-      if (finishing || map.members < rules.minMembers) return;
+      if (finishing || !milestonesCount(map, rules)) return;
 
       const seasons = activeSeasons(SEASONS, localDate(happened, map.timeZone)).map((s) => s.id);
       // By player, then track: every milestone transaction locks rows in this order.

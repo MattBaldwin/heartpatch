@@ -6,15 +6,10 @@ import {
   type FoundSetPlace,
   type FoundSetRoll,
 } from '@heartpatch/shared/server';
-import {
-  FOUND_SETS,
-  foundSetTrackId,
-  MILESTONE_RULES,
-  Rng,
-  type ClothingDropSource,
-} from '@heartpatch/shared';
+import { FOUND_SETS, foundSetTrackId, Rng, type ClothingDropSource } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import { newSeed } from '../../lib/rng.js';
+import { milestonesCount } from '../milestones/counts.js';
 import { createMilestonesRepo } from '../milestones/repo.js';
 import { devDropChanceOr, grantFoundPiece } from './drops.js';
 
@@ -36,7 +31,8 @@ import { devDropChanceOr, grantFoundPiece } from './drops.js';
  *    is a shared-contract change) and `refId` a uuid unique to the event.
  *
  * Pieces only drop where milestones count (`MILESTONE_RULES.minMembers`
- * active members, decision F, as the milestones consumer judges it), so
+ * active members, decision F, judged by the milestones consumer's own
+ * `milestonesCount`), so
  * every piece found moves the set's title along; elsewhere a piece's share
  * finds nothing, and the set's finds still drop. "Already found" is what the
  * title has counted, not what's owned: a piece that somehow wasn't counted
@@ -77,7 +73,7 @@ export async function rekindledDrop(
   if (!tables.some((t) => t.place === roll.place && t.chance > 0)) return NOTHING_FOUND;
   const milestones = createMilestonesRepo(tx);
   const map = await milestones.mapContext(roll.mapId, roll.at);
-  const counts = map?.kind === 'multiplayer' && map.members >= MILESTONE_RULES.minMembers;
+  const counts = map !== null && milestonesCount(map);
   const found = await milestones.countedKeys(roll.userId, FOUND_SETS.map(foundSetTrackId));
   const rng = options.rng ?? Rng.fromSeed(newSeed());
   const rolled = rollFoundSets(tables, roll.place, found, rng);
