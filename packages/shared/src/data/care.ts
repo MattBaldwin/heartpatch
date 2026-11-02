@@ -34,19 +34,19 @@ export const CARE_RULES: CareRules = {
 export const GROWTH_RULES: GrowthRules = {
   maxLevel: 100, // TUNE:
   // TUNE: owner decision 2026-10-06 (design review Q1): keep level 100, but
-  // make 30–100 a long tail. `pnpm sim:progression`: a casual kid's Partner
-  // grows up (16) on day 3–5, is about 24 on day 14 and 29 on day 30; an
-  // engaged kid's (with `battleXpFalloff`) is about 37 on day 30. Training
-  // Grounds every night (owner decision 2026-10-06) move a casual Partner a
-  // day sooner at most (about 30 on day 30). Knee 16 is
-  // when starters grow up; knee 30 starts the long tail. Pinned by
-  // `growth-pace.test.ts`.
+  // make 30–100 a long tail. Owner decision 2026-11-02 (#730, option 2)
+  // quartered both knees' steepness to lift the week-two ceiling.
+  // `pnpm sim:progression` (with Training Grounds every night): a casual
+  // kid's Partner (4 seats) grows up (16) on day 3–4, is about 23 on day 7,
+  // 31 on day 14, 39 on day 30 and 59 on day 60; an engaged kid's (with
+  // `battleXpFalloff`) is about 33 / 41 / 54 / 83. Knee 16 is when starters
+  // grow up; knee 30 starts the long tail. Pinned by `growth-pace.test.ts`.
   xpCurve: {
     perLevel: 20,
     curve: 20,
     knees: [
-      { level: 16, steep: 500 },
-      { level: 30, steep: 1500 },
+      { level: 16, steep: 125 },
+      { level: 30, steep: 375 },
     ],
   },
   care: { minPercent: 100, maxPercent: 175 }, // TUNE: design doc §7 [DEFAULT: 1.0× to 1.75×]
