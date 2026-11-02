@@ -34,6 +34,18 @@ export function codeLifeLeft(expiresAt: string, now: number): string {
   return `Works for ${String(days)} more days.`;
 }
 
+/** What the lobby and the Next-up solo card say when a patch has no invite code. */
+export const NO_INVITE_LINE = 'No code right now. Make one to invite a friend!';
+
+/**
+ * The line under a patch's invite code, wherever it's shown (the lobby and
+ * the Next-up solo card, #731 owner decision 5: one invite flow). It signs a
+ * new family up too (#195).
+ */
+export function inviteShareLine(expiresAt: string, now: number): string {
+  return `${codeLifeLeft(expiresAt, now)} New families can sign up with it too!`;
+}
+
 /** "14 days" (rounded up) until a new family code ends, at `now` on the game clock. */
 export function codeDays(expiresAt: string, now: number): string {
   const days = Math.max(1, Math.ceil((Date.parse(expiresAt) - now) / DAY_MS));

@@ -105,7 +105,7 @@ const E2E_GROUPS = [
     'trick-or-treat',
     'whats-new',
   ],
-  // ~17.9 iPhone, ~24.2 iPad.
+  // ~17.9 iPhone, ~24.2 iPad, before next-up (~2.5 min, #731).
   [
     'buildings-guide',
     'chat',
@@ -116,6 +116,7 @@ const E2E_GROUPS = [
     'layout-overlaps',
     'long-night',
     'map',
+    'next-up',
     'push',
     'raids',
     'territory',
