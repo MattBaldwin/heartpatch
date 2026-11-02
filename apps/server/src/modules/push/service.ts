@@ -198,15 +198,17 @@ export function createPushService(options: PushServiceOptions): PushService {
       return left === null || left.getTime() <= awaySince;
     });
     result.due = away.length;
-    // One per arriver per window: the bucket is the repeat guard, in `push_sends`.
-    const bucket = Math.floor(at.getTime() / (PUSH_RULES.friendRepeatHours * 60 * MINUTE_MS));
+    // One per arriver per `friendRepeatHours`, counted back from now (not a
+    // fixed bucket, which two arrivals either side of its edge would both pass).
+    const repeatSince = new Date(at.getTime() - PUSH_RULES.friendRepeatHours * 60 * MINUTE_MS);
     for (const user of away) {
       try {
         await send(
           {
             user,
             kind: 'friend',
-            dedupeKey: `${mapId}/${arriverUserId}/${bucket}`,
+            dedupeKey: `${mapId}/${arriverUserId}`,
+            repeatSince,
             mapId,
             name: arriver,
           },

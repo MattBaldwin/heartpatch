@@ -29,8 +29,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 const VAPID = { ...newVapidPair(), subject: 'mailto:nudges@pumpkinpatchgames.com' };
 const ZONE = 'America/Denver';
-// Noon in Denver (MDT, UTC−6) on Oct 14, and the start of a 2-hour repeat
-// bucket (buckets start on even UTC hours).
+// Noon in Denver (MDT, UTC−6) on Oct 14.
 const NOON = '2026-10-14T18:00:00Z';
 const TEST_KEEPER = {
   base: 'pip',
@@ -226,10 +225,10 @@ describe.skipIf(!url)('the friend nudge (#726d, needs DATABASE_URL)', { timeout:
     ]);
     // Never the arriver.
     expect(sentTo(sender, moon)).toEqual([]);
-    const bucket = Math.floor(clock.getTime() / (PUSH_RULES.friendRepeatHours * 60 * MINUTE_MS));
+    // The first nudge about this arriver here: `/0` (the repeat window's count).
     expect(await friendSendsOf(kid.id)).toEqual([
       expect.objectContaining({
-        dedupeKey: `${mapId}/${moon.id}/${String(bucket)}`,
+        dedupeKey: `${mapId}/${moon.id}/0`,
         mapId,
         sentAt: clock,
         devices: 1,
@@ -351,7 +350,7 @@ describe.skipIf(!url)('the friend nudge (#726d, needs DATABASE_URL)', { timeout:
     expect(sender.sent).toEqual([]);
   });
 
-  it('nudges about one arriver once per repeat window, then again in the next', async () => {
+  it('nudges about one arriver once per repeat window, then again after it', async () => {
     const moon = await player();
     const kid = await player();
     const mapId = await patch(moon, [kid]);
@@ -359,15 +358,63 @@ describe.skipIf(!url)('the friend nudge (#726d, needs DATABASE_URL)', { timeout:
     const push = pushService(sender);
 
     await push.friendArrived(mapId, moon.id);
-    // Back again within the window (19:59Z, the same 2-hour bucket): nothing.
+    // Back again within the window (19:59Z): nothing.
     clock.setTime(Date.parse(NOON) + (PUSH_RULES.friendRepeatHours * 60 - 1) * MINUTE_MS);
     expect(await push.friendArrived(mapId, moon.id)).toMatchObject({ due: 1, claimed: 0 });
     expect(sentTo(sender, kid)).toHaveLength(1);
-    // The next window (20:00Z): one more.
+    // Two hours on (20:00Z): one more.
     clock.setTime(Date.parse(NOON) + PUSH_RULES.friendRepeatHours * 60 * MINUTE_MS);
     expect(await push.friendArrived(mapId, moon.id)).toMatchObject({ claimed: 1, delivered: 1 });
     expect(sentTo(sender, kid)).toHaveLength(2);
     expect(await friendSendsOf(kid.id)).toHaveLength(2);
+  });
+
+  it('the repeat window counts back from the last nudge, not from a fixed bucket edge', async () => {
+    const moon = await player();
+    const kid = await player();
+    const mapId = await patch(moon, [kid]);
+    const sender = fakeSender();
+    const push = pushService(sender);
+    const at = (iso: string) => clock.setTime(Date.parse(iso));
+
+    // 1:59 PM and 2:01 PM in Denver (19:59Z, 20:01Z): either side of an even UTC hour.
+    at('2026-10-14T19:59:00Z');
+    expect(await push.friendArrived(mapId, moon.id)).toMatchObject({ claimed: 1 });
+    at('2026-10-14T20:01:00Z');
+    expect(await push.friendArrived(mapId, moon.id)).toMatchObject({ due: 1, claimed: 0 });
+    // Still inside two hours of the first one.
+    at('2026-10-14T21:58:00Z');
+    expect(await push.friendArrived(mapId, moon.id)).toMatchObject({ claimed: 0 });
+    expect(sentTo(sender, kid)).toHaveLength(1);
+    // Two hours on: one more.
+    at('2026-10-14T21:59:00Z');
+    expect(await push.friendArrived(mapId, moon.id)).toMatchObject({ claimed: 1, delivered: 1 });
+    expect(sentTo(sender, kid)).toHaveLength(2);
+    expect((await friendSendsOf(kid.id)).map((r) => r.dedupeKey)).toEqual([
+      `${mapId}/${moon.id}/0`,
+      `${mapId}/${moon.id}/1`,
+    ]);
+  });
+
+  it('two claims at once inside the window: the unique key lets one in', async () => {
+    const moon = await player();
+    const kid = await player();
+    const mapId = await patch(moon, [kid]);
+    const repo = createPushRepo(db);
+    const claim = () =>
+      repo.claim({
+        userId: kid.id,
+        kind: 'friend',
+        dedupeKey: `${mapId}/${moon.id}`,
+        repeatSince: minutesAgo(PUSH_RULES.friendRepeatHours * 60),
+        mapId,
+        now: clock,
+        dayStart: accountDayStart(clock, ZONE),
+      });
+    const outcomes = await Promise.all([claim(), claim(), claim(), claim()]);
+    expect(outcomes.filter((o) => o.outcome === 'claimed')).toHaveLength(1);
+    expect(outcomes.filter((o) => o.outcome === 'sent')).toHaveLength(3);
+    expect(await friendSendsOf(kid.id)).toHaveLength(1);
   });
 
   it('a send that throws for one patch-mate is logged and the others still get theirs', async () => {

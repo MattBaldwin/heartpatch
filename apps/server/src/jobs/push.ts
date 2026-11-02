@@ -15,6 +15,16 @@ export interface PushSweepRunner {
 export const PUSH_SWEEP_QUEUE = 'push.sweep';
 
 /**
+ * Info only when a sweep claimed something. A nudge dropped in quiet hours
+ * or at the cap stays due, so it would be dropped (and logged) again every
+ * minute until its window closes: that goes to debug.
+ */
+export function logPushSweep(logger: FastifyBaseLogger, result: PushSweepResult): void {
+  if (result.claimed > 0) logger.info(result, 'push nudges swept');
+  else if (result.quiet > 0 || result.capped > 0) logger.debug(result, 'push nudges dropped');
+}
+
+/**
  * The `push.sweep` job (#726 plan, "How sends are triggered"), shaped like
  * `nightfall.sweep`: every minute (`short`, so a slow run never stacks a
  * second behind it) and once at boot, it asks the database whose nudge is
@@ -31,9 +41,7 @@ export async function startPushSweep(
   const sweep = async () => {
     if (!runner.enabled) return null;
     const result = await runner.sweep();
-    if (result.claimed > 0 || result.quiet > 0 || result.capped > 0) {
-      logger.info(result, 'push nudges swept');
-    }
+    logPushSweep(logger, result);
     return result;
   };
 
