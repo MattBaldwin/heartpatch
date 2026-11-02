@@ -169,14 +169,21 @@ body:not(.hp-trays-on) .next-up-sprout,
   background: radial-gradient(circle at 50% 60%, #9bd88a 0 60%, #6fbf5e 61%);
 }
 
+/* A fade, not a slide: the map's labels measure the line once as it shows
+   (trading/post-flags.ts) and step aside, so its box stays put from the start. */
 @keyframes next-up-pop {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(8px);
   }
 }
 
 /* ── The sheet ─────────────────────────────────────────────────────────── */
+/* The sheet has its own ✕ where the Keeper's "Me" button sits (a phone on
+   its side): the button steps aside while it's open, as for the lore book. */
+body:has(.next-up-scrim:not([hidden])) .auth-chip {
+  display: none;
+}
+
 .next-up-scrim {
   position: fixed;
   z-index: 6;

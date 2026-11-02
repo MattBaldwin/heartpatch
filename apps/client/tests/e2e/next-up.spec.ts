@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { tapCanvas } from './claim-land.js';
 import { api, hook, waitForLiveMap } from './dev-hook.js';
+import { settled } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 // The Next-up chip (#731): a patch that's only you shows the share-your-code
@@ -22,6 +23,55 @@ const nextUp = (page: Page) => hook<NextUpDebug>(page, 'nextUp');
 const tutorial = (page: Page) =>
   hook<{ stepId: string | null; status: string | null }>(page, 'tutorial');
 const trays = (page: Page) => hook<{ visible: boolean }>(page, 'trays');
+
+/** An iPhone SE on its side, where the Keeper's "Me" button met the ✕. */
+const SE_SIDEWAYS = { width: 667, height: 375 };
+
+/**
+ * The open sheet's ✕ is the top thing at its own middle and shares no area
+ * with the Keeper's "Me" button (or the plain chip off the trays) when
+ * that's on screen, then shuts the sheet with a tap.
+ */
+async function closeClear(page: Page): Promise<void> {
+  const sheet = page.getByTestId('next-up-sheet');
+  await expect(sheet).toBeVisible();
+  await settled(page);
+  const probe = await page.evaluate(() => {
+    const close = document.querySelector('[data-testid="next-up-close"]')!;
+    const c = close.getBoundingClientRect();
+    const top = document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2);
+    const hits = [...document.querySelectorAll('.auth-chip, .auth-chip-toggle')]
+      .map((el) => el.getBoundingClientRect())
+      .filter((r) => r.width > 0 && r.height > 0)
+      .filter((r) => c.left < r.right && r.left < c.right && c.top < r.bottom && r.top < c.bottom)
+      .map((r) => [r.left, r.top, r.right, r.bottom].map(Math.round));
+    return {
+      onTop: top !== null && close.contains(top),
+      hits,
+      inView: c.top >= 0 && c.left >= 0 && c.right <= window.innerWidth,
+    };
+  });
+  expect(probe.hits, 'the Keeper button is over the ✕').toEqual([]);
+  expect(probe.onTop, 'something covers the ✕').toBe(true);
+  expect(probe.inView, 'the ✕ is off screen').toBe(true);
+  await sheet.getByTestId('next-up-close').tap();
+  await expect(sheet).toBeHidden();
+  // The Keeper button comes back once the sheet shuts.
+  await expect(page.locator('.auth-chip')).toBeVisible();
+}
+
+/** Opens the sheet from the chip and checks its ✕ upright and on a phone on its side. */
+async function closeClearBothWays(page: Page): Promise<void> {
+  const upright = page.viewportSize()!;
+  const chip = page.getByTestId('next-up-chip');
+  for (const size of [upright, SE_SIDEWAYS]) {
+    await page.setViewportSize(size);
+    await expect(chip).toBeVisible();
+    await chip.tap();
+    await closeClear(page);
+  }
+  await page.setViewportSize(upright);
+}
 
 test('no chip on the Tutorial Glade', async ({ browser }) => {
   test.setTimeout(120_000); // draws the Glade; CI renders in software
@@ -73,6 +123,8 @@ test('a solo patch shows the share-your-code card, then real goals once a friend
   await sheet.getByTestId('next-up-close').tap();
   await expect(sheet).toBeHidden();
   await expect(chip).toBeVisible();
+  // Its ✕ is clear of the Keeper's "Me" button, upright and on its side.
+  await closeClearBothWays(owner);
 
   // The tile panel owns the bottom middle (owner decision 1): the chip steps aside.
   const box = (await owner.locator('#game').boundingBox())!;
@@ -111,14 +163,38 @@ test('a solo patch shows the share-your-code card, then real goals once a friend
   // Now there's a real goal: Sprout says it once (owner decision 4).
   await expect.poll(() => nextUp(owner).then((n) => n?.sprout), { timeout: 15_000 }).toBe(true);
   await expect(owner.getByTestId('next-up-sprout')).toHaveText('Ooh, a goal!');
+  // Map labels step aside for Sprout's line and the chip, as for the night's chips.
+  await settled(owner);
+  const under = await owner.evaluate(() => {
+    const covers = ['next-up-sprout', 'next-up-chip'].map((id) =>
+      document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect(),
+    );
+    return [...document.querySelectorAll<HTMLElement>('.post-flag')]
+      .filter((f) => !f.hidden && f.offsetWidth > 0)
+      .filter((f) => {
+        const r = f.getBoundingClientRect();
+        return covers.some(
+          (c) => c.left < r.right && r.left < c.right && c.top < r.bottom && r.top < c.bottom,
+        );
+      })
+      .map((f) => f.textContent);
+  });
+  expect(under, 'a map label under Sprout or the chip').toEqual([]);
   const goals = (await nextUp(owner))?.goals ?? [];
   expect(goals.length).toBe(3);
   await chip.tap();
   await expect(sheet.getByTestId('next-up-goal')).toHaveCount(3);
   await expect(sheet.getByTestId('next-up-solo')).toHaveCount(0);
   await sheet.getByTestId('next-up-close').tap();
+  await expect(sheet).toBeHidden();
+  await closeClearBothWays(owner);
 
   // One Goals row in the Adventure tray opens the same sheet (owner decision 2).
+  // Under 740 px tall it gives way (next-up.css), and Playwright's iPhone 15
+  // is Safari's 659 px: stand it as the installed app's full 852 px.
+  const browserSize = owner.viewportSize()!;
+  if (browserSize.height < 740)
+    await owner.setViewportSize({ width: browserSize.width, height: 852 });
   await owner.getByTestId('tray-handle-adventure').tap();
   const row = owner.getByTestId('next-up-row');
   await expect(row).toBeVisible();
@@ -128,4 +204,5 @@ test('a solo patch shows the share-your-code card, then real goals once a friend
   await expect.poll(() => nextUp(owner).then((n) => n?.sheetOpen)).toBe(true);
   await sheet.getByTestId('next-up-close').tap();
   await expect(sheet).toBeHidden();
+  await owner.setViewportSize(browserSize);
 });
