@@ -358,6 +358,16 @@ body:not(.hp-trays-on) .next-up-sprout,
   align-self: flex-start;
 }
 
+/* A phone on its side: the tray's rows must all fit without scrolling
+   (short-screens.spec), so the Goals row gives way there; the chip on the
+   map is the same door. */
+@media (max-height: 520px) and (min-width: 640px) {
+  .tray-section > .next-up-row,
+  .tray-section:has(> .next-up-row:only-child) {
+    display: none;
+  }
+}
+
 /* Short and wide: prizes give way so two goals fit; they show upright. */
 @media (max-height: 520px) and (min-width: 640px) {
   .next-up-prizes {
