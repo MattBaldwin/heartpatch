@@ -1,5 +1,7 @@
 import {
+  MILESTONE_RULES,
   MILESTONE_UNIT,
+  type MilestoneRules,
   type MilestoneReward,
   type MilestonesResponse,
   type MilestoneTier,
@@ -13,7 +15,9 @@ import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
 import { uuidV5 } from '../../lib/uuid-v5.js';
 import { creditCoins } from '../coins/service.js';
+import { requireMember } from '../maps/members.js';
 import { grantClothing } from '../wardrobe/service.js';
+import { milestonesCount } from './counts.js';
 import { createMilestonesRepo, type RewardRow } from './repo.js';
 import { ALL_MILESTONES } from './tracks.js';
 
@@ -145,7 +149,11 @@ const rewardOf = (tier: MilestoneTier): MilestoneReward => ({
 });
 
 export interface MilestonesService {
-  get: (user: PublicUser) => Promise<MilestonesResponse>;
+  /**
+   * My milestones. With `mapId` (a patch I'm an active member of, else
+   * NOT_FOUND), also `countsHere`: whether milestones count there right now.
+   */
+  get: (user: PublicUser, mapId?: string) => Promise<MilestonesResponse>;
   /** The player's client celebrated these. */
   seen: (user: PublicUser, ids: readonly string[]) => Promise<MilestonesResponse>;
   /** Wear an earned title on the profile card, or none. */
@@ -162,13 +170,15 @@ export interface MilestonesService {
 export interface MilestonesServiceOptions {
   db: Executor;
   clock?: Clock;
-  /** Tests swap the tracks. */
+  /** Tests swap the tracks and rules. */
   tracks?: readonly MilestoneTrack[];
+  rules?: MilestoneRules;
 }
 
 export function createMilestonesService(options: MilestonesServiceOptions): MilestonesService {
   const now = options.clock ?? (() => new Date());
   const tracks = options.tracks ?? ALL_MILESTONES;
+  const rules = options.rules ?? MILESTONE_RULES;
   const store = createMilestonesRepo(options.db);
   const tracksById = new Map(tracks.map((t) => [t.id, t]));
 
@@ -258,7 +268,14 @@ export function createMilestonesService(options: MilestonesServiceOptions): Mile
   };
 
   return {
-    get: (user) => view(user.id),
+    get: async (user, mapId) => {
+      if (mapId === undefined) return view(user.id);
+      // Membership first, so a patch that isn't mine says nothing about itself.
+      await requireMember(options.db, user, mapId);
+      // Judged at the game clock, the way the consumer judges an event's time.
+      const map = await store.mapContext(mapId, now());
+      return { ...(await view(user.id)), countsHere: map !== null && milestonesCount(map, rules) };
+    },
 
     seen: async (user, ids) => {
       await store.markSeen(user.id, ids, now());

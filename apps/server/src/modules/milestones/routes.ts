@@ -1,5 +1,6 @@
 import {
   EquipTitleRequestSchema,
+  MilestonesQuerySchema,
   MilestonesResponseSchema,
   MilestonesSeenRequestSchema,
 } from '@heartpatch/shared';
@@ -16,7 +17,8 @@ export interface MilestonesRoutesOptions {
 
 /**
  * Keeper milestones (design doc §24), account-level: `GET /milestones` (my
- * tracks, titles and anything new to celebrate), `POST /milestones/seen`
+ * tracks, titles and anything new to celebrate; with `?mapId=` of a patch I'm
+ * in, also whether milestones count there: `countsHere`), `POST /milestones/seen`
  * (celebrated) and `POST /milestones/title` (wear an earned title, or none).
  * Both posts are idempotent by nature, so they need no `Idempotency-Key`.
  */
@@ -29,8 +31,11 @@ export const milestonesRoutes =
 
     app.get(
       '/milestones',
-      { schema: { response: { 200: MilestonesResponseSchema } }, preHandler: requireAuth },
-      async (request) => service.get(requireUser(request)),
+      {
+        schema: { querystring: MilestonesQuerySchema, response: { 200: MilestonesResponseSchema } },
+        preHandler: requireAuth,
+      },
+      async (request) => service.get(requireUser(request), request.query.mapId),
     );
 
     app.post(
