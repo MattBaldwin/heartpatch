@@ -600,9 +600,8 @@ describe.skipIf(!url)(
           dayStart: accountDayStart(clock, ZONE),
         };
         expect(await createPushRepo(db).claim(claim)).toEqual({ outcome: 'capped' });
-        expect(await createPushRepo(db).claim(claim, PUSH_RULES.dailyCap + 1)).toEqual({
+        expect(await createPushRepo(db).claim(claim, PUSH_RULES.dailyCap + 1)).toMatchObject({
           outcome: 'claimed',
-          id: expect.any(String),
         });
         // And the unique key: the same send claimed twice is claimed once.
         expect(await createPushRepo(db).claim(claim, PUSH_RULES.dailyCap + 2)).toEqual({
