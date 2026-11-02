@@ -69,6 +69,7 @@ import { openPrivacy, PRIVACY_TEXT } from './ui/privacy/privacy-link.js';
 import { createLoreBagEntry } from './lore/bag-entry.js';
 import { createLorebook } from './lore/lorebook.js';
 import { createMilestoneCelebration } from './milestones/milestone-celebration.js';
+import { createNextUp } from './milestones/next-up.js';
 import { createKeeperScreen, KEEPER_TEXT } from './ui/keeper/keeper-screen.js';
 import { mountLobby } from './ui/lobby/lobby-overlay.js';
 import { lobbyApi } from './ui/lobby/lobby-api.js';
@@ -1447,6 +1448,8 @@ const maps = createMapScreen({
     trays.setVisible(mapId !== null);
     mapSquishies.hidden = mapId === null || mapId === glade;
     recipeBook.setMap(mapId);
+    // The Next-up chip reads the patch on screen's goals; never on the Glade (#731).
+    nextUp.setMap(mapId === glade ? null : mapId);
     // Hidden, then shown: the Team and Jobs row checks the map (not on the Glade).
     jobsBox.hidden = true;
     jobsBox.hidden = mapId === null;
@@ -1642,7 +1645,60 @@ const milestones = createMilestoneCelebration({
     lobby.formOpen,
   onChange: () => {
     hollow.otherReportChanged();
+    // A milestone party arrived: the Next-up chip reads its goals again (#731).
+    if (milestones.debug.showing !== null) nextUp.refresh();
   },
+});
+/** What "Claim land" says over the map (the tray row and the Explorer goal's button). */
+const CLAIM_LAND_SAY = 'Tap land next to yours, then Claim!';
+/** Taps a tray's own entry button (Find a squishy, the Hollow), else opens that tray to it. */
+const tapTrayEntry = (testId: string, side: 'adventure' | 'heartpatch'): void => {
+  const button = document.querySelector<HTMLButtonElement>(`.trays [data-testid="${testId}"]`);
+  if (button && !button.disabled && button.closest('[hidden]') === null) button.click();
+  else trays.open(side);
+};
+// The Next-up chip (#731): the nearest milestones on the patch on screen, a
+// goals sheet, and one Goals row at the top of the Adventure tray. Each goal's
+// button goes where it's done, through the map's own entries.
+const nextUp = createNextUp({
+  root: document.body,
+  rowRoot: trays.slot('team'),
+  invite: {
+    load: async (mapId) => {
+      const map = await lobbyApi.get(mapId);
+      return map.admin ? map.admin.invite : 'not-owner';
+    },
+    make: (mapId) => lobbyApi.newInvite(mapId),
+  },
+  now: () => inventory.gameNow(),
+  inSeason: () => {
+    const zone = maps.view?.map.timeZone;
+    if (!zone) return null;
+    const on = new Set(seasonsOn(zone, new Date(inventory.gameNow())));
+    return (season) => on.has(season);
+  },
+  onGo: (go) => {
+    switch (go) {
+      case 'find':
+        tapTrayEntry('battle-entry', 'adventure');
+        return;
+      case 'claim':
+        trays.say(CLAIM_LAND_SAY);
+        return;
+      case 'hollow':
+        tapTrayEntry('hollow-open', 'adventure');
+        return;
+      case 'team':
+        tapTrayEntry('team-open', 'heartpatch');
+        return;
+      case 'map':
+        return;
+    }
+  },
+  busy: () => mapCovered(),
+  canCopy: 'clipboard' in navigator,
+  // async: a missing clipboard (an http page) rejects instead of throwing.
+  copy: async (text) => navigator.clipboard.writeText(text),
 });
 // Battles (#13) own the whole screen: the map and the lobby's button step
 // out while one is open, and the map comes back after.
@@ -1781,7 +1837,7 @@ trays.slot('adventure').append(
     sub: 'Tap land next to yours',
     testId: 'tray-claim',
     onTap: () => {
-      trays.say('Tap land next to yours, then Claim!');
+      trays.say(CLAIM_LAND_SAY);
     },
   }),
 );
@@ -2059,6 +2115,7 @@ const mapCovered = (): boolean =>
   lorebook.debug.showing !== null ||
   lorebook.isOpen ||
   milestones.debug.showing !== null ||
+  nextUp.isOpen ||
   hollowReportOpen();
 const whatsNew = createWhatsNew({
   root: document.body,
@@ -2208,6 +2265,7 @@ mountAuth(document.body, {
     starters.setUser(user);
     lorebook.setUser(user);
     milestones.setUser(user);
+    nextUp.setUser(user);
     defense.setUser(user);
     maps.setUser(user);
     signedIn = user;
@@ -2336,6 +2394,7 @@ if (import.meta.env.DEV) {
     starter: () => starters.debug,
     lore: () => lorebook.debug,
     milestones: () => milestones.debug,
+    nextUp: () => nextUp.debug,
     defense: () => defense.debug,
     whatsNew: () => whatsNew.debug,
     patchLine: () => ({ ...patchLine.debug, busy: patchLineBusy() }),
