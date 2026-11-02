@@ -27,6 +27,46 @@ const trays = (page: Page) => hook<{ visible: boolean }>(page, 'trays');
 /** An iPhone SE on its side, where the Keeper's "Me" button met the ✕. */
 const SE_SIDEWAYS = { width: 667, height: 375 };
 
+/** An iPhone SE upright, and an iPhone 15 in a Safari tab (not installed). */
+const SE_UPRIGHT = { width: 375, height: 667 };
+const SAFARI_TAB = { width: 393, height: 659 };
+
+async function shutAdventure(page: Page): Promise<void> {
+  const tray = page.getByTestId('tray-adventure');
+  await tray.locator('.hp-close').tap();
+  await expect(tray).not.toHaveClass(/tray-shown/);
+}
+
+/** At `size`, the Adventure tray shows the Goals row and every row is in view, unscrolled. */
+async function goalsRowFits(page: Page, size: { width: number; height: number }): Promise<void> {
+  const upright = page.viewportSize()!;
+  await page.setViewportSize(size);
+  await page.getByTestId('tray-handle-adventure').tap();
+  const tray = page.getByTestId('tray-adventure');
+  await expect(tray).toHaveClass(/tray-shown/);
+  await expect(page.getByTestId('next-up-row')).toBeVisible();
+  await settled(page);
+  const fit = await tray.evaluate((t) => {
+    const body = t.querySelector('.tray-body')!;
+    const view = body.getBoundingClientRect();
+    const cut = [...body.querySelectorAll<HTMLElement>('.tray-section button')]
+      .filter((b) => !b.closest('[hidden]') && !b.dataset['testid']?.startsWith('battle-dev-'))
+      .filter((b) => b.getBoundingClientRect().height > 0)
+      .filter((b) => {
+        const r = b.getBoundingClientRect();
+        return r.top < view.top - 0.5 || r.bottom > view.bottom + 0.5;
+      })
+      .map((b) => b.dataset['testid'] ?? b.className);
+    return { cut, scrollTop: body.scrollTop };
+  });
+  expect(fit.cut, `rows below the fold at ${String(size.width)}x${String(size.height)}`).toEqual(
+    [],
+  );
+  expect(fit.scrollTop).toBe(0);
+  await shutAdventure(page);
+  await page.setViewportSize(upright);
+}
+
 /**
  * The open sheet's ✕ is the top thing at its own middle and shares no area
  * with the Keeper's "Me" button (or the plain chip off the trays) when
@@ -189,12 +229,18 @@ test('a solo patch shows the share-your-code card, then real goals once a friend
   await expect(sheet).toBeHidden();
   await closeClearBothWays(owner);
 
+  // The Goals row keeps its place on an iPhone SE upright and in a Safari tab,
+  // with every Adventure row still in view; on a phone on its side it gives way.
+  for (const size of [SE_UPRIGHT, SAFARI_TAB]) await goalsRowFits(owner, size);
+  const upright = owner.viewportSize()!;
+  await owner.setViewportSize(SE_SIDEWAYS);
+  await owner.getByTestId('tray-handle-adventure').tap();
+  await expect(owner.getByTestId('tray-adventure')).toHaveClass(/tray-shown/);
+  await expect(owner.getByTestId('next-up-row')).toBeHidden();
+  await shutAdventure(owner);
+  await owner.setViewportSize(upright);
+
   // One Goals row in the Adventure tray opens the same sheet (owner decision 2).
-  // Under 740 px tall it gives way (next-up.css), and Playwright's iPhone 15
-  // is Safari's 659 px: stand it as the installed app's full 852 px.
-  const browserSize = owner.viewportSize()!;
-  if (browserSize.height < 740)
-    await owner.setViewportSize({ width: browserSize.width, height: 852 });
   await owner.getByTestId('tray-handle-adventure').tap();
   const row = owner.getByTestId('next-up-row');
   await expect(row).toBeVisible();
@@ -204,5 +250,4 @@ test('a solo patch shows the share-your-code card, then real goals once a friend
   await expect.poll(() => nextUp(owner).then((n) => n?.sheetOpen)).toBe(true);
   await sheet.getByTestId('next-up-close').tap();
   await expect(sheet).toBeHidden();
-  await owner.setViewportSize(browserSize);
 });

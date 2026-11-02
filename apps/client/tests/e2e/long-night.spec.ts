@@ -57,12 +57,18 @@ async function expectNextUpClear(page: Page, when: string): Promise<void> {
     if (!box) return [];
     return [...document.querySelectorAll('.night-chip')].flatMap((n) => {
       const r = shown(n);
+      // At least 6 px apart, not just apart: touching pills read as one.
+      const gap = 6;
       const hit =
-        r && r.left < box.right && box.left < r.right && r.top < box.bottom && box.top < r.bottom;
-      return hit ? [n.textContent] : [];
+        r &&
+        r.left < box.right + gap &&
+        box.left - gap < r.right &&
+        r.top < box.bottom + gap &&
+        box.top - gap < r.bottom;
+      return hit ? [`${n.textContent} ${JSON.stringify([r.top, box.bottom].map(Math.round))}`] : [];
     });
   });
-  expect(overlaps, `night chips under the Next-up chip (${when})`).toEqual([]);
+  expect(overlaps, `night chips under or within 6 px of the Next-up chip (${when})`).toEqual([]);
 }
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 

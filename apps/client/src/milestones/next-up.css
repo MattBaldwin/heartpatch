@@ -365,14 +365,41 @@ body:has(.next-up-scrim:not([hidden])) .auth-chip {
   align-self: flex-start;
 }
 
-/* A short screen (an iPhone SE upright, any phone on its side): the tray's
-   rows must all fit without scrolling (short-screens.spec), so the Goals row
-   gives way there; the chip on the map is the same door. Same 740 px line as
-   the home-indicator rule above. // TUNE: */
-@media (max-height: 739px) {
+/* A phone on its side, or a small phone in a Safari tab (a mini at 629 px,
+   320 x 568): the tray's rows must all fit without scrolling
+   (short-screens.spec) and there's no room for one more, so the Goals row
+   gives way there; the chip on the map is the same door. // TUNE: */
+@media (max-height: 658px) {
   .tray-section > .next-up-row,
   .tray-section:has(> .next-up-row:only-child) {
     display: none;
+  }
+}
+
+/* An iPhone SE upright (667 px), or an iPhone 15 in a Safari tab (659 px):
+   the Goals row keeps its place (owner decision 2), and the Adventure tray's
+   rows sit 4 px slimmer and 2 px closer while it's there, so every row still
+   fits without scrolling. Still 44pt+ targets, 6 px above and below the
+   42 px icons. // TUNE: */
+@media (orientation: portrait) and (min-height: 659px) and (max-height: 739px) {
+  .tray-body:has(> .tray-section > .next-up-row:not([hidden])) {
+    --hp-pad-y: 6px;
+    gap: 8px;
+  }
+
+  .tray-body:has(> .tray-section > .next-up-row:not([hidden])) > .tray-section,
+  .tray-body:has(> .tray-section > .next-up-row:not([hidden])) .battle-entry-box {
+    gap: 6px;
+  }
+
+  .tray-body:has(> .tray-section > .next-up-row:not([hidden]))
+    :is(
+      .tray-section > button,
+      .tray-section > .battle-entry-box > button,
+      .tray-jobs .jobs-entry > button,
+      .tray-row
+    ) {
+    min-height: 54px;
   }
 }
 
