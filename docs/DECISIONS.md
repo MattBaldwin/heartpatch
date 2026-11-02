@@ -2187,3 +2187,13 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 **Owner decisions (later)**
 - **Nudges screens approved (owner, 2026-11-01 21:56):** "Approve, merge on green" for https://claude.ai/artifact/FMmnLR2SonyLyYhvBQzVes v6 (PR #773, head `f956f9e`): the offer card, "Nudges on! 🔔", Settings › Nudges in four states with the audio-toggle On/Off buttons.
 - **Supervisors run on Opus (owner, 2026-11-01):** supervisor 33 ran on Fable because the owner's iOS session was created with that model and nobody checked. The next supervisor checks `configured_model` at takeover.
+
+## Supervisor 34 (2026-11-01 ~22:00 → 2026-11-02 ~03:00 UTC)
+
+- **726f ruled small** (#775): the sweep asks `isLongNightOn` (a yes/no helper in long-night/service.ts that `longNightTonight` now reuses), so push code never sees the Night's secrets (rule 6). `long-night-soon` replaces that night's dusk nudge; `long-night-start` names the night by today's date, because `tonightOf` flips at nightfall; the start window is `PUSH_RULES.longNightStartWindowMinutes` (10). A player with `long_night` off and `dusk` on gets no nudge on a Long Night (dusk is suppressed for the patch).
+- **`watchHudPlace` also observes the root element's size** (#773 round 4): WebKit could leave the name pill placed for the previous screen width after a sideways-to-sideways change.
+- **Explore runs one frame loop** (#777): the frame loop owns a single pending rAF; `wake()` during `tick` must not start a second chain.
+
+**Owner decisions**
+- **#730: option 2, quarter the knees** (owner, 2026-11-02, from https://claude.ai/artifact/1vDBed7VwDUy6pE3Forg3W): `GROWTH_RULES.xpCurve.knees` steeps 500→125 (Lv 16) and 1500→375 (Lv 30); level 100 stays. Re-opens 10-06 Q1's steeper curve. Casual 4-seat Lv 31 on day 14 and 39 on day 30; engaged 41 / 54. Trade-offs accepted: engaged 2-seat Lv 94 by day 60; casual first rare befriended day 9 → 16 and rare evolved day 13 → 32; engaged longest gap between firsts 12 → 21 days. `attemptsPerDay`, `battleXpFalloff` and wild levels (#208) unchanged. Merged as #776.
+- **#731 mockups v4 approved with all six recommendations** (owner, 2026-11-02): https://claude.ai/artifact/4wc8vWbcPA6d5hmC4eA6Hv; the list is at https://github.com/MattBaldwin/heartpatch/issues/731#issuecomment-6567861121.
