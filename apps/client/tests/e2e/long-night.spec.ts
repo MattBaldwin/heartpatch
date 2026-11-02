@@ -92,6 +92,23 @@ async function expectNextUpClear(page: Page, when: string): Promise<void> {
   if (size.width >= 700 || size.height >= 740) return;
   await page.setViewportSize({ width: size.width, height: 852 });
   await nextUpClearHere(page, `${when}, 852 px tall`);
+  // An iPhone 15's notch and home bar, arriving after layout with no resize
+  // (as on a turn or a launch from the home screen): the night's chips move
+  // up by the inset and the chip must follow. Chromium can say so (CDP).
+  const cdp = await page
+    .context()
+    .newCDPSession(page)
+    .catch(() => null);
+  if (cdp) {
+    const insets = (top: number, bottom: number) =>
+      cdp.send('Emulation.setSafeAreaInsetsOverride', {
+        insets: { top, bottom, left: 0, right: 0 },
+      });
+    await insets(59, 34);
+    await nextUpClearHere(page, `${when}, 852 px tall with the home bar's inset`);
+    await insets(0, 0);
+    await cdp.detach();
+  }
   await page.setViewportSize(size);
 }
 

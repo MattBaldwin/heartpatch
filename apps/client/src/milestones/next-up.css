@@ -53,11 +53,24 @@
 }
 
 /* At night the Hollow's chips have the bottom edge, one row or two (a Long
-   Night adds its own): next-up.ts measures them into --next-up-lift and the
-   chip and Sprout's line sit just above. */
+   Night adds its own), and the chip and Sprout's line sit 8 px above them.
+   Where the row stands is worked out here from the same env() as the row's
+   own `bottom` (hollow.css .night-chips: change both together), so a
+   safe-area change (a turn, standalone vs Safari) moves both at once; only
+   its height is measured (next-up.ts, a ResizeObserver: --next-up-row). With
+   no chips up, --next-up-row is far below the screen and the lift loses. */
 .next-up-chip,
 .next-up-sprout {
-  --next-up-lift: 0px;
+  --next-up-floor: calc(env(safe-area-inset-bottom) + 12px);
+  --next-up-row: -100vh;
+  --next-up-lift: calc(var(--next-up-floor) + var(--next-up-row) + 8px);
+}
+
+@media (orientation: portrait) and (min-height: 740px) {
+  .next-up-chip,
+  .next-up-sprout {
+    --next-up-floor: calc(max(env(safe-area-inset-bottom), 22px) + 12px);
+  }
 }
 
 /* Off the map, and while something else owns the bottom middle (owner

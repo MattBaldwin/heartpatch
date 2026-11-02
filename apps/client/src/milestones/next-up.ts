@@ -205,22 +205,15 @@ export function createNextUp(options: NextUpOptions): NextUp {
   options.root.append(chip, sprout, scrim);
 
   // ── Above the night's chips ─────────────────────────────────────────────
-  /** Gap between the chips below and this one. // TUNE: */
-  const LIFT_GAP_PX = 8;
   let liftWatched: HTMLElement | null = null;
+  /** The night chips' height, for next-up.css to stand the chip on (its place is CSS's). */
   const lift = () => {
     const over = liftWatched;
-    const box =
-      over && !over.hidden && over.childElementCount > 0 ? over.getBoundingClientRect() : null;
-    // From the row's own `bottom` and height, not window.innerHeight: both are
-    // fixed to the same layout viewport, which innerHeight needn't match
-    // (iOS toolbars, a pinch), and a short lift tucks the chip over the row.
-    const from = over && box && box.height > 0 ? parseFloat(getComputedStyle(over).bottom) : NaN;
-    const px = box && Number.isFinite(from) ? Math.max(0, from) + box.height + LIFT_GAP_PX : 0;
-    const value = `${String(Math.ceil(px))}px`;
+    const height =
+      over && !over.hidden && over.childElementCount > 0 ? over.getBoundingClientRect().height : 0;
     for (const node of [chip, sprout]) {
-      if (node.style.getPropertyValue('--next-up-lift') !== value)
-        node.style.setProperty('--next-up-lift', value);
+      if (height > 0) node.style.setProperty('--next-up-row', `${String(Math.ceil(height))}px`);
+      else node.style.removeProperty('--next-up-row');
     }
   };
   const liftObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(lift);
