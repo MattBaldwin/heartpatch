@@ -330,6 +330,68 @@ const frameClock = (page: Page) =>
     at: performance.now(),
   }));
 
+/**
+ * Holds a finger on the ground for up to `frames` readings of two frames each
+ * (a log lifted, a rock, a pumpkin), then lets go, counting
+ * `requestAnimationFrame` registrations per reading. Explore keeps one frame
+ * loop: a held gesture once doubled its loops every frame (65,000
+ * registrations in a 900 ms hold, the owner's frame drops on logs). It lets
+ * go after `maxMs` too, well short of the 900 ms hold, so a slow software
+ * frame doesn't finish the lift; the assertion is on counts, never timing.
+ */
+const holdOnGround = (page: Page, frames: number, maxMs: number) =>
+  page.evaluate(
+    async ({ n, maxMs }) => {
+      const ground = document.querySelector<HTMLElement>('[data-testid="explore-ground"]')!;
+      const box = ground.getBoundingClientRect();
+      const at = { clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 };
+      const pointer = {
+        ...at,
+        pointerId: 41,
+        isPrimary: true,
+        bubbles: true,
+        pointerType: 'touch',
+      };
+      const raf = window.requestAnimationFrame.bind(window);
+      let registrations = 0;
+      window.requestAnimationFrame = (cb) => {
+        registrations++;
+        return raf(cb);
+      };
+      const perFrame: number[] = [];
+      const nextFrame = () =>
+        new Promise<void>((done) => {
+          const before = registrations;
+          raf(() => {
+            // Read a frame later, once every callback of this frame has run.
+            raf(() => {
+              perFrame.push(registrations - before);
+              done();
+            });
+          });
+        });
+      try {
+        ground.dispatchEvent(new PointerEvent('pointerdown', pointer));
+        const start = performance.now();
+        for (let i = 0; i < n && performance.now() - start < maxMs; i++) await nextFrame();
+        ground.dispatchEvent(new PointerEvent('pointerup', pointer));
+        await nextFrame();
+      } finally {
+        window.requestAnimationFrame = raf;
+      }
+      return { registrations, perFrame };
+    },
+    { n: frames, maxMs },
+  );
+/** Readings `holdOnGround` needs to judge: doubling loops pass the ceiling by the third. */
+const HOLD_READINGS_MIN = 3;
+/**
+ * Registrations a frame may make: explore's one loop, the stage's draw and
+ * ambient life (two frames per reading in `holdOnGround`). Doubling loops pass
+ * this within four frames.
+ */
+const HOLD_RAF_PER_READING = 12;
+
 /** Explore draws at most 30 frames a second (#501, owner Oct 18), with a frame of slack for the clock. */
 const EXPLORE_MAX_FPS = 31;
 const mapState = (page: Page) =>
@@ -529,6 +591,8 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   let searched = 0;
   let guardSkipped: string | null = 'the first hand spot was already in reach';
   let toasted = false;
+  /** The held-lift rAF probe runs once, on the first hand spot. */
+  let holdProbed = false;
   for (const hands of handSpots.slice(0, 5)) {
     const walkStart = await frameClock(page);
     if (!(await walkTo(page, hands.index))) continue;
@@ -544,7 +608,7 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     const walked = (await exploreState(page))!;
     const moved = walked.keeper.x !== first.keeper.x || walked.keeper.z !== first.keeper.z;
     // A software renderer's governor may change tier while exploring, and the
-    // walk's first step applies it (the team's detail level rebuilds): that's
+    // walk's end applies it (the team's detail level rebuilds): that's
     // a rebuild on purpose, so only a walk on one tier is judged. A tier
     // probe that failed goes down and straight back: the tier ends where it
     // started, but the Keeper rebuilt twice (#501 G), so that's a change too.
@@ -588,26 +652,70 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
       quality: await quality(page),
       hitches: await hitchesExpected(page),
     };
-    await page.getByTestId('explore-easy').tap();
+    // The first hand spot you lift: hold it a few frames (well short of the
+    // hold's 900 ms, so it lets go unfinished) and count the frame loops it runs.
+    let liftedByItself = false;
+    if (!holdProbed) {
+      const kind = (await exploreState(page))?.playing;
+      if (kind === 'lift') {
+        holdProbed = true;
+        const held = await holdOnGround(page, 12, 400);
+        test.info().annotations.push({
+          type: 'holdRaf',
+          description: `${String(held.registrations)} rAF over ${String(held.perFrame.length)} readings: ${held.perFrame.join(' ')}`,
+        });
+        // The last reading is the frame after letting go.
+        if (held.perFrame.length - 1 >= HOLD_READINGS_MIN) {
+          expect(
+            Math.max(...held.perFrame),
+            'rAF registrations per reading while holding',
+          ).toBeLessThanOrEqual(HOLD_RAF_PER_READING);
+        } else {
+          test.info().annotations.push({
+            type: 'skipped',
+            description: 'rAF over a held lift: frames too slow for three readings in 400 ms',
+          });
+        }
+      } else {
+        test.info().annotations.push({
+          type: 'skipped',
+          description: `rAF over a held lift: this hand spot is ${String(kind)}`,
+        });
+      }
+      // A frame slower than the whole hold lifts it anyway: its toast may be
+      // gone by the time it's looked for, so the spot being done counts.
+      liftedByItself = !(await exploreState(page))?.playing;
+    }
+    if (!liftedByItself) await page.getByTestId('explore-easy').tap();
     // The toast is short-lived: read it and the hook in the same breath.
     type Seen = { toast: string | null; card: string | null; shown: boolean };
     let seen: Seen = { toast: null, card: null, shown: false };
     await expect
       .poll(async () => {
-        seen = await page.evaluate(() => {
+        let done: boolean;
+        [seen, done] = await page.evaluate((index) => {
           const e = (
             window as unknown as {
-              __heartpatch?: { explore?: () => { toast: string | null; card: string | null } };
+              __heartpatch?: {
+                explore?: () => {
+                  toast: string | null;
+                  card: string | null;
+                  spots: { index: number; done: boolean }[];
+                };
+              };
             }
           ).__heartpatch?.explore?.();
           const box = document.querySelector<HTMLElement>('[data-testid="explore-toast"]');
-          return {
-            toast: e?.toast ?? null,
-            card: e?.card ?? null,
-            shown: box !== null && !box.hidden && box.textContent !== '',
-          };
-        });
-        return seen.toast !== null || seen.card !== null;
+          return [
+            {
+              toast: e?.toast ?? null,
+              card: e?.card ?? null,
+              shown: box !== null && !box.hidden && box.textContent !== '',
+            },
+            e?.spots.find((x) => x.index === index)?.done ?? false,
+          ] as const;
+        }, hands.index);
+        return seen.toast !== null || seen.card !== null || (liftedByItself && done);
       }, slow)
       .toBe(true);
     searched += 1;
@@ -641,6 +749,8 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
       await slowExpect(sheet).toBeHidden();
       continue;
     }
+    // Lifted by itself and its toast already gone: the next hand spot shows one.
+    if (liftedByItself && seen.toast === null) continue;
     expect(after.card).toBeNull();
     await expect(sheet).toBeHidden();
     expect(seen.shown).toBe(true);
