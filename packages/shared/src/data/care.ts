@@ -37,10 +37,10 @@ export const GROWTH_RULES: GrowthRules = {
   // make 30–100 a long tail. Owner decision 2026-11-02 (#730, option 2)
   // quartered both knees' steepness to lift the week-two ceiling.
   // `pnpm sim:progression` (with Training Grounds every night): a casual
-  // kid's Partner (4 seats) grows up (16) on day 3–4, is about 23 on day 7,
+  // kid's Partner (4 seats) evolves (16) on day 3–4, is about 23 on day 7,
   // 31 on day 14, 39 on day 30 and 59 on day 60; an engaged kid's (with
   // `battleXpFalloff`) is about 33 / 41 / 54 / 83. Knee 16 is when starters
-  // grow up; knee 30 starts the long tail. Pinned by `growth-pace.test.ts`.
+  // evolve; knee 30 starts the long tail. Pinned by `growth-pace.test.ts`.
   xpCurve: {
     perLevel: 20,
     curve: 20,

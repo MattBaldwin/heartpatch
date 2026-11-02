@@ -10,7 +10,7 @@ import { addXp, grantedXp, xpForLevel } from './growth.js';
 // and Q2). Wild squishies match the Partner's level (spawn rules
 // `partnerOffset`), so a win pays about 30 × its level, and the curve does
 // the pacing: a starter grows up after about 23 wild wins at 1× care, and
-// past the knees at 16 and 30 later levels take more wins (never fewer).
+// past the knees at 16 and 30, later levels take more wins (never fewer).
 // Pins `BATTLE_RULES.xp` and `SPAWN_RULES.partnerOffset` against
 // `GROWTH_RULES.xpCurve` and the evolution levels, so a change to any of
 // them shows up here. `pnpm sim:progression` turns this into days.
