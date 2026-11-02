@@ -725,9 +725,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       findFront();
     }
     if (playing) feed({ type: 'tick', t: now });
-    // A new quality tier rebuilds the Keeper's meshes: never on a tap's frame
-    // or mid-gesture or mid-walk, where it hitches what the player is doing.
-    // It waits for the Keeper to stand still with nothing playing.
+    // A new quality tier rebuilds the Keeper's meshes: not mid-gesture or
+    // mid-walk (nor on the tap that starts one), where it hitches what the
+    // player is doing. It waits for the Keeper to stand still with nothing
+    // playing; a find's own frame may take it (the governor expects that hitch).
     const tier = options.tier();
     if (tier !== lastTier && playing === null && !walking) {
       lastTier = tier;

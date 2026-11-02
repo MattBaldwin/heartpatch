@@ -32,7 +32,11 @@ export interface FrameLoopOptions {
 
 export function createFrameLoop(options: FrameLoopOptions): FrameLoop {
   const raf = options.raf ?? ((cb: FrameRequestCallback) => requestAnimationFrame(cb));
-  const caf = options.caf ?? ((id: number) => cancelAnimationFrame(id));
+  const caf =
+    options.caf ??
+    ((id: number) => {
+      cancelAnimationFrame(id);
+    });
   let id = 0;
   let running = false;
   let wanted = false;
@@ -44,8 +48,7 @@ export function createFrameLoop(options: FrameLoopOptions): FrameLoop {
   function run(now: number): void {
     id = 0;
     running = true;
-    wanted = false;
-    let more = false;
+    let more: boolean;
     try {
       more = options.frame(now);
     } finally {

@@ -343,19 +343,19 @@ const holdOnGround = (page: Page, frames: number) =>
     const box = ground.getBoundingClientRect();
     const at = { clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 };
     const pointer = { ...at, pointerId: 41, isPrimary: true, bubbles: true, pointerType: 'touch' };
-    const raf = window.requestAnimationFrame;
+    const raf = window.requestAnimationFrame.bind(window);
     let registrations = 0;
     window.requestAnimationFrame = (cb) => {
       registrations++;
-      return raf.call(window, cb);
+      return raf(cb);
     };
     const perFrame: number[] = [];
     const nextFrame = () =>
       new Promise<void>((done) => {
         const before = registrations;
-        raf.call(window, () => {
+        raf(() => {
           // Read a frame later, once every callback of this frame has run.
-          raf.call(window, () => {
+          raf(() => {
             perFrame.push(registrations - before);
             done();
           });
@@ -648,6 +648,11 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
         Math.max(...held.perFrame),
         'rAF registrations per reading while holding',
       ).toBeLessThanOrEqual(HOLD_RAF_PER_READING);
+    } else {
+      test.info().annotations.push({
+        type: 'skipped',
+        description: `rAF over a held lift: this hand spot is ${String((await exploreState(page))?.playing)}`,
+      });
     }
     // A slow software frame can make those frames a whole hold: it lifts by itself.
     if ((await exploreState(page))?.playing) await page.getByTestId('explore-easy').tap();
