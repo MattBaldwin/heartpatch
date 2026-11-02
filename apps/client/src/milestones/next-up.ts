@@ -406,16 +406,21 @@ export function createNextUp(options: NextUpOptions): NextUp {
   };
 
   // ── Sprout's one-time line (owner decision 4) ───────────────────────────
+  /** Said this session, even where storage won't keep it (private mode, full). */
+  const saidHere = new Set<string>();
   const said = (accountId: string): boolean => {
+    if (saidHere.has(accountId)) return true;
     try {
       return storage?.getItem(sproutKey(accountId)) === '1';
     } catch {
       return true;
     }
   };
+  let sproutHideTimer: number | undefined;
   const hideSprout = () => {
     sproutPending = false;
     sprout.hidden = true;
+    window.clearTimeout(sproutHideTimer);
   };
   const offerSprout = (accountId: string) => {
     if (!sprout.hidden || said(accountId)) return;
@@ -432,13 +437,15 @@ export function createNextUp(options: NextUpOptions): NextUp {
       return;
     }
     sproutPending = false;
+    saidHere.add(accountId);
     try {
       storage?.setItem(sproutKey(accountId), '1');
     } catch {
       // Private mode: it may say it again next time.
     }
     sprout.hidden = false;
-    setTimer(() => {
+    window.clearTimeout(sproutHideTimer);
+    sproutHideTimer = window.setTimeout(() => {
       sprout.hidden = true;
     }, SPROUT_MS);
   };
@@ -491,7 +498,9 @@ export function createNextUp(options: NextUpOptions): NextUp {
     // Back to the chip or row that opened it, if it's still there to hold focus.
     const back = opener;
     opener = null;
-    if (back && !back.hidden && back.isConnected) back.focus();
+    // A row in a tray that has shut since (inert) can't hold focus: the chip takes it.
+    if (back && !back.hidden && back.isConnected && back.closest('[inert]') === null) back.focus();
+    else if (!chip.hidden) chip.focus();
   };
 
   return {
