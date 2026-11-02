@@ -10,7 +10,7 @@ import { addXp, grantedXp, xpForLevel } from './growth.js';
 // and Q2). Wild squishies match the Partner's level (spawn rules
 // `partnerOffset`), so a win pays about 30 × its level, and the curve does
 // the pacing: a starter grows up after about 23 wild wins at 1× care, and
-// past the knees at 16 and 30 each level takes more wins than the last.
+// past the knees at 16 and 30, later levels take more wins (never fewer).
 // Pins `BATTLE_RULES.xp` and `SPAWN_RULES.partnerOffset` against
 // `GROWTH_RULES.xpCurve` and the evolution levels, so a change to any of
 // them shows up here. `pnpm sim:progression` turns this into days.
@@ -52,14 +52,14 @@ describe('growth pace', () => {
     expect(OFFSET).toEqual({ min: -2, max: 0 });
   });
 
-  it('grows a level-1 starter up after 23–30 wild wins at 1× care', () => {
+  it('grows a level-1 starter up after 23–27 wild wins at 1× care', () => {
     const wins = Object.fromEntries(
       STARTERS.speciesIds.map((id) => [id, winsToReach(evolvesAt(id), 100)]),
     );
-    expect(wins).toEqual({ emberbun: 23, puddlepuff: 23, thistlepip: 30 });
+    expect(wins).toEqual({ emberbun: 23, puddlepuff: 23, thistlepip: 27 });
   });
 
-  it('grows a starter up faster with care: 14–18 wins at full care, 9–11 at the cap', () => {
+  it('grows a starter up faster with care: 14–16 wins at full care, 9–10 at the cap', () => {
     const wins = (percent: number) =>
       Object.fromEntries(
         STARTERS.speciesIds.map((id) => [id, winsToReach(evolvesAt(id), percent)]),
@@ -67,28 +67,28 @@ describe('growth pace', () => {
     expect(wins(GROWTH_RULES.care.maxPercent)).toEqual({
       emberbun: 14,
       puddlepuff: 14,
-      thistlepip: 18,
+      thistlepip: 16,
     });
-    expect(wins(GROWTH_RULES.capPercent)).toEqual({ emberbun: 9, puddlepuff: 9, thistlepip: 11 });
+    expect(wins(GROWTH_RULES.capPercent)).toEqual({ emberbun: 9, puddlepuff: 9, thistlepip: 10 });
   });
 
   it('keeps rarer evolutions slower, more so past the knee', () => {
     const at = (level: number) => winsToReach(level, 100);
     // Evolution levels by rarity (species.ts): common 16 … legendary 30.
-    expect([16, 18, 22, 26, 30].map(at)).toEqual([23, 30, 64, 117, 183]);
+    expect([16, 18, 22, 26, 30].map(at)).toEqual([23, 27, 40, 57, 78]);
   });
 
   // #443: a line's teens come 8 levels after its kid (common 24, rare 30), and
   // grown-ups 20 after it (common 36); the kid keeps the old evolution level.
   it('paces the later stages: teens at kid + 8, grown-ups at kid + 20', () => {
     const at = (level: number) => winsToReach(level, 100);
-    expect([24, 26, 30, 36].map(at)).toEqual([89, 117, 183, 355]);
+    expect([24, 26, 30, 36].map(at)).toEqual([48, 57, 78, 127]);
   });
 
-  it('makes each level past the knees take more wins than the last (at 2×)', () => {
+  it('makes later levels past the knees take more wins, never fewer (at 2×)', () => {
     const perLevel = [16, 20, 25, 30, 40, 60, 80, 99].map((from) =>
       winsToReach(from + 1, 200, from),
     );
-    expect(perLevel).toEqual([2, 5, 8, 10, 25, 40, 47, 51]);
+    expect(perLevel).toEqual([1, 2, 3, 3, 7, 11, 13, 14]);
   });
 });

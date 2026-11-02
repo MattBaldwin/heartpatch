@@ -441,10 +441,10 @@ describe('levels', () => {
     // TUNE pins (data/care.ts): a change to the curve shows up here.
     expect(xpForLevel(2, GROWTH_RULES)).toBe(40);
     expect(xpForLevel(16, GROWTH_RULES)).toBe(4_800);
-    expect(xpForLevel(20, GROWTH_RULES)).toBe(15_600);
-    expect(xpForLevel(30, GROWTH_RULES)).toBe(115_400);
-    expect(xpForLevel(40, GROWTH_RULES)).toBe(469_200);
-    expect(xpForLevel(100, GROWTH_RULES)).toBe(11_076_000);
+    expect(xpForLevel(20, GROWTH_RULES)).toBe(9_600);
+    expect(xpForLevel(30, GROWTH_RULES)).toBe(41_900);
+    expect(xpForLevel(40, GROWTH_RULES)).toBe(140_700);
+    expect(xpForLevel(100, GROWTH_RULES)).toBe(2_917_500);
     expect(levelForXp(xpForLevel(100, GROWTH_RULES) * 2, GROWTH_RULES)).toBe(GROWTH_RULES.maxLevel);
     // Every level costs more than the one before it.
     for (let level = 2; level < GROWTH_RULES.maxLevel; level++) {

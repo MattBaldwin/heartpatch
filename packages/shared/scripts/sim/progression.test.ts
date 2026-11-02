@@ -59,9 +59,10 @@ describe('headline numbers (a short run, so data changes show up here)', () => {
       runProgression(data, SMALL, CURRENT_RULES, kid, 4).kids[0]!.days.map((d) => d.partnerLevel),
     );
     // Wave 2's kinds (#382) reshuffled the seeded wild fights: the casual kid's days 2 and 3 moved.
+    // #730 quartered the XP curve's knees: both kids pull ahead once past Lv 16.
     expect(levels).toEqual([
-      [8, 11, 15, 17, 18, 19],
-      [14, 18, 20, 21, 22, 23],
+      [8, 11, 15, 18, 20, 21],
+      [14, 20, 23, 26, 28, 31],
     ]);
   });
 
