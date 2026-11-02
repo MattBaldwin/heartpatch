@@ -46,30 +46,55 @@ const hollowState = (page: Page) => hook<HollowDebug>(page, 'hollow');
  * The Next-up chip (#731) never covers a night chip: it sits above them,
  * however many rows they wrap to. Boxes of what's actually showing.
  */
-async function expectNextUpClear(page: Page, when: string): Promise<void> {
-  const overlaps = await page.evaluate(() => {
-    const shown = (e: Element) => {
-      const r = e.getBoundingClientRect();
-      return getComputedStyle(e).display !== 'none' && r.width > 0 && r.height > 0 ? r : null;
-    };
-    const chip = document.querySelector('[data-testid="next-up-chip"]');
-    const box = chip ? shown(chip) : null;
-    if (!box) return [];
-    return [...document.querySelectorAll('.night-chip')].flatMap((n) => {
-      const r = shown(n);
-      // At least 6 px apart, not just apart: touching pills read as one.
-      const gap = 6;
-      const hit =
-        r &&
-        r.left < box.right + gap &&
-        box.left - gap < r.right &&
-        r.top < box.bottom + gap &&
-        box.top - gap < r.bottom;
-      return hit ? [`${n.textContent} ${JSON.stringify([r.top, box.bottom].map(Math.round))}`] : [];
+async function nextUpClearHere(page: Page, when: string): Promise<void> {
+  const overlaps = () =>
+    page.evaluate(() => {
+      const shown = (e: Element) => {
+        const r = e.getBoundingClientRect();
+        return getComputedStyle(e).display !== 'none' && r.width > 0 && r.height > 0 ? r : null;
+      };
+      const chip = document.querySelector('[data-testid="next-up-chip"]');
+      const box = chip ? shown(chip) : null;
+      if (!box) return [];
+      return [...document.querySelectorAll('.night-chip')].flatMap((n) => {
+        const r = shown(n);
+        // At least 6 px apart, not just apart: touching pills read as one.
+        const gap = 6;
+        const hit =
+          r &&
+          r.left < box.right + gap &&
+          box.left - gap < r.right &&
+          r.top < box.bottom + gap &&
+          box.top - gap < r.bottom;
+        return hit
+          ? [`${n.textContent} ${JSON.stringify([r.top, box.bottom].map(Math.round))}`]
+          : [];
+      });
     });
-  });
-  expect(overlaps, `night chips under or within 6 px of the Next-up chip (${when})`).toEqual([]);
+  // A turn or a resize re-measures on the next frame or two: allow those, not a lasting overlap.
+  await expect
+    .poll(overlaps, {
+      message: `night chips under or within 6 px of the Next-up chip (${when})`,
+      timeout: 3_000,
+    })
+    .toEqual([]);
 }
+
+/**
+ * The chip clears the night's chips at this size and, on a phone, at the
+ * installed app's full height too (Playwright's iPhone 15 is a Safari tab,
+ * 659 px; the app on the home screen is 852 px, past the 740 px line where
+ * the chips sit higher, hollow.css).
+ */
+async function expectNextUpClear(page: Page, when: string): Promise<void> {
+  await nextUpClearHere(page, when);
+  const size = page.viewportSize()!;
+  if (size.width >= 700 || size.height >= 740) return;
+  await page.setViewportSize({ width: size.width, height: 852 });
+  await nextUpClearHere(page, `${when}, 852 px tall`);
+  await page.setViewportSize(size);
+}
+
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 test('a Long Night: the countdown, the live feed, the reveal and the crown', async ({
