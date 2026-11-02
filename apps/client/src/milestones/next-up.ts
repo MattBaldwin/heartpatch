@@ -212,8 +212,12 @@ export function createNextUp(options: NextUpOptions): NextUp {
     const over = liftWatched;
     const box =
       over && !over.hidden && over.childElementCount > 0 ? over.getBoundingClientRect() : null;
-    const px = box && box.height > 0 ? Math.max(0, window.innerHeight - box.top) + LIFT_GAP_PX : 0;
-    const value = `${String(Math.round(px))}px`;
+    // From the row's own `bottom` and height, not window.innerHeight: both are
+    // fixed to the same layout viewport, which innerHeight needn't match
+    // (iOS toolbars, a pinch), and a short lift tucks the chip over the row.
+    const from = over && box && box.height > 0 ? parseFloat(getComputedStyle(over).bottom) : NaN;
+    const px = box && Number.isFinite(from) ? Math.max(0, from) + box.height + LIFT_GAP_PX : 0;
+    const value = `${String(Math.ceil(px))}px`;
     for (const node of [chip, sprout]) {
       if (node.style.getPropertyValue('--next-up-lift') !== value)
         node.style.setProperty('--next-up-lift', value);
