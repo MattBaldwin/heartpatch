@@ -40,6 +40,7 @@ import { EXPLORE_FIND, EXPLORE_VIEW } from './explore-config.js';
 import { exploreApi, type ExploreApi } from './explore-api.js';
 import { ExploreScene, type ExploreSceneStats } from './explore-scene.js';
 import { placeDark, type DarkPaint } from './lantern-dark.js';
+import { createFrameLoop } from './frame-loop.js';
 import {
   actionFor,
   afterSearch,
@@ -360,7 +361,6 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let lastHeld: ToolId | null = null;
   let working = false;
   let opening = false;
-  let frame = 0;
   let panel: { container: HTMLElement; tile: PublicTile; view: MapView } | null = null;
   /** Clears an echo's "Boo!" line after a moment. */
   let spookTimer: ReturnType<typeof setTimeout> | null = null;
@@ -646,25 +646,26 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let tierChanges = 0;
 
   let lastFrame = 0;
-  /** Draws every frame while the Keeper walks or something plays, then stops. */
-  function wake(): void {
-    if (frame === 0 && isOpen) {
+  /**
+   * Draws every frame while the Keeper walks or something plays, then stops:
+   * one chain of frames at most, however often it's woken (a held gesture's
+   * tick wakes it from inside its own frame).
+   */
+  const loop = createFrameLoop({
+    frame: tick,
+    live: () => isOpen,
+    onStart: () => {
       lastFrame = performance.now();
-      frame = requestAnimationFrame(tick);
-    }
+    },
+  });
+  function wake(): void {
+    loop.wake();
   }
 
-  function tick(now: number): void {
-    frame = 0;
+  /** One frame's work; true asks for the next. */
+  function tick(now: number): boolean {
     const s = scene3d;
-    if (!s || !isOpen) return;
-    const tier = options.tier();
-    if (tier !== lastTier) {
-      lastTier = tier;
-      tierChanges++;
-      s.setLod(lodFor('closeUp', tier));
-      s.setTier(tier);
-    }
+    if (!s || !isOpen) return false;
     const dt = Math.min(EXPLORE_VIEW.maxFrameStep, Math.max(0, (now - lastFrame) / 1000));
     lastFrame = now;
     let walking = false;
@@ -724,6 +725,16 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       findFront();
     }
     if (playing) feed({ type: 'tick', t: now });
+    // A new quality tier rebuilds the Keeper's meshes: never on a tap's frame
+    // or mid-gesture or mid-walk, where it hitches what the player is doing.
+    // It waits for the Keeper to stand still with nothing playing.
+    const tier = options.tier();
+    if (tier !== lastTier && playing === null && !walking) {
+      lastTier = tier;
+      tierChanges++;
+      s.setLod(lodFor('closeUp', tier));
+      s.setTier(tier);
+    }
     const animating = s.step(now);
     renderDark();
     // Settled (the Keeper and camera still), the card picks its shape afresh
@@ -736,7 +747,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     // lantern's dark are DOM; a tool's swing animates through `step`).
     if (moved || turned || animating) options.invalidate();
     const holding = playing !== null && playing.state.holdSince !== null;
-    if (walking || animating || holding) frame = requestAnimationFrame(tick);
+    return walking || animating || holding;
   }
 
   /** An echo's "Boo!" on the note line, for a moment. */
@@ -1555,27 +1566,59 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     play.replaceChildren(...nodes);
   }
 
+  /**
+   * What the overlay's count last showed (`renderPlay`): it runs every frame
+   * of a held gesture, so it only touches the DOM when the count changes.
+   */
+  let playShown: {
+    dots: HTMLElement;
+    shape: string;
+    fill: HTMLElement | null;
+    text: string;
+  } | null = null;
+
   /** Updates the overlay's count (dots, or a hold's fill). */
   function renderPlay(): void {
     const p = playing;
-    play.hidden = p === null || card !== null;
-    if (!p) return;
+    const hidden = p === null || card !== null;
+    if (play.hidden !== hidden) play.hidden = hidden;
+    if (!p || !playDots) return;
     const s = p.state;
-    if (playDots) {
+    // The overlay's shape: its dots, a hold's bar, or nothing.
+    const shape =
+      s.need > 1
+        ? `dots ${String(s.need)}`
+        : s.kind === 'lift' || s.kind === 'stack'
+          ? 'hold'
+          : 'none';
+    if (playShown?.dots !== playDots || playShown.shape !== shape) {
+      let fill: HTMLElement | null = null;
       if (s.need > 1) {
-        playDots.setAttribute('aria-label', `${String(s.count)} of ${String(s.need)}`);
         playDots.replaceChildren(
-          ...Array.from({ length: s.need }, (_, i) =>
-            el('span', { class: `explore-dot${i < s.count ? ' explore-dot-on' : ''}` }),
-          ),
+          ...Array.from({ length: s.need }, () => el('span', { class: 'explore-dot' })),
         );
-      } else if (s.kind === 'lift' || s.kind === 'stack') {
-        const fill = el('span', { class: 'explore-hold-fill' });
-        fill.style.width = `${String(Math.round(interactionProgress(s) * 100))}%`;
+      } else if (shape === 'hold') {
+        fill = el('span', { class: 'explore-hold-fill' });
         playDots.replaceChildren(el('span', { class: 'explore-hold' }, fill));
       } else {
         playDots.replaceChildren();
       }
+      playShown = { dots: playDots, shape, fill, text: '' };
+    }
+    const shown = playShown;
+    if (s.need > 1) {
+      const text = `${String(s.count)} of ${String(s.need)}`;
+      if (shown.text === text) return;
+      shown.text = text;
+      playDots.setAttribute('aria-label', text);
+      Array.from(playDots.children).forEach((dot, i) => {
+        dot.classList.toggle('explore-dot-on', i < s.count);
+      });
+    } else if (shown.fill) {
+      const width = `${String(Math.round(interactionProgress(s) * 100))}%`;
+      if (shown.text === width) return;
+      shown.text = width;
+      shown.fill.style.width = width;
     }
   }
 
@@ -1595,6 +1638,18 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const on = s?.kind === 'light' && !(s.revealed && s.light === null) && card === null;
     // The glint shows once the light has found it, as "Grab it" wakes up.
     const showGlint = s?.kind === 'light' && s.revealed && card === null;
+    // Runs every frame: with neither showing, and both already hidden and
+    // cleared, there's nothing to write (any gesture but the lantern's).
+    if (
+      !on &&
+      !showGlint &&
+      dark.hidden &&
+      glint.hidden &&
+      darkPaint === null &&
+      glintMoved === ''
+    ) {
+      return;
+    }
     const shown = (on && dark.hidden) || (showGlint && glint.hidden);
     dark.hidden = !on;
     glint.hidden = !showGlint;
@@ -1957,8 +2012,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     // A reply still on its way (a search, a bag read) belongs to this visit:
     // it must never land on the next tile opened.
     generation += 1;
-    if (frame !== 0) cancelAnimationFrame(frame);
-    frame = 0;
+    loop.stop();
     press = null;
     stick = null;
     walk = null;

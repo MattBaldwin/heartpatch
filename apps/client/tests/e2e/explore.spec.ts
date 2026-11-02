@@ -330,6 +330,54 @@ const frameClock = (page: Page) =>
     at: performance.now(),
   }));
 
+/**
+ * Holds a finger on the ground for `frames` frames (a log lifted, a rock, a
+ * pumpkin), then lets go, counting `requestAnimationFrame` registrations each
+ * frame. Explore keeps one frame loop: a held gesture once doubled its loops
+ * every frame (65,000 registrations in a 900 ms hold, the owner's frame drops
+ * on logs). Counts only, never timing: a slow software frame changes nothing.
+ */
+const holdOnGround = (page: Page, frames: number) =>
+  page.evaluate(async (n) => {
+    const ground = document.querySelector<HTMLElement>('[data-testid="explore-ground"]')!;
+    const box = ground.getBoundingClientRect();
+    const at = { clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 };
+    const pointer = { ...at, pointerId: 41, isPrimary: true, bubbles: true, pointerType: 'touch' };
+    const raf = window.requestAnimationFrame;
+    let registrations = 0;
+    window.requestAnimationFrame = (cb) => {
+      registrations++;
+      return raf.call(window, cb);
+    };
+    const perFrame: number[] = [];
+    const nextFrame = () =>
+      new Promise<void>((done) => {
+        const before = registrations;
+        raf.call(window, () => {
+          // Read a frame later, once every callback of this frame has run.
+          raf.call(window, () => {
+            perFrame.push(registrations - before);
+            done();
+          });
+        });
+      });
+    try {
+      ground.dispatchEvent(new PointerEvent('pointerdown', pointer));
+      for (let i = 0; i < n; i++) await nextFrame();
+      ground.dispatchEvent(new PointerEvent('pointerup', pointer));
+      await nextFrame();
+    } finally {
+      window.requestAnimationFrame = raf;
+    }
+    return { registrations, perFrame };
+  }, frames);
+/**
+ * Registrations a frame may make: explore's one loop, the stage's draw and
+ * ambient life (two frames per reading in `holdOnGround`). Doubling loops pass
+ * this within four frames.
+ */
+const HOLD_RAF_PER_READING = 12;
+
 /** Explore draws at most 30 frames a second (#501, owner Oct 18), with a frame of slack for the clock. */
 const EXPLORE_MAX_FPS = 31;
 const mapState = (page: Page) =>
@@ -544,7 +592,7 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     const walked = (await exploreState(page))!;
     const moved = walked.keeper.x !== first.keeper.x || walked.keeper.z !== first.keeper.z;
     // A software renderer's governor may change tier while exploring, and the
-    // walk's first step applies it (the team's detail level rebuilds): that's
+    // walk's end applies it (the team's detail level rebuilds): that's
     // a rebuild on purpose, so only a walk on one tier is judged. A tier
     // probe that failed goes down and straight back: the tier ends where it
     // started, but the Keeper rebuilt twice (#501 G), so that's a change too.
@@ -588,7 +636,21 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
       quality: await quality(page),
       hitches: await hitchesExpected(page),
     };
-    await page.getByTestId('explore-easy').tap();
+    // A hand spot you lift: hold it a few frames (well short of the hold's
+    // 900 ms, so it lets go unfinished) and count the frame loops it runs.
+    if ((await exploreState(page))?.playing === 'lift') {
+      const held = await holdOnGround(page, 12);
+      test.info().annotations.push({
+        type: 'holdRaf',
+        description: `${String(held.registrations)} rAF over ${String(held.perFrame.length)} readings: ${held.perFrame.join(' ')}`,
+      });
+      expect(
+        Math.max(...held.perFrame),
+        'rAF registrations per reading while holding',
+      ).toBeLessThanOrEqual(HOLD_RAF_PER_READING);
+    }
+    // A slow software frame can make those frames a whole hold: it lifts by itself.
+    if ((await exploreState(page))?.playing) await page.getByTestId('explore-easy').tap();
     // The toast is short-lived: read it and the hook in the same breath.
     type Seen = { toast: string | null; card: string | null; shown: boolean };
     let seen: Seen = { toast: null, card: null, shown: false };
