@@ -70,7 +70,11 @@ async function cardClearOfTheTopRow(page: Page): Promise<void> {
 }
 
 async function openSettings(page: Page): Promise<ReturnType<Page['getByTestId']>> {
-  await page.getByTestId('keeper-menu').tap();
+  // The Keeper's "Me" button is back once the patch is up (#731c): a hide
+  // that's never undone fails here, not as a 3-minute tap timeout.
+  const me = page.getByTestId('keeper-menu');
+  await expect(me).toBeVisible({ timeout: 30_000 });
+  await me.tap();
   await page.getByRole('button', { name: 'Settings' }).tap();
   return page.getByTestId('lobby').getByTestId('push-settings');
 }
@@ -204,6 +208,8 @@ test('no offer in a plain tab; Not now is for good; Settings shows each state', 
   await card.getByRole('button', { name: 'Not now' }).tap();
   await expect(card).toBeHidden();
   for (const side of HANDLES) await expect(page.getByTestId(`tray-handle-${side}`)).toBeVisible();
+  // ...and so does the Keeper's "Me" button (#731c).
+  await expect(page.getByTestId('keeper-menu')).toBeVisible();
   await expect(nightChips).toHaveCSS('visibility', 'visible');
   expect(await pushStubCounts(page)).toEqual({ requests: 0, subscribes: 0 });
   await page.reload();
