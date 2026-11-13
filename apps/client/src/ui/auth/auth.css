@@ -303,8 +303,36 @@ body:has(.tile-panel-building:not([hidden])) {
   margin-top: 8px;
   padding: 10px;
   border-radius: 22px;
-  background: #fffafc;
+  /* Short screens (a phone on its side): the panel is capped by the chip
+     below and scrolls inside itself, so "Log out" is always reachable. The
+     soft shadow at the bottom edge shows only while there's more to scroll
+     (it rides the content, so it slides away at the end). */
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background:
+    linear-gradient(rgb(255 250 252 / 0%), #fffafc 70%) center bottom / 100% 28px no-repeat local,
+    radial-gradient(farthest-side at 50% 100%, rgb(74 49 80 / 22%), rgb(74 49 80 / 0%)) center
+      bottom / 100% 12px no-repeat scroll,
+    #fffafc;
   box-shadow: 0 14px 34px rgb(74 49 80 / 30%);
+}
+
+/* The cap: the open chip never runs past the bottom of the safe area. The
+   round button keeps its size; the panel under it (above) takes the squeeze,
+   and its rows keep theirs and scroll instead. Tall screens never hit it. */
+:is(.hp-trays-on, :where(body:has(.tile-panel-building:not([hidden])))) .auth-chip-open {
+  max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px);
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px);
+}
+
+:is(.hp-trays-on, :where(body:has(.tile-panel-building:not([hidden])))) .auth-chip-toggle,
+:is(.hp-trays-on, :where(body:has(.tile-panel-building:not([hidden]))))
+  .auth-chip-open
+  .auth-chip-body
+  > * {
+  flex-shrink: 0;
 }
 
 :is(.hp-trays-on, :where(body:has(.tile-panel-building:not([hidden])))) .auth-chip-name {
