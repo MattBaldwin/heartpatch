@@ -54,10 +54,9 @@ test('My Home dots the Jobs row while a gatherer is full', async ({ browser }) =
   for (let i = 0; i < 4; i++) {
     expect((await api(page, 'POST', `/maps/${mapId}/dev/work/ready`)).status).toBe(200);
   }
-  // ...and the map, opened again, reads the jobs view that says so.
+  // ...and the map, opened again (a reload lands back on the patch, #160),
+  // reads the jobs view that says so.
   await page.reload();
-  await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible();
-  await visitPatch(lobby);
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
   await waitForLiveMap(page, mapId);
   await expect
