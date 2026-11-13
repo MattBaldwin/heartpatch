@@ -41,6 +41,77 @@ interface BattleDebug {
 }
 
 const hollowState = (page: Page) => hook<HollowDebug>(page, 'hollow');
+
+/**
+ * The Next-up chip (#731) never covers a night chip: it sits above them,
+ * however many rows they wrap to. Boxes of what's actually showing.
+ */
+async function nextUpClearHere(page: Page, when: string): Promise<void> {
+  const overlaps = () =>
+    page.evaluate(() => {
+      const shown = (e: Element) => {
+        const r = e.getBoundingClientRect();
+        return getComputedStyle(e).display !== 'none' && r.width > 0 && r.height > 0 ? r : null;
+      };
+      const chip = document.querySelector('[data-testid="next-up-chip"]');
+      const box = chip ? shown(chip) : null;
+      if (!box) return [];
+      return [...document.querySelectorAll('.night-chip')].flatMap((n) => {
+        const r = shown(n);
+        // At least 6 px apart, not just apart: touching pills read as one.
+        const gap = 6;
+        const hit =
+          r &&
+          r.left < box.right + gap &&
+          box.left - gap < r.right &&
+          r.top < box.bottom + gap &&
+          box.top - gap < r.bottom;
+        return hit
+          ? [`${n.textContent} ${JSON.stringify([r.top, box.bottom].map(Math.round))}`]
+          : [];
+      });
+    });
+  // A turn or a resize re-measures on the next frame or two: allow those, not a lasting overlap.
+  await expect
+    .poll(overlaps, {
+      message: `night chips under or within 6 px of the Next-up chip (${when})`,
+      timeout: 3_000,
+    })
+    .toEqual([]);
+}
+
+/**
+ * The chip clears the night's chips at this size and, on a phone, at the
+ * installed app's full height too (Playwright's iPhone 15 is a Safari tab,
+ * 659 px; the app on the home screen is 852 px, past the 740 px line where
+ * the chips sit higher, hollow.css).
+ */
+async function expectNextUpClear(page: Page, when: string): Promise<void> {
+  await nextUpClearHere(page, when);
+  const size = page.viewportSize()!;
+  if (size.width >= 700 || size.height >= 740) return;
+  await page.setViewportSize({ width: size.width, height: 852 });
+  await nextUpClearHere(page, `${when}, 852 px tall`);
+  // An iPhone 15's notch and home bar, arriving after layout with no resize
+  // (as on a turn or a launch from the home screen): the night's chips move
+  // up by the inset and the chip must follow. Chromium can say so (CDP).
+  const cdp = await page
+    .context()
+    .newCDPSession(page)
+    .catch(() => null);
+  if (cdp) {
+    const insets = (top: number, bottom: number) =>
+      cdp.send('Emulation.setSafeAreaInsetsOverride', {
+        insets: { top, bottom, left: 0, right: 0 },
+      });
+    await insets(59, 34);
+    await nextUpClearHere(page, `${when}, 852 px tall with the home bar's inset`);
+    await insets(0, 0);
+    await cdp.detach();
+  }
+  await page.setViewportSize(size);
+}
+
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 test('a Long Night: the countdown, the live feed, the reveal and the crown', async ({
@@ -78,6 +149,7 @@ test('a Long Night: the countdown, the live feed, the reveal and the crown', asy
   await expect
     .poll(async () => (await hollowState(page))?.longNight.chip, { timeout: 30_000 })
     .toBe('🌑 Long Night in 2 days');
+  await expectNextUpClear(page, 'countdown');
   await page.getByTestId('long-night-chip').tap();
   const notice = page.getByTestId('long-night-notice');
   await expect(notice).toBeVisible();
@@ -113,6 +185,7 @@ test('a Long Night: the countdown, the live feed, the reveal and the crown', asy
   await page.getByTestId('tray-hint-ok').tap();
   await expect(caption).toBeVisible();
   await expect(page.getByTestId('night-feed')).toBeVisible();
+  await expectNextUpClear(page, 'live');
   await page.getByTestId('night-show-skip').tap();
   await expect.poll(() => idle(page), { timeout: 30_000 }).toBe(true);
 
@@ -127,6 +200,7 @@ test('a Long Night: the countdown, the live feed, the reveal and the crown', asy
   // open yet. The reveal says so with no "Go look"; one tap closes it.
   expect((await read()).longNight?.gap ?? null).toBeNull();
   expect((await hollowState(page))?.longNight.revealGoLook).toBe(false);
+  await expectNextUpClear(page, 'reveal');
   await reveal.getByTestId('long-night-ok').tap();
   await expect(reveal).toBeHidden();
   await expect.poll(async () => (await hollowState(page))?.longNight.reveal).toBeNull();
@@ -168,6 +242,7 @@ test('a Long Night: the countdown, the live feed, the reveal and the crown', asy
     .toBe('available');
   const gapChip = page.getByTestId('gap-chip');
   await expect(gapChip).toHaveText("✨ Juniper's Gap is open");
+  await expectNextUpClear(page, 'Gap open');
   await gapChip.tap();
   const gapSheet = page.getByTestId('long-night-gap');
   await expect(gapSheet).toBeVisible();

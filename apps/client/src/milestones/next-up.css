@@ -1,0 +1,537 @@
+/* The Next-up chip, its goals sheet and the Adventure tray's Goals row
+   (#731, owner-approved mockups v4). Colours from trays.css; 44pt+ targets;
+   safe areas. The chip sits bottom centre with the map's own overlays (3),
+   under the trays (4); the sheet is a sheet (6). */
+
+.next-up-chip,
+.next-up-sprout,
+.next-up-scrim {
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.next-up-chip {
+  position: fixed;
+  z-index: 3;
+  left: 50%;
+  bottom: max(calc(env(safe-area-inset-bottom) + 14px), var(--next-up-lift));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px);
+  min-height: 52px;
+  margin: 0;
+  padding: 6px 16px 6px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 96%);
+  box-shadow:
+    0 6px 16px rgb(74 49 80 / 26%),
+    inset 0 0 0 2px #f6dceb;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* Upright on a phone with a home indicator, clear of it even where env()
+   reads 0, as the night's chips are (hollow.css). // TUNE: */
+@media (orientation: portrait) and (min-height: 740px) {
+  .next-up-chip {
+    bottom: max(calc(max(env(safe-area-inset-bottom), 22px) + 14px), var(--next-up-lift));
+  }
+
+  .next-up-sprout {
+    bottom: max(
+      calc(max(env(safe-area-inset-bottom), 22px) + 76px),
+      calc(var(--next-up-lift) + 62px)
+    );
+  }
+}
+
+/* At night the Hollow's chips have the bottom edge, one row or two (a Long
+   Night adds its own), and the chip and Sprout's line sit 8 px above them.
+   Where the row stands is worked out here from the same env() as the row's
+   own `bottom` (hollow.css .night-chips: change both together), so a
+   safe-area change (a turn, standalone vs Safari) moves both at once; only
+   its height is measured (next-up.ts, a ResizeObserver: --next-up-row). With
+   no chips up, --next-up-row is far below the screen and the lift loses. */
+.next-up-chip,
+.next-up-sprout {
+  --next-up-floor: calc(env(safe-area-inset-bottom) + 12px);
+  --next-up-row: -100vh;
+  --next-up-lift: calc(var(--next-up-floor) + var(--next-up-row) + 8px);
+}
+
+@media (orientation: portrait) and (min-height: 740px) {
+  .next-up-chip,
+  .next-up-sprout {
+    --next-up-floor: calc(max(env(safe-area-inset-bottom), 22px) + 12px);
+  }
+}
+
+/* Off the map, and while something else owns the bottom middle (owner
+   decision 1): the tile panel (and the Build sheet in it), the lobby's Back
+   pill, the Hollow's cards over the map, an open tray, and Sprout's
+   first-time hint. The night's chips stay: the chip sits above them. */
+.next-up-chip[hidden],
+.next-up-sprout[hidden],
+.next-up-scrim[hidden],
+.next-up-row-count[hidden],
+body:not(.hp-trays-on) .next-up-chip,
+body:not(.hp-trays-on) .next-up-sprout,
+:is(
+    body:has(.tile-panel:not([hidden])),
+    body:has(.lobby-back:not([hidden])),
+    body:has(.hollow-card:not([hidden])),
+    body:has(.night-caption:not([hidden]):not(.night-caption-held)),
+    body:has(.trays-open),
+    body:has(.trays-hinting)
+  )
+  :is(.next-up-chip, .next-up-sprout) {
+  display: none;
+}
+
+.next-up-ring {
+  --next-up-p: 0;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle closest-side, #fbeaf2 78%, transparent 80%),
+    conic-gradient(#b8487a calc(var(--next-up-p) * 1%), #f6dceb 0);
+  font-size: 19px;
+  line-height: 1;
+}
+
+.next-up-chip[data-look='solo'] .next-up-ring {
+  background: #fbeaf2;
+}
+
+/* All done (owner decision 6): quieter, the ring full gold. */
+.next-up-chip[data-look='done'] {
+  background: rgb(255 255 255 / 88%);
+}
+
+.next-up-chip[data-look='done'] .next-up-ring {
+  background: radial-gradient(circle closest-side, #fff1c4 78%, transparent 80%), #ffc94d;
+}
+
+.next-up-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.next-up-kicker {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #b0305e;
+}
+
+.next-up-line {
+  font-size: 15px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.next-up-go {
+  flex: none;
+  margin-left: 2px;
+  font-size: 22px;
+  font-weight: 900;
+  color: #b8487a;
+}
+
+/* Sprout's one-time line, just above the chip. */
+.next-up-sprout {
+  position: fixed;
+  z-index: 3;
+  left: 50%;
+  bottom: max(calc(env(safe-area-inset-bottom) + 76px), calc(var(--next-up-lift) + 62px));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 14px 8px 8px;
+  border-radius: 18px;
+  background: #fffafc;
+  box-shadow: 0 6px 16px rgb(74 49 80 / 22%);
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: next-up-pop 320ms ease-out 1;
+}
+
+.next-up-sprout-face {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 60%, #9bd88a 0 60%, #6fbf5e 61%);
+}
+
+/* A fade, not a slide: the map's labels measure the line once as it shows
+   (trading/post-flags.ts) and step aside, so its box stays put from the start. */
+@keyframes next-up-pop {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ── The sheet ─────────────────────────────────────────────────────────── */
+/* The sheet has its own ✕ where the Keeper's "Me" button sits (a phone on
+   its side): the button steps aside while it's open, as for the lore book. */
+body:has(.next-up-scrim:not([hidden])) .auth-chip {
+  display: none;
+}
+
+.next-up-scrim {
+  position: fixed;
+  z-index: 6;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgb(74 49 80 / 28%);
+}
+
+.next-up-sheet {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  max-height: calc(100% - env(safe-area-inset-top) - 60px);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  border-radius: 28px 28px 0 0;
+  background: #fffafc;
+  box-shadow: 0 -10px 30px rgb(74 49 80 / 24%);
+}
+
+/* iPad: a centred card, like other sheets. */
+@media (min-width: 700px) and (min-height: 700px) {
+  .next-up-scrim {
+    align-items: center;
+  }
+
+  .next-up-sheet {
+    width: min(560px, 90%);
+    max-height: calc(100% - 64px);
+    padding: 0;
+    border-radius: 28px;
+  }
+}
+
+/* A phone on its side: from the right, so the map stays on the left. */
+@media (max-height: 520px) and (min-width: 640px) {
+  .next-up-scrim {
+    align-items: stretch;
+    justify-content: flex-end;
+  }
+
+  .next-up-sheet {
+    width: min(66%, 460px);
+    max-height: none;
+    margin: calc(env(safe-area-inset-top) + 8px) 0 8px;
+    padding: 0 env(safe-area-inset-right) 0 0;
+    border-radius: 28px 0 0 28px;
+  }
+}
+
+.next-up-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 14px 6px 20px;
+}
+
+.next-up-title {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 900;
+  color: #7a2d55;
+}
+
+.next-up-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 14px 14px;
+}
+
+.next-up-sub {
+  margin: 0;
+  padding: 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #6b4b6e;
+}
+
+.next-up-goal {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1.5px #f6dceb;
+}
+
+.next-up-goal-waiting {
+  opacity: 0.62;
+}
+
+.next-up-goal-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.next-up-goal-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: 14px;
+  background: #fbeaf2;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.next-up-goal-words {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.next-up-goal-short {
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.next-up-goal-track {
+  font-size: 13px;
+  font-weight: 700;
+  color: #6b4b6e;
+}
+
+.next-up-goal-count {
+  font-size: 13px;
+  font-weight: 900;
+  color: #7a2d55;
+  white-space: nowrap;
+}
+
+.next-up-bar {
+  display: block;
+  height: 12px;
+  border-radius: 999px;
+  background: #f6e7ef;
+  overflow: hidden;
+}
+
+.next-up-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ff9fb2, #ffc94d);
+}
+
+.next-up-prizes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.next-up-prize {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #fff8ec;
+  box-shadow: 0 0 0 1.5px #f2d9a6;
+  font-size: 12px;
+  font-weight: 800;
+  color: #8a5d12;
+}
+
+.next-up-go-button {
+  align-self: flex-start;
+}
+
+/* A phone on its side, or a small phone in a Safari tab (a mini at 629 px,
+   320 x 568): the tray's rows must all fit without scrolling
+   (short-screens.spec) and there's no room for one more, so the Goals row
+   gives way there; the chip on the map is the same door. // TUNE: */
+@media (max-height: 658px) {
+  .tray-section > .next-up-row,
+  .tray-section:has(> .next-up-row:only-child) {
+    display: none;
+  }
+}
+
+/* An iPhone SE upright (667 px), or an iPhone 15 in a Safari tab (659 px):
+   the Goals row keeps its place (owner decision 2), and the Adventure tray's
+   rows sit 4 px slimmer and 2 px closer while it's there, so every row still
+   fits without scrolling. Still 44pt+ targets, 6 px above and below the
+   42 px icons. // TUNE: */
+@media (orientation: portrait) and (min-height: 659px) and (max-height: 739px) {
+  .tray-body:has(> .tray-section > .next-up-row:not([hidden])) {
+    --hp-pad-y: 6px;
+    gap: 8px;
+  }
+
+  .tray-body:has(> .tray-section > .next-up-row:not([hidden])) > .tray-section,
+  .tray-body:has(> .tray-section > .next-up-row:not([hidden])) .battle-entry-box {
+    gap: 6px;
+  }
+
+  .tray-body:has(> .tray-section > .next-up-row:not([hidden]))
+    :is(
+      .tray-section > button,
+      .tray-section > .battle-entry-box > button,
+      .tray-jobs .jobs-entry > button,
+      .tray-row
+    ) {
+    min-height: 54px;
+  }
+}
+
+/* Short and wide: prizes give way so two goals fit; they show upright. */
+@media (max-height: 520px) and (min-width: 640px) {
+  .next-up-prizes {
+    display: none;
+  }
+}
+
+/* The solo card. */
+.next-up-solo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: none;
+}
+
+.next-up-solo-heading,
+.next-up-solo-line {
+  margin: 0;
+  padding: 0 14px;
+  background: #fff4dc;
+  color: #6b3f12;
+}
+
+.next-up-solo-heading {
+  padding-top: 12px;
+  border-radius: 16px 16px 0 0;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.next-up-solo-line {
+  margin-top: -8px;
+  padding-bottom: 12px;
+  border-radius: 0 0 16px 16px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.next-up-code-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.next-up-code {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  margin: 0;
+  border-radius: 18px;
+  background: #b8487a;
+  box-shadow: 0 4px 0 #7a2d55;
+  color: #fff;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  user-select: all;
+}
+
+.next-up-medals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.next-up-medal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 4px 12px 4px 8px;
+  border-radius: 999px;
+  background: #fff1c4;
+  box-shadow: inset 0 0 0 2px #f2a93b;
+  color: #6b3f12;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.next-up-medal i {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffc94d;
+  font-size: 11px;
+  font-style: normal;
+}
+
+/* The Adventure tray's Goals row: first in the tray, its count like a badge
+   but never a news badge (`data-tray-alert` stays for news). */
+/* The Goals row is the Team section's only entry: while it hides, so does the section. */
+.tray-section:has(> .next-up-row[hidden]:only-child) {
+  display: none;
+}
+
+.next-up-row-count {
+  margin-left: auto;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: #ffc94d;
+  color: #4a3150;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 26px;
+  text-align: center;
+  flex: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .next-up-sprout {
+    animation: none;
+  }
+}

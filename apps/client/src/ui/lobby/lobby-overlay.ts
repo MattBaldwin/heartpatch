@@ -23,8 +23,9 @@ import { buttonClass, hpButton } from '../button/button.js';
 import { deviceTimeZone, el, messageOf } from '../dom.js';
 import {
   codeDays,
-  codeLifeLeft,
+  inviteShareLine,
   familyCodeBadge,
+  NO_INVITE_LINE,
   familyCodeMeta,
   FAMILY_CODE_ACCOUNTS_ONLY,
   familyCodeUsedBy,
@@ -684,17 +685,10 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       if (invite) {
         inviteSection.append(
           el('p', { class: 'auth-code', 'data-testid': 'lobby-invite-code' }, invite.code),
-          el(
-            'p',
-            { class: 'auth-hint' },
-            // It signs a new family up too (#195).
-            `${codeLifeLeft(invite.expiresAt, now())} New families can sign up with it too!`,
-          ),
+          el('p', { class: 'auth-hint' }, inviteShareLine(invite.expiresAt, now())),
         );
       } else {
-        inviteSection.append(
-          el('p', { class: 'auth-hint' }, 'No code right now. Make one to invite a friend!'),
-        );
+        inviteSection.append(el('p', { class: 'auth-hint' }, NO_INVITE_LINE));
       }
       const newCode = button(
         invite ? 'New code' : 'Make a code',
