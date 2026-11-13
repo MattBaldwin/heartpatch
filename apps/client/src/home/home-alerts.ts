@@ -22,8 +22,17 @@ export interface HomeAlert {
 
 /** What the server last said for the patch on screen (null: not read yet). */
 export interface HomeAlertSources {
-  readonly house: Pick<HouseView, 'gift'> | null;
+  /**
+   * A House gift waits: the map view's `giftWaiting` (read-only, so it's
+   * known before the house is opened), then each house reply's wrapped gift.
+   */
+  readonly giftWaiting: boolean | null;
   readonly jobs: Pick<JobsView, 'squishies'> | null;
+}
+
+/** A house reply's say on the gift: wrapped (not opened yet) means one waits. */
+export function giftWaitingIn(view: Pick<HouseView, 'gift'>): boolean {
+  return wrappedGift(view) !== null;
 }
 
 /** The dots: on the Home row (the House gift) and the Jobs row (full gatherers); null for none. */
@@ -37,11 +46,34 @@ export function fullGatherers(jobs: Pick<JobsView, 'squishies'> | null): number 
   return jobs?.squishies.filter((s) => s.work?.full === true).length ?? 0;
 }
 
+/** A re-read waits at least this long, and its timer never runs past the cap. */
+export const FULL_REREAD = { slackMs: 1_000, maxMs: 6 * 60 * 60 * 1000 } as const; // TUNE:
+
+/**
+ * How long until my first working gatherer fills up (#731c), from the
+ * server's own `now`, so the Jobs dot can read the view again then (the map
+ * reads it only when its gatherer counts change): the next cycle, plus one
+ * cycle for each slot left after it. Null when none is filling. The re-read
+ * keeps the dot what the server says; a night's pause just schedules again.
+ */
+export function nextFullInMs(view: Pick<JobsView, 'squishies' | 'rules' | 'now'>): number | null {
+  const now = Date.parse(view.now);
+  let soonest: number | null = null;
+  for (const { work } of view.squishies) {
+    if (!work || work.full || work.nextReadyAt === null) continue;
+    const left = Math.max(1, view.rules.maxStoredCycles - work.readyCycles);
+    const at = Date.parse(work.nextReadyAt) + (left - 1) * work.cycleSeconds * 1000;
+    if (soonest === null || at < soonest) soonest = at;
+  }
+  if (soonest === null) return null;
+  return Math.min(Math.max(soonest - now, 0) + FULL_REREAD.slackMs, FULL_REREAD.maxMs);
+}
+
 /** THE badge rule: which My Home rows wear a dot, and with what count. */
 export function homeAlerts(sources: HomeAlertSources): HomeAlerts {
   const full = fullGatherers(sources.jobs);
   return {
-    home: wrappedGift(sources.house) ? { count: 1, peek: HOME_ALERT_TEXT.gift } : null,
+    home: sources.giftWaiting === true ? { count: 1, peek: HOME_ALERT_TEXT.gift } : null,
     jobs: full > 0 ? { count: full, peek: HOME_ALERT_TEXT.full(full) } : null,
   };
 }
@@ -82,11 +114,65 @@ export function watchedHouseApi(
 export interface HomeAlertBadges {
   /** The patch the map shows now (another patch: what was said for the last one goes). */
   setMap: (mapId: string) => void;
+  /** The map view's `giftWaiting` (left out by older servers: nothing changes). */
+  mapView: (mapId: string, giftWaiting: boolean | undefined) => void;
   house: (mapId: string, view: Pick<HouseView, 'gift'>) => void;
   jobs: (mapId: string, view: Pick<JobsView, 'squishies'>) => void;
   /** Logged out or in as someone else: nothing waits. */
   reset: () => void;
   readonly debug: HomeAlerts;
+}
+
+/**
+ * The dots' state for the patch on screen, without the DOM: `draw` gets the
+ * alerts each time what the server said changes (and once at the start).
+ */
+export function createHomeAlertState(draw: (alerts: HomeAlerts) => void): HomeAlertBadges {
+  let mapId: string | null = null;
+  let sources: HomeAlertSources = { giftWaiting: null, jobs: null };
+  // A map's view can land before the HUD says it's on screen: kept for its setMap.
+  let early: { mapId: string; giftWaiting: boolean } | null = null;
+  const redraw = () => {
+    draw(homeAlerts(sources));
+  };
+  redraw();
+  return {
+    setMap: (next) => {
+      if (next === mapId) return;
+      mapId = next;
+      sources = { giftWaiting: early?.mapId === next ? early.giftWaiting : null, jobs: null };
+      early = null;
+      redraw();
+    },
+    mapView: (forMap, giftWaiting) => {
+      if (giftWaiting === undefined) return;
+      if (forMap !== mapId) {
+        early = { mapId: forMap, giftWaiting };
+        return;
+      }
+      sources = { ...sources, giftWaiting };
+      redraw();
+    },
+    house: (forMap, view) => {
+      if (forMap !== mapId) return;
+      sources = { ...sources, giftWaiting: giftWaitingIn(view) };
+      redraw();
+    },
+    jobs: (forMap, view) => {
+      if (forMap !== mapId) return;
+      sources = { ...sources, jobs: view };
+      redraw();
+    },
+    reset: () => {
+      mapId = null;
+      early = null;
+      sources = { giftWaiting: null, jobs: null };
+      redraw();
+    },
+    get debug() {
+      return homeAlerts(sources);
+    },
+  };
 }
 
 export function createHomeAlertBadges(rows: {
@@ -99,38 +185,8 @@ export function createHomeAlertBadges(rows: {
     return node;
   };
   const badges = { home: badge(rows.home), jobs: badge(rows.jobs) };
-  let mapId: string | null = null;
-  let sources: HomeAlertSources = { house: null, jobs: null };
-  const draw = () => {
-    const alerts = homeAlerts(sources);
+  return createHomeAlertState((alerts) => {
     showAlert(badges.home, alerts.home);
     showAlert(badges.jobs, alerts.jobs);
-  };
-  draw();
-  return {
-    setMap: (next) => {
-      if (next === mapId) return;
-      mapId = next;
-      sources = { house: null, jobs: null };
-      draw();
-    },
-    house: (forMap, view) => {
-      if (forMap !== mapId) return;
-      sources = { ...sources, house: view };
-      draw();
-    },
-    jobs: (forMap, view) => {
-      if (forMap !== mapId) return;
-      sources = { ...sources, jobs: view };
-      draw();
-    },
-    reset: () => {
-      mapId = null;
-      sources = { house: null, jobs: null };
-      draw();
-    },
-    get debug() {
-      return homeAlerts(sources);
-    },
-  };
+  });
 }

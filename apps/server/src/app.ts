@@ -271,6 +271,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         });
         const maps = createMapsService({
           db,
+          house,
           // A Keeper leaving calls off their trade offers (#271) and their asks (#29).
           // Each on its own: one failing never keeps the other from running.
           departed: async (mapId, userId, actorUserId) => {

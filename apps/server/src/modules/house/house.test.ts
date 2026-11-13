@@ -5,6 +5,7 @@ import {
   HouseViewSchema,
   JobsViewSchema,
   MapResponseSchema,
+  MapViewSchema,
   TutorialResponseSchema,
   type HouseView,
 } from '@heartpatch/shared';
@@ -1054,6 +1055,45 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
       expect(ApiErrorSchema.parse(res.json()).error.message).toBe(
         'No gift yet today. Check back soon! 🎁',
       );
+    });
+
+    it("says on the map's view whether a gift waits, rolling and writing nothing (#731c)", async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const waiting = async () => {
+        const res = await server.inject({
+          method: 'GET',
+          url: `/api/v1/maps/${mapId}/view`,
+          cookies: { [SESSION_COOKIE]: kid.token },
+        });
+        expect(res.statusCode).toBe(200);
+        return MapViewSchema.parse(res.json()).giftWaiting;
+      };
+      const houseRows = () =>
+        db.query.keeperHouses.findMany({
+          where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, kid.id)),
+        });
+      // Nobody home: nothing waits.
+      expect(await waiting()).toBe(false);
+      await resident(mapId, kid);
+      // Someone home: the next GET /house would leave one, so it waits; reading
+      // it twice rolls nothing and writes no gift or house row.
+      expect(await waiting()).toBe(true);
+      expect(await waiting()).toBe(true);
+      expect(await giftRows(mapId, kid)).toEqual([]);
+      expect(await houseRows()).toEqual([]);
+      // Rolled by the house screen: still waiting, and the read leaves the row as it was.
+      const rolled = (await house(server, kid, mapId)).gift;
+      expect(rolled).not.toBeNull();
+      const rows = await giftRows(mapId, kid);
+      expect(await waiting()).toBe(true);
+      expect(await waiting()).toBe(true);
+      expect(await giftRows(mapId, kid)).toEqual(rows);
+      // Opened: nothing waits for the rest of the day.
+      expect((await claim(server, kid, mapId)).statusCode).toBe(200);
+      expect(await waiting()).toBe(false);
+      expect(await giftRows(mapId, kid)).toHaveLength(1);
     });
 
     it('opens once: pays the Keeper (ledger `house-gift`), tells only them, then says come back tomorrow', async () => {

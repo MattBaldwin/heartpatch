@@ -43,6 +43,8 @@ import { createAuthRepo } from '../auth/repo.js';
 import { seedHomeRingNodes, type HomeRingLog } from '../buildings/home-ring.js';
 import { listPublicBuildings, removeMemberBuildings } from '../buildings/service.js';
 import { createHouseRepo } from '../house/repo.js';
+import { giftWaitingOn } from '../house/service.js';
+import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from '../house/switch.js';
 import { listPublicFences, removeMemberFences } from '../fences/service.js';
 import { seedExtraNodes } from './extra-nodes.js';
 import { createKeepersRepo } from '../keepers/repo.js';
@@ -105,6 +107,8 @@ export interface MapsServiceOptions {
   wildIsle?: WildIsleSwitch;
   /** `HP_LONG_NIGHT` (#727): the weekday in details, the night crown in stats; off when left out. */
   longNight?: LongNightSwitch;
+  /** `HP_HOUSE` (#381): whose views say whether a House gift waits (#731c); off when left out. */
+  house?: HouseSwitch;
   clock?: Clock;
   /**
    * Live sync (`wsHub.publish`): called after a command that wrote game events
@@ -254,6 +258,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
   const keepersRepo = createKeepersRepo(db);
   const wildIsle = options.wildIsle ?? WILD_ISLE_OFF;
   const longNight = options.longNight ?? LONG_NIGHT_OFF;
+  const house = options.house ?? HOUSE_OFF;
 
   const assertTutorialDone = async (user: PublicUser) => {
     if (!tutorialRequired) return;
@@ -616,6 +621,11 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
             tiles,
             morning: villageMorning(at, map.timeZone),
           }),
+          // My Home's gift dot (#731c): a plain read that rolls nothing.
+          giftWaiting:
+            map.kind === 'multiplayer' && houseOpenFor(house, user)
+              ? await giftWaitingOn(tx, map, user.id, at)
+              : false,
           seq: map.eventSeq,
         };
       });

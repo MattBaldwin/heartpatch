@@ -159,6 +159,60 @@ export async function leaveHouse(
   return living;
 }
 
+/** The Keeper's residents now, each with why it's away (null: at home). */
+async function residentsOf(
+  executor: Executor,
+  mapId: string,
+  userId: string,
+): Promise<(ResidentRow & Pick<HouseResident, 'away'>)[]> {
+  const residents = await createHouseRepo(executor).residents(mapId, userId);
+  // A resident keeps its job: its bed says where it went (plan Q5).
+  const jobs = new Map(
+    (await createSquishyJobsRepo(executor).listByIds(residents.map((r) => r.squishyId))).map(
+      (row) => [
+        row.squishy.id,
+        jobOf({
+          teamSlot: row.teamSlot,
+          atWork: row.atWork,
+          onWatch: row.onWatch,
+          training: row.training !== null,
+        }),
+      ],
+    ),
+  );
+  return residents.map((r) => ({
+    ...r,
+    away: residentAwayOf(r.state, jobs.get(r.squishyId) ?? 'resting'),
+  }));
+}
+
+/** Residents at home now (not away): who can leave today's gift. */
+const giversAmong = (residents: Awaited<ReturnType<typeof residentsOf>>) =>
+  residents
+    .filter((r) => r.away === null)
+    .map((r) => ({ squishyId: r.squishyId, feeling: r.feeling }));
+
+/**
+ * Whether a gift waits for this Keeper today (#731c), read-only: today's
+ * gift is wrapped, or `GET /house` would roll one now (no row yet, someone
+ * home to leave it, and none opened today: `rollHouseGift` rolls whenever
+ * there's a giver). Rolls and writes nothing, so the map can show the dot
+ * before the house is opened without opening the gift early.
+ */
+export async function giftWaitingOn(
+  executor: Executor,
+  map: Pick<MapRow, 'id' | 'timeZone'>,
+  userId: string,
+  at: Date,
+): Promise<boolean> {
+  const day = localDate(at, map.timeZone);
+  const repo = createHouseRepo(executor);
+  const gift = await repo.gift(map.id, userId, day);
+  if (gift) return gift.claimedAt === null;
+  if (giversAmong(await residentsOf(executor, map.id, userId)).length === 0) return false;
+  return !(await repo.openedGiftOn(map.id, userId, day));
+}
+
 export function createHouseService(options: HouseServiceOptions): HouseService {
   const { db } = options;
   const now = options.clock ?? (() => new Date());
@@ -186,38 +240,6 @@ export function createHouseService(options: HouseServiceOptions): HouseService {
     };
   }
 
-  /** The Keeper's residents now, each with why it's away (null: at home). */
-  async function residentsOf(
-    executor: Executor,
-    mapId: string,
-    userId: string,
-  ): Promise<(ResidentRow & Pick<HouseResident, 'away'>)[]> {
-    const residents = await createHouseRepo(executor).residents(mapId, userId);
-    // A resident keeps its job: its bed says where it went (plan Q5).
-    const jobs = new Map(
-      (await createSquishyJobsRepo(executor).listByIds(residents.map((r) => r.squishyId))).map(
-        (row) => [
-          row.squishy.id,
-          jobOf({
-            teamSlot: row.teamSlot,
-            atWork: row.atWork,
-            onWatch: row.onWatch,
-            training: row.training !== null,
-          }),
-        ],
-      ),
-    );
-    return residents.map((r) => ({
-      ...r,
-      away: residentAwayOf(r.state, jobs.get(r.squishyId) ?? 'resting'),
-    }));
-  }
-
-  /** Residents at home now (not away): who can leave today's gift. */
-  const giversAmong = (residents: Awaited<ReturnType<typeof residentsOf>>) =>
-    residents
-      .filter((r) => r.away === null)
-      .map((r) => ({ squishyId: r.squishyId, feeling: r.feeling }));
 
   /** The map's secret seed (tech spec §8), as spawns and explore read it. Never sent. */
   const mapSeedOf = async (executor: Executor, mapId: string) =>

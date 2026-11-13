@@ -113,6 +113,34 @@ async function closeClearBothWays(page: Page): Promise<void> {
   await page.setViewportSize(upright);
 }
 
+/** An iPhone 15 in Safari's home-screen app, with its notch and home bar (#731c). */
+const IPHONE_15 = { width: 393, height: 852 };
+const IPHONE_15_INSETS = { top: 59, bottom: 34, left: 0, right: 0 };
+
+/** Safe-area insets need CDP, so only Chromium gets them (the CI projects are Chromium). */
+async function safeArea(page: Page, insets: typeof IPHONE_15_INSETS): Promise<void> {
+  if (page.context().browser()?.browserType().name() !== 'chromium') return;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets });
+  await cdp.detach();
+}
+
+/**
+ * The px between the bottom of Sprout's line and the top of the chip. Sprout's
+ * line hides on its own timer (SPROUT_MS), so if it has gone it's shown for
+ * the measure and hidden again: what's measured is where the CSS puts it.
+ */
+const sproutGap = (page: Page) =>
+  page.evaluate(() => {
+    const sprout = document.querySelector<HTMLElement>('.next-up-sprout')!;
+    const chip = document.querySelector<HTMLElement>('[data-testid="next-up-chip"]')!;
+    const wasHidden = sprout.hidden;
+    sprout.hidden = false;
+    const gap = chip.getBoundingClientRect().top - sprout.getBoundingClientRect().bottom;
+    sprout.hidden = wasHidden;
+    return gap;
+  });
+
 test('no chip on the Tutorial Glade', async ({ browser }) => {
   test.setTimeout(120_000); // draws the Glade; CI renders in software
   const page = await newPlayer(browser, uniqueName('glade'));
@@ -203,6 +231,17 @@ test('a solo patch shows the share-your-code card, then real goals once a friend
   // Now there's a real goal: Sprout says it once (owner decision 4).
   await expect.poll(() => nextUp(owner).then((n) => n?.sprout), { timeout: 15_000 }).toBe(true);
   await expect(owner.getByTestId('next-up-sprout')).toHaveText('Ooh, a goal!');
+  // On an iPhone 15 with its notch and home bar, Sprout's line clears the chip
+  // (insets applied after the resize's layout, as Safari reports them).
+  const projectSize = viewportOf(owner);
+  await owner.setViewportSize(IPHONE_15);
+  await owner.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+  );
+  await safeArea(owner, IPHONE_15_INSETS);
+  await expect.poll(() => sproutGap(owner)).toBeGreaterThanOrEqual(6);
+  await safeArea(owner, { top: 0, bottom: 0, left: 0, right: 0 });
+  await owner.setViewportSize(projectSize);
   // Map labels step aside for Sprout's line and the chip, as for the night's chips.
   await settled(owner);
   const under = await owner.evaluate(() => {
