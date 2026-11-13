@@ -131,8 +131,6 @@ test('a Long Night: the countdown, the live feed, the reveal and the crown', asy
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
   await waitForLiveMap(page);
-  // Sprout's first-time hint about the trays comes first; the Next-up chip waits behind it.
-  await page.getByTestId('tray-hint-ok').tap();
   const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
   await expect.poll(async () => (await hollowState(page))?.mapId, { timeout: 30_000 }).toBe(mapId);
 
@@ -154,8 +152,10 @@ test('a Long Night: the countdown, the live feed, the reveal and the crown', asy
   await expect
     .poll(async () => (await hollowState(page))?.longNight.chip, { timeout: 30_000 })
     .toBe('🌑 Long Night in 2 days');
-  // The chip is up over the countdown (a solo patch: "Invite a friend").
-  await expectNextUpClear(page, 'countdown', true);
+  // A new account's tray hint is up (it stays till the live feed, below), so
+  // the Next-up chip waits behind it here.
+  await expect(page.getByTestId('next-up-chip')).toBeHidden();
+  await expectNextUpClear(page, 'countdown');
   await page.getByTestId('long-night-chip').tap();
   const notice = page.getByTestId('long-night-notice');
   await expect(notice).toBeVisible();
@@ -248,7 +248,9 @@ test('a Long Night: the countdown, the live feed, the reveal and the crown', asy
     .toBe('available');
   const gapChip = page.getByTestId('gap-chip');
   await expect(gapChip).toHaveText("✨ Juniper's Gap is open");
-  await expectNextUpClear(page, 'Gap open');
+  // The hint and the night's cards are gone: the chip is up beside the Gap's
+  // chip (a solo patch: "Invite a friend"), so the check is never vacuous.
+  await expectNextUpClear(page, 'Gap open', true);
   await gapChip.tap();
   const gapSheet = page.getByTestId('long-night-gap');
   await expect(gapSheet).toBeVisible();
