@@ -1322,6 +1322,31 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
       expect(await giftLedger(mapId, kid)).toHaveLength(2);
     });
 
+    it("says no gift waits on the map's view while the switch is off, and on the Tutorial Glade (#731c)", async () => {
+      const waitingOn = async (server: FastifyInstance, mapId: string) => {
+        const res = await server.inject({
+          method: 'GET',
+          url: `/api/v1/maps/${mapId}/view`,
+          cookies: { [SESSION_COOKIE]: kid.token },
+        });
+        expect(res.statusCode).toBe(200);
+        return MapViewSchema.parse(res.json()).giftWaiting;
+      };
+      const off = await start({});
+      const kid = await player();
+      const mapId = await newMap(off, kid);
+      await resident(mapId, kid);
+      expect(await waitingOn(off, mapId)).toBe(false);
+      await app!.close();
+      const on = await start();
+      // The same Keeper with the switch on: a resident home, so one waits.
+      expect(await waitingOn(on, mapId)).toBe(true);
+      const started = await call(on, 'POST', '/tutorial/start', kid);
+      const glade = TutorialResponseSchema.parse(started.json()).tutorial.mapId!;
+      expect(await waitingOn(on, glade)).toBe(false);
+      expect(await giftRows(mapId, kid)).toEqual([]);
+    });
+
     it('is NOT_FOUND while the switch is off, and on the Tutorial Glade', async () => {
       const server = await start({});
       const kid = await player();

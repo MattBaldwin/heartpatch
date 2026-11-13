@@ -170,15 +170,13 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
   // watch: sheets show and shut by `hidden`, trays by `inert` and a class
   // they drop once their slide ends, the Keeper menu by a class, and the
   // Next-up chip and Sprout's line move up over the night's chips by an
-  // inline `--next-up-row` (#731). A flag's own changes, and any other
-  // inline style change, are skipped.
+  // inline `--next-up-row` (#731). A flag's own changes are skipped. Inline
+  // styles are watched on those two nodes only: tile marks and the flags
+  // write `style` every frame while the camera pans, so a page-wide `style`
+  // filter would make records each frame.
   let recheck = 0;
-  const counts = ({ target, attributeName }: MutationRecord): boolean => {
-    if (target instanceof HTMLElement && target.classList.contains('post-flag')) return false;
-    if (attributeName === 'style')
-      return target instanceof Element && target.matches(NEXT_UP_MOVES);
-    return true;
-  };
+  const counts = ({ target }: MutationRecord): boolean =>
+    !(target instanceof HTMLElement && target.classList.contains('post-flag'));
   const covers = new MutationObserver((changes) => {
     if (recheck || !scene) return;
     if (!changes.some(counts)) return;
@@ -323,8 +321,11 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
       covers.observe(document.body, {
         subtree: true,
         attributes: true,
-        attributeFilter: ['hidden', 'inert', 'class', 'style'],
+        attributeFilter: ['hidden', 'inert', 'class'],
       });
+      for (const node of document.querySelectorAll(NEXT_UP_MOVES)) {
+        covers.observe(node, { attributes: true, attributeFilter: ['style'] });
+      }
       next.onDisposeObservable.addOnce(() => {
         if (scene !== next) return;
         scene = null;

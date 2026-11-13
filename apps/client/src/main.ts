@@ -315,6 +315,9 @@ const inventory = createInventoryScreen({
   // player is back on the map (`onHudChange`) or opens the book.
   onCollected: () => {
     void recipeBook.check();
+    // A settle banks full gatherers' work (#731c): a lit Jobs dot reads my jobs
+    // again, so it never says "full" about work already in the bag.
+    if (alertsMapId !== null && homeAlerts.debug.jobs !== null) jobs.loadView(alertsMapId);
   },
   // A settle charges the morning's upkeep (#601): the 💛 pill reads after it,
   // not alongside it (its own read on coming back can beat the charge).
