@@ -13,8 +13,7 @@ interface HomeAlert {
 const alerts = (page: Page) =>
   hook<{ home: HomeAlert | null; jobs: HomeAlert | null }>(page, 'homeAlerts');
 const mapState = (page: Page) => hook<{ id: string }>(page, 'map');
-const jobsState = (page: Page) =>
-  hook<{ board: { jobs: Record<string, string> } }>(page, 'jobs');
+const jobsState = (page: Page) => hook<{ board: { jobs: Record<string, string> } }>(page, 'jobs');
 
 test('My Home dots the Jobs row while a gatherer is full', async ({ browser }) => {
   test.setTimeout(240_000); // two map builds; CI renders in software

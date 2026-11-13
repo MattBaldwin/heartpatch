@@ -162,12 +162,7 @@ describe('nextFullInMs', () => {
   });
 
   it('takes the soonest of my gatherers and skips full, idle and non-gatherers', () => {
-    const v = view(
-      working(0, 30),
-      working(3, 500),
-      working(4, null, 600, true),
-      gatherer(null),
-    );
+    const v = view(working(0, 30), working(3, 500), working(4, null, 600, true), gatherer(null));
     expect(nextFullInMs(v)).toBe(500 * 1000 + FULL_REREAD.slackMs);
     expect(nextFullInMs(view(working(4, null, 600, true), gatherer(null)))).toBeNull();
   });

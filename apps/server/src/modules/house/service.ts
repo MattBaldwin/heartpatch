@@ -240,7 +240,6 @@ export function createHouseService(options: HouseServiceOptions): HouseService {
     };
   }
 
-
   /** The map's secret seed (tech spec §8), as spawns and explore read it. Never sent. */
   const mapSeedOf = async (executor: Executor, mapId: string) =>
     (await createTerritoryRepo(executor).mapSeed(mapId)) ?? deriveSeed('hand-authored-map', mapId);
