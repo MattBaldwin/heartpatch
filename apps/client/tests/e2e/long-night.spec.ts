@@ -131,6 +131,8 @@ test('a Long Night: the countdown, the live feed, the reveal and the crown', asy
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
   await waitForLiveMap(page);
+  // Sprout's first-time hint about the trays comes first; the Next-up chip waits behind it.
+  await page.getByTestId('tray-hint-ok').tap();
   const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
   await expect.poll(async () => (await hollowState(page))?.mapId, { timeout: 30_000 }).toBe(mapId);
 

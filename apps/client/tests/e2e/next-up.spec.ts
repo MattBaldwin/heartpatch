@@ -299,10 +299,11 @@ test('a solo patch shows the share-your-code card, then real goals once a friend
     await owner.locator('.auth-chip-menu').getByRole('button', { name: 'Milestones' }).tap();
     await expect(list).toBeVisible();
     await expect(list.getByTestId('milestones-back')).toBeInViewport();
-    // The First Patch's title is a gold medal; the next tiers' stay grey.
+    // Every title is a medal pill (gold once earned: milestones.spec.ts); this
+    // Keeper skipped the tutorial, so the First Patch's is still grey.
     await expect(list.locator('[data-medal="sprouts-friend"]')).toHaveAttribute(
       'data-earned',
-      'true',
+      'false',
     );
     await expect(
       list.locator('[data-track="territory"] [data-earned="false"]').first(),
