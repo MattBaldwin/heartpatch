@@ -4,6 +4,16 @@ import { expect, type Page } from '@playwright/test';
 // words inside each visible control on the page as drawn, against the
 // control's own box and the screen: a guard, not a pixel comparison.
 
+/**
+ * The page's viewport, which every project here sets: a clear failure, not a
+ * crash on `null`, if one ever doesn't (#731c).
+ */
+export function viewportOf(page: Page): { width: number; height: number } {
+  const size = page.viewportSize();
+  if (!size) throw new Error('This test needs a fixed viewport (set one in its project).');
+  return size;
+}
+
 /** Phones and tablets every tray and book layout must fit. */
 export const SCREENS = [
   { name: 'smallest phone', width: 320, height: 568 },

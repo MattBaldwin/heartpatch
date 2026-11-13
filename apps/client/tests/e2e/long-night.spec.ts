@@ -1,6 +1,7 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook, idle, waitForLiveMap } from './dev-hook.js';
+import { viewportOf } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
@@ -46,7 +47,9 @@ const hollowState = (page: Page) => hook<HollowDebug>(page, 'hollow');
  * The Next-up chip (#731) never covers a night chip: it sits above them,
  * however many rows they wrap to. Boxes of what's actually showing.
  */
-async function nextUpClearHere(page: Page, when: string): Promise<void> {
+async function nextUpClearHere(page: Page, when: string, chipShows = false): Promise<void> {
+  // Where the chip must be up, check it is: with no chip there's nothing to overlap.
+  if (chipShows) await expect(page.getByTestId('next-up-chip'), when).toBeVisible();
   const overlaps = () =>
     page.evaluate(() => {
       const shown = (e: Element) => {
@@ -86,12 +89,12 @@ async function nextUpClearHere(page: Page, when: string): Promise<void> {
  * 659 px; the app on the home screen is 852 px, past the 740 px line where
  * the chips sit higher, hollow.css).
  */
-async function expectNextUpClear(page: Page, when: string): Promise<void> {
-  await nextUpClearHere(page, when);
-  const size = page.viewportSize()!;
+async function expectNextUpClear(page: Page, when: string, chipShows = false): Promise<void> {
+  await nextUpClearHere(page, when, chipShows);
+  const size = viewportOf(page);
   if (size.width >= 700 || size.height >= 740) return;
   await page.setViewportSize({ width: size.width, height: 852 });
-  await nextUpClearHere(page, `${when}, 852 px tall`);
+  await nextUpClearHere(page, `${when}, 852 px tall`, chipShows);
   // An iPhone 15's notch and home bar, arriving after layout with no resize
   // (as on a turn or a launch from the home screen): the night's chips move
   // up by the inset and the chip must follow. Chromium can say so (CDP).
@@ -105,7 +108,7 @@ async function expectNextUpClear(page: Page, when: string): Promise<void> {
         insets: { top, bottom, left: 0, right: 0 },
       });
     await insets(59, 34);
-    await nextUpClearHere(page, `${when}, 852 px tall with the home bar's inset`);
+    await nextUpClearHere(page, `${when}, 852 px tall with the home bar's inset`, chipShows);
     await insets(0, 0);
     await cdp.detach();
   }
@@ -149,7 +152,8 @@ test('a Long Night: the countdown, the live feed, the reveal and the crown', asy
   await expect
     .poll(async () => (await hollowState(page))?.longNight.chip, { timeout: 30_000 })
     .toBe('🌑 Long Night in 2 days');
-  await expectNextUpClear(page, 'countdown');
+  // The chip is up over the countdown (a solo patch: "Invite a friend").
+  await expectNextUpClear(page, 'countdown', true);
   await page.getByTestId('long-night-chip').tap();
   const notice = page.getByTestId('long-night-notice');
   await expect(notice).toBeVisible();

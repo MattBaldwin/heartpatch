@@ -34,6 +34,10 @@ export const MILESTONES_TEXT = {
   prize: 'Prize:',
   coins: (n: number) => `${String(n)} Patch Coins`,
   titleReward: (name: string) => `the title “${name}”`,
+  // The medal pills (#731): each tier's title, gold when earned.
+  medals: 'Titles',
+  earned: 'Earned ✓',
+  notYet: 'Not yet',
   // The celebration card.
   kicker: 'Milestone!',
   yay: 'Yay!',
@@ -52,6 +56,22 @@ export function nextTier(track: ShownTrack): Tier | null {
 /** How many tiers are earned. */
 export function earnedCount(track: ShownTrack): number {
   return track.tiers.filter((t) => t.earnedAt !== null).length;
+}
+
+/** One medal pill: a tier's title, earned (gold) or not yet (grey). */
+export interface MedalPill {
+  readonly titleId: string;
+  readonly name: string;
+  readonly earned: boolean;
+}
+
+/** The track's medal pills, one per tier in order (#731). */
+export function medalPills(track: ShownTrack): MedalPill[] {
+  return track.tiers.map((t) => ({
+    titleId: t.reward.title.id,
+    name: t.reward.title.name,
+    earned: t.earnedAt !== null,
+  }));
 }
 
 /** How full the bar is, 0–100: progress towards the next tier ("3 of 10"). */

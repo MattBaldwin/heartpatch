@@ -46,6 +46,8 @@ export interface NextUpOptions {
   inSeason: () => ((season: string) => boolean) | null;
   /** A goal's button was tapped; the sheet has closed. */
   onGo: (go: NextUpGo) => void;
+  /** "All milestones" was tapped (the full list, #731); the sheet has closed. */
+  onAll?: () => void;
   /** True while Sprout's line would be in the way (another card, the trays' hint). */
   busy: () => boolean;
   /**
@@ -215,8 +217,17 @@ export function createNextUp(options: NextUpOptions): NextUp {
       if (height > 0) node.style.setProperty('--next-up-row', `${String(Math.ceil(height))}px`);
       else node.style.removeProperty('--next-up-row');
     }
+    // Sprout's line stands on the chip's real height (a long goal wraps), so
+    // it never touches it (#731c: 2 px on an iPhone 15). Hidden: keep the last.
+    const chipHeight = chip.getBoundingClientRect().height;
+    if (chipHeight > 0) {
+      sprout.style.setProperty('--next-up-chip-h', `${String(Math.ceil(chipHeight))}px`);
+    }
   };
+  // Both live as long as the app (one chip, made once in main.ts), so they
+  // are never disconnected: the night's chips and the window come and go.
   const liftObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(lift);
+  liftObserver?.observe(chip);
   /** Starts watching what's below once it exists (it's made with the Hollow). */
   const watchLift = () => {
     if (liftWatched) return;
@@ -355,7 +366,7 @@ export function createNextUp(options: NextUpOptions): NextUp {
         return;
       case 'goals':
         sheetTitle.textContent = NEXT_UP_TEXT.sheetTitle;
-        body.replaceChildren(...state.goals.map((g) => goalCard(g, false)));
+        body.replaceChildren(...state.goals.map((g) => goalCard(g, false)), ...allButton());
         return;
       case 'solo': {
         sheetTitle.textContent = NEXT_UP_TEXT.sheetTitle;
@@ -401,10 +412,27 @@ export function createNextUp(options: NextUpOptions): NextUp {
             ),
           );
         }
-        body.replaceChildren(...parts);
+        body.replaceChildren(...parts, ...allButton());
         return;
       }
     }
+  };
+
+  /** "All milestones" at the sheet's foot (mockup v4): the full list, the Keeper menu's too. */
+  const allButton = (): HTMLElement[] => {
+    const onAll = options.onAll;
+    if (!onAll) return [];
+    const all = hpButton(NEXT_UP_TEXT.all, {
+      variant: 'secondary',
+      small: true,
+      testId: 'next-up-all',
+    });
+    all.classList.add('next-up-all');
+    all.addEventListener('click', () => {
+      shut();
+      onAll();
+    });
+    return [all];
   };
 
   // ── Drawing ─────────────────────────────────────────────────────────────
@@ -444,11 +472,12 @@ export function createNextUp(options: NextUpOptions): NextUp {
       return true;
     }
   };
-  let sproutHideTimer: number | undefined;
+  /** Bumped each time Sprout's line shows or goes, so an older hide timer does nothing. */
+  let sproutShown = 0;
   const hideSprout = () => {
     sproutPending = false;
     sprout.hidden = true;
-    window.clearTimeout(sproutHideTimer);
+    sproutShown += 1;
   };
   const offerSprout = (accountId: string) => {
     if (!sprout.hidden || said(accountId)) return;
@@ -472,9 +501,10 @@ export function createNextUp(options: NextUpOptions): NextUp {
       // Private mode: it may say it again next time.
     }
     sprout.hidden = false;
-    window.clearTimeout(sproutHideTimer);
-    sproutHideTimer = window.setTimeout(() => {
-      sprout.hidden = true;
+    lift();
+    const shown = ++sproutShown;
+    setTimer(() => {
+      if (shown === sproutShown) sprout.hidden = true;
     }, SPROUT_MS);
   };
   /** The chip is really showing (not hidden by a panel over it, next-up.css). */

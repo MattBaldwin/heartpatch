@@ -39,6 +39,8 @@ import { createCrookedScreen } from './far-hollow/house/crooked-screen.js';
 import { giftLine, newlyWon } from './hollowed/restore-view.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createHouseScreen } from './house/house-screen.js';
+import { houseApi } from './house/house-api.js';
+import { createHomeAlertBadges, watchedHouseApi } from './home/home-alerts.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
 import { createCatalogScreen } from './catalog/catalog-screen.js';
 import { createCareSheet } from './care/care-sheet.js';
@@ -70,6 +72,7 @@ import { createLoreBagEntry } from './lore/bag-entry.js';
 import { createLorebook } from './lore/lorebook.js';
 import { createMilestoneCelebration } from './milestones/milestone-celebration.js';
 import { createNextUp } from './milestones/next-up.js';
+import { MILESTONES_TEXT } from './milestones/milestones-view.js';
 import { createKeeperScreen, KEEPER_TEXT } from './ui/keeper/keeper-screen.js';
 import { mountLobby } from './ui/lobby/lobby-overlay.js';
 import { lobbyApi } from './ui/lobby/lobby-api.js';
@@ -1018,6 +1021,10 @@ const home = createHomeScreen({
 // the close-up it owns the screen while open; Back goes home again.
 const house = createHouseScreen({
   root: document.body,
+  // Every house reply also feeds My Home's gift dot (#731c).
+  api: watchedHouseApi(houseApi, (mapId, view) => {
+    homeAlerts.house(mapId, view);
+  }),
   showScene,
   invalidate: () => stage?.invalidate(),
   requestFrame: () => stage?.requestFrame(),
@@ -1439,6 +1446,8 @@ const maps = createMapScreen({
   hudExtras: [heartCoins.mapPill, weatherChip.node],
   onHudChange: (mapId) => {
     hudMapId = mapId;
+    // My Home's dots follow the patch on screen (off the map, they keep it).
+    if (mapId !== null) homeAlerts.setMap(mapId);
     // Back on the map (after a battle, home, the lobby): read its Heart Coins again.
     if (mapId !== null) heartCoinsOn(mapId);
     // The map is up: a new build's What's new may pop up now (#220).
@@ -1684,6 +1693,10 @@ const nextUp = createNextUp({
     const on = new Set(seasonsOn(zone, new Date(inventory.gameNow())));
     return (season) => on.has(season);
   },
+  // "All milestones": the full list, as the Keeper menu's row opens it (#731).
+  onAll: () => {
+    wardrobe.openMilestones();
+  },
   onGo: (go) => {
     switch (go) {
       case 'find':
@@ -1851,8 +1864,15 @@ trays.slot('adventure').append(
   }),
 );
 jobs.mountTeamButton(jobsBox, () => hudMapId);
+// My Home's dots (#731c): the House gift on the Home row, full gatherers on
+// Jobs. One rule (home/home-alerts.ts); the trays sum them onto the handle.
+const homeAlerts = createHomeAlertBadges({
+  home: trays.slot('heartpatch').querySelector('[data-testid="home-open"]'),
+  jobs: jobsBox.querySelector('[data-testid="jobs-open"]'),
+});
 // A job changed or the board read a fresh view: the home's moods follow (#393).
 jobs.onView((mapId, view) => {
+  homeAlerts.jobs(mapId, view);
   home.setWorkMoods(mapId, workMoods(view));
 });
 /** Who is logged in now (a story finishing late must not open another player's lobby). */
@@ -2241,6 +2261,10 @@ mountAuth(document.body, {
     menuRow('👗', 'Wardrobe', () => {
       wardrobe.open();
     }),
+    // The full milestone list has its own row (#731); the Wardrobe keeps a shortcut.
+    menuRow('🏅', MILESTONES_TEXT.open, () => {
+      wardrobe.openMilestones();
+    }),
     menuRow('⚙️', 'Settings', () => {
       lobby.showSettings();
     }),
@@ -2275,6 +2299,7 @@ mountAuth(document.body, {
     lorebook.setUser(user);
     milestones.setUser(user);
     nextUp.setUser(user);
+    homeAlerts.reset();
     defense.setUser(user);
     maps.setUser(user);
     signedIn = user;
@@ -2404,6 +2429,7 @@ if (import.meta.env.DEV) {
     lore: () => lorebook.debug,
     milestones: () => milestones.debug,
     nextUp: () => nextUp.debug,
+    homeAlerts: () => homeAlerts.debug,
     defense: () => defense.debug,
     whatsNew: () => whatsNew.debug,
     patchLine: () => ({ ...patchLine.debug, busy: patchLineBusy() }),
