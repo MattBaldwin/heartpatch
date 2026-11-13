@@ -199,7 +199,7 @@ declare global {
       lore?(): LorebookDebug;
       /** The milestone celebration (#44): the card showing and how many wait. */
       milestones?(): MilestoneCelebrationDebug;
-      /** My Home's dots (#731c): the House gift and full gatherers. */
+      /** My Home's dot (#731c): whether a House gift waits. */
       homeAlerts?(): HomeAlerts;
       nextUp?(): NextUpDebug;
       defense?(): DefensePromptDebug;
