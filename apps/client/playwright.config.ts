@@ -42,7 +42,7 @@ const testDir = './tests/e2e';
  * (local runs) runs everything.
  */
 const E2E_GROUPS = [
-  // ~20.3 iPhone, ~24.2 iPad (spec-timing, c006b78), before home-alerts (~1.5 min, #731). tutorial-flow's two runs go side by side.
+  // ~20.3 iPhone, ~24.2 iPad (spec-timing, c006b78). tutorial-flow's two runs go side by side.
   [
     'accessory-everywhere',
     'admin',
@@ -53,7 +53,6 @@ const E2E_GROUPS = [
     'hollow',
     'hollowed-explore',
     'hollowed-restore',
-    'home-alerts',
     'landscape-phone',
     'recipe-book',
     'squishy-gallery',

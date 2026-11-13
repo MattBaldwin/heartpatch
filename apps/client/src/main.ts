@@ -40,7 +40,7 @@ import { giftLine, newlyWon } from './hollowed/restore-view.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createHouseScreen } from './house/house-screen.js';
 import { houseApi } from './house/house-api.js';
-import { createHomeAlertBadges, nextFullInMs, watchedHouseApi } from './home/home-alerts.js';
+import { createHomeAlertBadges, watchedHouseApi } from './home/home-alerts.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
 import { createCatalogScreen } from './catalog/catalog-screen.js';
 import { createCareSheet } from './care/care-sheet.js';
@@ -283,8 +283,6 @@ jobsBox.hidden = true;
 trays.slot('squishies').append(jobsBox);
 /** The map whose HUD is on screen (null between maps): the Team and Jobs row follows it (#132). */
 let hudMapId: string | null = null;
-/** The patch My Home's dots are for: the last map on screen (#731c). */
-let alertsMapId: string | null = null;
 /** The patch of the battle on screen (its map is put away meanwhile). */
 let battleMapId: string | null = null;
 
@@ -315,9 +313,6 @@ const inventory = createInventoryScreen({
   // player is back on the map (`onHudChange`) or opens the book.
   onCollected: () => {
     void recipeBook.check();
-    // A settle banks full gatherers' work (#731c): a lit Jobs dot reads my jobs
-    // again, so it never says "full" about work already in the bag.
-    if (alertsMapId !== null && homeAlerts.debug.jobs !== null) jobs.loadView(alertsMapId);
   },
   // A settle charges the morning's upkeep (#601): the 💛 pill reads after it,
   // not alongside it (its own read on coming back can beat the charge).
@@ -1461,10 +1456,7 @@ const maps = createMapScreen({
   onHudChange: (mapId) => {
     hudMapId = mapId;
     // My Home's dots follow the patch on screen (off the map, they keep it).
-    if (mapId !== null) {
-      alertsMapId = mapId;
-      homeAlerts.setMap(mapId);
-    }
+    if (mapId !== null) homeAlerts.setMap(mapId);
     // Back on the map (after a battle, home, the lobby): read its Heart Coins again.
     if (mapId !== null) heartCoinsOn(mapId);
     // The map is up: a new build's What's new may pop up now (#220).
@@ -1881,30 +1873,13 @@ trays.slot('adventure').append(
   }),
 );
 jobs.mountTeamButton(jobsBox, () => hudMapId);
-// My Home's dots (#731c): the House gift on the Home row, full gatherers on
-// Jobs. One rule (home/home-alerts.ts); the trays sum them onto the handle.
+// My Home's dot (#731c): the House gift on the Home row. One rule
+// (home/home-alerts.ts); the trays sum it onto the handle.
 const homeAlerts = createHomeAlertBadges({
   home: trays.slot('heartpatch').querySelector('[data-testid="home-open"]'),
-  jobs: jobsBox.querySelector('[data-testid="jobs-open"]'),
 });
 // A job changed or the board read a fresh view: the home's moods follow (#393).
-// A gatherer filling up while I watch the map: read my jobs again then (#731c).
-let fullReread: ReturnType<typeof setTimeout> | undefined;
-const stopFullReread = (): void => {
-  clearTimeout(fullReread);
-  fullReread = undefined;
-};
 jobs.onView((mapId, view) => {
-  homeAlerts.jobs(mapId, view);
-  stopFullReread();
-  const wait = nextFullInMs(view);
-  if (wait !== null) {
-    fullReread = setTimeout(() => {
-      fullReread = undefined;
-      // Off the map (a battle, a sheet's screen) the dots keep its patch, so read it then too.
-      if (alertsMapId === mapId) jobs.loadView(mapId);
-    }, wait);
-  }
   home.setWorkMoods(mapId, workMoods(view));
 });
 /** Who is logged in now (a story finishing late must not open another player's lobby). */
@@ -2332,8 +2307,6 @@ mountAuth(document.body, {
     milestones.setUser(user);
     nextUp.setUser(user);
     homeAlerts.reset();
-    alertsMapId = null;
-    stopFullReread();
     defense.setUser(user);
     maps.setUser(user);
     signedIn = user;

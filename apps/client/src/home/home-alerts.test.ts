@@ -1,12 +1,8 @@
-import type { JobsView } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { sampleHouse, withGift } from '../house/house-fixtures.js';
 import {
   createHomeAlertState,
-  fullGatherers,
   giftWaitingIn,
-  FULL_REREAD,
-  nextFullInMs,
   HOME_ALERT_TEXT,
   homeAlerts,
   type HomeAlerts,
@@ -14,48 +10,26 @@ import {
   watchedHouseApi,
 } from './home-alerts.js';
 
-type JobSquishy = JobsView['squishies'][number];
-/** Only `work.full` matters to the rule; the rest of a job row is never read. */
-const gatherer = (full: boolean | null): JobSquishy =>
-  ({ work: full === null ? null : { full } }) as unknown as JobSquishy;
-const jobs = (...rows: (boolean | null)[]) => ({ squishies: rows.map(gatherer) });
-
 const wrapped = withGift(sampleHouse(1)).view;
 const opened = withGift(sampleHouse(1), { claimed: true }).view;
 
 describe('homeAlerts (#731)', () => {
   it('shows nothing before the server has said anything', () => {
-    expect(homeAlerts({ giftWaiting: null, jobs: null })).toEqual({ home: null, jobs: null });
+    expect(homeAlerts({ giftWaiting: null })).toEqual({ home: null });
   });
 
   it('dots the Home row while a House gift waits', () => {
-    expect(homeAlerts({ giftWaiting: true, jobs: null }).home).toEqual({
+    expect(homeAlerts({ giftWaiting: true }).home).toEqual({
       count: 1,
       peek: HOME_ALERT_TEXT.gift,
     });
-    expect(homeAlerts({ giftWaiting: false, jobs: null }).home).toBeNull();
+    expect(homeAlerts({ giftWaiting: false }).home).toBeNull();
   });
 
   it("reads a house reply's gift: waiting while wrapped, not once opened or with none", () => {
     expect(giftWaitingIn(wrapped)).toBe(true);
     expect(giftWaitingIn(opened)).toBe(false);
     expect(giftWaitingIn({ gift: null })).toBe(false);
-  });
-
-  it('dots the Jobs row with how many gatherers are full', () => {
-    expect(homeAlerts({ giftWaiting: null, jobs: jobs(true, false, null) }).jobs).toEqual({
-      count: 1,
-      peek: 'A gatherer is full',
-    });
-    expect(homeAlerts({ giftWaiting: null, jobs: jobs(true, true) }).jobs).toEqual({
-      count: 2,
-      peek: '2 gatherers are full',
-    });
-  });
-
-  it('keeps the Jobs row quiet while every gatherer is still working', () => {
-    expect(homeAlerts({ giftWaiting: true, jobs: jobs(false, null) }).jobs).toBeNull();
-    expect(fullGatherers(jobs())).toBe(0);
   });
 });
 
@@ -134,41 +108,8 @@ describe('createHomeAlertState', () => {
     state.mapView('map-1', undefined);
     expect(home()).toBe(false);
     state.mapView('map-1', true);
-    state.jobs('map-1', jobs(true));
-    expect(state.debug.jobs?.count).toBe(1);
+    expect(home()).toBe(true);
     state.reset();
-    expect(state.debug).toEqual({ home: null, jobs: null });
-  });
-});
-
-describe('nextFullInMs', () => {
-  const now = '2026-10-31T12:00:00.000Z';
-  const at = (seconds: number) => new Date(Date.parse(now) + seconds * 1000).toISOString();
-  const working = (readyCycles: number, nextIn: number | null, cycleSeconds = 600, full = false) =>
-    ({
-      work: { readyCycles, nextReadyAt: nextIn === null ? null : at(nextIn), cycleSeconds, full },
-    }) as unknown as JobSquishy;
-  const view = (...squishies: JobSquishy[]) => ({
-    squishies,
-    rules: { teamSize: 3, maxStoredCycles: 4 },
-    now,
-  });
-
-  it('is the next cycle plus one cycle per slot left after it, from the server clock', () => {
-    // 1 ready of 4: the next lands in 60 s, then two more 600 s cycles.
-    expect(nextFullInMs(view(working(1, 60)))).toBe((60 + 2 * 600) * 1000 + FULL_REREAD.slackMs);
-    // 3 ready: the next one fills it.
-    expect(nextFullInMs(view(working(3, 60)))).toBe(60 * 1000 + FULL_REREAD.slackMs);
-  });
-
-  it('takes the soonest of my gatherers and skips full, idle and non-gatherers', () => {
-    const v = view(working(0, 30), working(3, 500), working(4, null, 600, true), gatherer(null));
-    expect(nextFullInMs(v)).toBe(500 * 1000 + FULL_REREAD.slackMs);
-    expect(nextFullInMs(view(working(4, null, 600, true), gatherer(null)))).toBeNull();
-  });
-
-  it('never schedules in the past and never waits longer than the cap', () => {
-    expect(nextFullInMs(view(working(3, -10)))).toBe(FULL_REREAD.slackMs);
-    expect(nextFullInMs(view(working(0, 60, 86_400)))).toBe(FULL_REREAD.maxMs);
+    expect(state.debug).toEqual({ home: null });
   });
 });
