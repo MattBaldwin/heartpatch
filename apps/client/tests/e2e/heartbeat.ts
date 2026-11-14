@@ -11,15 +11,21 @@ import type { Page, TestInfo, WebSocket } from '@playwright/test';
 //   250 ms `setInterval` counts ticks (it only runs while the main thread is
 //   free) and asks for one animation frame at a time (frames: it only runs while
 //   rendering does), with the longest gap each has seen.
-// - Every second the page logs one console line with both counts. Console
-//   messages reach the test over the inspector protocol without Playwright's
-//   injected script or execution contexts, so the last line's age says when the
-//   page last ran script even when `page.evaluate` can't reach it.
+// - Every second the page sends both counts two ways: a console line, and a
+//   `fetch` of the favicon with the counts in its query (seen from
+//   `page.on('request')`, not routed: a route would turn on request
+//   interception for every request). Playwright's WebKit side drops a console
+//   message when it has no execution context for the main frame, but a
+//   request event needs none. So the request beat's age says when the page
+//   last ran script even when `page.evaluate` can't reach it, and a request
+//   beat with no console beat means Playwright lost the page's context.
 // - Test side: the page's load, navigation, crash, page-error and websocket
 //   events (Vite's HMR socket), timestamped, for a reload racing something.
 
-/** The console line's prefix, so nothing else is mistaken for a beat. */
+/** The console line's prefix and the request's query key, so nothing else is mistaken for a beat. */
 const BEAT = 'hp-beat';
+/** A file the dev server answers with 200, so the beat logs no failed load. */
+const BEAT_URL = '/favicon.svg';
 const BEAT_MS = 250;
 const EVENTS_KEPT = 30;
 /** How long a probe may take before the page counts as not answering. */
@@ -40,10 +46,12 @@ interface PageBeat {
   framePendingSince: number;
 }
 
+type Channel = 'request' | 'console';
+
 interface Watch {
   started: number;
-  /** The last console beat: when it arrived (test clock) and what it said. */
-  lastBeat: { at: number; beat: PageBeat } | null;
+  /** The last beat on each channel: when it arrived (test clock) and what it said. */
+  last: Record<Channel, { at: number; beat: PageBeat } | null>;
   /** Ticks and frames as of the first beat of each 5 s window, to show a rate. */
   beats: { at: number; ticks: number; frames: number }[];
   events: string[];
@@ -54,7 +62,9 @@ const watched = new Map<Page, Watch>();
 /** Starts the heartbeat on the page's context (from its next load) and listens to it. */
 export async function watchHeartbeat(page: Page): Promise<void> {
   await page.context().addInitScript(
-    ({ prefix, every }) => {
+    ({ prefix, every, url }) => {
+      // The top frame only: a frame inside would beat with its own load and clock.
+      if (window !== window.top) return;
       const now = () => performance.now();
       const beat = {
         load: Math.round(performance.timeOrigin),
@@ -89,36 +99,56 @@ export async function watchHeartbeat(page: Page): Promise<void> {
         askFrame();
         if (t - logged >= 1_000) {
           logged = t;
-          console.debug(prefix, JSON.stringify(beat));
+          const line = JSON.stringify(beat);
+          console.debug(prefix, line);
+          void fetch(`${url}?${prefix}=${encodeURIComponent(line)}`, { cache: 'no-store' }).catch(
+            () => undefined,
+          );
         }
       }, every);
     },
-    { prefix: BEAT, every: BEAT_MS },
+    { prefix: BEAT, every: BEAT_MS, url: BEAT_URL },
   );
 
-  const watch: Watch = { started: Date.now(), lastBeat: null, beats: [], events: [] };
+  const watch: Watch = {
+    started: Date.now(),
+    last: { request: null, console: null },
+    beats: [],
+    events: [],
+  };
   watched.set(page, watch);
   const since = () => `${((Date.now() - watch.started) / 1000).toFixed(1)}s`;
   const note = (event: string) => {
     watch.events.push(`${since()} ${event}`);
     if (watch.events.length > EVENTS_KEPT) watch.events.shift();
   };
+  const onBeat = (channel: Channel, json: string) => {
+    let beat: PageBeat;
+    try {
+      beat = JSON.parse(json) as PageBeat;
+    } catch {
+      return; // Not a beat after all.
+    }
+    const at = Date.now();
+    if (watch.last[channel]?.beat.load !== beat.load) {
+      note(`first ${channel} beat of load ${String(beat.load)}`);
+    }
+    watch.last[channel] = { at, beat };
+    if (channel !== 'request') return;
+    const last = watch.beats.at(-1);
+    if (!last || at - last.at >= 5_000) {
+      watch.beats.push({ at, ticks: beat.ticks, frames: beat.frames });
+      if (watch.beats.length > 4) watch.beats.shift();
+    }
+  };
   page.on('console', (msg) => {
     const text = msg.text();
-    if (!text.startsWith(BEAT)) return;
-    try {
-      const beat = JSON.parse(text.slice(BEAT.length + 1)) as PageBeat;
-      const at = Date.now();
-      if (watch.lastBeat?.beat.load !== beat.load) note(`first beat of load ${String(beat.load)}`);
-      watch.lastBeat = { at, beat };
-      const last = watch.beats.at(-1);
-      if (!last || at - last.at >= 5_000) {
-        watch.beats.push({ at, ticks: beat.ticks, frames: beat.frames });
-        if (watch.beats.length > 4) watch.beats.shift();
-      }
-    } catch {
-      // Not a beat after all.
-    }
+    if (text.startsWith(`${BEAT} `)) onBeat('console', text.slice(BEAT.length + 1));
+  });
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    const json = url.pathname === BEAT_URL ? url.searchParams.get(BEAT) : null;
+    if (json !== null) onBeat('request', json);
   });
   page.on('framenavigated', (frame) => {
     if (frame === page.mainFrame()) note('navigated');
@@ -151,22 +181,34 @@ export async function watchHeartbeat(page: Page): Promise<void> {
 }
 
 /** What `work` gave or threw, or `fallback` once `ms` pass without either (the work is left to run). */
-function within<T>(work: Promise<T>, ms: number, fallback: string): Promise<T | string> {
-  return Promise.race([
-    work.catch((error: unknown) => (error instanceof Error ? error.message : String(error))),
-    new Promise<string>((resolve) =>
-      setTimeout(() => {
-        resolve(fallback);
-      }, ms),
-    ),
-  ]);
+async function within<T>(work: Promise<T>, ms: number, fallback: string): Promise<T | string> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work.catch((error: unknown) => (error instanceof Error ? error.message : String(error))),
+      new Promise<string>((resolve) => {
+        timer = setTimeout(() => {
+          resolve(fallback);
+        }, ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
- * On a failed test, one `heartbeat` annotation per watched page: the last beat
- * and how old it is, ticks and frames per second over the last windows, the page's
- * events, and whether a main-world `evaluate` and a locator query (Playwright's
- * utility world) still answer within 3 s.
+ * On a failed test, one `heartbeat` annotation per watched page: how old the
+ * last request and console beats are, the last beat, ticks and frames per second
+ * over the last windows (from request beats), the page's events, and whether a
+ * main-world `evaluate` and a locator query (Playwright's utility world) still
+ * answer within 3 s.
+ *
+ * - request beat fresh, frames ~0, probes answer: only rendering stopped.
+ * - request beat fresh, console beat stale or probes silent: the page runs, and
+ *   Playwright lost its execution context.
+ * - request beat stale, probes silent: the main thread is blocked (or the page is
+ *   gone: look for CRASH in the events).
  */
 export async function reportHeartbeats(testInfo: TestInfo): Promise<void> {
   const pages = [...watched];
@@ -201,11 +243,14 @@ export async function reportHeartbeats(testInfo: TestInfo): Promise<void> {
         framesPerS: +((b.frames - a.frames) / s).toFixed(2),
       };
     });
+    const age = (last: { at: number } | null) =>
+      last ? +((now - last.at) / 1000).toFixed(1) : null;
     const report = {
       // On the events' clock (seconds since the heartbeat was set up).
       reportedAtS: +((now - watch.started) / 1000).toFixed(1),
-      lastBeatAgeS: watch.lastBeat ? +((now - watch.lastBeat.at) / 1000).toFixed(1) : null,
-      lastBeat: watch.lastBeat?.beat ?? null,
+      requestBeatAgeS: age(watch.last.request),
+      consoleBeatAgeS: age(watch.last.console),
+      lastBeat: watch.last.request?.beat ?? watch.last.console?.beat ?? null,
       rates,
       evaluate,
       locatorCount: locator,
