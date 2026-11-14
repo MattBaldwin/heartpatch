@@ -20,6 +20,15 @@ export default class SpecTimingReporter implements Reporter {
     const spec = basename(test.location.file).replace(/\.spec\.ts$/, '');
     this.seconds.set(spec, (this.seconds.get(spec) ?? 0) + result.duration / 1000);
     this.project ||= test.parent.project()?.name ?? '';
+    // A failed try's page heartbeat (heartbeat.ts, #784), as a warning so it shows beside the
+    // failure in the check run's annotations.
+    for (const { type, description } of result.annotations) {
+      if (type !== 'heartbeat' || !description) continue;
+      const title = `heartbeat ${this.project} ${spec}:${String(test.location.line)} try ${String(result.retry + 1)}`;
+      console.log(
+        `::warning title=${title.replace(/[:,\r\n]/g, '-')}::${description.replace(/%/g, '%25').replace(/[\r\n]/g, ' ')}`,
+      );
+    }
   }
 
   onEnd(result: FullResult): void {

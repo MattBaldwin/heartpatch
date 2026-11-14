@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
+import { reportHeartbeats, watchHeartbeat } from './heartbeat.js';
 import { expectClear } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { pushStubCounts, setPushStub, stubPush } from './push-stub.js';
@@ -25,6 +26,14 @@ async function offerDone(page: Page): Promise<void> {
     .poll(async () => (await hook<{ offer: string }>(page, 'push'))?.offer, { timeout: 30_000 })
     .toBe('done');
 }
+
+// Every stall here so far came just after a page.reload() (#784): on a failure, say whether the
+// page was still running script and drawing (heartbeat.ts), then close what a failed test left
+// open (#397).
+test.afterEach(async ({ browser }, testInfo) => {
+  await reportHeartbeats(testInfo);
+  for (const context of browser.contexts()) await context.close();
+});
 
 const HANDLES = ['adventure', 'heartpatch'] as const;
 
@@ -84,6 +93,7 @@ test('the offer shows once in a Home Screen app, and Yes please turns nudges on'
 }) => {
   test.setTimeout(180_000);
   const page = await newPlayer(browser, uniqueName('nudge'));
+  await watchHeartbeat(page);
   await stubPush(page);
   await page.reload();
   await makePatch(page);
@@ -178,6 +188,7 @@ test('no offer in a plain tab; Not now is for good; Settings shows each state', 
 }) => {
   test.setTimeout(180_000);
   const page = await newPlayer(browser, uniqueName('nudgetab'));
+  await watchHeartbeat(page);
   await stubPush(page, { standalone: false });
   await page.reload();
   await makePatch(page);

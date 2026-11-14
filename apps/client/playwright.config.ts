@@ -300,9 +300,9 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:5173',
     // DOM snapshots and sources, but no screencast (#784). The screencast pulls composited
-    // frames out of WebKit as JPEGs (~558x800 on the iPad, up to ~5 a second) with a frame
-    // ack held in flight. In the stalled iPad runs the page's animation frames stopped
-    // (layout.ts still() hung past its own deadline) and the trace fixture's teardown timed out.
+    // frames out of WebKit as JPEGs (~558x800 on the iPad, up to ~5 a second): work on CI's
+    // software renderer for a picture nobody reads (the job's traces can't be downloaded from
+    // sessions). It isn't what stalls pages: they stalled with it off too.
     trace: { mode: 'retain-on-failure', screenshots: false, snapshots: true, sources: true },
     timezoneId,
   },
