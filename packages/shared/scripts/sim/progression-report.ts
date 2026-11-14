@@ -3,6 +3,9 @@ import { BATTLE_RULES } from '../../src/data/battle.js';
 import { GUARDIAN_RULES } from '../../src/data/server/guardian-rules.js';
 import {
   CURRENT_RULES,
+  FRIENDLY_GATE,
+  WITH_FRIENDLIES_RULES,
+  type FriendlyGate,
   type ProgressionConfig,
   type ProgressionRules,
 } from './progression-config.js';
@@ -72,6 +75,107 @@ export function summarise(run: ProgressionRun, config: ProgressionConfig): RunSu
     landFull: first(days, (d) => d.neutralLeft === 0)?.day ?? null,
     level: Object.fromEntries(days.map((d) => [d.day, d.partnerLevel])),
   };
+}
+
+/** #728's gate: the gated kid's Partner level on the gate day, without and with friendlies. */
+export interface FriendlyGateResult {
+  readonly kid: string;
+  readonly day: number;
+  readonly seats: number;
+  readonly before: number;
+  readonly after: number;
+  readonly delta: number;
+  readonly maxLevels: number;
+  readonly passes: boolean;
+}
+
+/**
+ * `FRIENDLY_GATE` over `runs`: kid 0 of the gated kind on the first map size,
+ * `CURRENT_RULES` against `WITH_FRIENDLIES_RULES`. Null when a run is missing.
+ */
+export function friendlyGate(
+  runs: readonly ProgressionRun[],
+  config: ProgressionConfig,
+  gate: FriendlyGate = FRIENDLY_GATE,
+): FriendlyGateResult | null {
+  const seats = config.seats[0] ?? 0;
+  const levelOf = (rules: ProgressionRules) => {
+    const run = runs.find(
+      (r) => r.rules === rules && r.seats === seats && r.profile.id === gate.kid,
+    );
+    return run ? (lead(run).days[gate.day - 1]?.partnerLevel ?? null) : null;
+  };
+  const before = levelOf(CURRENT_RULES);
+  const after = levelOf(WITH_FRIENDLIES_RULES);
+  if (before === null || after === null) return null;
+  const delta = after - before;
+  return {
+    kid: gate.kid,
+    day: gate.day,
+    seats,
+    before,
+    after,
+    delta,
+    maxLevels: gate.maxLevels,
+    passes: delta <= gate.maxLevels,
+  };
+}
+
+export function formatFriendlyGate(result: FriendlyGateResult): string {
+  const sign = result.delta >= 0 ? '+' : '';
+  return (
+    `friendly gate (#728): ${result.kid} Partner Lv ${String(result.before)} → ${String(result.after)} ` +
+    `on day ${String(result.day)} (${sign}${String(result.delta)}, at most +${String(result.maxLevels)}): ` +
+    (result.passes ? 'PASS' : 'FAIL')
+  );
+}
+
+/** Sums a kid's day records up to and including `day`. */
+const upTo = (days: readonly DayRecord[], day: number, field: 'defences' | 'defencesHeld') =>
+  days.filter((d) => d.day <= day).reduce((n, d) => n + d[field], 0);
+
+/** The friendlies and defences table (#728) and its gate. */
+function renderFriendlies(runs: readonly ProgressionRun[], config: ProgressionConfig): string[] {
+  const these = runs.filter((r) => r.rules === CURRENT_RULES || r.rules === WITH_FRIENDLIES_RULES);
+  const gate = friendlyGate(runs, config);
+  if (!gate || !WITH_FRIENDLIES_RULES.friendlies) return [];
+  const { friendlies, defences } = WITH_FRIENDLIES_RULES;
+  return [
+    '## Friendlies and defences (#728)',
+    '',
+    `\`${WITH_FRIENDLIES_RULES.label}\`: the map's two kids play ${config.kids.map((k) => `${String(friendlies.perDay[k.id] ?? 0)} (${k.id})`).join(' / ')} friendlies a day against each other on top of their battles, both sides paid at ${String(friendlies.xpPercent)} % of the engine's XP, every friendly counting toward the falloff win or lose; their tile tries also weigh each other's land outside the home ring${defences ? ` from day ${String(defences.shieldDays + 1)}, at most ${String(defences.lossCapPerDay)} taken from a kid a day, against the owner's first ${String(defences.maxDefenders)} squishies on watch at the Partner level + ${String(defences.guardLevel.partnerBonus)}` : ''}. Defences: the other kid's tries on kid 0's land (held in brackets; a hold pays the guards XP). Gate: ${formatFriendlyGate(gate)} (${String(gate.seats)}-seat map).`,
+    '',
+    markdownTable(
+      [
+        'Rules',
+        'Map seats',
+        'Kid',
+        'Friendlies a day',
+        'Defences by day 14',
+        'Defences by day 30',
+        'Lv day 7',
+        'Lv day 14',
+        'Lv day 30',
+      ],
+      these.map((run) => {
+        const { days } = lead(run);
+        const defence = (day: number) =>
+          `${String(upTo(days, day, 'defences'))} (${String(upTo(days, day, 'defencesHeld'))})`;
+        return [
+          run.rules.label,
+          String(run.seats),
+          run.profile.id,
+          String(run.rules.friendlies?.perDay[run.profile.id] ?? 0),
+          defence(14),
+          defence(30),
+          cell(days[6]?.partnerLevel ?? null),
+          cell(days[13]?.partnerLevel ?? null),
+          cell(days[29]?.partnerLevel ?? null),
+        ];
+      }),
+    ),
+    '',
+  ];
 }
 
 /**
@@ -238,6 +342,7 @@ export function renderProgression(
     ),
     '',
     ...(info.firsts ? renderFirsts(runs, config, info.firsts) : []),
+    ...renderFriendlies(runs, config),
     "## What a Juniper's Gap win pays",
     '',
     'An average Gap team (three guardians at the middle of their levels), at the day the Gap is ready.',

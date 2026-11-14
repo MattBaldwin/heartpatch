@@ -5,13 +5,22 @@ import {
   CURRENT_RULES,
   NO_TRAINING_RULES,
   WITH_EXPLORE_RULES,
+  WITH_FRIENDLIES_RULES,
+  FRIENDLY_XP_PERCENT,
   PROGRESSION_CONFIG,
   type ProgressionConfig,
 } from './progression-config.js';
 import { JOURNEY_RULES } from '../../src/data/journeys.js';
-import { gapWin, journeyGateMisses, renderProgression, summarise } from './progression-report.js';
+import {
+  formatFriendlyGate,
+  friendlyGate,
+  gapWin,
+  journeyGateMisses,
+  renderProgression,
+  summarise,
+} from './progression-report.js';
 import { firstsFacts } from './progression-firsts.js';
-import { journeyOdds, modelData, runProgression, wildOdds } from './progression.js';
+import { journeyOdds, modelData, runProgression, sideB, wildOdds } from './progression.js';
 
 /** A short run: the same model, a few days and a small odds estimate. */
 const SMALL: ProgressionConfig = { ...PROGRESSION_CONFIG, days: 6, estimateGames: 4 };
@@ -171,4 +180,70 @@ describe('the progression report', () => {
     expect(gapWin(22, 100, CURRENT_RULES)).toMatchObject({ base: 1440, xp: 1440, levels: 0 });
     expect(gapWin(22, 100, BASELINE_RULES).levels).toBeGreaterThan(1);
   });
+});
+
+describe('friendlies and defences (#728)', () => {
+  it('fields the other kid as side b, lifted to the watch floor', () => {
+    const team = [
+      { id: 'partner', speciesId: 'emberbun', level: 10 },
+      { id: 'friend-1', speciesId: 'fuzzbolt', level: 15 },
+      { id: 'friend-2', speciesId: 'pebblesnooze', level: 3 },
+    ];
+    const side = sideB(team, PROGRESSION_CONFIG, 2, 13);
+    expect(side.squishies.map((s) => [s.id, s.level])).toEqual([
+      ['b:partner', 13],
+      ['b:friend-1', 15],
+    ]);
+    expect(sideB(team, PROGRESSION_CONFIG).squishies.map((s) => s.level)).toEqual([10, 15, 3]);
+  });
+
+  it("plays the day's friendlies on top of the battles, and none under the shipped rules", () => {
+    const run = runProgression(data, SMALL, WITH_FRIENDLIES_RULES, engaged!, 4);
+    const perDay = WITH_FRIENDLIES_RULES.friendlies?.perDay['engaged'];
+    expect(perDay).toBe(3);
+    expect(WITH_FRIENDLIES_RULES.friendlies?.xpPercent).toBe(FRIENDLY_XP_PERCENT);
+    for (const kid of run.kids) {
+      for (const day of kid.days) {
+        expect(day.friendlies).toBe(perDay);
+        expect(day.tileBattles + day.wildBattles).toBe(engaged!.battlesPerDay);
+      }
+    }
+    const now = runProgression(data, SMALL, CURRENT_RULES, engaged!, 4);
+    for (const day of now.kids.flatMap((k) => k.days)) {
+      expect([day.friendlies, day.defences, day.defencesHeld]).toEqual([0, 0, 0]);
+    }
+    // Friendly XP lands: the Partner is ahead of the shipped pace after a few days.
+    const level = (r: typeof run) => r.kids[0]!.days.at(-1)!.partnerLevel;
+    expect(level(run)).toBeGreaterThan(level(now));
+  }, 30_000);
+
+  it("lets a kid try the other kid's land, outside the shield and the home ring", () => {
+    // Every try is worth it, so the 2-seat map's land runs out and the kids meet.
+    const eager: ProgressionConfig = { ...SMALL, days: 8, tryTileAt: 0 };
+    const rules = { ...WITH_FRIENDLIES_RULES, attemptsPerDay: 30 };
+    const run = runProgression(data, eager, rules, engaged!, 2);
+    const days = run.kids.flatMap((k) => k.days);
+    const shield = WITH_FRIENDLIES_RULES.defences!.shieldDays;
+    expect(days.filter((d) => d.day <= shield).every((d) => d.defences === 0)).toBe(true);
+    expect(days.reduce((n, d) => n + d.defences, 0)).toBeGreaterThan(0);
+    for (const d of days) expect(d.defencesHeld).toBeLessThanOrEqual(d.defences);
+    // Home rings (7 tiles each) are never taken.
+    for (const d of days) expect(d.tiles).toBeGreaterThanOrEqual(7);
+  }, 30_000);
+
+  it("gates the day's level move", () => {
+    const runs = [CURRENT_RULES, WITH_FRIENDLIES_RULES].map((rules) =>
+      runProgression(data, SMALL, rules, engaged!, 4),
+    );
+    const gate = { kid: 'engaged', day: 6, maxLevels: 1 };
+    const result = friendlyGate(runs, SMALL, gate);
+    const level = (i: number) => runs[i]!.kids[0]!.days[5]!.partnerLevel;
+    expect(result).toMatchObject({ before: level(0), after: level(1), delta: level(1) - level(0) });
+    expect(result?.passes).toBe((result?.delta ?? 0) <= 1);
+    expect(friendlyGate(runs, SMALL, { ...gate, maxLevels: 99 })?.passes).toBe(true);
+    expect(formatFriendlyGate({ ...result!, delta: 2, passes: false })).toMatch(
+      /\(\+2, at most \+1\): FAIL$/,
+    );
+    expect(friendlyGate(runs.slice(0, 1), SMALL, gate)).toBeNull();
+  }, 30_000);
 });

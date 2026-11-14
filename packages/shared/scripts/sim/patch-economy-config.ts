@@ -12,8 +12,18 @@ export interface PatchEconomyKid {
   readonly id: string;
   /** Map-local hours the kid opens the patch (each opening settles: output lands, coins earn). */
   readonly sessions: readonly number[];
-  /** Battles won a day, by kind (Heart Coins under the daily cap). */
-  readonly wins: { readonly wild: number; readonly tile: number };
+  /**
+   * Battles won a day, by kind (Heart Coins under the daily `battle` cap).
+   * `defence`: rival-tile holds that pay (#728: a guard of theirs on watch or
+   * a live defence; guardian-only holds and scooted challengers pay none).
+   * `friendly`: friendly wins over one patch-mate, not counting scoots.
+   */
+  readonly wins: {
+    readonly wild: number;
+    readonly tile: number;
+    readonly defence: number;
+    readonly friendly: number;
+  };
   /** Squishies befriended and tiles claimed a day. */
   readonly captures: { readonly wild: number; readonly tile: number };
   /** Care actions a day that count in full. */
@@ -84,7 +94,9 @@ export const PATCH_ECONOMY_CONFIG: PatchEconomyConfig = {
     {
       id: 'casual',
       sessions: fuel('casual').sessions,
-      wins: { wild: 1, tile: 0 }, // TUNE: guess, the #601 plan's casual kid
+      // TUNE: guess, the #601 plan's casual kid; #728: one friendly a day
+      // (sim:progression's casual kid), won about half the time, and no paid holds.
+      wins: { wild: 1, tile: 0, defence: 0, friendly: 1 },
       captures: { wild: 0, tile: 0 },
       fullCareActions: 3, // TUNE: one care session
       huts: ['woodcutters-hut', 'stone-quarry'],
@@ -95,7 +107,9 @@ export const PATCH_ECONOMY_CONFIG: PatchEconomyConfig = {
     {
       id: 'engaged',
       sessions: fuel('engaged').sessions,
-      wins: { wild: 2, tile: 1 }, // TUNE: guess, the plan's engaged kid
+      // TUNE: guess, the plan's engaged kid; #728: three friendlies a day, won
+      // about half, and one paid hold a day.
+      wins: { wild: 2, tile: 1, defence: 1, friendly: 2 },
       captures: { wild: 0, tile: 1 },
       fullCareActions: 10, // TUNE: full care
       huts: ['woodcutters-hut', 'stone-quarry', 'greenhouse', 'water-well'],
