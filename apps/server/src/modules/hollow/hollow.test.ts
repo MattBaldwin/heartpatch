@@ -1404,6 +1404,22 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect(battle.view.sides.a.squishies.map((s) => s.id)).toEqual([lost]);
     });
 
+    it('pays the squishy its battle XP when it wins its own solo rescue (#728 round 2)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      const lost = await squishy(mapId, kid, { level: 40, state: 'hollowed' });
+      const xpOf = async () =>
+        (await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, lost) }))!.xp;
+      const before = await xpOf();
+      const { battle } = await hollowService().rescue(kid, mapId, { squishyId: lost });
+      const done = await playOut(server, kid, battle);
+      expect(done.status).toBe('finished');
+      // Still hollowed at the finish (it comes home in the consumer), and paid.
+      expect(await stateOf(lost)).toBe('hollowed');
+      expect(await xpOf()).toBeGreaterThan(before);
+    });
+
     it('refuses squishies that are home already, or not yours, through the API', async () => {
       const server = await start();
       const kid = await player();

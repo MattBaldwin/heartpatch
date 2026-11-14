@@ -10,6 +10,7 @@ import {
   rareFindTier,
   sidesToAct,
   battleXpPercent,
+  CHALLENGE_RULES,
   befriendedLevel,
   joiningSpecies,
   CAPTURABLE_BATTLE_KINDS,
@@ -20,6 +21,7 @@ import {
   createBattleContent,
   GAME_DATA,
   gameplayOverrides,
+  friendlyBattleXp,
   GROWTH_RULES,
   HEART_COIN_RULES,
   MAP_GEN,
@@ -62,7 +64,7 @@ import { isUniqueViolation } from '../../db/errors.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { newSeed } from '../../lib/rng.js';
-import { uuidV5 } from '../../lib/uuid-v5.js';
+import { sideBRefId } from '../../lib/side-b-ref.js';
 import { wornAccessories } from '../wardrobe/accessories.js';
 import { nextLocalMidnight, type Clock } from '../../lib/time.js';
 import { applyXp, appendGrowthEvents, EVOLUTION_STEPS, type Growth } from '../care/service.js';
@@ -245,17 +247,6 @@ export interface TileBattleDefense {
   /** Side `b`'s squishies that are the Keeper's own (guards on watch), in id order. Guardians: none. */
   ownSquishyIds: readonly string[];
 }
-
-/**
- * Fixed namespace for side `b`'s coin `ref_id` (#728): uuid v5 of the
- * battle id. Both coin ledgers are unique on `(source, ref_id)` with no user
- * column, so side `b`'s `battle` credit can't reuse the battle id (side
- * `a`'s key); this one is as stable, so a retried finish credits nothing twice.
- */
-const SIDE_B_REF_NAMESPACE = '9d3a6f12-4c7b-4e85-a1d0-5b8e2c7f4a36';
-
-/** Side `b`'s coin `ref_id` for a battle (#728): stable, and never the battle id itself. */
-export const sideBRefId = (battleId: string): string => uuidV5(battleId, SIDE_B_REF_NAMESPACE);
 
 /** One player's coins from a finished battle, by ledger key (#728). */
 interface CoinPayee {
@@ -548,9 +539,9 @@ function defsFor(
  * A battle's rewards as `side`'s player sees them (#728). Side `a` gets the
  * stored rewards without side `b`'s block; side `b` (only ever its own Keeper: a live defender or
  * the defender's replay) gets `rewards.b` in side `a`'s shape, with no
- * Gentle share (100) and nothing of side `a`'s, keeping `b` itself for
- * its `unpaid` reason; null when side `b` earned nothing or the battle is
- * from before #728.
+ * Gentle share (100) and nothing of side `a`'s, with `b`'s `unpaid`
+ * reason (`b` itself kept too); null when side `b` earned nothing or the
+ * battle is from before #728. A friendly's side `b` is the friend (#728).
  */
 export function rewardsFor(
   rewards: BattleRewards | null,
@@ -565,6 +556,7 @@ export function rewardsFor(
     percent: 100,
     fullXpResetAt: b.fullXpResetAt,
     coins: b.coins,
+    unpaid: b.unpaid,
     b,
   };
 }
@@ -1180,6 +1172,16 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     });
   };
 
+  /** A friendly's side-`b` player (#728), read before its turn state ends; a missing row throws. */
+  const friendOf = async (
+    liveBattles: ReturnType<typeof createLiveBattlesRepo>,
+    battleId: string,
+  ): Promise<string> => {
+    const live = await liveBattles.find(battleId);
+    if (!live) throw new Error(`finish: friendly ${battleId} has no live_battles row`);
+    return live.bUserId;
+  };
+
   /** The battle is over: XP for the player's squishies, then the events. */
   const finish = async (
     repo: BattlesTxRepo,
@@ -1204,21 +1206,40 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         ? await options.journeys.ended(tx, { ...row, state }, result.winner, at)
         : [];
     // A live battle's turn state goes (#29): side `b` is free to battle again.
-    await createLiveBattlesRepo(tx).end(row.id);
+    // A friendly's side-`b` player is read first (#728): they're paid too.
+    // A friendly with no turn state left fails closed: nobody is paid twice
+    // or to the wrong Keeper, and the battle stays unfinished.
+    const isFriendly = row.kind === 'friendly';
+    const liveBattles = createLiveBattlesRepo(tx);
+    const friendUserId = isFriendly ? await friendOf(liveBattles, row.id) : null;
+    await liveBattles.end(row.id);
+    // A friendly battle (#728, owner decision 2026-11-14) pays both sides
+    // one opponent's worth of the engine's XP at `friendlyPercent`
+    // (`friendlyBattleXp`), before care × habitat and the falloff.
+    const opponentsOut = (side: BattleSideId) =>
+      state.sides[otherSide(side)].squishies.filter((s) => s.energy === 0).length;
+    const friendlyXp = (award: { side: BattleSideId; xp: number }) =>
+      friendlyBattleXp(award.xp, opponentsOut(award.side), GROWTH_RULES);
     // A rival's land held (#728): the Keeper's own squishies on side `b`
     // earn the engine's side-`b` XP. Gentle's share never applies to them
     // (it is the challenger's), and guardians standing in earn nothing.
+    // A friendly's side `b` is the friend's own team, win or lose.
     const defense = tile.defense ?? null;
+    const sideBUserId = defense?.userId ?? friendUserId;
     const theirs = new Set(defense?.ownSquishyIds ?? []);
-    const defenderAwards = result.xp
-      .filter((award) => award.side === 'b' && theirs.has(award.squishyId) && award.xp > 0)
-      .map((award) => ({ ...award }));
+    const sideBAwards = result.xp
+      .filter((award) => award.side === 'b' && (isFriendly || theirs.has(award.squishyId)))
+      .map((award) => ({ ...award, xp: isFriendly ? friendlyXp(award) : award.xp }))
+      .filter((award) => award.xp > 0);
     // Gentle mode's share (owner decision 2026-10-03): challenging a much
-    // smaller player pays part of the battle's XP, win or lose. A friendly
-    // battle (#29) has nothing at stake: no XP for either side.
+    // smaller player pays part of the battle's XP, win or lose. Never a
+    // friendly's (both said yes): its own share above instead.
     const awards = result.xp
-      .filter((award) => award.side === PLAYER_SIDE && row.kind !== 'friendly')
-      .map((award) => ({ ...award, xp: Math.floor((award.xp * tile.xpPercent) / 100) }))
+      .filter((award) => award.side === PLAYER_SIDE)
+      .map((award) => ({
+        ...award,
+        xp: isFriendly ? friendlyXp(award) : Math.floor((award.xp * tile.xpPercent) / 100),
+      }))
       .filter((award) => award.xp > 0);
     // Base battle XP × care and habitat, levels and evolution (#19's
     // `applyXp`), under the squishy locks (the order above).
@@ -1230,11 +1251,36 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     await repo.lockSquishies([
       ...new Set([
         ...awards.map((a) => a.squishyId),
-        ...defenderAwards.map((a) => a.squishyId),
+        ...sideBAwards.map((a) => a.squishyId),
         ...(tile.squishies ?? []),
         ...guards.map((g) => g.squishyId),
       ]),
     ]);
+    // Each side's squishies are still its Keeper's, now that they're locked
+    // (#728): one traded, sent to the trading post or to the Hollow after
+    // the setup was read earns nothing (and so uses no falloff slot).
+    // Side `a` is re-checked in a friendly only: a solo rescue's squishy
+    // fights while still `hollowed` (design doc §14) and is paid as before.
+    const stillMine = isFriendly
+      ? new Set(
+          await repo.ownActiveSquishies(
+            row.mapId,
+            row.playerUserId,
+            awards.map((a) => a.squishyId),
+          ),
+        )
+      : null;
+    const stillTheirs = new Set(
+      sideBUserId === null
+        ? []
+        : await repo.ownActiveSquishies(
+            row.mapId,
+            sideBUserId,
+            sideBAwards.map((a) => a.squishyId),
+          ),
+    );
+    const playerAwards = stillMine ? awards.filter((a) => stillMine.has(a.squishyId)) : awards;
+    const defenderAwards = sideBAwards.filter((a) => stillTheirs.has(a.squishyId));
     // The guards sent home: their watch so far held (#376).
     await writeGuardCheckpoints(tx, guards, at);
     // The daily falloff (owner decision 2026-10-06): a squishy that has
@@ -1242,7 +1288,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // Wins count on either side (#728): a guard's holds count toward its 7.
     const wins = await repo.winsToday(
       row.mapId,
-      [...awards, ...defenderAwards].map((a) => a.squishyId),
+      [...playerAwards, ...defenderAwards].map((a) => a.squishyId),
       at,
     );
     /** Squishies on full XP today: only their wins lean Brave (#32), as only full-value care leans. */
@@ -1258,7 +1304,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       }
       return cut;
     };
-    const fellOff = falloff(awards);
+    const fellOff = falloff(playerAwards);
     const defenderFellOff = falloff(defenderAwards);
     // A captured tile's fire comes back to its old owner (#202): their
     // inventory rows (step 11) after the squishy locks, before any XP writes
@@ -1289,8 +1335,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       return out;
     };
     // Side `a` first, then side `b` (#728): each squishy's lock is already held.
-    const grown = await grow(awards, result.winner === PLAYER_SIDE);
-    const defenderGrown = await grow(defenderAwards, true);
+    const grown = await grow(playerAwards, result.winner === PLAYER_SIDE);
+    const defenderGrown = await grow(defenderAwards, result.winner === 'b');
     // Befriended in this last step (design doc §6, #279): each one joins
     // the player. Ones befriended earlier in a guardian battle joined then.
     const friends = await welcome(repo, tx, row, befriendedIn(row.state, state), at);
@@ -1303,24 +1349,55 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     const share = (coins: number, percent: number) => Math.floor((coins * percent) / 100);
     const capture = (rules: { capture: { wild: number; tile: number } }) =>
       captured ? rules.capture.wild : tile.drop ? share(rules.capture.tile, tile.drop.percent) : 0;
+    // A scooted battle of any kind never pays coins (owner decision
+    // 2026-11-14): only XP, once a turn was played.
+    const scooted = result.reason === 'forfeit';
+    // A friendly win (#728) pays `battleWin.friendly`, at most
+    // `paidWinsPerPairPerDay` wins over the same patch-mate a patch day.
+    const friendlyWinner =
+      friendUserId === null || scooted || result.winner === 'draw'
+        ? null
+        : result.winner === PLAYER_SIDE
+          ? { userId: row.playerUserId, loserUserId: friendUserId }
+          : { userId: friendUserId, loserUserId: row.playerUserId };
+    const pairCapped =
+      friendlyWinner !== null &&
+      (await repo.friendlyWinsAgainstToday(
+        row.mapId,
+        friendlyWinner.userId,
+        friendlyWinner.loserUserId,
+        at,
+      )) >= CHALLENGE_RULES.paidWinsPerPairPerDay;
+    /** Why a winning side got no win coins, or null. */
+    const winUnpaid: UnpaidReason | null = scooted ? 'scooted' : pairCapped ? 'pair-cap' : null;
     // A held defence (#728) pays the Keeper under the same `battle` caps,
     // keyed `sideBRefId` so it can't collide with the challenger's credit.
     // Never for a scooted challenger, nor for land the guardians held alone
-    // (owner decisions 2026-11-14).
-    const unpaid: UnpaidReason | null = !defense
-      ? null
-      : defense.ownSquishyIds.length === 0 && !defense.live
+    // (owner decisions 2026-11-14). A friendly's side-`b` winner the same way.
+    const unpaid: UnpaidReason | null = defense
+      ? defense.ownSquishyIds.length === 0 && !defense.live
         ? 'guardians'
-        : result.reason === 'forfeit'
-          ? 'scooted'
-          : null;
+        : winUnpaid
+      : isFriendly && result.winner === 'b'
+        ? winUnpaid
+        : null;
+    const aUnpaid: UnpaidReason | null = won ? winUnpaid : null;
+    const sideBWin =
+      sideBUserId === null || unpaid !== null || result.winner !== 'b'
+        ? null
+        : defense
+          ? {
+              patch: COIN_RULES.defenseWin['rival-tile'],
+              heart: HEART_COIN_RULES.defenseWin['rival-tile'],
+            }
+          : { patch: COIN_RULES.battleWin.friendly, heart: HEART_COIN_RULES.battleWin.friendly };
     const paid = await payCoins(tx, row, at, [
       {
         userId: row.playerUserId,
         refId: row.id,
         source: 'battle',
-        patch: won ? share(COIN_RULES.battleWin[row.kind], tile.xpPercent) : 0,
-        heart: won ? share(HEART_COIN_RULES.battleWin[row.kind], tile.xpPercent) : 0,
+        patch: won && !aUnpaid ? share(COIN_RULES.battleWin[row.kind], tile.xpPercent) : 0,
+        heart: won && !aUnpaid ? share(HEART_COIN_RULES.battleWin[row.kind], tile.xpPercent) : 0,
       },
       {
         // A befriended wild squishy, or a claimed tile (befriending its
@@ -1331,14 +1408,13 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         patch: capture(COIN_RULES),
         heart: capture(HEART_COIN_RULES),
       },
-      ...(defense && unpaid === null
+      ...(sideBUserId !== null && sideBWin
         ? [
             {
-              userId: defense.userId,
+              userId: sideBUserId,
               refId: sideBRefId(row.id),
               source: 'battle' as const,
-              patch: COIN_RULES.defenseWin['rival-tile'],
-              heart: HEART_COIN_RULES.defenseWin['rival-tile'],
+              ...sideBWin,
             },
           ]
         : []),
@@ -1361,15 +1437,17 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         percent: tile.xpPercent,
         fullXpResetAt,
         coins: paid.get(row.playerUserId) ?? { patch: 0, heart: 0 },
-        b: defense
-          ? {
-              userId: defense.userId,
-              xp: growthRewards(defenderGrown),
-              fullXpResetAt: defenderFellOff ? resetAt : null,
-              coins: unpaid === null ? (paid.get(defense.userId) ?? { patch: 0, heart: 0 }) : null,
-              unpaid,
-            }
-          : null,
+        unpaid: aUnpaid,
+        b:
+          sideBUserId !== null
+            ? {
+                userId: sideBUserId,
+                xp: growthRewards(defenderGrown),
+                fullXpResetAt: defenderFellOff ? resetAt : null,
+                coins: unpaid === null ? (paid.get(sideBUserId) ?? { patch: 0, heart: 0 }) : null,
+                unpaid,
+              }
+            : null,
       },
       endedAt: at,
     });
@@ -1412,12 +1490,16 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         reason: result.reason,
         turns: result.turns,
         xp: grown.map(({ squishyId, xp }) => ({ squishyId, xp })),
-        ...(defense && {
-          defender: {
-            userId: defense.userId,
-            xp: defenderGrown.map(({ squishyId, xp }) => ({ squishyId, xp })),
-          },
-        }),
+        // Only when the Keeper's squishies earned something (a guardian-only
+        // hold has none); a friendly's side `b` hears through `rewards.b`
+        // and its growth events.
+        ...(defense &&
+          defenderGrown.length > 0 && {
+            defender: {
+              userId: defense.userId,
+              xp: defenderGrown.map(({ squishyId, xp }) => ({ squishyId, xp })),
+            },
+          }),
       },
     });
     // Each growth event names its squishy's owner, so side `b`'s reach the Keeper.

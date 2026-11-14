@@ -27,6 +27,7 @@ import {
   battleXpPercent,
   befriendedLevel,
   countsTowardFalloff,
+  friendlyBattleXp,
   joiningSpecies,
   carePercent,
   evolutionAt,
@@ -498,21 +499,64 @@ describe('battleXpPercent (owner decision 2026-10-06)', () => {
   });
 
   it('is on in the shipped data', () => {
-    expect(GROWTH_RULES.battleXpFalloff).toEqual({ fullWinsPerDay: 7, afterPercent: 10 });
+    expect(GROWTH_RULES.battleXpFalloff).toMatchObject({ fullWinsPerDay: 7, afterPercent: 10 });
   });
 });
 
 describe('countsTowardFalloff (#728)', () => {
   it("counts a win on either side: a challenger's win and a guard's hold", () => {
-    expect(countsTowardFalloff('rival-tile', 'a', 'a')).toBe(true);
-    expect(countsTowardFalloff('rival-tile', 'b', 'b')).toBe(true);
-    expect(countsTowardFalloff('wild', 'a', 'a')).toBe(true);
+    expect(countsTowardFalloff('rival-tile', 'a', 'a', 30)).toBe(true);
+    expect(countsTowardFalloff('rival-tile', 'b', 'b', 30)).toBe(true);
+    expect(countsTowardFalloff('wild', 'a', 'a', 30)).toBe(true);
   });
 
-  it('never counts a loss, a tie or a friendly', () => {
-    expect(countsTowardFalloff('rival-tile', 'b', 'a')).toBe(false);
-    expect(countsTowardFalloff('tile', 'a', 'draw')).toBe(false);
-    expect(countsTowardFalloff('friendly', 'a', 'a')).toBe(false);
+  it('never counts a loss or a tie of any other kind', () => {
+    expect(countsTowardFalloff('rival-tile', 'b', 'a', 30)).toBe(false);
+    expect(countsTowardFalloff('tile', 'a', 'draw', 30)).toBe(false);
+  });
+
+  it('counts a friendly win, lose or tie, once the engine paid the squishy something', () => {
+    expect(countsTowardFalloff('friendly', 'a', 'a', 30)).toBe(true);
+    expect(countsTowardFalloff('friendly', 'b', 'a', 12)).toBe(true);
+    expect(countsTowardFalloff('friendly', 'a', 'draw', 5)).toBe(true);
+    // The one who ran away, or a scoot before any turn: nothing used up.
+    expect(countsTowardFalloff('friendly', 'b', 'a', 0)).toBe(false);
+  });
+});
+
+describe('friendlyBattleXp (#728, owner decision 2026-11-14)', () => {
+  const rules = {
+    battleXpFalloff: {
+      fullWinsPerDay: 7,
+      afterPercent: 10,
+      friendlyPercent: 50,
+      friendlyOneOpponent: true,
+    },
+  };
+
+  it("pays one opponent's worth at the friendly share, floored at each step", () => {
+    // 3 opponents out: 91 → 30 (one opponent) → 15 (50 %).
+    expect(friendlyBattleXp(91, 3, rules)).toBe(15);
+    expect(friendlyBattleXp(61, 2, rules)).toBe(15);
+  });
+
+  it("with no KOs the engine's amount is one opponent's worth as is", () => {
+    expect(friendlyBattleXp(5, 0, rules)).toBe(2);
+    expect(friendlyBattleXp(0, 0, rules)).toBe(0);
+  });
+
+  it('each knob is off when left out of the data', () => {
+    const plain = { fullWinsPerDay: 7, afterPercent: 10 };
+    const percentOnly = { ...plain, friendlyPercent: 50 };
+    expect(friendlyBattleXp(90, 3, { battleXpFalloff: percentOnly })).toBe(45);
+    const oneOnly = { ...plain, friendlyOneOpponent: true };
+    expect(friendlyBattleXp(90, 3, { battleXpFalloff: oneOnly })).toBe(30);
+    expect(friendlyBattleXp(90, 3, {})).toBe(90);
+  });
+
+  it("ships the owner's rule: one opponent at 50 %", () => {
+    expect(GROWTH_RULES.battleXpFalloff?.friendlyOneOpponent).toBe(true);
+    expect(GROWTH_RULES.battleXpFalloff?.friendlyPercent).toBe(50);
   });
 });
 

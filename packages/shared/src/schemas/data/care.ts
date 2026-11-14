@@ -184,12 +184,23 @@ export const GrowthRulesSchema = z
     /**
      * Battle XP falls off per squishy per map-local day: full XP while it has
      * won fewer than `fullWinsPerDay` battles today, then `afterPercent` of
-     * it. Optional: left out, every battle pays in full.
+     * it. A friendly battle counts toward `fullWinsPerDay` win or lose (#728).
+     * Optional: left out, every battle pays in full.
      */
     battleXpFalloff: z
       .strictObject({
         fullWinsPerDay: z.number().int().min(1),
         afterPercent: z.number().int().min(0).max(100),
+        /**
+         * A friendly battle's share (%) of its XP (#728), taken before care ×
+         * habitat and the falloff. Optional: left out, friendlies pay in full.
+         */
+        friendlyPercent: z.number().int().min(1).max(100).optional(),
+        /**
+         * A friendly battle pays one opponent's worth (#728): the engine's XP
+         * ÷ the opponents tuckered out (at least 1). Optional: left out, off.
+         */
+        friendlyOneOpponent: z.boolean().optional(),
       })
       .optional(),
   })

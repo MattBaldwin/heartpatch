@@ -67,5 +67,15 @@ export const GROWTH_RULES: GrowthRules = {
   // TUNE: owner decision 2026-10-06 (design review, engaged kids): full battle
   // XP for a squishy's first 7 wins of the map-local day, then 10%. A casual
   // kid (about 7 battles a day) never reaches it; `pnpm sim:progression`.
-  battleXpFalloff: { fullWinsPerDay: 7, afterPercent: 10 },
+  // A friendly battle (#728, owner decision 2026-11-14, option 1) pays one
+  // opponent's worth: the engine's XP ÷ the opponents tuckered out, then
+  // `friendlyPercent` of that, before care × habitat and the falloff. The
+  // engine sums every KO, and a friendly KOs a whole team, so paid in full
+  // two friends snowballed (+10 levels by day 14 in `pnpm sim:progression`).
+  battleXpFalloff: {
+    fullWinsPerDay: 7,
+    afterPercent: 10,
+    friendlyPercent: 50, // TUNE: owner-approved lever (#728); engaged day 14: 39 / 39 vs `now` 41
+    friendlyOneOpponent: true, // TUNE: owner decision 2026-11-14 (#728 option 1)
+  },
 };

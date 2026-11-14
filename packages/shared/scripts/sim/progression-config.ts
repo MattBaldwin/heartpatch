@@ -53,17 +53,20 @@ export interface ProgressionRules {
    * Friendly battles (#728), or none: each day, after training and exploring
    * and before tile tries, the map's two kids play `perDay[kid]` friendlies,
    * team against team (both AI), on top of their `battlesPerDay`. Both sides
-   * earn the engine's XP (the winner's 1.5×, the loser's 1×) × `xpPercent` %,
-   * care × habitat, under the daily falloff, and every friendly counts toward
-   * `fullWinsPerDay` win or lose (the #728 rule). Played first, so their XP
-   * comes before the falloff thins anything.
+   * earn the engine's XP (the winner's 1.5×, the loser's 1×), one opponent's
+   * worth with `oneOpponent`, then × `xpPercent` % (`friendlyBattleXp`, as
+   * the battles service pays it), care × habitat, under the daily falloff,
+   * and every friendly counts toward `fullWinsPerDay` win or lose (the #728
+   * rule). Played first, so their XP comes before the falloff thins anything.
    */
   readonly friendlies?: {
     readonly perDay: Readonly<Record<string, number>>;
+    /** `GROWTH_RULES.battleXpFalloff.friendlyPercent` in the shipped data. */
     readonly xpPercent: number;
     /**
-     * A proposed rule, not the approved one: pay a friendly as one opponent's
-     * worth (the engine's XP ÷ opponents tuckered out, the average one's level).
+     * Pay a friendly as one opponent's worth (the engine's XP ÷ opponents
+     * tuckered out): `GROWTH_RULES.battleXpFalloff.friendlyOneOpponent`
+     * in the shipped data (owner decision 2026-11-14, #728 option 1).
      */
     readonly oneOpponent?: boolean;
   };
@@ -85,13 +88,13 @@ export interface ProgressionRules {
 }
 
 /**
- * Friendly XP as a percent of the engine's. 728b adds
- * `GROWTH_RULES.battleXpFalloff.friendlyPercent` (owner: 100); until then
- * the sim uses its own 100, and reads the data field once it exists.
+ * Friendly XP as the battles service pays it (#728b): the shipped
+ * `GROWTH_RULES.battleXpFalloff` knobs, so the sim and production can't drift.
  */
-const falloff: { readonly fullWinsPerDay?: number; readonly friendlyPercent?: number } =
-  GROWTH_RULES.battleXpFalloff ?? {};
-export const FRIENDLY_XP_PERCENT = falloff.friendlyPercent ?? 100; // TUNE: until 728b's data field
+export const SHIPPED_FRIENDLY_XP = {
+  xpPercent: GROWTH_RULES.battleXpFalloff?.friendlyPercent ?? 100,
+  oneOpponent: GROWTH_RULES.battleXpFalloff?.friendlyOneOpponent ?? false,
+} as const;
 
 /**
  * The shipped Training Grounds at their top level, trained a whole capped
@@ -192,16 +195,17 @@ export const WITH_EXPLORE_RULES: ProgressionRules = {
 
 /**
  * The shipped data plus #728's friendlies and defences: both kids on the map
- * play friendlies against each other and try each other's land. Not shipped
- * yet (728b pays friendlies), so it isn't `CURRENT_RULES`; the report holds
- * the engaged kid's day-14 level to `FRIENDLY_GATE` of the shipped pace.
+ * play friendlies against each other and try each other's land. A variant,
+ * not `CURRENT_RULES`, because how often kids play each other is a guess;
+ * the report holds the engaged kid's day-14 level to `FRIENDLY_GATE` of the
+ * shipped pace.
  */
 export const WITH_FRIENDLIES_RULES: ProgressionRules = {
   ...CURRENT_RULES,
   label: 'now + friendlies',
   friendlies: {
     perDay: { casual: 1, engaged: 3 }, // TUNE: #728 plan §9, the realistic volume
-    xpPercent: FRIENDLY_XP_PERCENT,
+    ...SHIPPED_FRIENDLY_XP,
   },
   defences: {
     shieldDays: Math.ceil(TERRITORY_RULES.newPlayerShieldHours / 24),

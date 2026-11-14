@@ -30,7 +30,7 @@ import { creditCoins } from '../coins/service.js';
 import { creditHeartCoins } from '../heart-coins/service.js';
 import { createRaidsConsumer } from '../raids/consumer.js';
 import { createBattlesRepo } from './repo.js';
-import { sideBRefId } from './service.js';
+import { sideBRefId } from '../../lib/side-b-ref.js';
 import { bigMove } from '../../../tests/big-move.js';
 
 const url = inject('testDatabaseUrl');
@@ -59,16 +59,6 @@ const uuid = (value: string) => {
 };
 const DEFENSE_PATCH = COIN_RULES.defenseWin['rival-tile'];
 const DEFENSE_HEART = HEART_COIN_RULES.defenseWin['rival-tile'];
-
-describe('side b’s coin key (#728)', () => {
-  it('sideBRefId is stable and differs from the battle id', () => {
-    const battleId = uuidv7();
-    expect(sideBRefId(battleId)).toBe(sideBRefId(battleId));
-    expect(sideBRefId(battleId)).not.toBe(battleId);
-    expect(sideBRefId(battleId)).toMatch(UUID);
-    expect(sideBRefId(uuidv7())).not.toBe(sideBRefId(battleId));
-  });
-});
 
 interface Player {
   id: string;
@@ -366,7 +356,8 @@ describe.skipIf(!url)('a won defence pays the defender (#728, needs DATABASE_URL
       unpaid: 'guardians',
     });
     expect(await ledgerOf(sideBRefId(done.id))).toEqual({ patch: [], heart: [] });
-    expect((await endedOf(mapId, done.id)).defender).toEqual({ userId: sam.id, xp: [] });
+    // Nothing earned: no `defender` block on the event (#790 follow-up).
+    expect((await endedOf(mapId, done.id)).defender).toBeUndefined();
     const raid = (await raidsOf(server, sam, mapId)).find((r) => r.battleId === done.id);
     expect(raid?.earned).toBeNull();
   });
@@ -563,6 +554,7 @@ describe.skipIf(!url)('a won defence pays the defender (#728, needs DATABASE_URL
       percent: 100,
       fullXpResetAt: stored.b!.fullXpResetAt,
       coins: stored.b!.coins,
+      unpaid: stored.b!.unpaid,
       b: stored.b,
     });
     // Side a still sees its own stored rewards.

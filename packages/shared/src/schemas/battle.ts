@@ -397,10 +397,11 @@ const RewardCoinsSchema = z.object({
 });
 
 /**
- * Why side `b` was credited no coins (#728): the challenger scooted home
- * (coins never pay for a scoot, owner decision 2026-11-14), the pair's
- * paid wins today are used up (#728b), or the land's guardians held it
- * alone (nobody on watch, nobody played it live).
+ * Why a winning side was credited no win coins (#728): the other side
+ * scooted home (coins never pay for a scoot, owner decision 2026-11-14), a
+ * friendly's paid wins over that patch-mate today are used up
+ * (`paidWinsPerPairPerDay`), or the land's guardians held it alone (nobody
+ * on watch, nobody played it live; side `b` only).
  */
 export const UnpaidReasonSchema = z.enum(['scooted', 'pair-cap', 'guardians']);
 export type UnpaidReason = z.infer<typeof UnpaidReasonSchema>;
@@ -421,8 +422,15 @@ export const BattleRewardsSchema = z.object({
    */
   coins: RewardCoinsSchema.nullable().default(null),
   /**
-   * Side `b`'s rewards (#728): the Keeper whose land held. Null when side
-   * `b` earned nothing (lost, a tie, a battle with no Keeper on side `b`)
+   * Set when side `a` won but got no win coins (#728): it was a scoot
+   * (`'scooted'`), or a friendly past `paidWinsPerPairPerDay` over that
+   * patch-mate today (`'pair-cap'`). Null otherwise and for older battles.
+   */
+  unpaid: UnpaidReasonSchema.nullable().default(null),
+  /**
+   * Side `b`'s rewards (#728): the Keeper whose land held, or a friendly
+   * battle's side-`b` player, win or lose. Null when side `b` earned
+   * nothing (a lost defence, a tie, a battle with no Keeper on side `b`)
    * and for battles stored before it. Gentle's share never applies to it.
    */
   b: z

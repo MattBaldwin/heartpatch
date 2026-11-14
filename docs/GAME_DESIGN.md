@@ -73,7 +73,7 @@ New players experience this story in the opening cinematic (§25) and the tutori
 - **Multiplayer model: hybrid.**
   - The world is **persistent and asynchronous**: state lives in Postgres; timers (mining, training, care decay) resolve from timestamps.
   - Attacks on an offline defender resolve server-side using the defender's **defense stance**.
-  - **Live battles** (#29, Phase 1; owner decision 2026-10-09) happen when both players are online: a friendly battle (nothing at stake, any PvP mode) or a live tile defense. Both players pick at the same time and the turn plays when both have; a player who runs out of time gets an AI pick for that turn, never a loss.
+  - **Live battles** (#29, Phase 1; owner decision 2026-10-09) happen when both players are online: a friendly battle (any PvP mode; both sides earn a little XP and the winner a few coins, paid for at most **[DEFAULT: 3]** wins over the same patch-mate a day) or a live tile defense. Both players pick at the same time and the turn plays when both have; a player who runs out of time gets an AI pick for that turn, never a loss.
 - Map size scales with players **[DEFAULT]**: hex radius 9 (2 players, 271 tiles), 11 (3 players, 397), 12 (4 players, 469), 16 (6 players, 817). New patches are made for 6 (#318); older ones stay at 4. Home bases are placed evenly around Juniper's Gap. A home nobody has joined yet is saved for the next Keeper: its home tiles can't be taken, faded or reclaimed, and the land around it is ordinary wild land.
 
 ## 4. Squishies

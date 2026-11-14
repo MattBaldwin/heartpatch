@@ -6,10 +6,11 @@ import {
   NO_TRAINING_RULES,
   WITH_EXPLORE_RULES,
   WITH_FRIENDLIES_RULES,
-  FRIENDLY_XP_PERCENT,
+  SHIPPED_FRIENDLY_XP,
   PROGRESSION_CONFIG,
   type ProgressionConfig,
 } from './progression-config.js';
+import { GROWTH_RULES } from '../../src/data/care.js';
 import { JOURNEY_RULES } from '../../src/data/journeys.js';
 import {
   formatFriendlyGate,
@@ -214,7 +215,12 @@ describe('friendlies and defences (#728)', () => {
     const run = runProgression(data, SMALL, WITH_FRIENDLIES_RULES, engaged!, 4);
     const perDay = WITH_FRIENDLIES_RULES.friendlies?.perDay['engaged'];
     expect(perDay).toBe(3);
-    expect(WITH_FRIENDLIES_RULES.friendlies?.xpPercent).toBe(FRIENDLY_XP_PERCENT);
+    // The variant reads the shipped knobs (#728b), so the sim pays what the server does.
+    expect(WITH_FRIENDLIES_RULES.friendlies).toMatchObject(SHIPPED_FRIENDLY_XP);
+    expect(SHIPPED_FRIENDLY_XP).toEqual({
+      xpPercent: GROWTH_RULES.battleXpFalloff?.friendlyPercent,
+      oneOpponent: GROWTH_RULES.battleXpFalloff?.friendlyOneOpponent,
+    });
     for (const kid of run.kids) {
       for (const day of kid.days) {
         expect(day.friendlies).toBe(perDay);
@@ -225,9 +231,11 @@ describe('friendlies and defences (#728)', () => {
     for (const day of now.kids.flatMap((k) => k.days)) {
       expect([day.friendlies, day.defences, day.defencesHeld]).toEqual([0, 0, 0]);
     }
-    // Friendly XP lands: the pair's leader is ahead of the shipped pace after a few days.
+    // One opponent's worth at 50 % (#728b): no snowball, the pair's leader
+    // stays within a level of the shipped pace (that friendly XP lands at
+    // all is the call-site test below).
     const level = (r: typeof run) => Math.max(...r.kids.map((k) => k.days.at(-1)!.partnerLevel));
-    expect(level(run)).toBeGreaterThan(level(now));
+    expect(level(run)).toBeLessThanOrEqual(level(now) + 1);
   }, 30_000);
 
   it("picks the other kid's tiles only after the shield, under the loss cap, outside home rings", () => {
@@ -307,16 +315,32 @@ describe('friendlies and defences (#728)', () => {
     }
   }, 30_000);
 
-  it('pays a friendly as one opponent with `oneOpponent` (a proposed rule)', () => {
+  it("adds a friendly's XP to the day's Partner XP (the call site, 728d follow-up)", () => {
+    // No battles or tile tries of their own: the friendlies are the day's only battle XP.
+    const idle = { ...engaged!, battlesPerDay: 0 };
+    const rules = { ...WITH_FRIENDLIES_RULES, defences: undefined };
+    const day1 = (r: typeof rules | typeof CURRENT_RULES) =>
+      runProgression(data, { ...SMALL, days: 1 }, r, idle, 4).kids.map((k) => k.days[0]!);
+    const without = day1(CURRENT_RULES);
+    const withFriendlies = day1(rules);
+    withFriendlies.forEach((day, k) => {
+      expect(day.friendlies).toBeGreaterThan(0);
+      expect(day.partnerXp).toBeGreaterThan(without[k]!.partnerXp);
+    });
+  }, 30_000);
+
+  it('pays a friendly as one opponent with `oneOpponent`, and less at a lower `xpPercent`', () => {
     const one = {
       ...WITH_FRIENDLIES_RULES,
       defences: undefined,
-      friendlies: { ...WITH_FRIENDLIES_RULES.friendlies!, oneOpponent: true },
+      friendlies: { ...WITH_FRIENDLIES_RULES.friendlies!, oneOpponent: true, xpPercent: 100 },
     };
     const full = { ...one, friendlies: { ...one.friendlies, oneOpponent: false } };
+    const half = { ...one, friendlies: { ...one.friendlies, xpPercent: 50 } };
     const xp = (rules: typeof one) =>
       runProgression(data, { ...SMALL, days: 1 }, rules, engaged!, 4).kids[0]!.days[0]!.partnerXp;
     expect(xp(one)).toBeLessThan(xp(full));
+    expect(xp(half)).toBeLessThan(xp(one));
   }, 30_000);
 
   it("gates the day's level move", () => {
