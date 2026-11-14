@@ -216,7 +216,11 @@ The supervisor keeps this list current. Remove items as they land.
     - **#797 (728b, friendly battles pay, server).** Head `df243de`.
       - Round 1: Fable APPROVE; Opus REQUEST CHANGES (two missing tests), verdict at #797 #issuecomment-6878599067. CI 13/14 green at the sweep.
       - The fix lane (`session_01RAEPnFLAjgmvzBZjxf9Hv3`, $5.28, archived) pushed `c118829`. It fixed both round-1 blockers, then a round-2 blocker of its own: re-checking side a in every battle kind dropped solo-rescue XP, so side a is now re-checked in friendlies only. Its Lane handoff is #728 #issuecomment-6879293224.
-      - Supervisor 40 started a round-3 Opus reviewer on `c118829` at ~15:01 UTC. If no verdict naming `c118829` is on #797, run a fresh one yourself, then merge on APPROVE@head + green + the #736 gate (firsts rows in the body).
+      - **Round 3: Opus APPROVE on `c118829`** (#797 #issuecomment-6879587915). All three earlier blockers are resolved with tests.
+      - **But CI on `c118829` is red: `e2e (iphone-webkit, 1)`, `hollowed-restore.spec.ts:150`, on both tries.** After the player wins and names the grey village, the client's community flags poll returns `[]`.
+        - The reviewer judges it very likely unrelated. Every server step before :150 passed, and the PR changes no client code.
+        - **However**, the same spec passed on #797's earlier head `df243de` and on main's last four runs (`968c69c`, `7543212`, `457ba09`, `74a842d`), so it is not a known flake.
+        - Before merging, get the owner to re-run that job (sessions get 403 on re-runs) or push a no-op only if the owner agrees. Never push an empty commit to kick CI. If it fails again, brief a small lane to bisect `df243de..c118829` against hollowed-restore. The fix lane's changes touched `hollow.test.ts` and the side-a re-check.
       - Then brief **728c** (client: friendly result card, which still says "Friendly battles give no XP" at `live-turn.ts:41`; Challenge report; a `changes/` entry; captures + Opus render-check + owner approval). 728c should follow 728b closely, because main auto-deploys and the card is wrong until 728c lands.
     - **#784 (WebKit CI stalls).** Main `74a842d` was green on all 12 WebKit groups. That is 1 of the 3 green runs needed to close it.
       - If `recipe-book.spec` (ipad group 1) goes red again, brief a small test lane to read its taps against `still()` / `settled()`. The `layout-overlaps` fade race was found that way: `panel-fit.ts` sets `data-more` one frame later.
@@ -224,7 +228,7 @@ The supervisor keeps this list current. Remove items as they land.
     - **#732 B (per-tier Catalog goal):** start after #794 merges. Brief it for real captures + a render-check + owner approval before merge.
     - **#732 D:** a Fable plan after 728b.
   - **Next** (in order):
-    1. Get the #797 round-3 verdict.
+    1. Settle #797's hollowed-restore red (re-run or bisect), then merge.
     2. Re-ask the #794 question.
     3. Merge #797 on the gates, then start 728c.
     4. The friendly-falloff owner question.
