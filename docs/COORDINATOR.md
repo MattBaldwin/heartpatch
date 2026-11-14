@@ -193,6 +193,48 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
+- **State (supervisor 40 handoff, 2026-11-14 ~14:40 UTC): read this first; the supervisor 39 block below is history.** Main is `74a842d` (#796). Supervisor 40 (`session_01RAEPnFmN4Fa5pTVfPPDfs3`, Opus, **depth 7, the last allowed**) stopped at about 275k context and ~$15. **The owner starts supervisor 41 from a fresh session (§8.5)**, so the lineage restarts at depth 1. No migrations since 0063.
+  - **Merged under supervisor 40:**
+    - #795 (docs, `7543212`).
+    - #788 (#784: e2e players without Web Audio, `457ba09`).
+    - #796 (`Chore:` `LP_NUM_THREADS: 1` in the e2e job + a `layout-overlaps` fade retry, `74a842d`). Merged with `recipe-book.spec` red in ipad-webkit group 1; that spec was also red on main's last three runs.
+    - Archived: supervisor 39 ($10.14), the #34 lane 2 ($9.34), the #784c lane ($7.61), the 728b lane ($6.94).
+  - **Owner decision (2026-11-14): #728 friendly XP = option 1**, recorded at #728 #issuecomment-6877762813. A friendly pays engine XP ÷ max(1, KO'd opponents), floored, × `friendlyPercent` 50. Both knobs are in `GROWTH_RULES`; the sim reads the same data.
+  - **OWNER QUESTION PENDING: #794 SHIP-OK / ONE MORE ROUND.** Asked 2026-11-14 ~13:12 UTC.
+    - The owner was sent 5 images (front Pip, front Bramble, eye-level Rowan, back Bramble, Rowan 3/4) and the captures page https://claude.ai/artifact/WnQkNdWUk2Pn5QKZkEDb9V.
+    - Honest notes given: the back reads bubbly/peaches more than leafy, and 3 spare pieces could add flat leaves. In Rowan's 3/4 view a side leaf covers the far eye.
+    - #794 is otherwise ready: reviewer APPROVE on `ec9cdfb` (#794 #issuecomment-6875845150), Opus render-check PASS, CI 15/15 green.
+    - On SHIP-OK, merge (squash, `ec9cdfb`) and start the #732 B lane (it touches `milestones.ts` too; see below).
+    - On ONE MORE ROUND, brief a fresh small lane from the #34 Lane handoff (#34 #issuecomment-6875598264), then render-check and re-ask.
+  - **NEXT OWNER QUESTION (ask only after #794 is answered): friendlies slow levelling.**
+    - Both #797 reviewers measured it. Each paid friendly uses one of a squishy's 7 full-XP falloff slots (`winsToday`) but pays at most half of one opponent's worth, so a later wild win drops to 10%.
+    - Sim, engaged: day 14 is 39/39 vs `now` 41; day 30 is 50/50 vs 54. Casual: day 14 is 30/30 vs 31/32.
+    - The owner approved option 1 when it showed −1. On today's main it is −2 to −4. The gate only limits gains (at most +1), so it passes.
+    - Options to offer, recommended first: (1) friendlies don't use a falloff slot (measure it first with the sim before asking; it must still pass the +1 gate); (2) keep it as is.
+    - Check the code before stating any numbers.
+  - **Open at handoff:**
+    - **#797 (728b, friendly battles pay, server).** Head `df243de`.
+      - Round 1: Fable APPROVE; Opus REQUEST CHANGES (two missing tests), verdict at #797 #issuecomment-6878599067. CI 13/14 green at the sweep.
+      - The fix lane (`session_01RAEPnFLAjgmvzBZjxf9Hv3`, $5.28, archived) pushed `c118829`. It fixed both round-1 blockers, then a round-2 blocker of its own: re-checking side a in every battle kind dropped solo-rescue XP, so side a is now re-checked in friendlies only. Its Lane handoff is #728 #issuecomment-6879293224.
+      - **Round 3: Opus APPROVE on `c118829`** (#797 #issuecomment-6879587915). All three earlier blockers are resolved with tests.
+      - **But CI on `c118829` is red: `e2e (iphone-webkit, 1)`, `hollowed-restore.spec.ts:150`, on both tries.** After the player wins and names the grey village, the client's community flags poll returns `[]`.
+        - The reviewer judges it very likely unrelated. Every server step before :150 passed, and the PR changes no client code.
+        - **However**, the same spec passed on #797's earlier head `df243de` and on main's last four runs (`968c69c`, `7543212`, `457ba09`, `74a842d`), so it is not a known flake.
+        - Before merging, get the owner to re-run that job (sessions get 403 on re-runs) or push a no-op only if the owner agrees. Never push an empty commit to kick CI. If it fails again, brief a small lane to bisect `df243de..c118829` against hollowed-restore. The fix lane's changes touched `hollow.test.ts` and the side-a re-check.
+      - Then brief **728c** (client: friendly result card, which still says "Friendly battles give no XP" at `live-turn.ts:41`; Challenge report; a `changes/` entry; captures + Opus render-check + owner approval). 728c should follow 728b closely, because main auto-deploys and the card is wrong until 728c lands.
+    - **#784 (WebKit CI stalls).** Main `74a842d` was green on all 12 WebKit groups. That is 1 of the 3 green runs needed to close it.
+      - If `recipe-book.spec` (ipad group 1) goes red again, brief a small test lane to read its taps against `still()` / `settled()`. The `layout-overlaps` fade race was found that way: `panel-fit.ts` sets `data-more` one frame later.
+      - Status comment: #784 #issuecomment-6878173918.
+    - **#732 B (per-tier Catalog goal):** start after #794 merges. Brief it for real captures + a render-check + owner approval before merge.
+    - **#732 D:** a Fable plan after 728b.
+  - **Next** (in order):
+    1. Settle #797's hollowed-restore red (re-run or bisect), then merge.
+    2. Re-ask the #794 question.
+    3. Merge #797 on the gates, then start 728c.
+    4. The friendly-falloff owner question.
+    5. #732 B.
+    6. #784 watch.
+    7. The §9 items from supervisor 39's "Next" (4): client push `Chore:`, Sprout's week-two tips, #729 after #728, the owner's real-phone push test.
 - **State (supervisor 39 handoff, 2026-11-14 ~10:10 UTC):** main `968c69c` (#789). Supervisor 39 (`session_01RAEPnEZCYauyhLt7CYBDhk`, Opus) hands to supervisor 40 at ~260k, ~$9. Migrations through 0063 (no migrations since). Supervisors 1–38 are archived. **Supervisors run on Opus** (owner, 2026-11-01): check `get_session` `configured_model` at takeover.
   - **Merged under supervisor 32:** #757 (docs), #761 (family-code hint in Join a patch), #760 (Wild Isle sea-to-sea rivers), #762 (e2e map clock no longer depends on the hour), #759 (726a push contract, migration 0063), #758 (Long Night on for everyone via the compose default, merged after Hawaii's nightfall so the first Night is Sat Nov 7), #764 (knocks test flake: `relayoutHomes(…, mapIds?)`), #763 (726b push module: subscribe, settings, sender), #765 (docs), #766 (landscape name pill never sits under the corner buttons).
   - **Merged under supervisor 33:** #767 (docs), #768 (`Chore:` `deploy.sh` warns when `.env` sets `HP_LONG_NIGHT` to anything but `on`; warn only), #769 (726c push sweep), #770 (docs), #771 (726d a friend is here: hub `onSubscribed`, `friendArrived`, shared `send.ts`), #772 (726e1 push client plumbing: zod-free 16 KB worker, `push-client.ts` with the tap rule, self-heal, logout unsubscribe).
@@ -293,6 +335,13 @@ The supervisor keeps this list current. Remove items as they land.
   - #696 reviewer nit: the $20 stop applies per lane, not per supervisor.
   - #694 nits: `// TUNE:` markers on the cap/rope ratios; the untested `top` branch of `logCap`.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
+- **Lessons (2026-11-14, supervisor 40):**
+  - **Faster CI exposes test races that starvation hid.** Removing the CPU starvation (#788 Web Audio, #796 llvmpipe threads) made `layout-overlaps` run in about 1 min instead of 5–8, and a one-frame `data-more` race surfaced. Read the assertion against the app's frame scheduling before calling a new red "flaky".
+  - **The heartbeat names the hog.** `runnable` thread counts in the #784 heartbeat annotations went from `webaudioSrc` to `llvmpipe-N`. Each fix showed up as the next thread to remove. Read them from the job logs (`gh api .../actions/jobs/<id>/logs`, grep `loadPerCore`).
+  - **Lanes hit 250k+ in under 30 min on big server work.** The 728b lane reached 265k in 26 min ($6.10). For big features, brief "open the PR and hand off at ~150k; the supervisor runs the reviewers" from the start, and run round 1 (Opus + Fable) as background subagents yourself.
+  - **Reviewers leave Postgres clusters running** (`/var/tmp/hp-pg-*`). Stop them with `pg_ctl -D <dir>/data stop` as the `postgres` user; they cost CPU in later test runs.
+  - **Supervisor context grows fast with subagent reports and CI log reads.** I reached ~270k in 4.5 h. At depth 7, start writing the repo handoff by ~250k.
+  - **Costs:** render-check ~120k subagent tokens; reviewers 28–140k each; the #784c lane $7.61; the 728b lane $6.94; supervisor 40 ~$15.
 - **Lessons (2026-11-14, supervisor 39):**
   - **A restart is not a finished turn (third supervisor in a row).** I answered two restarts with "No response requested" while the #728 question was pending. After every restart, re-ask any pending owner question first; when dialogs die twice, ask in prose and keep restating it each sweep.
   - **Measure the fix before asking.** 728d's first numbers were wrong (one kid only; friendlies snowball). Asking the lane to measure its own suggestion before the owner question caught it; the corrected table changed which option passes.
