@@ -3,6 +3,9 @@ import { BATTLE_RULES } from '../../src/data/battle.js';
 import { GUARDIAN_RULES } from '../../src/data/server/guardian-rules.js';
 import {
   CURRENT_RULES,
+  FRIENDLY_GATE,
+  WITH_FRIENDLIES_RULES,
+  type FriendlyGate,
   type ProgressionConfig,
   type ProgressionRules,
 } from './progression-config.js';
@@ -72,6 +75,123 @@ export function summarise(run: ProgressionRun, config: ProgressionConfig): RunSu
     landFull: first(days, (d) => d.neutralLeft === 0)?.day ?? null,
     level: Object.fromEntries(days.map((d) => [d.day, d.partnerLevel])),
   };
+}
+
+/**
+ * #728's gate: the gated kind's Partner level on the gate day, without and
+ * with friendlies, for the kid of the pair it moves most (friendlies
+ * snowball: the winner earns more and wins more, so one kid races ahead
+ * while the other falls behind; kid 0 alone can read either way).
+ */
+export interface FriendlyGateResult {
+  readonly kid: string;
+  /** The kid of the pair whose level moved most (0 or 1). */
+  readonly slot: number;
+  readonly day: number;
+  readonly seats: number;
+  readonly before: number;
+  readonly after: number;
+  readonly delta: number;
+  readonly maxLevels: number;
+  readonly passes: boolean;
+}
+
+/**
+ * `FRIENDLY_GATE` over `runs`: both kids of the gated kind on the first map
+ * size, `CURRENT_RULES` against `WITH_FRIENDLIES_RULES`, the larger rise
+ * counting. Null when a run is missing.
+ */
+export function friendlyGate(
+  runs: readonly ProgressionRun[],
+  config: ProgressionConfig,
+  gate: FriendlyGate = FRIENDLY_GATE,
+): FriendlyGateResult | null {
+  const seats = config.seats[0] ?? 0;
+  const levelsOf = (rules: ProgressionRules) => {
+    const run = runs.find(
+      (r) => r.rules === rules && r.seats === seats && r.profile.id === gate.kid,
+    );
+    const levels = (run?.kids ?? []).flatMap((k) => k.days[gate.day - 1]?.partnerLevel ?? []);
+    return levels.length === 2 ? levels : null;
+  };
+  const was = levelsOf(CURRENT_RULES);
+  const now = levelsOf(WITH_FRIENDLIES_RULES);
+  if (!was || !now) return null;
+  const deltas = now.map((level, k) => level - (was[k] ?? 0));
+  const delta = Math.max(...deltas);
+  const slot = deltas.indexOf(delta);
+  const before = was[slot] ?? 0;
+  const after = now[slot] ?? 0;
+  return {
+    kid: gate.kid,
+    slot,
+    day: gate.day,
+    seats,
+    before,
+    after,
+    delta,
+    maxLevels: gate.maxLevels,
+    passes: delta <= gate.maxLevels,
+  };
+}
+
+export function formatFriendlyGate(result: FriendlyGateResult): string {
+  const sign = result.delta >= 0 ? '+' : '';
+  return (
+    `friendly gate (#728): ${result.kid} kid ${String(result.slot)} Partner Lv ${String(result.before)} → ${String(result.after)} ` +
+    `on day ${String(result.day)} (${sign}${String(result.delta)}, at most +${String(result.maxLevels)}): ` +
+    (result.passes ? 'PASS' : 'FAIL')
+  );
+}
+
+/** Sums a kid's day records up to and including `day`. */
+const upTo = (days: readonly DayRecord[], day: number, field: 'defences' | 'defencesHeld') =>
+  days.filter((d) => d.day <= day).reduce((n, d) => n + d[field], 0);
+
+/** The friendlies and defences table (#728) and its gate. */
+function renderFriendlies(runs: readonly ProgressionRun[], config: ProgressionConfig): string[] {
+  const these = runs.filter((r) => r.rules === CURRENT_RULES || r.rules === WITH_FRIENDLIES_RULES);
+  const gate = friendlyGate(runs, config);
+  if (!gate || !WITH_FRIENDLIES_RULES.friendlies) return [];
+  const { friendlies, defences } = WITH_FRIENDLIES_RULES;
+  return [
+    '## Friendlies and defences (#728)',
+    '',
+    `\`${WITH_FRIENDLIES_RULES.label}\`: the map's two kids play ${config.kids.map((k) => `${String(friendlies.perDay[k.id] ?? 0)} (${k.id})`).join(' / ')} friendlies a day against each other on top of their battles, both sides paid at ${String(friendlies.xpPercent)} % of the engine's XP, every friendly counting toward the falloff win or lose; their tile tries also weigh each other's land outside the home ring${defences ? ` from day ${String(defences.shieldDays + 1)}, at most ${String(defences.lossCapPerDay)} taken from a kid a day, against the owner's first ${String(defences.maxDefenders)} squishies on watch at the Partner level + ${String(defences.guardLevel.partnerBonus)}` : ''}. Levels are kid 0 / kid 1: friendlies snowball (the winner earns more and wins more), so one kid races ahead and the other falls behind, and the gate takes the kid that moves most. The other kid can end below the shipped pace: under win-or-lose counting its lost friendlies use up full-XP falloff slots on loser's XP. Defences: the other kid's tries on kid 0's land (held in brackets; a hold pays the guards XP), an upper bound: here the whole team guards every tile, where on the server a squishy watches one tile and unguarded land falls back to guardians, who earn nothing. Read only the level columns of the firsts table for this variant: its befriend firsts move later because a befriend counts only when it joins the team, and wild squishies rarely beat a team levelled by friendlies. Gate (soft until 728b): ${formatFriendlyGate(gate)} (${String(gate.seats)}-seat map).`,
+    '',
+    markdownTable(
+      [
+        'Rules',
+        'Map seats',
+        'Kid',
+        'Friendlies a day',
+        'Defences by day 14',
+        'Defences by day 30',
+        'Lv day 7 (kid 0 / 1)',
+        'Lv day 14',
+        'Lv day 30',
+      ],
+      these.map((run) => {
+        const level = (day: number) =>
+          run.kids.map((k) => cell(k.days[day - 1]?.partnerLevel ?? null)).join(' / ');
+        const { days } = lead(run);
+        const defence = (day: number) =>
+          `${String(upTo(days, day, 'defences'))} (${String(upTo(days, day, 'defencesHeld'))})`;
+        return [
+          run.rules.label,
+          String(run.seats),
+          run.profile.id,
+          String(run.rules.friendlies?.perDay[run.profile.id] ?? 0),
+          defence(14),
+          defence(30),
+          level(7),
+          level(14),
+          level(30),
+        ];
+      }),
+    ),
+    '',
+  ];
 }
 
 /**
@@ -238,6 +358,7 @@ export function renderProgression(
     ),
     '',
     ...(info.firsts ? renderFirsts(runs, config, info.firsts) : []),
+    ...renderFriendlies(runs, config),
     "## What a Juniper's Gap win pays",
     '',
     'An average Gap team (three guardians at the middle of their levels), at the day the Gap is ready.',

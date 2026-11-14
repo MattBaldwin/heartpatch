@@ -25,6 +25,7 @@ import { spawnWindowAt, type SpawnWindow } from '../../src/spawns/window.js';
 import { resolveGuardians, type GuardianData } from '../../src/territory/guardians.js';
 import { journeyFor, journeyTeam } from '../../src/territory/journeys.js';
 import { isTradingPost } from '../../src/territory/reach.js';
+import { atWatchLevel, watchFloor } from '../../src/territory/watch-level.js';
 import type { JourneyRules } from '../../src/schemas/data/journeys.js';
 import type { KidProfile, ProgressionConfig, ProgressionRules } from './progression-config.js';
 
@@ -46,9 +47,14 @@ import type { KidProfile, ProgressionConfig, ProgressionRules } from './progress
  * Training Grounds (owner decision 2026-10-06): with `rules.training`, the
  * team trains overnight before each day's battles, as an upper bound.
  *
+ * Friendlies and defences (#728): with `rules.friendlies` the two kids play
+ * friendlies each morning, and with `rules.defences` their tile tries weigh
+ * each other's land too, where the owner's team stands guard and a hold pays
+ * the guards XP.
+ *
  * Not modelled (see `MODEL_LIMITS`): care and habitat changes, gathering, the
  * Hollow Man, the capture roll itself (a win stands in for a befriend), and
- * challenging the other kid once neutral land runs out.
+ * (without `rules.defences`) challenging the other kid.
  */
 
 /** What the model leaves out, for the report. */
@@ -57,11 +63,12 @@ export const MODEL_LIMITS = [
   'a won wild battle stands in for a successful Heart Charm',
   'no gathering, crafting or the Hollow Man',
   'exploring: the kid always has the tools, and finds are not counted',
-  'no challenges between the two kids once neutral land runs out',
+  'no challenges between the two kids, except under rules with defences (#728)',
+  'defences: the whole team stands guard on every tile (an upper bound on defence XP)',
 ] as const;
 
 /** One squishy on a kid's team. */
-interface Member {
+export interface Member {
   readonly id: string;
   speciesId: string;
   level: number;
@@ -70,7 +77,7 @@ interface Member {
   winsToday: number;
 }
 
-interface Kid {
+export interface Kid {
   readonly profile: KidProfile;
   readonly slot: number;
   /** The Partner first, then the teammates (the team picker's default order). */
@@ -108,6 +115,14 @@ export interface DayRecord {
   readonly befriended: readonly string[];
   /** Juniper's Gap tiles won today. */
   readonly gapWins: number;
+  /** Friendlies played today (#728), on top of `tileBattles` + `wildBattles`. */
+  readonly friendlies: number;
+  /** The other kid's tries on this kid's land today, and how many held (#728). */
+  readonly defences: number;
+  readonly defencesHeld: number;
+  /** XP the Partner got from holds today, and tiles the other kid took today (#728). */
+  readonly defenceXp: number;
+  readonly tilesLost: number;
 }
 
 export interface KidRun {
@@ -178,6 +193,59 @@ function teamSide(kid: Kid, config: ProgressionConfig): BattleSideSetup {
   };
 }
 
+/** Side b's squishy ids carry this, so a kid's team can fight another kid's. */
+const SIDE_B = 'b:';
+
+/**
+ * A kid's team as side b (ids prefixed): the first `count` members, lifted
+ * to `floor` (`atWatchLevel`) when given.
+ */
+export function sideB(
+  team: readonly { readonly id: string; readonly speciesId: string; readonly level: number }[],
+  config: ProgressionConfig,
+  count = team.length,
+  floor: number | null = null,
+): BattleSideSetup {
+  const squishies = team
+    .slice(0, count)
+    .map((m) => ({ id: `${SIDE_B}${m.id}`, speciesId: m.speciesId, level: m.level }));
+  return {
+    controller: { type: 'ai', policy: config.kidPolicy },
+    squishies: atWatchLevel(squishies, floor),
+  };
+}
+
+/** Plays one battle; returns the winner and each side's base XP by squishy id (side b unprefixed). */
+function duel(
+  data: ModelData,
+  a: BattleSideSetup,
+  b: BattleSideSetup,
+  seed: string,
+): {
+  winner: 'a' | 'b' | null;
+  a: Map<string, number>;
+  b: Map<string, number>;
+  /** Opponents each side tuckered out. */
+  out: { a: number; b: number };
+} {
+  const { state } = autoplayBattle(data.content, { seed, sides: { a, b } });
+  if (state.phase.type !== 'over') throw new Error('autoplay always finishes');
+  const { result } = state.phase;
+  const xpOf = (side: 'a' | 'b') =>
+    new Map(
+      result.xp
+        .filter((x) => x.side === side)
+        .map((x) => [
+          x.squishyId.startsWith(SIDE_B) ? x.squishyId.slice(SIDE_B.length) : x.squishyId,
+          x.xp,
+        ]),
+    );
+  const winner = result.winner === 'draw' ? null : result.winner;
+  const outOf = (side: 'a' | 'b') =>
+    state.sides[side].squishies.filter((sq) => sq.energy === 0).length;
+  return { winner, a: xpOf('a'), b: xpOf('b'), out: { a: outOf('b'), b: outOf('a') } };
+}
+
 /** Plays one battle; returns whether the kid won and the base XP each member earned. */
 function play(
   data: ModelData,
@@ -186,23 +254,22 @@ function play(
   opponent: BattleSideSetup,
   seed: string,
 ): { won: boolean; xp: Map<string, number> } {
-  const { state } = autoplayBattle(data.content, {
-    seed,
-    sides: { a: teamSide(kid, config), b: opponent },
-  });
-  if (state.phase.type !== 'over') throw new Error('autoplay always finishes');
-  const { result } = state.phase;
-  const xp = new Map(result.xp.filter((a) => a.side === 'a').map((a) => [a.squishyId, a.xp]));
-  return { won: result.winner === 'a', xp };
+  const result = duel(data, teamSide(kid, config), opponent, seed);
+  return { won: result.winner === 'a', xp: result.a };
 }
 
-/** Grants battle XP to the members who joined, through the real growth rules. */
-function grant(
+/**
+ * Grants battle XP to the members who joined, through the real growth rules.
+ * `counts`: the battle counts toward the falloff (a win; any friendly, #728).
+ * `percent`: a share of the engine's XP (friendlies' `xpPercent`).
+ */
+export function grant(
   data: ModelData,
   kid: Kid,
   rules: ProgressionRules,
   xp: ReadonlyMap<string, number>,
   won: boolean,
+  { counts = won, percent = 100 }: { counts?: boolean; percent?: number } = {},
 ): number {
   let partnerXp = 0;
   for (const member of kid.team) {
@@ -210,8 +277,9 @@ function grant(
     if (engine === undefined) continue;
     // The daily falloff, as the battles service applies it: on the base XP,
     // from the wins before this battle.
-    const base = Math.floor((engine * battleXpPercent(member.winsToday, rules.growth)) / 100);
-    if (won) member.winsToday += 1;
+    const falloff = battleXpPercent(member.winsToday, rules.growth);
+    const base = Math.floor((engine * falloff * percent) / 10_000);
+    if (counts) member.winsToday += 1;
     const gained = grantedXp(base, kid.profile.xpPercent);
     if (member === kid.team[0]) partnerXp += gained;
     grow(data, kid, member, rules, gained);
@@ -280,6 +348,94 @@ function estimateOdds(
   });
 }
 
+/** The team's estimated win chance (%) against the other kid's guards today (#728). */
+function estimateRivalOdds(
+  data: ModelData,
+  kid: Kid,
+  rival: Kid,
+  config: ProgressionConfig,
+  defences: NonNullable<ProgressionRules['defences']>,
+  day: number,
+): number {
+  const floor = watchFloor(rival.team[0]?.level ?? null, defences.guardLevel);
+  const guards = sideB(rival.team, config, defences.maxDefenders, floor);
+  let wins = 0;
+  for (let i = 0; i < config.estimateGames; i++) {
+    const seed = deriveSeed(config.rootSeed, 'rival-odds', kid.profile.id, kid.slot, day, i);
+    if (play(data, kid, config, guards, seed).won) wins += 1;
+  }
+  return Math.floor((wins * 100) / config.estimateGames);
+}
+
+/**
+ * Friendly `f` of `day` between the map's two kids (#728). Side a alternates
+ * by day and by battle, so a kid with one a day isn't always side a. Both
+ * sides earn the engine's XP × `rules.friendlies.xpPercent` %, and every
+ * friendly counts toward the falloff, win or lose. Returns which kid was
+ * side a and each kid's Partner XP.
+ */
+export function playFriendly(
+  data: ModelData,
+  kids: readonly Kid[],
+  config: ProgressionConfig,
+  rules: ProgressionRules,
+  day: number,
+  f: number,
+): { sideA: number; partnerXp: number[] } {
+  const a = (day + f) % 2;
+  const b = 1 - a;
+  const [kidA, kidB] = [kids[a], kids[b]];
+  if (!kidA || !kidB) throw new Error('a friendly needs two kids');
+  const seed = deriveSeed(config.rootSeed, 'friendly', kidA.profile.id, day, f);
+  const result = duel(data, teamSide(kidA, config), sideB(kidB.team, config), seed);
+  const percent = rules.friendlies?.xpPercent ?? 100;
+  if (rules.friendlies?.oneOpponent) {
+    for (const side of ['a', 'b'] as const) {
+      const n = Math.max(1, result.out[side]);
+      for (const [id, xp] of result[side]) result[side].set(id, Math.floor(xp / n));
+    }
+  }
+  const partnerXp = [0, 0];
+  partnerXp[a] = grant(data, kidA, rules, result.a, result.winner === 'a', {
+    counts: true,
+    percent,
+  });
+  partnerXp[b] = grant(data, kidB, rules, result.b, result.winner === 'b', {
+    counts: true,
+    percent,
+  });
+  return { sideA: a, partnerXp };
+}
+
+/** A hold (728a): the guards earn side b's XP, and it counts as their win. */
+export function payHold(
+  data: ModelData,
+  defender: Kid,
+  rules: ProgressionRules,
+  xp: ReadonlyMap<string, number>,
+): number {
+  return grant(data, defender, rules, xp, true);
+}
+
+/**
+ * The other kid's tiles a kid may try today (#728 defences): none during the
+ * new-player shield (days 1–`shieldDays`) or once `lossCapPerDay` were taken
+ * from them today, and never a home ring. Adjacency is the caller's. A
+ * sim subset of `attackTargetProblem` (territory): the kids never own
+ * trading posts, water or unrestored Hollowed tiles; keep the two in step.
+ */
+export function rivalTargets(
+  tiles: readonly MapTile[],
+  owner: ReadonlyMap<HexKey, number | null>,
+  rival: number,
+  day: number,
+  lostToday: number,
+  defences: NonNullable<ProgressionRules['defences']>,
+): MapTile[] {
+  if (day <= defences.shieldDays || lostToday >= defences.lossCapPerDay) return [];
+  return tiles.filter((t) => owner.get(hexKey(t)) === rival && t.homeSlot === null);
+}
+
 /** Runs two kids of one kind on one map for `config.days` days. */
 export function runProgression(
   data: ModelData,
@@ -327,6 +483,13 @@ export function runProgression(
     const date = dateOf(config, day);
     const guardianWindow = spawnWindowAt({ date, hour: 12 }, GUARDIAN_RULES.windowHours);
     const odds = kids.map((kid) => estimateOdds(data, kid, config, guardianWindow, day));
+    const { defences } = rules;
+    const rivalOdds = kids.map((kid, k) => {
+      const rival = kids[1 - k];
+      return defences && rival && day > defences.shieldDays
+        ? estimateRivalOdds(data, kid, rival, config, defences, day)
+        : null;
+    });
     for (const kid of kids) {
       for (const member of kid.team) member.winsToday = 0;
       kid.evolved.length = 0;
@@ -357,18 +520,45 @@ export function runProgression(
     const gapWins = kids.map(() => 0);
     const triedToday = new Set<HexKey>();
     const doneWithTiles = kids.map(() => false);
+    const friendlies = rules.friendlies?.perDay[profile.id] ?? 0;
+    const defended = kids.map(() => 0);
+    const held = kids.map(() => 0);
+    const lost = kids.map(() => 0);
+    const holdXp = kids.map(() => 0);
+
+    for (let f = 0; f < friendlies; f++) {
+      playFriendly(data, kids, config, rules, day, f).partnerXp.forEach((xp, k) => {
+        partnerXp[k] = (partnerXp[k] ?? 0) + xp;
+      });
+    }
 
     // Tile tries, taking turns so both kids race for the same land.
     for (let attempt = 0; attempt < rules.attemptsPerDay; attempt++) {
       kids.forEach((kid, k) => {
         if (doneWithTiles[k] || (tileBattles[k] ?? 0) >= profile.battlesPerDay) return;
         const mine = new Set(tiles.filter((t) => owner.get(hexKey(t)) === k).map(hexKey));
-        const target = neutralLeft()
-          .filter((t) => !triedToday.has(hexKey(t)))
-          .filter((t) => hexNeighbors(t).some((n) => mine.has(hexKey(n))))
-          .map((t) => ({ t, odds: odds[k]?.[(t.guardianStrength ?? 1) - 1] ?? 0 }))
+        const rival = 1 - k;
+        const rivalAt = rivalOdds[k];
+        // The other kid's land (#728 defences), after neutral land at equal odds.
+        const rivalTiles =
+          defences && rivalAt !== null && rivalAt !== undefined
+            ? rivalTargets(tiles, owner, rival, day, lost[rival] ?? 0, defences)
+            : [];
+        const target = [
+          ...neutralLeft().map((t) => ({
+            t,
+            odds: odds[k]?.[(t.guardianStrength ?? 1) - 1] ?? 0,
+            rival: false,
+          })),
+          ...rivalTiles.map((t) => ({ t, odds: rivalAt ?? 0, rival: true })),
+        ]
+          .filter(({ t }) => !triedToday.has(hexKey(t)))
+          .filter(({ t }) => hexNeighbors(t).some((n) => mine.has(hexKey(n))))
           .sort(
-            (x, y) => y.odds - x.odds || (x.t.guardianStrength ?? 1) - (y.t.guardianStrength ?? 1),
+            (x, y) =>
+              y.odds - x.odds ||
+              Number(x.rival) - Number(y.rival) ||
+              (x.t.guardianStrength ?? 1) - (y.t.guardianStrength ?? 1),
           )[0];
         if (!target || target.odds < config.tryTileAt) {
           doneWithTiles[k] = true;
@@ -376,6 +566,29 @@ export function runProgression(
         }
         const { t } = target;
         triedToday.add(hexKey(t));
+        const seed = deriveSeed(config.rootSeed, 'tile', profile.id, k, day, attempt);
+        const defender = kids[rival];
+        if (target.rival && defences && defender) {
+          const floor = watchFloor(defender.team[0]?.level ?? null, defences.guardLevel);
+          const guards = sideB(defender.team, config, defences.maxDefenders, floor);
+          const result = duel(data, teamSide(kid, config), guards, seed);
+          partnerXp[k] =
+            (partnerXp[k] ?? 0) + grant(data, kid, rules, result.a, result.winner === 'a');
+          tileBattles[k] = (tileBattles[k] ?? 0) + 1;
+          defended[rival] = (defended[rival] ?? 0) + 1;
+          if (result.winner === 'b') {
+            // A hold pays the guards side b's XP (728a) and counts as their win.
+            held[rival] = (held[rival] ?? 0) + 1;
+            const gained = payHold(data, defender, rules, result.b);
+            partnerXp[rival] = (partnerXp[rival] ?? 0) + gained;
+            holdXp[rival] = (holdXp[rival] ?? 0) + gained;
+          } else if (result.winner === 'a') {
+            owner.set(hexKey(t), k);
+            lost[rival] = (lost[rival] ?? 0) + 1;
+            if (t.terrain === GAP_TERRAIN) gapWins[k] = (gapWins[k] ?? 0) + 1;
+          }
+          return;
+        }
         const guardians = resolveGuardians(
           {
             seed: deriveSeed(config.mapSeed, 'guardian', t.q, t.r, guardianWindow.id),
@@ -385,7 +598,6 @@ export function runProgression(
           },
           data.guardians,
         );
-        const seed = deriveSeed(config.rootSeed, 'tile', profile.id, k, day, attempt);
         const opponent: BattleSideSetup = {
           controller: { type: 'ai', policy: 'guardian' },
           squishies: guardians,
@@ -469,6 +681,11 @@ export function runProgression(
         evolved: [...kid.evolved],
         befriended,
         gapWins: gapWins[k] ?? 0,
+        friendlies,
+        defences: defended[k] ?? 0,
+        defencesHeld: held[k] ?? 0,
+        defenceXp: holdXp[k] ?? 0,
+        tilesLost: lost[k] ?? 0,
       });
     });
   }

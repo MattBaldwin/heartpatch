@@ -195,12 +195,25 @@ export interface PatchEconomyRun {
   readonly days: readonly DayRecord[];
 }
 
+/**
+ * Heart Coins for a friendly win (#728). The owner approved 2 + 2, but
+ * `battleWin.friendly` stays 0 until 728b ships it; until then the sim uses
+ * this, and the data value once it is set. 728b deletes the fallback.
+ */
+export const FRIENDLY_WIN_UNTIL_728B = 2; // TUNE: owner decision 2026-11-14 (#728)
+/** Paid friendly wins over one patch-mate a day (728b's `paidWinsPerPairPerDay`). */
+export const PAID_FRIENDLY_WINS_PER_PAIR = 3; // TUNE: owner decision 2026-11-14 (#728)
+
 /** The kid's daily play earnings, each source under its cap. */
 export function playCoins(kid: PatchEconomyKid): number {
   const r = HEART_COIN_RULES;
+  const friendlyWin = r.battleWin.friendly > 0 ? r.battleWin.friendly : FRIENDLY_WIN_UNTIL_728B;
   const battle = Math.min(
     r.dailyCaps.battle,
-    kid.wins.wild * r.battleWin.wild + kid.wins.tile * r.battleWin.tile,
+    kid.wins.wild * r.battleWin.wild +
+      kid.wins.tile * r.battleWin.tile +
+      kid.wins.defence * r.defenseWin['rival-tile'] +
+      Math.min(kid.wins.friendly, PAID_FRIENDLY_WINS_PER_PAIR) * friendlyWin,
   );
   const capture = Math.min(
     r.dailyCaps.capture,

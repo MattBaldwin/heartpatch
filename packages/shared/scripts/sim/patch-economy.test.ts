@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PATCH_ECONOMY_CONFIG as CONFIG } from './patch-economy-config.js';
+import { HEART_COIN_RULES } from '../../src/data/heart-coins.js';
 import {
   awayWindow,
   buildIncome,
@@ -7,6 +8,8 @@ import {
   formatWhatPays,
   levelDays,
   pausedWhilePlaying,
+  FRIENDLY_WIN_UNTIL_728B,
+  PAID_FRIENDLY_WINS_PER_PAIR,
   playCoins,
   renderPatchEconomy,
   runKid,
@@ -53,9 +56,22 @@ describe('the patch economy model (#601)', () => {
 
   it('earns play Heart Coins under each daily cap', () => {
     expect(playCoins(kid('casual'))).toBeGreaterThan(0);
-    expect(playCoins({ ...kid('engaged'), wins: { wild: 999, tile: 999 } })).toBeLessThanOrEqual(
+    const flood = { wild: 999, tile: 999, defence: 999, friendly: 999 };
+    expect(playCoins({ ...kid('engaged'), wins: flood })).toBeLessThanOrEqual(
       playCoins(kid('engaged')) + 20,
     );
+  });
+
+  it('pays defences and friendlies under the battle cap (#728)', () => {
+    const none = { wild: 0, tile: 0, defence: 0, friendly: 0 };
+    const only = (wins: Partial<typeof none>) =>
+      playCoins({ ...kid('casual'), wins: { ...none, ...wins } }) -
+      playCoins({ ...kid('casual'), wins: none });
+    expect(only({ defence: 1 })).toBe(HEART_COIN_RULES.defenseWin['rival-tile']);
+    expect(only({ friendly: 1 })).toBe(FRIENDLY_WIN_UNTIL_728B);
+    // At most three paid friendly wins over one patch-mate a day.
+    expect(only({ friendly: 10 })).toBe(PAID_FRIENDLY_WINS_PER_PAIR * FRIENDLY_WIN_UNTIL_728B);
+    expect(only({ defence: 99 })).toBe(HEART_COIN_RULES.dailyCaps.battle);
   });
 });
 

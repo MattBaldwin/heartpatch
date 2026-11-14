@@ -16,9 +16,16 @@ import {
   PROGRESSION_CONFIG,
   UNCAPPED_BEFRIEND_RULES,
   WITH_EXPLORE_RULES,
+  WITH_FRIENDLIES_RULES,
 } from './progression-config.js';
 import { JOURNEY_RULES } from '../../src/data/journeys.js';
-import { journeyGateMisses, renderProgression, summarise } from './progression-report.js';
+import {
+  formatFriendlyGate,
+  friendlyGate,
+  journeyGateMisses,
+  renderProgression,
+  summarise,
+} from './progression-report.js';
 import {
   firstsFacts,
   firstsGate,
@@ -48,6 +55,7 @@ for (const rules of [
   NO_TRAINING_RULES,
   CURRENT_RULES,
   WITH_EXPLORE_RULES,
+  WITH_FRIENDLIES_RULES,
   NO_FALLOFF_RULES,
   UNCAPPED_BEFRIEND_RULES,
 ]) {
@@ -93,17 +101,28 @@ const misses = journeyGateMisses(journeys);
 console.log(
   misses.length === 0 ? '  journey gate: passes' : `  journey gate MISSES: ${misses.join('; ')}`,
 );
-// Firsts (#736): the shipped rules, kid 0 of each run.
+// Firsts (#736): the shipped rules and #728's friendlies variant, kid 0 of each run.
 const gate = PROGRESSION_CONFIG.firstsGate;
-for (const run of runs.filter((r) => r.rules === CURRENT_RULES)) {
+for (const run of runs.filter(
+  (r) => r.rules === CURRENT_RULES || r.rules === WITH_FRIENDLIES_RULES,
+)) {
   const firsts = firstsOf(run.kids[0]?.days ?? [], facts);
   console.log(
-    `  firsts ${String(run.seats)} seats ${run.profile.id.padEnd(7)} ` +
+    `  firsts ${run.rules.label.padEnd(16)} ${String(run.seats)} seats ${run.profile.id.padEnd(7)} ` +
       firsts.map((f) => `${f.label} ${formatFirst(f.day, PROGRESSION_CONFIG.days)}`).join(', '),
   );
-  if (run.profile.id === gate.kid && run.seats === PROGRESSION_CONFIG.seats[0]) {
+  if (
+    run.rules === CURRENT_RULES &&
+    run.profile.id === gate.kid &&
+    run.seats === PROGRESSION_CONFIG.seats[0]
+  ) {
     // TODO(#730): exit non-zero on a FAIL once #730 merges; soft until then.
     console.log(`  ${formatFirstsGate(firstsGate(firsts, gate), gate)}`);
   }
 }
+// Friendlies and defences (#728): the engaged kid's day-14 level moves by at most 1.
+const friendly = friendlyGate(runs, PROGRESSION_CONFIG);
+if (!friendly) throw new Error('the friendly gate needs the now and now + friendlies runs');
+// TODO(#728): soft until the owner settles friendly XP (728b); does not fail the run.
+console.log(`  ${formatFriendlyGate(friendly)} (soft until 728b; does not fail the run)`);
 console.log(`Report: ${reportPath}`);
