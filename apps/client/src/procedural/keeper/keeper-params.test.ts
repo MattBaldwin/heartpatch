@@ -628,6 +628,7 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
       'leaf-crown',
       'harvest-scarf',
       'patchwork-quilt-cape',
+      'leaf-pile-costume',
       'lamplighters-crown',
       'gearheart-wrench',
       'wishing-well-cape',

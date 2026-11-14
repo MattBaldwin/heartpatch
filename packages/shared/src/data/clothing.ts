@@ -1816,6 +1816,135 @@ const MILESTONE: ClothingItem[] = [
       ],
     },
   },
+  {
+    // Cozy Harvest's top tier (#34): a heap of red, orange and gold leaves
+    // up to the chin, so the Keeper's own face peeks out (unlike the Harvest
+    // Moon, which hides it), with an acorn cap: a red base, an orange core
+    // and gold collar on the torso (so the collar stops under each base's
+    // chin) with lumps along its edge, six fluffy lumps up the sides, leaves
+    // laid on top and tucked into the sides, and leaf bunches over the hands.
+    // Shapes are first guesses (shape round 2).
+    id: 'leaf-pile-costume',
+    name: 'Leaf Pile Costume',
+    description: 'Hop into a fluffy heap of leaves. Peekaboo!',
+    slot: 'costume',
+    rarity: 'legendary',
+    season: 'thanksgiving',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, -0.36, 0], size: [1.36, 0.5, 1.32], color: '#b5371f' },
+        {
+          shape: 'ellipsoid',
+          on: 'top',
+          at: [0, -0.6, 0],
+          size: [2.2, 1.8, 2.1],
+          color: '#e8892b',
+        },
+        { shape: 'ellipsoid', on: 'top', at: [0, 0.2, 0], size: [2.0, 0.8, 1.9], color: '#f2c14e' },
+        {
+          shape: 'ellipsoid',
+          on: 'top',
+          at: [-0.6, 0.1, -0.75],
+          size: [0.55, 0.45, 0.45],
+          color: '#e8892b',
+        },
+        {
+          shape: 'ellipsoid',
+          on: 'top',
+          at: [0, 0.0, -0.88],
+          size: [0.55, 0.45, 0.45],
+          color: '#e8a93b',
+        },
+        {
+          shape: 'ellipsoid',
+          on: 'top',
+          at: [0.6, 0.1, -0.75],
+          size: [0.55, 0.45, 0.45],
+          color: '#e8892b',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [0.459, -0.17, -0.244],
+          size: [0.5, 0.45, 0.5],
+          color: '#c8452f',
+        },
+        { shape: 'ellipsoid', at: [0.518, -0.17, 0.045], size: [0.5, 0.45, 0.5], color: '#f2c14e' },
+        { shape: 'ellipsoid', at: [0.26, -0.12, 0.45], size: [0.5, 0.45, 0.5], color: '#e8892b' },
+        { shape: 'ellipsoid', at: [-0.26, -0.09, 0.45], size: [0.5, 0.45, 0.5], color: '#c8452f' },
+        {
+          shape: 'ellipsoid',
+          at: [-0.518, -0.12, 0.045],
+          size: [0.5, 0.45, 0.5],
+          color: '#f2c14e',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [-0.459, -0.14, -0.244],
+          size: [0.5, 0.45, 0.5],
+          color: '#e8892b',
+        },
+        {
+          shape: 'teardrop',
+          at: [0.523, 0.06, -0.17],
+          size: [0.32, 0.3, 0.05],
+          turn: [-85, 108.0, -25],
+          color: '#f2c14e',
+        },
+        {
+          shape: 'teardrop',
+          at: [0.323, 0.06, 0.445],
+          size: [0.32, 0.3, 0.05],
+          turn: [-85, 36.0, 0],
+          color: '#c8452f',
+        },
+        {
+          shape: 'teardrop',
+          at: [-0.323, 0.06, 0.445],
+          size: [0.32, 0.3, 0.05],
+          turn: [-85, -36.0, 25],
+          color: '#e8892b',
+        },
+        {
+          shape: 'teardrop',
+          at: [-0.523, 0.06, -0.17],
+          size: [0.32, 0.3, 0.05],
+          turn: [-85, -108.0, -25],
+          color: '#b5371f',
+        },
+        {
+          shape: 'teardrop',
+          at: [-0.72, -0.1, -0.05],
+          size: [0.24, 0.28, 0.05],
+          turn: [0, 0, 30],
+          color: '#f2c14e',
+        },
+        {
+          shape: 'teardrop',
+          at: [0.72, -0.12, -0.05],
+          size: [0.24, 0.28, 0.05],
+          turn: [0, 0, -30],
+          color: '#c8452f',
+        },
+        { shape: 'ellipsoid', on: 'hands', at: [0, 0, 0], size: [1.7, 1.5, 1.7], color: '#e8892b' },
+        {
+          shape: 'ellipsoid',
+          on: 'head',
+          at: [0, 0.47, 0],
+          size: [0.92, 0.52, 0.92],
+          color: '#5e3a1f',
+        },
+        {
+          shape: 'capsule',
+          on: 'head',
+          at: [0, 0.77, 0.02],
+          size: [0.1, 0.2, 0.1],
+          color: '#4a2d17',
+        },
+      ],
+    },
+  },
 ];
 
 // ── Halloween costumes (#261): head to toe, Common to Mythic ─────────────
