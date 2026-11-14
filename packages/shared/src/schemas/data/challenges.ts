@@ -19,5 +19,10 @@ export const ChallengeRulesSchema = z.strictObject({
   notNowRestMinutes: z.number().int().min(0),
   /** Team levels this far apart (or more) show a friendly heads-up on the card. */
   levelGapNote: positiveInt,
+  /**
+   * Friendly wins over the same patch-mate that pay coins per patch day
+   * (#728); each direction counts on its own. Past it, XP still flows.
+   */
+  paidWinsPerPairPerDay: positiveInt,
 });
 export type ChallengeRules = z.infer<typeof ChallengeRulesSchema>;

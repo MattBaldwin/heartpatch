@@ -7,6 +7,7 @@ export const CHALLENGE_RULES: ChallengeRules = {
   perPlayer: { max: 10, minutes: 60 }, // TUNE: guess
   notNowRestMinutes: 5, // TUNE: "Not now!" means a little while
   levelGapNote: 5, // TUNE: a team this many levels apart is a real mismatch
+  paidWinsPerPairPerDay: 3, // TUNE: #728; past it a win over that patch-mate still pays XP
 };
 
 /**

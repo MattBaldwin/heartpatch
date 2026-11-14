@@ -7,8 +7,10 @@ import type { BoutiqueRules, CoinRules } from '../schemas/data/coins.js';
  */
 export const COIN_RULES: CoinRules = {
   // TUNE: a win is a few coins; claiming land and Hollow rescues pay in other
-  // ways. A journey (#270) is a gate, not a farm: no coins.
-  battleWin: { wild: 2, tile: 3, 'rival-tile': 3, rescue: 0, journey: 0, friendly: 0 },
+  // ways. A journey (#270) is a gate, not a farm: no coins. A friendly win
+  // (#728) pays a little, at most `CHALLENGE_RULES.paidWinsPerPairPerDay` a day
+  // over the same patch-mate, and never on a scoot.
+  battleWin: { wild: 2, tile: 3, 'rival-tile': 3, rescue: 0, journey: 0, friendly: 2 },
   // TUNE: a held defence (#728) pays the Keeper what taking that land would.
   defenseWin: { 'rival-tile': 3 },
   // TUNE: a new friend or a new tile is worth more than a win.

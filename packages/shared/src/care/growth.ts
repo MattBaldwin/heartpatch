@@ -201,17 +201,42 @@ export function battleXpPercent(
 }
 
 /**
- * Whether one squishy's award in a finished battle counts as a win toward
- * its daily falloff (`battleXpPercent`, #201): it was on the winning side,
- * whichever side that was (a held defence counts for the guard, #728). A
- * friendly battle (#29) pays no XP, so it never counts.
+ * Whether one squishy's award in a finished battle counts toward its daily
+ * falloff (`battleXpPercent`, #201): it was on the winning side, whichever
+ * side that was (a held defence counts for the guard, #728). A friendly
+ * battle (#728) counts win, lose or tie, so two friends trading losses
+ * can't take un-faded XP all day; but only when the engine paid the squishy
+ * something (`xp` > 0): one who ran away, or a scoot before any turn, used
+ * up nothing.
  */
 export function countsTowardFalloff(
   kind: BattleKind,
   side: BattleSideId,
   winner: BattleSideId | 'draw',
+  xp: number,
 ): boolean {
-  return kind !== 'friendly' && side === winner;
+  if (kind === 'friendly') return xp > 0;
+  return side === winner;
+}
+
+/**
+ * A friendly battle's XP for one squishy (#728, owner decision 2026-11-14,
+ * option 1), from the engine's award: one opponent's worth (the award ÷ the
+ * opponents it tuckered out, at least 1, floored) when
+ * `friendlyOneOpponent`, then `friendlyPercent` of that, floored. With no
+ * KOs the engine's amount (its `minimum`) is one opponent's worth as is.
+ * Taken before care × habitat and the daily falloff, like Gentle's share.
+ */
+export function friendlyBattleXp(
+  engineXp: number,
+  opponentsOut: number,
+  rules: Pick<GrowthRules, 'battleXpFalloff'>,
+): number {
+  const falloff = rules.battleXpFalloff;
+  const one = falloff?.friendlyOneOpponent
+    ? Math.floor(engineXp / Math.max(1, opponentsOut))
+    : engineXp;
+  return Math.floor((one * (falloff?.friendlyPercent ?? 100)) / 100);
 }
 
 /** How far a squishy is toward its next evolution (#205), for the evolving meter. */

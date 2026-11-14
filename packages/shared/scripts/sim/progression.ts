@@ -4,6 +4,7 @@ import {
   addXp,
   battleXpPercent,
   befriendedLevel,
+  friendlyBattleXp,
   evolutionAt,
   grantedXp,
   type EvolutionStep,
@@ -261,7 +262,6 @@ function play(
 /**
  * Grants battle XP to the members who joined, through the real growth rules.
  * `counts`: the battle counts toward the falloff (a win; any friendly, #728).
- * `percent`: a share of the engine's XP (friendlies' `xpPercent`).
  */
 export function grant(
   data: ModelData,
@@ -269,7 +269,7 @@ export function grant(
   rules: ProgressionRules,
   xp: ReadonlyMap<string, number>,
   won: boolean,
-  { counts = won, percent = 100 }: { counts?: boolean; percent?: number } = {},
+  { counts = won }: { counts?: boolean } = {},
 ): number {
   let partnerXp = 0;
   for (const member of kid.team) {
@@ -278,7 +278,7 @@ export function grant(
     // The daily falloff, as the battles service applies it: on the base XP,
     // from the wins before this battle.
     const falloff = battleXpPercent(member.winsToday, rules.growth);
-    const base = Math.floor((engine * falloff * percent) / 10_000);
+    const base = Math.floor((engine * falloff) / 100);
     if (counts) member.winsToday += 1;
     const gained = grantedXp(base, kid.profile.xpPercent);
     if (member === kid.team[0]) partnerXp += gained;
@@ -370,8 +370,9 @@ function estimateRivalOdds(
 /**
  * Friendly `f` of `day` between the map's two kids (#728). Side a alternates
  * by day and by battle, so a kid with one a day isn't always side a. Both
- * sides earn the engine's XP × `rules.friendlies.xpPercent` %, and every
- * friendly counts toward the falloff, win or lose. Returns which kid was
+ * sides earn `friendlyBattleXp` of the engine's XP (one opponent's worth with
+ * `oneOpponent`, × `xpPercent` %), and every friendly counts toward the
+ * falloff, win or lose. Returns which kid was
  * side a and each kid's Partner XP.
  */
 export function playFriendly(
@@ -388,22 +389,25 @@ export function playFriendly(
   if (!kidA || !kidB) throw new Error('a friendly needs two kids');
   const seed = deriveSeed(config.rootSeed, 'friendly', kidA.profile.id, day, f);
   const result = duel(data, teamSide(kidA, config), sideB(kidB.team, config), seed);
-  const percent = rules.friendlies?.xpPercent ?? 100;
-  if (rules.friendlies?.oneOpponent) {
-    for (const side of ['a', 'b'] as const) {
-      const n = Math.max(1, result.out[side]);
-      for (const [id, xp] of result[side]) result[side].set(id, Math.floor(xp / n));
+  // The battles service's friendly share (`friendlyBattleXp`), from the variant's knobs.
+  const share = {
+    battleXpFalloff: {
+      fullWinsPerDay: 1,
+      afterPercent: 100,
+      friendlyPercent: rules.friendlies?.xpPercent ?? 100,
+      friendlyOneOpponent: rules.friendlies?.oneOpponent ?? false,
+    },
+  };
+  for (const side of ['a', 'b'] as const) {
+    for (const [id, xp] of result[side]) {
+      result[side].set(id, friendlyBattleXp(xp, result.out[side], share));
     }
   }
+  // Win or lose, a friendly counts toward the falloff (`countsTowardFalloff`;
+  // the sim's AI never scoots, so the engine always pays something).
   const partnerXp = [0, 0];
-  partnerXp[a] = grant(data, kidA, rules, result.a, result.winner === 'a', {
-    counts: true,
-    percent,
-  });
-  partnerXp[b] = grant(data, kidB, rules, result.b, result.winner === 'b', {
-    counts: true,
-    percent,
-  });
+  partnerXp[a] = grant(data, kidA, rules, result.a, result.winner === 'a', { counts: true });
+  partnerXp[b] = grant(data, kidB, rules, result.b, result.winner === 'b', { counts: true });
   return { sideA: a, partnerXp };
 }
 

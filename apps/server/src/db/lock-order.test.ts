@@ -15,6 +15,7 @@ import {
   NAMING_RULES,
   STARTERS,
   type BattleAction,
+  type BattleState,
   type PlayerBattleAction,
 } from '@heartpatch/shared';
 import { RESCUE_GUARDIANS, type LoreEntry } from '@heartpatch/shared/server';
@@ -2082,6 +2083,146 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
       expect((await heartRows(mapId, rival.id)).map((r) => r.source)).toEqual(['battle']);
     },
   );
+
+  /*
+   * A friendly battle pays both sides XP and the winner coins (#728b): the
+   * finish locks both players' squishies in one id-ordered set (step 10),
+   * then the winner's balance only (12, 12b). The loser is credited nothing,
+   * and a zero credit takes no balance lock (`creditCoins`), so no finish
+   * holds two accounts' balances: the "two payees in user id order" order
+   * (`payCoins`) stays unreachable, and these cases pin why.
+   */
+  /**
+   * A friendly one pick from over: the kid's level-40 lead against the
+   * friend's level-1 squishy. The kid has picked; the friend's pick plays the
+   * turn that ends it (checked against the stored state: the engine is
+   * deterministic). `kidSquishyFirst` picks which squishy id sorts lower.
+   */
+  async function friendlyOnePickFromOver(prefix: string, { kidSquishyFirst = true } = {}) {
+    const kid = await player(`${prefix}a`);
+    const friend = await player(`${prefix}b`);
+    const map = await createMapsService({
+      db,
+      tutorialRequired: false,
+      keeperRequired: false,
+    }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
+    const mapId = map.id;
+    await db.insert(mapMembers).values({ mapId, userId: friend.id, role: 'member' });
+    await db
+      .update(maps)
+      .set({ kind: 'multiplayer', friendlyChallenges: true })
+      .where(eq(maps.id, mapId));
+    const [low, high] = [randomUUID(), randomUUID()].sort();
+    const [heroId, friendSquishyId] = kidSquishyFirst ? [low!, high!] : [high!, low!];
+    await db.insert(squishies).values([
+      {
+        id: heroId,
+        mapId,
+        ownerUserId: kid.id,
+        speciesId: STARTERS.speciesIds[0]!,
+        element: 'fire',
+        feeling: 'cozy',
+        level: 40,
+      },
+      {
+        id: friendSquishyId,
+        mapId,
+        ownerUserId: friend.id,
+        speciesId: STARTERS.speciesIds[1]!,
+        element: 'water',
+        feeling: 'cozy',
+        level: 1,
+      },
+    ]);
+    const content = defaultBattleContent();
+    const fights = createBattlesService({ db, content });
+    const battleId = await fights.startFriendly({ mapId, aUserId: kid.id, bUserId: friend.id });
+    const moveOf = (state: BattleState, side: 'a' | 'b') => {
+      const team = state.sides[side];
+      return team.squishies[team.active]!.moves[0]!;
+    };
+    for (let i = 0; i < content.rules.maxTurns + 5; i++) {
+      const { state } = (await createBattlesRepo(db).findBattle(battleId))!;
+      const [a, b] = [moveOf(state, 'a'), moveOf(state, 'b')];
+      await fights.act(kid, battleId, { action: { type: 'move', move: a }, turn: state.turn });
+      const next = applyBattleAction(content, state, {
+        type: 'turn',
+        choices: { a: { type: 'move', move: a }, b: { type: 'move', move: b } },
+      });
+      const finishing = {
+        action: { type: 'move', move: b } as PlayerBattleAction,
+        turn: state.turn,
+      };
+      if (next.phase.type === 'over') {
+        expect(next.phase.result.winner).toBe('a');
+        return { kid, friend, mapId, heroId, friendSquishyId, battleId, fights, finishing };
+      }
+      await fights.act(friend, battleId, finishing);
+    }
+    throw new Error('the friendly never got one pick from over');
+  }
+
+  it.each([
+    ["the kid's", true],
+    ["the friend's", false],
+  ] as const)(
+    "locks both players' squishies in one id-ordered set on a friendly, %s lowest (battles `finish`, #728b step 10)",
+    async (_, kidSquishyFirst) => {
+      const { kid, friend, heroId, friendSquishyId, battleId, fights, finishing } =
+        await friendlyOnePickFromOver('friendlyset', { kidSquishyFirst });
+      const before = await squishyRow(friendSquishyId);
+      const [low, high] = [heroId, friendSquishyId].sort();
+      await holdThen(
+        (tx) => lockSquishy(tx, low!),
+        () => fights.act(friend, battleId, finishing),
+        (tx) => lockSquishy(tx, high!),
+      );
+      const done = (await createBattlesRepo(db).findBattle(battleId))!;
+      expect(done.status).toBe('finished');
+      expect(done.rewards?.b).toMatchObject({ userId: friend.id, coins: { patch: 0, heart: 0 } });
+      // The loser's squishy grew too (#728b), under its lock.
+      expect(await squishyRow(friendSquishyId)).not.toEqual(before);
+      expect(await coinRows(kid.id)).toEqual([
+        { source: 'battle', amount: COIN_RULES.battleWin.friendly },
+      ]);
+    },
+  );
+
+  it("takes the winner's balance only after both players' squishies (battles `finish`, #728b step 10 then 12)", async () => {
+    const { kid, friendSquishyId, battleId, fights, friend, finishing } =
+      await friendlyOnePickFromOver('friendlybal');
+    // Hold the loser's squishy (care on it, or nightfall), let the finish
+    // queue on it, then take the winner's balance as care or a purchase would.
+    await holdThen(
+      (tx) => lockSquishy(tx, friendSquishyId),
+      () => fights.act(friend, battleId, finishing),
+      (tx) => lockCoins(tx, kid.id),
+    );
+    expect(await coinRows(kid.id)).toEqual([
+      { source: 'battle', amount: COIN_RULES.battleWin.friendly },
+    ]);
+  });
+
+  it("never takes the loser's balance: a friendly finishes while the loser's care holds it (battles `finish`, care `care`, #728b)", async () => {
+    const { kid, friend, battleId, fights, finishing } =
+      await friendlyOnePickFromOver('friendlyloser');
+    await db.transaction(async (tx) => {
+      // The loser's account balance, as their care paying coins would hold it.
+      await lockCoins(tx, friend.id);
+      // Finishes without waiting on the loser's balances (a wait would time out here).
+      await Promise.race([
+        fights.act(friend, battleId, finishing),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("the finish waited on the loser's balance")), 5000),
+        ),
+      ]);
+    });
+    expect((await createBattlesRepo(db).findBattle(battleId))!.status).toBe('finished');
+    expect(await coinRows(friend.id)).toEqual([]);
+    expect(await coinRows(kid.id)).toEqual([
+      { source: 'battle', amount: COIN_RULES.battleWin.friendly },
+    ]);
+  });
 
   it("takes the defender's balance only after their guard (battles `finish`, #728 step 10 then 12)", async () => {
     const { kid, rival, guardId, battle, fights, finishing } =

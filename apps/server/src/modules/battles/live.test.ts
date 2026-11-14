@@ -2,6 +2,13 @@ import {
   ApiErrorSchema,
   BATTLE_RULES,
   BattleResponseSchema,
+  BattleRewardsSchema,
+  BattleResultSchema,
+  CHALLENGE_RULES,
+  COIN_RULES,
+  friendlyBattleXp,
+  GROWTH_RULES,
+  HEART_COIN_RULES,
   CurrentBattleResponseSchema,
   JoinMapResponseSchema,
   LIVE_BATTLE_RULES,
@@ -22,13 +29,16 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from
 import { WebSocket } from 'ws';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
-import { createDbClient, type Database, type DbClient } from '../../db/client.js';
+import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
 import { keepers, sessions, users } from '../../db/schema.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
+import { creditCoins } from '../coins/service.js';
+import { creditHeartCoins } from '../heart-coins/service.js';
+import { sideBRefId } from '../../lib/side-b-ref.js';
 import { settleTimeouts } from './live.js';
-import { setupOf, type LiveRow } from './repo.js';
+import { createBattlesRepo, setupOf, type LiveRow } from './repo.js';
 import { createBattlesService, defaultBattleContent } from './service.js';
 
 const url = inject('testDatabaseUrl');
@@ -304,7 +314,95 @@ describe.skipIf(!url)('live battles (#29, needs DATABASE_URL)', () => {
       orderBy: (t, { asc }) => [asc(t.seq)],
     });
 
-  it('plays a friendly battle to the end: hidden picks, both sides, nothing at stake', async () => {
+  /** Both players pick every turn (a move, or who goes out next) until the battle ends. */
+  async function fight(
+    server: FastifyInstance,
+    a: Player,
+    b: Player,
+    battleId: string,
+  ): Promise<PlayerBattle> {
+    let theirs = await get(server, b, battleId);
+    for (let i = 0; i < 2 * BATTLE_RULES.maxTurns && theirs.status === 'active'; i++) {
+      for (const [who, view] of [
+        [a, await get(server, a, battleId)],
+        [b, await get(server, b, battleId)],
+      ] as const) {
+        if (view.status !== 'active') break;
+        const phase = view.view.phase;
+        if (phase.type === 'replace') {
+          if (!phase.sides.includes(view.mySide)) continue;
+          const bench = view.view.sides[view.mySide].squishies.findIndex(
+            (s, slot) => slot !== view.view.sides[view.mySide].active && s.energy > 0,
+          );
+          expect((await pick(server, who, view, { type: 'replace', slot: bench })).statusCode).toBe(
+            200,
+          );
+        } else if (view.live?.myPick === null) {
+          expect(
+            (await pick(server, who, view, { type: 'move', move: myMove(view) })).statusCode,
+          ).toBe(200);
+        }
+      }
+      theirs = await get(server, b, battleId);
+    }
+    expect(theirs.status).toBe('finished');
+    return get(server, a, battleId);
+  }
+
+  const battleRowOf = async (battleId: string) =>
+    (await db.query.battles.findFirst({ where: (t, { eq }) => eq(t.id, battleId) }))!;
+  const rewardsOf = async (battleId: string) =>
+    BattleRewardsSchema.parse((await battleRowOf(battleId)).rewards);
+  const resultOf = async (battleId: string) =>
+    BattleResultSchema.parse((await battleRowOf(battleId)).result);
+  const ledgerOf = async (refId: string) => ({
+    patch: (await db.query.coinLedger.findMany({ where: (t, { eq }) => eq(t.refId, refId) })).map(
+      (r) => [r.userId, r.amount],
+    ),
+    heart: (
+      await db.query.heartCoinLedger.findMany({ where: (t, { eq }) => eq(t.refId, refId) })
+    ).map((r) => [r.userId, r.amount]),
+  });
+  const squishiesOf = (mapId: string, userId: string) =>
+    db.query.squishies.findMany({
+      where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.ownerUserId, userId)),
+    });
+  /** A level-40 squishy leads `who`'s team, so their friendlies end fast and theirs. */
+  const strong = async (server: FastifyInstance, mapId: string, who: Player) => {
+    const res = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, who, {
+      speciesId: 'puddlepuff',
+      level: 40,
+    });
+    expect(res.statusCode, res.body).toBe(201);
+  };
+  /** A friendly Lee (side a) is sure to win against `foe`. */
+  const leeWins = async (server: FastifyInstance, mapId: string, lee: Player, foe: Player) => {
+    const battleId = await service(server).startFriendly({
+      mapId,
+      aUserId: lee.id,
+      bUserId: foe.id,
+    });
+    await fight(server, lee, foe, battleId);
+    const result = await resultOf(battleId);
+    expect(result.winner).toBe('a');
+    expect(result.reason).not.toBe('forfeit');
+    return battleId;
+  };
+  /**
+   * Base XP for one side's squishy as the server pays a friendly (#728,
+   * `friendlyBattleXp`): the engine's award, one opponent's worth, at
+   * `friendlyPercent`. Care × habitat can only add to it, up to `capPercent`.
+   */
+  const friendlyBase = async (battleId: string, side: 'a' | 'b', squishyId: string) => {
+    const row = await battleRowOf(battleId);
+    const result = BattleResultSchema.parse(row.result);
+    const engine = result.xp.find((x) => x.side === side && x.squishyId === squishyId)!.xp;
+    const state = row.state as { sides: Record<'a' | 'b', { squishies: { energy: number }[] }> };
+    const out = state.sides[side === 'a' ? 'b' : 'a'].squishies.filter((s) => s.energy === 0);
+    return { engine, base: friendlyBattleXp(engine, out.length, GROWTH_RULES) };
+  };
+
+  it('plays a friendly battle to the end: hidden picks, both sides, both paid XP', async () => {
     const server = await start();
     const [lee, sam] = [await player(), await player()];
     const mapId = await patch(server, lee, sam);
@@ -376,11 +474,13 @@ describe.skipIf(!url)('live battles (#29, needs DATABASE_URL)', () => {
     mine = await get(server, lee, battleId);
     expect(mine.live?.deadlineAt).toBeNull();
     expect(mine.seed).not.toBeNull();
-    // Nothing at stake: no XP for anyone.
+    // Both sides earn XP (#728): every squishy that came out grew.
     const xpAfter = await db.query.squishies.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) });
-    expect(xpAfter.map((s) => [s.id, s.xp]).sort()).toEqual(
-      xpBefore.map((s) => [s.id, s.xp]).sort(),
-    );
+    const grew = xpAfter.filter((s) => {
+      const was = xpBefore.find((b) => b.id === s.id)!;
+      return s.level > was.level || s.xp > was.xp;
+    });
+    expect(grew.map((s) => s.ownerUserId).sort()).toEqual([lee.id, sam.id].sort());
     expect((await liveRowOf(battleId))?.active).toBe(false);
     // The record replays: seed, setup and every action (rule 3).
     const row = (await db.query.battles.findFirst({ where: (t, { eq }) => eq(t.id, battleId) }))!;
@@ -396,6 +496,222 @@ describe.skipIf(!url)('live battles (#29, needs DATABASE_URL)', () => {
       if (!event.type.startsWith('battle.')) continue;
       expect(JSON.stringify(event.payload)).not.toMatch(/"move"|"choices"|"picks"/);
     }
+  });
+
+  it('a friendly pays both sides XP and the winner 2 + 2 (#728)', async () => {
+    const server = await start();
+    const [lee, sam] = [await player(), await player()];
+    const mapId = await patch(server, lee, sam);
+    await strong(server, mapId, lee);
+    const battleId = await leeWins(server, mapId, lee, sam);
+
+    const rewards = await rewardsOf(battleId);
+    const [leeTop] = (await squishiesOf(mapId, lee.id)).sort((x, y) => y.level - x.level);
+    const [samOnly] = await squishiesOf(mapId, sam.id);
+    // One opponent's worth at `friendlyPercent`, × care and habitat (≥ 100 %, ≤ the cap).
+    for (const [side, list, id] of [
+      ['a', rewards.xp, leeTop!.id],
+      ['b', rewards.b!.xp, samOnly!.id],
+    ] as const) {
+      const { engine, base } = await friendlyBase(battleId, side, id);
+      const paid = list.find((x) => x.squishyId === id)!.xp;
+      expect(base).toBeGreaterThan(0);
+      expect(base).toBeLessThan(engine);
+      expect(paid).toBeGreaterThanOrEqual(base);
+      expect(paid).toBeLessThanOrEqual(Math.floor((base * GROWTH_RULES.capPercent) / 100));
+    }
+    const win = {
+      patch: COIN_RULES.battleWin.friendly,
+      heart: HEART_COIN_RULES.battleWin.friendly,
+    };
+    expect(win.patch).toBeGreaterThan(0);
+    expect(rewards).toMatchObject({ percent: 100, coins: win, unpaid: null });
+    expect(rewards.b).toMatchObject({
+      userId: sam.id,
+      coins: { patch: 0, heart: 0 },
+      unpaid: null,
+    });
+    // The winner's credit is keyed by the battle id; the loser has none.
+    expect(await ledgerOf(battleId)).toEqual({
+      patch: [[lee.id, win.patch]],
+      heart: [[lee.id, win.heart]],
+    });
+    expect(await ledgerOf(sideBRefId(battleId))).toEqual({ patch: [], heart: [] });
+    // Each seat sees its own rewards in the same shape (side b's reshaped).
+    const mine = await get(server, lee, battleId);
+    expect(mine.rewards).toMatchObject({ coins: win, unpaid: null, b: null });
+    const theirs = await get(server, sam, battleId);
+    expect(theirs.rewards).toEqual({
+      xp: rewards.b!.xp,
+      percent: 100,
+      fullXpResetAt: null,
+      coins: { patch: 0, heart: 0 },
+      unpaid: null,
+      b: rewards.b,
+    });
+    // `battle.ended` carries side a's XP; side b's reaches Sam through rewards
+    // and the growth events, which name the squishy's owner.
+    const events = await eventsOf(mapId);
+    const ended = events.find((e) => e.type === 'battle.ended')!.payload as { defender?: unknown };
+    expect(ended.defender).toBeUndefined();
+  });
+
+  it("side b's friendly win pays side b under its own key (#728)", async () => {
+    const server = await start();
+    const [lee, sam] = [await player(), await player()];
+    const mapId = await patch(server, lee, sam);
+    await strong(server, mapId, sam);
+    const battleId = await service(server).startFriendly({
+      mapId,
+      aUserId: lee.id,
+      bUserId: sam.id,
+    });
+    await fight(server, lee, sam, battleId);
+    expect((await resultOf(battleId)).winner).toBe('b');
+    const win = {
+      patch: COIN_RULES.battleWin.friendly,
+      heart: HEART_COIN_RULES.battleWin.friendly,
+    };
+    const rewards = await rewardsOf(battleId);
+    expect(rewards).toMatchObject({ coins: { patch: 0, heart: 0 }, unpaid: null });
+    expect(rewards.b).toMatchObject({ userId: sam.id, coins: win, unpaid: null });
+    expect(rewards.xp.length).toBeGreaterThan(0);
+    expect(await ledgerOf(sideBRefId(battleId))).toEqual({
+      patch: [[sam.id, win.patch]],
+      heart: [[sam.id, win.heart]],
+    });
+    expect(await ledgerOf(battleId)).toEqual({ patch: [], heart: [] });
+  });
+
+  it("the loser's friendly counts toward its falloff (#728)", async () => {
+    const server = await start();
+    const [lee, sam] = [await player(), await player()];
+    const mapId = await patch(server, lee, sam);
+    await strong(server, mapId, lee);
+    const [samOnly] = await squishiesOf(mapId, sam.id);
+    const repo = createBattlesRepo(db);
+    expect((await repo.winsToday(mapId, [samOnly!.id], clock)).get(samOnly!.id)).toBeUndefined();
+    const battleId = await leeWins(server, mapId, lee, sam);
+    expect((await rewardsOf(battleId)).b!.xp.map((x) => x.squishyId)).toEqual([samOnly!.id]);
+    expect((await repo.winsToday(mapId, [samOnly!.id], clock)).get(samOnly!.id)).toBe(1);
+  });
+
+  it('the 4th win over the same patch-mate today pays XP, no coins; another patch-mate still pays (#728)', async () => {
+    const server = await start();
+    const [lee, sam, kim] = [await player(), await player(), await player()];
+    const mapId = await patch(server, lee, sam, kim);
+    await strong(server, mapId, lee);
+    const cap = CHALLENGE_RULES.paidWinsPerPairPerDay;
+    const win = {
+      patch: COIN_RULES.battleWin.friendly,
+      heart: HEART_COIN_RULES.battleWin.friendly,
+    };
+    for (let i = 0; i < cap; i++) {
+      const paid = await leeWins(server, mapId, lee, sam);
+      expect(await rewardsOf(paid)).toMatchObject({ coins: win, unpaid: null });
+    }
+    const capped = await leeWins(server, mapId, lee, sam);
+    const rewards = await rewardsOf(capped);
+    expect(rewards).toMatchObject({ coins: { patch: 0, heart: 0 }, unpaid: 'pair-cap' });
+    expect(rewards.xp.some((x) => x.xp > 0)).toBe(true);
+    expect(rewards.b!.xp.some((x) => x.xp > 0)).toBe(true);
+    expect(await ledgerOf(capped)).toEqual({ patch: [], heart: [] });
+    // A win over Kim is a different pair: it pays.
+    const other = await leeWins(server, mapId, lee, kim);
+    expect(await rewardsOf(other)).toMatchObject({ coins: win, unpaid: null });
+    // The cap is a patch day's: the next day pays again.
+    clock.setTime(clock.getTime() + DAY_MS);
+    const tomorrow = await leeWins(server, mapId, lee, sam);
+    expect(await rewardsOf(tomorrow)).toMatchObject({ coins: win, unpaid: null });
+  }, 60_000);
+
+  it('a scooted friendly pays the stayer XP, no coins; the one who left earns nothing (#728)', async () => {
+    const server = await start();
+    const [lee, sam] = [await player(), await player()];
+    const mapId = await patch(server, lee, sam);
+    // Two level-40 leads: one turn leaves both standing.
+    await strong(server, mapId, lee);
+    await strong(server, mapId, sam);
+    const battleId = await service(server).startFriendly({
+      mapId,
+      aUserId: lee.id,
+      bUserId: sam.id,
+    });
+    // One played turn, then Sam scoots.
+    for (const who of [lee, sam]) {
+      const view = await get(server, who, battleId);
+      expect((await pick(server, who, view, { type: 'move', move: myMove(view) })).statusCode).toBe(
+        200,
+      );
+    }
+    const theirs = await get(server, sam, battleId);
+    expect(theirs.view.turn).toBeGreaterThan(0);
+    expect(theirs.status, 'one turn should leave both standing').toBe('active');
+    const res = await pick(server, sam, theirs, { type: 'forfeit' });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(await resultOf(battleId)).toMatchObject({ winner: 'a', reason: 'forfeit' });
+    const rewards = await rewardsOf(battleId);
+    expect(rewards).toMatchObject({ coins: { patch: 0, heart: 0 }, unpaid: 'scooted' });
+    expect(rewards.xp.some((x) => x.xp > 0)).toBe(true);
+    expect(rewards.b).toMatchObject({ userId: sam.id, xp: [], coins: { patch: 0, heart: 0 } });
+    expect(await ledgerOf(battleId)).toEqual({ patch: [], heart: [] });
+    // The one who left used up no falloff slot.
+    const samIds = (await squishiesOf(mapId, sam.id)).map((x) => x.id);
+    const wins = await createBattlesRepo(db).winsToday(mapId, samIds, clock);
+    expect(wins.size).toBe(0);
+  });
+
+  it('a friendly scooted at turn 0 pays nobody anything (#728)', async () => {
+    const server = await start();
+    const [lee, sam] = [await player(), await player()];
+    const mapId = await patch(server, lee, sam);
+    const battleId = await service(server).startFriendly({
+      mapId,
+      aUserId: lee.id,
+      bUserId: sam.id,
+    });
+    const before = await db.query.squishies.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) });
+    const theirs = await get(server, sam, battleId);
+    const res = await pick(server, sam, theirs, { type: 'forfeit' });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(await resultOf(battleId)).toMatchObject({ winner: 'a', reason: 'forfeit', turns: 0 });
+    const rewards = await rewardsOf(battleId);
+    expect(rewards).toMatchObject({ xp: [], coins: { patch: 0, heart: 0 }, unpaid: 'scooted' });
+    expect(rewards.b).toMatchObject({ xp: [], coins: { patch: 0, heart: 0 } });
+    expect(await ledgerOf(battleId)).toEqual({ patch: [], heart: [] });
+    expect(await ledgerOf(sideBRefId(battleId))).toEqual({ patch: [], heart: [] });
+    const after = await db.query.squishies.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) });
+    expect(after.map((s) => [s.id, s.level, s.xp]).sort()).toEqual(
+      before.map((s) => [s.id, s.level, s.xp]).sort(),
+    );
+  });
+
+  it('a replayed friendly finish credits nothing twice (#728)', async () => {
+    const server = await start();
+    const [lee, sam] = [await player(), await player()];
+    const mapId = await patch(server, lee, sam);
+    await strong(server, mapId, sam);
+    const battleId = await service(server).startFriendly({
+      mapId,
+      aUserId: lee.id,
+      bUserId: sam.id,
+    });
+    await fight(server, lee, sam, battleId);
+    const ledger = await ledgerOf(sideBRefId(battleId));
+    expect(ledger.patch).toHaveLength(1);
+    // The same credit again, as a retried finish would make it: the key is taken.
+    await withTransaction(db, async (tx) => {
+      const base = {
+        source: 'battle' as const,
+        refId: sideBRefId(battleId),
+        userId: sam.id,
+        mapId,
+      };
+      const at = new Date(clock);
+      expect((await creditCoins(tx, { ...base, at, amount: 2 })).credited).toBe(0);
+      expect((await creditHeartCoins(tx, { ...base, at, amount: 2 })).credited).toBe(0);
+    });
+    expect(await ledgerOf(sideBRefId(battleId))).toEqual(ledger);
   });
 
   it('a timeout lets the AI pick (never a loss), after one grace for an away player', async () => {

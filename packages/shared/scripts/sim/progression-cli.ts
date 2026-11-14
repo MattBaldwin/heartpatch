@@ -123,6 +123,7 @@ for (const run of runs.filter(
 // Friendlies and defences (#728): the engaged kid's day-14 level moves by at most 1.
 const friendly = friendlyGate(runs, PROGRESSION_CONFIG);
 if (!friendly) throw new Error('the friendly gate needs the now and now + friendlies runs');
-// TODO(#728): soft until the owner settles friendly XP (728b); does not fail the run.
-console.log(`  ${formatFriendlyGate(friendly)} (soft until 728b; does not fail the run)`);
+// Hard since 728b shipped the owner's friendly XP rule: a FAIL fails the run.
+console.log(`  ${formatFriendlyGate(friendly)}`);
+if (!friendly.passes) process.exitCode = 1;
 console.log(`Report: ${reportPath}`);

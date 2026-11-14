@@ -120,7 +120,8 @@ export interface BattlesRepo {
   /**
    * How many finished battles each of `squishyIds` joined and won on this
    * map on `at`'s map-local day, on either side (#728: a guard's holds
-   * count, `countsTowardFalloff`), for the daily battle-XP falloff
+   * count), plus every friendly battle it joined and was paid for, win or
+   * lose (#728, `countsTowardFalloff`), for the daily battle-XP falloff
    * (`GROWTH_RULES.battleXpFalloff`). Missing ids won none.
    */
   winsToday: (
@@ -128,8 +129,26 @@ export interface BattlesRepo {
     squishyIds: readonly string[],
     at: Date,
   ) => Promise<Map<string, number>>;
+  /**
+   * Friendly battles (#728) `winnerUserId` won against `loserUserId` on this
+   * map on `at`'s map-local day, on either seat, that could pay coins (not
+   * a scoot: `CHALLENGE_RULES.paidWinsPerPairPerDay`). Finished ones only,
+   * so the battle being finished doesn't count itself.
+   */
+  friendlyWinsAgainstToday: (
+    mapId: string,
+    winnerUserId: string,
+    loserUserId: string,
+    at: Date,
+  ) => Promise<number>;
   /** Row-locks the squishies until commit (XP is written under it, care's `applyXp`). */
   lockSquishies: (ids: readonly string[]) => Promise<void>;
+  /**
+   * Which of `ids` are `userId`'s active squishies on the map. Read under
+   * their step-10 lock, so a trade that committed after the battle's setup
+   * was read can't pay XP to a squishy that changed hands (#728).
+   */
+  ownActiveSquishies: (mapId: string, userId: string, ids: readonly string[]) => Promise<string[]>;
   /**
    * A new squishy for a player (befriended, a starter, the tutorial's
    * Partner, or the dev grant; every insert comes through here, which sets
@@ -358,8 +377,6 @@ function queries(db: Executor): BattlesRepo {
           and(
             eq(battles.mapId, mapId),
             eq(battles.status, 'finished'),
-            // A friendly battle (#29) earns no XP, so it never cuts a later one's.
-            not(eq(battles.kind, 'friendly')),
             sql`(${battles.endedAt} at time zone ${maps.timeZone})::date = (${at.toISOString()}::timestamptz at time zone ${maps.timeZone})::date`,
           ),
         );
@@ -367,13 +384,61 @@ function queries(db: Executor): BattlesRepo {
       for (const row of rows) {
         const result = ResultSchema.parse(row.result);
         for (const award of result.xp) {
-          // Either side (#728): a challenger's wins and a guard's holds.
+          // Either side (#728): a challenger's wins, a guard's holds, and
+          // a friendly win or lose.
           if (!wanted.has(award.squishyId)) continue;
-          if (!countsTowardFalloff(row.kind, award.side, result.winner)) continue;
+          if (!countsTowardFalloff(row.kind, award.side, result.winner, award.xp)) continue;
           wins.set(award.squishyId, (wins.get(award.squishyId) ?? 0) + 1);
         }
       }
       return wins;
+    },
+
+    friendlyWinsAgainstToday: async (mapId, winnerUserId, loserUserId, at) => {
+      const [row] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(battles)
+        .innerJoin(liveBattles, eq(liveBattles.battleId, battles.id))
+        .innerJoin(maps, eq(maps.id, battles.mapId))
+        .where(
+          and(
+            eq(battles.mapId, mapId),
+            eq(battles.kind, 'friendly'),
+            eq(battles.status, 'finished'),
+            sql`${battles.result}->>'reason' <> 'forfeit'`,
+            or(
+              and(
+                eq(battles.playerUserId, winnerUserId),
+                eq(liveBattles.bUserId, loserUserId),
+                sql`${battles.result}->>'winner' = 'a'`,
+              ),
+              and(
+                eq(battles.playerUserId, loserUserId),
+                eq(liveBattles.bUserId, winnerUserId),
+                sql`${battles.result}->>'winner' = 'b'`,
+              ),
+            ),
+            sql`(${battles.endedAt} at time zone ${maps.timeZone})::date = (${at.toISOString()}::timestamptz at time zone ${maps.timeZone})::date`,
+          ),
+        );
+      return row?.n ?? 0;
+    },
+
+    ownActiveSquishies: async (mapId, userId, ids) => {
+      if (ids.length === 0) return [];
+      const rows = await db
+        .select({ id: squishies.id })
+        .from(squishies)
+        .where(
+          and(
+            eq(squishies.mapId, mapId),
+            eq(squishies.ownerUserId, userId),
+            eq(squishies.state, 'active'),
+            inArray(squishies.id, [...ids]),
+          ),
+        )
+        .orderBy(asc(squishies.id));
+      return rows.map((r) => r.id);
     },
 
     lockSquishies: async (ids) => {
