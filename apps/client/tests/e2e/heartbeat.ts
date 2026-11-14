@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { availableParallelism, loadavg } from 'node:os';
 import { test, type Page, type TestInfo, type WebSocket } from '@playwright/test';
 
@@ -227,6 +228,29 @@ export async function watchHeartbeat(page: Page): Promise<void> {
   });
 }
 
+/**
+ * The machine's threads that are running or waiting for a core right now
+ * (what the load average counts), by process name, most first: names what
+ * fills a loaded runner. Linux `ps` (procps) only; null elsewhere or without it.
+ */
+function runnableThreads(): Record<string, number> | null {
+  if (process.platform !== 'linux') return null;
+  let out: string;
+  try {
+    out = execFileSync('ps', ['-eLo', 'stat=,comm='], { encoding: 'utf8', timeout: 2_000 });
+  } catch {
+    return null;
+  }
+  const count = new Map<string, number>();
+  for (const line of out.split('\n')) {
+    const [stat = '', ...name] = line.trim().split(/\s+/);
+    if (!stat.startsWith('R') && !stat.startsWith('D')) continue;
+    const comm = name.join(' ');
+    count.set(comm, (count.get(comm) ?? 0) + 1);
+  }
+  return Object.fromEntries([...count].sort((a, b) => b[1] - a[1]).slice(0, 10));
+}
+
 /** What `work` gave or threw, or `fallback` once `ms` pass without either (the work is left to run). */
 async function within<T>(work: Promise<T>, ms: number, fallback: string): Promise<T | string> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -269,6 +293,8 @@ async function snapshot(page: Page, watch: Watch): Promise<Record<string, unknow
     lastBeat: watch.last?.beat ?? null,
     // The runner's 1-minute load average over its cores: above 1, the page waits for a core.
     loadPerCore: +(load1 / availableParallelism()).toFixed(2),
+    cores: availableParallelism(),
+    runnable: runnableThreads(),
     rates,
     events: [...watch.events],
   };
@@ -348,7 +374,7 @@ function startWatchdog(page: Page, watch: Watch, testInfo: TestInfo): void {
  * - beat fresh, frames ~0, probes answer: only rendering stopped.
  * - ticks well under 4/s with draws ~0: the page is starved, not by our render
  *   loop. `anims` > 0 points at the page's own CSS animations; `loadPerCore`
- *   above 1 at the runner.
+ *   above 1 at the runner, and `runnable` names the processes filling it.
  * - beat fresh, probes silent: the page runs, and Playwright lost its context.
  * - beat stale, probes silent: the main thread is blocked, or the page is
  *   gone (CRASH in the events) or Playwright lost its whole page session (a
