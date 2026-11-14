@@ -218,7 +218,13 @@ function duel(
   a: BattleSideSetup,
   b: BattleSideSetup,
   seed: string,
-): { winner: 'a' | 'b' | null; a: Map<string, number>; b: Map<string, number> } {
+): {
+  winner: 'a' | 'b' | null;
+  a: Map<string, number>;
+  b: Map<string, number>;
+  /** Opponents each side tuckered out. */
+  out: { a: number; b: number };
+} {
   const { state } = autoplayBattle(data.content, { seed, sides: { a, b } });
   if (state.phase.type !== 'over') throw new Error('autoplay always finishes');
   const { result } = state.phase;
@@ -232,7 +238,9 @@ function duel(
         ]),
     );
   const winner = result.winner === 'draw' ? null : result.winner;
-  return { winner, a: xpOf('a'), b: xpOf('b') };
+  const outOf = (side: 'a' | 'b') =>
+    state.sides[side].squishies.filter((sq) => sq.energy === 0).length;
+  return { winner, a: xpOf('a'), b: xpOf('b'), out: { a: outOf('b'), b: outOf('a') } };
 }
 
 /** Plays one battle; returns whether the kid won and the base XP each member earned. */
@@ -455,6 +463,12 @@ export function runProgression(
       const seed = deriveSeed(config.rootSeed, 'friendly', profile.id, day, f);
       const result = duel(data, teamSide(kidA, config), sideB(kidB.team, config), seed);
       const percent = rules.friendlies?.xpPercent ?? 100;
+      if (rules.friendlies?.oneOpponent) {
+        for (const side of ['a', 'b'] as const) {
+          const n = Math.max(1, result.out[side]);
+          for (const [id, xp] of result[side]) result[side].set(id, Math.floor(xp / n));
+        }
+      }
       partnerXp[a] =
         (partnerXp[a] ?? 0) +
         grant(data, kidA, rules, result.a, result.winner === 'a', { counts: true, percent });

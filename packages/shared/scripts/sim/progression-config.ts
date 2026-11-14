@@ -61,6 +61,11 @@ export interface ProgressionRules {
   readonly friendlies?: {
     readonly perDay: Readonly<Record<string, number>>;
     readonly xpPercent: number;
+    /**
+     * A proposed rule, not the approved one: pay a friendly as one opponent's
+     * worth (the engine's XP ÷ opponents tuckered out, the average one's level).
+     */
+    readonly oneOpponent?: boolean;
   };
   /**
    * Defences (#728, 728a's rules), or none: a kid's tile tries also weigh the

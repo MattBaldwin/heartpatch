@@ -231,6 +231,18 @@ describe('friendlies and defences (#728)', () => {
     for (const d of days) expect(d.tiles).toBeGreaterThanOrEqual(7);
   }, 30_000);
 
+  it('pays a friendly as one opponent with `oneOpponent` (a proposed rule)', () => {
+    const one = {
+      ...WITH_FRIENDLIES_RULES,
+      defences: undefined,
+      friendlies: { ...WITH_FRIENDLIES_RULES.friendlies!, oneOpponent: true },
+    };
+    const full = { ...one, friendlies: { ...one.friendlies, oneOpponent: false } };
+    const xp = (rules: typeof one) =>
+      runProgression(data, { ...SMALL, days: 1 }, rules, engaged!, 4).kids[0]!.days[0]!.partnerXp;
+    expect(xp(one)).toBeLessThan(xp(full));
+  }, 30_000);
+
   it("gates the day's level move", () => {
     const runs = [CURRENT_RULES, WITH_FRIENDLIES_RULES].map((rules) =>
       runProgression(data, SMALL, rules, engaged!, 4),
