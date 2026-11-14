@@ -299,11 +299,10 @@ export default defineConfig({
     : 'list',
   use: {
     baseURL: 'http://localhost:5173',
-    // DOM snapshots and sources, but no screencast (#784). The screencast streams every
-    // composited frame out of WebKit as a JPEG (an iPad at DPR 2 is 1668x2388). In the
-    // stalled iPad runs the page's animation frames stopped (layout.ts still() hung past its
-    // own deadline) and the trace fixture's teardown timed out. Sessions can't download the
-    // report artifact anyway.
+    // DOM snapshots and sources, but no screencast (#784). The screencast pulls composited
+    // frames out of WebKit as JPEGs (~558x800 on the iPad, up to ~5 a second) with a frame
+    // ack held in flight. In the stalled iPad runs the page's animation frames stopped
+    // (layout.ts still() hung past its own deadline) and the trace fixture's teardown timed out.
     trace: { mode: 'retain-on-failure', screenshots: false, snapshots: true, sources: true },
     timezoneId,
   },
