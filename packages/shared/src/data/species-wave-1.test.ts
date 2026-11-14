@@ -88,7 +88,7 @@ describe('wave 1 (#382)', () => {
     for (const terrain of covered) expect(wild, terrain).toContain(terrain);
     expect(covered.size).toBeGreaterThanOrEqual(5);
     const byId = new Map(KINDS.map((s) => [s.id, s]));
-    const weight: Partial<Record<string, number>> = { common: 4, uncommon: 2, rare: 1 };
+    const weight: Partial<Record<string, number>> = { common: 4, uncommon: 2, rare: 2 };
     for (const t of tables) {
       for (const e of t.entries) {
         const kind = byId.get(e.species);

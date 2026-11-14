@@ -22,6 +22,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
       { species: 'puddlepuff', weight: 4 },
       { species: 'fizzlepop', weight: 4 },
       { species: 'thistlepip', weight: 3 },
+      { species: 'moonmoth', weight: 2 }, // TUNE: #732, the meadow's rare
     ],
   },
   {
@@ -32,7 +33,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
       { species: 'nookling', weight: 3 },
       { species: 'emberbun', weight: 3 },
       { species: 'fuzzbolt', weight: 2 },
-      { species: 'mossmuffin', weight: 2 },
+      { species: 'mossmuffin', weight: 4 }, // TUNE: doubled (#732)
     ],
   },
   {
@@ -41,7 +42,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
     entries: [
       { species: 'nookling', weight: 5 },
       { species: 'pebblesnooze', weight: 3 },
-      { species: 'mossmuffin', weight: 3 },
+      { species: 'mossmuffin', weight: 6 }, // TUNE: doubled (#732)
       { species: 'snoozicle', weight: 2 },
     ],
   },
@@ -53,7 +54,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
       { species: 'fuzzbolt', weight: 4 },
       { species: 'emberbun', weight: 3 },
       { species: 'fizzlepop', weight: 2 },
-      { species: 'glimmerock', weight: 2 },
+      { species: 'glimmerock', weight: 4 }, // TUNE: doubled (#732)
     ],
   },
   {
@@ -62,8 +63,8 @@ export const SPAWN_TABLES: SpawnTable[] = [
     entries: [
       { species: 'snoozicle', weight: 5 },
       { species: 'pebblesnooze', weight: 4 },
-      { species: 'flurrypup', weight: 3 },
-      { species: 'glimmerock', weight: 3 },
+      { species: 'flurrypup', weight: 6 }, // TUNE: doubled (#732)
+      { species: 'glimmerock', weight: 6 }, // TUNE: doubled (#732)
     ],
   },
   {
@@ -73,6 +74,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
       { species: 'puddlepuff', weight: 7 },
       { species: 'bubbletub', weight: 5 },
       { species: 'snoozicle', weight: 2 },
+      { species: 'cometsnail', weight: 2 }, // TUNE: #732, a second lake Cometsnail row
     ],
   },
   {
@@ -83,6 +85,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
       { species: 'emberbun', weight: 4 },
       { species: 'thistlepip', weight: 3 },
       { species: 'fizzlepop', weight: 3 },
+      { species: 'mossmuffin', weight: 2 }, // TUNE: #732, a leafy rare for the field's rows
     ],
   },
   {
@@ -99,11 +102,11 @@ export const SPAWN_TABLES: SpawnTable[] = [
       { species: 'bubbletub', weight: 2 },
       { species: 'thistlepip', weight: 2 },
       { species: 'nookling', weight: 2 },
-      { species: 'flurrypup', weight: 2 },
-      { species: 'glimmerock', weight: 2 },
-      { species: 'mossmuffin', weight: 2 },
-      { species: 'dawndrop', weight: 1 },
-      { species: 'thunderpuff', weight: 1 },
+      { species: 'flurrypup', weight: 4 }, // TUNE: doubled (#732)
+      { species: 'glimmerock', weight: 4 }, // TUNE: doubled (#732)
+      { species: 'mossmuffin', weight: 4 }, // TUNE: doubled (#732)
+      { species: 'dawndrop', weight: 2 }, // TUNE: doubled (#732)
+      { species: 'thunderpuff', weight: 2 }, // TUNE: doubled (#732)
     ],
   },
 
@@ -117,12 +120,13 @@ export const SPAWN_TABLES: SpawnTable[] = [
       { species: 'bubbletub', weight: 4 },
       { species: 'shellnap', weight: 3 },
       { species: 'quackle', weight: 2 },
+      { species: 'lampfin', weight: 2 }, // TUNE: #732, tide pools get a rare
     ],
   },
 
   // Wave 1 (#382): biome-tied kinds, every day of the year, on top of the
   // launch tables above (weights add up across matching tables). Common 4,
-  // uncommon 2, rare 1. TUNE: every weight.
+  // uncommon 2, rare 2 (doubled by #732). TUNE: every weight.
   {
     id: 'wave-1-meadow',
     terrains: ['meadow'],
@@ -136,13 +140,13 @@ export const SPAWN_TABLES: SpawnTable[] = [
     terrains: ['forest'],
     entries: [
       { species: 'gnomnom', weight: 2 },
-      { species: 'moonmoth', weight: 1 },
+      { species: 'moonmoth', weight: 2 }, // TUNE: doubled (#732)
     ],
   },
   {
     id: 'wave-1-old-forest',
     terrains: ['old-forest'],
-    entries: [{ species: 'moonmoth', weight: 1 }],
+    entries: [{ species: 'moonmoth', weight: 2 }], // TUNE: doubled (#732)
   },
   {
     id: 'wave-1-hills',
@@ -159,8 +163,8 @@ export const SPAWN_TABLES: SpawnTable[] = [
     entries: [
       { species: 'hailhop', weight: 4 },
       { species: 'flakefluff', weight: 4 },
-      { species: 'cometsnail', weight: 1 },
-      { species: 'moonmoth', weight: 1 },
+      { species: 'cometsnail', weight: 2 }, // TUNE: doubled (#732)
+      { species: 'moonmoth', weight: 2 }, // TUNE: doubled (#732)
     ],
   },
   {
@@ -169,7 +173,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
     entries: [
       { species: 'lilyhop', weight: 4 },
       { species: 'shellnap', weight: 2 },
-      { species: 'cometsnail', weight: 1 },
+      { species: 'cometsnail', weight: 2 }, // TUNE: doubled (#732)
     ],
   },
   {
@@ -182,7 +186,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
   },
 
   // Wave 2 (#382): biome, daylight and night kinds, on top of the tables above.
-  // Common 4, uncommon 2, rare 1. TUNE: every weight.
+  // Common 4, uncommon 2, rare 2 (doubled by #732). TUNE: every weight.
   {
     id: 'wave-2-meadow',
     terrains: ['meadow'],
@@ -252,7 +256,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
     id: 'wave-2-lake-nights',
     terrains: ['lake'],
     timeOfDay: 'night',
-    entries: [{ species: 'lampfin', weight: 1 }],
+    entries: [{ species: 'lampfin', weight: 2 }], // TUNE: doubled (#732)
   },
 
   // Times of day.
@@ -261,7 +265,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
     id: 'sunny-days',
     terrains: ['meadow', 'hills'],
     timeOfDay: 'day',
-    entries: [{ species: 'dawndrop', weight: 1 }], // TUNE: an epic find
+    entries: [{ species: 'dawndrop', weight: 2 }], // TUNE: an epic find, doubled (#732)
   },
   {
     id: 'quiet-nights',
@@ -310,7 +314,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
     timeOfDay: 'night',
     entries: [
       { species: 'upsybat', weight: 4 }, // TUNE:
-      { species: 'glowboo', weight: 3 }, // TUNE:
+      { species: 'glowboo', weight: 6 }, // TUNE: doubled (#732)
       { species: 'candlekit', weight: 2 }, // TUNE:
     ],
   },
@@ -324,8 +328,9 @@ export const SPAWN_TABLES: SpawnTable[] = [
   },
   {
     // Secret: a tiny piece of the Heartpatch, out on Gap nights. Weights add
-    // up across matching tables, so this is 1 in 27 Gap night spawns (1 in
-    // 38 at Halloween): about one Heartlet in the Gap every 5–6 days.
+    // up across matching tables, so this is 1 in 35 Gap night spawns (1 in
+    // 49 at Halloween): about one Heartlet in the Gap every 7–8 days (#732
+    // doubled the rare weights).
     id: 'gap-nights',
     terrains: ['junipers-gap'],
     timeOfDay: 'night',
@@ -338,7 +343,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
  * encounter (`rollGapEncounter`). Secret (CLAUDE.md rule 6). Kept out of
  * `SPAWN_TABLES` so the ordinary spawn roll never sees it. Legendary and
  * secret base forms only: the legendary line's Thunderpuff, and the
- * Heartlet at a raised weight (1 in 27 Gap night spawns on an ordinary
+ * Heartlet at a raised weight (1 in 35 Gap night spawns on an ordinary
  * night, 1 in 3 here).
  */
 export const LONG_NIGHT_GAP_TABLE: SpawnTable = {
@@ -347,6 +352,6 @@ export const LONG_NIGHT_GAP_TABLE: SpawnTable = {
   timeOfDay: 'night',
   entries: [
     { species: 'thunderpuff', weight: 2 }, // TUNE:
-    { species: 'heartlet', weight: 1 }, // TUNE: raised from the Gap night table's 1 in 27
+    { species: 'heartlet', weight: 1 }, // TUNE: raised from the Gap night table's 1 in 35
   ],
 };
