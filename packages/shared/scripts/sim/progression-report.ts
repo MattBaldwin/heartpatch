@@ -111,13 +111,13 @@ export function friendlyGate(
     const run = runs.find(
       (r) => r.rules === rules && r.seats === seats && r.profile.id === gate.kid,
     );
-    const levels = run?.kids.map((k) => k.days[gate.day - 1]?.partnerLevel);
-    return levels?.length === 2 && levels.every((l) => l !== undefined) ? levels : null;
+    const levels = (run?.kids ?? []).flatMap((k) => k.days[gate.day - 1]?.partnerLevel ?? []);
+    return levels.length === 2 ? levels : null;
   };
   const was = levelsOf(CURRENT_RULES);
   const now = levelsOf(WITH_FRIENDLIES_RULES);
   if (!was || !now) return null;
-  const deltas = now.map((level, k) => (level ?? 0) - (was[k] ?? 0));
+  const deltas = now.map((level, k) => level - (was[k] ?? 0));
   const delta = Math.max(...deltas);
   const slot = deltas.indexOf(delta);
   const before = was[slot] ?? 0;
