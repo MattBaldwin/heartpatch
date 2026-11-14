@@ -802,8 +802,8 @@ const THANKSGIVING: ClothingItem[] = [
     visual: {
       // A twig ring sat down in the hair, two three-lobed maple leaves at the
       // front with an acorn on the band between them, and three single leaves
-      // round the back (red and brown, so they don't vanish in gold hair), all
-      // pitched −28°. Each lobe's `at` is its leaf's centre plus the lobe's
+      // round the back (brown, red and orange; no gold, which vanished in gold
+      // hair), all pitched −28°. Each lobe's `at` is its leaf's centre plus the lobe's
       // offset turned by the leaf's `turn` (yaw, pitch, roll).
       pieces: [
         { shape: 'ellipsoid', at: [0, -0.37, 0], size: [1, 0.18, 1], color: '#8a5a34' },

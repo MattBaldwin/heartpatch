@@ -194,12 +194,18 @@ describe.skipIf(!url)('Boutique (needs DATABASE_URL)', () => {
       const kid = await player();
       // The 2026 window runs to Nov 9 (DECISIONS: extended for the launch).
       clock.setTime(Date.parse('2026-11-09T18:00:00Z'));
-      expect((await shop(server, kid)).seasonal.map((r) => r.seasonId)).toEqual(['halloween']);
+      // Thanksgiving's window has opened by then too (#34), so it has a rack.
+      expect((await shop(server, kid)).seasonal.map((r) => r.seasonId)).toEqual([
+        'halloween',
+        'thanksgiving',
+      ]);
       clock.setTime(Date.parse('2026-11-10T18:00:00Z'));
       const after = await shop(server, kid);
-      // Thanksgiving is on, but has nothing to sell yet: no rack.
-      expect(after.seasonal).toEqual([]);
-      expect(allOf(after).some((i) => CLOTHING_BY_ID.get(i.itemId)!.season)).toBe(false);
+      // Only Thanksgiving's rack is left, and no Halloween piece on any rack.
+      expect(after.seasonal.map((r) => r.seasonId)).toEqual(['thanksgiving']);
+      expect(allOf(after).some((i) => CLOTHING_BY_ID.get(i.itemId)!.season === 'halloween')).toBe(
+        false,
+      );
       // And a Halloween piece can't be bought out of season.
       await coins(server, kid, 500);
       const res = await buy(server, kid, 'witch-hat');
