@@ -72,6 +72,20 @@ export const RaidSchema = z.object({
    * decision 2026-10-07: nothing comes back): how many. Null: none.
    */
   lostFences: z.number().int().min(1).nullable().optional(),
+  /**
+   * What holding the land earned me (#728): my squishies' XP in all, and
+   * the Patch Coins and Heart Coins credited (after the daily caps). Null:
+   * it didn't hold, the guardians held it alone, or it ended before #728.
+   * Optional only so older fixtures parse.
+   */
+  earned: z
+    .object({
+      xp: z.number().int().min(0),
+      patch: z.number().int().min(0),
+      heart: z.number().int().min(0),
+    })
+    .nullable()
+    .optional(),
 });
 export type Raid = z.infer<typeof RaidSchema>;
 

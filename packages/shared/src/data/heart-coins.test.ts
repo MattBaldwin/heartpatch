@@ -26,6 +26,15 @@ describe('Heart Coin rules', () => {
     }
   });
 
+  it('pays a held defence in both currencies, as much as the challenge would (#728)', () => {
+    expect(COIN_RULES.defenseWin['rival-tile']).toBeGreaterThan(0);
+    expect(HEART_COIN_RULES.defenseWin['rival-tile']).toBeGreaterThan(0);
+    expect(COIN_RULES.defenseWin['rival-tile']).toBe(COIN_RULES.battleWin['rival-tile']);
+    expect(HEART_COIN_RULES.defenseWin['rival-tile']).toBe(
+      HEART_COIN_RULES.battleWin['rival-tile'],
+    );
+  });
+
   it('pays care only for an action that counts in full', () => {
     const per = HEART_COIN_RULES.care.perFullAction;
     expect(careHeartCoins({ full: true, counts: true }, HEART_COIN_RULES)).toBe(per);

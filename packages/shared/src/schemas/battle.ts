@@ -371,22 +371,42 @@ export const CAPTURABLE_BATTLE_KINDS: ReadonlySet<BattleKind> = new Set(['wild',
  */
 const EvolvingPercentSchema = z.number().int().min(0).max(100).nullable().default(null);
 
+/** One squishy's XP from a battle, with its evolving meter, for the results card. */
+const RewardXpSchema = z.object({
+  squishyId: z.uuid(),
+  xp: z.number().int().min(0),
+  /**
+   * Its evolving meter before and after this battle's XP (#205), for the
+   * results card; null with no meter (a top form, a secret one next) and
+   * for battles stored before it. After is null when this battle evolved
+   * it (the evolution celebration takes over); 100: it evolves on its
+   * next XP.
+   */
+  evolvingBefore: EvolvingPercentSchema,
+  evolvingAfter: EvolvingPercentSchema,
+});
+
+/**
+ * Coins a battle actually credited (#728): what `creditCoins` and
+ * `creditHeartCoins` returned, after the daily caps, so a card never
+ * promises coins a cap withheld.
+ */
+const RewardCoinsSchema = z.object({
+  patch: z.number().int().min(0),
+  heart: z.number().int().min(0),
+});
+
+/**
+ * Why side `b` was credited no coins (#728): the challenger scooted home
+ * (coins never pay for a scoot, owner decision 2026-11-14), the pair's
+ * paid wins today are used up (#728b), or the land's guardians held it
+ * alone (nobody on watch, nobody played it live).
+ */
+export const UnpaidReasonSchema = z.enum(['scooted', 'pair-cap', 'guardians']);
+export type UnpaidReason = z.infer<typeof UnpaidReasonSchema>;
+
 export const BattleRewardsSchema = z.object({
-  xp: z.array(
-    z.object({
-      squishyId: z.uuid(),
-      xp: z.number().int().min(0),
-      /**
-       * Its evolving meter before and after this battle's XP (#205), for the
-       * results card; null with no meter (a top form, a secret one next) and
-       * for battles stored before it. After is null when this battle evolved
-       * it (the evolution celebration takes over); 100: it evolves on its
-       * next XP.
-       */
-      evolvingBefore: EvolvingPercentSchema,
-      evolvingAfter: EvolvingPercentSchema,
-    }),
-  ),
+  xp: z.array(RewardXpSchema),
   /** The share of the battle's XP it paid, in percent (Gentle mode, design doc §11). */
   percent: z.number().int().min(0).max(100),
   /**
@@ -395,6 +415,27 @@ export const BattleRewardsSchema = z.object({
    * for battles stored before it.
    */
   fullXpResetAt: z.iso.datetime().nullable().default(null),
+  /**
+   * The coins side `a` was credited, battle and capture together (#728).
+   * Null for battles stored before it.
+   */
+  coins: RewardCoinsSchema.nullable().default(null),
+  /**
+   * Side `b`'s rewards (#728): the Keeper whose land held. Null when side
+   * `b` earned nothing (lost, a tie, a battle with no Keeper on side `b`)
+   * and for battles stored before it. Gentle's share never applies to it.
+   */
+  b: z
+    .object({
+      userId: z.uuid(),
+      xp: z.array(RewardXpSchema),
+      fullXpResetAt: z.iso.datetime().nullable(),
+      coins: RewardCoinsSchema.nullable(),
+      /** Set when `coins` is null: why nothing was credited. */
+      unpaid: UnpaidReasonSchema.nullable().default(null),
+    })
+    .nullable()
+    .default(null),
 });
 export type BattleRewards = z.infer<typeof BattleRewardsSchema>;
 

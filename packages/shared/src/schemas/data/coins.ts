@@ -41,6 +41,12 @@ export const CoinRulesSchema = z.strictObject({
     friendly: coins,
   }),
   /**
+   * Coins for the Keeper whose land held (#728): a won defence of a rival's
+   * challenge, when one of their own squishies fought or they played it live.
+   * Paid under the `battle` daily cap; never for a scooted challenger.
+   */
+  defenseWin: z.strictObject({ 'rival-tile': coins }),
+  /**
    * Coins for befriending a wild squishy, and for claiming a tile (neutral or
    * a rival's; Gentle's share scales it, like found clothing).
    */

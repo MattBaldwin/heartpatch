@@ -176,6 +176,16 @@ const BattleEndedSchema = z.strictObject({
    * and habitat multiplier (design doc §7, #19).
    */
   xp: z.array(z.strictObject({ squishyId: z.uuid(), xp: z.number().int().min(0) })),
+  /**
+   * The Keeper whose land held, and the XP their squishies earned (#728).
+   * Missing when side `b` earned nothing, and on events from before it.
+   */
+  defender: z
+    .strictObject({
+      userId: z.uuid(),
+      xp: z.array(z.strictObject({ squishyId: z.uuid(), xp: z.number().int().min(0) })),
+    })
+    .optional(),
 });
 
 const TileBattleKindSchema = z.enum(['tile', 'rival-tile']);

@@ -40,7 +40,9 @@ import {
   type BattleSideId,
   type BattleSideSetup,
   type BattleSquishySetup,
+  type BattleRewards,
   type BattleState,
+  type UnpaidReason,
   type ItemCounts,
   type Hex,
   type Move,
@@ -60,6 +62,7 @@ import { isUniqueViolation } from '../../db/errors.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { newSeed } from '../../lib/rng.js';
+import { uuidV5 } from '../../lib/uuid-v5.js';
 import { wornAccessories } from '../wardrobe/accessories.js';
 import { nextLocalMidnight, type Clock } from '../../lib/time.js';
 import { applyXp, appendGrowthEvents, EVOLUTION_STEPS, type Growth } from '../care/service.js';
@@ -226,6 +229,41 @@ export interface TileBattleEnd {
    * with `events`.
    */
   afterRefunds?: (tx: Executor, at: Date) => Promise<NewGameEvent[]>;
+  /**
+   * A rival's land held (#728): who to pay on side `b`. Missing or null for
+   * a capture, a loss, a tie, a fence battle, neutral land, or a Keeper no
+   * longer on the patch.
+   */
+  defense?: TileBattleDefense | null;
+}
+
+/** The Keeper whose land held (#728), as the territory port reads it from the battle's setup. */
+export interface TileBattleDefense {
+  userId: string;
+  /** They said "Defend now?" yes and played side `b` themselves. */
+  live: boolean;
+  /** Side `b`'s squishies that are the Keeper's own (guards on watch), in id order. Guardians: none. */
+  ownSquishyIds: readonly string[];
+}
+
+/**
+ * Fixed namespace for side `b`'s coin `ref_id` (#728): uuid v5 of the
+ * battle id. Both coin ledgers are unique on `(source, ref_id)` with no user
+ * column, so side `b`'s `battle` credit can't reuse the battle id (side
+ * `a`'s key); this one is as stable, so a retried finish credits nothing twice.
+ */
+const SIDE_B_REF_NAMESPACE = '9d3a6f12-4c7b-4e85-a1d0-5b8e2c7f4a36';
+
+/** Side `b`'s coin `ref_id` for a battle (#728): stable, and never the battle id itself. */
+export const sideBRefId = (battleId: string): string => uuidV5(battleId, SIDE_B_REF_NAMESPACE);
+
+/** One player's coins from a finished battle, by ledger key (#728). */
+interface CoinPayee {
+  userId: string;
+  refId: string;
+  source: 'battle' | 'capture';
+  patch: number;
+  heart: number;
 }
 
 /** The other side of a rescue (#21), built by the hollow module in the start transaction. */
@@ -506,6 +544,27 @@ function defsFor(
  * always side `a`; the raid log's replay (#16) shows a finished challenge to
  * the defender, side `b`.
  */
+/**
+ * A battle's rewards as `side`'s player sees them (#728). Side `a` gets the
+ * stored rewards; side `b` (only ever its own Keeper: a live defender or
+ * the defender's replay) gets `rewards.b` in side `a`'s shape, with no
+ * Gentle share (100) and nothing of side `a`'s, keeping `b` itself for
+ * its `unpaid` reason; null when side `b` earned nothing or the battle is
+ * from before #728.
+ */
+export function rewardsFor(rewards: BattleRewards | null, side: BattleSideId): BattleRewards | null {
+  if (side === PLAYER_SIDE) return rewards;
+  const b = rewards?.b;
+  if (!b) return null;
+  return {
+    xp: b.xp,
+    percent: 100,
+    fullXpResetAt: b.fullXpResetAt,
+    coins: b.coins,
+    b,
+  };
+}
+
 export function playerBattleView(
   content: BattleContent,
   row: BattleRow,
@@ -539,8 +598,9 @@ export function playerBattleView(
     ...defsFor(content, state),
     // The seed predicts every roll, so it stays secret until the end (tech spec §8).
     seed: row.status === 'active' ? null : row.seed,
-    // The player's own rewards; a defender watching the replay doesn't get them.
-    rewards: (options.mySide ?? PLAYER_SIDE) === PLAYER_SIDE ? row.rewards : null,
+    // The viewer's own rewards (#728: side `b`'s reshaped like side `a`'s,
+    // so the card reads one way for both seats); never someone else's.
+    rewards: rewardsFor(row.rewards, options.mySide ?? PLAYER_SIDE),
     // A battle from before arenas were stored plays on the home terrain, by day.
     terrain: row.arena?.terrain ?? MAP_GEN.homeTerrain,
     timeOfDay: row.arena?.timeOfDay ?? 'day',
@@ -980,21 +1040,43 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
   };
 
   /**
-   * Credits each of a finished battle's coin rewards to its player: Patch
-   * Coins (`creditCoins`, step 12), then Heart Coins on the patch
-   * (`creditHeartCoins`, step 12b, #601).
+   * Credits a finished battle's coin rewards to each payee: every Patch
+   * Coin credit (`creditCoins`, step 12), then every Heart Coin credit on
+   * the patch (`creditHeartCoins`, step 12b, #601). Within each step the
+   * payees go in user id order (tech spec §7: several rows of one kind in
+   * id order), so a challenger and a defender paid in one finish lock their
+   * balance rows the same way round as any other transaction (#728).
+   * Returns what each payee was actually credited, after the daily caps.
    */
   const payCoins = async (
     tx: Executor,
     row: BattleRow,
     at: Date,
-    rewards: readonly { source: 'battle' | 'capture'; amount: number; heart: number }[],
-  ): Promise<void> => {
-    const paid = { refId: row.id, userId: row.playerUserId, mapId: row.mapId, at };
-    for (const { source, amount } of rewards) await creditCoins(tx, { ...paid, source, amount });
-    for (const { source, heart } of rewards) {
-      await creditHeartCoins(tx, { ...paid, source, amount: heart });
+    payees: readonly CoinPayee[],
+  ): Promise<Map<string, { patch: number; heart: number }>> => {
+    const ordered = [...payees].sort((x, y) => (x.userId < y.userId ? -1 : x.userId > y.userId ? 1 : 0));
+    const credited = new Map<string, { patch: number; heart: number }>();
+    const tally = (userId: string) => {
+      const sum = credited.get(userId) ?? { patch: 0, heart: 0 };
+      credited.set(userId, sum);
+      return sum;
+    };
+    for (const { userId, refId, source, patch } of ordered) {
+      const paid = await creditCoins(tx, { userId, refId, source, amount: patch, mapId: row.mapId, at });
+      tally(userId).patch += paid.credited;
     }
+    for (const { userId, refId, source, heart } of ordered) {
+      const paid = await creditHeartCoins(tx, {
+        userId,
+        refId,
+        source,
+        amount: heart,
+        mapId: row.mapId,
+        at,
+      });
+      tally(userId).heart += paid.credited;
+    }
+    return credited;
   };
 
   /** Who a step befriended from the other side (#279). */
@@ -1110,6 +1192,14 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         : [];
     // A live battle's turn state goes (#29): side `b` is free to battle again.
     await createLiveBattlesRepo(tx).end(row.id);
+    // A rival's land held (#728): the Keeper's own squishies on side `b`
+    // earn the engine's side-`b` XP. Gentle's share never applies to them
+    // (it is the challenger's), and guardians standing in earn nothing.
+    const defense = tile.defense ?? null;
+    const theirs = new Set(defense?.ownSquishyIds ?? []);
+    const defenderAwards = result.xp
+      .filter((award) => award.side === 'b' && theirs.has(award.squishyId) && award.xp > 0)
+      .map((award) => ({ ...award }));
     // Gentle mode's share (owner decision 2026-10-03): challenging a much
     // smaller player pays part of the battle's XP, win or lose. A friendly
     // battle (#29) has nothing at stake: no XP for either side.
@@ -1121,9 +1211,13 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // `applyXp`), under the squishy locks (the order above).
     // A capture's moved squishies (#277's trainees) join the same id-ordered lock.
     const guards = tile.guards ?? [];
+    // Side `b`'s own squishies on a hold are new locks (#728), in the same
+    // one id-ordered set: two accounts' squishies here are no different
+    // from one account's (tech spec §7 step 10).
     await repo.lockSquishies([
       ...new Set([
         ...awards.map((a) => a.squishyId),
+        ...defenderAwards.map((a) => a.squishyId),
         ...(tile.squishies ?? []),
         ...guards.map((g) => g.squishyId),
       ]),
@@ -1132,21 +1226,27 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     await writeGuardCheckpoints(tx, guards, at);
     // The daily falloff (owner decision 2026-10-06): a squishy that has
     // already won `fullWinsPerDay` battles today gets a share of the XP.
+    // Wins count on either side (#728): a guard's holds count toward its 7.
     const wins = await repo.winsToday(
       row.mapId,
-      row.playerUserId,
-      awards.map((a) => a.squishyId),
+      [...awards, ...defenderAwards].map((a) => a.squishyId),
       at,
     );
-    let fellOff = false;
     /** Squishies on full XP today: only their wins lean Brave (#32), as only full-value care leans. */
     const fullXp = new Set<string>();
-    for (const award of awards) {
-      const percent = battleXpPercent(wins.get(award.squishyId) ?? 0, GROWTH_RULES);
-      if (percent < 100) fellOff = true;
-      else fullXp.add(award.squishyId);
-      award.xp = Math.floor((award.xp * percent) / 100);
-    }
+    /** Cuts each award by its squishy's falloff; true if any was cut. */
+    const falloff = (list: { squishyId: string; xp: number }[]): boolean => {
+      let cut = false;
+      for (const award of list) {
+        const percent = battleXpPercent(wins.get(award.squishyId) ?? 0, GROWTH_RULES);
+        if (percent < 100) cut = true;
+        else fullXp.add(award.squishyId);
+        award.xp = Math.floor((award.xp * percent) / 100);
+      }
+      return cut;
+    };
+    const fellOff = falloff(awards);
+    const defenderFellOff = falloff(defenderAwards);
     // A captured tile's fire comes back to its old owner (#202): their
     // inventory rows (step 11) after the squishy locks, before any XP writes
     // `species_seen`.
@@ -1160,17 +1260,25 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     }
     const landEvents = tile.afterRefunds ? await tile.afterRefunds(tx, at) : [];
     // When full XP comes back (#201): wins count from the patch's midnight.
-    const map = fellOff ? await createMapsRepo(tx).findMap(row.mapId) : null;
-    const fullXpResetAt = map ? nextLocalMidnight(at, map.timeZone).toISOString() : null;
-    const grown: Growth[] = [];
-    for (const award of awards) {
-      if (award.xp <= 0) continue;
-      const growth = await applyXp(tx, award.squishyId, award.xp, at, {
-        // A win leans its squishies Brave (#32).
-        won: result.winner === PLAYER_SIDE && fullXp.has(award.squishyId),
-      });
-      if (growth) grown.push(growth);
-    }
+    const map =
+      fellOff || defenderFellOff ? await createMapsRepo(tx).findMap(row.mapId) : null;
+    const resetAt = map ? nextLocalMidnight(at, map.timeZone).toISOString() : null;
+    const fullXpResetAt = fellOff ? resetAt : null;
+    const grow = async (list: readonly { squishyId: string; xp: number }[], won: boolean) => {
+      const out: Growth[] = [];
+      for (const award of list) {
+        if (award.xp <= 0) continue;
+        const growth = await applyXp(tx, award.squishyId, award.xp, at, {
+          // A win leans its squishies Brave (#32).
+          won: won && fullXp.has(award.squishyId),
+        });
+        if (growth) out.push(growth);
+      }
+      return out;
+    };
+    // Side `a` first, then side `b` (#728): each squishy's lock is already held.
+    const grown = await grow(awards, result.winner === PLAYER_SIDE);
+    const defenderGrown = await grow(defenderAwards, true);
     // Befriended in this last step (design doc §6, #279): each one joins
     // the player. Ones befriended earlier in a guardian battle joined then.
     const friends = await welcome(repo, tx, row, befriendedIn(row.state, state), at);
@@ -1183,20 +1291,53 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     const share = (coins: number, percent: number) => Math.floor((coins * percent) / 100);
     const capture = (rules: { capture: { wild: number; tile: number } }) =>
       captured ? rules.capture.wild : tile.drop ? share(rules.capture.tile, tile.drop.percent) : 0;
-    await payCoins(tx, row, at, [
+    // A held defence (#728) pays the Keeper under the same `battle` caps,
+    // keyed `sideBRefId` so it can't collide with the challenger's credit.
+    // Never for a scooted challenger, nor for land the guardians held alone
+    // (owner decisions 2026-11-14).
+    const unpaid: UnpaidReason | null = !defense
+      ? null
+      : defense.ownSquishyIds.length === 0 && !defense.live
+        ? 'guardians'
+        : result.reason === 'forfeit'
+          ? 'scooted'
+          : null;
+    const paid = await payCoins(tx, row, at, [
       {
+        userId: row.playerUserId,
+        refId: row.id,
         source: 'battle',
-        amount: won ? share(COIN_RULES.battleWin[row.kind], tile.xpPercent) : 0,
+        patch: won ? share(COIN_RULES.battleWin[row.kind], tile.xpPercent) : 0,
         heart: won ? share(HEART_COIN_RULES.battleWin[row.kind], tile.xpPercent) : 0,
       },
       {
         // A befriended wild squishy, or a claimed tile (befriending its
         // guardians on the way pays nothing more, #279).
+        userId: row.playerUserId,
+        refId: row.id,
         source: 'capture',
-        amount: capture(COIN_RULES),
+        patch: capture(COIN_RULES),
         heart: capture(HEART_COIN_RULES),
       },
+      ...(defense && unpaid === null
+        ? [
+            {
+              userId: defense.userId,
+              refId: sideBRefId(row.id),
+              source: 'battle' as const,
+              patch: COIN_RULES.defenseWin['rival-tile'],
+              heart: HEART_COIN_RULES.defenseWin['rival-tile'],
+            },
+          ]
+        : []),
     ]);
+    const growthRewards = (list: readonly Growth[]) =>
+      list.map(({ squishyId, xp, evolvingBefore, evolvingAfter }) => ({
+        squishyId,
+        xp,
+        evolvingBefore,
+        evolvingAfter,
+      }));
     await repo.finish(row.id, {
       status: 'finished',
       actions,
@@ -1204,14 +1345,19 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       result,
       log: [...state.log],
       rewards: {
-        xp: grown.map(({ squishyId, xp, evolvingBefore, evolvingAfter }) => ({
-          squishyId,
-          xp,
-          evolvingBefore,
-          evolvingAfter,
-        })),
+        xp: growthRewards(grown),
         percent: tile.xpPercent,
         fullXpResetAt,
+        coins: paid.get(row.playerUserId) ?? { patch: 0, heart: 0 },
+        b: defense
+          ? {
+              userId: defense.userId,
+              xp: growthRewards(defenderGrown),
+              fullXpResetAt: defenderFellOff ? resetAt : null,
+              coins: unpaid === null ? (paid.get(defense.userId) ?? { patch: 0, heart: 0 }) : null,
+              unpaid,
+            }
+          : null,
       },
       endedAt: at,
     });
@@ -1254,9 +1400,16 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         reason: result.reason,
         turns: result.turns,
         xp: grown.map(({ squishyId, xp }) => ({ squishyId, xp })),
+        ...(defense && {
+          defender: {
+            userId: defense.userId,
+            xp: defenderGrown.map(({ squishyId, xp }) => ({ squishyId, xp })),
+          },
+        }),
       },
     });
-    await appendGrowthEvents(repo.appendEvent, grown);
+    // Each growth event names its squishy's owner, so side `b`'s reach the Keeper.
+    await appendGrowthEvents(repo.appendEvent, [...grown, ...defenderGrown]);
     for (const friend of friends) {
       await appendCaptured(repo, row, friend);
       await appendCelebrated(repo, tx, row, friend);
