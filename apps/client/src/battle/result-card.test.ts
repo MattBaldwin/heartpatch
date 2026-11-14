@@ -45,7 +45,7 @@ describe('XP lines on the result card (#728)', () => {
 
 describe('a live defence that held (#728)', () => {
   it('pays coins', () => {
-    expect(line({})).toBe('Held! You earned 3 Patch Coins and 💛 3.');
+    expect(line({})).toBe('Held! You earned 3 Patch Coins and 💛\u00a03.');
   });
 
   it('says a scoot pays XP, not coins', () => {
@@ -54,7 +54,7 @@ describe('a live defence that held (#728)', () => {
     );
   });
 
-  it('says the coin pouch is full when the daily cap credited 0, never "You earned 💛 0"', () => {
+  it('says the coin pouch is full when the daily cap credited 0, never "You earned 💛\u00a00"', () => {
     expect(line({ rewards: rewards({ coins: { patch: 0, heart: 0 } }) })).toBe(
       REWARD_TEXT.pouchFull,
     );
@@ -81,7 +81,7 @@ describe('a friendly battle (#728)', () => {
     line({ role: 'friendly', rewards: rewards({ coins: { patch: 2, heart: 2 } }), ...over });
 
   it('cheers the winner with their coins', () => {
-    expect(friendly({})).toBe('+2 Patch Coins and 💛 2 for the win!');
+    expect(friendly({})).toBe('+2 Patch Coins and 💛\u00a02 for the\u00a0win!');
   });
 
   it('is kind to the loser', () => {
@@ -109,7 +109,7 @@ describe("the challenger's coin line (#728)", () => {
   const mine = (over: Partial<Input>) => line({ role: 'challenger', ...over });
 
   it('says the coins a win paid', () => {
-    expect(mine({})).toBe('You earned 3 Patch Coins and 💛 3.');
+    expect(mine({})).toBe('You earned 3 Patch Coins and 💛\u00a03.');
   });
 
   it('says nothing when it paid nothing or is from before #728', () => {
@@ -122,8 +122,8 @@ describe("the challenger's coin line (#728)", () => {
 
 describe('reward words', () => {
   it('writes coins the way the rest of the app does', () => {
-    expect(coinsText({ patch: 3, heart: 3 })).toBe('3 Patch Coins and 💛 3');
-    expect(coinsText({ patch: 0, heart: 2 })).toBe('💛 2');
+    expect(coinsText({ patch: 3, heart: 3 })).toBe('3 Patch Coins and 💛\u00a03');
+    expect(coinsText({ patch: 0, heart: 2 })).toBe('💛\u00a02');
   });
 
   it('never uses an avoided word', () => {

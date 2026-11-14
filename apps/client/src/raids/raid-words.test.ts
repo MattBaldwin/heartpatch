@@ -140,7 +140,7 @@ describe('what a hold paid (#728)', () => {
 
   it('says the XP and the coins a hold earned', () => {
     expect(raidLine(raid({ earned }))).toBe(
-      'Pumpkinpal tried to visit your land. Your squishies held on and earned 12 XP! You got 3 Patch Coins and 💛 3.',
+      'Pumpkinpal tried to visit your land. Your squishies held on and earned 12 XP! You got 3 Patch Coins and 💛\u00a03.',
     );
     // A daily cap kept the coins: just the XP, never "You got 0".
     expect(raidLine(raid({ earned: { xp: 12, patch: 0, heart: 0 } }))).toBe(
@@ -154,13 +154,13 @@ describe('what a hold paid (#728)', () => {
 
   it('says what a live hold earned too', () => {
     expect(raidLine(raid({ live: true, stance: null, earned }))).toBe(
-      '🛡️ You defended live and kept Pumpkinpal out. Your land is safe! Your squishies earned 12 XP! You got 3 Patch Coins and 💛 3.',
+      '🛡️ You defended live and kept Pumpkinpal out. Your land is safe! Your squishies earned 12 XP! You got 3 Patch Coins and 💛\u00a03.',
     );
     // Played with the guardians: coins, no XP.
     expect(
       raidLine(raid({ live: true, stance: null, earned: { xp: 0, patch: 3, heart: 3 } })),
     ).toBe(
-      '🛡️ You defended live and kept Pumpkinpal out. Your land is safe! You got 3 Patch Coins and 💛 3.',
+      '🛡️ You defended live and kept Pumpkinpal out. Your land is safe! You got 3 Patch Coins and 💛\u00a03.',
     );
   });
 

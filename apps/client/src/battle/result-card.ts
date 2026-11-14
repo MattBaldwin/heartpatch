@@ -14,7 +14,7 @@ export const REWARD_TEXT = {
   heldScooted: (name: string) => `${name} scooted home. XP still counts, coins don't.`,
   /** A win the daily battle-coin cap held back (`battleCoins`). */
   pouchFull: 'Coin pouch full for today. XP still counts!',
-  friendlyWon: (coins: string) => `+${coins} for the win!`,
+  friendlyWon: (coins: string) => `+${coins} for the\u00a0win!`,
   friendlyLost: 'Good game! Everyone learned something.',
   friendlyPairCap: (name: string) => `You've won your coins from ${name} today. XP still counts!`,
   friendlyGaveUp: (name: string) => `${name} gave up, so no coins this time. XP still counts!`,
@@ -23,7 +23,8 @@ export const REWARD_TEXT = {
 /** "3 Patch Coins and 💛 3", or just the one that was credited. */
 export function coinsText(coins: { patch: number; heart: number }): string {
   const patch = `${String(coins.patch)} Patch ${coins.patch === 1 ? 'Coin' : 'Coins'}`;
-  const heart = `💛 ${String(coins.heart)}`;
+  // No-break spaces keep "💛 3" and "the win!" from wrapping apart on a phone.
+  const heart = `💛\u00a0${String(coins.heart)}`;
   if (coins.heart === 0) return patch;
   if (coins.patch === 0) return heart;
   return `${patch} and ${heart}`;
