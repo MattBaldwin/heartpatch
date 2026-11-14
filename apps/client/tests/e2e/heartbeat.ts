@@ -1,9 +1,12 @@
+import { availableParallelism, loadavg } from 'node:os';
 import { test, type Page, type TestInfo, type WebSocket } from '@playwright/test';
 
-// A diagnostic for #784: on CI's WebKit a page sometimes stops answering (no
-// animation frames, locator queries never return), after a reload or not
-// (recipe-book never reloads). Is its main thread blocked, has only rendering
-// stopped, or has Playwright lost the page's execution context? Every page
+// A diagnostic for #784: on CI's WebKit a page sometimes crawls (taps wait
+// minutes for "stable"), after a reload or not (recipe-book never reloads).
+// Found so far: its main thread is starved (timer ticks at a third to a half
+// of their rate) while the game itself is idle (a few draws a load), so it
+// isn't our render loop. Is the page busy with itself (CSS animations painted
+// in software) or waiting for a core on a loaded runner? Every page
 // newPlayer opens keeps a heartbeat. A watchdog adds a `heartbeat-stall`
 // annotation the moment a beat goes quiet or frames stop, and a spec's
 // afterEach can add a `heartbeat` one on a failed test (`reportHeartbeats`).
@@ -13,21 +16,21 @@ import { test, type Page, type TestInfo, type WebSocket } from '@playwright/test
 //   250 ms `setInterval` counts ticks (it only runs while the main thread is
 //   free) and asks for one animation frame at a time (frames: it only runs while
 //   rendering does), with the longest gap each has seen.
-// - Every second the page sends both counts two ways: a console line, and a
-//   `fetch` of the favicon with the counts in its query (seen from
-//   `page.on('request')`, not routed: a route would turn on request
-//   interception for every request). Playwright's WebKit side drops a console
-//   message when it has no execution context for the main frame, but a
-//   request event needs none. So the request beat's age says when the page
-//   last ran script even when `page.evaluate` can't reach it, and a request
-//   beat with no console beat means Playwright lost the page's context.
+// - Every second the page logs both counts as a console line, with the game's
+//   own draws (dev hook), whether its stage is idle, and how many CSS
+//   animations are running (WebKit paints those on CI's software renderer).
+//   There used to be a second channel, a `fetch` of the favicon each second,
+//   in case Playwright lost the page's execution context. In every CI report
+//   the console beat stayed current, and a beat fetch that a reload cut off
+//   reached specs as a WebKit page error ("…favicon.svg?hp-beat=… due to
+//   access control checks."), failing wardrobe.spec. So only the console beats.
+// - Test side: the runner's load average with each report, to tell a page
+//   starved by the machine from one busy with itself.
 // - Test side: the page's load, navigation, crash, page-error and websocket
 //   events (Vite's HMR socket), timestamped, for a reload racing something.
 
-/** The console line's prefix and the request's query key, so nothing else is mistaken for a beat. */
+/** The console line's prefix, so nothing else is mistaken for a beat. */
 const BEAT = 'hp-beat';
-/** A file the dev server answers with 200, so the beat logs no failed load. */
-const BEAT_URL = '/favicon.svg';
 const BEAT_MS = 250;
 const EVENTS_KEPT = 30;
 /** How long a beat may be quiet, or frames stand still, before the watchdog looks. */
@@ -55,14 +58,14 @@ interface PageBeat {
   /** The game's own frames drawn (dev hook `draws`, -1 before it's up) and whether it's idle. */
   draws: number;
   idle: boolean | null;
+  /** CSS animations and transitions running on the page now. */
+  anims: number;
 }
-
-type Channel = 'request' | 'console';
 
 interface Watch {
   started: number;
-  /** The last beat on each channel: when it arrived (test clock) and what it said. */
-  last: Record<Channel, { at: number; beat: PageBeat } | null>;
+  /** The last beat: when it arrived (test clock) and what it said. */
+  last: { at: number; beat: PageBeat } | null;
   /** Ticks, frames and draws as of the first beat of each 5 s window this load, to show a rate. */
   beats: { at: number; ticks: number; frames: number; draws: number }[];
   events: string[];
@@ -81,7 +84,7 @@ const watched = new Map<Page, Watch>();
 /** Starts the heartbeat on the page's context (from its next load) and listens to it. */
 export async function watchHeartbeat(page: Page): Promise<void> {
   await page.context().addInitScript(
-    ({ prefix, every, url }) => {
+    ({ prefix, every }) => {
       // The top frame only: a frame inside would beat with its own load and clock.
       if (window !== window.top) return;
       const now = () => performance.now();
@@ -96,6 +99,7 @@ export async function watchHeartbeat(page: Page): Promise<void> {
         framePendingSince: 0,
         draws: -1,
         idle: null as boolean | null,
+        anims: 0,
       };
       (window as unknown as { __hpBeat: typeof beat }).__hpBeat = beat;
       // One frame at a time, asked for on a tick, so the page isn't kept drawing
@@ -127,21 +131,18 @@ export async function watchHeartbeat(page: Page): Promise<void> {
         askFrame();
         if (t - logged >= 1_000) {
           logged = t;
-          const line = JSON.stringify(beat);
-          console.debug(prefix, line);
-          void fetch(`${url}?${prefix}=${encodeURIComponent(line)}`, { cache: 'no-store' }).catch(
-            () => undefined,
-          );
+          beat.anims = document.getAnimations().filter((a) => a.playState === 'running').length;
+          console.debug(prefix, JSON.stringify(beat));
         }
       }, every);
     },
-    { prefix: BEAT, every: BEAT_MS, url: BEAT_URL },
+    { prefix: BEAT, every: BEAT_MS },
   );
 
   const started = Date.now();
   const watch: Watch = {
     started,
-    last: { request: null, console: null },
+    last: null,
     beats: [],
     events: [],
     navigatedAt: started,
@@ -157,7 +158,7 @@ export async function watchHeartbeat(page: Page): Promise<void> {
     watch.events.push(`${since()} ${event}`);
     if (watch.events.length > EVENTS_KEPT) watch.events.shift();
   };
-  const onBeat = (channel: Channel, json: string) => {
+  const onBeat = (json: string) => {
     let beat: PageBeat;
     try {
       beat = JSON.parse(json) as PageBeat;
@@ -165,12 +166,9 @@ export async function watchHeartbeat(page: Page): Promise<void> {
       return; // Not a beat after all.
     }
     const at = Date.now();
-    if (watch.last[channel]?.beat.load !== beat.load) {
-      note(`first ${channel} beat of load ${String(beat.load)}`);
-    }
-    const newLoad = watch.last[channel]?.beat.load !== beat.load;
-    watch.last[channel] = { at, beat };
-    if (channel !== 'request') return;
+    const newLoad = watch.last?.beat.load !== beat.load;
+    if (newLoad) note(`first beat of load ${String(beat.load)}`);
+    watch.last = { at, beat };
     // Counts start again on each load: a rate across a reload means nothing.
     if (newLoad) watch.beats = [];
     if (beat.frames !== watch.frames) {
@@ -185,12 +183,7 @@ export async function watchHeartbeat(page: Page): Promise<void> {
   };
   page.on('console', (msg) => {
     const text = msg.text();
-    if (text.startsWith(`${BEAT} `)) onBeat('console', text.slice(BEAT.length + 1));
-  });
-  page.on('request', (request) => {
-    const url = new URL(request.url());
-    const json = url.pathname === BEAT_URL ? url.searchParams.get(BEAT) : null;
-    if (json !== null) onBeat('request', json);
+    if (text.startsWith(`${BEAT} `)) onBeat(text.slice(BEAT.length + 1));
   });
   page.on('framenavigated', (frame) => {
     if (frame !== page.mainFrame()) return;
@@ -256,16 +249,18 @@ async function snapshot(page: Page, watch: Watch): Promise<Record<string, unknow
     return {
       ticksPerS: +((b.ticks - a.ticks) / s).toFixed(1),
       framesPerS: +((b.frames - a.frames) / s).toFixed(2),
-      drawsPerS: +((b.draws - a.draws) / s).toFixed(2),
+      // The count starts again when the map remounts its stage: no rate across that.
+      drawsPerS: b.draws >= a.draws ? +((b.draws - a.draws) / s).toFixed(2) : null,
     };
   });
   const seen = {
     // On the events' clock (seconds since the heartbeat was set up).
     reportedAtS: +((now - watch.started) / 1000).toFixed(1),
-    requestBeatAgeS: age(watch.last.request),
-    consoleBeatAgeS: age(watch.last.console),
+    beatAgeS: age(watch.last),
     framesStillS: +((now - watch.framesMovedAt) / 1000).toFixed(1),
-    lastBeat: watch.last.request?.beat ?? watch.last.console?.beat ?? null,
+    lastBeat: watch.last?.beat ?? null,
+    // The runner's 1-minute load average over its cores: above 1, the page waits for a core.
+    loadPerCore: +(loadavg()[0]! / availableParallelism()).toFixed(2),
     rates,
     events: [...watch.events],
   };
@@ -291,9 +286,9 @@ async function snapshot(page: Page, watch: Watch): Promise<Record<string, unknow
 }
 
 /**
- * Every 2 s while the test that opened the page runs: a beat channel quiet for
- * 20 s since the last navigation, or frames standing still for 20 s while
- * request beats come, adds one `heartbeat-stall` annotation (once per kind a
+ * Every 2 s while the test that opened the page runs: beats quiet for 20 s
+ * since the last navigation, or frames standing still for 20 s while beats
+ * come, adds one `heartbeat-stall` annotation (once per kind a
  * load, at most 2 a page). spec-timing-reporter.ts prints them for tries that
  * didn't pass.
  */
@@ -312,12 +307,9 @@ function startWatchdog(page: Page, watch: Watch, testInfo: TestInfo): void {
     }
     if (probing) return;
     const now = Date.now();
-    const quiet = (channel: Channel) =>
-      now - Math.max(watch.last[channel]?.at ?? 0, watch.navigatedAt) >= STALL_MS;
-    const kind = quiet('request')
-      ? 'request beat quiet'
-      : quiet('console')
-        ? 'console beat quiet'
+    const kind =
+      now - Math.max(watch.last?.at ?? 0, watch.navigatedAt) >= STALL_MS
+        ? 'beat quiet'
         : now - watch.framesMovedAt >= STALL_MS
           ? 'frames stopped'
           : null;
@@ -340,15 +332,17 @@ function startWatchdog(page: Page, watch: Watch, testInfo: TestInfo): void {
 
 /**
  * On a failed test, one `heartbeat` annotation per watched page: how old the
- * last request and console beats are, the last beat, ticks and frames per second
- * over the last windows (from request beats), the page's events, and whether a
+ * last beat is and what it said, ticks, frames and draws per second over the
+ * last windows, the runner's load per core, the page's events, and whether a
  * main-world `evaluate` and a locator query (Playwright's utility world) still
  * answer within 3 s.
  *
- * - request beat fresh, frames ~0, probes answer: only rendering stopped.
- * - request beat fresh, console beat stale or probes silent: the page runs, and
- *   Playwright lost its execution context.
- * - request beat stale, probes silent: the main thread is blocked, or the page is
+ * - beat fresh, frames ~0, probes answer: only rendering stopped.
+ * - ticks well under 4/s with draws ~0: the page is starved, not by our render
+ *   loop. `anims` > 0 points at the page's own CSS animations; `loadPerCore`
+ *   above 1 at the runner.
+ * - beat fresh, probes silent: the page runs, and Playwright lost its context.
+ * - beat stale, probes silent: the main thread is blocked, or the page is
  *   gone (CRASH in the events) or Playwright lost its whole page session (a
  *   process swap on navigation): then navigation and load events stop too.
  */
