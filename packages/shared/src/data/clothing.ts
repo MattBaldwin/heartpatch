@@ -800,77 +800,78 @@ const THANKSGIVING: ClothingItem[] = [
     boutiquePrice: 30, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
-      // A twig ring low on the hair, two three-lobed maple leaves at the front
-      // with an acorn between them, and three single leaves round the back,
-      // all tipped out a little. Each lobe's `at` is its leaf's centre plus
-      // the lobe's offset turned by the leaf's `turn` (yaw, pitch, roll).
+      // A twig ring sat down in the hair, two three-lobed maple leaves at the
+      // front with an acorn on the band between them, and three single leaves
+      // round the back (red and brown, so they don't vanish in gold hair), all
+      // pitched −28°. Each lobe's `at` is its leaf's centre plus the lobe's
+      // offset turned by the leaf's `turn` (yaw, pitch, roll).
       pieces: [
-        { shape: 'ellipsoid', at: [0, -0.25, 0], size: [1, 0.18, 1], color: '#8a5a34' },
+        { shape: 'ellipsoid', at: [0, -0.37, 0], size: [1, 0.18, 1], color: '#8a5a34' },
         {
           shape: 'teardrop',
-          at: [-0.301, -0.095, -0.385],
+          at: [-0.278, -0.215, -0.356],
           size: [0.17, 0.38, 0.06],
-          turn: [28, -142, 0],
+          turn: [-28, -142, 0],
           color: '#d9482b',
         },
         {
           shape: 'teardrop',
-          at: [-0.213, -0.148, -0.418],
+          at: [-0.224, -0.268, -0.433],
           size: [0.15, 0.3, 0.06],
-          turn: [28, -142, 35],
+          turn: [-28, -142, 35],
           color: '#c23a22',
         },
         {
           shape: 'teardrop',
-          at: [-0.355, -0.148, -0.308],
+          at: [-0.366, -0.268, -0.322],
           size: [0.15, 0.3, 0.06],
-          turn: [28, -142, -35],
+          turn: [-28, -142, -35],
           color: '#c23a22',
         },
         {
           shape: 'teardrop',
-          at: [0.301, -0.095, -0.385],
+          at: [0.278, -0.215, -0.356],
           size: [0.17, 0.38, 0.06],
-          turn: [28, 142, 0],
+          turn: [-28, 142, 0],
           color: '#f07f2a',
         },
         {
           shape: 'teardrop',
-          at: [0.355, -0.148, -0.308],
+          at: [0.366, -0.268, -0.322],
           size: [0.15, 0.3, 0.06],
-          turn: [28, 142, 35],
+          turn: [-28, 142, 35],
           color: '#e06a1c',
         },
         {
           shape: 'teardrop',
-          at: [0.213, -0.148, -0.418],
+          at: [0.224, -0.268, -0.433],
           size: [0.15, 0.3, 0.06],
-          turn: [28, 142, -35],
+          turn: [-28, 142, -35],
           color: '#e06a1c',
         },
         {
           shape: 'teardrop',
-          at: [0.385, -0.13, 0.27],
+          at: [0.385, -0.25, 0.27],
           size: [0.26, 0.36, 0.07],
-          turn: [28, 55, 0],
-          color: '#e8b33a',
+          turn: [-28, 55, 0],
+          color: '#7a3f1d',
         },
         {
           shape: 'teardrop',
-          at: [0, -0.13, 0.47],
+          at: [0, -0.25, 0.47],
           size: [0.26, 0.36, 0.07],
-          turn: [28, 0, 0],
-          color: '#d9482b',
+          turn: [-28, 0, 0],
+          color: '#9e2a1e',
         },
         {
           shape: 'teardrop',
-          at: [-0.385, -0.13, 0.27],
+          at: [-0.385, -0.25, 0.27],
           size: [0.26, 0.36, 0.07],
-          turn: [28, -55, 0],
+          turn: [-28, -55, 0],
           color: '#f07f2a',
         },
-        { shape: 'ellipsoid', at: [0, -0.19, -0.57], size: [0.21, 0.26, 0.18], color: '#c08a4a' },
-        { shape: 'ellipsoid', at: [0, -0.05, -0.57], size: [0.26, 0.12, 0.21], color: '#6e4426' },
+        { shape: 'ellipsoid', at: [0, -0.31, -0.52], size: [0.21, 0.26, 0.18], color: '#c08a4a' },
+        { shape: 'ellipsoid', at: [0, -0.17, -0.52], size: [0.26, 0.12, 0.21], color: '#6e4426' },
       ],
     },
   },
@@ -885,36 +886,41 @@ const THANKSGIVING: ClothingItem[] = [
     boutiquePrice: 15, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
-      // Two fat wraps up to the neck line (never over the face; owner, #34)
-      // that stand out past the arms, a knot at the front with a striped,
-      // fringed tail, and a second tail down the back so the side view
-      // reads as a scarf.
+      // Two chunky wraps up to the neck line (never over the face; owner, #34)
+      // that stand out past the arms, a big knot at the front with a wide,
+      // flat, striped and fringed tail laid on the chest, and a second tail
+      // down the back so the side view reads as a scarf.
       pieces: [
-        { shape: 'ellipsoid', at: [0, 0.1, 0], size: [1.26, 0.5, 1.26], color: '#7b3d6e' },
-        { shape: 'ellipsoid', at: [0, 0.32, 0], size: [1.2, 0.36, 1.2], color: '#f07f2a' },
-        { shape: 'ellipsoid', at: [0.22, 0.1, -0.62], size: [0.34, 0.34, 0.26], color: '#7b3d6e' },
-        { shape: 'capsule', at: [0.26, -0.22, -0.55], size: [0.3, 0.6, 0.2], color: '#7b3d6e' },
+        { shape: 'ellipsoid', at: [0, 0.02, 0], size: [1.45, 0.66, 1.45], color: '#7b3d6e' },
+        { shape: 'ellipsoid', at: [0, 0.3, 0], size: [1.38, 0.4, 1.38], color: '#f07f2a' },
+        { shape: 'ellipsoid', at: [0.22, 0.06, -0.7], size: [0.42, 0.4, 0.3], color: '#7b3d6e' },
+        { shape: 'capsule', at: [0.22, -0.24, -0.58], size: [0.45, 0.62, 0.12], color: '#7b3d6e' },
         {
           shape: 'ellipsoid',
-          at: [0.26, -0.12, -0.56],
-          size: [0.31, 0.08, 0.22],
+          at: [0.22, -0.14, -0.59],
+          size: [0.46, 0.08, 0.13],
           color: '#f07f2a',
         },
-        { shape: 'ellipsoid', at: [0.26, -0.3, -0.56], size: [0.31, 0.08, 0.22], color: '#e8b33a' },
-        { shape: 'capsule', at: [0.17, -0.55, -0.55], size: [0.06, 0.12, 0.06], color: '#e8b33a' },
-        { shape: 'capsule', at: [0.26, -0.56, -0.55], size: [0.06, 0.12, 0.06], color: '#e8b33a' },
-        { shape: 'capsule', at: [0.35, -0.55, -0.55], size: [0.06, 0.12, 0.06], color: '#e8b33a' },
+        {
+          shape: 'ellipsoid',
+          at: [0.22, -0.32, -0.59],
+          size: [0.46, 0.08, 0.13],
+          color: '#e8b33a',
+        },
+        { shape: 'capsule', at: [0.07, -0.58, -0.58], size: [0.07, 0.12, 0.07], color: '#e8b33a' },
+        { shape: 'capsule', at: [0.22, -0.59, -0.58], size: [0.07, 0.12, 0.07], color: '#e8b33a' },
+        { shape: 'capsule', at: [0.37, -0.58, -0.58], size: [0.07, 0.12, 0.07], color: '#e8b33a' },
         {
           shape: 'capsule',
-          at: [-0.24, -0.12, 0.6],
-          size: [0.28, 0.6, 0.18],
+          at: [-0.24, -0.16, 0.62],
+          size: [0.38, 0.62, 0.12],
           turn: [0, 0, -6],
           color: '#7b3d6e',
         },
         {
           shape: 'ellipsoid',
-          at: [-0.235, -0.2, 0.61],
-          size: [0.29, 0.08, 0.2],
+          at: [-0.235, -0.22, 0.63],
+          size: [0.39, 0.08, 0.13],
           turn: [0, 0, -6],
           color: '#f07f2a',
         },
@@ -933,8 +939,9 @@ const THANKSGIVING: ClothingItem[] = [
     tradable: true,
     visual: {
       // A cream quilt wider than the shoulders, its hem tipped out 10°, with
-      // folded edges, uneven autumn patches (turned with it) and a pumpkin
-      // roll at the collar that shows from the front.
+      // folded edges and six uneven autumn patches (turned with it). A fat
+      // pumpkin roll at the collar and two cream shoulder wraps show the cape
+      // from the front and side.
       pieces: [
         {
           shape: 'capsule',
@@ -943,7 +950,7 @@ const THANKSGIVING: ClothingItem[] = [
           turn: [-10, 0, 0],
           color: '#f6ead2',
         },
-        { shape: 'ellipsoid', at: [0, 0.3, 0], size: [1.3, 0.26, 1.3], color: '#f07f2a' },
+        { shape: 'ellipsoid', at: [0, 0.24, 0], size: [1.5, 0.44, 1.5], color: '#f07f2a' },
         {
           shape: 'capsule',
           at: [-0.8, -0.546, 0.648],
@@ -960,59 +967,59 @@ const THANKSGIVING: ClothingItem[] = [
         },
         {
           shape: 'capsule',
-          at: [-0.42, 0.057, 0.613],
-          size: [0.62, 0.6, 0.04],
-          turn: [-10, 0, 4],
+          at: [-0.34, -0.041, 0.63],
+          size: [0.66, 0.6, 0.04],
+          turn: [-10, 0, 9],
           color: '#c4552d',
         },
         {
           shape: 'capsule',
-          at: [0.3, 0.087, 0.608],
-          size: [0.7, 0.5, 0.04],
-          turn: [-10, 0, -6],
+          at: [0.34, -0.022, 0.627],
+          size: [0.7, 0.52, 0.04],
+          turn: [-10, 0, -11],
           color: '#e8b33a',
         },
         {
           shape: 'capsule',
-          at: [-0.5, -0.514, 0.714],
-          size: [0.55, 0.52, 0.04],
-          turn: [-10, 0, -3],
+          at: [-0.36, -0.504, 0.712],
+          size: [0.66, 0.6, 0.04],
+          turn: [-10, 0, -8],
           color: '#9cae6b',
         },
         {
           shape: 'capsule',
-          at: [0.08, -0.465, 0.705],
-          size: [0.5, 0.62, 0.04],
-          turn: [-10, 0, 7],
+          at: [0.34, -0.534, 0.717],
+          size: [0.6, 0.7, 0.04],
+          turn: [-10, 0, 12],
           color: '#7b3d6e',
         },
         {
           shape: 'capsule',
-          at: [0.56, -0.563, 0.723],
-          size: [0.36, 0.58, 0.04],
-          turn: [-10, 0, -8],
+          at: [-0.3, -1.026, 0.804],
+          size: [0.76, 0.5, 0.04],
+          turn: [-10, 0, 10],
           color: '#f07f2a',
         },
         {
           shape: 'capsule',
-          at: [-0.34, -1.095, 0.816],
-          size: [0.74, 0.56, 0.04],
-          turn: [-10, 0, 5],
-          color: '#e8b33a',
-        },
-        {
-          shape: 'capsule',
-          at: [0.34, -1.075, 0.813],
-          size: [0.56, 0.5, 0.04],
-          turn: [-10, 0, -4],
+          at: [0.38, -1.026, 0.804],
+          size: [0.54, 0.6, 0.04],
+          turn: [-10, 0, -9],
           color: '#c4552d',
         },
         {
-          shape: 'capsule',
-          at: [0.64, -1.233, 0.841],
-          size: [0.28, 0.32, 0.04],
-          turn: [-10, 0, 8],
-          color: '#9cae6b',
+          shape: 'ellipsoid',
+          at: [-0.44, 0.18, 0.1],
+          size: [0.52, 0.34, 0.8],
+          turn: [0, 0, 22],
+          color: '#efdfc0',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [0.44, 0.18, 0.1],
+          size: [0.52, 0.34, 0.8],
+          turn: [0, 0, -22],
+          color: '#efdfc0',
         },
       ],
     },
