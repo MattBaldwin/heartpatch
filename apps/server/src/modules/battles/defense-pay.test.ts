@@ -207,7 +207,9 @@ describe.skipIf(!url)('a won defence pays the defender (#728, needs DATABASE_URL
     mapId: string,
     h: { q: number; r: number },
   ) => {
-    const battle = battleOf(await call(server, 'POST', `/maps/${mapId}/attacks`, who, { q: h.q, r: h.r }));
+    const battle = battleOf(
+      await call(server, 'POST', `/maps/${mapId}/attacks`, who, { q: h.q, r: h.r }),
+    );
     expect(battle.kind).toBe('rival-tile');
     expect(battle.defensePrompt).toBeUndefined();
     return battle;
@@ -258,7 +260,12 @@ describe.skipIf(!url)('a won defence pays the defender (#728, needs DATABASE_URL
     return RaidReportResponseSchema.parse(res.json()).report.raids;
   };
   /** A strong guard against a weak challenger: the land holds. */
-  async function hold(server: FastifyInstance, lee: Player, mapId: string, near: { q: number; r: number }) {
+  async function hold(
+    server: FastifyInstance,
+    lee: Player,
+    mapId: string,
+    near: { q: number; r: number },
+  ) {
     const done = await playOut(server, lee, await attack(server, lee, mapId, near));
     expect(resultOf(done)).toMatchObject({ winner: 'b' });
     expect(resultOf(done).reason).not.toBe('forfeit');
@@ -478,7 +485,8 @@ describe.skipIf(!url)('a won defence pays the defender (#728, needs DATABASE_URL
     const repo = createBattlesRepo(db);
     expect((await repo.winsToday(mapId, [guard.id], clock)).get(guard.id)).toBe(1);
     // Six more holds today, as copies of the first finished battle.
-    const full = GROWTH_RULES.battleXpFalloff.fullWinsPerDay;
+    const falloff = GROWTH_RULES.battleXpFalloff!;
+    const full = falloff.fullWinsPerDay;
     await db.execute(
       `insert into battles
        select (jsonb_populate_record(null::battles, to_jsonb(b) || jsonb_build_object('id', gen_random_uuid()))).*
@@ -491,7 +499,7 @@ describe.skipIf(!url)('a won defence pays the defender (#728, needs DATABASE_URL
     clock.setTime(clock.getTime() + (TERRITORY_RULES.cooldownHours + 1) * HOUR_MS);
     const done = await hold(server, lee, mapId, near);
     const base = resultOf(done).xp.find((a) => a.side === 'b' && a.squishyId === guard.id)!.xp;
-    const cut = Math.floor((base * GROWTH_RULES.battleXpFalloff.afterPercent) / 100);
+    const cut = Math.floor((base * falloff.afterPercent) / 100);
     const rewards = await rewardsOf(done.id);
     expect(rewards.b!.xp.map((x) => x.squishyId)).toEqual([guard.id]);
     const granted = rewards.b!.xp[0]!.xp;

@@ -546,7 +546,7 @@ function defsFor(
  */
 /**
  * A battle's rewards as `side`'s player sees them (#728). Side `a` gets the
- * stored rewards; side `b` (only ever its own Keeper: a live defender or
+ * stored rewards without side `b`'s block; side `b` (only ever its own Keeper: a live defender or
  * the defender's replay) gets `rewards.b` in side `a`'s shape, with no
  * Gentle share (100) and nothing of side `a`'s, keeping `b` itself for
  * its `unpaid` reason; null when side `b` earned nothing or the battle is
@@ -556,7 +556,8 @@ export function rewardsFor(
   rewards: BattleRewards | null,
   side: BattleSideId,
 ): BattleRewards | null {
-  if (side === PLAYER_SIDE) return rewards;
+  // Side `a` sees its own: the Keeper's block is theirs, not the challenger's.
+  if (side === PLAYER_SIDE) return rewards && { ...rewards, b: null };
   const b = rewards?.b;
   if (!b) return null;
   return {
