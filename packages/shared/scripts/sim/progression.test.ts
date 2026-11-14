@@ -23,13 +23,14 @@ import { firstsFacts } from './progression-firsts.js';
 import {
   grant,
   journeyOdds,
+  payHold,
+  playFriendly,
   modelData,
   rivalTargets,
   runProgression,
   sideB,
   wildOdds,
   type Kid,
-  type Member,
 } from './progression.js';
 import { hexKey, type HexKey } from '../../src/hex/index.js';
 import type { MapTile } from '../../src/mapgen/index.js';
@@ -250,20 +251,41 @@ describe('friendlies and defences (#728)', () => {
   });
 
   it('counts every friendly and every hold toward the falloff, win or lose', () => {
-    const member: Member = { id: 'partner', speciesId: 'emberbun', level: 10, xp: 0, winsToday: 0 };
-    const kid: Kid = { profile: engaged!, slot: 0, team: [member], evolved: [] };
+    const kidOf = (slot: number): Kid => ({
+      profile: engaged!,
+      slot,
+      team: [
+        { id: 'partner', speciesId: 'emberbun', level: 12, xp: 0, winsToday: 0 },
+        { id: 'friend-1', speciesId: 'pebblesnooze', level: 8, xp: 0, winsToday: 0 },
+      ],
+      evolved: [],
+    });
+    const kids = [kidOf(0), kidOf(1)];
+    // Side a alternates by day and by battle.
+    const first = playFriendly(data, kids, PROGRESSION_CONFIG, WITH_FRIENDLIES_RULES, 1, 0);
+    const second = playFriendly(data, kids, PROGRESSION_CONFIG, WITH_FRIENDLIES_RULES, 1, 1);
+    const nextDay = playFriendly(data, kids, PROGRESSION_CONFIG, WITH_FRIENDLIES_RULES, 2, 0);
+    expect([first.sideA, second.sideA, nextDay.sideA]).toEqual([1, 0, 0]);
+    // The Partners lead off, so they join every friendly: three each, won or lost.
+    expect(kids.map((k) => k.team[0]!.winsToday)).toEqual([3, 3]);
+    for (const r of [first, second, nextDay]) expect(r.partnerXp.every((xp) => xp > 0)).toBe(true);
+
+    // A hold counts as the guards' win and pays them.
+    const guard = kidOf(0);
+    expect(payHold(data, guard, WITH_FRIENDLIES_RULES, new Map([['partner', 40]]))).toBeGreaterThan(
+      0,
+    );
+    expect(guard.team.map((m) => m.winsToday)).toEqual([1, 0]);
+
+    // A lost wild battle doesn't count, and past `fullWinsPerDay` a battle pays the falloff's share.
+    const member = guard.team[0]!;
     const xp = new Map([['partner', 40]]);
-    grant(data, kid, WITH_FRIENDLIES_RULES, xp, false, { counts: true });
-    expect(member.winsToday).toBe(1); // a lost friendly
-    grant(data, kid, WITH_FRIENDLIES_RULES, xp, true);
-    expect(member.winsToday).toBe(2); // a hold
-    grant(data, kid, WITH_FRIENDLIES_RULES, xp, false);
-    expect(member.winsToday).toBe(2); // a lost wild battle doesn't count
-    // Past `fullWinsPerDay`, a battle pays the falloff's share.
+    grant(data, guard, WITH_FRIENDLIES_RULES, xp, false);
+    expect(member.winsToday).toBe(1);
     member.winsToday = WITH_FRIENDLIES_RULES.growth.battleXpFalloff!.fullWinsPerDay;
-    const thinned = grant(data, kid, WITH_FRIENDLIES_RULES, xp, false, { counts: true });
+    const thinned = grant(data, guard, WITH_FRIENDLIES_RULES, xp, false, { counts: true });
     member.winsToday = 0;
-    const full = grant(data, kid, WITH_FRIENDLIES_RULES, xp, false, { counts: true });
+    const full = grant(data, guard, WITH_FRIENDLIES_RULES, xp, false, { counts: true });
     expect(thinned).toBeLessThan(full);
   });
 

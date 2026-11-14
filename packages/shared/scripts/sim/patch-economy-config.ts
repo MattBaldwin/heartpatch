@@ -17,6 +17,7 @@ export interface PatchEconomyKid {
    * `defence`: rival-tile holds that pay (#728: a guard of theirs on watch or
    * a live defence; guardian-only holds and scooted challengers pay none).
    * `friendly`: friendly wins over one patch-mate, not counting scoots.
+   * Rival-tile attack wins have no field of their own; fold them into `tile`.
    */
   readonly wins: {
     readonly wild: number;

@@ -368,9 +368,61 @@ function estimateRivalOdds(
 }
 
 /**
+ * Friendly `f` of `day` between the map's two kids (#728). Side a alternates
+ * by day and by battle, so a kid with one a day isn't always side a. Both
+ * sides earn the engine's XP × `rules.friendlies.xpPercent` %, and every
+ * friendly counts toward the falloff, win or lose. Returns which kid was
+ * side a and each kid's Partner XP.
+ */
+export function playFriendly(
+  data: ModelData,
+  kids: readonly Kid[],
+  config: ProgressionConfig,
+  rules: ProgressionRules,
+  day: number,
+  f: number,
+): { sideA: number; partnerXp: number[] } {
+  const a = (day + f) % 2;
+  const b = 1 - a;
+  const [kidA, kidB] = [kids[a], kids[b]];
+  if (!kidA || !kidB) throw new Error('a friendly needs two kids');
+  const seed = deriveSeed(config.rootSeed, 'friendly', kidA.profile.id, day, f);
+  const result = duel(data, teamSide(kidA, config), sideB(kidB.team, config), seed);
+  const percent = rules.friendlies?.xpPercent ?? 100;
+  if (rules.friendlies?.oneOpponent) {
+    for (const side of ['a', 'b'] as const) {
+      const n = Math.max(1, result.out[side]);
+      for (const [id, xp] of result[side]) result[side].set(id, Math.floor(xp / n));
+    }
+  }
+  const partnerXp = [0, 0];
+  partnerXp[a] = grant(data, kidA, rules, result.a, result.winner === 'a', {
+    counts: true,
+    percent,
+  });
+  partnerXp[b] = grant(data, kidB, rules, result.b, result.winner === 'b', {
+    counts: true,
+    percent,
+  });
+  return { sideA: a, partnerXp };
+}
+
+/** A hold (728a): the guards earn side b's XP, and it counts as their win. */
+export function payHold(
+  data: ModelData,
+  defender: Kid,
+  rules: ProgressionRules,
+  xp: ReadonlyMap<string, number>,
+): number {
+  return grant(data, defender, rules, xp, true);
+}
+
+/**
  * The other kid's tiles a kid may try today (#728 defences): none during the
  * new-player shield (days 1–`shieldDays`) or once `lossCapPerDay` were taken
- * from them today, and never a home ring. Adjacency is the caller's.
+ * from them today, and never a home ring. Adjacency is the caller's. A
+ * sim subset of `attackTargetProblem` (territory): the kids never own
+ * trading posts, water or unrestored Hollowed tiles; keep the two in step.
  */
 export function rivalTargets(
   tiles: readonly MapTile[],
@@ -474,29 +526,10 @@ export function runProgression(
     const lost = kids.map(() => 0);
     const holdXp = kids.map(() => 0);
 
-    // Friendlies (#728), the two kids taking turns as side a: both sides paid,
-    // every one counting toward the falloff win or lose.
     for (let f = 0; f < friendlies; f++) {
-      // Alternate who starts by day too, so a kid with one a day isn't always side a.
-      const a = (day + f) % 2;
-      const b = 1 - a;
-      const [kidA, kidB] = [kids[a], kids[b]];
-      if (!kidA || !kidB) break;
-      const seed = deriveSeed(config.rootSeed, 'friendly', profile.id, day, f);
-      const result = duel(data, teamSide(kidA, config), sideB(kidB.team, config), seed);
-      const percent = rules.friendlies?.xpPercent ?? 100;
-      if (rules.friendlies?.oneOpponent) {
-        for (const side of ['a', 'b'] as const) {
-          const n = Math.max(1, result.out[side]);
-          for (const [id, xp] of result[side]) result[side].set(id, Math.floor(xp / n));
-        }
-      }
-      partnerXp[a] =
-        (partnerXp[a] ?? 0) +
-        grant(data, kidA, rules, result.a, result.winner === 'a', { counts: true, percent });
-      partnerXp[b] =
-        (partnerXp[b] ?? 0) +
-        grant(data, kidB, rules, result.b, result.winner === 'b', { counts: true, percent });
+      playFriendly(data, kids, config, rules, day, f).partnerXp.forEach((xp, k) => {
+        partnerXp[k] = (partnerXp[k] ?? 0) + xp;
+      });
     }
 
     // Tile tries, taking turns so both kids race for the same land.
@@ -546,7 +579,7 @@ export function runProgression(
           if (result.winner === 'b') {
             // A hold pays the guards side b's XP (728a) and counts as their win.
             held[rival] = (held[rival] ?? 0) + 1;
-            const gained = grant(data, defender, rules, result.b, true);
+            const gained = payHold(data, defender, rules, result.b);
             partnerXp[rival] = (partnerXp[rival] ?? 0) + gained;
             holdXp[rival] = (holdXp[rival] ?? 0) + gained;
           } else if (result.winner === 'a') {
