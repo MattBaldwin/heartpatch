@@ -114,6 +114,9 @@ export function flagRoom(keeper: Rect | null): FlagRoom {
   return { width: window.innerWidth, height: window.innerHeight, top, covers };
 }
 
+/** What moves by an inline style the flags must step aside for (next-up.ts, #731). */
+const NEXT_UP_MOVES = '.next-up-chip, .next-up-sprout';
+
 /** The ring: just inside the tile's rim, lifted clear of the dome. TUNE. */
 const RING = { diameter: TILE_RADIUS * 1.84, thickness: 0.045, lift: 0.012, color: '#ffc94d' };
 
@@ -165,18 +168,18 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
   // A sheet opening or shutting over an idle map draws no frame, so watch
   // for it and look again once on the next frame, like the tutorial's own
   // watch: sheets show and shut by `hidden`, trays by `inert` and a class
-  // they drop once their slide ends, the Keeper menu by a class. A flag's
-  // own changes are skipped.
+  // they drop once their slide ends, the Keeper menu by a class, and the
+  // Next-up chip and Sprout's line move up over the night's chips by an
+  // inline `--next-up-row` (#731). A flag's own changes are skipped. Inline
+  // styles are watched on those two nodes only: tile marks and the flags
+  // write `style` every frame while the camera pans, so a page-wide `style`
+  // filter would make records each frame.
   let recheck = 0;
+  const counts = ({ target }: MutationRecord): boolean =>
+    !(target instanceof HTMLElement && target.classList.contains('post-flag'));
   const covers = new MutationObserver((changes) => {
     if (recheck || !scene) return;
-    if (
-      changes.every(
-        (c) => c.target instanceof HTMLElement && c.target.classList.contains('post-flag'),
-      )
-    ) {
-      return;
-    }
+    if (!changes.some(counts)) return;
     recheck = requestAnimationFrame(() => {
       recheck = 0;
       if (scene) placeAll();
@@ -320,6 +323,9 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
         attributes: true,
         attributeFilter: ['hidden', 'inert', 'class'],
       });
+      for (const node of document.querySelectorAll(NEXT_UP_MOVES)) {
+        covers.observe(node, { attributes: true, attributeFilter: ['style'] });
+      }
       next.onDisposeObservable.addOnce(() => {
         if (scene !== next) return;
         scene = null;

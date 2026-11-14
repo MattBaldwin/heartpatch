@@ -11,6 +11,7 @@ export const NEXT_UP_TEXT = {
   kickerCount: (have: number, need: number) => `Next up · ${String(have)} of ${String(need)}`,
   open: 'See your next goals',
   sheetTitle: 'Next up',
+  all: 'All milestones',
   close: 'Close Next up',
   allDoneChip: 'All done! Nice one',
   allDoneTitle: 'All done!',

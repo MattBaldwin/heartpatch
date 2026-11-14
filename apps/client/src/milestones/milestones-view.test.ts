@@ -5,6 +5,7 @@ import {
   earnedCount,
   freshNews,
   mayEarnMilestone,
+  medalPills,
   MILESTONES_TEXT,
   nextTier,
   progressLabel,
@@ -51,6 +52,21 @@ describe('milestone words (style guide)', () => {
     const texts = strings(MILESTONES_TEXT);
     expect(texts.length).toBeGreaterThan(20);
     expect(texts.flatMap((t) => findAvoidedWords(t))).toEqual([]);
+  });
+});
+
+describe('medal pills (#731)', () => {
+  it('has one pill per tier, gold for the earned ones and grey after', () => {
+    expect(medalPills(track(60, 2))).toEqual([
+      { titleId: 't0', name: 'Title 0', earned: true },
+      { titleId: 't1', name: 'Title 1', earned: true },
+      { titleId: 't2', name: 'Title 2', earned: false },
+    ]);
+  });
+
+  it('is all grey before the first tier and all gold once the track is done', () => {
+    expect(medalPills(track(0, 0)).map((m) => m.earned)).toEqual([false, false, false]);
+    expect(medalPills(track(150, 3)).map((m) => m.earned)).toEqual([true, true, true]);
   });
 });
 

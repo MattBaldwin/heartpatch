@@ -5,6 +5,7 @@ import {
   HouseViewSchema,
   JobsViewSchema,
   MapResponseSchema,
+  MapViewSchema,
   TutorialResponseSchema,
   type HouseView,
 } from '@heartpatch/shared';
@@ -1056,6 +1057,45 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
       );
     });
 
+    it("says on the map's view whether a gift waits, rolling and writing nothing (#731c)", async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const waiting = async () => {
+        const res = await server.inject({
+          method: 'GET',
+          url: `/api/v1/maps/${mapId}/view`,
+          cookies: { [SESSION_COOKIE]: kid.token },
+        });
+        expect(res.statusCode).toBe(200);
+        return MapViewSchema.parse(res.json()).giftWaiting;
+      };
+      const houseRows = () =>
+        db.query.keeperHouses.findMany({
+          where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, kid.id)),
+        });
+      // Nobody home: nothing waits.
+      expect(await waiting()).toBe(false);
+      await resident(mapId, kid);
+      // Someone home: the next GET /house would leave one, so it waits; reading
+      // it twice rolls nothing and writes no gift or house row.
+      expect(await waiting()).toBe(true);
+      expect(await waiting()).toBe(true);
+      expect(await giftRows(mapId, kid)).toEqual([]);
+      expect(await houseRows()).toEqual([]);
+      // Rolled by the house screen: still waiting, and the read leaves the row as it was.
+      const rolled = (await house(server, kid, mapId)).gift;
+      expect(rolled).not.toBeNull();
+      const rows = await giftRows(mapId, kid);
+      expect(await waiting()).toBe(true);
+      expect(await waiting()).toBe(true);
+      expect(await giftRows(mapId, kid)).toEqual(rows);
+      // Opened: nothing waits for the rest of the day.
+      expect((await claim(server, kid, mapId)).statusCode).toBe(200);
+      expect(await waiting()).toBe(false);
+      expect(await giftRows(mapId, kid)).toHaveLength(1);
+    });
+
     it('opens once: pays the Keeper (ledger `house-gift`), tells only them, then says come back tomorrow', async () => {
       const server = await start();
       const owner = await player();
@@ -1280,6 +1320,31 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
       expect(gone.note).toMatch(/^A little friend /);
       expect((await claim(server, kid, mapId)).statusCode).toBe(200);
       expect(await giftLedger(mapId, kid)).toHaveLength(2);
+    });
+
+    it("says no gift waits on the map's view while the switch is off, and on the Tutorial Glade (#731c)", async () => {
+      const waitingOn = async (server: FastifyInstance, mapId: string) => {
+        const res = await server.inject({
+          method: 'GET',
+          url: `/api/v1/maps/${mapId}/view`,
+          cookies: { [SESSION_COOKIE]: kid.token },
+        });
+        expect(res.statusCode).toBe(200);
+        return MapViewSchema.parse(res.json()).giftWaiting;
+      };
+      const off = await start({});
+      const kid = await player();
+      const mapId = await newMap(off, kid);
+      await resident(mapId, kid);
+      expect(await waitingOn(off, mapId)).toBe(false);
+      await app!.close();
+      const on = await start();
+      // The same Keeper with the switch on: a resident home, so one waits.
+      expect(await waitingOn(on, mapId)).toBe(true);
+      const started = await call(on, 'POST', '/tutorial/start', kid);
+      const glade = TutorialResponseSchema.parse(started.json()).tutorial.mapId!;
+      expect(await waitingOn(on, glade)).toBe(false);
+      expect(await giftRows(mapId, kid)).toEqual([]);
     });
 
     it('is NOT_FOUND while the switch is off, and on the Tutorial Glade', async () => {

@@ -33,6 +33,7 @@ import type { HeartCoinsDebug } from '../heart-coins/heart-coins.js';
 import type { LorebookDebug } from '../lore/lorebook.js';
 import type { MilestoneCelebrationDebug } from '../milestones/milestone-celebration.js';
 import type { NextUpDebug } from '../milestones/next-up.js';
+import type { HomeAlerts } from '../home/home-alerts.js';
 import type { DefensePromptDebug } from '../battle/defense-prompt.js';
 import type { WhatsNewDebug } from '../whats-new/whats-new.js';
 import type { StarterDebug } from '../starters/starter-screen.js';
@@ -198,6 +199,8 @@ declare global {
       lore?(): LorebookDebug;
       /** The milestone celebration (#44): the card showing and how many wait. */
       milestones?(): MilestoneCelebrationDebug;
+      /** My Home's dot (#731c): whether a House gift waits. */
+      homeAlerts?(): HomeAlerts;
       nextUp?(): NextUpDebug;
       defense?(): DefensePromptDebug;
       /** Quick messages (#23): the sheet, the feed and the bubbles over the map, or null. */

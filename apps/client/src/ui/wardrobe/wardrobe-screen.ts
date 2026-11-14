@@ -107,6 +107,11 @@ export interface WardrobeDebug {
 export interface WardrobeScreen {
   setUser: (user: PublicUser | null) => void;
   open: () => void;
+  /**
+   * Opens straight onto Milestones (the Keeper menu's own row, #731): the
+   * same list as the Wardrobe's shortcut, and its "Back" closes the screen.
+   */
+  openMilestones: () => void;
   /** Closes it as "Done" does (the tutorial's wardrobe step moving on, #24). */
   close: () => void;
   /** The lobby's "Wardrobe" button. */
@@ -205,6 +210,8 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
   let frame = 0;
   let lastTier: QualityTier | null = null;
 
+  /** Opened from the Keeper menu's Milestones row (#731): Milestones' "Back" closes the screen. */
+  let milestonesOnly = false;
   // ── DOM ───────────────────────────────────────────────────────────────
   const title = el('h1', { class: 'auth-title', id: 'wardrobe-title' }, WARDROBE_TEXT.title);
   const turn = el(
@@ -295,6 +302,11 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
   // Milestones (#44) swap in the same way; the Keeper above shows off.
   const milestones = createMilestonesCard({
     onBack: () => {
+      // Opened from the Keeper menu: back where it was opened, not to the clothes.
+      if (milestonesOnly) {
+        close();
+        return;
+      }
       card.hidden = false;
       render();
     },
@@ -697,6 +709,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
   /** Closes it; `back` goes back where it was opened (not on a logout). */
   function close(back = true): void {
     if (!isOpen) return;
+    milestonesOnly = false;
     boutique.close();
     milestones.close();
     card.hidden = false;
@@ -722,10 +735,16 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     card.hidden = true;
     boutique.open();
   });
-  goals.addEventListener('click', () => {
+  const showMilestones = () => {
     closeSave();
+    boutique.close();
     card.hidden = true;
     milestones.open();
+  };
+  // The Wardrobe's shortcut: "Back" comes back to the clothes.
+  goals.addEventListener('click', () => {
+    milestonesOnly = false;
+    showMilestones();
   });
 
   devGrant?.addEventListener('click', () => {
@@ -772,6 +791,14 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
       if (next) void load();
     },
     open,
+    openMilestones: () => {
+      if (!user) return;
+      if (!isOpen) {
+        open();
+        milestonesOnly = true;
+      }
+      showMilestones();
+    },
     close: () => {
       close();
     },

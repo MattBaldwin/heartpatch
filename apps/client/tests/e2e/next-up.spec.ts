@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { tapCanvas } from './claim-land.js';
 import { api, hook, waitForLiveMap } from './dev-hook.js';
-import { settled } from './layout.js';
+import { settled, viewportOf } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 // The Next-up chip (#731): a patch that's only you shows the share-your-code
@@ -39,7 +39,7 @@ async function shutAdventure(page: Page): Promise<void> {
 
 /** At `size`, the Adventure tray shows the Goals row and every row is in view, unscrolled. */
 async function goalsRowFits(page: Page, size: { width: number; height: number }): Promise<void> {
-  const upright = page.viewportSize()!;
+  const upright = viewportOf(page);
   await page.setViewportSize(size);
   await page.getByTestId('tray-handle-adventure').tap();
   const tray = page.getByTestId('tray-adventure');
@@ -102,7 +102,7 @@ async function closeClear(page: Page): Promise<void> {
 
 /** Opens the sheet from the chip and checks its ✕ upright and on a phone on its side. */
 async function closeClearBothWays(page: Page): Promise<void> {
-  const upright = page.viewportSize()!;
+  const upright = viewportOf(page);
   const chip = page.getByTestId('next-up-chip');
   for (const size of [upright, SE_SIDEWAYS]) {
     await page.setViewportSize(size);
@@ -112,6 +112,34 @@ async function closeClearBothWays(page: Page): Promise<void> {
   }
   await page.setViewportSize(upright);
 }
+
+/** An iPhone 15 in Safari's home-screen app, with its notch and home bar (#731c). */
+const IPHONE_15 = { width: 393, height: 852 };
+const IPHONE_15_INSETS = { top: 59, bottom: 34, left: 0, right: 0 };
+
+/** Safe-area insets need CDP, so only Chromium gets them (the CI projects are Chromium). */
+async function safeArea(page: Page, insets: typeof IPHONE_15_INSETS): Promise<void> {
+  if (page.context().browser()?.browserType().name() !== 'chromium') return;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets });
+  await cdp.detach();
+}
+
+/**
+ * The px between the bottom of Sprout's line and the top of the chip. Sprout's
+ * line hides on its own timer (SPROUT_MS), so if it has gone it's shown for
+ * the measure and hidden again: what's measured is where the CSS puts it.
+ */
+const sproutGap = (page: Page) =>
+  page.evaluate(() => {
+    const sprout = document.querySelector<HTMLElement>('.next-up-sprout')!;
+    const chip = document.querySelector<HTMLElement>('[data-testid="next-up-chip"]')!;
+    const wasHidden = sprout.hidden;
+    sprout.hidden = false;
+    const gap = chip.getBoundingClientRect().top - sprout.getBoundingClientRect().bottom;
+    sprout.hidden = wasHidden;
+    return gap;
+  });
 
 test('no chip on the Tutorial Glade', async ({ browser }) => {
   test.setTimeout(120_000); // draws the Glade; CI renders in software
@@ -203,6 +231,17 @@ test('a solo patch shows the share-your-code card, then real goals once a friend
   // Now there's a real goal: Sprout says it once (owner decision 4).
   await expect.poll(() => nextUp(owner).then((n) => n?.sprout), { timeout: 15_000 }).toBe(true);
   await expect(owner.getByTestId('next-up-sprout')).toHaveText('Ooh, a goal!');
+  // On an iPhone 15 with its notch and home bar, Sprout's line clears the chip
+  // (insets applied after the resize's layout, as Safari reports them).
+  const projectSize = viewportOf(owner);
+  await owner.setViewportSize(IPHONE_15);
+  await owner.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+  );
+  await safeArea(owner, IPHONE_15_INSETS);
+  await expect.poll(() => sproutGap(owner)).toBeGreaterThanOrEqual(6);
+  await safeArea(owner, { top: 0, bottom: 0, left: 0, right: 0 });
+  await owner.setViewportSize(projectSize);
   // Map labels step aside for Sprout's line and the chip, as for the night's chips.
   await settled(owner);
   const under = await owner.evaluate(() => {
@@ -232,7 +271,7 @@ test('a solo patch shows the share-your-code card, then real goals once a friend
   // The Goals row keeps its place on an iPhone SE upright and in a Safari tab,
   // with every Adventure row still in view; on a phone on its side it gives way.
   for (const size of [SE_UPRIGHT, SAFARI_TAB]) await goalsRowFits(owner, size);
-  const upright = owner.viewportSize()!;
+  const upright = viewportOf(owner);
   await owner.setViewportSize(SE_SIDEWAYS);
   await owner.getByTestId('tray-handle-adventure').tap();
   await expect(owner.getByTestId('tray-adventure')).toHaveClass(/tray-shown/);
@@ -250,4 +289,35 @@ test('a solo patch shows the share-your-code card, then real goals once a friend
   await expect.poll(() => nextUp(owner).then((n) => n?.sheetOpen)).toBe(true);
   await sheet.getByTestId('next-up-close').tap();
   await expect(sheet).toBeHidden();
+
+  // The full list lives in the Keeper menu (#731c), on a small phone and at
+  // this project's size (iPhone 15 or iPad); "Back" comes back to the map.
+  const list = owner.getByTestId('milestones');
+  for (const size of [SE_UPRIGHT, upright]) {
+    await owner.setViewportSize(size);
+    await owner.getByTestId('keeper-menu').tap();
+    await owner.locator('.auth-chip-menu').getByRole('button', { name: 'Milestones' }).tap();
+    await expect(list).toBeVisible();
+    await expect(list.getByTestId('milestones-back')).toBeInViewport();
+    // Every title is a medal pill (gold once earned: milestones.spec.ts); this
+    // Keeper skipped the tutorial, so the First Patch's is still grey.
+    await expect(list.locator('[data-medal="sprouts-friend"]')).toHaveAttribute(
+      'data-earned',
+      'false',
+    );
+    await expect(
+      list.locator('[data-track="territory"] [data-earned="false"]').first(),
+    ).toBeVisible();
+    await list.getByTestId('milestones-back').tap();
+    await expect(list).toBeHidden();
+    await expect(owner.getByTestId('wardrobe-items')).toBeHidden();
+    await expect(owner.getByTestId('next-up-chip')).toBeVisible({ timeout: 30_000 });
+  }
+
+  // "All milestones" at the sheet's foot opens the same list.
+  await owner.getByTestId('next-up-chip').tap();
+  await sheet.getByTestId('next-up-all').tap();
+  await expect(list).toBeVisible();
+  await list.getByTestId('milestones-back').tap();
+  await expect(list).toBeHidden();
 });

@@ -474,6 +474,14 @@ export const MapViewSchema = z.object({
    */
   communities: z.array(CommunityViewSchema).optional(),
   /**
+   * A House gift waits for this viewer today (#731c): wrapped, or one
+   * `GET /house` would leave now. Read-only on the server (reading it rolls
+   * nothing), so My Home's dot shows before the house is opened. False with
+   * the house off and on the Tutorial Glade. Optional only so older servers'
+   * views parse.
+   */
+  giftWaiting: z.boolean().optional(),
+  /**
    * The map's latest event seq this view includes (`maps.event_seq`). Live
    * sync subscribes with it as `afterSeq` (tech spec §5 "WebSocket").
    */

@@ -4,6 +4,7 @@ import { milestonesApi, type MilestonesApi } from './milestones-api.js';
 import {
   barPercent,
   earnedCount,
+  medalPills,
   MILESTONES_TEXT,
   nextTier,
   progressLabel,
@@ -186,11 +187,31 @@ export function createMilestonesCard(options: MilestonesCardOptions): Milestones
     const fill = el('span', { class: 'milestones-bar-fill' });
     fill.style.width = `${String(barPercent(track))}%`;
     const season = seasonLabel(track);
-    const dots = track.tiers.map((t) =>
-      el('span', {
-        class: `milestones-dot${t.earnedAt === null ? '' : ' milestones-dot-earned'}`,
-        'aria-hidden': 'true',
-      }),
+    // Each tier's title as a medal (#731): gold when earned, grey until then.
+    const medals = el(
+      'ul',
+      { class: 'milestones-medals', 'aria-label': MILESTONES_TEXT.medals },
+      ...medalPills(track).map((m) =>
+        el(
+          'li',
+          {
+            class: `milestones-medal${m.earned ? ' milestones-medal-earned' : ''}`,
+            'data-medal': m.titleId,
+            'data-earned': String(m.earned),
+          },
+          el(
+            'span',
+            { class: 'milestones-medal-icon', 'aria-hidden': 'true' },
+            m.earned ? '★' : '',
+          ),
+          m.name,
+          el(
+            'span',
+            { class: 'milestones-medal-state' },
+            `, ${m.earned ? MILESTONES_TEXT.earned : MILESTONES_TEXT.notYet}`,
+          ),
+        ),
+      ),
     );
     return el(
       'section',
@@ -204,7 +225,6 @@ export function createMilestonesCard(options: MilestonesCardOptions): Milestones
         { class: 'milestones-track-head' },
         el('h3', { class: 'milestones-track-name' }, track.name),
         ...(season ? [el('span', { class: 'milestones-season' }, season)] : []),
-        el('span', { class: 'milestones-dots' }, ...dots),
       ),
       el(
         'div',
@@ -229,6 +249,7 @@ export function createMilestonesCard(options: MilestonesCardOptions): Milestones
             ),
           ]
         : []),
+      medals,
     );
   }
 

@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
-import { settled, still } from './layout.js';
+import { settled, still, viewportOf } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { closeRoster, openRoster } from './roster.js';
 import { closeTrays, openTray, trayButton } from './trays.js';
@@ -233,6 +233,76 @@ test('home, the roster, the team, chat and the heart pill fit a phone on its sid
       await sheet.getByTestId('home-handle').tap();
       await sheet.getByTestId('home-back').tap();
       await expect(sheet).toBeHidden();
+    });
+  }
+});
+
+// The Keeper (Me) menu on a short screen (#731c): with four rows it ran past
+// the bottom edge on a phone on its side, so "Log out" couldn't be reached.
+// Now the panel scrolls inside itself; on a tall iPad it isn't capped at all.
+const MENU_SCREENS = [
+  { name: 'iPhone SE sideways', width: 667, height: 375 },
+  {
+    name: 'iPhone 15 sideways, notch',
+    width: 852,
+    height: 393,
+    insets: { top: 0, bottom: 21, left: 59, right: 59 },
+  },
+  { name: 'iPad portrait', width: 820, height: 1180 },
+] as const;
+
+test('the Keeper menu reaches "Log out" on a phone on its side', async ({ browser }) => {
+  test.setTimeout(240_000); // a map build; CI renders in software
+  const page = await newPlayer(browser, uniqueName('menu'));
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Menu Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await page.getByTestId('tray-hint-ok').tap();
+  const chromium = page.context().browser()?.browserType().name() === 'chromium';
+
+  for (const size of MENU_SCREENS) {
+    await test.step(size.name, async () => {
+      const insets = 'insets' in size ? size.insets : undefined;
+      if (insets && !chromium) return; // safe-area override is CDP-only
+      await page.setViewportSize({ width: size.width, height: size.height });
+      if (chromium) {
+        const cdp = await page.context().newCDPSession(page);
+        await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+          insets: insets ?? { top: 0, bottom: 0, left: 0, right: 0 },
+        });
+        await cdp.detach();
+      }
+      await page.getByTestId('keeper-menu').tap();
+      const body = page.locator('.auth-chip-open .auth-chip-body');
+      await expect(body.getByRole('button', { name: /Milestones/ })).toBeVisible();
+      await settled(page);
+      const scrolls = await body.evaluate((el) => el.scrollHeight > el.clientHeight + 1);
+      const logout = body.getByRole('button', { name: 'Log out' });
+      const { height } = viewportOf(page);
+      if (size.height >= 1000) {
+        expect(scrolls, 'a tall screen shows the whole menu').toBe(false);
+      }
+      await logout.scrollIntoViewIfNeeded();
+      const box = await logout.evaluate((el) => {
+        const b = el.getBoundingClientRect();
+        const hit = document.elementFromPoint((b.left + b.right) / 2, (b.top + b.bottom) / 2);
+        return {
+          top: b.top,
+          bottom: b.bottom,
+          hit: !!hit && (hit === el || el.contains(hit)),
+        };
+      });
+      const bottomInset = insets?.bottom ?? 0;
+      expect(box.top, 'Log out starts on screen').toBeGreaterThanOrEqual(0);
+      expect(box.bottom, 'Log out clears the bottom edge').toBeLessThanOrEqual(
+        height - bottomInset + 0.5,
+      );
+      expect(box.hit, 'a tap on Log out lands on it').toBe(true);
+      await page.getByTestId('keeper-menu').tap(); // fold it away
+      await expect(body).toHaveCount(0);
     });
   }
 });

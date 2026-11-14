@@ -46,8 +46,8 @@
 
   .next-up-sprout {
     bottom: max(
-      calc(max(env(safe-area-inset-bottom), 22px) + 76px),
-      calc(var(--next-up-lift) + 62px)
+      calc(max(env(safe-area-inset-bottom), 22px) + 14px + var(--next-up-above)),
+      calc(var(--next-up-lift) + var(--next-up-above))
     );
   }
 }
@@ -64,6 +64,12 @@
   --next-up-floor: calc(env(safe-area-inset-bottom) + 12px);
   --next-up-row: -100vh;
   --next-up-lift: calc(var(--next-up-floor) + var(--next-up-row) + 8px);
+}
+
+/* Sprout's line stands 10 px over the chip: its measured height (next-up.ts
+   sets --next-up-chip-h; a wrapped goal makes it taller) plus the gap. */
+.next-up-sprout {
+  --next-up-above: calc(var(--next-up-chip-h, 52px) + 10px);
 }
 
 @media (orientation: portrait) and (min-height: 740px) {
@@ -157,7 +163,10 @@ body:not(.hp-trays-on) .next-up-sprout,
   position: fixed;
   z-index: 3;
   left: 50%;
-  bottom: max(calc(env(safe-area-inset-bottom) + 76px), calc(var(--next-up-lift) + 62px));
+  bottom: max(
+    calc(env(safe-area-inset-bottom) + 14px + var(--next-up-above)),
+    calc(var(--next-up-lift) + var(--next-up-above))
+  );
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -376,6 +385,11 @@ body:has(.next-up-scrim:not([hidden])) .auth-chip {
 
 .next-up-go-button {
   align-self: flex-start;
+}
+
+/* "All milestones": the sheet's last row, full width (mockup v4). */
+.next-up-all {
+  align-self: stretch;
 }
 
 /* A phone on its side, or a small phone in a Safari tab (a mini at 629 px,

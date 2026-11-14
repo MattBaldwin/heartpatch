@@ -53,7 +53,7 @@ test('earn The First Patch, celebrate it, then see it and wear its title', async
   // The prize arrived: 20 Patch Coins on the patch list.
   await expect(lobby.getByTestId('lobby-coins')).toContainText('20');
 
-  // The Milestones screen, from the Wardrobe.
+  // The Milestones screen, from the Wardrobe's shortcut (its home is the Keeper menu, #731).
   await lobby.getByTestId('wardrobe-open').tap();
   await page.getByTestId('wardrobe-milestones').tap();
   const card = page.getByTestId('milestones');
@@ -66,6 +66,10 @@ test('earn The First Patch, celebrate it, then see it and wear its title', async
   expect(shown?.tracks.filter((t) => t === '???').length).toBeGreaterThan(0);
   await expect(card.locator('[data-track="???"]').first()).toContainText('???');
   await expect(card.locator('[data-track="first-patch"]')).toContainText('All done!');
+  await expect(card.locator('[data-medal="sprouts-friend"]')).toHaveAttribute(
+    'data-earned',
+    'true',
+  );
 
   // Wear the title on the profile card.
   await expect(card.getByTestId('milestones-worn')).toHaveText('No title yet');

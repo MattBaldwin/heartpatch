@@ -64,6 +64,10 @@ const homeState = (page: Page) => hook<HomeDebug>(page, 'home');
 const slow = { timeout: 60_000 };
 const slowExpect = expect.configure(slow);
 
+/** My Home's dots (#731c), as the dev hook reports them. */
+const homeAlerts = (page: Page) =>
+  hook<{ home: { count: number; peek: string } | null }>(page, 'homeAlerts');
+
 async function patchAndHome(page: Page): Promise<void> {
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
@@ -246,7 +250,20 @@ test('today’s gift waits in the house: open it once and the box goes away', as
     claimed = true;
     await route.fulfill({ json: withGift((await house.json()) as HouseView) });
   });
+  // The map's view says so too (#731c, read-only on the server): My Home's
+  // Home row wears a dot before the house is ever opened.
+  await page.route('**/api/v1/maps/*/view', async (route) => {
+    const response = await route.fetch();
+    const view = (await response.json()) as Record<string, unknown>;
+    await route.fulfill({ response, json: { ...view, giftWaiting: !claimed } });
+  });
   await patchAndHome(page);
+  await expect
+    .poll(async () => (await homeAlerts(page))?.home, slow)
+    .toEqual({ count: 1, peek: 'Gift waiting 🎁' });
+  const dot = page.getByTestId('home-open').locator('.home-alert-badge');
+  await expect(dot).toHaveText('1');
+  await expect(dot).toHaveAttribute('data-tray-alert', 'Gift waiting 🎁');
   await page.getByTestId('home-house-shortcut').tap();
   await expect.poll(async () => (await houseState(page))?.pose, slow).toBe('dollhouse');
 
@@ -276,6 +293,9 @@ test('today’s gift waits in the house: open it once and the box goes away', as
   expect((await houseState(page))?.scene?.gift).toBe(false);
   await expect(line).toBeHidden();
   await expect(page.getByTestId('house-scrim')).toBeHidden();
+  // The claim's reply puts My Home's dot out.
+  await expect.poll(async () => (await homeAlerts(page))?.home).toBeNull();
+  await expect(dot).toBeHidden();
 
   // Opening the sheet re-reads the house: the gift stays opened, nothing comes back.
   await page.getByTestId('house-peek-handle').tap();
