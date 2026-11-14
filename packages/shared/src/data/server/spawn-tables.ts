@@ -314,7 +314,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
     timeOfDay: 'night',
     entries: [
       { species: 'upsybat', weight: 4 }, // TUNE:
-      { species: 'glowboo', weight: 6 }, // TUNE:
+      { species: 'glowboo', weight: 6 }, // TUNE: doubled (#732)
       { species: 'candlekit', weight: 2 }, // TUNE:
     ],
   },
@@ -329,7 +329,8 @@ export const SPAWN_TABLES: SpawnTable[] = [
   {
     // Secret: a tiny piece of the Heartpatch, out on Gap nights. Weights add
     // up across matching tables, so this is 1 in 35 Gap night spawns (1 in
-    // 49 at Halloween): about one Heartlet in the Gap every 7–8 days (#732 doubled the rare weights).
+    // 49 at Halloween): about one Heartlet in the Gap every 7–8 days (#732
+    // doubled the rare weights).
     id: 'gap-nights',
     terrains: ['junipers-gap'],
     timeOfDay: 'night',
