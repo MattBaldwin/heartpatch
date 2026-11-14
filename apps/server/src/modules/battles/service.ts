@@ -552,7 +552,10 @@ function defsFor(
  * its `unpaid` reason; null when side `b` earned nothing or the battle is
  * from before #728.
  */
-export function rewardsFor(rewards: BattleRewards | null, side: BattleSideId): BattleRewards | null {
+export function rewardsFor(
+  rewards: BattleRewards | null,
+  side: BattleSideId,
+): BattleRewards | null {
   if (side === PLAYER_SIDE) return rewards;
   const b = rewards?.b;
   if (!b) return null;
@@ -1054,7 +1057,9 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     at: Date,
     payees: readonly CoinPayee[],
   ): Promise<Map<string, { patch: number; heart: number }>> => {
-    const ordered = [...payees].sort((x, y) => (x.userId < y.userId ? -1 : x.userId > y.userId ? 1 : 0));
+    const ordered = [...payees].sort((x, y) =>
+      x.userId < y.userId ? -1 : x.userId > y.userId ? 1 : 0,
+    );
     const credited = new Map<string, { patch: number; heart: number }>();
     const tally = (userId: string) => {
       const sum = credited.get(userId) ?? { patch: 0, heart: 0 };
@@ -1062,7 +1067,14 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       return sum;
     };
     for (const { userId, refId, source, patch } of ordered) {
-      const paid = await creditCoins(tx, { userId, refId, source, amount: patch, mapId: row.mapId, at });
+      const paid = await creditCoins(tx, {
+        userId,
+        refId,
+        source,
+        amount: patch,
+        mapId: row.mapId,
+        at,
+      });
       tally(userId).patch += paid.credited;
     }
     for (const { userId, refId, source, heart } of ordered) {
@@ -1260,8 +1272,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     }
     const landEvents = tile.afterRefunds ? await tile.afterRefunds(tx, at) : [];
     // When full XP comes back (#201): wins count from the patch's midnight.
-    const map =
-      fellOff || defenderFellOff ? await createMapsRepo(tx).findMap(row.mapId) : null;
+    const map = fellOff || defenderFellOff ? await createMapsRepo(tx).findMap(row.mapId) : null;
     const resetAt = map ? nextLocalMidnight(at, map.timeZone).toISOString() : null;
     const fullXpResetAt = fellOff ? resetAt : null;
     const grow = async (list: readonly { squishyId: string; xp: number }[], won: boolean) => {
