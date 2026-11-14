@@ -1259,13 +1259,17 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // Each side's squishies are still its Keeper's, now that they're locked
     // (#728): one traded, sent to the trading post or to the Hollow after
     // the setup was read earns nothing (and so uses no falloff slot).
-    const stillMine = new Set(
-      await repo.ownActiveSquishies(
-        row.mapId,
-        row.playerUserId,
-        awards.map((a) => a.squishyId),
-      ),
-    );
+    // Side `a` is re-checked in a friendly only: a solo rescue's squishy
+    // fights while still `hollowed` (design doc §14) and is paid as before.
+    const stillMine = isFriendly
+      ? new Set(
+          await repo.ownActiveSquishies(
+            row.mapId,
+            row.playerUserId,
+            awards.map((a) => a.squishyId),
+          ),
+        )
+      : null;
     const stillTheirs = new Set(
       sideBUserId === null
         ? []
@@ -1275,7 +1279,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
             sideBAwards.map((a) => a.squishyId),
           ),
     );
-    const playerAwards = awards.filter((a) => stillMine.has(a.squishyId));
+    const playerAwards = stillMine ? awards.filter((a) => stillMine.has(a.squishyId)) : awards;
     const defenderAwards = sideBAwards.filter((a) => stillTheirs.has(a.squishyId));
     // The guards sent home: their watch so far held (#376).
     await writeGuardCheckpoints(tx, guards, at);
