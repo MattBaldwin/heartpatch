@@ -40,10 +40,12 @@ describe('milestone data', () => {
       'rescuer',
       'seeker',
       'halloween',
+      'cozy-harvest',
       'lantern-keeper',
       'set-rekindled',
     ]);
     expect(track('halloween').season).toBe('halloween');
+    expect(track('cozy-harvest').season).toBe('thanksgiving');
     expect(SECRET_MILESTONES.length).toBeGreaterThan(0);
   });
 
@@ -177,6 +179,55 @@ describe('milestoneCredits', () => {
         (c) => c.trackId,
       ),
     ).toEqual(['halloween']);
+  });
+
+  it('counts Cozy Harvest things only in the Thanksgiving window (#34)', () => {
+    const crunchkin = { userId: KID, speciesId: 'crunchkin' };
+    expect(credits('squishy.captured', crunchkin).map((c) => c.trackId)).toEqual(['collector']);
+    expect(credits('squishy.captured', crunchkin, ['thanksgiving']).map((c) => c.trackId)).toEqual([
+      'collector',
+      'cozy-harvest',
+    ]);
+    expect(
+      credits('resource.gathered', { userId: KID, resource: 'magic-fallen-leaves' }, [
+        'thanksgiving',
+      ]),
+    ).toEqual([{ trackId: 'cozy-harvest', userId: KID, amount: MILESTONE_UNIT, key: null }]);
+    // Pumpkins are Halloween's, and a Halloween piece doesn't count either.
+    expect(
+      credits('resource.gathered', { userId: KID, resource: 'pumpkins' }, ['thanksgiving']),
+    ).toEqual([]);
+    expect(
+      credits('clothing.found', { userId: KID, itemId: 'witch-hat' }, ['thanksgiving']),
+    ).toEqual([]);
+    expect(
+      credits('clothing.found', { userId: KID, itemId: 'leaf-crown' }, ['thanksgiving']).map(
+        (c) => c.trackId,
+      ),
+    ).toEqual(['cozy-harvest']);
+    // The costume is the top tier's prize, not something found, so it never counts.
+    expect(
+      credits('clothing.found', { userId: KID, itemId: 'leaf-pile-costume' }, ['thanksgiving']),
+    ).toEqual([]);
+  });
+
+  it("gives the Leaf Pile Costume at Cozy Harvest's top tier (#34)", () => {
+    const tiers = track('cozy-harvest').tiers;
+    expect(tiers.map((t) => [t.threshold, t.title.name, t.coins, t.clothing])).toEqual([
+      [4, 'Leaf Lover', 25, undefined],
+      [10, 'Cozy Crunch', 50, undefined],
+      [20, 'Pile Pal', 100, 'leaf-pile-costume'],
+    ]);
+    const costume = CLOTHING_BY_ID.get('leaf-pile-costume');
+    expect(costume).toMatchObject({
+      slot: 'costume',
+      rarity: 'legendary',
+      season: 'thanksgiving',
+      sources: ['milestone'],
+      tradable: false,
+    });
+    // It dresses the Keeper rather than replacing the body (the face shows in the renders).
+    expect(costume?.visual.replacesBody).toBeUndefined();
   });
 
   it('checks the secret conditions on the payload', () => {
