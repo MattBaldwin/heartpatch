@@ -44,6 +44,11 @@ export const HeartCoinRulesSchema = z.strictObject({
     friendly: coins,
   }),
   /**
+   * Heart Coins for the Keeper whose land held (#728), as `CoinRules.defenseWin`,
+   * under the `battle` daily cap.
+   */
+  defenseWin: z.strictObject({ 'rival-tile': coins }),
+  /**
    * Heart Coins for befriending a wild squishy, and for claiming a tile
    * (neutral or a rival's; Gentle's share scales it, like found clothing).
    */

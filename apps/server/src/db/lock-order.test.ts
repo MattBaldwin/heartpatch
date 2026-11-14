@@ -7,6 +7,7 @@ import {
   GAME_DATA,
   hexDistance,
   hexKey,
+  COIN_RULES,
   HEART_COIN_RULES,
   hexNeighbors,
   HOME_BASE_RULES,
@@ -1173,15 +1174,22 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
    * A patch with a Woodcutter's Hut on a forest homestead (#601), placed two
    * days ago with an hour's Timber waiting and two mornings owed, and Heart
    * Coins for both, for the settle.
+   *
+   * Everything runs on `clock`, pinned to the last noon UTC: the patch's
+   * mornings are 06:00 UTC, so a real clock read here and again in the
+   * service could straddle one and owe a third morning, and
+   * `stormyHutSetup`'s knock five minutes before "now" would land before
+   * that day's morning between 06:00 and 06:05 and leave it unpaid.
    */
   async function hutSetup(prefix: string) {
+    const now = lastNoon();
+    const clock = () => now;
     const kid = await player(prefix);
     const map = await createMapsService({
       db,
       tutorialRequired: false,
       keeperRequired: false,
     }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
-    const now = new Date();
     const plot = await makeHomestead(db, map.id, kid.id, now);
     await db.execute(
       sql`update tiles set terrain = 'forest', node_resource = null where id = ${plot.id}`,
@@ -1207,7 +1215,15 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
         at: now,
       });
     });
-    return { kid, mapId: map.id, settle: createSettleService({ db }) };
+    return { kid, mapId: map.id, clock, settle: createSettleService({ db, clock }) };
+  }
+
+  /** Noon UTC today, or yesterday if it's not noon yet: far from 06:00 and midnight, never ahead. */
+  function lastNoon(): Date {
+    const noon = new Date();
+    noon.setUTCHours(12, 0, 0, 0);
+    if (noon.getTime() > Date.now()) noon.setUTCDate(noon.getUTCDate() - 1);
+    return noon;
   }
 
   it("banks a resource building's output before charging its upkeep (settle, #601 step 11 then 12b)", async () => {
@@ -1242,12 +1258,12 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
   });
 
   it("charges a take-down's owed mornings after its inventory rows (buildings `remove`, #601 step 11 then 12b)", async () => {
-    const { kid, mapId } = await hutSetup('hut-taker');
+    const { kid, mapId, clock } = await hutSetup('hut-taker');
     const [hut] = await db
       .select({ id: buildings.id })
       .from(buildings)
       .where(and(eq(buildings.mapId, mapId), eq(buildings.ownerUserId, kid.id)));
-    const service = createBuildingsService({ db });
+    const service = createBuildingsService({ db, clock });
     await holdThen(
       (tx) =>
         tx
@@ -1268,13 +1284,13 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
   });
 
   it("takes a Watermill's Greens with the settle's grant rows, before the balance (settle, #621 W1-8 step 11 then 12b)", async () => {
-    const { kid, mapId, settle } = await hutSetup('mill-eater');
+    const { kid, mapId, clock, settle } = await hutSetup('mill-eater');
     await makeWildIsle(db, mapId);
     // Calm days from the hut's placing (two days back) to tomorrow: left to
     // the patch's random seed, a storm could knock the mill, which then eats
     // nothing, never queues on the Greens row, and the wait times out.
     for (let back = -1; back <= 2; back++) {
-      const day = new Date(Date.now() - back * 24 * 3600_000).toISOString().slice(0, 10);
+      const day = new Date(clock().getTime() - back * 24 * 3600_000).toISOString().slice(0, 10);
       await putPlan(db, mapId, day, []);
     }
     // The hut's row becomes a Watermill with an hour's grinding waiting.
@@ -1331,7 +1347,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
       .select({ q: tiles.q, r: tiles.r })
       .from(tiles)
       .where(eq(tiles.id, hut!.tileId));
-    const now = Date.now();
+    const now = setup.clock().getTime();
     await db
       .update(buildings)
       .set({ weatherCheckedThrough: new Date(now - 30 * 60_000) })
@@ -1378,7 +1394,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
       lockHut,
       lockTimber,
       knocks,
-      weather: createWeatherService({ db }),
+      weather: createWeatherService({ db, clock: setup.clock }),
     };
   }
 
@@ -1417,14 +1433,15 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
   });
 
   it("takes a fix's building before its inventory rows (buildings `repair`, #621 step 8 then 11)", async () => {
-    const { kid, mapId, hutId, lockHut, lockTimber, weather } = await stormyHutSetup('fixer');
+    const { kid, mapId, clock, hutId, lockHut, lockTimber, weather } =
+      await stormyHutSetup('fixer');
     await weather.sweep(mapId);
     await withTransaction(db, (tx) =>
       grantItems(tx, { mapId, userId: kid.id }, { timber: 10, stone: 10 }, 'dev-grant'),
     );
     await holdThen(
       lockHut,
-      () => createBuildingsService({ db }).repair(kid, mapId, hutId),
+      () => createBuildingsService({ db, clock }).repair(kid, mapId, hutId),
       lockTimber,
     );
     const [row] = await db.select().from(buildings).where(eq(buildings.id, hutId));
@@ -1432,12 +1449,12 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
   });
 
   it("spends a fix's cost and charges its mornings before its events (buildings `repair`, #621 step 11 then 12b then 13)", async () => {
-    const { kid, mapId, hutId, lockTimber, weather } = await stormyHutSetup('fix-payer');
+    const { kid, mapId, clock, hutId, lockTimber, weather } = await stormyHutSetup('fix-payer');
     await weather.sweep(mapId);
     await withTransaction(db, (tx) =>
       grantItems(tx, { mapId, userId: kid.id }, { timber: 10, stone: 10 }, 'dev-grant'),
     );
-    const repair = () => createBuildingsService({ db }).repair(kid, mapId, hutId);
+    const repair = () => createBuildingsService({ db, clock }).repair(kid, mapId, hutId);
     await holdThen(lockTimber, repair, (tx) => lockHeart(tx, mapId, kid.id));
     expect((await heartRows(mapId, kid.id)).filter((r) => r.source === 'upkeep')).toHaveLength(2);
   });
@@ -1922,6 +1939,239 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
       'dev-grant',
     ]);
   });
+
+  /*
+   * A won defence pays the defender (#728). When a rival's land holds, the
+   * finish locks the Keeper's guards in the same one id-ordered
+   * `lockSquishies` as the challenger's team (step 10), then pays both
+   * players: every Patch Coin credit (step 12), then every Heart Coin credit
+   * (12b), each in user id order. Each test holds one lock, lets the finish
+   * queue on it, then takes what the waiting finish must not hold yet; out of
+   * order, Postgres would report a deadlock (40P01) or the lock timeout would
+   * fail it.
+   */
+  /**
+   * A challenge on a rival's tile one move from the land holding: the kid's
+   * level-1 starter against the rival's level-30 guard on watch, played (by
+   * the defence AI) up to the turn before the kid's last squishy is tuckered
+   * out, checked against the stored state (the engine is deterministic).
+   * `guardFirst` and `defenderFirst` pick which of the two squishy ids and
+   * which of the two user ids sort lower.
+   */
+  async function defenceOneMoveFromHolding(
+    prefix: string,
+    { guardFirst = true, defenderFirst = true } = {},
+  ) {
+    const [lowUser, highUser] = [randomUUID(), randomUUID()].sort();
+    const [kidId, rivalId] = defenderFirst ? [highUser!, lowUser!] : [lowUser!, highUser!];
+    const make = async (id: string, who: string) => {
+      const username = `${prefix}${who}_${String(process.pid)}_${String((counter += 1))}`;
+      await db.insert(users).values({ id, username, passwordHash: 'not-a-hash', birthYear: 2014 });
+      return { id, username };
+    };
+    const kid = await make(kidId, 'a');
+    const rival = await make(rivalId, 'b');
+    const map = await createMapsService({
+      db,
+      tutorialRequired: false,
+      keeperRequired: false,
+    }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
+    const mapId = map.id;
+    // Joined long ago: past the new-player shield.
+    await db
+      .insert(mapMembers)
+      .values({ mapId, userId: rival.id, role: 'member', joinedAt: new Date(0) });
+    const [lowSquishy, highSquishy] = [randomUUID(), randomUUID()].sort();
+    const [guardId, heroId] = guardFirst
+      ? [lowSquishy!, highSquishy!]
+      : [highSquishy!, lowSquishy!];
+    await db.insert(squishies).values([
+      {
+        id: heroId,
+        mapId,
+        ownerUserId: kid.id,
+        speciesId: STARTERS.speciesIds[0]!,
+        element: 'fire',
+        feeling: 'cozy',
+        level: 1,
+      },
+      {
+        id: guardId,
+        mapId,
+        ownerUserId: rival.id,
+        speciesId: STARTERS.speciesIds[1]!,
+        element: 'water',
+        feeling: 'cozy',
+        level: 30,
+      },
+    ]);
+    const all = await db.select().from(tiles).where(eq(tiles.mapId, mapId));
+    const mine = new Set(all.filter((t) => t.ownerUserId === kid.id).map(hexKey));
+    const target = all.find(
+      (t) =>
+        t.ownerUserId === null &&
+        t.homeSlot === null &&
+        t.communityId === null &&
+        t.terrain !== 'trading-post' &&
+        hexNeighbors(t).some((n) => mine.has(hexKey(n))),
+    )!;
+    await db.update(tiles).set({ ownerUserId: rival.id }).where(eq(tiles.id, target.id));
+    await db
+      .insert(tileDefenders)
+      .values({ mapId, tileId: target.id, slot: 0, squishyId: guardId, assignedAt: new Date() });
+
+    const content = defaultBattleContent();
+    const fights = createBattlesService({ db, content, tileBattles: createTileBattlePort() });
+    const territory = createTerritoryService({ db, battles: fights });
+    const { battle } = await territory.attack(kid, mapId, { q: target.q, r: target.r });
+    expect(battle.kind).toBe('rival-tile');
+    let finishing: { action: PlayerBattleAction; turn: number } | null = null;
+    for (let i = 0; i < content.rules.maxTurns + 5 && !finishing; i++) {
+      const { state } = (await createBattlesRepo(db).findBattle(battle.id))!;
+      const side = state.sides.a;
+      const move = side.squishies[side.active]!.moves[0]!;
+      const action: PlayerBattleAction = { type: 'move', move };
+      const next = applyBattleAction(content, state, {
+        type: 'turn',
+        choices: { a: { type: 'move', move } },
+      });
+      if (next.phase.type === 'over') {
+        expect(next.phase.result.winner).toBe('b');
+        finishing = { action, turn: state.turn };
+      } else {
+        await fights.act(kid, battle.id, { action, turn: state.turn });
+      }
+    }
+    if (!finishing) throw new Error('the defence never got one move from holding');
+    return { kid, rival, mapId, heroId, guardId, battle, fights, finishing };
+  }
+
+  const squishyRow = async (id: string) => {
+    const [row] = await db
+      .select({ level: squishies.level, xp: squishies.xp })
+      .from(squishies)
+      .where(eq(squishies.id, id));
+    return row!;
+  };
+
+  it.each([
+    ['the guard', true],
+    ['the hero', false],
+  ] as const)(
+    "locks both sides' squishies in one id-ordered set on a hold, %s lowest (battles `finish`, #728 step 10)",
+    async (_, guardFirst) => {
+      const { kid, rival, mapId, heroId, guardId, battle, fights, finishing } =
+        await defenceOneMoveFromHolding('holder', { guardFirst });
+      const before = await squishyRow(guardId);
+      const [low, high] = [heroId, guardId].sort();
+      // Nightfall-style: hold the lowest of the two squishies, let the
+      // finishing move queue on it, then take the other. The finish must wait
+      // on the guard (not skip it) and must not hold the higher one yet.
+      await holdThen(
+        (tx) => lockSquishy(tx, low!),
+        () => fights.act(kid, battle.id, finishing),
+        (tx) => lockSquishy(tx, high!),
+      );
+      const done = (await createBattlesRepo(db).findBattle(battle.id))!;
+      expect(done.status).toBe('finished');
+      expect(done.state.phase).toMatchObject({ type: 'over', result: { winner: 'b' } });
+      expect(done.rewards?.b).toMatchObject({ userId: rival.id, unpaid: null });
+      expect(done.rewards?.b?.xp.map((x) => x.squishyId)).toEqual([guardId]);
+      // The guard's XP is written.
+      expect(await squishyRow(guardId)).not.toEqual(before);
+      expect((await heartRows(mapId, rival.id)).map((r) => r.source)).toEqual(['battle']);
+    },
+  );
+
+  it("takes the defender's balance only after their guard (battles `finish`, #728 step 10 then 12)", async () => {
+    const { kid, rival, guardId, battle, fights, finishing } =
+      await defenceOneMoveFromHolding('guarded');
+    // Hold the guard (care on it, or nightfall), let the finish queue on it,
+    // then take the defender's balance as care or a purchase would.
+    await holdThen(
+      (tx) => lockSquishy(tx, guardId),
+      () => fights.act(kid, battle.id, finishing),
+      (tx) => lockCoins(tx, rival.id),
+    );
+    expect(await coinRows(rival.id)).toEqual([
+      { source: 'battle', amount: COIN_RULES.defenseWin['rival-tile'] },
+    ]);
+  });
+
+  it("lets the defender's Boutique purchase finish while a defence finish waits on their balance (battles `finish`, boutique `buy`, #728)", async () => {
+    const { kid, rival, battle, fights, finishing } = await defenceOneMoveFromHolding('boutique');
+    const at = new Date();
+    const [itemId] = stockFor(rival.id, await accountDay(db, rival.id, at)).daily;
+    await withTransaction(db, (tx) =>
+      creditCoins(tx, {
+        source: 'dev-grant',
+        refId: randomUUID(),
+        userId: rival.id,
+        amount: 500,
+        at,
+      }),
+    );
+    // A purchase holds the defender's balance; the finish queues on it
+    // holding the battle and both sides' squishies. The purchase then writes
+    // its debit and piece (whose foreign keys key-share the account row):
+    // nothing the finish holds may stand in its way, or this deadlocks.
+    await holdThen(
+      (tx) => lockCoins(tx, rival.id),
+      () => fights.act(kid, battle.id, finishing),
+      async (tx) => {
+        const refId = randomUUID();
+        await spendCoins(tx, { userId: rival.id, refId, amount: 1, at });
+        await grantClothing(tx, {
+          userId: rival.id,
+          itemId: itemId!,
+          source: 'boutique',
+          refId,
+          mapId: null,
+          at,
+        });
+      },
+    );
+    expect((await coinRows(rival.id)).map((r) => r.source).sort()).toEqual([
+      'battle',
+      'boutique',
+      'dev-grant',
+    ]);
+  });
+
+  it.each([
+    ['the defender', true],
+    ['the challenger', false],
+  ] as const)(
+    "two payees in one finish: waiting on the defender's balance it holds no other balance or Heart Coins, %s lower (battles `finish`, #728 step 12 then 12b)",
+    async (_, defenderFirst) => {
+      const { kid, rival, mapId, battle, fights, finishing } = await defenceOneMoveFromHolding(
+        'payees',
+        { defenderFirst },
+      );
+      // Both players are payees of a hold, but only the defender's credits
+      // are above zero (the challenger lost), and a zero credit takes no
+      // lock. So: hold the defender's Patch Coins, let the finish queue on
+      // it, then take the challenger's Patch Coins (whichever side of the
+      // defender's id it sorts) and both players' Heart Coins. The waiting
+      // finish must hold none of them: no second balance taken out of order,
+      // and no Heart Coin credit before every Patch Coin one.
+      await holdThen(
+        (tx) => lockCoins(tx, rival.id),
+        () => fights.act(kid, battle.id, finishing),
+        async (tx) => {
+          await lockCoins(tx, kid.id);
+          for (const userId of [kid.id, rival.id].sort()) await lockHeart(tx, mapId, userId);
+        },
+      );
+      expect(await coinRows(kid.id)).toEqual([]);
+      expect(await coinRows(rival.id)).toEqual([
+        { source: 'battle', amount: COIN_RULES.defenseWin['rival-tile'] },
+      ]);
+      expect(await heartRows(mapId, rival.id)).toEqual([
+        { source: 'battle', amount: HEART_COIN_RULES.defenseWin['rival-tile'] },
+      ]);
+    },
+  );
 
   /*
    * The tutorial (#24): start, replay and skip take the account's `users` row

@@ -40,6 +40,7 @@ import {
   SERVER_GAME_DATA,
   type GuardianData,
 } from '@heartpatch/shared/server';
+import { z } from 'zod';
 import { watchtowerLevelsOf } from '../communities/service.js';
 import { createCommunitiesRepo } from '../communities/repo.js';
 import type { Executor } from '../../db/client.js';
@@ -59,6 +60,7 @@ import {
   type BattlesService,
   type PrepareTileBattle,
   type StartResult,
+  type TileBattleDefense,
   type TileBattleEnd,
   type TileBattlePort,
 } from '../battles/service.js';
@@ -871,6 +873,35 @@ async function leaveForWatch(
 }
 
 /**
+ * Who held a rival's land when side `b` won (#728), for battles to pay:
+ * the Keeper, whether they played it live ("Defend now?" yes seats them as
+ * a player), and which of side `b`'s squishies are their own. Read from
+ * the battle's baked setup, so a guard moved off watch mid-battle still
+ * earns; guardians standing in have no squishy ids and earn nothing. Null
+ * for neutral land, a tie or a loss, and for a Keeper who has left the
+ * patch (nothing to pay a non-member, plan §10).
+ */
+async function heldBy(
+  tx: Executor,
+  attack: { mapId: string; defenderUserId: string | null },
+  battle: BattleRow,
+): Promise<TileBattleDefense | null> {
+  const userId = attack.defenderUserId;
+  if (battle.kind !== 'rival-tile' || userId === null) return null;
+  if (battle.state.phase.type !== 'over' || battle.state.phase.result.winner !== 'b') return null;
+  const member = await createMapsRepo(tx).membership(attack.mapId, userId);
+  if (member?.status !== 'active') return null;
+  const side = battle.setup.b;
+  // Guardians are `guardian-1`, … (never squishy ids): only real ids are looked up.
+  const ids = side.squishies.map((s) => s.id).filter((id) => z.uuid().safeParse(id).success);
+  return {
+    userId,
+    live: side.controller.type === 'player',
+    ownSquishyIds: await createTerritoryRepo(tx).ownActiveSquishies(attack.mapId, userId, ids),
+  };
+}
+
+/**
  * The battles service's `tileBattles` port (#15): the attempt log and
  * captures, written on the battle's own transaction.
  */
@@ -897,7 +928,7 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
       if (winner !== 'a') {
         // Lost, tied, or left (a forfeit): no land changes hands.
         await repo.endAttack(battle.id, 'lost', at);
-        return { events: [], xpPercent, drop: null };
+        return { events: [], xpPercent, drop: null, defense: await heldBy(tx, attack, battle) };
       }
       const tile = await repo.lockTile(attack.tileId);
       // The tile is taken only from whoever held it when the battle began

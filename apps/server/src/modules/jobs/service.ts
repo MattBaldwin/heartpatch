@@ -367,7 +367,7 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
     // patch's next midnight (the battles service's falloff, the same count).
     const ids = rows.map((r) => r.squishy.id);
     const [wins, worn] = await Promise.all([
-      createBattlesRepo(tx).winsToday(map.id, userId, ids, at),
+      createBattlesRepo(tx).winsToday(map.id, ids, at),
       wornAccessories(tx, userId, ids),
     ]);
     const fullXpBack = nextLocalMidnight(at, map.timeZone).toISOString();
