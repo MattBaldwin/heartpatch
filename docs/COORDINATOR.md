@@ -215,8 +215,8 @@ The supervisor keeps this list current. Remove items as they land.
   - **Open at handoff:**
     - **#797 (728b, friendly battles pay, server).** Head `df243de`.
       - Round 1: Fable APPROVE; Opus REQUEST CHANGES (two missing tests), verdict at #797 #issuecomment-6878599067. CI 13/14 green at the sweep.
-      - Fix lane `session_01RAEPnFLAjgmvzBZjxf9Hv3` (Opus, $6 / 150k caps) pushes to the same branch, runs round 2 (Opus) itself and reports to supervisor 40.
-      - **Supervisor 41 must re-route it at takeover (§8.1)** and then run the merge gates. Merge on APPROVE@head + green, plus the #736 gate: firsts rows in the body.
+      - The fix lane (`session_01RAEPnFLAjgmvzBZjxf9Hv3`, $5.28, archived) pushed `c118829`. It fixed both round-1 blockers, then a round-2 blocker of its own: re-checking side a in every battle kind dropped solo-rescue XP, so side a is now re-checked in friendlies only. Its Lane handoff is #728 #issuecomment-6879293224.
+      - Supervisor 40 started a round-3 Opus reviewer on `c118829` at ~15:01 UTC. If no verdict naming `c118829` is on #797, run a fresh one yourself, then merge on APPROVE@head + green + the #736 gate (firsts rows in the body).
       - Then brief **728c** (client: friendly result card, which still says "Friendly battles give no XP" at `live-turn.ts:41`; Challenge report; a `changes/` entry; captures + Opus render-check + owner approval). 728c should follow 728b closely, because main auto-deploys and the card is wrong until 728c lands.
     - **#784 (WebKit CI stalls).** Main `74a842d` was green on all 12 WebKit groups. That is 1 of the 3 green runs needed to close it.
       - If `recipe-book.spec` (ipad group 1) goes red again, brief a small test lane to read its taps against `still()` / `settled()`. The `layout-overlaps` fade race was found that way: `panel-fit.ts` sets `data-more` one frame later.
@@ -224,7 +224,7 @@ The supervisor keeps this list current. Remove items as they land.
     - **#732 B (per-tier Catalog goal):** start after #794 merges. Brief it for real captures + a render-check + owner approval before merge.
     - **#732 D:** a Fable plan after 728b.
   - **Next** (in order):
-    1. Re-route the #797 fix lane.
+    1. Get the #797 round-3 verdict.
     2. Re-ask the #794 question.
     3. Merge #797 on the gates, then start 728c.
     4. The friendly-falloff owner question.
