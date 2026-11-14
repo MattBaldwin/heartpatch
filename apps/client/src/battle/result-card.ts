@@ -17,7 +17,7 @@ export const REWARD_TEXT = {
   friendlyWon: (coins: string) => `+${coins} for the\u00a0win!`,
   friendlyLost: 'Good game! Everyone learned something.',
   friendlyPairCap: (name: string) => `You've won your coins from ${name} today. XP still counts!`,
-  friendlyGaveUp: (name: string) => `${name} gave up, so no coins this time. XP still counts!`,
+  friendlyGaveUp: 'No coins for a give-up. XP still counts!',
 } as const;
 
 /** "3 Patch Coins and 💛 3", or just the one that was credited. */
@@ -79,9 +79,7 @@ export function coinLine(input: {
     return paid(rewards.coins) ? REWARD_TEXT.earned(coinsText(rewards.coins)) : null;
   switch (rewards.unpaid) {
     case 'scooted':
-      return role === 'defender'
-        ? REWARD_TEXT.heldScooted(opponent)
-        : REWARD_TEXT.friendlyGaveUp(opponent);
+      return role === 'defender' ? REWARD_TEXT.heldScooted(opponent) : REWARD_TEXT.friendlyGaveUp;
     case 'pair-cap':
       return role === 'friendly' ? REWARD_TEXT.friendlyPairCap(opponent) : null;
     case 'guardians':

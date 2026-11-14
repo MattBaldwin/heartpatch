@@ -100,7 +100,7 @@ describe('a friendly battle (#728)', () => {
 
   it('pays no coins when the friend gave up', () => {
     expect(friendly({ rewards: rewards({ coins: null, unpaid: 'scooted' }), scooted: true })).toBe(
-      'Lee gave up, so no coins this time. XP still counts!',
+      'No coins for a give-up. XP still counts!',
     );
   });
 });
