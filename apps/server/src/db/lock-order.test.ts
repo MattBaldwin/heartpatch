@@ -1174,15 +1174,22 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
    * A patch with a Woodcutter's Hut on a forest homestead (#601), placed two
    * days ago with an hour's Timber waiting and two mornings owed, and Heart
    * Coins for both, for the settle.
+   *
+   * Everything runs on `clock`, pinned to the last noon UTC: the patch's
+   * mornings are 06:00 UTC, so a real clock read here and again in the
+   * service could straddle one and owe a third morning, and
+   * `stormyHutSetup`'s knock five minutes before "now" would land before
+   * that day's morning between 06:00 and 06:05 and leave it unpaid.
    */
   async function hutSetup(prefix: string) {
+    const now = lastNoon();
+    const clock = () => now;
     const kid = await player(prefix);
     const map = await createMapsService({
       db,
       tutorialRequired: false,
       keeperRequired: false,
     }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
-    const now = new Date();
     const plot = await makeHomestead(db, map.id, kid.id, now);
     await db.execute(
       sql`update tiles set terrain = 'forest', node_resource = null where id = ${plot.id}`,
@@ -1208,7 +1215,15 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
         at: now,
       });
     });
-    return { kid, mapId: map.id, settle: createSettleService({ db }) };
+    return { kid, mapId: map.id, clock, settle: createSettleService({ db, clock }) };
+  }
+
+  /** Noon UTC today, or yesterday if it's not noon yet: far from 06:00 and midnight, never ahead. */
+  function lastNoon(): Date {
+    const noon = new Date();
+    noon.setUTCHours(12, 0, 0, 0);
+    if (noon.getTime() > Date.now()) noon.setUTCDate(noon.getUTCDate() - 1);
+    return noon;
   }
 
   it("banks a resource building's output before charging its upkeep (settle, #601 step 11 then 12b)", async () => {
@@ -1243,12 +1258,12 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
   });
 
   it("charges a take-down's owed mornings after its inventory rows (buildings `remove`, #601 step 11 then 12b)", async () => {
-    const { kid, mapId } = await hutSetup('hut-taker');
+    const { kid, mapId, clock } = await hutSetup('hut-taker');
     const [hut] = await db
       .select({ id: buildings.id })
       .from(buildings)
       .where(and(eq(buildings.mapId, mapId), eq(buildings.ownerUserId, kid.id)));
-    const service = createBuildingsService({ db });
+    const service = createBuildingsService({ db, clock });
     await holdThen(
       (tx) =>
         tx
@@ -1269,13 +1284,13 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
   });
 
   it("takes a Watermill's Greens with the settle's grant rows, before the balance (settle, #621 W1-8 step 11 then 12b)", async () => {
-    const { kid, mapId, settle } = await hutSetup('mill-eater');
+    const { kid, mapId, clock, settle } = await hutSetup('mill-eater');
     await makeWildIsle(db, mapId);
     // Calm days from the hut's placing (two days back) to tomorrow: left to
     // the patch's random seed, a storm could knock the mill, which then eats
     // nothing, never queues on the Greens row, and the wait times out.
     for (let back = -1; back <= 2; back++) {
-      const day = new Date(Date.now() - back * 24 * 3600_000).toISOString().slice(0, 10);
+      const day = new Date(clock().getTime() - back * 24 * 3600_000).toISOString().slice(0, 10);
       await putPlan(db, mapId, day, []);
     }
     // The hut's row becomes a Watermill with an hour's grinding waiting.
@@ -1332,7 +1347,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
       .select({ q: tiles.q, r: tiles.r })
       .from(tiles)
       .where(eq(tiles.id, hut!.tileId));
-    const now = Date.now();
+    const now = setup.clock().getTime();
     await db
       .update(buildings)
       .set({ weatherCheckedThrough: new Date(now - 30 * 60_000) })
@@ -1379,7 +1394,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
       lockHut,
       lockTimber,
       knocks,
-      weather: createWeatherService({ db }),
+      weather: createWeatherService({ db, clock: setup.clock }),
     };
   }
 
@@ -1418,14 +1433,15 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
   });
 
   it("takes a fix's building before its inventory rows (buildings `repair`, #621 step 8 then 11)", async () => {
-    const { kid, mapId, hutId, lockHut, lockTimber, weather } = await stormyHutSetup('fixer');
+    const { kid, mapId, clock, hutId, lockHut, lockTimber, weather } =
+      await stormyHutSetup('fixer');
     await weather.sweep(mapId);
     await withTransaction(db, (tx) =>
       grantItems(tx, { mapId, userId: kid.id }, { timber: 10, stone: 10 }, 'dev-grant'),
     );
     await holdThen(
       lockHut,
-      () => createBuildingsService({ db }).repair(kid, mapId, hutId),
+      () => createBuildingsService({ db, clock }).repair(kid, mapId, hutId),
       lockTimber,
     );
     const [row] = await db.select().from(buildings).where(eq(buildings.id, hutId));
@@ -1433,12 +1449,12 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
   });
 
   it("spends a fix's cost and charges its mornings before its events (buildings `repair`, #621 step 11 then 12b then 13)", async () => {
-    const { kid, mapId, hutId, lockTimber, weather } = await stormyHutSetup('fix-payer');
+    const { kid, mapId, clock, hutId, lockTimber, weather } = await stormyHutSetup('fix-payer');
     await weather.sweep(mapId);
     await withTransaction(db, (tx) =>
       grantItems(tx, { mapId, userId: kid.id }, { timber: 10, stone: 10 }, 'dev-grant'),
     );
-    const repair = () => createBuildingsService({ db }).repair(kid, mapId, hutId);
+    const repair = () => createBuildingsService({ db, clock }).repair(kid, mapId, hutId);
     await holdThen(lockTimber, repair, (tx) => lockHeart(tx, mapId, kid.id));
     expect((await heartRows(mapId, kid.id)).filter((r) => r.source === 'upkeep')).toHaveLength(2);
   });
