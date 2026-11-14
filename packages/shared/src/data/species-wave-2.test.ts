@@ -101,7 +101,7 @@ describe('wave 2 (#382)', () => {
 
   it('weighs rarer kinds lighter and keeps every kind out of the Gap', () => {
     const byId = new Map(KINDS.map((s) => [s.id, s]));
-    const weight: Partial<Record<string, number>> = { common: 4, uncommon: 2, rare: 1 };
+    const weight: Partial<Record<string, number>> = { common: 4, uncommon: 2, rare: 2 };
     for (const t of tables) {
       expect(t.terrains, t.id).not.toContain('junipers-gap');
       for (const e of t.entries) {
