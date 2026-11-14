@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
-import { reportHeartbeats, watchHeartbeat } from './heartbeat.js';
+import { reportHeartbeats } from './heartbeat.js';
 import { expectClear } from './layout.js';
 import { newPlayer, savedCode, submitSignUp, TEST_PASSWORD, uniqueName } from './players.js';
 import { realTap } from './touch.js';
@@ -103,7 +103,6 @@ test('the optional tutorial: start, resume after reload, graduate, replay and sk
 }) => {
   test.setTimeout(120_000); // draws the Glade three times; CI renders in software
   const page = await newPlayer(browser, uniqueName('sprout'));
-  await watchHeartbeat(page);
   const lobby = page.getByTestId('lobby');
   const tutorial = page.getByTestId('tutorial');
   const bubble = page.getByTestId('tutorial-bubble');

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
-import { reportHeartbeats, watchHeartbeat } from './heartbeat.js';
+import { reportHeartbeats } from './heartbeat.js';
 import { expectClear } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { pushStubCounts, setPushStub, stubPush } from './push-stub.js';
@@ -93,7 +93,6 @@ test('the offer shows once in a Home Screen app, and Yes please turns nudges on'
 }) => {
   test.setTimeout(180_000);
   const page = await newPlayer(browser, uniqueName('nudge'));
-  await watchHeartbeat(page);
   await stubPush(page);
   await page.reload();
   await makePatch(page);
@@ -188,7 +187,6 @@ test('no offer in a plain tab; Not now is for good; Settings shows each state', 
 }) => {
   test.setTimeout(180_000);
   const page = await newPlayer(browser, uniqueName('nudgetab'));
-  await watchHeartbeat(page);
   await stubPush(page, { standalone: false });
   await page.reload();
   await makePatch(page);

@@ -6,6 +6,7 @@ import {
   type Page,
   type Request,
 } from '@playwright/test';
+import { watchHeartbeat } from './heartbeat.js';
 
 // Signup needs the family code the dev server was started with (playwright.config.ts).
 const signupCode = process.env['HP_SIGNUP_CODE'] ?? '';
@@ -69,6 +70,9 @@ export async function newPlayer(
     ...(options.timezoneId ? { timezoneId: options.timezoneId } : {}),
   });
   const page = await context.newPage();
+  // Whether a page that stops answering on CI is blocked, not drawing or out of
+  // Playwright's reach (#784): from the first load on.
+  await watchHeartbeat(page);
   const inFlight = apiInFlight(page);
   await slowCpu(page);
   await signUp(page, name, code, options);
