@@ -142,6 +142,7 @@ describe('BattleRewardsSchema (#201)', () => {
       percent: 100,
       fullXpResetAt: null,
       coins: null,
+      unpaid: null,
       b: null,
     });
   });
