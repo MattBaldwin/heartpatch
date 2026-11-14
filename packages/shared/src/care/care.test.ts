@@ -26,6 +26,7 @@ import {
   addXp,
   battleXpPercent,
   befriendedLevel,
+  countsTowardFalloff,
   joiningSpecies,
   carePercent,
   evolutionAt,
@@ -498,6 +499,20 @@ describe('battleXpPercent (owner decision 2026-10-06)', () => {
 
   it('is on in the shipped data', () => {
     expect(GROWTH_RULES.battleXpFalloff).toEqual({ fullWinsPerDay: 7, afterPercent: 10 });
+  });
+});
+
+describe('countsTowardFalloff (#728)', () => {
+  it("counts a win on either side: a challenger's win and a guard's hold", () => {
+    expect(countsTowardFalloff('rival-tile', 'a', 'a')).toBe(true);
+    expect(countsTowardFalloff('rival-tile', 'b', 'b')).toBe(true);
+    expect(countsTowardFalloff('wild', 'a', 'a')).toBe(true);
+  });
+
+  it('never counts a loss, a tie or a friendly', () => {
+    expect(countsTowardFalloff('rival-tile', 'b', 'a')).toBe(false);
+    expect(countsTowardFalloff('tile', 'a', 'draw')).toBe(false);
+    expect(countsTowardFalloff('friendly', 'a', 'a')).toBe(false);
   });
 });
 

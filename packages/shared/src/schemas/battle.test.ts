@@ -141,6 +141,28 @@ describe('BattleRewardsSchema (#201)', () => {
       xp: [],
       percent: 100,
       fullXpResetAt: null,
+      coins: null,
+      b: null,
     });
+  });
+
+  it('reads side b rewards (#728), with no unpaid reason by default', () => {
+    const userId = '00000000-0000-4000-8000-000000000001';
+    const parsed = BattleRewardsSchema.parse({
+      xp: [],
+      percent: 50,
+      coins: { patch: 1, heart: 1 },
+      b: { userId, xp: [], fullXpResetAt: null, coins: { patch: 3, heart: 3 } },
+    });
+    expect(parsed.b).toEqual({
+      userId,
+      xp: [],
+      fullXpResetAt: null,
+      coins: { patch: 3, heart: 3 },
+      unpaid: null,
+    });
+    expect(() =>
+      BattleRewardsSchema.parse({ xp: [], percent: 100, b: { ...parsed.b, unpaid: 'sulked' } }),
+    ).toThrow();
   });
 });

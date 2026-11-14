@@ -1,3 +1,4 @@
+import type { BattleKind, BattleSideId } from '../schemas/battle.js';
 import type { GrowthRules } from '../schemas/data/care.js';
 import type { ElementId, FeelingId } from '../schemas/data/elements.js';
 
@@ -197,6 +198,20 @@ export function battleXpPercent(
   const falloff = rules.battleXpFalloff;
   if (!falloff || winsToday < falloff.fullWinsPerDay) return 100;
   return falloff.afterPercent;
+}
+
+/**
+ * Whether one squishy's award in a finished battle counts as a win toward
+ * its daily falloff (`battleXpPercent`, #201): it was on the winning side,
+ * whichever side that was (a held defence counts for the guard, #728). A
+ * friendly battle (#29) pays no XP, so it never counts.
+ */
+export function countsTowardFalloff(
+  kind: BattleKind,
+  side: BattleSideId,
+  winner: BattleSideId | 'draw',
+): boolean {
+  return kind !== 'friendly' && side === winner;
 }
 
 /** How far a squishy is toward its next evolution (#205), for the evolving meter. */
