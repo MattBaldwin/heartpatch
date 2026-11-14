@@ -226,7 +226,7 @@ describe('milestoneCredits', () => {
       sources: ['milestone'],
       tradable: false,
     });
-    // The Keeper's own face peeks out: no piece covers it.
+    // It dresses the Keeper rather than replacing the body (the face shows in the renders).
     expect(costume?.visual.replacesBody).toBeUndefined();
   });
 

@@ -1870,7 +1870,7 @@ const MILESTONE: ClothingItem[] = [
           size: [0.5, 0.45, 0.5],
           color: '#c8452f',
         },
-        { shape: 'ellipsoid', at: [0.518, -0.09, 0.045], size: [0.5, 0.45, 0.5], color: '#f2c14e' },
+        { shape: 'ellipsoid', at: [0.518, -0.17, 0.045], size: [0.5, 0.45, 0.5], color: '#f2c14e' },
         { shape: 'ellipsoid', at: [0.26, -0.12, 0.45], size: [0.5, 0.45, 0.5], color: '#e8892b' },
         { shape: 'ellipsoid', at: [-0.26, -0.09, 0.45], size: [0.5, 0.45, 0.5], color: '#c8452f' },
         {
@@ -1931,8 +1931,8 @@ const MILESTONE: ClothingItem[] = [
         {
           shape: 'ellipsoid',
           on: 'head',
-          at: [0, 0.55, 0.02],
-          size: [0.86, 0.36, 0.86],
+          at: [0, 0.47, 0],
+          size: [0.92, 0.52, 0.92],
           color: '#5e3a1f',
         },
         {
