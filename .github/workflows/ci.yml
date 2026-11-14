@@ -184,6 +184,12 @@ jobs:
       # The dev server and the db scripts need this. Inside a container job the
       # service is reached by its name, not localhost.
       DATABASE_URL: postgres://heartpatch:heartpatch@db:5432/heartpatch
+      # WebGL here is Mesa llvmpipe (software), which starts one raster thread
+      # per core for every GL context. With 2 workers and two-phone tests that
+      # was ~16-20 runnable llvmpipe threads on a 4-core runner (load 7-8 per
+      # core, the #784 heartbeat), starving WebKit's timers and taps. One
+      # raster thread per context keeps the total near the core count.
+      LP_NUM_THREADS: 1 # TUNE: try 2 if frames get slower than the stalls were
     steps:
       - uses: actions/checkout@v5
         with:
