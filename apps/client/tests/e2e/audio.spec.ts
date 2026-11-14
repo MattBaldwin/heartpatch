@@ -26,7 +26,8 @@ test('sound waits for a tap, ticks for buttons, and keeps its settings on this d
 }) => {
   // Signup goes through the Keeper picker's 3D preview (#42); CI renders in software.
   test.setTimeout(90_000);
-  const page = await newPlayer(browser, uniqueName('snd'));
+  // The only player with Web Audio: the rest go without it on CI (players.ts, #784).
+  const page = await newPlayer(browser, uniqueName('snd'), undefined, { sound: true });
 
   // Signing up was all taps: sound is unlocked (or the browser has none), and
   // the buttons asked for ticks.
