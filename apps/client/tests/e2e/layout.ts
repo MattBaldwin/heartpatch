@@ -63,9 +63,16 @@ export async function settled(page: Page): Promise<void> {
  */
 export async function still(page: Page, selector: string): Promise<void> {
   await page.evaluate(async (selector) => {
+    const FRAME_STALL_MS = 10_000;
+    // A frame that never comes fails here, named, rather than at the test's own timeout:
+    // WebKit on CI has stopped running animation frames altogether (#784).
     const frame = () =>
-      new Promise<void>((resolve) => {
+      new Promise<void>((resolve, reject) => {
+        const stalled = setTimeout(() => {
+          reject(new Error(`no animation frame for ${String(FRAME_STALL_MS)} ms: ${selector}`));
+        }, FRAME_STALL_MS);
         requestAnimationFrame(() => {
+          clearTimeout(stalled);
           resolve();
         });
       });

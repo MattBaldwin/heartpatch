@@ -2,10 +2,12 @@ import {
   expect,
   test,
   type Browser,
+  type BrowserContext,
   type Locator,
   type Page,
   type Request,
 } from '@playwright/test';
+import { watchHeartbeat } from './heartbeat.js';
 
 // Signup needs the family code the dev server was started with (playwright.config.ts).
 const signupCode = process.env['HP_SIGNUP_CODE'] ?? '';
@@ -68,7 +70,11 @@ export async function newPlayer(
     ...(baseURL ? { baseURL } : {}),
     ...(options.timezoneId ? { timezoneId: options.timezoneId } : {}),
   });
+  if (!options.sound) await withoutWebAudio(context);
   const page = await context.newPage();
+  // Whether a page that stops answering on CI is blocked, not drawing or out of
+  // Playwright's reach (#784): from the first load on.
+  await watchHeartbeat(page);
   const inFlight = apiInFlight(page);
   await slowCpu(page);
   await signUp(page, name, code, options);
@@ -95,6 +101,22 @@ function apiInFlight(page: Page): ReadonlySet<Request> {
   page.on('requestfinished', done);
   page.on('requestfailed', done);
   return waiting;
+}
+
+/**
+ * No live Web Audio on the context's pages, so the game's sound is
+ * `unsupported` (audio.ts makes no AudioContext). On CI's WebKit, which has no
+ * sound device, a running context's GStreamer source threads (`webaudioSrc`)
+ * spin: the busiest threads on a runner loaded 7-8 times over its 4 cores,
+ * starving pages until taps time out (#784). Test-only; real iPhones play
+ * through a sound device. audio.spec opts back in (`sound: true`).
+ */
+async function withoutWebAudio(context: BrowserContext): Promise<void> {
+  await context.addInitScript(() => {
+    const g = window as unknown as Record<string, unknown>;
+    g['AudioContext'] = undefined;
+    g['webkitAudioContext'] = undefined;
+  });
 }
 
 /**
@@ -163,6 +185,8 @@ export interface SignUpOptions {
    * player in, e.g. with their patch invite: what to tap there.
    */
   helper?: 'later' | 'ask';
+  /** Keep the browser's Web Audio (audio.spec); every other player's pages have none. */
+  sound?: boolean;
 }
 
 /**

@@ -20,6 +20,17 @@ export default class SpecTimingReporter implements Reporter {
     const spec = basename(test.location.file).replace(/\.spec\.ts$/, '');
     this.seconds.set(spec, (this.seconds.get(spec) ?? 0) + result.duration / 1000);
     this.project ||= test.parent.project()?.name ?? '';
+    // A page heartbeat (heartbeat.ts, #784): a stall the watchdog saw, or a failed try's last
+    // look, for tries that didn't pass. A warning, so it shows in the check run's annotations
+    // (GitHub keeps only the first few warnings a step: passing tests' stalls would crowd out).
+    if (result.status === 'passed') return;
+    for (const { type, description } of result.annotations) {
+      if ((type !== 'heartbeat' && type !== 'heartbeat-stall') || !description) continue;
+      const title = `${type} ${this.project} ${spec}:${String(test.location.line)} try ${String(result.retry + 1)}`;
+      console.log(
+        `::warning title=${title.replace(/[:,\r\n]/g, '-')}::${description.replace(/%/g, '%25').replace(/[\r\n]/g, ' ')}`,
+      );
+    }
   }
 
   onEnd(result: FullResult): void {
