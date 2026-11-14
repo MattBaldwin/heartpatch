@@ -120,7 +120,11 @@ describe('boutiqueStock', () => {
     const seen = new Set<string>();
     for (let day = 1; day <= 30; day++) {
       const date = `2026-10-${String(day).padStart(2, '0')}`;
-      const stock = boutiqueStock(CLOTHING, { ...OCTOBER, date }, BOUTIQUE_RULES);
+      const stock = boutiqueStock(
+        CLOTHING,
+        { ...OCTOBER, date, seasons: ['halloween', 'thanksgiving'] },
+        BOUTIQUE_RULES,
+      );
       racks.add(stock.daily.join());
       for (const id of all(stock)) seen.add(id);
     }
@@ -144,8 +148,20 @@ describe('boutiqueStock', () => {
     expect(all(outOfSeason).some((id) => CLOTHING_BY_ID.get(id)!.season)).toBe(false);
     // A season with nothing to sell gets no rack.
     expect(
-      boutiqueStock(CLOTHING, { ...OCTOBER, seasons: ['thanksgiving'] }, BOUTIQUE_RULES).seasonal,
+      boutiqueStock(CLOTHING, { ...OCTOBER, seasons: ['christmas'] }, BOUTIQUE_RULES).seasonal,
     ).toEqual([]);
+    // Thanksgiving's rack (#34) sells its pieces, and nothing from Halloween.
+    const november = boutiqueStock(
+      CLOTHING,
+      { ...OCTOBER, date: '2026-11-20', seasons: ['thanksgiving'] },
+      BOUTIQUE_RULES,
+    ).seasonal;
+    expect(november.map((r) => r.seasonId)).toEqual(['thanksgiving']);
+    expect([...november[0]!.items].sort()).toEqual([
+      'harvest-scarf',
+      'leaf-crown',
+      'patchwork-quilt-cape',
+    ]);
     // Each rack rolls on its own, so a season's rack never reshuffles the daily one.
     expect(outOfSeason.daily).toEqual(boutiqueStock(CLOTHING, OCTOBER, BOUTIQUE_RULES).daily);
   });

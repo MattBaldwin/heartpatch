@@ -621,9 +621,13 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
     // Fingerprint of every other catalog item on two bases, taken on main
     // before the model costume existed (#261 follow-up). Items added since
     // (the Rekindled set, #306 PR 5, the cellar keepsakes, #306, and the
-    // Crooked House's cloak, #306 6b) aren't in it: they can't have changed.
+    // Crooked House's cloak, #306 6b, the Thanksgiving pieces, #34) aren't in
+    // it: they can't have changed.
     const addedSince = new Set<string>([
       ...REKINDLED.pieces,
+      'leaf-crown',
+      'harvest-scarf',
+      'patchwork-quilt-cape',
       'lamplighters-crown',
       'gearheart-wrench',
       'wishing-well-cape',

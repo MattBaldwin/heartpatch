@@ -21,8 +21,8 @@ const HALLOWEEN_COSTUMES = [
 /**
  * Found clothing drop tables (design doc §23). Secret (CLAUDE.md rule 6):
  * server-only, so players can't read the odds or where things hide. Halloween
- * items carry `season: 'halloween'` in the catalog and only drop in that
- * window. Rarer items get smaller weights. All first guesses.
+ * and Thanksgiving items carry their `season` in the catalog and only drop in
+ * that window. Rarer items get smaller weights. All first guesses.
  */
 export const CLOTHING_DROPS: ClothingDropTable[] = [
   {
@@ -63,6 +63,10 @@ export const CLOTHING_DROPS: ClothingDropTable[] = [
       { item: 'bat-wings', weight: 10, terrains: ['old-forest', 'mountains'] },
       { item: 'squishy-onesie', weight: 10 },
       ...HALLOWEEN_COSTUMES,
+      // Thanksgiving window only (catalog `season`, #34).
+      { item: 'harvest-scarf', weight: 100 },
+      { item: 'leaf-crown', weight: 60, terrains: ['forest', 'old-forest'] },
+      { item: 'patchwork-quilt-cape', weight: 30 },
     ],
   },
   {
@@ -84,6 +88,8 @@ export const CLOTHING_DROPS: ClothingDropTable[] = [
       { item: 'bat-wings', weight: 10 },
       { item: 'squishy-onesie', weight: 10 },
       ...HALLOWEEN_COSTUMES,
+      { item: 'harvest-scarf', weight: 100 },
+      { item: 'leaf-crown', weight: 60 },
     ],
   },
   {
@@ -97,6 +103,8 @@ export const CLOTHING_DROPS: ClothingDropTable[] = [
       { item: 'ghost-cape', weight: 60 },
       { item: 'ghost-sheet', weight: 30 },
       { item: 'jack-o-lamp', weight: 60 },
+      { item: 'harvest-scarf', weight: 100 },
+      { item: 'patchwork-quilt-cape', weight: 30 },
     ],
   },
   {
