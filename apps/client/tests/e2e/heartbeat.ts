@@ -63,6 +63,8 @@ interface PageBeat {
 }
 
 interface Watch {
+  /** The test that opened the page: only its own report shows the page. */
+  testInfo: TestInfo;
   started: number;
   /** The last beat: when it arrived (test clock) and what it said. */
   last: { at: number; beat: PageBeat } | null;
@@ -139,8 +141,13 @@ export async function watchHeartbeat(page: Page): Promise<void> {
     { prefix: BEAT, every: BEAT_MS },
   );
 
+  const testInfo = test.info();
+  // Pages a spec left open in earlier tests (many never close their contexts)
+  // belong to those tests: never report them as this one's.
+  for (const [old, w] of watched) if (w.testInfo !== testInfo) watched.delete(old);
   const started = Date.now();
   const watch: Watch = {
+    testInfo,
     started,
     last: null,
     beats: [],
@@ -152,7 +159,7 @@ export async function watchHeartbeat(page: Page): Promise<void> {
     stalls: 0,
   };
   watched.set(page, watch);
-  startWatchdog(page, watch, test.info());
+  startWatchdog(page, watch, testInfo);
   const since = () => `${((Date.now() - watch.started) / 1000).toFixed(1)}s`;
   const note = (event: string) => {
     watch.events.push(`${since()} ${event}`);
@@ -201,9 +208,9 @@ export async function watchHeartbeat(page: Page): Promise<void> {
   page.on('crash', () => {
     note('CRASH');
   });
+  // A page that closed (or crashed) during a failed test is still reported, as closed.
   page.on('close', () => {
     note('close');
-    watched.delete(page);
   });
   page.on('pageerror', (error) => {
     note(`pageerror ${error.message.slice(0, 120)}`);
@@ -241,6 +248,7 @@ async function within<T>(work: Promise<T>, ms: number, fallback: string): Promis
 async function snapshot(page: Page, watch: Watch): Promise<Record<string, unknown>> {
   // The test side first: beats that arrive during the probes would make ages negative.
   const now = Date.now();
+  const [load1 = 0] = loadavg();
   const age = (last: { at: number } | null) => (last ? +((now - last.at) / 1000).toFixed(1) : null);
   const rates = watch.beats.slice(1).map((b, i) => {
     const a = watch.beats[i];
@@ -260,7 +268,7 @@ async function snapshot(page: Page, watch: Watch): Promise<Record<string, unknow
     framesStillS: +((now - watch.framesMovedAt) / 1000).toFixed(1),
     lastBeat: watch.last?.beat ?? null,
     // The runner's 1-minute load average over its cores: above 1, the page waits for a core.
-    loadPerCore: +(loadavg()[0]! / availableParallelism()).toFixed(2),
+    loadPerCore: +(load1 / availableParallelism()).toFixed(2),
     rates,
     events: [...watch.events],
   };
@@ -331,7 +339,7 @@ function startWatchdog(page: Page, watch: Watch, testInfo: TestInfo): void {
 }
 
 /**
- * On a failed test, one `heartbeat` annotation per watched page: how old the
+ * On a failed test, one `heartbeat` annotation per page it opened: how old the
  * last beat is and what it said, ticks, frames and draws per second over the
  * last windows, the runner's load per core, the page's events, and whether a
  * main-world `evaluate` and a locator query (Playwright's utility world) still
@@ -347,7 +355,7 @@ function startWatchdog(page: Page, watch: Watch, testInfo: TestInfo): void {
  *   process swap on navigation): then navigation and load events stop too.
  */
 export async function reportHeartbeats(testInfo: TestInfo): Promise<void> {
-  const pages = [...watched];
+  const pages = [...watched].filter(([, w]) => w.testInfo === testInfo);
   watched.clear();
   if (testInfo.status === testInfo.expectedStatus) return;
   for (const [page, watch] of pages) {
