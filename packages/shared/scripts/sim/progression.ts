@@ -68,7 +68,7 @@ export const MODEL_LIMITS = [
 ] as const;
 
 /** One squishy on a kid's team. */
-interface Member {
+export interface Member {
   readonly id: string;
   speciesId: string;
   level: number;
@@ -77,7 +77,7 @@ interface Member {
   winsToday: number;
 }
 
-interface Kid {
+export interface Kid {
   readonly profile: KidProfile;
   readonly slot: number;
   /** The Partner first, then the teammates (the team picker's default order). */
@@ -120,6 +120,9 @@ export interface DayRecord {
   /** The other kid's tries on this kid's land today, and how many held (#728). */
   readonly defences: number;
   readonly defencesHeld: number;
+  /** XP the Partner got from holds today, and tiles the other kid took today (#728). */
+  readonly defenceXp: number;
+  readonly tilesLost: number;
 }
 
 export interface KidRun {
@@ -260,7 +263,7 @@ function play(
  * `counts`: the battle counts toward the falloff (a win; any friendly, #728).
  * `percent`: a share of the engine's XP (friendlies' `xpPercent`).
  */
-function grant(
+export function grant(
   data: ModelData,
   kid: Kid,
   rules: ProgressionRules,
@@ -364,6 +367,23 @@ function estimateRivalOdds(
   return Math.floor((wins * 100) / config.estimateGames);
 }
 
+/**
+ * The other kid's tiles a kid may try today (#728 defences): none during the
+ * new-player shield (days 1–`shieldDays`) or once `lossCapPerDay` were taken
+ * from them today, and never a home ring. Adjacency is the caller's.
+ */
+export function rivalTargets(
+  tiles: readonly MapTile[],
+  owner: ReadonlyMap<HexKey, number | null>,
+  rival: number,
+  day: number,
+  lostToday: number,
+  defences: NonNullable<ProgressionRules['defences']>,
+): MapTile[] {
+  if (day <= defences.shieldDays || lostToday >= defences.lossCapPerDay) return [];
+  return tiles.filter((t) => owner.get(hexKey(t)) === rival && t.homeSlot === null);
+}
+
 /** Runs two kids of one kind on one map for `config.days` days. */
 export function runProgression(
   data: ModelData,
@@ -452,11 +472,13 @@ export function runProgression(
     const defended = kids.map(() => 0);
     const held = kids.map(() => 0);
     const lost = kids.map(() => 0);
+    const holdXp = kids.map(() => 0);
 
     // Friendlies (#728), the two kids taking turns as side a: both sides paid,
     // every one counting toward the falloff win or lose.
     for (let f = 0; f < friendlies; f++) {
-      const a = f % 2;
+      // Alternate who starts by day too, so a kid with one a day isn't always side a.
+      const a = (day + f) % 2;
       const b = 1 - a;
       const [kidA, kidB] = [kids[a], kids[b]];
       if (!kidA || !kidB) break;
@@ -484,16 +506,11 @@ export function runProgression(
         const mine = new Set(tiles.filter((t) => owner.get(hexKey(t)) === k).map(hexKey));
         const rival = 1 - k;
         const rivalAt = rivalOdds[k];
-        const rivalOpen =
-          defences !== undefined &&
-          rivalAt !== null &&
-          rivalAt !== undefined &&
-          (lost[rival] ?? 0) < defences.lossCapPerDay;
-        // The other kid's land outside their home ring (#728 defences), after
-        // neutral land at equal odds.
-        const rivalTiles = rivalOpen
-          ? tiles.filter((t) => owner.get(hexKey(t)) === rival && t.homeSlot === null)
-          : [];
+        // The other kid's land (#728 defences), after neutral land at equal odds.
+        const rivalTiles =
+          defences && rivalAt !== null && rivalAt !== undefined
+            ? rivalTargets(tiles, owner, rival, day, lost[rival] ?? 0, defences)
+            : [];
         const target = [
           ...neutralLeft().map((t) => ({
             t,
@@ -529,8 +546,9 @@ export function runProgression(
           if (result.winner === 'b') {
             // A hold pays the guards side b's XP (728a) and counts as their win.
             held[rival] = (held[rival] ?? 0) + 1;
-            partnerXp[rival] =
-              (partnerXp[rival] ?? 0) + grant(data, defender, rules, result.b, true);
+            const gained = grant(data, defender, rules, result.b, true);
+            partnerXp[rival] = (partnerXp[rival] ?? 0) + gained;
+            holdXp[rival] = (holdXp[rival] ?? 0) + gained;
           } else if (result.winner === 'a') {
             owner.set(hexKey(t), k);
             lost[rival] = (lost[rival] ?? 0) + 1;
@@ -633,6 +651,8 @@ export function runProgression(
         friendlies,
         defences: defended[k] ?? 0,
         defencesHeld: held[k] ?? 0,
+        defenceXp: holdXp[k] ?? 0,
+        tilesLost: lost[k] ?? 0,
       });
     });
   }

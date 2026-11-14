@@ -95,7 +95,7 @@ export const PATCH_ECONOMY_CONFIG: PatchEconomyConfig = {
       id: 'casual',
       sessions: fuel('casual').sessions,
       // TUNE: guess, the #601 plan's casual kid; #728: one friendly a day
-      // (sim:progression's casual kid), won about half the time, and no paid holds.
+      // (sim:progression's casual kid), counted as won (an upper bound), no paid holds.
       wins: { wild: 1, tile: 0, defence: 0, friendly: 1 },
       captures: { wild: 0, tile: 0 },
       fullCareActions: 3, // TUNE: one care session
@@ -107,8 +107,9 @@ export const PATCH_ECONOMY_CONFIG: PatchEconomyConfig = {
     {
       id: 'engaged',
       sessions: fuel('engaged').sessions,
-      // TUNE: guess, the plan's engaged kid; #728: three friendlies a day, won
-      // about half, and one paid hold a day.
+      // TUNE: guess, the plan's engaged kid; #728: three friendlies a day, two
+      // won (rounded up), and one paid hold a day: an upper bound, since
+      // sim:progression's kids rarely meet before neutral land runs out.
       wins: { wild: 2, tile: 1, defence: 1, friendly: 2 },
       captures: { wild: 0, tile: 1 },
       fullCareActions: 10, // TUNE: full care

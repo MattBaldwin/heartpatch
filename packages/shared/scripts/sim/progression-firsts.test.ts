@@ -31,6 +31,8 @@ const day = (n: number, over: Partial<DayRecord> = {}): DayRecord => ({
   friendlies: 0,
   defences: 0,
   defencesHeld: 0,
+  defenceXp: 0,
+  tilesLost: 0,
   wildBattles: 7,
   partnerXp: 0,
   evolved: [],

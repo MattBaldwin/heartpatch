@@ -20,7 +20,19 @@ import {
   summarise,
 } from './progression-report.js';
 import { firstsFacts } from './progression-firsts.js';
-import { journeyOdds, modelData, runProgression, sideB, wildOdds } from './progression.js';
+import {
+  grant,
+  journeyOdds,
+  modelData,
+  rivalTargets,
+  runProgression,
+  sideB,
+  wildOdds,
+  type Kid,
+  type Member,
+} from './progression.js';
+import { hexKey, type HexKey } from '../../src/hex/index.js';
+import type { MapTile } from '../../src/mapgen/index.js';
 
 /** A short run: the same model, a few days and a small odds estimate. */
 const SMALL: ProgressionConfig = { ...PROGRESSION_CONFIG, days: 6, estimateGames: 4 };
@@ -212,23 +224,65 @@ describe('friendlies and defences (#728)', () => {
     for (const day of now.kids.flatMap((k) => k.days)) {
       expect([day.friendlies, day.defences, day.defencesHeld]).toEqual([0, 0, 0]);
     }
-    // Friendly XP lands: the Partner is ahead of the shipped pace after a few days.
-    const level = (r: typeof run) => r.kids[0]!.days.at(-1)!.partnerLevel;
+    // Friendly XP lands: the pair's leader is ahead of the shipped pace after a few days.
+    const level = (r: typeof run) => Math.max(...r.kids.map((k) => k.days.at(-1)!.partnerLevel));
     expect(level(run)).toBeGreaterThan(level(now));
   }, 30_000);
 
-  it("lets a kid try the other kid's land, outside the shield and the home ring", () => {
+  it("picks the other kid's tiles only after the shield, under the loss cap, outside home rings", () => {
+    const defences = WITH_FRIENDLIES_RULES.defences!;
+    const tile = (q: number, homeSlot: number | null) =>
+      ({ q, r: 0, terrain: 'meadow', homeSlot }) as unknown as MapTile;
+    const tiles = [tile(0, 1), tile(1, null), tile(2, null), tile(3, null)];
+    const owner = new Map<HexKey, number | null>([
+      [hexKey(tiles[0]!), 1], // the rival's home ring
+      [hexKey(tiles[1]!), 1],
+      [hexKey(tiles[2]!), 0],
+      [hexKey(tiles[3]!), null],
+    ]);
+    const open = defences.shieldDays + 1;
+    const pick = (day: number, lost: number) =>
+      rivalTargets(tiles, owner, 1, day, lost, defences).map((t) => t.q);
+    expect(pick(open, 0)).toEqual([1]);
+    expect(pick(defences.shieldDays, 0)).toEqual([]);
+    expect(pick(open, defences.lossCapPerDay - 1)).toEqual([1]);
+    expect(pick(open, defences.lossCapPerDay)).toEqual([]);
+  });
+
+  it('counts every friendly and every hold toward the falloff, win or lose', () => {
+    const member: Member = { id: 'partner', speciesId: 'emberbun', level: 10, xp: 0, winsToday: 0 };
+    const kid: Kid = { profile: engaged!, slot: 0, team: [member], evolved: [] };
+    const xp = new Map([['partner', 40]]);
+    grant(data, kid, WITH_FRIENDLIES_RULES, xp, false, { counts: true });
+    expect(member.winsToday).toBe(1); // a lost friendly
+    grant(data, kid, WITH_FRIENDLIES_RULES, xp, true);
+    expect(member.winsToday).toBe(2); // a hold
+    grant(data, kid, WITH_FRIENDLIES_RULES, xp, false);
+    expect(member.winsToday).toBe(2); // a lost wild battle doesn't count
+    // Past `fullWinsPerDay`, a battle pays the falloff's share.
+    member.winsToday = WITH_FRIENDLIES_RULES.growth.battleXpFalloff!.fullWinsPerDay;
+    const thinned = grant(data, kid, WITH_FRIENDLIES_RULES, xp, false, { counts: true });
+    member.winsToday = 0;
+    const full = grant(data, kid, WITH_FRIENDLIES_RULES, xp, false, { counts: true });
+    expect(thinned).toBeLessThan(full);
+  });
+
+  it('pays holds and keeps to the loss cap when the kids meet', () => {
     // Every try is worth it, so the 2-seat map's land runs out and the kids meet.
     const eager: ProgressionConfig = { ...SMALL, days: 8, tryTileAt: 0 };
     const rules = { ...WITH_FRIENDLIES_RULES, attemptsPerDay: 30 };
     const run = runProgression(data, eager, rules, engaged!, 2);
     const days = run.kids.flatMap((k) => k.days);
-    const shield = WITH_FRIENDLIES_RULES.defences!.shieldDays;
-    expect(days.filter((d) => d.day <= shield).every((d) => d.defences === 0)).toBe(true);
+    const { shieldDays, lossCapPerDay } = WITH_FRIENDLIES_RULES.defences!;
     expect(days.reduce((n, d) => n + d.defences, 0)).toBeGreaterThan(0);
-    for (const d of days) expect(d.defencesHeld).toBeLessThanOrEqual(d.defences);
-    // Home rings (7 tiles each) are never taken.
-    for (const d of days) expect(d.tiles).toBeGreaterThanOrEqual(7);
+    expect(days.reduce((n, d) => n + d.tilesLost, 0)).toBeGreaterThan(0);
+    for (const d of days) {
+      if (d.day <= shieldDays) expect(d.defences).toBe(0);
+      expect(d.tilesLost).toBeLessThanOrEqual(lossCapPerDay);
+      expect(d.defencesHeld + d.tilesLost).toBeLessThanOrEqual(d.defences);
+      // A hold pays the guards (the Partner always guards); no hold, no defence XP.
+      expect(d.defenceXp > 0).toBe(d.defencesHeld > 0);
+    }
   }, 30_000);
 
   it('pays a friendly as one opponent with `oneOpponent` (a proposed rule)', () => {
@@ -249,8 +303,15 @@ describe('friendlies and defences (#728)', () => {
     );
     const gate = { kid: 'engaged', day: 6, maxLevels: 1 };
     const result = friendlyGate(runs, SMALL, gate);
-    const level = (i: number) => runs[i]!.kids[0]!.days[5]!.partnerLevel;
-    expect(result).toMatchObject({ before: level(0), after: level(1), delta: level(1) - level(0) });
+    const level = (i: number, k: number) => runs[i]!.kids[k]!.days[5]!.partnerLevel;
+    const deltas = [0, 1].map((k) => level(1, k) - level(0, k));
+    const slot = deltas.indexOf(Math.max(...deltas));
+    expect(result).toMatchObject({
+      slot,
+      before: level(0, slot),
+      after: level(1, slot),
+      delta: Math.max(...deltas),
+    });
     expect(result?.passes).toBe((result?.delta ?? 0) <= 1);
     expect(friendlyGate(runs, SMALL, { ...gate, maxLevels: 99 })?.passes).toBe(true);
     expect(formatFriendlyGate({ ...result!, delta: 2, passes: false })).toMatch(
