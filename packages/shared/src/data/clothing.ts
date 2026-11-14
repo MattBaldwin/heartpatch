@@ -8,8 +8,9 @@ import { isSquishyCostume, type ClothingItem } from '../schemas/data/clothing.js
  *
  * - **Starter** items (`sources: ['starter']`) are every account's from the
  *   start, so the wardrobe is never empty (DECISIONS "Wardrobe (#43)").
- * - **Everyday** items are found all year; **Halloween** items only drop in
- *   the Halloween window (design doc §15) and stay wearable forever.
+ * - **Everyday** items are found all year; **Halloween** and **Thanksgiving**
+ *   items only drop in their season's window (design doc §15) and stay
+ *   wearable forever.
  * - Where items drop, and how often, is server-only
  *   (`data/server/clothing-drops.ts`, CLAUDE.md rule 6).
  * - **Boutique** items (`boutique` source, #45) can also be bought with
@@ -779,6 +780,247 @@ const HALLOWEEN: ClothingItem[] = [
           color: '#a8e6cf',
         },
         { shape: 'ellipsoid', at: [0, -0.18, -0.5], size: [0.5, 0.4, 0.06], color: '#fff6e0' },
+      ],
+    },
+  },
+];
+
+// ── Thanksgiving (#34): found in the Thanksgiving window only ────────────
+// Cozy harvest pieces for the Keeper: no turkeys, no costumes of real-world
+// groups, just leaves, knits and quilts. Shapes are first guesses.
+const THANKSGIVING: ClothingItem[] = [
+  {
+    id: 'leaf-crown',
+    name: 'Leaf Crown',
+    description: 'Crunchy maple leaves and one very proud acorn.',
+    slot: 'hat',
+    rarity: 'uncommon',
+    season: 'thanksgiving',
+    sources: ['found', 'boutique'],
+    boutiquePrice: 30, // TUNE: by rarity (#45)
+    tradable: true,
+    visual: {
+      // A twig ring sat down in the hair, two three-lobed maple leaves at the
+      // front with an acorn on the band between them, and three single leaves
+      // round the back (brown, red and orange; no gold, which vanished in gold
+      // hair), all pitched −28°. Each lobe's `at` is its leaf's centre plus the lobe's
+      // offset turned by the leaf's `turn` (yaw, pitch, roll).
+      pieces: [
+        { shape: 'ellipsoid', at: [0, -0.37, 0], size: [1, 0.18, 1], color: '#8a5a34' },
+        {
+          shape: 'teardrop',
+          at: [-0.278, -0.215, -0.356],
+          size: [0.17, 0.38, 0.06],
+          turn: [-28, -142, 0],
+          color: '#d9482b',
+        },
+        {
+          shape: 'teardrop',
+          at: [-0.224, -0.268, -0.433],
+          size: [0.15, 0.3, 0.06],
+          turn: [-28, -142, 35],
+          color: '#c23a22',
+        },
+        {
+          shape: 'teardrop',
+          at: [-0.366, -0.268, -0.322],
+          size: [0.15, 0.3, 0.06],
+          turn: [-28, -142, -35],
+          color: '#c23a22',
+        },
+        {
+          shape: 'teardrop',
+          at: [0.278, -0.215, -0.356],
+          size: [0.17, 0.38, 0.06],
+          turn: [-28, 142, 0],
+          color: '#f07f2a',
+        },
+        {
+          shape: 'teardrop',
+          at: [0.366, -0.268, -0.322],
+          size: [0.15, 0.3, 0.06],
+          turn: [-28, 142, 35],
+          color: '#e06a1c',
+        },
+        {
+          shape: 'teardrop',
+          at: [0.224, -0.268, -0.433],
+          size: [0.15, 0.3, 0.06],
+          turn: [-28, 142, -35],
+          color: '#e06a1c',
+        },
+        {
+          shape: 'teardrop',
+          at: [0.385, -0.25, 0.27],
+          size: [0.26, 0.36, 0.07],
+          turn: [-28, 55, 0],
+          color: '#7a3f1d',
+        },
+        {
+          shape: 'teardrop',
+          at: [0, -0.25, 0.47],
+          size: [0.26, 0.36, 0.07],
+          turn: [-28, 0, 0],
+          color: '#9e2a1e',
+        },
+        {
+          shape: 'teardrop',
+          at: [-0.385, -0.25, 0.27],
+          size: [0.26, 0.36, 0.07],
+          turn: [-28, -55, 0],
+          color: '#f07f2a',
+        },
+        { shape: 'ellipsoid', at: [0, -0.31, -0.52], size: [0.21, 0.26, 0.18], color: '#c08a4a' },
+        { shape: 'ellipsoid', at: [0, -0.17, -0.52], size: [0.26, 0.12, 0.21], color: '#6e4426' },
+      ],
+    },
+  },
+  {
+    id: 'harvest-scarf',
+    name: 'Harvest Scarf',
+    description: 'Plum, pumpkin and mustard, knitted extra chunky.',
+    slot: 'top',
+    rarity: 'common',
+    season: 'thanksgiving',
+    sources: ['found', 'boutique'],
+    boutiquePrice: 15, // TUNE: by rarity (#45)
+    tradable: true,
+    visual: {
+      // Two chunky wraps up to the neck line (never over the face; owner, #34)
+      // that stand out past the arms, a big knot at the front with a wide,
+      // flat, striped and fringed tail laid on the chest, and a second tail
+      // down the back so the side view reads as a scarf.
+      pieces: [
+        { shape: 'ellipsoid', at: [0, 0.02, 0], size: [1.45, 0.66, 1.45], color: '#7b3d6e' },
+        { shape: 'ellipsoid', at: [0, 0.3, 0], size: [1.38, 0.4, 1.38], color: '#f07f2a' },
+        { shape: 'ellipsoid', at: [0.22, 0.06, -0.7], size: [0.42, 0.4, 0.3], color: '#7b3d6e' },
+        { shape: 'capsule', at: [0.22, -0.24, -0.58], size: [0.45, 0.62, 0.12], color: '#7b3d6e' },
+        {
+          shape: 'ellipsoid',
+          at: [0.22, -0.14, -0.59],
+          size: [0.46, 0.08, 0.13],
+          color: '#f07f2a',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [0.22, -0.32, -0.59],
+          size: [0.46, 0.08, 0.13],
+          color: '#e8b33a',
+        },
+        { shape: 'capsule', at: [0.07, -0.58, -0.58], size: [0.07, 0.12, 0.07], color: '#e8b33a' },
+        { shape: 'capsule', at: [0.22, -0.59, -0.58], size: [0.07, 0.12, 0.07], color: '#e8b33a' },
+        { shape: 'capsule', at: [0.37, -0.58, -0.58], size: [0.07, 0.12, 0.07], color: '#e8b33a' },
+        {
+          shape: 'capsule',
+          at: [-0.24, -0.16, 0.62],
+          size: [0.38, 0.62, 0.12],
+          turn: [0, 0, -6],
+          color: '#7b3d6e',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [-0.235, -0.22, 0.63],
+          size: [0.39, 0.08, 0.13],
+          turn: [0, 0, -6],
+          color: '#f07f2a',
+        },
+      ],
+    },
+  },
+  {
+    id: 'patchwork-quilt-cape',
+    name: 'Patchwork Quilt Cape',
+    description: 'A snuggly quilt you can wear. Naps go anywhere now.',
+    slot: 'back',
+    rarity: 'rare',
+    season: 'thanksgiving',
+    sources: ['found', 'boutique'],
+    boutiquePrice: 60, // TUNE: by rarity (#45)
+    tradable: true,
+    visual: {
+      // A cream quilt wider than the shoulders, its hem tipped out 10°, with
+      // folded edges and six uneven autumn patches (turned with it). A fat
+      // pumpkin roll at the collar and two cream shoulder wraps show the cape
+      // from the front and side.
+      pieces: [
+        {
+          shape: 'capsule',
+          at: [0, -0.5, 0.62],
+          size: [1.7, 1.9, 0.16],
+          turn: [-10, 0, 0],
+          color: '#f6ead2',
+        },
+        { shape: 'ellipsoid', at: [0, 0.24, 0], size: [1.5, 0.44, 1.5], color: '#f07f2a' },
+        {
+          shape: 'capsule',
+          at: [-0.8, -0.546, 0.648],
+          size: [0.16, 1.75, 0.24],
+          turn: [-10, 0, 0],
+          color: '#efdfc0',
+        },
+        {
+          shape: 'capsule',
+          at: [0.8, -0.546, 0.648],
+          size: [0.16, 1.75, 0.24],
+          turn: [-10, 0, 0],
+          color: '#efdfc0',
+        },
+        {
+          shape: 'capsule',
+          at: [-0.34, -0.041, 0.63],
+          size: [0.66, 0.6, 0.04],
+          turn: [-10, 0, 9],
+          color: '#c4552d',
+        },
+        {
+          shape: 'capsule',
+          at: [0.34, -0.022, 0.627],
+          size: [0.7, 0.52, 0.04],
+          turn: [-10, 0, -11],
+          color: '#e8b33a',
+        },
+        {
+          shape: 'capsule',
+          at: [-0.36, -0.504, 0.712],
+          size: [0.66, 0.6, 0.04],
+          turn: [-10, 0, -8],
+          color: '#9cae6b',
+        },
+        {
+          shape: 'capsule',
+          at: [0.34, -0.534, 0.717],
+          size: [0.6, 0.7, 0.04],
+          turn: [-10, 0, 12],
+          color: '#7b3d6e',
+        },
+        {
+          shape: 'capsule',
+          at: [-0.3, -1.026, 0.804],
+          size: [0.76, 0.5, 0.04],
+          turn: [-10, 0, 10],
+          color: '#f07f2a',
+        },
+        {
+          shape: 'capsule',
+          at: [0.38, -1.026, 0.804],
+          size: [0.54, 0.6, 0.04],
+          turn: [-10, 0, -9],
+          color: '#c4552d',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [-0.44, 0.18, 0.1],
+          size: [0.52, 0.34, 0.8],
+          turn: [0, 0, 22],
+          color: '#efdfc0',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [0.44, 0.18, 0.1],
+          size: [0.52, 0.34, 0.8],
+          turn: [0, 0, -22],
+          color: '#efdfc0',
+        },
       ],
     },
   },
@@ -3241,6 +3483,7 @@ export const CLOTHING: ClothingItem[] = [
   ...EVERYDAY,
   ...HALLOWEEN,
   ...HALLOWEEN_COSTUMES,
+  ...THANKSGIVING,
   ...MILESTONE,
   ...REKINDLED,
   ...CELLAR_KEEPSAKES,

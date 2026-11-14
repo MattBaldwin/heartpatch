@@ -9,6 +9,8 @@ import { CROOKED_HOUSE_SECRETS } from './crooked-house.js';
 
 const TERRAINS = GAME_DATA.terrains.map((t) => t.id);
 const copy = (): ClothingDropTable[] => structuredClone(CLOTHING_DROPS);
+/** Where a test's extra gather entries land. */
+const NEXT = CLOTHING_DROPS[0]!.entries.length;
 // Found sets' pieces drop from their own tables (#306 PR 5), and the cellar
 // keepsakes only from a cellar's big chest (#306), the Crooked House's only
 // from its attic (#306 6b).
@@ -55,6 +57,23 @@ describe('clothing drop tables (server-only)', () => {
     }
   });
 
+  it('can find each Thanksgiving piece (#34), rarer ones less often', () => {
+    const pieces = CLOTHING.filter((i) => i.season === 'thanksgiving');
+    expect(pieces.map((i) => i.id).sort()).toEqual([
+      'harvest-scarf',
+      'leaf-crown',
+      'patchwork-quilt-cape',
+    ]);
+    const gather = CLOTHING_DROPS.find((t) => t.source === 'gather')!;
+    const weight = (id: string) => gather.entries.find((e) => e.item === id)?.weight ?? 0;
+    expect(weight('harvest-scarf')).toBeGreaterThan(weight('leaf-crown'));
+    expect(weight('leaf-crown')).toBeGreaterThan(weight('patchwork-quilt-cape'));
+    expect(weight('patchwork-quilt-cape')).toBeGreaterThan(0);
+    // The Leaf Crown is a forest find from gathers, but a capture finds it anywhere.
+    const capture = CLOTHING_DROPS.find((t) => t.source === 'capture')!;
+    expect(capture.entries.find((e) => e.item === 'leaf-crown')?.terrains).toBeUndefined();
+  });
+
   it('makes rarer costumes much rarer, the Mythic rarest of all', () => {
     for (const table of CLOTHING_DROPS) {
       const weight = (id: string) => table.entries.find((e) => e.item === id)?.weight;
@@ -95,10 +114,12 @@ describe('clothing drop tables (server-only)', () => {
     );
     tables[1]!.source = 'gather';
     const problems = checkClothingDrops(tables.slice(0, 2), CLOTHING, TERRAINS, SET_PIECES);
-    expect(problems).toContain('drops[0].entries[42].item: unknown clothing "crown-of-doom"');
-    expect(problems).toContain('drops[0].entries[43].item: "sunny-cap" isn\'t a found item');
-    expect(problems).toContain('drops[0].entries[44].item: "heart-clip" is listed twice');
-    expect(problems).toContain('drops[0].entries[44].terrains[0]: unknown terrain "moon"');
+    expect(problems).toContain(`drops[0].entries[${NEXT}].item: unknown clothing "crown-of-doom"`);
+    expect(problems).toContain(
+      `drops[0].entries[${NEXT + 1}].item: "sunny-cap" isn't a found item`,
+    );
+    expect(problems).toContain(`drops[0].entries[${NEXT + 2}].item: "heart-clip" is listed twice`);
+    expect(problems).toContain(`drops[0].entries[${NEXT + 2}].terrains[0]: unknown terrain "moon"`);
     expect(problems).toContain('drops[1].source: one table per source');
     // Tables can't lose an item without it becoming impossible to find.
     const withoutHat = copy().map((t) => ({
@@ -117,7 +138,7 @@ describe('clothing drop tables (server-only)', () => {
     const tables = copy();
     tables[0]!.entries.push({ item: 'lantern-glow-cap', weight: 1 });
     expect(checkClothingDrops(tables, CLOTHING, TERRAINS, SET_PIECES)).toEqual([
-      'drops[0].entries[42].item: "lantern-glow-cap" drops from its own set\'s tables',
+      `drops[0].entries[${NEXT}].item: "lantern-glow-cap" drops from its own set's tables`,
     ]);
   });
 });
