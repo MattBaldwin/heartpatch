@@ -134,3 +134,63 @@ describe('a challenge I defended live (#29-C)', () => {
     expect(raidStyleLine(raid({ stance: 'aggressive' }))).toBe('Style: Bold');
   });
 });
+
+describe('what a hold paid (#728)', () => {
+  const earned = { xp: 12, patch: 3, heart: 3 };
+
+  it('says the XP and the coins a hold earned', () => {
+    expect(raidLine(raid({ earned }))).toBe(
+      'Pumpkinpal tried to visit your land. Your squishies held on and earned 12 XP! You got 3 Patch Coins and 💛 3.',
+    );
+    // A daily cap kept the coins: just the XP, never "You got 0".
+    expect(raidLine(raid({ earned: { xp: 12, patch: 0, heart: 0 } }))).toBe(
+      'Pumpkinpal tried to visit your land. Your squishies held on and earned 12 XP!',
+    );
+    // A scoot pays XP, never coins.
+    expect(raidLine(raid({ reason: 'forfeit', earned: { xp: 5, patch: 0, heart: 0 } }))).toBe(
+      'Pumpkinpal came to visit, then scooted home. Your land is safe! Your squishies earned 5 XP!',
+    );
+  });
+
+  it('says what a live hold earned too', () => {
+    expect(raidLine(raid({ live: true, stance: null, earned }))).toBe(
+      '🛡️ You defended live and kept Pumpkinpal out. Your land is safe! Your squishies earned 12 XP! You got 3 Patch Coins and 💛 3.',
+    );
+    // Played with the guardians: coins, no XP.
+    expect(
+      raidLine(raid({ live: true, stance: null, earned: { xp: 0, patch: 3, heart: 3 } })),
+    ).toBe(
+      '🛡️ You defended live and kept Pumpkinpal out. Your land is safe! You got 3 Patch Coins and 💛 3.',
+    );
+  });
+
+  it('nudges toward the guard job once when the guardians held alone', () => {
+    expect(raidLine(raid({ stance: null, earned: null }))).toBe(
+      'Pumpkinpal tried to visit your land. The land’s guardians held on! Put a squishy on watch to earn from holds!',
+    );
+    // Only on a hold.
+    expect(raidLine(raid({ stance: null, outcome: 'lost' }))).not.toMatch(/on watch/);
+  });
+
+  it('keeps an old row’s words', () => {
+    expect(raidLine(raid({ earned: undefined }))).toBe(
+      'Pumpkinpal tried to visit your land. Your squishies held on!',
+    );
+    expect(raidLine(raid({ earned: null }))).toBe(
+      'Pumpkinpal tried to visit your land. Your squishies held on!',
+    );
+    expect(raidLine(raid({ live: true, stance: null, earned: null }))).toBe(
+      '🛡️ You defended live and kept Pumpkinpal out. Your land is safe!',
+    );
+  });
+
+  it('never uses an avoided word', () => {
+    for (const line of [
+      raidLine(raid({ earned })),
+      raidLine(raid({ live: true, earned })),
+      raidLine(raid({ stance: null })),
+    ]) {
+      expect(findAvoidedWords(line), line).toEqual([]);
+    }
+  });
+});
