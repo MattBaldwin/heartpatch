@@ -354,6 +354,7 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
       rescuer: 1,
       seeker: 0, // searches count in the explore tests (#199)
       halloween: 2, // the pumpkins and the Witch Hat
+      'cozy-harvest': 0, // Thanksgiving only (#34); this runs in the Halloween window
       'lantern-keeper': 0, // the far Hollow's attic (#306 6b)
       'set-rekindled': 0, // found in the Hollows (#306 PR 5)
     });

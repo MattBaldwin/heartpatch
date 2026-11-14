@@ -58,7 +58,10 @@ describe('clothing drop tables (server-only)', () => {
   });
 
   it('can find each Thanksgiving piece (#34), rarer ones less often', () => {
-    const pieces = CLOTHING.filter((i) => i.season === 'thanksgiving');
+    // Found pieces only: the Leaf Pile Costume is Cozy Harvest's prize, never a drop.
+    const pieces = CLOTHING.filter(
+      (i) => i.season === 'thanksgiving' && i.sources.includes('found'),
+    );
     expect(pieces.map((i) => i.id).sort()).toEqual([
       'harvest-scarf',
       'leaf-crown',

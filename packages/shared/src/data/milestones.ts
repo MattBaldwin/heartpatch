@@ -23,6 +23,12 @@ const HALLOWEEN_CLOTHING = CLOTHING.filter(
   (c) => c.season === 'halloween' && c.sources.includes('found'),
 ).map((c) => c.id);
 
+/** Thanksgiving's squishies, clothes and Magic Fallen Leaves count for Cozy Harvest (#34). */
+const THANKSGIVING_SPECIES = SPECIES.filter((s) => s.season === 'thanksgiving').map((s) => s.id);
+const THANKSGIVING_CLOTHING = CLOTHING.filter(
+  (c) => c.season === 'thanksgiving' && c.sources.includes('found'),
+).map((c) => c.id);
+
 /** A found set's milestone track id: its counted keys are the pieces found (#306 PR 5). */
 export function foundSetTrackId(set: Pick<FoundSet, 'id'>): string {
   return `set-${set.id}`;
@@ -365,6 +371,56 @@ export const MILESTONE_TRACKS: MilestoneTrack[] = [
         title: { id: 'harvest-moon', name: 'Moonlit Pumpkin' },
         coins: 100,
         clothing: 'harvest-moon-costume',
+      },
+    ],
+  },
+  {
+    // Cozy Harvest (#34): Thanksgiving's track, counted like Halloween's while
+    // the Thanksgiving window is on. Shorter tiers than Halloween's because
+    // the window is shorter.
+    id: 'cozy-harvest',
+    name: 'Cozy Harvest',
+    secret: false,
+    season: 'thanksgiving',
+    progress: {
+      from: 'events',
+      sources: [
+        {
+          eventType: 'squishy.captured',
+          where: [{ op: 'oneOf', field: 'speciesId', values: THANKSGIVING_SPECIES }],
+          player: 'userId',
+        },
+        {
+          eventType: 'resource.gathered',
+          where: [{ op: 'equals', field: 'resource', value: 'magic-fallen-leaves' }],
+          player: 'userId',
+        },
+        {
+          eventType: 'clothing.found',
+          where: [{ op: 'oneOf', field: 'itemId', values: THANKSGIVING_CLOTHING }],
+          player: 'userId',
+        },
+      ],
+    },
+    tiers: [
+      {
+        threshold: 4, // TUNE:
+        goal: 'Do 4 cozy harvest things: befriend, gather or find!',
+        title: { id: 'leaf-lover', name: 'Leaf Lover' },
+        coins: 25, // TUNE:
+      },
+      {
+        threshold: 10, // TUNE:
+        goal: 'Do 10 cozy harvest things.',
+        title: { id: 'cozy-crunch', name: 'Cozy Crunch' },
+        coins: 50, // TUNE:
+      },
+      {
+        threshold: 20, // TUNE:
+        goal: 'Do 20 cozy harvest things.',
+        title: { id: 'pile-pal', name: 'Pile Pal' },
+        coins: 100, // TUNE:
+        clothing: 'leaf-pile-costume',
       },
     ],
   },
