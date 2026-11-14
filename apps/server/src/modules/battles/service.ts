@@ -1172,6 +1172,16 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     });
   };
 
+  /** A friendly's side-`b` player (#728), read before its turn state ends; a missing row throws. */
+  const friendOf = async (
+    liveBattles: ReturnType<typeof createLiveBattlesRepo>,
+    battleId: string,
+  ): Promise<string> => {
+    const live = await liveBattles.find(battleId);
+    if (!live) throw new Error(`finish: friendly ${battleId} has no live_battles row`);
+    return live.bUserId;
+  };
+
   /** The battle is over: XP for the player's squishies, then the events. */
   const finish = async (
     repo: BattlesTxRepo,
@@ -1197,9 +1207,11 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         : [];
     // A live battle's turn state goes (#29): side `b` is free to battle again.
     // A friendly's side-`b` player is read first (#728): they're paid too.
+    // A friendly with no turn state left fails closed: nobody is paid twice
+    // or to the wrong Keeper, and the battle stays unfinished.
+    const isFriendly = row.kind === 'friendly';
     const liveBattles = createLiveBattlesRepo(tx);
-    const friendUserId =
-      row.kind === 'friendly' ? ((await liveBattles.find(row.id))?.bUserId ?? null) : null;
+    const friendUserId = isFriendly ? await friendOf(liveBattles, row.id) : null;
     await liveBattles.end(row.id);
     // A friendly battle (#728, owner decision 2026-11-14) pays both sides
     // one opponent's worth of the engine's XP at `friendlyPercent`
@@ -1216,10 +1228,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     const sideBUserId = defense?.userId ?? friendUserId;
     const theirs = new Set(defense?.ownSquishyIds ?? []);
     const sideBAwards = result.xp
-      .filter(
-        (award) => award.side === 'b' && (friendUserId !== null || theirs.has(award.squishyId)),
-      )
-      .map((award) => ({ ...award, xp: friendUserId !== null ? friendlyXp(award) : award.xp }))
+      .filter((award) => award.side === 'b' && (isFriendly || theirs.has(award.squishyId)))
+      .map((award) => ({ ...award, xp: isFriendly ? friendlyXp(award) : award.xp }))
       .filter((award) => award.xp > 0);
     // Gentle mode's share (owner decision 2026-10-03): challenging a much
     // smaller player pays part of the battle's XP, win or lose. Never a
@@ -1228,10 +1238,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       .filter((award) => award.side === PLAYER_SIDE)
       .map((award) => ({
         ...award,
-        xp:
-          row.kind === 'friendly'
-            ? friendlyXp(award)
-            : Math.floor((award.xp * tile.xpPercent) / 100),
+        xp: isFriendly ? friendlyXp(award) : Math.floor((award.xp * tile.xpPercent) / 100),
       }))
       .filter((award) => award.xp > 0);
     // Base battle XP × care and habitat, levels and evolution (#19's
@@ -1249,8 +1256,16 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         ...guards.map((g) => g.squishyId),
       ]),
     ]);
-    // Side `b`'s squishies are still its Keeper's, now that they're locked
-    // (#728): a trade that committed after the setup was read pays nobody.
+    // Each side's squishies are still its Keeper's, now that they're locked
+    // (#728): one traded, sent to the trading post or to the Hollow after
+    // the setup was read earns nothing (and so uses no falloff slot).
+    const stillMine = new Set(
+      await repo.ownActiveSquishies(
+        row.mapId,
+        row.playerUserId,
+        awards.map((a) => a.squishyId),
+      ),
+    );
     const stillTheirs = new Set(
       sideBUserId === null
         ? []
@@ -1260,6 +1275,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
             sideBAwards.map((a) => a.squishyId),
           ),
     );
+    const playerAwards = awards.filter((a) => stillMine.has(a.squishyId));
     const defenderAwards = sideBAwards.filter((a) => stillTheirs.has(a.squishyId));
     // The guards sent home: their watch so far held (#376).
     await writeGuardCheckpoints(tx, guards, at);
@@ -1268,7 +1284,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // Wins count on either side (#728): a guard's holds count toward its 7.
     const wins = await repo.winsToday(
       row.mapId,
-      [...awards, ...defenderAwards].map((a) => a.squishyId),
+      [...playerAwards, ...defenderAwards].map((a) => a.squishyId),
       at,
     );
     /** Squishies on full XP today: only their wins lean Brave (#32), as only full-value care leans. */
@@ -1284,7 +1300,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       }
       return cut;
     };
-    const fellOff = falloff(awards);
+    const fellOff = falloff(playerAwards);
     const defenderFellOff = falloff(defenderAwards);
     // A captured tile's fire comes back to its old owner (#202): their
     // inventory rows (step 11) after the squishy locks, before any XP writes
@@ -1315,7 +1331,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       return out;
     };
     // Side `a` first, then side `b` (#728): each squishy's lock is already held.
-    const grown = await grow(awards, result.winner === PLAYER_SIDE);
+    const grown = await grow(playerAwards, result.winner === PLAYER_SIDE);
     const defenderGrown = await grow(defenderAwards, result.winner === 'b');
     // Befriended in this last step (design doc §6, #279): each one joins
     // the player. Ones befriended earlier in a guardian battle joined then.
@@ -1358,7 +1374,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       ? defense.ownSquishyIds.length === 0 && !defense.live
         ? 'guardians'
         : winUnpaid
-      : friendUserId !== null && result.winner === 'b'
+      : isFriendly && result.winner === 'b'
         ? winUnpaid
         : null;
     const aUnpaid: UnpaidReason | null = won ? winUnpaid : null;

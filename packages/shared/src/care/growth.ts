@@ -205,9 +205,10 @@ export function battleXpPercent(
  * falloff (`battleXpPercent`, #201): it was on the winning side, whichever
  * side that was (a held defence counts for the guard, #728). A friendly
  * battle (#728) counts win, lose or tie, so two friends trading losses
- * can't take un-faded XP all day; but only when the engine paid the squishy
- * something (`xp` > 0): one who ran away, or a scoot before any turn, used
- * up nothing.
+ * can't take un-faded XP all day; but only when the squishy was paid
+ * something (`xp` > 0: for a friendly, the XP actually paid, not the
+ * engine's): one who ran away, a scoot before any turn, a share that
+ * rounded to 0, or a squishy that changed Keeper first used up nothing.
  */
 export function countsTowardFalloff(
   kind: BattleKind,

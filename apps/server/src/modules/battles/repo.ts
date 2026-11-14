@@ -120,8 +120,8 @@ export interface BattlesRepo {
   /**
    * How many finished battles each of `squishyIds` joined and won on this
    * map on `at`'s map-local day, on either side (#728: a guard's holds
-   * count), plus every friendly battle it joined and was paid for, win or
-   * lose (#728, `countsTowardFalloff`), for the daily battle-XP falloff
+   * count), plus every friendly battle it was paid XP for, win or lose
+   * (#728, `countsTowardFalloff` on the paid amount, from `rewards`), for the daily battle-XP falloff
    * (`GROWTH_RULES.battleXpFalloff`). Missing ids won none.
    */
   winsToday: (
@@ -370,7 +370,7 @@ function queries(db: Executor): BattlesRepo {
       const wins = new Map<string, number>();
       if (squishyIds.length === 0) return wins;
       const rows = await db
-        .select({ kind: battles.kind, result: battles.result })
+        .select({ kind: battles.kind, result: battles.result, rewards: battles.rewards })
         .from(battles)
         .innerJoin(maps, eq(maps.id, battles.mapId))
         .where(
@@ -383,11 +383,21 @@ function queries(db: Executor): BattlesRepo {
       const wanted = new Set(squishyIds);
       for (const row of rows) {
         const result = ResultSchema.parse(row.result);
+        // A friendly counts what each side was actually paid (#728): its
+        // share of the engine's XP, and nothing for a squishy that changed
+        // Keeper, went to the post or the Hollow before the finish.
+        const isFriendly = row.kind === 'friendly';
+        const rewards =
+          isFriendly && row.rewards !== null ? BattleRewardsSchema.parse(row.rewards) : null;
+        const paid = new Map<string, number>(
+          [...(rewards?.xp ?? []), ...(rewards?.b?.xp ?? [])].map((x) => [x.squishyId, x.xp]),
+        );
         for (const award of result.xp) {
           // Either side (#728): a challenger's wins, a guard's holds, and
           // a friendly win or lose.
           if (!wanted.has(award.squishyId)) continue;
-          if (!countsTowardFalloff(row.kind, award.side, result.winner, award.xp)) continue;
+          const xp = isFriendly ? (paid.get(award.squishyId) ?? 0) : award.xp;
+          if (!countsTowardFalloff(row.kind, award.side, result.winner, xp)) continue;
           wins.set(award.squishyId, (wins.get(award.squishyId) ?? 0) + 1);
         }
       }

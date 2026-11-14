@@ -75,7 +75,7 @@ export const GROWTH_RULES: GrowthRules = {
   battleXpFalloff: {
     fullWinsPerDay: 7,
     afterPercent: 10,
-    friendlyPercent: 50, // TUNE: owner-approved lever (#728); 39 / 40 vs `now` 40 on day 14
+    friendlyPercent: 50, // TUNE: owner-approved lever (#728); engaged day 14: 39 / 39 vs `now` 41
     friendlyOneOpponent: true, // TUNE: owner decision 2026-11-14 (#728 option 1)
   },
 };
