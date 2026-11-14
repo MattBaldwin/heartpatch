@@ -116,6 +116,15 @@ async function makeBusy(page: Page): Promise<void> {
  */
 async function expectWholeRows(page: Page): Promise<void> {
   await settled(page);
+  // panel-fit.ts refits and sets the fade (`data-more`) on the next animation
+  // frame after a resize or new content, so retry briefly: a fast runner can
+  // measure before that frame and see the previous state's fade (#784).
+  await expect(async () => {
+    await expectWholeRowsNow(page);
+  }).toPass({ timeout: 5_000 });
+}
+
+async function expectWholeRowsNow(page: Page): Promise<void> {
   const fit = await page.getByTestId('tile-panel').evaluate((panel) => {
     const foot = panel.getBoundingClientRect().bottom;
     const sliced = [...panel.querySelectorAll('p, button, .tile-panel-head')]
