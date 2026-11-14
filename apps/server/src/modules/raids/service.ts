@@ -1,5 +1,6 @@
 import {
   otherSide,
+  BattleRewardsSchema,
   fencePercent,
   RAID_RULES,
   RaidSchema,
@@ -84,6 +85,22 @@ export function createRaidsService(options: RaidsServiceOptions): RaidsService {
   const replayable = (row: RaidRow): boolean =>
     row.battleStatus === 'finished' && row.contentHash === content.contentHash;
 
+  /**
+   * What holding the land earned me (#728), from the battle's `rewards.b`:
+   * null when it didn't hold, the guardians held it alone, it's someone
+   * else's (never mine to see), or the battle is from before #728.
+   */
+  const earnedOf = (row: RaidRow): Raid['earned'] => {
+    const parsed = BattleRewardsSchema.nullable().safeParse(row.rewards ?? null);
+    const b = parsed.success ? parsed.data?.b : null;
+    if (!b || b.userId !== row.defenderUserId || b.unpaid === 'guardians') return null;
+    return {
+      xp: b.xp.reduce((sum, award) => sum + award.xp, 0),
+      patch: b.coins?.patch ?? 0,
+      heart: b.coins?.heart ?? 0,
+    };
+  };
+
   const toRaid = (row: RaidRow): Raid => ({
     id: row.id,
     battleId: row.battleId,
@@ -102,6 +119,7 @@ export function createRaidsService(options: RaidsServiceOptions): RaidsService {
     lostFire: row.lostFire ?? null,
     fence: fenceLine(row),
     lostFences: row.lostFences ?? null,
+    earned: earnedOf(row),
   });
 
   const report = async (user: PublicUser, mapId: string): Promise<RaidReport> => {

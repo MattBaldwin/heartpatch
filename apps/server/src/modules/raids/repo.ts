@@ -41,6 +41,8 @@ export interface RaidRow {
   lostFences: number | null;
   /** I defended it live (#29-C): the battle had a player on my side. Null: the AI did. */
   liveBattleId: string | null;
+  /** The battle's stored rewards (jsonb, unparsed): side `b`'s are what holding it earned me (#728). */
+  rewards: unknown;
 }
 
 export interface NewRaid {
@@ -126,6 +128,8 @@ const raidColumns = {
   lostFences: tileAttacks.lostFences,
   // Defended live (#29-C): the battle's `live_battles` row, kept after it ends.
   liveBattleId: liveBattles.battleId,
+  // What holding it earned me (#728): `rewards.b`, read at request time.
+  rewards: battles.rewards,
 };
 
 export function createRaidsRepo(db: Executor): RaidsRepo {

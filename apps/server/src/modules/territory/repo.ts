@@ -178,6 +178,12 @@ export interface TerritoryRepo {
   defenderFloorLevel: (mapId: string, userId: string) => Promise<number | null>;
   /** The owner's squishies on watch on the tile, by slot (active ones only). */
   listDefenders: (tileId: string, ownerUserId: string) => Promise<DefenderRow[]>;
+  /**
+   * Which of `ids` are the player's own active squishies on the map (#728:
+   * a held defence pays only a Keeper's own squishies), in id order. No
+   * locks: the battles service locks the squishies at its step 10.
+   */
+  ownActiveSquishies: (mapId: string, userId: string, ids: readonly string[]) => Promise<string[]>;
   /** Sends everyone on watch on the tile home; returns their ids. */
   clearDefenders: (tileId: string) => Promise<string[]>;
   /**
@@ -508,6 +514,23 @@ function queries(db: Executor): TerritoryRepo {
           ),
         );
       return strongest?.level ?? null;
+    },
+
+    ownActiveSquishies: async (mapId, userId, ids) => {
+      if (ids.length === 0) return [];
+      const rows = await db
+        .select({ id: squishies.id })
+        .from(squishies)
+        .where(
+          and(
+            eq(squishies.mapId, mapId),
+            eq(squishies.ownerUserId, userId),
+            eq(squishies.state, 'active'),
+            inArray(squishies.id, [...ids]),
+          ),
+        )
+        .orderBy(asc(squishies.id));
+      return rows.map((r) => r.id);
     },
 
     listDefenders: async (tileId, ownerUserId) => {

@@ -9,6 +9,8 @@ import type { HeartCoinRules } from '../schemas/data/heart-coins.js';
 export const HEART_COIN_RULES: HeartCoinRules = {
   // TUNE: as Patch Coins; a journey (#270) is a gate, not a farm.
   battleWin: { wild: 2, tile: 3, 'rival-tile': 3, rescue: 0, journey: 0, friendly: 0 },
+  // TUNE: a held defence (#728) pays the Keeper what taking that land would.
+  defenseWin: { 'rival-tile': 3 },
   // TUNE: a new friend or a new tile is worth more than a win.
   capture: { wild: 5, tile: 5 },
   // TUNE: one a full-value care action.

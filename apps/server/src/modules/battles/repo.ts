@@ -20,6 +20,7 @@ import {
   type BattleSetup,
   type BattleState,
   type BattleStatus,
+  countsTowardFalloff,
   ElementIdSchema,
   FeelingIdSchema,
   type ElementId,
@@ -117,13 +118,13 @@ export interface BattlesRepo {
   /** Does the player have a squishy that isn't in the Hollow (busy ones too)? */
   hasActiveSquishy: (mapId: string, userId: string) => Promise<boolean>;
   /**
-   * How many finished battles each of `squishyIds` joined and won for the
-   * player on this map on `at`'s map-local day (the daily battle-XP
-   * falloff, `GROWTH_RULES.battleXpFalloff`). Missing ids won none.
+   * How many finished battles each of `squishyIds` joined and won on this
+   * map on `at`'s map-local day, on either side (#728: a guard's holds
+   * count, `countsTowardFalloff`), for the daily battle-XP falloff
+   * (`GROWTH_RULES.battleXpFalloff`). Missing ids won none.
    */
   winsToday: (
     mapId: string,
-    userId: string,
     squishyIds: readonly string[],
     at: Date,
   ) => Promise<Map<string, number>>;
@@ -346,29 +347,29 @@ function queries(db: Executor): BattlesRepo {
       return row !== undefined;
     },
 
-    winsToday: async (mapId, userId, squishyIds, at) => {
+    winsToday: async (mapId, squishyIds, at) => {
       const wins = new Map<string, number>();
       if (squishyIds.length === 0) return wins;
       const rows = await db
-        .select({ result: battles.result })
+        .select({ kind: battles.kind, result: battles.result })
         .from(battles)
         .innerJoin(maps, eq(maps.id, battles.mapId))
         .where(
           and(
             eq(battles.mapId, mapId),
-            eq(battles.playerUserId, userId),
             eq(battles.status, 'finished'),
             // A friendly battle (#29) earns no XP, so it never cuts a later one's.
             not(eq(battles.kind, 'friendly')),
-            // The player is always side `a` (battles service, `PLAYER_SIDE`).
-            sql`${battles.result} ->> 'winner' = 'a'`,
             sql`(${battles.endedAt} at time zone ${maps.timeZone})::date = (${at.toISOString()}::timestamptz at time zone ${maps.timeZone})::date`,
           ),
         );
       const wanted = new Set(squishyIds);
       for (const row of rows) {
-        for (const award of ResultSchema.parse(row.result).xp) {
-          if (award.side !== 'a' || !wanted.has(award.squishyId)) continue;
+        const result = ResultSchema.parse(row.result);
+        for (const award of result.xp) {
+          // Either side (#728): a challenger's wins and a guard's holds.
+          if (!wanted.has(award.squishyId)) continue;
+          if (!countsTowardFalloff(row.kind, award.side, result.winner)) continue;
           wins.set(award.squishyId, (wins.get(award.squishyId) ?? 0) + 1);
         }
       }
