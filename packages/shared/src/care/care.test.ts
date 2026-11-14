@@ -546,9 +546,10 @@ describe('friendlyBattleXp (#728, owner decision 2026-11-14)', () => {
   });
 
   it('each knob is off when left out of the data', () => {
-    const { friendlyOneOpponent: _one, ...percentOnly } = rules.battleXpFalloff;
+    const plain = { fullWinsPerDay: 7, afterPercent: 10 };
+    const percentOnly = { ...plain, friendlyPercent: 50 };
     expect(friendlyBattleXp(90, 3, { battleXpFalloff: percentOnly })).toBe(45);
-    const { friendlyPercent: _pct, ...oneOnly } = rules.battleXpFalloff;
+    const oneOnly = { ...plain, friendlyOneOpponent: true };
     expect(friendlyBattleXp(90, 3, { battleXpFalloff: oneOnly })).toBe(30);
     expect(friendlyBattleXp(90, 3, {})).toBe(90);
   });

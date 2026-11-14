@@ -2213,7 +2213,9 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
       await Promise.race([
         fights.act(friend, battleId, finishing),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("the finish waited on the loser's balance")), 5000),
+          setTimeout(() => {
+            reject(new Error("the finish waited on the loser's balance"));
+          }, 5000),
         ),
       ]);
     });
