@@ -553,27 +553,18 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   display: none;
 }
 
-/* A Rare Lure is held (#729): a gold-and-lilac halo that pulses (opacity only). */
-.battle-entry.battle-entry-lure {
-  position: relative;
+/* A Rare Lure is held (#729): a gold ring and lilac halo that breathe. The
+   tray draws the button's picture on ::before, so the glow is the button's
+   own shadow and the sparkle sits on ::after. */
+.tray-section > .battle-entry-box > .battle-entry.battle-entry-lure {
   box-shadow:
-    0 3px 0 #8f3360,
+    0 4px 0 #7a2d55,
     0 0 0 3px #ffe08a,
-    0 0 18px 6px rgb(255 214 107 / 65%);
-}
-
-.battle-entry.battle-entry-lure::before {
-  content: '';
-  position: absolute;
-  inset: -6px;
-  border-radius: 24px;
-  box-shadow: 0 0 26px 10px rgb(168 130 255 / 55%);
-  opacity: 0.9;
+    0 0 14px 4px rgb(168 130 255 / 70%);
   animation: battle-lure-pulse 2.4s ease-in-out infinite;
-  pointer-events: none;
 }
 
-.battle-entry.battle-entry-lure::after {
+.tray-section > .battle-entry-box > .battle-entry.battle-entry-lure::after {
   content: '✨';
   position: absolute;
   right: 14px;
@@ -586,18 +577,23 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 @keyframes battle-lure-pulse {
   0%,
   100% {
-    opacity: 0.35;
+    box-shadow:
+      0 4px 0 #7a2d55,
+      0 0 0 3px #ffe08a,
+      0 0 6px 1px rgb(168 130 255 / 30%);
   }
 
   50% {
-    opacity: 1;
+    box-shadow:
+      0 4px 0 #7a2d55,
+      0 0 0 3px #ffe08a,
+      0 0 16px 5px rgb(168 130 255 / 80%);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .battle-entry.battle-entry-lure::before {
+  .tray-section > .battle-entry-box > .battle-entry.battle-entry-lure {
     animation: none;
-    opacity: 1;
   }
 }
 

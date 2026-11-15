@@ -1,5 +1,6 @@
 import {
   GAME_DATA,
+  pluralName,
   POST_SHOP_BY_ID,
   type BuyRequest,
   type BuyResponse,
@@ -157,7 +158,8 @@ export function receipt(res: BuyResponse): { title: string; line: string } {
     return { title: SHOP_TEXT.lureReady, line: SHOP_TEXT.lureReadyLine };
   }
   const parts = Object.entries(res.bought.got.items).map(
-    ([id, n]) => `${String(n)} ${RESOURCES.get(id) ?? id}`,
+    ([id, n]) =>
+      `${String(n)} ${n === 1 ? (RESOURCES.get(id) ?? id) : pluralName(RESOURCES.get(id) ?? id)}`,
   );
   return { title: SHOP_TEXT.got, line: parts.join(', ') };
 }

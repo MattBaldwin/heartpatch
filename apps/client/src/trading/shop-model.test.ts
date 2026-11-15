@@ -120,6 +120,6 @@ describe('buy', () => {
         got: { kind: 'items', items: { 'heart-charm': 5 } },
       },
     };
-    expect(receipt(pack).line).toMatch(/^5 /);
+    expect(receipt(pack).line).toBe('5 Heart Charms');
   });
 });
