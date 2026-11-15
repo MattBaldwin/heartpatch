@@ -1523,11 +1523,13 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 }
 
 .battle-evolving-row .evolving-line {
-  font-size: 12px;
+  gap: 4px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .battle-evolving-row .evolving-bar {
-  height: 8px;
+  height: 6px;
 }
 
 /* A phone: the befriend panel says what happened, so the subtitle steps aside. */
