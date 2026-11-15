@@ -11,7 +11,7 @@ import {
 } from './body-shape.js';
 import { FLOATER, LOD } from './config.js';
 import { floaterArrays } from './floater-shapes.js';
-import { orientTriangles, partArrays } from './part-shapes.js';
+import { accentArrays, bentToe, orientTriangles, partArrays } from './part-shapes.js';
 import type { Vec3 } from './params.js';
 import { partMatrix, surfaceFrame } from './placement.js';
 
@@ -87,6 +87,43 @@ describe.each(PartShapeSchema.options)('part shape %s', (shape) => {
   it('has fewer triangles at low detail', () => {
     expect(partArrays(shape, LOD.low).indices.length).toBeLessThan(
       partArrays(shape, LOD.high).indices.length,
+    );
+  });
+});
+
+describe('accent mesh bent-toe (#234 v16)', () => {
+  for (const lod of ['low', 'high', 'hero'] as const) {
+    it(`faces outwards (${lod})`, () => {
+      expectFrontFacing(accentArrays('bent-toe', LOD[lod]));
+    });
+  }
+
+  it("sits in the bent shaft's own unit box, sleeving its tip in a wide, flat chisel", () => {
+    const shaft = bounds(partArrays('bent', LOD.high));
+    const toe = accentArrays('bent-toe', LOD.high);
+    const box = bounds(toe);
+    // It covers the shaft's end: as far up and as far forward, a little past it.
+    expect(box.max[1]).toBeGreaterThanOrEqual(shaft.max[1] - 1e-6);
+    expect(box.max[2]).toBeGreaterThanOrEqual(shaft.max[2] - 1e-6);
+    // It only dresses the end, not the shaft: it starts high up.
+    expect(box.min[1]).toBeGreaterThan(0.1);
+    // 1.6-2x the shaft's width where it starts (the shaft's root is the box's
+    // full width, 1, and it tapers to 0.85 at the tip).
+    const { flare, length } = bentToe();
+    expect(flare).toBeGreaterThanOrEqual(1.6);
+    expect(flare).toBeLessThanOrEqual(2);
+    expect(length).toBeGreaterThan(0.08);
+    expect(length).toBeLessThan(0.2);
+    const width = box.max[0] - box.min[0];
+    expect(width).toBeGreaterThan(1.6 * 0.85);
+    expect(width).toBeLessThan(2 * 1);
+    // Flat: much wider than it is thick across its end.
+    expect(width / (box.max[2] - box.min[2])).toBeGreaterThan(1.5);
+  });
+
+  it('has fewer triangles at low detail', () => {
+    expect(accentArrays('bent-toe', LOD.low).indices.length).toBeLessThan(
+      accentArrays('bent-toe', LOD.high).indices.length,
     );
   });
 });

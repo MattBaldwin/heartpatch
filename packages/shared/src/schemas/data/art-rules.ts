@@ -234,8 +234,15 @@ export function checkSpeciesArt(
   }
 
   const ids = new Set(visual.parts);
+  // A part that declares `replaces: 'mouth'` meets a face group made only of mouths.
+  const replaced = new Set(parts.flatMap((p) => (p.replaces ? [p.replaces] : [])));
+  const stoodInFor = (group: readonly string[]) =>
+    group.every((id) => {
+      const slot = registry.parts.get(id)?.slot;
+      return slot !== undefined && (replaced as ReadonlySet<string>).has(slot);
+    });
   for (const group of rules.feelingFaces[species.feeling]) {
-    if (!group.some((id) => ids.has(id))) {
+    if (!group.some((id) => ids.has(id)) && !stoodInFor(group)) {
       report(
         [...at, 'parts'],
         `${species.feeling} squishies need one of ${group.map((id) => `"${id}"`).join(', ')}`,

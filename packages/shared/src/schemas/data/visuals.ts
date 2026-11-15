@@ -61,15 +61,33 @@ export const SURFACE_SLOTS: readonly PartSlot[] = ['eyes', 'brows', 'mouth', 'ch
 /**
  * The primitive a part is built from; each has one geometry builder in the
  * client. `arc` is a curved tube (smiles, closed eyes, curly tails), opening
- * upwards unless the part sets `flip`.
+ * upwards unless the part sets `flip`. `box` is a flat, softly rounded block
+ * whose sides line up with the part's width, length and thickness, so a
+ * shallow `size` makes a straight bar or plank that doesn't bulge in the
+ * middle (#234 kit extension; new shapes go at the end). `bent` is a flat,
+ * slightly tapering strip (a leaf-rake tine), its wide side to the front,
+ * straight for its top 40% and then curving evenly towards the front by 65°
+ * over the rest. Its thickness covers the strip plus how far the tip curves
+ * forward, so size it in the client's `bentProportions()` to keep the
+ * strip's section and curve true.
  */
-export const PartShapeSchema = z.enum(['ellipsoid', 'capsule', 'cone', 'teardrop', 'arc']);
+export const PartShapeSchema = z.enum([
+  'ellipsoid',
+  'capsule',
+  'cone',
+  'teardrop',
+  'arc',
+  'box',
+  'bent',
+]);
 export type PartShape = z.infer<typeof PartShapeSchema>;
 
 /**
  * Which colour a part takes. `primary`, `secondary`, `accent` and `detail`
  * are the species palette's 1st to 4th colours (a missing one falls back to
  * the one before it); `ink`, `white` and `blush` are fixed toy colours.
+ * `metal` (#234 kit extension, appended) is a fixed cool grey for tool metal
+ * such as rake tines.
  */
 export const PaletteRoleSchema = z.enum([
   'primary',
@@ -79,6 +97,7 @@ export const PaletteRoleSchema = z.enum([
   'ink',
   'white',
   'blush',
+  'metal',
 ]);
 export type PaletteRole = z.infer<typeof PaletteRoleSchema>;
 
@@ -196,7 +215,10 @@ export const PartSchema = z.strictObject({
   tilt: degrees(-90, 90).optional(),
   /**
    * Paired parts lean outwards, away from the middle (sticking-out parts),
-   * or turn outwards like eyebrows (surface parts).
+   * or turn outwards like eyebrows (surface parts). On a `ring` (#234 kit
+   * extension) the copies fan out: each leans sideways, away from `around`,
+   * in proportion to how far round it sits, the outermost by nearly `splay`
+   * (a leaf rake's tines). Unset leaves a ring's copies parallel, as before.
    */
   splay: degrees(-90, 90).optional(),
   /** How far the part sinks into the body: 0 sits on it, 1 is fully sunk. */
@@ -207,6 +229,31 @@ export const PartSchema = z.strictObject({
   highlight: z.boolean().optional(),
   /** Per-squishy size variance as a fraction. */
   jitter: z.number().min(0).max(0.3),
+  /**
+   * Opt-in (#234 round 11). `front` lines a sticking-out part up in front of
+   * its host's face instead of on the curved surface, like the tines along a
+   * rake head: each copy starts at the height and sideways spot of
+   * `around`/`up`, `standoff` in front of the face's centre line at that
+   * height (so every copy roots on one straight line, the front of a bar),
+   * and grows straight down, leaning forward towards the viewer by `tilt`
+   * (and sideways by `splay` on a ring). Unset is `surface`, today's
+   * behaviour.
+   */
+  anchor: z.enum(['surface', 'front']).optional(),
+  /**
+   * Opt-in with `anchor: 'front'` (#234 round 11): how far in front of the
+   * face's centre line the part roots, relative to host height.
+   */
+  standoff: z.number().min(0).max(0.5).optional(),
+  /**
+   * Opt-in (#234 kit extension): this part stands in for the species' mouth,
+   * so a feeling face kit's mouth requirement (`ART_RULES.feelingFaces`) is
+   * met by it and no mouth part is drawn (a rake bar that is the mouth).
+   * The client also keys two looks on it: a mouth stand-in holds still (no
+   * per-squishy placement wobble, so the rings rooted on it stay put) and is
+   * drawn plain, without the rarity's vinyl finish, like the rest of the face.
+   */
+  replaces: z.enum(['mouth']).optional(),
 });
 export type Part = z.infer<typeof PartSchema>;
 
@@ -262,7 +309,20 @@ export function checkSpeciesVisual(
       report(at, `parts "${other}" and "${id}" both use the ${part.slot} slot`);
     }
     slots.set(part.slot, id);
+    if (part.anchor === 'front' && (SURFACE_SLOTS.includes(part.slot) || part.slot === 'legs')) {
+      report(at, `part "${id}" can't stand in front of its host: only sticking-out parts can`);
+    }
+    if (part.standoff !== undefined && part.anchor !== 'front') {
+      report(at, `part "${id}" has a standoff but isn't anchored in front of its host`);
+    }
   });
+  const replacer = visual.parts.find((id) => registry.parts.get(id)?.replaces === 'mouth');
+  if (replacer !== undefined && slots.has('mouth')) {
+    report(
+      [...path, 'parts'],
+      `part "${replacer}" replaces the mouth, so "${slots.get('mouth')}" isn't needed`,
+    );
+  }
   if (visual.head && !registry.bodies.has(visual.head.body)) {
     report([...path, 'head', 'body'], `unknown head body "${visual.head.body}"`);
   }

@@ -67,6 +67,23 @@ export interface PartPlacement {
   };
 }
 
+/** A two-tone part's second mesh (#234 v16): built per main shape in `accentArrays`. */
+export type AccentMesh = 'bent-toe';
+
+/**
+ * A part's optional second mesh in its own colour (sRGB hex), drawn with the
+ * same placements as the part, so one part can be two-tone without another
+ * slot. A client art-kit field: the shared `Part` schema doesn't carry it, so
+ * only the dev gallery's draft parts use it until lane 234b moves them.
+ */
+export interface PartAccent {
+  readonly mesh: AccentMesh;
+  readonly color: string;
+}
+
+/** A shared `Part`, optionally two-tone. */
+export type KitPart = Part & { readonly accent?: PartAccent };
+
 export interface PartParams {
   readonly id: string;
   readonly slot: PartSlot;
@@ -81,9 +98,20 @@ export interface PartParams {
   /** Extra distance out from the surface, world units (eye glints sit on the eye). */
   readonly lift: number;
   readonly flip: boolean;
+  /**
+   * Set only for a part that stands in a straight line in front of its
+   * host's face (`anchor: 'front'`); unset grows from the surface.
+   */
+  readonly anchor?: 'front';
+  /** With `anchor: 'front'`: how far in front of the face's centre line it roots, world units. */
+  readonly standoff?: number;
+  /** Set only on `metal` parts and mouth stand-ins (#234): plain, without the rarity's vinyl finish. */
+  readonly plain?: true;
   /** Lit from inside (the species' `glow`: every non-face part, or only `accent` ones). */
   readonly glow: boolean;
   readonly placements: readonly PartPlacement[];
+  /** Set only on a two-tone part: its second mesh and that mesh's colour, at the same placements. */
+  readonly accent?: { readonly mesh: AccentMesh; readonly color: Rgb };
 }
 
 /** A camera-facing glyph floating beside the squishy (the species' `visual.floater`). */
@@ -199,6 +227,7 @@ function paletteColors(
     ink: inkHex ? hexToRgb(inkHex) : ink,
     white,
     blush: hexToRgb(FIXED_COLORS.blush),
+    metal: hexToRgb(FIXED_COLORS.metal),
   };
 }
 
@@ -224,7 +253,13 @@ function placementsFor(part: Part, height: number, rng: Rng): PartPlacement[] {
         layout.kind === 'row'
           ? part.up + ((layout.to - part.up) * i) / (layout.count - 1)
           : part.up;
-      out.push({ around: a * DEG, up: u * DEG, size, tilt, splay: 0, side: 0 });
+      // A ring with `splay` fans out (#234): each copy leans away from
+      // `around` in proportion to its offset; unset stays parallel.
+      const offset =
+        layout.kind === 'ring' && layout.spread > 0 ? (a - part.around) / layout.spread : 0;
+      const fan = splay * offset;
+      const side = fan === 0 ? 0 : fan > 0 ? 1 : -1;
+      out.push({ around: a * DEG, up: u * DEG, size, tilt, splay: Math.abs(fan), side });
     }
     return out;
   }
@@ -289,8 +324,11 @@ function placementsFor(part: Part, height: number, rng: Rng): PartPlacement[] {
   }
 
   // Single and paired parts get one wobble, mirrored on both sides, so faces stay symmetric.
-  const a = (part.around + wobble(rng, VARIATION.placementDeg)) * DEG;
-  const u = (part.up + wobble(rng, VARIATION.placementDeg)) * DEG;
+  // A mouth stand-in (the rake bar) holds still: its tines and rivets are rings
+  // rooted on it, which don't wobble, so a wobbling bar slid off them (#234 v14).
+  const steady = part.replaces === 'mouth';
+  const a = (part.around + (steady ? 0 : wobble(rng, VARIATION.placementDeg))) * DEG;
+  const u = (part.up + (steady ? 0 : wobble(rng, VARIATION.placementDeg))) * DEG;
   if (layout.kind === 'single') {
     return [{ around: part.around === 0 ? 0 : a, up: u, size, tilt, splay, side: 0 }];
   }
@@ -298,6 +336,13 @@ function placementsFor(part: Part, height: number, rng: Rng): PartPlacement[] {
     { around: -a, up: u, size, tilt, splay, side: -1 },
     { around: a, up: u, size, tilt, splay, side: 1 },
   ];
+}
+
+/** A two-tone part's second mesh and its colour; nothing for a one-mesh part. */
+function accentOf(part: KitPart): Pick<PartParams, 'accent'> {
+  return part.accent
+    ? { accent: { mesh: part.accent.mesh, color: hexToRgb(part.accent.color) } }
+    : {};
 }
 
 /** A small white glint on each eye, up and towards the viewer's left (one light, both eyes). */
@@ -395,10 +440,16 @@ export function squishyParams(
       sink: part.sink ?? 0,
       lift: 0,
       flip: part.flip ?? false,
+      ...(part.anchor === 'front' ? { anchor: part.anchor } : {}),
+      ...(part.anchor === 'front' ? { standoff: (part.standoff ?? 0) * hostHeight } : {}),
+      // Metal (rake tines, rivets) and a part that stands in for the mouth (the
+      // rake bar) skip the rarity's vinyl finish, like the rest of the face (#234 v14).
+      ...(part.color === 'metal' || part.replaces === 'mouth' ? { plain: true as const } : {}),
       glow:
         !surfaceSlots.has(part.slot) &&
         (visual.glow === 'body' || (visual.glow === 'accent' && part.color === 'accent')),
       placements: placementsFor(part, hostHeight, stream(`part:${part.id}`)),
+      ...accentOf(part),
     };
     parts.push(params);
     if (part.highlight) parts.push(glintFor(params, colors.white, hostHeight));

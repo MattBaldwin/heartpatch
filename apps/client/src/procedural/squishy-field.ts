@@ -46,7 +46,7 @@ import {
   type SquishySpecies,
 } from './params.js';
 import { rareGlowCode } from './rare-glow.js';
-import { orientTriangles, partArrays } from './part-shapes.js';
+import { accentArrays, orientTriangles, partArrays } from './part-shapes.js';
 import { partMatrix } from './placement.js';
 import { SquishPlugin } from './squish-plugin.js';
 
@@ -820,19 +820,35 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       );
       const color = linear(part.color);
       // Faces and patterns stay plain vinyl; sticking-out parts share the body's tier and glow.
-      const finish = (part.surface ? 0 : tier + rareGlow) + glow(part.glow);
+      // Metal parts (rake tines) and mouth stand-ins (the rake bar) stay plain, without the vinyl finish (#234).
+      const finish = (part.surface || part.plain ? 0 : tier + rareGlow) + glow(part.glow);
       const onHead = part.host === 'head' && params.head && headBody;
       const hostBody = onHead ? headBody : body;
       const hostScale = onHead ? params.head.scale : params.body.scale;
       const hostAt = onHead ? params.head.offset : torsoAt;
+      // A two-tone part's second mesh rides on the same placement (#234 v16).
+      const accent = part.accent;
+      const accentBatch = accent
+        ? this.#batch(`accent:${accent.mesh}`, (lod) => accentArrays(accent.mesh, LOD[lod]), false)
+        : null;
+      const accentColor = accent ? linear(accent.color) : null;
       for (const p of part.placements) {
         const local = Matrix.FromArray(partMatrix(hostBody, hostScale, part, p, hostAt));
-        const entry = attach(batch, local, color, finish, part.slot === 'eyes');
-        if (part.slot === 'crown' || part.slot === 'ears') {
-          squishy.tuckParts.push({ ...entry, slot: part.slot });
+        const entries = [attach(batch, local, color, finish, part.slot === 'eyes')];
+        if (accentBatch && accentColor) {
+          entries.push(attach(accentBatch, local.clone(), accentColor, finish));
         }
-        if (part.slot === 'eyes' || part.slot === 'mouth') {
-          squishy.faceParts.push({ ...entry, slot: part.slot, base: local.clone() });
+        for (const entry of entries) {
+          if (part.slot === 'crown' || part.slot === 'ears') {
+            squishy.tuckParts.push({ ...entry, slot: part.slot });
+          }
+          if (part.slot === 'eyes' || part.slot === 'mouth') {
+            squishy.faceParts.push({
+              ...entry,
+              slot: part.slot,
+              base: entry.instance.local.clone(),
+            });
+          }
         }
       }
     }

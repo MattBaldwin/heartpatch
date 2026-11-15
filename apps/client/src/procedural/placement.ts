@@ -77,7 +77,9 @@ function pitched(v: Vec3, angle: number): Vec3 {
 export function partMatrix(
   body: Body,
   bodyScale: Vec3,
-  part: Pick<PartParams, 'surface' | 'sink' | 'lift' | 'flip'> & { readonly slot?: string },
+  part: Pick<PartParams, 'surface' | 'sink' | 'lift' | 'flip' | 'anchor' | 'standoff'> & {
+    readonly slot?: string;
+  },
   placement: PartPlacement,
   offset: Vec3 = [0, 0, 0],
 ): Mat4 {
@@ -132,6 +134,32 @@ export function partMatrix(
     x = cross(y, z);
     const out = (thickness / 2) * (1 - part.sink) + part.lift;
     centre = add(f.point, scaled(f.normal, out));
+  } else if (part.anchor === 'front') {
+    // Roots on a straight line `standoff` in front of the face's centre line
+    // at this spot's height (the front of a rake bar), at this spot's
+    // sideways position, and grows straight down, leaning forward towards
+    // the viewer by `tilt` and sideways by `splay` like a ring's fan.
+    // Sideways, `around` is spread evenly along the line (a quarter turn is
+    // the host's side), so a ring's copies stay evenly gapped like tines.
+    const face = surfacePoint(body, 0, placement.up)[2] * bodyScale[2] + offset[2];
+    const halfWidth = surfacePoint(body, Math.PI / 2, placement.up)[0] * bodyScale[0];
+    const sideways = (placement.around / (Math.PI / 2)) * halfWidth + offset[0];
+    const root: Vec3 = [sideways, f.point[1], face - (part.standoff ?? 0)];
+    let dir = lean([0, -1, 0], FRONT, placement.tilt);
+    if (placement.splay !== 0) {
+      const out = placement.side === 0 ? 1 : placement.side;
+      dir = lean(dir, normalize(flatten([out, 0, 0], dir)), placement.splay);
+    }
+    y = dir;
+    // Straight out towards the viewer (a rivet), "front" is undefined: face down.
+    let front = flatten(FRONT, y);
+    if (len(front) < 1e-3) front = [0, -1, 0];
+    z = normalize(front);
+    // v15: every copy curls the same way, straight towards the viewer, so
+    // the five hooks share one parallel forward arc (v14 turned the fanned
+    // copies' curls outwards, which read as tusks head-on).
+    x = cross(y, z);
+    centre = add(root, scaled(y, length / 2 - part.sink * length + part.lift));
   } else {
     // Grows out along the normal, leaning towards the top and outwards.
     let dir = lean(f.normal, f.towardsTop, placement.tilt);

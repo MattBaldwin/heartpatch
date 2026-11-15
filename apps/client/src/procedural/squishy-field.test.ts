@@ -1,7 +1,7 @@
 import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Vector3, type Matrix } from '@babylonjs/core/Maths/math.vector';
-import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { Scene } from '@babylonjs/core/scene';
 import {
@@ -19,7 +19,7 @@ import {
   SQUISH_LOOK_CODE,
   type SquishyLod,
 } from './config.js';
-import type { SquishySpecies } from './params.js';
+import type { KitPart, SquishySpecies } from './params.js';
 import { decodeSquishCode, glowHueIndex } from './rare-glow.js';
 import { SquishyField, type SquishyHandle } from './squishy-field.js';
 
@@ -819,6 +819,59 @@ describe('SquishyField rare finds glow (#391)', () => {
       0,
     );
     expect(after).toBeGreaterThan(before);
+  });
+
+  it("draws a two-tone part's accent on its own batch, one instance per placement (#234 v16)", () => {
+    const tines: KitPart = {
+      id: 'test-two-tone-tines',
+      slot: 'fangs',
+      shape: 'bent',
+      size: [0.08, 0.3, 0.12],
+      color: 'metal',
+      accent: { mesh: 'bent-toe', color: '#b4bdc8' },
+      layout: { kind: 'ring', count: 3, spread: 60 },
+      around: 0,
+      up: -15,
+      jitter: 0,
+    };
+    const scene = new Scene(engine);
+    const f = new SquishyField<SquishyLod>(scene, {
+      registry: visualRegistry({ bodies: GAME_DATA.bodies, parts: [...GAME_DATA.parts, tines] }),
+      lod: 'low',
+      shadows: false,
+    });
+    const one = {
+      ...species,
+      visual: { ...species.visual, parts: [...species.visual.parts, tines.id] },
+    };
+    f.add(one, 'p', { x: 0, z: 0 });
+    f.flush();
+    const meshNamed = (prefix: string): Mesh => {
+      const found = scene.meshes.find((m) => m.name.startsWith(prefix));
+      expect(found, prefix).toBeInstanceOf(Mesh);
+      if (!(found instanceof Mesh)) throw new Error(`no mesh ${prefix}`);
+      return found;
+    };
+    const accent = meshNamed('squishy-accent:bent-toe');
+    expect(accent.thinInstanceCount).toBe(3);
+    const shaft = meshNamed('squishy-part:bent');
+    expect(shaft.thinInstanceCount).toBe(3);
+    // The same placement matrices: the toe rides on its tine.
+    expect(
+      Array.from(
+        accent
+          .thinInstanceGetWorldMatrices()
+          .map((m) => m.m)
+          .flat(),
+      ),
+    ).toEqual(
+      Array.from(
+        shaft
+          .thinInstanceGetWorldMatrices()
+          .map((m) => m.m)
+          .flat(),
+      ),
+    );
   });
 
   it('adds no meshes: a rare kind draws on the same batches as a common one', () => {

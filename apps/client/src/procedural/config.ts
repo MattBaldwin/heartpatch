@@ -8,13 +8,14 @@
 import { ART_RULES } from '@heartpatch/shared';
 
 /**
- * Fixed toy colours (sRGB hex) for the `ink`, `white` and `blush` palette
- * roles. A species may set its own ink (`visual.ink`, ART_BIBLE §1.7).
+ * Fixed toy colours (sRGB hex) for the `ink`, `white`, `blush` and `metal`
+ * palette roles. A species may set its own ink (`visual.ink`, ART_BIBLE §1.7).
  */
 export const FIXED_COLORS = {
   ink: ART_RULES.defaultInk,
   white: '#ffffff',
   blush: '#ff9db5', // TUNE
+  metal: '#6c7682', // TUNE: rake-tine steel (#234), darker than the honey wood; v15 a little darker
 } as const;
 
 /** Per-squishy variation, seeded from the instance id. */
