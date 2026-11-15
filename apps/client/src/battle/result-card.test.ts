@@ -45,7 +45,7 @@ describe('XP lines on the result card (#728)', () => {
 
 describe('a live defence that held (#728)', () => {
   it('pays coins', () => {
-    expect(line({})).toBe('Held! You earned 3 Patch Coins and 💛\u00a03.');
+    expect(line({})).toBe('Held! You earned 3\u00a0Patch\u00a0Coins and 💛\u00a03.');
   });
 
   it('says a scoot pays XP, not coins', () => {
@@ -62,7 +62,7 @@ describe('a live defence that held (#728)', () => {
 
   it('says only what the cap let through', () => {
     expect(line({ rewards: rewards({ coins: { patch: 1, heart: 0 } }) })).toBe(
-      'Held! You earned 1 Patch Coin.',
+      'Held! You earned 1\u00a0Patch\u00a0Coin.',
     );
   });
 
@@ -81,7 +81,7 @@ describe('a friendly battle (#728)', () => {
     line({ role: 'friendly', rewards: rewards({ coins: { patch: 2, heart: 2 } }), ...over });
 
   it('cheers the winner with their coins', () => {
-    expect(friendly({})).toBe('+2 Patch Coins and 💛\u00a02 for the\u00a0win!');
+    expect(friendly({})).toBe('+2\u00a0Patch\u00a0Coins and 💛\u00a02 for the\u00a0win!');
   });
 
   it('is kind to the loser', () => {
@@ -109,7 +109,7 @@ describe("the challenger's coin line (#728)", () => {
   const mine = (over: Partial<Input>) => line({ role: 'challenger', ...over });
 
   it('says the coins a win paid', () => {
-    expect(mine({})).toBe('You earned 3 Patch Coins and 💛\u00a03.');
+    expect(mine({})).toBe('You earned 3\u00a0Patch\u00a0Coins and 💛\u00a03.');
   });
 
   it('says nothing when it paid nothing or is from before #728', () => {
@@ -122,7 +122,7 @@ describe("the challenger's coin line (#728)", () => {
 
 describe('reward words', () => {
   it('writes coins the way the rest of the app does', () => {
-    expect(coinsText({ patch: 3, heart: 3 })).toBe('3 Patch Coins and 💛\u00a03');
+    expect(coinsText({ patch: 3, heart: 3 })).toBe('3\u00a0Patch\u00a0Coins and 💛\u00a03');
     expect(coinsText({ patch: 0, heart: 2 })).toBe('💛\u00a02');
   });
 

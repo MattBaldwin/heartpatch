@@ -22,8 +22,8 @@ export const REWARD_TEXT = {
 
 /** "3 Patch Coins and 💛 3", or just the one that was credited. */
 export function coinsText(coins: { patch: number; heart: number }): string {
-  const patch = `${String(coins.patch)} Patch ${coins.patch === 1 ? 'Coin' : 'Coins'}`;
-  // No-break spaces keep "💛 3" and "the win!" from wrapping apart on a phone.
+  // No-break spaces keep "3 Patch Coins", "💛 3" and "the win!" whole on a phone.
+  const patch = `${String(coins.patch)}\u00a0Patch\u00a0${coins.patch === 1 ? 'Coin' : 'Coins'}`;
   const heart = `💛\u00a0${String(coins.heart)}`;
   if (coins.heart === 0) return patch;
   if (coins.patch === 0) return heart;
