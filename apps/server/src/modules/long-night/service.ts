@@ -378,7 +378,7 @@ export async function rescueRewardsMultiplierOn(
 }
 
 /**
- * `gapLevel`: a Gap squishy's level: the Keeper's Partner's, as the top of a wild
+ * `gapLevel` — a Gap squishy's level: the Keeper's Partner's, as the top of a wild
  * spawn's `partnerOffset` (a rare one is a step harder, owner decision
  * 2026-10-07), else the top of the plain range. No roll: the species was
  * the roll.

@@ -10,13 +10,13 @@ import {
   latestResult,
   LONG_NIGHT_TEXT,
   localDate,
+  nextCheckMinutes,
   noticeChip,
   noticeChipText,
   reportLines,
   rescueReward,
   revealCard,
   type LongNightStatus,
-  nextCheckMinutes,
 } from './long-night.js';
 
 const NY = 'America/New_York';
