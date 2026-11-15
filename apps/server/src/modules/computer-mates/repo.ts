@@ -13,7 +13,7 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
-import type { Executor } from '../../db/client.js';
+import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { computerMates, mapMembers, maps, squishies, tiles, users } from '../../db/schema.js';
 
 /*
@@ -29,6 +29,10 @@ export const playerUser: SQL = eq(users.kind, 'player');
 
 /** `maps.id = mapId`, for tests that reshape a patch (as maps' `activeMember`). */
 export const mapIs = (mapId: string): SQL => eq(maps.id, mapId);
+
+/** One mate step's transaction (#386c): modules reach the client through their repo. */
+export const mateTransaction = <T>(db: Executor, fn: (tx: Transaction) => Promise<T>) =>
+  withTransaction(db, fn);
 
 /** A computer patch-mate's own row (#386), with whether it's on the patch now. */
 export interface MateRow {
@@ -218,7 +222,7 @@ export function createComputerMatesRepo(db: Executor) {
         .from(computerMates)
         .where(eq(computerMates.userId, userId))
         .for('update');
-      return row ? { ...row, state: row.state as MateState } : null;
+      return row ? { ...row, state: row.state } : null;
     },
 
     /**

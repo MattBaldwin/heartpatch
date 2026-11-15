@@ -8,7 +8,6 @@ import {
   type MateView,
 } from '@heartpatch/shared/server';
 import type { Database, Transaction } from '../../db/client.js';
-import { withTransaction } from '../../db/client.js';
 import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { localDate, mapLocalTime, type Clock } from '../../lib/time.js';
 import { BUILDING_DATA, toPublicBuilding } from '../buildings/hearthfire.js';
@@ -16,7 +15,7 @@ import { createBuildingsRepo } from '../buildings/repo.js';
 import { heartSeedOf } from '../maps/depart.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { createTendingRepo, createTerritoryRepo } from '../territory/repo.js';
-import { createComputerMatesRepo, type MateState } from './repo.js';
+import { createComputerMatesRepo, mateTransaction, type MateState } from './repo.js';
 
 const MINUTE_MS = 60 * 1000;
 /** The fire a mate lights (#202's Hearthfire, level 1). */
@@ -98,7 +97,7 @@ export function createComputerMateSteps(options: ComputerMateStepsOptions): Comp
 
   const act = async (userId: string, step: number): Promise<MateStepResult | null> => {
     const at = now();
-    const out = await withTransaction(db, (tx) => stepWithin(tx, userId, step, at, secrets));
+    const out = await mateTransaction(db, (tx) => stepWithin(tx, userId, step, at, secrets));
     if (out) void options.publish?.(out.mapId);
     return out?.result ?? null;
   };
