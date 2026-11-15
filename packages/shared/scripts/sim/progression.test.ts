@@ -130,7 +130,7 @@ describe('headline numbers (a short run, so data changes show up here)', () => {
         expect((exploring.level[day] ?? 0) - (now.level[day] ?? 0)).toBeLessThanOrEqual(1);
       }
     }
-  });
+  }, 30_000); // four 30-day runs, as above: 5.3 s under coverage beside the map-fill sim tests (PR #814 CI)
 
   it('keeps befriended squishies below their evolution with the shipped cap', () => {
     const capped = runProgression(data, SMALL, CURRENT_RULES, engaged!, 4);
