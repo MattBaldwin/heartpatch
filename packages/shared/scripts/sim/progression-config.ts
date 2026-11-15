@@ -35,6 +35,12 @@ export interface ProgressionRules {
   readonly spawn: SpawnRules;
   readonly attemptsPerDay: number;
   /**
+   * A benched teammate's share (%) of the best award on its side (#732):
+   * `GROWTH_RULES.benchXpPercent` in the shipped data (`SHIPPED_BENCH_XP`).
+   * None or 0: the bench earns nothing.
+   */
+  readonly benchXpPercent?: number;
+  /**
    * How the sim kid picks a new friend after a won wild battle (#732 D3);
    * none means `'stronger'`. `'stronger'`: the friend replaces the weakest
    * team member when it's stronger. `'collector'`: it replaces the least-rare
@@ -109,6 +115,12 @@ export const SHIPPED_FRIENDLY_XP = {
   xpPercent: GROWTH_RULES.battleXpFalloff?.friendlyPercent ?? 100,
   oneOpponent: GROWTH_RULES.battleXpFalloff?.friendlyOneOpponent ?? false,
 } as const;
+
+/**
+ * The bench's share as the battles service pays it (#732): the shipped
+ * `GROWTH_RULES.benchXpPercent`, so the sim and production can't drift.
+ */
+export const SHIPPED_BENCH_XP = GROWTH_RULES.benchXpPercent ?? 0;
 
 /**
  * The shipped Training Grounds at their top level, trained a whole capped
@@ -190,6 +202,7 @@ export const CURRENT_RULES: ProgressionRules = {
   spawn: SPAWN_RULES,
   attemptsPerDay: TERRITORY_RULES.attemptsPerDay,
   training: topTraining(),
+  benchXpPercent: SHIPPED_BENCH_XP,
 };
 
 /**
@@ -234,6 +247,23 @@ export const WITH_FRIENDLIES_RULES: ProgressionRules = {
  * Partner level on `day` by at most `maxLevels` (first map size).
  */
 export const FRIENDLY_GATE: FriendlyGate = { kid: 'engaged', day: 14, maxLevels: 1 }; // the issue's criterion 2
+
+/**
+ * The shipped data with the bench at 25 % (#732: 25–50 is pre-approved as
+ * data), beside the shipped 50 %, so the knob's lever shows in the report.
+ */
+export const BENCH_25_RULES: ProgressionRules = {
+  ...CURRENT_RULES,
+  label: 'now (bench 25 %)',
+  benchXpPercent: 25,
+};
+
+/** `WITH_FRIENDLIES_RULES` with the bench at 25 % (#732). */
+export const WITH_FRIENDLIES_BENCH_25_RULES: ProgressionRules = {
+  ...WITH_FRIENDLIES_RULES,
+  label: 'now + friendlies (bench 25 %)',
+  benchXpPercent: 25,
+};
 
 /**
  * The shipped data with the collector befriend choice (#732 D3): a kid who

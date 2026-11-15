@@ -4,6 +4,7 @@ import {
   addXp,
   battleXpPercent,
   befriendedLevel,
+  benchXp,
   friendlyBattleXp,
   evolutionAt,
   grantedXp,
@@ -275,7 +276,10 @@ function play(
 }
 
 /**
- * Grants battle XP to the members who joined, through the real growth rules.
+ * Grants battle XP to the members who joined, through the real growth rules,
+ * and the bench's share (#732, `benchXp`) to the members of the setup
+ * (`setup`, the whole team by default) who never came out: the same
+ * falloff, slot and care as a fighter, as the battles service pays it.
  * `counts`: the battle counts toward the falloff (a win, by default).
  */
 export function grant(
@@ -284,11 +288,15 @@ export function grant(
   rules: ProgressionRules,
   xp: ReadonlyMap<string, number>,
   won: boolean,
-  { counts = won }: { counts?: boolean } = {},
+  { counts = won, setup = kid.team }: { counts?: boolean; setup?: readonly Member[] } = {},
 ): number {
+  const bench = benchXp(
+    [...xp.values()].map((v) => ({ xp: v })),
+    { benchXpPercent: rules.benchXpPercent ?? 0 },
+  );
   let partnerXp = 0;
-  for (const member of kid.team) {
-    const engine = xp.get(member.id);
+  for (const member of setup) {
+    const engine = xp.get(member.id) ?? (bench > 0 ? bench : undefined);
     if (engine === undefined) continue;
     // The daily falloff, as the battles service applies it: on the base XP,
     // from the wins before this battle.
@@ -467,14 +475,19 @@ export function playFriendly(
   return { sideA: a, winner: result.winner, partnerXp };
 }
 
-/** A hold (728a): the guards earn side b's XP, and it counts as their win. */
+/**
+ * A hold (728a): the guards earn side b's XP, and it counts as their win.
+ * The guards on watch that never came out are the bench (#732); members
+ * past `maxDefenders` weren't in the setup and earn nothing.
+ */
 export function payHold(
   data: ModelData,
   defender: Kid,
   rules: ProgressionRules,
   xp: ReadonlyMap<string, number>,
 ): number {
-  return grant(data, defender, rules, xp, true);
+  const setup = defender.team.slice(0, rules.defences?.maxDefenders ?? defender.team.length);
+  return grant(data, defender, rules, xp, true, { setup });
 }
 
 /**

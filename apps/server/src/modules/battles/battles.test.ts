@@ -1058,43 +1058,52 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
     const share = (base: number) => paidNow(Math.floor((base * falloff.afterPercent) / 100));
     const weak = { speciesId: SECRET_IDS[0]!, level: 3 };
 
-    it('counts only wins a squishy came out for, and starts again at map-local midnight', async () => {
+    it('counts wins a squishy came out for or cheered from the side, and starts again at map-local midnight', async () => {
       const server = await start();
       const kid = await player();
       const mapId = await newMap(server, kid);
       const lead = await grant(server, kid, mapId, { speciesId: SECRET_IDS[1], level: 20 });
       const bench = await grant(server, kid, mapId, { speciesId: SECRET_IDS[1], level: 20 });
+      const spare = await grant(server, kid, mapId, { speciesId: SECRET_IDS[1], level: 20 });
       const team = (ids: string[]) =>
         call(server, 'POST', `/maps/${mapId}/team`, kid, { squishyIds: ids });
       expect((await team([lead.id, bench.id])).statusCode).toBe(200);
+      const half = (base: number) => Math.floor((base * GROWTH_RULES.benchXpPercent!) / 100);
 
       // A loss doesn't count: the lead comes out and loses to a much stronger squishy.
       const lost = await fight(server, kid, mapId, { speciesId: SECRET_IDS[0]!, level: 90 });
       expect(lost.winner).toBe('b');
-      // All the wins before the limit pay in full; the bench never comes out.
+      // All the wins before the limit pay in full; the bench never comes out
+      // and cheers for half the lead's base (#732), taking a slot too.
       for (let i = 0; i < falloff.fullWinsPerDay; i++) {
         const won = await fight(server, kid, mapId, weak);
         expect(won.winner).toBe('a');
         expect(won.paid.get(lead.id)).toBe(full(won.base.get(lead.id)!));
         expect(won.base.has(bench.id)).toBe(false);
+        expect(won.paid.get(bench.id)).toBe(full(half(won.base.get(lead.id)!)));
         expect(won.fullXpResetAt).toBeNull();
       }
-      // Now the lead's next win pays less, until Denver's midnight; the bench's doesn't.
+      // Now both get less until Denver's midnight; the spare, off the team, doesn't.
       expect(await fullXpBack(server, kid, mapId)).toEqual(
         new Map([
           [lead.id, DENVER_MIDNIGHT],
-          [bench.id, null],
+          [bench.id, DENVER_MIDNIGHT],
+          [spare.id, null],
         ]),
       );
-      // Past the limit, the lead gets the share, still on Oct 2 in Denver (23:59).
+      // Past the limit, both get the share, still on Oct 2 in Denver (23:59).
       clock.setTime(Date.parse('2026-10-03T05:59:00Z'));
       const tired = await fight(server, kid, mapId, weak);
       expect(tired.paid.get(lead.id)).toBe(share(tired.base.get(lead.id)!));
+      expect(tired.paid.get(bench.id)).toBe(
+        paidNow(Math.floor((half(tired.base.get(lead.id)!) * falloff.afterPercent) / 100)),
+      );
       expect(tired.fullXpResetAt).toBe(DENVER_MIDNIGHT);
-      // The squishy that sat on the bench has won nothing today: full XP.
-      expect((await team([bench.id])).statusCode).toBe(200);
+      // The squishy that wasn't on the team has won nothing today: full XP
+      // (at least its base: off the team, its care isn't the lead's).
+      expect((await team([spare.id])).statusCode).toBe(200);
       const fresh = await fight(server, kid, mapId, weak);
-      expect(fresh.paid.get(bench.id)).toBe(full(fresh.base.get(bench.id)!));
+      expect(fresh.paid.get(spare.id)).toBeGreaterThanOrEqual(fresh.base.get(spare.id)!);
       expect(fresh.fullXpResetAt).toBeNull();
       // Midnight in Denver (06:00 UTC): the lead's count starts again.
       clock.setTime(Date.parse('2026-10-03T06:00:00Z'));
