@@ -27,12 +27,12 @@ export const COMPUTER_TEXT = {
   helloLine: "They're run by the game.",
   helloButton: 'Say hi!',
   /** Who's here: mates are always here. */
-  here: 'Here now',
+  here: 'Always up for a friendly!',
   hereHint: "Computer friends are run by the game, so they're always here.",
   /** On the friendly card for a mate: honest, and it keeps its own pace. */
   battleLine: "They're run by the game, and they play fair. Just for fun!",
   /** Who's here with only mates around: "nobody here" would contradict the list. */
-  noKidsHere: 'No other Keepers are here right now. Try again in a bit!',
+  noKidsHere: 'No other Keepers right now, but your Computer friends are up for a battle!',
 } as const;
 
 /** True for a computer patch-mate's seat (`MapMember.computer`, #386a). */

@@ -158,8 +158,28 @@ test('the owner switches Computer friends on, and three badged mates move in (#3
   await expect(mates.getByRole('button', { name: 'Battle me?' })).toHaveCount(3);
   // Only mates here: the hint doesn't say nobody's here above a list of them.
   await expect(
-    page.getByText('No other Keepers are here right now. Try again in a bit!'),
+    page.getByText('No other Keepers right now, but your Computer friends are up for a battle!'),
   ).toBeVisible();
+  await expect(mates.getByText('Always up for a friendly!')).toHaveCount(3);
+  // Layout (render check): at 393 and 320 pt the badge sits under the name,
+  // clear of "Battle me?", which stays on one line.
+  for (const width of [393, 320]) {
+    await page.setViewportSize({ width, height: 852 });
+    for (const row of await mates.getByRole('listitem').all()) {
+      const pill = await row.getByTestId('computer-badge').boundingBox();
+      const name = await row.locator('.friendly-name').boundingBox();
+      const btn = await row.getByTestId('friendly-battle-mate').boundingBox();
+      if (!pill || !name || !btn) throw new Error('row parts missing');
+      const apart = pill.x + pill.width <= btn.x + 0.5 || btn.y >= pill.y + pill.height - 0.5;
+      expect(apart, `badge clear of the button at ${String(width)}`).toBe(true);
+      expect(pill.y, 'badge under the name').toBeGreaterThanOrEqual(name.y + name.height - 1);
+      expect(btn.height, `one-line button at ${String(width)}`).toBeLessThan(60);
+      const clipped = await row
+        .getByTestId('computer-badge')
+        .evaluate((n) => n.scrollWidth > n.clientWidth + 1);
+      expect(clipped, 'badge words not clipped').toBe(false);
+    }
+  }
   await expect(page.getByText('Battles with Computer friends are coming soon!')).toHaveCount(0);
   // The card says who it is, with the badge and no level-gap line.
   await mates.getByTestId('friendly-battle-mate').first().tap();

@@ -197,12 +197,33 @@
   color: #6b4b6e;
 }
 
-/* Who's here: a mate's name, badge and status fill the row (no "Battle me?" until #386e). */
-.friendly-row-computer .friendly-row-text {
-  flex: 1 1 auto;
-}
-
 /* Under the name in a column (Who's here), the pill keeps its own width. */
 .friendly-row-text .cf-badge {
   align-self: flex-start;
+  max-width: 100%;
+  min-width: 0;
+  /* On a narrow phone the pill may wrap under the key rather than hide behind the button. */
+  white-space: normal;
+  border-radius: 14px;
+}
+
+/*
+ * The name column keeps room for the whole pill (about 9.5rem); the button
+ * never wraps or shrinks, so on a narrow phone it drops under the words,
+ * aligned right, instead of covering the badge (#386f render check).
+ */
+.friendly-row-computer {
+  flex-wrap: wrap;
+}
+
+.friendly-row-computer .friendly-row-text {
+  flex: 1 1 9.5rem;
+  min-width: 0;
+}
+
+.friendly-row-computer > button {
+  flex: none;
+  margin-left: auto;
+  white-space: nowrap;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
 }

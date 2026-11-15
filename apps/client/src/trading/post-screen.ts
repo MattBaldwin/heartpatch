@@ -25,7 +25,7 @@ import { glimmerSwapApi, type GlimmerSwapApi } from './glimmer-swap-api.js';
 import { hoursToReset, SWAP_TEXT, swapCards, swapsLeft } from './glimmer-swap-model.js';
 import { postConfirm, postSheet } from './post-confirm.js';
 import { computerAvatar, computerBadge } from '../computer-mates/computer-badge.js';
-import { isComputer } from '../computer-mates/computer-mates-model.js';
+import { COMPUTER_TEXT, isComputer } from '../computer-mates/computer-mates-model.js';
 import { sellApi, type SellApi } from './sell-api.js';
 import { shopApi, type ShopApi } from './shop-api.js';
 import { buyRequest, receipt as shopReceipt, SHOP_TEXT } from './shop-model.js';
@@ -263,6 +263,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     isMate(id)
       ? computerAvatar('dot')
       : el('span', { class: `post-face ${cls}`, 'aria-hidden': 'true' }, name.slice(0, 1));
+  /** The name in words for a sentence: a Computer friend gets "(Computer friend)" after it. */
+  const labelOf = (id: string, name: string) =>
+    isMate(id) ? `${name} (${COMPUTER_TEXT.badge})` : name;
   const passOver = () => post !== null && postChip(post.passUntil, now()) === null;
 
   // ---- loading -------------------------------------------------------------
@@ -722,6 +725,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         offer.give,
         meterLook(offer.want, offer.give, from, 'receiver'),
         from,
+        offer.fromUserId,
         'full',
       ),
       el(
@@ -885,7 +889,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       title: TRADE_TEXT.mateSureTitle,
       testId: 'post-trade-confirm',
       lines: [
-        { icon: '💌', text: TRADE_TEXT.giftConfirmTo(name) },
+        { icon: '💌', text: TRADE_TEXT.giftConfirmTo(labelOf(to, name)) },
         ...picked.map((l) => {
           const look = lineLook(l);
           return { icon: look.icon || '🧸', text: look.name };
@@ -920,7 +924,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       title: forever ? TRADE_TEXT.mateSureTitle : TRADE_TEXT.giftConfirmTitle,
       testId: 'post-gift-confirm',
       lines: [
-        { icon: '💌', text: TRADE_TEXT.giftConfirmTo(name) },
+        { icon: '💌', text: TRADE_TEXT.giftConfirmTo(labelOf(to, name)) },
         ...picked.map((l) => {
           const look = lineLook(l);
           return { icon: look.icon || '🧸', text: look.name };
@@ -1058,13 +1062,17 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       'span',
       { class: 'post-who' },
       el('span', { class: 'post-col-name post-fit' }, name),
+      ...(side === 'theirs' && owner !== null && isMate(owner) ? [computerBadge()] : []),
       el(
         'span',
         { class: 'post-col-sub' },
         side === 'mine' ? TRADE_TEXT.yourThings : TRADE_TEXT.theirThings,
       ),
     );
-    const face = el('span', { class: 'post-face', 'aria-hidden': 'true' }, name.slice(0, 1));
+    const face =
+      side === 'theirs' && owner !== null && isMate(owner)
+        ? computerAvatar('avatar')
+        : el('span', { class: 'post-face', 'aria-hidden': 'true' }, name.slice(0, 1));
     let header: HTMLElement;
     if (side === 'theirs' && mates().length > 1) {
       header = el(
@@ -1272,6 +1280,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     getLines: readonly TradeLineView[],
     look: MeterLook,
     mateName: string,
+    mateId: string | null,
     draw: 'mini' | 'full',
     onTile?: (side: Side, line: TradeLineView) => void,
   ): HTMLElement {
@@ -1310,12 +1319,12 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         el('span', { class: 'post-swap-arrow', 'aria-hidden': 'true' }, '⇄'),
         half('theirs', getLines, look.getHearts),
       ),
-      meter(look, mateName),
+      meter(look, mateName, mateId),
     );
   }
 
   /** The fairness meter: a track with a gold middle and a heart that slides toward who gets more. */
-  function meter(look: MeterLook, mateName: string): HTMLElement {
+  function meter(look: MeterLook, mateName: string, mateId: string | null): HTMLElement {
     const tone =
       look.tip === 'none'
         ? 'none'
@@ -1391,11 +1400,13 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         { class: 'post-meter-row' },
         el('span', { class: 'post-face mine small', 'aria-hidden': 'true' }, myName.slice(0, 1)),
         track,
-        el(
-          'span',
-          { class: 'post-face theirs small', 'aria-hidden': 'true' },
-          mateName.slice(0, 1),
-        ),
+        mateId !== null && isMate(mateId)
+          ? computerAvatar('dot')
+          : el(
+              'span',
+              { class: 'post-face theirs small', 'aria-hidden': 'true' },
+              mateName.slice(0, 1),
+            ),
       ),
       say,
     );
@@ -1459,6 +1470,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           picked.get,
           picked.look,
           mate === null ? '' : nameOf(mate),
+          mate,
           'mini',
           onTile,
         ),
