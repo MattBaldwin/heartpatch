@@ -1554,6 +1554,9 @@ const recipeBook = createRecipeBook({
 // The squishy catalog (#14) opens from the button by the battle entry.
 const catalog = createCatalogScreen({
   root: document.body,
+  // Which seasonal kinds count today: the patch's zone and the game clock, like the map (#583).
+  timeZone: () => maps.view?.map.timeZone ?? null,
+  now: () => new Date(inventory.gameNow()),
   onCare: (mapId, speciesId) => {
     void care.openForSpecies(mapId, speciesId);
   },
