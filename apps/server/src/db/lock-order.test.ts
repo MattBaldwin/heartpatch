@@ -125,6 +125,7 @@ import {
   tiles,
   users,
   battles,
+  bossBonds,
   bossEncounters,
   challenges,
 } from './schema.js';
@@ -752,6 +753,33 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
       .from(battles)
       .where(and(eq(battles.playerUserId, kid.id), eq(battles.status, 'active')));
     expect(fightsNow).toHaveLength(1);
+  });
+
+  it("takes a befriend's visit row, then the bond, before the charms (#190c step 5e)", async () => {
+    const { kid, mapId, battle, fights, bosses, finishing, lockEncounter } =
+      await minibossOneMoveFromWinning('befriender');
+    await fights.act(kid, battle.id, finishing);
+    const row = await createBattlesRepo(db).findBattle(battle.id);
+    const bossSpecies = row!.state.sides.b.squishies[0]!.speciesId;
+    await db.insert(bossBonds).values({ mapId, userId: kid.id, speciesId: bossSpecies });
+    // Hold the visit row: the ask queues there holding only the battle. Then
+    // take its bond and the charms, as later steps: it must hold neither yet.
+    await holdThen(
+      lockEncounter,
+      () => bosses.befriend(kid, battle.id, 1),
+      async (tx) => {
+        await tx
+          .select({ misses: bossBonds.misses })
+          .from(bossBonds)
+          .where(and(eq(bossBonds.mapId, mapId), eq(bossBonds.userId, kid.id)))
+          .for('update');
+        await createInventoryRepo(tx).lockItems({ mapId, userId: kid.id }, ['heart-charm']);
+      },
+    );
+    const ledger = await db.query.resourceLedger.findMany({
+      where: (t, { and: all, eq: is }) => all(is(t.userId, kid.id), is(t.reason, 'boss-befriend')),
+    });
+    expect(ledger).toHaveLength(1);
   });
 
   it("rolls a capture's found clothing after the battle's squishy locks (battles `finish`, #84)", async () => {

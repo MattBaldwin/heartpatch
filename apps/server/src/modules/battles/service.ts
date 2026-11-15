@@ -399,6 +399,8 @@ export interface MinibossBattlePort {
   lastActionAt: (tx: Executor, battle: BattleRow) => Promise<Date | null>;
   /** The Keeper stepped the fight: its idle clock starts again (step 5e, after the battle). */
   acted: (tx: Executor, battle: BattleRow, at: Date) => Promise<void>;
+  /** `PlayerBattle.boss` for the fight's Keeper (190c): reads only, never odds or warmth. */
+  view: (tx: Executor, battle: BattleRow, at: Date) => Promise<PlayerBattle['boss']>;
 }
 
 /** What a capture try costs (design doc §6): one Heart Charm. */
@@ -690,6 +692,7 @@ export function playerBattleView(
     defensePrompt?: PlayerBattle['defensePrompt'];
     firstMeeting?: boolean;
     firstEver?: boolean;
+    boss?: PlayerBattle['boss'];
   } = {},
 ): PlayerBattle {
   const state = options.state ?? row.state;
@@ -723,6 +726,7 @@ export function playerBattleView(
     endedAt: row.endedAt?.toISOString() ?? null,
     ...(options.live && { live: options.live }),
     ...(options.defensePrompt && { defensePrompt: options.defensePrompt }),
+    ...(options.boss && { boss: options.boss }),
   };
 }
 
@@ -863,8 +867,13 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     const firstMeeting = await firstMeetingOf(tx, row);
     // Only the battle's own player befriended anything (a defender's replay never).
     const firstEver = side === PLAYER_SIDE ? await firstEverOf(tx, row) : null;
+    const boss =
+      row.kind === 'miniboss' && side === PLAYER_SIDE
+        ? await options.minibosses?.view(tx, row, now())
+        : undefined;
     return playerBattleView(content, row, {
       mySide: side,
+      ...(boss && { boss }),
       worn,
       ...(firstMeeting !== null && { firstMeeting }),
       ...(firstEver !== null && { firstEver }),

@@ -85,4 +85,5 @@ export const SERVER_GAME_DATA: ServerGameData = {
 };
 export * from '../../schemas/data/boss-events.js';
 export * from '../../boss/schedule.js';
+export * from '../../boss/befriend.js';
 export { BOSS_EVENTS } from './boss-events.js';
