@@ -197,6 +197,19 @@ describe.skipIf(!url)('Wild Isle water works (#621 W1-8, needs DATABASE_URL)', (
     clock.setTime(Date.parse(START));
   });
 
+  /**
+   * A stored clear plan for every local day from `from` to `from + spanMs`.
+   * Without one, settle seeds a plan from the map's random seed, and a storm
+   * leaving a works' tile knocks it about (stopping its output): a flake.
+   */
+  async function clearSkies(mapId: string, from: Date, spanMs: number): Promise<void> {
+    const days = new Set<ReturnType<typeof localDate>>();
+    for (const t of [from.getTime(), from.getTime() + spanMs]) {
+      days.add(localDate(new Date(t), ZONE));
+    }
+    for (const day of days) await putPlan(db, mapId, day, []);
+  }
+
   async function start(): Promise<FastifyInstance> {
     const config = loadConfig({
       NODE_ENV: 'test',
@@ -464,6 +477,8 @@ describe.skipIf(!url)('Wild Isle water works (#621 W1-8, needs DATABASE_URL)', (
       const placedAt = new Date(clock);
       const mill = await works(mapId, kid, line[2]!, 'watermill', placedAt);
       await give(mapId, kid, { greens: 7 });
+      // Clear skies: a storm leaving the tile could knock the mill and stop it.
+      await clearSkies(mapId, placedAt, HOUR_MS);
 
       // An hour at level 1: 6 cycles of 10 minutes; the bag pays for 3.
       clock.setTime(placedAt.getTime() + HOUR_MS);
@@ -506,6 +521,10 @@ describe.skipIf(!url)('Wild Isle water works (#621 W1-8, needs DATABASE_URL)', (
         amount: 50,
       });
       expect(grant.statusCode).toBe(201);
+      // Clear skies both days: with no stored plan, settle seeds one from the
+      // map's random seed, and a storm leaving the tile can knock the pans.
+      const placedAt = new Date(clock);
+      await clearSkies(mapId, placedAt, 24 * HOUR_MS);
       // The next morning, 7:00 AM in Denver.
       clock.setTime(Date.parse('2026-10-03T13:00:00Z'));
       const settled = await settle(server, kid, mapId);
