@@ -1,3 +1,5 @@
+import { POST_SHOP } from '../../src/data/post-shop.js';
+import type { PostShop } from '../../src/schemas/data/post-shop.js';
 import { FUEL_CONFIG } from './fuel-config.js';
 
 /**
@@ -68,8 +70,9 @@ export interface PatchEconomyConfig {
   /**
    * "What pays today" (#736): the `kid`'s balance on the last day against
    * everything 💛 buys in the last `weekDays` days other than upkeep (`shop`:
-   * a price and how many a week). Gate: they can spend at least
-   * `minSpendPercent` of that week's earnings on it.
+   * a price and how many a week, the Post shop's items at their caps).
+   * Hard gate (#729): they can spend at least `minSpendPercent` of that
+   * week's earnings on it.
    */
   readonly whatPays: {
     readonly kid: string;
@@ -81,7 +84,44 @@ export interface PatchEconomyConfig {
       readonly perWeek: number;
     }[];
   };
+  /**
+   * #729 plan §8: from `fromDay`, each kid (4 seats, playing daily, every
+   * hut and the Warehouse) buys `perWeek` of the shop's `item` in any
+   * `weekDays` days, after selling, when the balance covers it. Gate: every
+   * one is bought and no building pauses a morning while they play.
+   */
+  readonly luresAffordable: {
+    readonly item: string;
+    readonly fromDay: number;
+    readonly perWeek: Readonly<Record<string, number>>;
+  };
 }
+
+/**
+ * The Post shop as a week of buying (#729 plan §8): a day cap is `count`
+ * a day for `weekDays` days, a week cap is `count` (rolling 7 patch days).
+ * Night supplies (729b) are once per Long Night, not weekly: leave them out
+ * when they ship.
+ */
+export function shopWeek(
+  shop: PostShop,
+  weekDays: number,
+): { id: string; price: number; perWeek: number }[] {
+  // Exhaustive on purpose: a new cap kind (729b's `long-night`) fails to
+  // compile here until it is counted or left out.
+  return shop.map((item) => {
+    switch (item.cap.per) {
+      case 'day':
+        return { id: item.id, price: item.price, perWeek: item.cap.count * weekDays };
+      case 'week':
+        return { id: item.id, price: item.price, perWeek: item.cap.count };
+    }
+  });
+}
+
+const WHAT_PAYS_WEEK_DAYS = 7;
+const RARE_LURE = POST_SHOP.find((item) => item.id === 'rare-lure');
+if (!RARE_LURE) throw new Error('no rare-lure in POST_SHOP');
 
 const fuel = (id: string) => {
   const profile = FUEL_CONFIG.profiles.find((p) => p.id === id);
@@ -131,10 +171,15 @@ export const PATCH_ECONOMY_CONFIG: PatchEconomyConfig = {
   firstHutByDay: { casual: 10, engaged: 5 },
   whatPays: {
     kid: 'casual',
-    weekDays: 7,
+    weekDays: WHAT_PAYS_WEEK_DAYS,
     minSpendPercent: 50, // TUNE: #736, half of what a casual kid earns
-    // TODO(#729): the Post shop's items and weekly caps, read from its data once it ships.
-    // Upkeep is the only thing 💛 buys today.
-    shop: [],
+    shop: shopWeek(POST_SHOP, WHAT_PAYS_WEEK_DAYS),
+  },
+  luresAffordable: {
+    item: RARE_LURE.id,
+    fromDay: 10, // #729 plan §8
+    // The casual kid at the Lure's weekly cap; the engaged kid, paying for
+    // every hut and the Warehouse, one a week (TUNE: #729 plan §8).
+    perWeek: { casual: RARE_LURE.cap.count, engaged: 1 },
   },
 };

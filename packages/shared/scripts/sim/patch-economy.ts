@@ -49,7 +49,7 @@ export const PATCH_ECONOMY_LIMITS = [
   "build income before the first hut is the fuel model's (#277), the share not kept for fires",
   'the Glimmer swap is used for exactly the Glimmer the next build step is short of, up to its daily cap',
   'the kid always has a homestead of the right land free (clearing, #242, is not modelled)',
-  'battles, captures and care earn the same each day; nothing else spends Heart Coins',
+  'battles, captures and care earn the same each day; nothing but upkeep spends Heart Coins, except the Lure rows (#729), which buy the Rare Lure after selling and don\'t model what it finds (no spawns here); "what pays today" prices the Post shop at its caps without buying it',
   'matches, fences, the Factory, trades and captures between kids',
   "solo rows (#386d) use the 4-seat map's build income, so they differ only in play coins and gifts; a solo kid: no friendly or defence wins; with computer mates: friendlies as the 4-seat row (at most `PAID_FRIENDLY_WINS_VS_COMPUTERS` a day, all mates), held defences at most the mates' weekly challenge cap, and `giftsPerPatchWeek` gifts a week of the best-selling `mateItems` item worth `giftMaxValue`; trades with mates are value-neutral (the fair band) and not modelled: they're bounded, since a mate gives only the everyday gathered resources on `mateItems` (never Heartdust, Glimmer, crafted, seasonal or `neverSold` items) and at most `offerValue.max` of them a trade, `completedPerPatchDay` trades a patch day",
   'the kid sells everything over what their next build needs, up to the daily cap',
@@ -171,6 +171,8 @@ export interface DayRecord {
   readonly played: number;
   readonly sold: number;
   readonly upkeep: number;
+  /** Heart Coins spent at the Post shop that day (`RunInput.buy`). */
+  readonly shop: number;
   /** Buildings paused at a morning that day. */
   readonly pausedMornings: number;
   /** Paused at the end of the day. */
@@ -287,6 +289,17 @@ interface RunInput {
   readonly useWarehouse: boolean;
   /** A solo row (#386d). */
   readonly solo?: 'plain' | 'mates';
+  /**
+   * #729: from `fromDay`, buy a `price` item at the post after selling,
+   * whenever the balance covers it and fewer than `perWeek` were bought in
+   * the last `weekDays` days (rolling, today included).
+   */
+  readonly buy?: {
+    readonly fromDay: number;
+    readonly price: number;
+    readonly perWeek: number;
+    readonly weekDays: number;
+  };
 }
 
 /** One kid on one map for `days` days. */
@@ -348,6 +361,7 @@ export function runKid(input: RunInput): PatchEconomyRun {
     let played = 0;
     let sold = 0;
     let swappedToday = 0;
+    let shop = 0;
     let output = 0;
 
     // The morning: each building placed before it owes one, in charge order.
@@ -425,6 +439,20 @@ export function runKid(input: RunInput): PatchEconomyRun {
         balance += lots * item.coins;
       }
 
+      // Buy at the Post shop (#729), at most one a day (a Lure is held one
+      // at a time until a wild start uses it), before waking anything: a
+      // purchase that leaves a building asleep shows as a paused morning.
+      const buy = input.buy;
+      if (buy && shop === 0 && day >= buy.fromDay && balance >= buy.price) {
+        const recent = days
+          .slice(Math.max(0, days.length - (buy.weekDays - 1)))
+          .filter((d) => d.shop > 0).length;
+        if (recent < buy.perWeek) {
+          balance -= buy.price;
+          shop = buy.price;
+        }
+      }
+
       // Wake paused buildings the balance covers, in charge order.
       const asleep = upkeepOrder(
         placed
@@ -491,6 +519,7 @@ export function runKid(input: RunInput): PatchEconomyRun {
       played,
       sold,
       upkeep,
+      shop,
       pausedMornings,
       pausedNow: placed.filter((p) => p.pausedAtMs !== null).length,
       buildings: placed.map((p) => `${p.data.id} ${String(p.level)}`),
@@ -552,8 +581,8 @@ export function buildIncome(
 export function runPatchEconomy(
   config: PatchEconomyConfig,
   progression: ProgressionConfig,
+  income: Map<string, Counts[]> = buildIncome(config, progression),
 ): PatchEconomyRun[] {
-  const income = buildIncome(config, progression);
   const runs: PatchEconomyRun[] = [];
   for (const seats of config.seats) {
     for (const kid of config.kids) {
@@ -625,19 +654,114 @@ export function whatPays(run: PatchEconomyRun, config: PatchEconomyConfig): What
   };
 }
 
-/** The "what pays today" line, always marked soft (#729). */
+/**
+ * The "what pays today" line. A hard gate since the Post shop shipped
+ * (#729): a FAIL names the data lever.
+ */
 export function formatWhatPays(
   result: WhatPays,
   run: PatchEconomyRun,
   config: PatchEconomyConfig,
 ): string {
-  // TODO(#729): make this a hard gate (fail the script and CI) once #729 merges.
   const { day, balance, earned, upkeep, buyable, canSpend, percent, pass } = result;
   return (
     `what pays today (${String(run.seats)} seats ${run.kid}): ${String(balance)} 💛 on day ${String(day)}; ` +
     `buyable besides upkeep in days ${String(day - config.whatPays.weekDays + 1)}–${String(day)}: ${String(buyable)} 💛; ` +
     `earned ${String(earned)} 💛, upkeep ${String(upkeep)} 💛; can spend ${String(canSpend)} 💛 (${String(percent)} % of earned). ` +
-    `Gate (soft until #729; does not fail the run): spend at least ${String(config.whatPays.minSpendPercent)} % of earnings on something other than upkeep: ${pass ? 'PASS' : 'FAIL'}`
+    `Gate: spend at least ${String(config.whatPays.minSpendPercent)} % of earnings on something other than upkeep: ` +
+    (pass
+      ? 'PASS'
+      : 'FAIL (lever: Post shop prices and caps in `POST_SHOP`, or sell and upkeep amounts in data)')
+  );
+}
+
+/** #729 plan §8: one kid buying the Lure each week from `fromDay`. */
+export interface LuresAffordable {
+  readonly kid: string;
+  readonly perWeek: number;
+  /** Lures the kid could have bought, at `perWeek` in any rolling week, and did. */
+  readonly wanted: number;
+  readonly bought: number;
+  readonly spent: number;
+  /** Mornings a building paused while the kid played, from `fromDay`. */
+  readonly paused: number;
+  /** The lowest end-of-day balance from `fromDay`, and day 30's. */
+  readonly lowest: number;
+  readonly balance: number;
+  readonly pass: boolean;
+}
+
+/**
+ * How many a kid buys at `perWeek` in any rolling `weekDays` days, one a
+ * day, from `fromDay` to `days`, if the balance always covers it.
+ */
+export function lureSlots(
+  fromDay: number,
+  days: number,
+  perWeek: number,
+  weekDays: number,
+): number {
+  const bought: number[] = [];
+  for (let day = fromDay; day <= days; day++) {
+    if (bought.filter((d) => d > day - weekDays).length < perWeek) bought.push(day);
+  }
+  return bought.length;
+}
+
+/**
+ * #729 plan §8 gate: each `luresAffordable` kid on the first map size,
+ * playing daily with every hut and the Warehouse, buys the Lure at its
+ * `perWeek` from `fromDay`; every one is bought and no building pauses a
+ * morning while they play.
+ */
+export function luresAffordable(
+  config: PatchEconomyConfig,
+  income: Map<string, Counts[]>,
+): { result: LuresAffordable; run: PatchEconomyRun }[] {
+  const gate = config.luresAffordable;
+  const item = config.whatPays.shop.find((i) => i.id === gate.item);
+  if (!item) throw new Error(`no shop item "${gate.item}"`);
+  const [seats] = config.seats;
+  const weekDays = config.whatPays.weekDays;
+  return config.kids.flatMap((kid) => {
+    const perWeek = gate.perWeek[kid.id];
+    if (perWeek === undefined) return [];
+    const run = runKid({
+      kid,
+      seats,
+      income: income.get(`${String(seats)}/${kid.id}`) ?? [],
+      days: config.days,
+      away: [],
+      useWarehouse: true,
+      buy: { fromDay: gate.fromDay, price: item.price, perWeek, weekDays },
+    });
+    const from = run.days.filter((d) => d.day >= gate.fromDay);
+    const bought = from.filter((d) => d.shop > 0).length;
+    const wanted = lureSlots(gate.fromDay, config.days, perWeek, weekDays);
+    const paused = pausedWhilePlaying(run, gate.fromDay);
+    const result: LuresAffordable = {
+      kid: kid.id,
+      perWeek,
+      wanted,
+      bought,
+      spent: from.reduce((a, d) => a + d.shop, 0),
+      paused,
+      lowest: Math.min(...from.map((d) => d.balance)),
+      balance: run.days.at(-1)?.balance ?? 0,
+      pass: bought === wanted && paused === 0,
+    };
+    return [{ result, run }];
+  });
+}
+
+/** The Lure line under "what pays today". */
+export function formatLuresAffordable(r: LuresAffordable, config: PatchEconomyConfig): string {
+  const { fromDay, item } = config.luresAffordable;
+  return (
+    `${item} ×${String(r.perWeek)} a week (${String(config.seats[0])} seats ${r.kid}, from day ${String(fromDay)}): ` +
+    `bought ${String(r.bought)} of ${String(r.wanted)}, ${String(r.spent)} 💛; lowest balance ${String(r.lowest)} 💛, ` +
+    `${String(r.balance)} 💛 on day ${String(config.days)}; paused mornings ${String(r.paused)}. Gate: every one bought, no paused morning: ` +
+    (r.pass ? 'PASS' : "FAIL (lever: the Lure's `price` or `cap` in `POST_SHOP`)")
   );
 }
 
@@ -740,7 +864,7 @@ export function awayWindow(run: PatchEconomyRun): DayRecord[] {
 export function renderPatchEconomy(
   runs: readonly PatchEconomyRun[],
   config: PatchEconomyConfig,
-  meta: { seconds: number },
+  meta: { seconds: number; lures?: readonly LuresAffordable[] },
 ): string {
   const levels = levelDays();
   const warehouse = warehouseData();
@@ -831,6 +955,7 @@ export function renderPatchEconomy(
     ...daily
       .filter((r) => r.kid === config.whatPays.kid && r.warehouse)
       .map((r) => `- ${formatWhatPays(whatPays(r, config), r, config)}`),
+    ...(meta.lures ?? []).map((r) => `- ${formatLuresAffordable(r, config)}`),
     '',
     '## Not modelled',
     '',
