@@ -7,11 +7,13 @@ import type {
 } from '../schemas/data/battle.js';
 import type { Move } from '../schemas/data/moves.js';
 import { getMove, moveKindOf, type BattleContent } from './content.js';
-import { expectedDamage } from './formulas.js';
+import { expectedDamage, matchupMultiplier } from './formulas.js';
 import {
   activeSquishy,
   benchOf,
+  inPlay,
   otherSide,
+  outOf,
   type BattleSquishy,
   type BattleState,
 } from './state.js';
@@ -178,4 +180,125 @@ export function chooseAiReplacement(
     weight: sharpen(Math.max(MIN_SCORE, bestDamageShare(content, squishy, target)), policy.focus),
   }));
   return rng.weighted(options).value;
+}
+
+// ── Team battles (#190) ─────────────────────────────────────────────────
+
+/** The standing squishies `side` has on the field, in slot order. */
+export function standingOut(
+  state: BattleState,
+  side: BattleSideId,
+): { slot: number; squishy: BattleSquishy }[] {
+  const { squishies } = state.sides[side];
+  return outOf(state, side).flatMap((slot) => {
+    const squishy = squishies[slot];
+    return squishy && inPlay(squishy) ? [{ slot, squishy }] : [];
+  });
+}
+
+/** Does `move` aim at foes (damage, or a status or stat drop on the foe)? */
+function aimsAtFoe(move: Move): boolean {
+  return (
+    move.power > 0 ||
+    (move.effects ?? []).some(
+      (e) => e.type === 'status' || (e.type === 'stat' && e.target === 'opponent'),
+    )
+  );
+}
+
+/**
+ * How good `move` looks with several foes standing: an `all-foes` move adds
+ * up its score against each (at `spreadPercent` when there's more than one),
+ * a one-foe move counts its best target.
+ */
+function teamMoveScore(
+  content: BattleContent,
+  policy: BattleAiPolicyRules,
+  move: Move,
+  user: BattleSquishy,
+  foes: readonly BattleSquishy[],
+): number {
+  if (move.targets === 'all-foes' && foes.length > 1) {
+    const spread = content.rules.team?.spreadPercent ?? 100;
+    let total = 0;
+    for (const foe of foes) total += scoreMove(content, policy, move, user, foe);
+    return (total * spread) / 100;
+  }
+  let best = 0;
+  for (const foe of foes) best = Math.max(best, scoreMove(content, policy, move, user, foe));
+  return best;
+}
+
+/**
+ * Who a one-foe move from `user` hits (#190), with one seeded pick when more
+ * than one foe stands: each weighs the move's matchup against it × (1 +
+ * `lowEnergy` × the share of energy it has lost) × `alreadyHitPercent`% if
+ * `user` already hit it this round (battle rules `team.target`).
+ */
+export function chooseTarget(
+  content: BattleContent,
+  move: Move,
+  user: BattleSquishy,
+  foes: readonly { slot: number; squishy: BattleSquishy }[],
+  alreadyHit: ReadonlySet<number>,
+  rng: Rng,
+): number {
+  const [first] = foes;
+  if (!first) throw new RangeError('chooseTarget() needs a foe standing');
+  if (foes.length === 1) return first.slot;
+  const rules = content.rules.team?.target ?? { lowEnergy: 0, alreadyHitPercent: 100 };
+  const options: Option<number>[] = foes.map(({ slot, squishy }) => {
+    const lost = (squishy.stats.hp - squishy.energy) / squishy.stats.hp;
+    const hit = alreadyHit.has(slot) ? rules.alreadyHitPercent / 100 : 1;
+    const weight =
+      matchupMultiplier(content, move, user, squishy) * (1 + rules.lowEnergy * lost) * hit;
+    return { value: slot, weight: Math.max(MIN_SCORE, weight) };
+  });
+  return rng.weighted(options).value;
+}
+
+/**
+ * An AI squishy's move in a team battle (#190) and who it hits: the move by
+ * `policy`'s weights against every standing foe (`sharpen`ed like any AI),
+ * then a target with `chooseTarget`. An `all-foes` move hits them all in slot
+ * order; a move that only helps its user aims at the first foe (it never
+ * reaches it). Advances `rng`.
+ */
+export function chooseTeamMove(
+  content: BattleContent,
+  state: BattleState,
+  side: BattleSideId,
+  slot: number,
+  policy: BattleAiPolicyRules,
+  alreadyHit: ReadonlySet<number>,
+  rng: Rng,
+): { move: string; targets: number[] } {
+  const user = state.sides[side].squishies[slot];
+  if (!user) throw new RangeError(`side ${side} has no squishy in slot ${slot}`);
+  const foes = standingOut(state, otherSide(side));
+  const [first] = foes;
+  if (!first) throw new RangeError('chooseTeamMove() needs a foe standing');
+  const options: Option<string>[] = user.moves.map((id) => ({
+    value: id,
+    weight: sharpen(
+      Math.max(
+        MIN_SCORE,
+        teamMoveScore(
+          content,
+          policy,
+          getMove(content, id),
+          user,
+          foes.map((f) => f.squishy),
+        ),
+      ),
+      policy.focus,
+    ),
+  }));
+  const move = getMove(content, rng.weighted(options).value);
+  if (move.targets === 'all-foes') return { move: move.id, targets: foes.map((f) => f.slot) };
+  if (!aimsAtFoe(move)) return { move: move.id, targets: [first.slot] };
+  return {
+    move: move.id,
+    targets: [chooseTarget(content, move, user, foes, alreadyHit, rng)],
+  };
 }

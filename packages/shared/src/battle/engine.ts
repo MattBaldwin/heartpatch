@@ -8,9 +8,11 @@ import {
   type BattleChoice,
   type BattleSetup,
   type BattleSideId,
+  type BattleStats,
+  type TeamPick,
 } from '../schemas/battle.js';
 import type { BattleStat, Move, MoveKind } from '../schemas/data/moves.js';
-import { chooseAiChoice, chooseAiReplacement } from './ai.js';
+import { chooseAiChoice, chooseAiReplacement, chooseTeamMove, standingOut } from './ai.js';
 import { BattleRuleError, getMove, getSpecies, moveKindOf, type BattleContent } from './content.js';
 import {
   captureChance,
@@ -57,8 +59,11 @@ const noBoosts = (): Record<BattleBoostStat, number> => ({ attack: 0, defense: 0
 /** Builds the first state from a setup. Throws if the setup breaks the rules. */
 export function startBattle(content: BattleContent, input: BattleSetup): BattleState {
   const setup = BattleSetupSchema.parse(input);
+  if (setup.format) checkTeamSetup(content, setup);
   const sideFrom = (side: BattleSideId): Draft<BattleState>['sides'][BattleSideId] => {
     const { controller, squishies } = setup.sides[side];
+    // A team battle (#190) has its whole side out at once; others one.
+    const outCount = setup.format?.[side] ?? 1;
     if (squishies.length > content.rules.teamSize) {
       throw new BattleRuleError(
         `side ${side} brings ${squishies.length} squishies; the limit is ${content.rules.teamSize}`,
@@ -71,6 +76,7 @@ export function startBattle(content: BattleContent, input: BattleSetup): BattleS
     return {
       controller: { ...controller },
       active: 0,
+      ...(outCount > 1 && { out: squishies.map((_, slot) => slot) }),
       squishies: squishies.map((s, slot) => {
         if (isFenceSetup(s)) {
           if (s.energy > s.stats.hp) {
@@ -87,7 +93,7 @@ export function startBattle(content: BattleContent, input: BattleSetup): BattleS
             energy: s.energy,
             stages: freshStages(),
             status: null,
-            joined: slot === 0,
+            joined: slot < outCount,
             boosts: noBoosts(),
             shield: 0,
             fence: s.fence,
@@ -95,7 +101,8 @@ export function startBattle(content: BattleContent, input: BattleSetup): BattleS
         }
         const species = getSpecies(content, s.speciesId);
         for (const move of species.moves) getMove(content, move);
-        const stats = s.stats ?? statsAtLevel(species.baseStats, s.level, content.rules);
+        const plain = s.stats ?? statsAtLevel(species.baseStats, s.level, content.rules);
+        const stats = s.boss ? bossStats(content, plain) : plain;
         return {
           id: s.id,
           speciesId: species.id,
@@ -107,9 +114,10 @@ export function startBattle(content: BattleContent, input: BattleSetup): BattleS
           energy: stats.hp,
           stages: freshStages(),
           status: null,
-          joined: slot === 0,
+          joined: slot < outCount,
           boosts: noBoosts(),
           shield: 0,
+          ...(s.boss && { boss: true as const }),
         };
       }),
       itemsUsed: [],
@@ -122,10 +130,57 @@ export function startBattle(content: BattleContent, input: BattleSetup): BattleS
     ...(setup.turnLimit !== undefined &&
       setup.turnLimit < content.rules.maxTurns && { turnLimit: setup.turnLimit }),
     ...(setup.gentle && { gentle: true as const }),
+    ...(setup.format && { format: { ...setup.format } }),
     rng: Rng.fromSeed(setup.seed).state(),
     sides: { a: sideFrom('a'), b: sideFrom('b') },
     phase: { type: 'turn' },
     log: [],
+  };
+}
+
+/**
+ * A team battle's setup (#190) keeps the rules: battle rules with a `team`
+ * block, side `a` brings exactly `format.a` squishies (all out at once) and
+ * side `b` exactly one, AI-controlled. No fences. Only side `b` may bring a
+ * boss, and only with a `boss` block in the rules.
+ */
+function checkTeamSetup(content: BattleContent, setup: BattleSetup): void {
+  const { format } = setup;
+  if (!format) return;
+  if (!content.rules.team) throw new BattleRuleError('these battle rules have no team battles');
+  for (const side of SIDES) {
+    const { squishies } = setup.sides[side];
+    if (squishies.length !== format[side]) {
+      throw new BattleRuleError(
+        `side ${side} brings ${squishies.length} squishies; a team battle has ${format[side]} out`,
+      );
+    }
+    if (squishies.some(isFenceSetup))
+      throw new BattleRuleError('a fence is never in a team battle');
+  }
+  if (setup.sides.b.controller.type !== 'ai') {
+    throw new BattleRuleError('side b of a team battle is AI-controlled');
+  }
+  const bosses = SIDES.flatMap((side) =>
+    setup.sides[side].squishies.flatMap((s) => (!isFenceSetup(s) && s.boss ? [side] : [])),
+  );
+  if (bosses.some((side) => side !== 'b')) throw new BattleRuleError('only side b brings a boss');
+  if (bosses.length > 0 && !content.rules.boss) {
+    throw new BattleRuleError('these battle rules have no bosses');
+  }
+}
+
+/** A boss's stats (#190): its stats at its level × battle rules' `boss.stats` %. */
+function bossStats(content: BattleContent, stats: BattleStats): BattleStats {
+  const scale = content.rules.boss?.stats;
+  if (!scale) throw new BattleRuleError('these battle rules have no bosses');
+  const scaled = (value: number, percent: number) =>
+    Math.max(1, Math.floor((value * percent) / 100));
+  return {
+    hp: scaled(stats.hp, scale.hp),
+    attack: scaled(stats.attack, scale.attack),
+    defense: scaled(stats.defense, scale.defense),
+    speed: scaled(stats.speed, scale.speed),
   };
 }
 
@@ -134,6 +189,7 @@ function draftOf(state: BattleState): Draft<BattleState> {
   const copySide = (side: BattleState['sides'][BattleSideId]) => ({
     controller: { ...side.controller },
     active: side.active,
+    ...(side.out && { out: [...side.out] }),
     squishies: side.squishies.map((s) => ({
       ...s,
       stats: { ...s.stats },
@@ -150,6 +206,7 @@ function draftOf(state: BattleState): Draft<BattleState> {
     turn: state.turn,
     ...(state.turnLimit !== undefined && { turnLimit: state.turnLimit }),
     ...(state.gentle && { gentle: true as const }),
+    ...(state.format && { format: { ...state.format } }),
     rng: [...state.rng],
     sides: { a: copySide(state.sides.a), b: copySide(state.sides.b) },
     phase: structuredPhase(state.phase),
@@ -176,6 +233,8 @@ class Step {
   readonly content: BattleContent;
   readonly state: Draft<BattleState>;
   readonly rng: Rng;
+  /** Actions the boss lost to dizzy or sleepy this round (#190). */
+  private bossSkips = 0;
 
   constructor(content: BattleContent, state: BattleState) {
     this.content = content;
@@ -196,8 +255,15 @@ class Step {
     return activeSquishy(this.state, side);
   }
 
-  at(side: BattleSideId) {
-    return { turn: this.state.turn, side, slot: this.state.sides[side].active };
+  at(side: BattleSideId, slot = this.state.sides[side].active) {
+    return { turn: this.state.turn, side, slot };
+  }
+
+  /** The squishy in `side`'s team `slot` (defaults to the one that's out). */
+  squishyAt(side: BattleSideId, slot = this.state.sides[side].active): Draft<BattleSquishy> {
+    const squishy = this.state.sides[side].squishies[slot];
+    if (!squishy) throw new BattleRuleError(`side ${side} has no squishy in slot ${slot}`);
+    return squishy;
   }
 
   get over(): boolean {
@@ -247,6 +313,181 @@ class Step {
     this.endTurn();
   }
 
+  // ── Team battles (#190) ──────────────────────────────────────────────
+
+  /**
+   * One round of a team battle: sips first, then every standing squishy out
+   * moves in speed order (ties broken by one seeded shuffle of each tied
+   * group, drawn only when there is a tie). The boss's first action comes at
+   * its speed and each further one closes the round, but it never acts more
+   * times than foes are still standing. A squishy tuckered out before its
+   * turn sits out. No swaps, no Heart Charms, nobody to replace.
+   */
+  teamTurn(choices: Partial<Record<BattleSideId, BattleChoice>>): void {
+    // Picks in a fixed order (a, then b) so AI rolls replay exactly.
+    const picks = { a: this.teamPicksFor('a', choices.a), b: this.teamPicksFor('b', choices.b) };
+    this.state.turn += 1;
+    this.bossSkips = 0;
+
+    for (const side of SIDES) {
+      const choice = choices[side];
+      if (choice?.type === 'team' && choice.item) {
+        this.useItem(side, choice.item.item, choice.item.slot);
+      }
+    }
+
+    const order = this.teamOrder();
+    const boss = order.find((m) => this.squishyAt(m.side, m.slot).boss === true);
+    const extra = boss ? (this.content.rules.boss?.actionsPerRound ?? 1) - 1 : 0;
+    for (let i = 0; i < extra && boss; i++) order.push(boss);
+
+    // Who each AI squishy already hit this round, by side and slot.
+    const hit = new Map<string, Set<number>>();
+    let bossActions = 0;
+    for (const { side, slot } of order) {
+      const user = this.squishyAt(side, slot);
+      if (!inPlay(user)) continue;
+      const foes = standingOut(this.state, otherSide(side));
+      if (user.boss) {
+        // Never more actions than foes still standing.
+        if (bossActions >= foes.length) continue;
+        bossActions += 1;
+      }
+      const key = `${side}:${slot}`;
+      const already = hit.get(key) ?? new Set<number>();
+      hit.set(key, already);
+      const pick = picks[side]?.get(slot);
+      const { move, targets } = pick
+        ? { move: pick.move, targets: this.pickTargets(side, pick) }
+        : chooseTeamMove(
+            this.content,
+            this.state,
+            side,
+            slot,
+            this.aiPolicy(side, user),
+            already,
+            this.rng,
+          );
+      this.useMove(side, getMove(this.content, move), slot, targets);
+      for (const target of targets) already.add(target);
+      this.syncActive();
+      this.checkForWinner();
+      if (this.over) return;
+    }
+    this.endTeamTurn();
+  }
+
+  /**
+   * A player side's validated team picks by slot; null for an AI side (its
+   * squishies pick when they move, so they see the field as it is then). An
+   * AI side `a` (the balance simulator) picks here, in slot order.
+   */
+  private teamPicksFor(
+    side: BattleSideId,
+    given: BattleChoice | undefined,
+  ): Map<number, TeamPick> | null {
+    const { controller } = this.state.sides[side];
+    if (controller.type === 'ai') {
+      if (given) throw new BattleRuleError(`side ${side} is AI-controlled; leave its choice out`);
+      return null;
+    }
+    if (!given) throw new BattleRuleError(`side ${side} needs a choice this turn`);
+    if (given.type !== 'team') {
+      throw new BattleRuleError(`side ${side}: a team battle takes a team choice`);
+    }
+    const standing = standingOut(this.state, side);
+    const picks = new Map<number, TeamPick>();
+    for (const pick of given.picks) {
+      const out = standing.find((s) => s.slot === pick.slot);
+      if (!out) throw new BattleRuleError(`side ${side} has nobody standing in slot ${pick.slot}`);
+      if (picks.has(pick.slot)) throw new BattleRuleError(`slot ${pick.slot} picked twice`);
+      if (!out.squishy.moves.includes(pick.move)) {
+        throw new BattleRuleError(`side ${side}'s slot ${pick.slot} doesn't know "${pick.move}"`);
+      }
+      if (
+        pick.target !== undefined &&
+        !standingOut(this.state, otherSide(side)).some((f) => f.slot === pick.target)
+      ) {
+        throw new BattleRuleError(`side ${side} can't aim at slot ${pick.target}`);
+      }
+      picks.set(pick.slot, pick);
+    }
+    if (picks.size !== standing.length) {
+      throw new BattleRuleError(`side ${side} needs a pick for each squishy standing`);
+    }
+    if (given.item) {
+      this.checkItem(side, given.item.item);
+      if (!standing.some((s) => s.slot === given.item?.slot)) {
+        throw new BattleRuleError(`side ${side} has nobody standing in slot ${given.item.slot}`);
+      }
+    }
+    return picks;
+  }
+
+  /** AI weights for an AI squishy in a team battle: a boss's own, else its side's policy. */
+  private aiPolicy(side: BattleSideId, user: BattleSquishy) {
+    const { controller } = this.state.sides[side];
+    if (user.boss && this.content.rules.boss) return this.content.rules.boss.ai;
+    if (controller.type !== 'ai') throw new BattleRuleError(`side ${side} picks its own moves`);
+    return this.content.rules.ai[controller.policy];
+  }
+
+  /**
+   * Who a player's pick hits: every standing foe for an `all-foes` move, else
+   * its target if still standing, or the first foe standing.
+   */
+  private pickTargets(side: BattleSideId, pick: TeamPick): number[] {
+    const foes = standingOut(this.state, otherSide(side)).map((f) => f.slot);
+    if (getMove(this.content, pick.move).targets === 'all-foes') return foes;
+    if (pick.target !== undefined && foes.includes(pick.target)) return [pick.target];
+    return foes.slice(0, 1);
+  }
+
+  /**
+   * Everyone standing on the field at the start of the round, fastest first.
+   * Equal speeds keep side-then-slot order and each tied group is shuffled
+   * with the battle's RNG, drawing only when a tie exists.
+   */
+  private teamOrder(): { side: BattleSideId; slot: number }[] {
+    const { rules } = this.content;
+    const movers = SIDES.flatMap((side) =>
+      standingOut(this.state, side).map(({ slot, squishy }) => ({
+        side,
+        slot,
+        speed: effectiveStat(squishy, 'speed', rules),
+      })),
+    );
+    movers.sort((x, y) => y.speed - x.speed);
+    const speed = (i: number) => movers[i]?.speed;
+    for (let start = 0; start < movers.length;) {
+      let end = start + 1;
+      while (end < movers.length && speed(end) === speed(start)) end += 1;
+      // Fisher–Yates over the tied group [start, end).
+      for (let i = end - 1; i > start; i--) {
+        const j = this.rng.int(start, i);
+        const [x, y] = [movers[i], movers[j]];
+        if (x && y) [movers[i], movers[j]] = [y, x];
+      }
+      start = end;
+    }
+    return movers.map(({ side, slot }) => ({ side, slot }));
+  }
+
+  /** `active` follows the first standing slot of `out` (#190). */
+  private syncActive(): void {
+    for (const side of SIDES) {
+      const standing = standingOut(this.state, side);
+      const first = standing[0];
+      if (this.state.sides[side].out && first) this.state.sides[side].active = first.slot;
+    }
+  }
+
+  /** A team battle's round ends: only the turn limit; nobody is waiting to come out. */
+  private endTeamTurn(): void {
+    const limit = Math.min(this.state.turnLimit ?? Infinity, this.content.rules.maxTurns);
+    if (this.state.turn >= limit) this.end(this.energyLeader(), 'turn-limit');
+  }
+
   /**
    * The player's validated choice, or the AI's pick for an AI side. A fence
    * (#203) picks nothing: it just stands there.
@@ -269,6 +510,8 @@ class Step {
       if (this.active(otherSide(side)).fence !== undefined) {
         throw new BattleRuleError(`side ${side} can't befriend a fence`);
       }
+    } else if (given.type === 'team') {
+      throw new BattleRuleError(`side ${side}: a team choice is only for a team battle`);
     } else if (given.type === 'item') {
       this.checkItem(side, given.item);
     } else if (given.type === 'move') {
@@ -299,26 +542,26 @@ class Step {
    * the battle, a heal gives back a share of full energy, and the shield
    * replaces any shield it had. No roll, so a potion always works.
    */
-  private useItem(side: BattleSideId, item: string): void {
+  private useItem(side: BattleSideId, item: string, slot = this.state.sides[side].active): void {
     const effect = this.content.items.get(item);
     if (!effect) throw new BattleRuleError(`"${item}" can't be used in battle`);
-    const user = this.active(side);
+    const user = this.squishyAt(side, slot);
     this.state.sides[side].itemsUsed.push(item);
-    this.emit({ ...this.at(side), type: 'item', item });
+    this.emit({ ...this.at(side, slot), type: 'item', item });
     user.boosts.attack += effect.attackPercent ?? 0;
     user.boosts.defense += effect.defensePercent ?? 0;
     user.shield = effect.shieldPercent;
-    if (effect.healPercent) this.heal(side, effect.healPercent);
+    if (effect.healPercent) this.heal(side, effect.healPercent, slot);
   }
 
-  /** Gives `side`'s active squishy back `percent`% of full energy, up to full. */
-  private heal(side: BattleSideId, percent: number): void {
-    const user = this.active(side);
+  /** Gives `side`'s squishy in `slot` back `percent`% of full energy, up to full. */
+  private heal(side: BattleSideId, percent: number, slot = this.state.sides[side].active): void {
+    const user = this.squishyAt(side, slot);
     const restored = Math.floor((user.stats.hp * percent) / 100);
     const amount = Math.min(restored, user.stats.hp - user.energy);
     if (amount === 0) return;
     user.energy += amount;
-    this.emit({ ...this.at(side), type: 'heal', amount, energy: user.energy });
+    this.emit({ ...this.at(side, slot), type: 'heal', amount, energy: user.energy });
   }
 
   private checkBenchSlot(side: BattleSideId, slot: number): void {
@@ -382,111 +625,158 @@ class Step {
   // ── Moves ────────────────────────────────────────────────────────────
 
   /** Sleepy and dizzy squishies may miss their turn. Returns true if it can act. */
-  private canAct(side: BattleSideId): boolean {
-    const user = this.active(side);
+  private canAct(side: BattleSideId, slot = this.state.sides[side].active): boolean {
+    const user = this.squishyAt(side, slot);
     const status = user.status;
     if (!status) return true;
-    if (status.turnsLeft === 0) {
+    // A boss (#190) that has lost its actions for this round shakes it off.
+    const shakesOff = (): void => {
       user.status = null;
-      this.emit({ ...this.at(side), type: 'status-end', status: status.id });
+      this.emit({ ...this.at(side, slot), type: 'status-end', status: status.id });
+    };
+    const bossSkips = user.boss ? this.content.rules.boss?.statusSkipsPerRound : undefined;
+    if (status.turnsLeft === 0 || (bossSkips !== undefined && this.bossSkips >= bossSkips)) {
+      shakesOff();
       return true;
     }
     status.turnsLeft -= 1;
     if (this.rng.chance(this.content.rules.status[status.id].skipChance)) {
-      this.emit({ ...this.at(side), type: 'status-skip', status: status.id });
+      this.emit({ ...this.at(side, slot), type: 'status-skip', status: status.id });
+      if (bossSkips !== undefined) {
+        this.bossSkips += 1;
+        if (this.bossSkips >= bossSkips) shakesOff();
+      }
       return false;
     }
     return true;
   }
 
-  private useMove(side: BattleSideId, move: Move): void {
-    const user = this.active(side);
-    if (!inPlay(user) || !this.canAct(side)) return;
+  /**
+   * `side`'s squishy in `userSlot` (the one that's out by default) uses
+   * `move` on the foes in `targetSlots` (the other side's one that's out by
+   * default). Each target is rolled on its own, in the order given: accuracy,
+   * then damage, at `rules.team.spreadPercent` when there's more than one
+   * (#190). The stance follows, then the move's effects on each target hit.
+   */
+  private useMove(
+    side: BattleSideId,
+    move: Move,
+    userSlot = this.state.sides[side].active,
+    targetSlots: readonly number[] = [this.state.sides[otherSide(side)].active],
+  ): void {
+    const user = this.squishyAt(side, userSlot);
+    if (!inPlay(user) || !this.canAct(side, userSlot)) return;
     const foeSide = otherSide(side);
-    const target = this.active(foeSide);
     const kind = moveKindOf(this.content, user.speciesId, move.id);
+    const spread = targetSlots.length > 1 ? (this.content.rules.team?.spreadPercent ?? 100) : 100;
 
-    this.emit({ ...this.at(side), type: 'move', move: move.id });
-    if (!this.rng.chance(move.accuracy)) {
-      this.emit({ ...this.at(side), type: 'miss', move: move.id });
-      this.takeStance(side, kind);
-      return;
-    }
-
-    if (move.power > 0) {
-      const { rules } = this.content;
-      const rolled = rollDamage(this.content, move, user, target, this.rng);
-      const guard = target.guard ?? 0;
-      const shielded = target.shield > 0;
-      let amount = Math.min(
-        target.energy,
-        shieldedAmount(guardedAmount(rolled, guard, rules), target.shield, rules),
-      );
-      // Gentle (#587): a player's steady move leaves a sliver of energy.
-      let gentle = false;
-      if (kind === 'steady' && rules.moveKinds && this.gentleInto(side)) {
-        const most = Math.max(0, target.energy - rules.moveKinds.gentleFloor);
-        if (amount > most) {
-          amount = most;
-          gentle = true;
-        }
+    this.emit({ ...this.at(side, userSlot), type: 'move', move: move.id });
+    const landed: number[] = [];
+    for (const slot of targetSlots) {
+      if (!this.rng.chance(move.accuracy)) {
+        this.emit({ ...this.at(side, userSlot), type: 'miss', move: move.id });
+        continue;
       }
-      target.shield = 0;
-      delete target.guard;
-      target.energy -= amount;
-      const effectiveness = effectivenessTier(
-        matchupMultiplier(this.content, move, user, target),
-        rules,
-      );
-      this.emit({
-        ...this.at(foeSide),
-        type: 'hit',
-        amount,
-        energy: target.energy,
-        effectiveness,
-        ...(shielded && { shielded: true as const }),
-        ...(guard > 0 && { guarded: true as const }),
-        ...(guard < 0 && { opened: true as const }),
-        ...(gentle && { gentle: true as const }),
-      });
-      if (target.energy === 0) this.emit({ ...this.at(foeSide), type: 'tuckered-out' });
+      landed.push(slot);
+      if (move.power > 0) this.hit(side, userSlot, slot, move, kind, spread);
     }
-    this.takeStance(side, kind);
+    this.takeStance(side, kind, userSlot);
+    if (landed.length === 0) return;
 
     for (const effect of move.effects ?? []) {
       switch (effect.type) {
         case 'heal':
-          this.heal(side, effect.percent);
+          this.heal(side, effect.percent, userSlot);
           break;
         case 'stat': {
-          const who = effect.target === 'self' ? side : foeSide;
-          const squishy = this.active(who);
-          if (squishy.energy === 0 || !this.rng.chance(effect.chance)) break;
-          const { maxStages } = this.content.rules.statStages;
-          const before = squishy.stages[effect.stat];
-          const after = Math.max(-maxStages, Math.min(maxStages, before + effect.stages));
-          squishy.stages[effect.stat] = after;
-          this.emit({
-            ...this.at(who),
-            type: 'stat-change',
-            stat: effect.stat,
-            stages: after - before,
-            total: after,
-          });
+          const at =
+            effect.target === 'self'
+              ? [{ who: side, slot: userSlot }]
+              : landed.map((slot) => ({ who: foeSide, slot }));
+          for (const { who, slot } of at) {
+            const squishy = this.squishyAt(who, slot);
+            if (squishy.energy === 0 || !this.rng.chance(effect.chance)) continue;
+            const { maxStages } = this.content.rules.statStages;
+            const before = squishy.stages[effect.stat];
+            const after = Math.max(-maxStages, Math.min(maxStages, before + effect.stages));
+            squishy.stages[effect.stat] = after;
+            this.emit({
+              ...this.at(who, slot),
+              type: 'stat-change',
+              stat: effect.stat,
+              stages: after - before,
+              total: after,
+            });
+          }
           break;
         }
         case 'status': {
-          if (target.energy === 0 || target.status || !this.rng.chance(effect.chance)) break;
-          const rule = this.content.rules.status[effect.status];
-          target.status = {
-            id: effect.status,
-            turnsLeft: this.rng.int(rule.minTurns, rule.maxTurns),
-          };
-          this.emit({ ...this.at(foeSide), type: 'status-start', status: effect.status });
+          for (const slot of landed) {
+            const target = this.squishyAt(foeSide, slot);
+            if (target.energy === 0 || target.status || !this.rng.chance(effect.chance)) continue;
+            const rule = this.content.rules.status[effect.status];
+            target.status = {
+              id: effect.status,
+              turnsLeft: this.rng.int(rule.minTurns, rule.maxTurns),
+            };
+            this.emit({ ...this.at(foeSide, slot), type: 'status-start', status: effect.status });
+          }
           break;
         }
       }
     }
+  }
+
+  /** One landed damaging move into the foe in `slot`, at `spread`% (#190; 100 is full). */
+  private hit(
+    side: BattleSideId,
+    userSlot: number,
+    slot: number,
+    move: Move,
+    kind: MoveKind | undefined,
+    spread: number,
+  ): void {
+    const { rules } = this.content;
+    const foeSide = otherSide(side);
+    const user = this.squishyAt(side, userSlot);
+    const target = this.squishyAt(foeSide, slot);
+    const full = rollDamage(this.content, move, user, target, this.rng);
+    const rolled =
+      spread < 100 ? Math.max(rules.damage.minimum, Math.floor((full * spread) / 100)) : full;
+    const guard = target.guard ?? 0;
+    const shielded = target.shield > 0;
+    let amount = Math.min(
+      target.energy,
+      shieldedAmount(guardedAmount(rolled, guard, rules), target.shield, rules),
+    );
+    // Gentle (#587): a player's steady move leaves a sliver of energy.
+    let gentle = false;
+    if (kind === 'steady' && rules.moveKinds && this.gentleInto(side)) {
+      const most = Math.max(0, target.energy - rules.moveKinds.gentleFloor);
+      if (amount > most) {
+        amount = most;
+        gentle = true;
+      }
+    }
+    target.shield = 0;
+    delete target.guard;
+    target.energy -= amount;
+    const effectiveness = effectivenessTier(
+      matchupMultiplier(this.content, move, user, target),
+      rules,
+    );
+    this.emit({
+      ...this.at(foeSide, slot),
+      type: 'hit',
+      amount,
+      energy: target.energy,
+      effectiveness,
+      ...(shielded && { shielded: true as const }),
+      ...(guard > 0 && { guarded: true as const }),
+      ...(guard < 0 && { opened: true as const }),
+      ...(gentle && { gentle: true as const }),
+    });
+    if (target.energy === 0) this.emit({ ...this.at(foeSide, slot), type: 'tuckered-out' });
   }
 
   /**
@@ -508,15 +798,23 @@ class Step {
    * steady guard or a big opening, replacing any it had, until the next hit
    * it takes. A move with no kind (or rules before #587) changes nothing.
    */
-  private takeStance(side: BattleSideId, kind: MoveKind | undefined): void {
+  private takeStance(
+    side: BattleSideId,
+    kind: MoveKind | undefined,
+    slot = this.state.sides[side].active,
+  ): void {
     const rules = this.content.rules.moveKinds;
     if (!kind || !rules) return;
-    const user = this.active(side);
+    const user = this.squishyAt(side, slot);
     if (!inPlay(user)) return;
     // A finishing blow takes no stance: there's no next hit to brace for.
     if (!this.state.sides[otherSide(side)].squishies.some(inPlay)) return;
     user.guard = kind === 'steady' ? rules.guardPercent : -rules.openPercent;
-    this.emit({ ...this.at(side), type: 'stance', stance: kind === 'steady' ? 'guard' : 'open' });
+    this.emit({
+      ...this.at(side, slot),
+      type: 'stance',
+      stance: kind === 'steady' ? 'guard' : 'open',
+    });
   }
 
   // ── End of turn and end of battle ────────────────────────────────────
@@ -650,7 +948,8 @@ export function applyBattleAction(
           `waiting for side ${phase.sides.join(' and ')} to send someone out`,
         );
       }
-      step.turn(action.choices);
+      if (state.format) step.teamTurn(action.choices);
+      else step.turn(action.choices);
       break;
     case 'replace': {
       if (phase.type !== 'replace' || !phase.sides.includes(action.side)) {
@@ -731,13 +1030,14 @@ export type ClientBattleView = Omit<BattleState, 'rng'>;
  * let a client predict every roll, so they never leave the server.
  */
 export function clientBattleView(state: BattleState): ClientBattleView {
-  const { version, contentHash, turn, turnLimit, gentle, sides, phase, log } = state;
+  const { version, contentHash, turn, turnLimit, gentle, format, sides, phase, log } = state;
   return {
     version,
     contentHash,
     turn,
     ...(turnLimit !== undefined && { turnLimit }),
     ...(gentle && { gentle }),
+    ...(format && { format }),
     sides,
     phase,
     log,
@@ -794,6 +1094,7 @@ export function itemRefusal(
 export function sipOf(choice: BattleChoice | null | undefined): string | undefined {
   if (choice?.type === 'item') return choice.item;
   if (choice?.type === 'move') return choice.item;
+  if (choice?.type === 'team') return choice.item?.item;
   return undefined;
 }
 
@@ -809,6 +1110,8 @@ export function legalChoices(
   content?: BattleContent,
 ): BattleChoice[] {
   if (state.phase.type !== 'turn') return [];
+  // A team battle (#190) takes one `team` choice: see `teamPickOptions`.
+  if (state.format) return [];
   // A fence (#203) never chooses anything.
   if (activeSquishy(state, side).fence !== undefined) return [];
   const items =
@@ -827,4 +1130,21 @@ export function legalChoices(
       : []),
     ...items.map((item): BattleChoice => ({ type: 'item', item })),
   ];
+}
+
+/**
+ * What each squishy `side` has standing can do in a team battle round (#190):
+ * its slot, its moves, and the foe slots it may aim at. Empty outside one.
+ */
+export function teamPickOptions(
+  state: BattleState,
+  side: BattleSideId,
+): { slot: number; moves: readonly string[]; targets: number[] }[] {
+  if (state.phase.type !== 'turn' || !state.format) return [];
+  const targets = standingOut(state, otherSide(side)).map((f) => f.slot);
+  return standingOut(state, side).map(({ slot, squishy }) => ({
+    slot,
+    moves: squishy.moves,
+    targets,
+  }));
 }

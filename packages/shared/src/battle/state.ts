@@ -1,6 +1,11 @@
 import type { RngState } from '../rng/index.js';
 import { BattleRuleError } from './content.js';
-import type { BattleController, BattleSideId, BattleStats } from '../schemas/battle.js';
+import type {
+  BattleController,
+  BattleFormat,
+  BattleSideId,
+  BattleStats,
+} from '../schemas/battle.js';
 import type { ElementId, FeelingId } from '../schemas/data/elements.js';
 import type { BattleStat, MoveEffect } from '../schemas/data/moves.js';
 
@@ -50,6 +55,11 @@ export interface BattleSquishy {
    * befriended isn't marked: the battle ends `captured` with it still out.
    */
   readonly befriended?: true;
+  /**
+   * A mini-boss (#190): its stats are scaled by `rules.boss.stats`, it acts
+   * up to `rules.boss.actionsPerRound` times a round and picks its targets.
+   */
+  readonly boss?: true;
 }
 
 /** The stats a potion can boost (#214). */
@@ -58,8 +68,17 @@ export type BattleBoostStat = 'attack' | 'defense';
 export interface BattleSide {
   readonly controller: BattleController;
   readonly squishies: readonly BattleSquishy[];
-  /** Slot of the squishy that's out. */
+  /**
+   * Slot of the squishy that's out. In a team battle (#190) it is the first
+   * standing slot of `out`, so anything that reads `active` still gets a
+   * sensible squishy.
+   */
   readonly active: number;
+  /**
+   * A team battle's slots on the field, in slot order (#190): only on a
+   * side with more than one out. Read it through `outOf`.
+   */
+  readonly out?: readonly number[];
   /** Battle items this side used, in order (#214): each kind only `rules.items.usesEach` times. */
   readonly itemsUsed: readonly string[];
 }
@@ -180,6 +199,12 @@ export interface BattleState {
    * tucker it out. Only in a battle whose squishies can be befriended.
    */
   readonly gentle?: true;
+  /**
+   * A team battle (#190): how many squishies each side has out. Its turns
+   * take the team path (`team` choices, every squishy out moves). Left out
+   * in every one-on-one battle, so their bytes are unchanged.
+   */
+  readonly format?: BattleFormat;
   readonly rng: RngState;
   readonly sides: Readonly<Record<BattleSideId, BattleSide>>;
   readonly phase: BattlePhase;
@@ -201,6 +226,15 @@ export function activeSquishy<S extends BattleState | Draft<BattleState>>(
   const squishy = squishies[active];
   if (!squishy) throw new BattleRuleError(`side ${side} has no squishy in slot ${active}`);
   return squishy;
+}
+
+/** The slots `side` has on the field (#190): `out` in a team battle, else just `active`. */
+export function outOf(
+  state: { readonly sides: Readonly<Record<BattleSideId, Pick<BattleSide, 'active' | 'out'>>> },
+  side: BattleSideId,
+): readonly number[] {
+  const { out, active } = state.sides[side];
+  return out ?? [active];
 }
 
 /** Still in the fight: not tuckered out and not befriended (#279). */

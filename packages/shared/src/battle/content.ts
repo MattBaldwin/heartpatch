@@ -106,12 +106,14 @@ export function battleContentHash(data: BattleData, rules: BattleRules): string 
         baseStats,
         moves,
       })),
-      moves: byId(data.moves).map(({ id, element, power, accuracy, effects }) => ({
+      // `targets` (#190) is left out when absent, so older moves keep their hash.
+      moves: byId(data.moves).map(({ id, element, power, accuracy, effects, targets }) => ({
         id,
         element,
         power,
         accuracy,
         effects,
+        targets,
       })),
       elementMatrix: data.elementMatrix,
       feelingMatrix: data.feelingMatrix,
