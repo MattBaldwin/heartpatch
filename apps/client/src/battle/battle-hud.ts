@@ -118,6 +118,11 @@ export interface ResultInfo {
    * before and after this battle. Missing or null: no meter for that line.
    */
   evolving?: readonly ({ before: number; after: number } | null)[];
+  /**
+   * Which XP lines are a benched teammate's cheer (#732), by index: drawn
+   * in the card's softer ink, as supporting cast. Missing: none.
+   */
+  bench?: readonly boolean[];
   /** One extra hint line ("Weaken a wild squishy, then…"), if any. */
   nudge?: string;
   done: string;
@@ -889,7 +894,10 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
           { class: 'battle-xp', 'data-testid': 'battle-xp' },
           ...info.xp.map((line, i) => {
             const gain = info.evolving?.[i];
-            if (!gain) return el('li', {}, line);
+            const attrs: Record<string, string> = info.bench?.[i]
+              ? { class: 'battle-xp-bench' }
+              : {};
+            if (!gain) return el('li', attrs, line);
             const meter = evolvingMeterEl('battle-evolving');
             const bar = evolvingBar(gain.after);
             meter.update(bar, {
@@ -899,7 +907,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
                   ? CARE_TEXT.evolvingGain(gain.after - gain.before)
                   : undefined,
             });
-            return el('li', {}, line, meter.root);
+            return el('li', attrs, line, meter.root);
           }),
         ),
         ...(info.nudge
