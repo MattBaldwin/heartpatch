@@ -53,7 +53,12 @@ export function xpLines(
     bench?: boolean;
   }[],
   nameOf: (squishyId: string) => string,
-): { lines: string[]; evolving: ({ before: number; after: number } | null)[] } {
+): {
+  lines: string[];
+  evolving: ({ before: number; after: number } | null)[];
+  /** Which lines are bench cheers, by index, so the card can soften them. */
+  bench: boolean[];
+} {
   const paidXp = awards.filter((award) => award.xp > 0);
   // The server already lists bench rows last; keep that order whatever it sends.
   const earned = [
@@ -73,6 +78,7 @@ export function xpLines(
         ? { before: award.evolvingBefore, after: award.evolvingAfter }
         : null,
     ),
+    bench: earned.map((award) => award.bench === true),
   };
 }
 

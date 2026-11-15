@@ -752,10 +752,16 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     names: BattleContent,
     b: PlayerBattle,
     role: 'defender' | 'friendly',
-  ): { xp: string[]; evolving: ({ before: number; after: number } | null)[] } => {
+  ): {
+    xp: string[];
+    evolving: ({ before: number; after: number } | null)[];
+    bench: boolean[];
+  } => {
     const result = b.view.phase.type === 'over' ? b.view.phase.result : null;
     const mine = b.view.sides[b.mySide];
-    const { lines, evolving } = xpLines(b.rewards?.xp ?? [], (id) => squishyName(names, mine, id));
+    const { lines, evolving, bench } = xpLines(b.rewards?.xp ?? [], (id) =>
+      squishyName(names, mine, id),
+    );
     if (lines.length === 0) lines.push(MESSAGES.noXp);
     const fullXpAt = b.rewards?.fullXpResetAt;
     const fullXpLeft = fullXpAt ? Date.parse(fullXpAt) - gameNow() : 0;
@@ -775,7 +781,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       opponent: opponentName(b),
     });
     if (coins) lines.push(coins);
-    return { xp: lines, evolving };
+    return { xp: lines, evolving, bench };
   };
 
   const showResult = (b: PlayerBattle): void => {
@@ -882,7 +888,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     // What the server granted (Gentle's share, care and habitat included);
     // a battle from before rewards were stored has only the engine's base XP.
     const awards = b.rewards?.xp ?? (result?.xp ?? []).filter((award) => award.side === b.mySide);
-    const { lines: xp, evolving } = xpLines(awards, (id) => squishyName(names, mine, id));
+    const { lines: xp, evolving, bench } = xpLines(awards, (id) => squishyName(names, mine, id));
     const glade = options.isGlade?.(b.mapId) ?? false;
     const friends = newFriends(b).map((id) => names.speciesName(id));
     const joined = friends.length > 0;
@@ -926,7 +932,12 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     hud.setCaption(null);
     const lines = xp.length > 0 ? xp : [MESSAGES.noXp];
     // Guardians befriended before the land was lost still came along (#279).
-    if (joined && result?.winner !== b.mySide) lines.unshift(joinedLine(friends));
+    // The meters and bench flags shift with it, so each stays on its own squishy's line.
+    if (joined && result?.winner !== b.mySide) {
+      lines.unshift(joinedLine(friends));
+      evolving.unshift(null);
+      bench.unshift(false);
+    }
     if (b.rewards && b.rewards.percent < 100) lines.push(MESSAGES.gentleNote(b.rewards.percent));
     // The reset is the server's time: counted on the game clock (#583).
     const fullXpAt = b.rewards?.fullXpResetAt;
@@ -953,6 +964,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       ...(journey ? { title: journey.title, subtitle: journey.subtitle } : {}),
       xp: lines,
       evolving,
+      bench,
       done: journey?.done ?? MESSAGES.done,
       ...(nudge ? { nudge } : {}),
       ...(cheer ? { cheer: { info: cheer, reducedMotion: reducedMotion.matches } } : {}),

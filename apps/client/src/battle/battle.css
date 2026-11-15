@@ -524,6 +524,11 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   text-wrap: balance;
 }
 
+/* A benched teammate's cheer line (#732): the card's softer ink, same size. */
+.battle-xp li.battle-xp-bench {
+  color: #6b4b6e;
+}
+
 /* ── The entry buttons (in the Adventure tray) ─────────────────────── */
 
 .battle-entry-box {

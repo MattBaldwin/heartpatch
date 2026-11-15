@@ -65,10 +65,11 @@ describe('bench XP on the result card (#732)', () => {
   });
 
   it('cheers a benched teammate after the fighters on a wild win', () => {
-    const { lines, evolving } = xpLines(
+    const { lines, evolving, bench } = xpLines(
       [row(PEBBLE, 12), row(MOSS, 8), row(MOCHI, 6, { bench: true })],
       names,
     );
+    expect(bench).toEqual([false, false, true]);
     expect(lines).toEqual([
       'Pebblesnooze earned 12 XP!',
       'Mossmuffin earned 8 XP!',
@@ -119,9 +120,13 @@ describe('bench XP on the result card (#732)', () => {
   });
 
   it('says nothing for a 0-XP bench row', () => {
-    const { lines, evolving } = xpLines([row(PEBBLE, 12), row(MOCHI, 0, { bench: true })], names);
+    const { lines, evolving, bench } = xpLines(
+      [row(PEBBLE, 12), row(MOCHI, 0, { bench: true })],
+      names,
+    );
     expect(lines).toEqual(['Pebblesnooze earned 12 XP!']);
     expect(evolving).toHaveLength(1);
+    expect(bench).toEqual([false]);
   });
 
   it('gives a bench squishy that evolved no meter, like a fighter that evolved', () => {
@@ -138,6 +143,7 @@ describe('bench XP on the result card (#732)', () => {
     expect(xpLines(legacy, names)).toEqual({
       lines: ['Pebblesnooze earned 12 XP!', 'Mossmuffin earned 4 XP!'],
       evolving: [{ before: 10, after: 20 }, null],
+      bench: [false, false],
     });
     expect(xpLines([row(PEBBLE, 12, { bench: false })], names).lines).toEqual([
       'Pebblesnooze earned 12 XP!',
