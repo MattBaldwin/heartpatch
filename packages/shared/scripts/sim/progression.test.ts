@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BASELINE_RULES,
+  COLLECTOR_RULES,
   UNCAPPED_BEFRIEND_RULES,
   CURRENT_RULES,
   NO_TRAINING_RULES,
@@ -15,13 +16,21 @@ import { JOURNEY_RULES } from '../../src/data/journeys.js';
 import {
   formatFriendlyGate,
   friendlyGate,
+  tierGateLine,
   gapWin,
   journeyGateMisses,
   renderProgression,
   summarise,
 } from './progression-report.js';
-import { firstsFacts } from './progression-firsts.js';
 import {
+  firstsFacts,
+  formatTierFirsts,
+  formatTierGate,
+  tierFirstsOf,
+  tierGate,
+} from './progression-firsts.js';
+import {
+  befriend,
   grant,
   journeyOdds,
   payHold,
@@ -31,6 +40,7 @@ import {
   runProgression,
   sideB,
   wildOdds,
+  type DayRecord,
   type Kid,
 } from './progression.js';
 import { hexKey, type HexKey } from '../../src/hex/index.js';
@@ -364,5 +374,112 @@ describe('friendlies and defences (#728)', () => {
       /\(\+2, at most \+1\): FAIL$/,
     );
     expect(friendlyGate(runs.slice(0, 1), SMALL, gate)).toBeNull();
+  }, 30_000);
+});
+
+describe('the collector befriend choice (#732 D3)', () => {
+  const kidWith = (): Kid => ({
+    profile: casual!,
+    slot: 0,
+    team: [
+      { id: 'partner', speciesId: 'emberbun', level: 30, xp: 0, winsToday: 0 },
+      { id: 'friend-1', speciesId: 'pebblesnooze', level: 24, xp: 0, winsToday: 0 },
+      { id: 'friend-2', speciesId: 'fuzzbolt', level: 25, xp: 0, winsToday: 0 },
+    ],
+    evolved: [],
+  });
+  // A rare (Moonmoth) at the befriend cap, weaker than both common friends.
+  const rare = { id: 'friend-new', speciesId: 'moonmoth', level: 21 };
+
+  it('takes a rarer, weaker friend in the least-rare, weakest friend’s place', () => {
+    const kid = kidWith();
+    expect(befriend(data, kid, rare, 'collector')).toBe(true);
+    expect(kid.team.map((m) => m.speciesId)).toEqual(['emberbun', 'moonmoth', 'fuzzbolt']);
+    expect(kid.team[1]).toMatchObject({ level: 21, xp: 0, winsToday: 0 });
+  });
+
+  it('falls back to a stronger friend when the new one is no rarer, and never touches the Partner', () => {
+    const kid = kidWith();
+    const common = { id: 'friend-new', speciesId: 'pebblesnooze', level: 26 };
+    expect(befriend(data, kid, common, 'collector')).toBe(true);
+    expect(kid.team.map((m) => m.level)).toEqual([30, 26, 25]);
+    expect(befriend(data, kid, { ...common, level: 20 }, 'collector')).toBe(false);
+    expect(kid.team[0]?.speciesId).toBe('emberbun');
+  });
+
+  it('still refuses the rarer, weaker friend under the stronger choice (the default)', () => {
+    const byDefault = kidWith();
+    const stronger = kidWith();
+    expect(befriend(data, byDefault, rare)).toBe(false);
+    expect(befriend(data, stronger, rare, 'stronger')).toBe(false);
+    for (const kid of [byDefault, stronger]) {
+      expect(kid.team.map((m) => m.speciesId)).toEqual(['emberbun', 'pebblesnooze', 'fuzzbolt']);
+    }
+  });
+
+  it("leaves the default rows' levels where they were", () => {
+    const explicit = { ...CURRENT_RULES, befriendPolicy: 'stronger' as const };
+    const days = (rules: typeof CURRENT_RULES) =>
+      runProgression(data, SMALL, rules, casual!, 4).kids.map((k) => k.days);
+    expect(days(explicit)).toEqual(days(CURRENT_RULES));
+    expect(CURRENT_RULES.befriendPolicy).toBeUndefined();
+    expect(COLLECTOR_RULES).toMatchObject({
+      label: 'now (collector)',
+      befriendPolicy: 'collector',
+    });
+  }, 30_000);
+
+  it("marks the Partner's own evolutions, so the per-tier line skips them", () => {
+    const run = runProgression(data, SMALL, CURRENT_RULES, engaged!, 4);
+    const evolved = run.kids[0]!.days.flatMap((d) => d.evolved);
+    expect(evolved.some((e) => e.partner === true && e.from === 'emberbun')).toBe(true);
+  });
+});
+
+describe("#732's per-tier first-evolve line", () => {
+  const facts = firstsFacts(data.species);
+  const day = (n: number, evolved: DayRecord['evolved']): Pick<DayRecord, 'day' | 'evolved'> => ({
+    day: n,
+    evolved,
+  });
+
+  it('reports `never` cleanly when nothing evolves', () => {
+    const firsts = tierFirstsOf([day(1, []), day(2, [])], facts);
+    expect(firsts.every((f) => f.day === null)).toBe(true);
+    expect(formatTierFirsts(firsts, 60)).toBe(
+      'common never (> day 60), uncommon never (> day 60), rare never (> day 60), epic never (> day 60), legendary never (> day 60)',
+    );
+    const result = tierGate(firsts, { rare: 10, epic: 20 });
+    expect(result.pass).toBe(false);
+    expect(formatTierGate(result, 'casual', 'collector')).toBe(
+      '#732 per-tier gate: rare ≤ day 10, epic ≤ day 20 (casual, collector): FAIL: rare never, epic never (soft until #732 D1; does not fail the run)',
+    );
+  });
+
+  it("goes by the line's base rarity, skips the Partner, and passes on time", () => {
+    const firsts = tierFirstsOf(
+      [
+        day(2, [{ from: 'emberbun', into: 'kindlebun', partner: true }]),
+        day(4, [{ from: 'pebblesnooze', into: 'x' }]),
+        day(9, [{ from: 'duskmoth', into: 'lunamoth' }]),
+        day(15, [{ from: 'dawndrop', into: 'y' }]),
+      ],
+      facts,
+    );
+    expect(firsts.map((f) => f.day)).toEqual([4, null, 9, 15, null]);
+    expect(tierGate(firsts, { rare: 10, epic: 20 }).pass).toBe(true);
+    expect(tierGate(firsts, { rare: 8 }).pass).toBe(false);
+  });
+
+  it('prints the gate line in the report only when the collector run is there', () => {
+    const runs = [runProgression(data, SMALL, COLLECTOR_RULES, casual!, 4)];
+    const config = { ...SMALL, seats: [4] };
+    expect(tierGateLine(runs, config, facts)).toMatch(
+      /^#732 per-tier gate: rare ≤ day 10, epic ≤ day 20 \(casual, collector\): (PASS|FAIL)/,
+    );
+    expect(tierGateLine([], config, facts)).toBeNull();
+    const report = renderProgression(runs, config, { seconds: 1, firsts: facts });
+    expect(report).toContain('## First evolve by rarity line (#732)');
+    expect(report).toContain('| now (collector) | 4 | casual |');
   }, 30_000);
 });
