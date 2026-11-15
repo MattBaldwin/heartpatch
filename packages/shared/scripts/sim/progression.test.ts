@@ -258,7 +258,7 @@ describe('friendlies and defences (#728)', () => {
     expect(pick(open, defences.lossCapPerDay)).toEqual([]);
   });
 
-  it('counts every friendly and every hold toward the falloff, win or lose', () => {
+  it('counts only a won friendly and every hold toward the falloff', () => {
     const kidOf = (slot: number): Kid => ({
       profile: engaged!,
       slot,
@@ -274,9 +274,16 @@ describe('friendlies and defences (#728)', () => {
     const second = playFriendly(data, kids, PROGRESSION_CONFIG, WITH_FRIENDLIES_RULES, 1, 1);
     const nextDay = playFriendly(data, kids, PROGRESSION_CONFIG, WITH_FRIENDLIES_RULES, 2, 0);
     expect([first.sideA, second.sideA, nextDay.sideA]).toEqual([1, 0, 0]);
-    // The Partners lead off, so they join every friendly: three each, won or lost.
-    expect(kids.map((k) => k.team[0]!.winsToday)).toEqual([3, 3]);
+    // The Partners lead off, so they join every friendly and are paid each
+    // time, but only a won one fills a falloff slot (owner decision 2026-11-15).
     for (const r of [first, second, nextDay]) expect(r.partnerXp.every((xp) => xp > 0)).toBe(true);
+    const won = [0, 0];
+    for (const r of [first, second, nextDay]) {
+      if (r.winner === 'a') won[r.sideA]! += 1;
+      else if (r.winner === 'b') won[1 - r.sideA]! += 1;
+    }
+    expect(kids.map((k) => k.team[0]!.winsToday)).toEqual(won);
+    expect(won[0]! + won[1]!).toBeLessThanOrEqual(3);
 
     // A hold counts as the guards' win and pays them.
     const guard = kidOf(0);

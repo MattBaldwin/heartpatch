@@ -56,8 +56,8 @@ export interface ProgressionRules {
    * earn the engine's XP (the winner's 1.5×, the loser's 1×), one opponent's
    * worth with `oneOpponent`, then × `xpPercent` % (`friendlyBattleXp`, as
    * the battles service pays it), care × habitat, under the daily falloff,
-   * and every friendly counts toward `fullWinsPerDay` win or lose (the #728
-   * rule). Played first, so their XP comes before the falloff thins anything.
+   * and a friendly counts toward `fullWinsPerDay` only for the side that won
+   * (#728, owner decision 2026-11-15). Played first, so their XP comes before the falloff thins anything.
    */
   readonly friendlies?: {
     readonly perDay: Readonly<Record<string, number>>;
