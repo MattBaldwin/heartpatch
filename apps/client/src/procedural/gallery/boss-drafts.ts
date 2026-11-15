@@ -74,12 +74,13 @@ export const DRAFT_BODIES: Body[] = [
   },
   {
     // Rakelet's head: wide and flat-faced, so the rake bar spans wider than
-    // the body; nearly oval, so a ring of tines comes out evenly spaced.
+    // the body. A true oval (squareness 0, round 9): any squareness pushes a
+    // ring's middle copies apart, which opened a gap between the middle tines.
     id: 'draft-rake-head',
     width: 1.3,
     height: 1.0,
     depth: 0.92,
-    squareness: 0.15,
+    squareness: 0,
     taper: 0,
     peak: 0,
     bottomFlat: 0.3,
@@ -186,7 +187,7 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-bar-small',
     slot: 'mane',
     shape: 'box',
-    size: [1.1, 0.06, 0.1], // [width, depth off the face, height]
+    size: [1.1, 0.14, 0.24], // [width, depth off the face, height]: a chunky plank, not a stick
     color: 'detail',
     layout: { kind: 'single' },
     around: 0,
@@ -201,12 +202,14 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tines-small',
     slot: 'fangs',
     shape: 'bent',
-    size: [0.07, 0.22, 0.12], // thickness ~1.7x width covers the forward kick
+    // Round 9: rooted in the bar, longer and straighter, with a small
+    // forward tip (thin thickness squashes the kick), so not claws.
+    size: [0.065, 0.42, 0.085],
     color: 'metal',
-    layout: { kind: 'ring', count: 4, spread: 40 },
+    layout: { kind: 'ring', count: 4, spread: 36 },
     around: 0,
-    up: -15,
-    tilt: -62, // TUNE: angled out so they clear the body below the chin
+    up: -8, // TUNE: behind the bar, so each tine grows out of its underside
+    tilt: -64, // TUNE: down and a little forward, clear of the face
     sink: 0.1,
     jitter: 0,
   }),
@@ -215,12 +218,12 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-mouth-small',
     slot: 'ears',
     shape: 'ellipsoid',
-    size: [0.5, 0.07, 0.28],
+    size: [0.44, 0.06, 0.22],
     color: 'ink',
     layout: { kind: 'single' },
     around: 0,
-    up: -30,
-    sink: 0.7,
+    up: -36,
+    sink: 0.85, // TUNE: recessed into the face behind the tines
     jitter: 0,
   }),
   part({
@@ -228,7 +231,7 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-bar',
     slot: 'mane',
     shape: 'box',
-    size: [1.2, 0.07, 0.13],
+    size: [1.25, 0.1, 0.15], // deep enough that the face can't poke through it
     color: 'detail',
     layout: { kind: 'single' },
     around: 0,
@@ -243,12 +246,12 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tines-mid',
     slot: 'fangs',
     shape: 'bent',
-    size: [0.06, 0.32, 0.1],
+    size: [0.06, 0.42, 0.1],
     color: 'metal',
-    layout: { kind: 'ring', count: 6, spread: 52 },
+    layout: { kind: 'ring', count: 6, spread: 44 },
     around: 0,
-    up: -19,
-    tilt: -70, // TUNE: angled out so they clear the chest
+    up: -12, // TUNE: behind the bar, so each tine grows out of its underside
+    tilt: -62, // TUNE: angled out so they clear the face and chest
     sink: 0.1,
     jitter: 0,
   }),
@@ -257,12 +260,12 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-mouth',
     slot: 'ears',
     shape: 'ellipsoid',
-    size: [0.72, 0.08, 0.36],
+    size: [0.66, 0.06, 0.3],
     color: 'ink',
     layout: { kind: 'single' },
     around: 0,
-    up: -34,
-    sink: 0.7,
+    up: -36, // TUNE: low enough that it never shows through the bar
+    sink: 0.85, // recessed into the face behind the tines
     jitter: 0,
   }),
   part({
@@ -271,7 +274,7 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tool-bar',
     slot: 'mane',
     shape: 'box',
-    size: [1.5, 0.12, 0.2], // TUNE: overhangs both cheeks (1.5 is the kit's cap)
+    size: [1.42, 0.12, 0.2], // TUNE: overhangs both cheeks, trimmed (round 9) so the 3/4 isn't a beak
     color: 'detail',
     layout: { kind: 'single' },
     around: 0,
@@ -286,12 +289,12 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tool-tines',
     slot: 'fangs',
     shape: 'bent',
-    size: [0.065, 0.44, 0.11], // stiffer dowels, not noodles
+    size: [0.065, 0.62, 0.11], // stiffer dowels, long enough to balance the bar
     color: 'metal',
-    layout: { kind: 'ring', count: 10, spread: 52 }, // TUNE: even spacing across the face
+    layout: { kind: 'ring', count: 10, spread: 50 }, // TUNE: even spacing across the bar
     around: 0,
-    up: -22,
-    tilt: -82, // TUNE: nearly straight down; the bend does the rest
+    up: -14, // TUNE: behind the bar, so each tine grows out of its underside
+    tilt: -62, // TUNE: down and a little forward, clear of the face; the bend does the rest
     sink: 0.1,
     jitter: 0,
   }),
@@ -300,12 +303,12 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tool-mouth',
     slot: 'cheeks',
     shape: 'ellipsoid',
-    size: [0.95, 0.08, 0.38],
+    size: [0.8, 0.06, 0.28],
     color: 'ink',
     layout: { kind: 'single' },
     around: 0,
-    up: -34,
-    sink: 0.7,
+    up: -46, // TUNE: well below the bar, so no dark strip shows under it
+    sink: 0.85, // TUNE: recessed into the face behind the tines
     jitter: 0,
   }),
   part({
