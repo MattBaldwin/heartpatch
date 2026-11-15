@@ -85,8 +85,8 @@ describe('bench XP on the result card (#732)', () => {
     const friendly = rewards({
       xp: [row(PEBBLE, 5), row(MOCHI, 2, { bench: true })],
       b: {
+        userId: '0190a000-0000-7000-8000-0000000000ff',
         xp: [row(THEIRS, 5), row(FERN, 2, { bench: true })],
-        percent: 100,
         fullXpResetAt: null,
         coins: null,
         unpaid: null,
