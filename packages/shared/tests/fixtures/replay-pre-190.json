@@ -1,0 +1,3445 @@
+{
+  "recordedOn": "de03dbd",
+  "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+  "battles": [
+    {
+      "name": "wild 0",
+      "setup": {
+        "seed": "pre190-wild-0",
+        "gentle": true,
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:0",
+                "speciesId": "beaconboo",
+                "level": 12
+              },
+              {
+                "id": "a:1",
+                "speciesId": "brambun",
+                "level": 10
+              },
+              {
+                "id": "a:2",
+                "speciesId": "bubblenub",
+                "level": 9
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "ai",
+              "policy": "wild"
+            },
+            "squishies": [
+              {
+                "id": "b:3",
+                "speciesId": "cloudlamb",
+                "level": 11
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "pollen-puff",
+              "item": "cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        }
+      ],
+      "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+      "result": {
+        "winner": "a",
+        "reason": "captured",
+        "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+        "turns": 4,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:0",
+            "xp": 20
+          },
+          {
+            "side": "a",
+            "squishyId": "a:1",
+            "xp": 20
+          },
+          {
+            "side": "b",
+            "squishyId": "b:3",
+            "xp": 20
+          }
+        ]
+      },
+      "events": 17,
+      "stateHash": "8a6702774561a070d89557920b678851",
+      "viewHash": "a0c679387c5b837a39c50cc1598b3437"
+    },
+    {
+      "name": "wild 1",
+      "setup": {
+        "seed": "pre190-wild-1",
+        "gentle": true,
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:0",
+                "speciesId": "drizzledoze",
+                "level": 13
+              },
+              {
+                "id": "a:1",
+                "speciesId": "fizzlepop",
+                "level": 11
+              },
+              {
+                "id": "a:2",
+                "speciesId": "fuzzbolt",
+                "level": 10
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "ai",
+              "policy": "wild"
+            },
+            "squishies": [
+              {
+                "id": "b:3",
+                "speciesId": "glittercrag",
+                "level": 12
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "snore-drizzle",
+              "item": "hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath",
+              "item": "brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "zip-zap"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "pebble-plop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fizzy-pop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "a",
+          "slot": 1
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "splish-splash"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        }
+      ],
+      "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+      "result": {
+        "winner": "a",
+        "reason": "captured",
+        "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+        "turns": 18,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:0",
+            "xp": 20
+          },
+          {
+            "side": "a",
+            "squishyId": "a:1",
+            "xp": 20
+          },
+          {
+            "side": "a",
+            "squishyId": "a:2",
+            "xp": 20
+          },
+          {
+            "side": "b",
+            "squishyId": "b:3",
+            "xp": 200
+          }
+        ]
+      },
+      "events": 88,
+      "stateHash": "e9a6c9a34dee4d3d44477d054f42d695",
+      "viewHash": "affbb9e0a30a8248486e4a5cd6246d4b"
+    },
+    {
+      "name": "wild 2",
+      "setup": {
+        "seed": "pre190-wild-2",
+        "gentle": true,
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:0",
+                "speciesId": "hearthbun",
+                "level": 14
+              },
+              {
+                "id": "a:1",
+                "speciesId": "lanternfin",
+                "level": 12
+              },
+              {
+                "id": "a:2",
+                "speciesId": "maplecrunch",
+                "level": 11
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "ai",
+              "policy": "wild"
+            },
+            "squishies": [
+              {
+                "id": "b:3",
+                "speciesId": "mothnook",
+                "level": 13
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "cozy-crackle",
+              "item": "cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "toasty-tumble",
+              "item": "hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "toasty-tumble"
+            }
+          }
+        }
+      ],
+      "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+      "result": {
+        "winner": "a",
+        "reason": "tuckered-out",
+        "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+        "turns": 3,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:0",
+            "xp": 390
+          },
+          {
+            "side": "b",
+            "squishyId": "b:3",
+            "xp": 20
+          }
+        ]
+      },
+      "events": 20,
+      "stateHash": "79228b0e57a6b84c2c342fc9a1c07611",
+      "viewHash": "a0f4b6def7bf996e71a29f3bb63b234e"
+    },
+    {
+      "name": "wild 3",
+      "setup": {
+        "seed": "pre190-wild-3",
+        "gentle": true,
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:0",
+                "speciesId": "rippletad",
+                "level": 15
+              },
+              {
+                "id": "a:1",
+                "speciesId": "slumberberg",
+                "level": 13
+              },
+              {
+                "id": "a:2",
+                "speciesId": "snugglestar",
+                "level": 12
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "ai",
+              "policy": "wild"
+            },
+            "squishies": [
+              {
+                "id": "b:3",
+                "speciesId": "spudsy",
+                "level": 14
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "static-snuggle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fizzy-pop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "zip-zap"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "iceberg-nap"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "chilly-yawn"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "sturdy-sit"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "chilly-yawn"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "frosty-pounce"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "sturdy-sit"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "a",
+          "slot": 1
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "chilly-yawn"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "iceberg-nap"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "frosty-pounce"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "sturdy-sit"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        }
+      ],
+      "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+      "result": {
+        "winner": "a",
+        "reason": "captured",
+        "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+        "turns": 26,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:0",
+            "xp": 20
+          },
+          {
+            "side": "a",
+            "squishyId": "a:1",
+            "xp": 20
+          },
+          {
+            "side": "a",
+            "squishyId": "a:2",
+            "xp": 20
+          },
+          {
+            "side": "b",
+            "squishyId": "b:3",
+            "xp": 240
+          }
+        ]
+      },
+      "events": 106,
+      "stateHash": "5bdbe643df2bd322b501e848404d28b6",
+      "viewHash": "61c37611a53f14dd6cb190c09c3d2912"
+    },
+    {
+      "name": "tile 0",
+      "setup": {
+        "seed": "pre190-tile-0",
+        "gentle": true,
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:0",
+                "speciesId": "beaconboo",
+                "level": 12
+              },
+              {
+                "id": "a:1",
+                "speciesId": "brambun",
+                "level": 10
+              },
+              {
+                "id": "a:2",
+                "speciesId": "bubblenub",
+                "level": 9
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "ai",
+              "policy": "guardian"
+            },
+            "squishies": [
+              {
+                "id": "b:3",
+                "speciesId": "cloudlamb",
+                "level": 11
+              },
+              {
+                "id": "b:4",
+                "speciesId": "cumulamb",
+                "level": 10
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "boo"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "night-light"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "night-light",
+              "item": "hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "night-light"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "beacon-beam",
+              "item": "cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "night-light"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "night-light",
+              "item": "brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        }
+      ],
+      "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+      "result": {
+        "winner": "a",
+        "reason": "captured",
+        "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+        "turns": 9,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:0",
+            "xp": 330
+          },
+          {
+            "side": "a",
+            "squishyId": "a:2",
+            "xp": 330
+          },
+          {
+            "side": "b",
+            "squishyId": "b:3",
+            "xp": 20
+          },
+          {
+            "side": "b",
+            "squishyId": "b:4",
+            "xp": 20
+          }
+        ]
+      },
+      "events": 49,
+      "stateHash": "d66fbd0cabae89a9df85f64548daf9ba",
+      "viewHash": "ad3e9ce65e65f468b632fd2f5a4a2cca"
+    },
+    {
+      "name": "tile 1",
+      "setup": {
+        "seed": "pre190-tile-1",
+        "gentle": true,
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:0",
+                "speciesId": "drizzledoze",
+                "level": 13
+              },
+              {
+                "id": "a:1",
+                "speciesId": "fizzlepop",
+                "level": 11
+              },
+              {
+                "id": "a:2",
+                "speciesId": "fuzzbolt",
+                "level": 10
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "ai",
+              "policy": "guardian"
+            },
+            "squishies": [
+              {
+                "id": "b:3",
+                "speciesId": "glittercrag",
+                "level": 12
+              },
+              {
+                "id": "b:4",
+                "speciesId": "grinnygourd",
+                "level": 11
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "splish-splash"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "zip-zap",
+              "item": "brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "pebble-plop",
+              "item": "cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "snore-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "splish-splash"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "snore-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath",
+              "item": "hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "splish-splash"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "snore-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "splish-splash"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "splish-splash"
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "a",
+          "slot": 1
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fizzy-pop"
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "a",
+          "slot": 2
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "zip-zap"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "pebble-plop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "zip-zap"
+            }
+          }
+        }
+      ],
+      "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+      "result": {
+        "winner": "b",
+        "reason": "tuckered-out",
+        "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+        "turns": 27,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:0",
+            "xp": 20
+          },
+          {
+            "side": "a",
+            "squishyId": "a:1",
+            "xp": 20
+          },
+          {
+            "side": "a",
+            "squishyId": "a:2",
+            "xp": 20
+          },
+          {
+            "side": "b",
+            "squishyId": "b:3",
+            "xp": 1020
+          },
+          {
+            "side": "b",
+            "squishyId": "b:4",
+            "xp": 1020
+          }
+        ]
+      },
+      "events": 132,
+      "stateHash": "0b2f8e1fec111374804961a571192ee9",
+      "viewHash": "02688a714675438a80760013ab2cec16"
+    },
+    {
+      "name": "tile 2",
+      "setup": {
+        "seed": "pre190-tile-2",
+        "gentle": true,
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:0",
+                "speciesId": "hearthbun",
+                "level": 14
+              },
+              {
+                "id": "a:1",
+                "speciesId": "lanternfin",
+                "level": 12
+              },
+              {
+                "id": "a:2",
+                "speciesId": "maplecrunch",
+                "level": 11
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "ai",
+              "policy": "guardian"
+            },
+            "squishies": [
+              {
+                "id": "b:3",
+                "speciesId": "mothnook",
+                "level": 13
+              },
+              {
+                "id": "b:4",
+                "speciesId": "pepperpip",
+                "level": 12
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "toasty-tumble"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "pebble-plop",
+              "item": "brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "cozy-crackle",
+              "item": "hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "pebble-plop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "pebble-plop"
+            }
+          }
+        }
+      ],
+      "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+      "result": {
+        "winner": "a",
+        "reason": "tuckered-out",
+        "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+        "turns": 5,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:0",
+            "xp": 750
+          },
+          {
+            "side": "b",
+            "squishyId": "b:3",
+            "xp": 20
+          },
+          {
+            "side": "b",
+            "squishyId": "b:4",
+            "xp": 20
+          }
+        ]
+      },
+      "events": 31,
+      "stateHash": "9e68489e394cf96faa20fe5831757f91",
+      "viewHash": "64570955ddb228b62f79abb7c4bcf0eb"
+    },
+    {
+      "name": "tile 3",
+      "setup": {
+        "seed": "pre190-tile-3",
+        "gentle": true,
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:0",
+                "speciesId": "rippletad",
+                "level": 15
+              },
+              {
+                "id": "a:1",
+                "speciesId": "slumberberg",
+                "level": 13
+              },
+              {
+                "id": "a:2",
+                "speciesId": "snugglestar",
+                "level": 12
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "ai",
+              "policy": "guardian"
+            },
+            "squishies": [
+              {
+                "id": "b:3",
+                "speciesId": "spudsy",
+                "level": 14
+              },
+              {
+                "id": "b:4",
+                "speciesId": "thistleknight",
+                "level": 13
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "giggle-drizzle",
+              "item": "cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath",
+              "item": "brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath",
+              "item": "hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "static-snuggle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "belly-flop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "chilly-yawn"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "chilly-yawn"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "zip-zap"
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "a",
+          "slot": 0
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "sturdy-sit"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "frosty-pounce"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "capture"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "a",
+          "slot": 0
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath"
+            }
+          }
+        }
+      ],
+      "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+      "result": {
+        "winner": "b",
+        "reason": "tuckered-out",
+        "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+        "turns": 26,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:0",
+            "xp": 20
+          },
+          {
+            "side": "a",
+            "squishyId": "a:1",
+            "xp": 20
+          },
+          {
+            "side": "a",
+            "squishyId": "a:2",
+            "xp": 20
+          },
+          {
+            "side": "b",
+            "squishyId": "b:3",
+            "xp": 1200
+          },
+          {
+            "side": "b",
+            "squishyId": "b:4",
+            "xp": 1200
+          }
+        ]
+      },
+      "events": 111,
+      "stateHash": "56ee976e61fb45e055e1cd4e40ac0ad2",
+      "viewHash": "d1d55d9950e2348d671ddb9ecdc520ed"
+    },
+    {
+      "name": "friendly 0",
+      "setup": {
+        "seed": "pre190-friendly-0",
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:0",
+                "speciesId": "beaconboo",
+                "level": 12
+              },
+              {
+                "id": "a:1",
+                "speciesId": "brambun",
+                "level": 10
+              },
+              {
+                "id": "a:2",
+                "speciesId": "bubblenub",
+                "level": 9
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "b:0",
+                "speciesId": "lanternfin",
+                "level": 12
+              },
+              {
+                "id": "b:1",
+                "speciesId": "maplecrunch",
+                "level": 10
+              },
+              {
+                "id": "b:2",
+                "speciesId": "mothnook",
+                "level": 9
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "hearty-soup"
+            },
+            "b": {
+              "type": "move",
+              "move": "peekaboo",
+              "item": "brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "night-light",
+              "item": "cozy-cocoa"
+            },
+            "b": {
+              "type": "move",
+              "move": "peekaboo",
+              "item": "cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            },
+            "b": {
+              "type": "move",
+              "move": "peekaboo",
+              "item": "hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath",
+              "item": "brave-brew"
+            },
+            "b": {
+              "type": "move",
+              "move": "splish-splash"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            },
+            "b": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            },
+            "b": {
+              "type": "move",
+              "move": "boo"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            },
+            "b": {
+              "type": "move",
+              "move": "lantern-flutter"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "pollen-puff"
+            },
+            "b": {
+              "type": "move",
+              "move": "boo"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            },
+            "b": {
+              "type": "move",
+              "move": "shadow-snuggle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            },
+            "b": {
+              "type": "move",
+              "move": "boo"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "mossy-nap"
+            },
+            "b": {
+              "type": "move",
+              "move": "boo"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "leafy-tickle"
+            },
+            "b": {
+              "type": "move",
+              "move": "peekaboo"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            },
+            "b": {
+              "type": "move",
+              "move": "peekaboo"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "boo"
+            },
+            "b": {
+              "type": "move",
+              "move": "peekaboo"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "boo"
+            },
+            "b": {
+              "type": "move",
+              "move": "boo"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "night-light"
+            },
+            "b": {
+              "type": "move",
+              "move": "shadow-snuggle"
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "b",
+          "slot": 1
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "dazzle-dance"
+            },
+            "b": {
+              "type": "move",
+              "move": "leaf-pile-leap"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "dazzle-dance"
+            },
+            "b": {
+              "type": "move",
+              "move": "leafy-tickle"
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "b",
+          "slot": 0
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "dazzle-dance"
+            },
+            "b": {
+              "type": "move",
+              "move": "splish-splash"
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "a",
+          "slot": 1
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "pollen-puff"
+            },
+            "b": {
+              "type": "move",
+              "move": "giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "leafy-tickle"
+            },
+            "b": {
+              "type": "move",
+              "move": "peekaboo"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            },
+            "b": {
+              "type": "move",
+              "move": "splish-splash"
+            }
+          }
+        },
+        {
+          "type": "forfeit",
+          "side": "b"
+        }
+      ],
+      "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+      "result": {
+        "winner": "a",
+        "reason": "forfeit",
+        "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+        "turns": 22,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:0",
+            "xp": 570
+          },
+          {
+            "side": "a",
+            "squishyId": "a:1",
+            "xp": 570
+          },
+          {
+            "side": "a",
+            "squishyId": "a:2",
+            "xp": 570
+          },
+          {
+            "side": "b",
+            "squishyId": "b:0",
+            "xp": 0
+          },
+          {
+            "side": "b",
+            "squishyId": "b:1",
+            "xp": 0
+          },
+          {
+            "side": "b",
+            "squishyId": "b:2",
+            "xp": 0
+          }
+        ]
+      },
+      "events": 111,
+      "stateHash": "e91aa5e7c008f4582d1bc7891595087e",
+      "viewHash": "ab566db8dc07760860dbbecb4bfa09da"
+    },
+    {
+      "name": "friendly 1",
+      "setup": {
+        "seed": "pre190-friendly-1",
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:0",
+                "speciesId": "drizzledoze",
+                "level": 13
+              },
+              {
+                "id": "a:1",
+                "speciesId": "fizzlepop",
+                "level": 11
+              },
+              {
+                "id": "a:2",
+                "speciesId": "fuzzbolt",
+                "level": 10
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "b:0",
+                "speciesId": "pepperpip",
+                "level": 13
+              },
+              {
+                "id": "b:1",
+                "speciesId": "rippletad",
+                "level": 11
+              },
+              {
+                "id": "b:2",
+                "speciesId": "slumberberg",
+                "level": 10
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath"
+            },
+            "b": {
+              "type": "move",
+              "move": "toasty-tumble",
+              "item": "hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "splish-splash"
+            },
+            "b": {
+              "type": "move",
+              "move": "ember-boop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "hearty-soup"
+            },
+            "b": {
+              "type": "move",
+              "move": "chilly-yawn"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "splish-splash"
+            },
+            "b": {
+              "type": "move",
+              "move": "sturdy-sit",
+              "item": "cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "giggle-drizzle"
+            },
+            "b": {
+              "type": "move",
+              "move": "iceberg-nap"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "giggle-drizzle",
+              "item": "cozy-cocoa"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            },
+            "b": {
+              "type": "move",
+              "move": "ember-boop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "pebble-plop"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "pebble-plop"
+            },
+            "b": {
+              "type": "move",
+              "move": "sturdy-sit"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "pebble-plop"
+            },
+            "b": {
+              "type": "move",
+              "move": "sturdy-sit",
+              "item": "brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            },
+            "b": {
+              "type": "move",
+              "move": "iceberg-nap"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            },
+            "b": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "zip-zap",
+              "item": "brave-brew"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            },
+            "b": {
+              "type": "move",
+              "move": "giggle-drizzle"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "splish-splash"
+            },
+            "b": {
+              "type": "move",
+              "move": "belly-flop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            },
+            "b": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "zip-zap"
+            },
+            "b": {
+              "type": "move",
+              "move": "toasty-tumble"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            },
+            "b": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "splish-splash"
+            },
+            "b": {
+              "type": "move",
+              "move": "belly-flop"
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "b",
+          "slot": 0
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "giggle-drizzle"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "snore-drizzle"
+            },
+            "b": {
+              "type": "move",
+              "move": "iceberg-nap"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            },
+            "b": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "zip-zap"
+            },
+            "b": {
+              "type": "move",
+              "move": "ember-boop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "fizzy-pop"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "forfeit",
+          "side": "b"
+        }
+      ],
+      "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+      "result": {
+        "winner": "a",
+        "reason": "forfeit",
+        "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+        "turns": 25,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:0",
+            "xp": 330
+          },
+          {
+            "side": "a",
+            "squishyId": "a:1",
+            "xp": 330
+          },
+          {
+            "side": "a",
+            "squishyId": "a:2",
+            "xp": 330
+          },
+          {
+            "side": "b",
+            "squishyId": "b:0",
+            "xp": 0
+          },
+          {
+            "side": "b",
+            "squishyId": "b:1",
+            "xp": 0
+          },
+          {
+            "side": "b",
+            "squishyId": "b:2",
+            "xp": 0
+          }
+        ]
+      },
+      "events": 110,
+      "stateHash": "75f6d61e6a58c8dc80d937d9b98bfb13",
+      "viewHash": "8944085dd9e0d066b61fd823cf1f55fe"
+    },
+    {
+      "name": "friendly 2",
+      "setup": {
+        "seed": "pre190-friendly-2",
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:0",
+                "speciesId": "hearthbun",
+                "level": 14
+              },
+              {
+                "id": "a:1",
+                "speciesId": "lanternfin",
+                "level": 12
+              },
+              {
+                "id": "a:2",
+                "speciesId": "maplecrunch",
+                "level": 11
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "b:0",
+                "speciesId": "snugglestar",
+                "level": 14
+              },
+              {
+                "id": "b:1",
+                "speciesId": "spudsy",
+                "level": 12
+              },
+              {
+                "id": "b:2",
+                "speciesId": "thistleknight",
+                "level": 11
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "toasty-tumble",
+              "item": "cozy-cocoa"
+            },
+            "b": {
+              "type": "item",
+              "item": "cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "ember-boop"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "hearty-soup"
+            },
+            "b": {
+              "type": "move",
+              "move": "rock-a-bye"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "ember-boop",
+              "item": "brave-brew"
+            },
+            "b": {
+              "type": "move",
+              "move": "sturdy-sit",
+              "item": "brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "cozy-crackle"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "cozy-crackle"
+            },
+            "b": {
+              "type": "move",
+              "move": "prickle-roll",
+              "item": "hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "pebble-plop"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "toasty-tumble"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "ember-boop"
+            },
+            "b": {
+              "type": "move",
+              "move": "pollen-puff"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "pebble-plop"
+            },
+            "b": {
+              "type": "move",
+              "move": "thistle-charge"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "cozy-crackle"
+            },
+            "b": {
+              "type": "move",
+              "move": "thistle-charge"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            },
+            "b": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "boo"
+            },
+            "b": {
+              "type": "move",
+              "move": "static-fluff"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            },
+            "b": {
+              "type": "move",
+              "move": "zip-zap"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "pebble-plop"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "cozy-crackle"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            },
+            "b": {
+              "type": "move",
+              "move": "rock-a-bye"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            },
+            "b": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "pebble-plop"
+            },
+            "b": {
+              "type": "move",
+              "move": "zip-zap"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "ember-boop"
+            },
+            "b": {
+              "type": "move",
+              "move": "zip-zap"
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "b",
+          "slot": 2
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "cozy-crackle"
+            },
+            "b": {
+              "type": "move",
+              "move": "pollen-puff"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "toasty-tumble"
+            },
+            "b": {
+              "type": "move",
+              "move": "mossy-nap"
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "b",
+          "slot": 1
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "pebble-plop"
+            },
+            "b": {
+              "type": "move",
+              "move": "pebble-plop"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "ember-boop"
+            },
+            "b": {
+              "type": "move",
+              "move": "pebble-plop"
+            }
+          }
+        }
+      ],
+      "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+      "result": {
+        "winner": "a",
+        "reason": "tuckered-out",
+        "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+        "turns": 24,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:0",
+            "xp": 1110
+          },
+          {
+            "side": "a",
+            "squishyId": "a:1",
+            "xp": 1110
+          },
+          {
+            "side": "b",
+            "squishyId": "b:0",
+            "xp": 20
+          },
+          {
+            "side": "b",
+            "squishyId": "b:1",
+            "xp": 20
+          },
+          {
+            "side": "b",
+            "squishyId": "b:2",
+            "xp": 20
+          }
+        ]
+      },
+      "events": 105,
+      "stateHash": "c65169227d9201f6df074ff6106a5451",
+      "viewHash": "e1eb1065bfcb1349dc9bbc95b7535fdf"
+    },
+    {
+      "name": "friendly 3",
+      "setup": {
+        "seed": "pre190-friendly-3",
+        "sides": {
+          "a": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "a:0",
+                "speciesId": "rippletad",
+                "level": 15
+              },
+              {
+                "id": "a:1",
+                "speciesId": "slumberberg",
+                "level": 13
+              },
+              {
+                "id": "a:2",
+                "speciesId": "snugglestar",
+                "level": 12
+              }
+            ]
+          },
+          "b": {
+            "controller": {
+              "type": "player"
+            },
+            "squishies": [
+              {
+                "id": "b:0",
+                "speciesId": "tsunoodle",
+                "level": 15
+              },
+              {
+                "id": "b:1",
+                "speciesId": "wickwhisker",
+                "level": 13
+              },
+              {
+                "id": "b:2",
+                "speciesId": "blusterpup",
+                "level": 12
+              }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "belly-flop",
+              "item": "cozy-cocoa"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            },
+            "b": {
+              "type": "item",
+              "item": "hearty-soup"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "iceberg-nap"
+            },
+            "b": {
+              "type": "move",
+              "move": "toasty-tumble",
+              "item": "cozy-cocoa"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "item",
+              "item": "hearty-soup"
+            },
+            "b": {
+              "type": "move",
+              "move": "boo"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "chilly-yawn",
+              "item": "brave-brew"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            },
+            "b": {
+              "type": "move",
+              "move": "brrr-bluster"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            },
+            "b": {
+              "type": "move",
+              "move": "frosty-pounce",
+              "item": "brave-brew"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            },
+            "b": {
+              "type": "move",
+              "move": "brrr-bluster"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 2
+            },
+            "b": {
+              "type": "move",
+              "move": "frosty-pounce"
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "a",
+          "slot": 1
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "chilly-yawn"
+            },
+            "b": {
+              "type": "move",
+              "move": "snowball-toss"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "sturdy-sit"
+            },
+            "b": {
+              "type": "move",
+              "move": "snowball-toss"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "chilly-yawn"
+            },
+            "b": {
+              "type": "move",
+              "move": "chilly-yawn"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 0
+            },
+            "b": {
+              "type": "move",
+              "move": "snowball-toss"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "swap",
+              "slot": 1
+            },
+            "b": {
+              "type": "move",
+              "move": "frosty-pounce"
+            }
+          }
+        },
+        {
+          "type": "replace",
+          "side": "a",
+          "slot": 0
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "belly-flop"
+            },
+            "b": {
+              "type": "move",
+              "move": "splish-splash"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath"
+            },
+            "b": {
+              "type": "move",
+              "move": "tidal-twirl"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "belly-flop"
+            },
+            "b": {
+              "type": "move",
+              "move": "bubble-bath"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "giggle-drizzle"
+            },
+            "b": {
+              "type": "move",
+              "move": "bubble-bath"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath"
+            },
+            "b": {
+              "type": "move",
+              "move": "splish-splash"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "belly-flop"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 2
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "giggle-drizzle"
+            },
+            "b": {
+              "type": "move",
+              "move": "frosty-pounce"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "belly-flop"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 1
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath"
+            },
+            "b": {
+              "type": "move",
+              "move": "toasty-tumble"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "bubble-bath"
+            },
+            "b": {
+              "type": "move",
+              "move": "toasty-tumble"
+            }
+          }
+        },
+        {
+          "type": "turn",
+          "choices": {
+            "a": {
+              "type": "move",
+              "move": "giggle-drizzle"
+            },
+            "b": {
+              "type": "swap",
+              "slot": 0
+            }
+          }
+        },
+        {
+          "type": "forfeit",
+          "side": "b"
+        }
+      ],
+      "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+      "result": {
+        "winner": "a",
+        "reason": "forfeit",
+        "contentHash": "d0f5ede7487f2237460aa0da50f630ce",
+        "turns": 26,
+        "xp": [
+          {
+            "side": "a",
+            "squishyId": "a:0",
+            "xp": 20
+          },
+          {
+            "side": "a",
+            "squishyId": "a:1",
+            "xp": 20
+          },
+          {
+            "side": "a",
+            "squishyId": "a:2",
+            "xp": 20
+          },
+          {
+            "side": "b",
+            "squishyId": "b:0",
+            "xp": 0
+          },
+          {
+            "side": "b",
+            "squishyId": "b:1",
+            "xp": 0
+          },
+          {
+            "side": "b",
+            "squishyId": "b:2",
+            "xp": 0
+          }
+        ]
+      },
+      "events": 121,
+      "stateHash": "50d9f7f73c128c38def4a7b1b3986aa9",
+      "viewHash": "1008c408657da6e87cbd1b917e705409"
+    }
+  ]
+}

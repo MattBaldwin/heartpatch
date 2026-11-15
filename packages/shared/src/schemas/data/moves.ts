@@ -47,6 +47,10 @@ export type MoveEffect = z.infer<typeof MoveEffectSchema>;
 export const MoveKindSchema = z.enum(['big', 'steady']);
 export type MoveKind = z.infer<typeof MoveKindSchema>;
 
+/** Who a move hits (#190); a move without `targets` hits one foe. */
+export const MoveTargetsSchema = z.enum(['one', 'all-foes']);
+export type MoveTargets = z.infer<typeof MoveTargetsSchema>;
+
 export const MoveSchema = z.strictObject({
   id: ContentIdSchema,
   name: DisplayNameSchema,
@@ -57,5 +61,11 @@ export const MoveSchema = z.strictObject({
   /** Percent chance to land. */
   accuracy: z.number().int().min(1).max(100),
   effects: z.array(MoveEffectSchema).max(3).optional(),
+  /**
+   * Who it hits (#190): `one` foe (the default when left out) or `all-foes`,
+   * each rolled on its own in slot order at `rules.team.spreadPercent` when
+   * it hits more than one. With one foe on the field it hits at full power.
+   */
+  targets: MoveTargetsSchema.optional(),
 });
 export type Move = z.infer<typeof MoveSchema>;
