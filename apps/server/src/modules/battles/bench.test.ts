@@ -21,7 +21,12 @@ import {
   type PlayerBattle,
   type PlayerBattleAction,
 } from '@heartpatch/shared';
-import { EVOLUTION_RULES, SERVER_GAME_DATA, serverBattleData } from '@heartpatch/shared/server';
+import {
+  EVOLUTION_RULES,
+  GUARDIAN_RULES,
+  SERVER_GAME_DATA,
+  serverBattleData,
+} from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -338,6 +343,15 @@ describe.skipIf(!url)('the bench shares XP (#732, needs DATABASE_URL)', () => {
       await setSquishy(lead, 'level = 1');
       const user = { id: kid.id, username: kid.username };
       const { battle } = await short.startAgainst(user, mapId, devEncounter(short, TOUGH));
+      // At the turn limit the side with more of its whole energy left wins,
+      // bench included (`energyLeader`), so a missed hit could hand side a
+      // the win. A benched squishy down to 1 energy (pinned in the stored
+      // state, as another request could) makes the loss certain on every
+      // seed, while it still stands to be sent out if the lead goes down.
+      await db.execute(
+        `update battles set state = jsonb_set(state, '{sides,a,squishies,1,energy}', '1')
+         where id = '${uuid(battle.id)}'`,
+      );
       const side = battle.view.sides.a;
       const done = await short.act(user, battle.id, {
         action: { type: 'move', move: bigMove(side.squishies[side.active]!) },
@@ -363,6 +377,43 @@ describe.skipIf(!url)('the bench shares XP (#732, needs DATABASE_URL)', () => {
       const rewards = await rewardsOf(done.id);
       expect(rewards.xp.map((x) => x.squishyId)).toEqual(ids);
       expect(rewards.xp.every((x) => x.bench === undefined)).toBe(true);
+    });
+
+    it('a bench squishy at the top level stays there', async () => {
+      const top = GROWTH_RULES.maxLevel;
+      const server = await start();
+      const { kid, mapId, ids } = await kidWithTeam(server, 1);
+      const [, bench] = ids as [string, string];
+      const atTop = xpForLevel(top, GROWTH_RULES);
+      await setSquishy(bench, `level = ${String(top)}, xp = ${String(atTop)}`);
+      const done = await playOut(server, kid, await pickFight(server, kid, mapId, WEAK));
+      expect(resultOf(done).winner).toBe('a');
+      const row = rowsBy((await rewardsOf(done.id)).xp).get(bench)!;
+      expect(row).toMatchObject({ bench: true });
+      expect(row.xp).toBeGreaterThan(0);
+      // Its XP is counted like a fighter's (#205), but no level past the cap.
+      const after = await squishyOf(bench);
+      expect(after.level).toBe(top);
+      expect(after.xp).toBe(atTop + row.xp);
+    });
+
+    it('pays no bench and uses no bench slot with the knob at 0', async () => {
+      const rules = GROWTH_RULES as { benchXpPercent?: number };
+      const was = rules.benchXpPercent;
+      rules.benchXpPercent = 0;
+      try {
+        const server = await start();
+        const { kid, mapId, ids } = await kidWithTeam(server, 1);
+        const [lead, bench] = ids as [string, string];
+        const done = await playOut(server, kid, await pickFight(server, kid, mapId, WEAK));
+        expect(resultOf(done).winner).toBe('a');
+        expect((await rewardsOf(done.id)).xp.map((x) => x.squishyId)).toEqual([lead]);
+        // Untouched: no XP has been written since the grant.
+        expect((await squishyOf(bench)).xp).toBe(0);
+        expect(await winsOf(mapId, ids)).toEqual({ [lead]: 1 });
+      } finally {
+        rules.benchXpPercent = was;
+      }
     });
 
     it('a squishy that came out for one turn fought: the engine’s award, no bench marker', async () => {
@@ -596,6 +647,108 @@ describe.skipIf(!url)('the bench shares XP (#732, needs DATABASE_URL)', () => {
   });
 
   describe('a held rival tile', () => {
+    /**
+     * Lee and Sam on one patch, past the new-player shield, with Sam holding
+     * the free tile next to Lee's land; Sam's `guards` (if any) on watch.
+     * Returns the other free tiles at Lee's edge too.
+     */
+    async function rivalTile(
+      server: FastifyInstance,
+      lee: Player,
+      sam: Player,
+      mapId: string,
+      guards: string[],
+    ) {
+      clock.setTime(clock.getTime() + (TERRITORY_RULES.newPlayerShieldHours + 1) * HOUR_MS);
+      const tiles = await db.query.tiles.findMany({
+        where: (t, { eq }) => eq(t.mapId, mapId),
+        orderBy: (t, { asc }) => [asc(t.q), asc(t.r)],
+      });
+      const mine = new Set(tiles.filter((t) => t.ownerUserId === lee.id).map(hexKey));
+      const [near, ...edge] = tiles.filter(
+        (t) =>
+          t.ownerUserId === null &&
+          t.homeSlot === null &&
+          hexNeighbors(t).some((n) => mine.has(hexKey(n))),
+      );
+      await db.execute(
+        `update tiles set owner_user_id = '${uuid(sam.id)}' where id = '${uuid(near!.id)}'`,
+      );
+      if (guards.length > 0) {
+        const watch = await call(server, 'POST', `/maps/${mapId}/defenders`, sam, {
+          q: near!.q,
+          r: near!.r,
+          squishyIds: guards,
+        });
+        expect(watch.statusCode, watch.body).toBe(200);
+      }
+      return { near: near!, edge };
+    }
+
+    it('a Gentle rival-tile battle benches half of the halved base', async () => {
+      const server = await start();
+      const [lee, sam] = [await player(), await player()];
+      const mapId = await patch(server, lee, sam);
+      const guard = await grant(server, sam, mapId, { speciesId: 'puddlepuff', level: 2 });
+      const { near, edge } = await rivalTile(server, lee, sam, mapId, [guard.id]);
+      // Lee has lots of land, Sam one tile: picking on a much smaller player
+      // (Gentle, the default) pays Lee part of the battle's XP.
+      for (const tile of edge.slice(0, 8)) {
+        await db.execute(
+          `update tiles set owner_user_id = '${uuid(lee.id)}' where id = '${uuid(tile.id)}'`,
+        );
+      }
+      // Granted now, at the battle's clock, so `paid` is their care.
+      const lead = await grant(server, lee, mapId, { speciesId: STRONG, level: 60 });
+      const bench = await grant(server, lee, mapId, { speciesId: STRONG, level: 20 });
+      await team(server, lee, mapId, [lead.id, bench.id]);
+
+      const started = battleOf(
+        await call(server, 'POST', `/maps/${mapId}/attacks`, lee, { q: near.q, r: near.r }),
+      );
+      expect(started.kind).toBe('rival-tile');
+      const done = await playOut(server, lee, started);
+      const result = resultOf(done);
+      expect(result.winner).toBe('a');
+      expect(done.view.sides.a.squishies.map((s) => s.joined)).toEqual([true, false]);
+      const rewards = await rewardsOf(done.id);
+      const percent = TERRITORY_RULES.gentle.rewardPercent;
+      expect(rewards.percent).toBe(percent);
+      expect(percent).toBeLessThan(100);
+      const engine = result.xp.find((x) => x.squishyId === lead.id)!.xp;
+      const gentle = Math.floor((engine * percent) / 100);
+      // The bench's base is half of Gentle's share, not half of the engine's.
+      expect(paid(half(gentle))).not.toBe(paid(half(engine)));
+      const rows = rowsBy(rewards.xp);
+      expect(rows.get(lead.id)).toMatchObject({ xp: paid(gentle) });
+      expect(rows.get(bench.id)).toMatchObject({ xp: paid(half(gentle)), bench: true });
+    });
+
+    it('guardians standing in have no bench', async () => {
+      const server = await start();
+      const [lee, sam] = [await player(), await player()];
+      const mapId = await patch(server, lee, sam);
+      await grant(server, lee, mapId, { speciesId: 'emberbun', level: 2 });
+      // Sam's squishy stays home: the land's guardians stand in.
+      await grant(server, sam, mapId, { speciesId: 'puddlepuff', level: 5 });
+      const { near } = await rivalTile(server, lee, sam, mapId, []);
+      // The strongest land has a team of guardians, so some wait on the bench.
+      const strongest = Math.max(...GUARDIAN_RULES.strengths.map((t) => t.strength));
+      await db.execute(
+        `update tiles set guardian_strength = ${String(strongest)} where id = '${uuid(near.id)}'`,
+      );
+      const started = battleOf(
+        await call(server, 'POST', `/maps/${mapId}/attacks`, lee, { q: near.q, r: near.r }),
+      );
+      expect(started.kind).toBe('rival-tile');
+      const done = await playOut(server, lee, started);
+      expect(resultOf(done).winner).toBe('b');
+      // At least one guardian never came out, and still nothing is paid on side b.
+      expect(done.view.sides.b.squishies.some((s) => !s.joined)).toBe(true);
+      const rewards = await rewardsOf(done.id);
+      expect(rewards.b?.xp ?? []).toEqual([]);
+    });
+
     it('pays the Keeper’s benched guard, in side b’s rewards', async () => {
       const server = await start();
       const [lee, sam] = [await player(), await player()];
