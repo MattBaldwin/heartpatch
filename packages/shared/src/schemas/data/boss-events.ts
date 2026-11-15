@@ -38,6 +38,12 @@ export const BossEventRulesSchema = z.strictObject({
    * boss content lands, #234).
    */
   bag: z.array(BossBagEntrySchema),
+  /**
+   * The guaranteed bundle a win puts in the Keeper's bag (#190 plan §2):
+   * item id → count, ledgered as `boss`. Paid once per win; a scoot or a
+   * loss pays none.
+   */
+  bundle: z.record(ContentIdSchema, z.number().int().min(1).max(99)),
 });
 export type BossEventRules = z.infer<typeof BossEventRulesSchema>;
 
@@ -46,6 +52,7 @@ export function checkBossEventRules(
   rules: unknown,
   knownSpecies: ReadonlySet<string>,
   knownTerrains: ReadonlySet<string>,
+  knownItems?: ReadonlySet<string>,
 ): string[] {
   const parsed = BossEventRulesSchema.safeParse(rules);
   if (!parsed.success) return formatDataIssues(rules, parsed.error);
@@ -62,6 +69,10 @@ export function checkBossEventRules(
         problems.push(`boss bag: "${entry.speciesId}" likes unknown terrain "${terrain}"`);
       }
     }
+  }
+  if (Object.keys(parsed.data.bundle).length === 0) problems.push('boss rules: the bundle is empty');
+  for (const item of Object.keys(parsed.data.bundle)) {
+    if (knownItems && !knownItems.has(item)) problems.push(`boss bundle: unknown item "${item}"`);
   }
   if (parsed.data.minPlayerLevel > parsed.data.minPartnerLevel) {
     problems.push('boss rules: minPlayerLevel is above minPartnerLevel');

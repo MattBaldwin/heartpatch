@@ -84,7 +84,14 @@ describe('boss schedule (#190)', () => {
   it('checks the rules: the shipped ones, and a bad bag', () => {
     const species = new Set([...GAME_DATA.species, ...SECRET_SPECIES].map((s) => s.id));
     const terrains = new Set(GAME_DATA.terrains.map((t) => t.id));
-    expect(checkBossEventRules(BOSS_EVENTS, species, terrains)).toEqual([]);
+    const items = new Set(GAME_DATA.resources.map((r) => r.id));
+    expect(checkBossEventRules(BOSS_EVENTS, species, terrains, items)).toEqual([]);
+    expect(
+      checkBossEventRules({ ...BOSS_EVENTS, bundle: { nothing: 1 } }, species, terrains, items),
+    ).toEqual(['boss bundle: unknown item "nothing"']);
+    expect(checkBossEventRules({ ...BOSS_EVENTS, bundle: {} }, species, terrains)).toEqual([
+      'boss rules: the bundle is empty',
+    ]);
     const bad = { ...BOSS_EVENTS, bag: [{ speciesId: 'nobody', terrains: ['nowhere'] }] };
     expect(checkBossEventRules(bad, species, terrains)).toEqual([
       'boss bag: unknown species "nobody"',

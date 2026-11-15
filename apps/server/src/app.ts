@@ -372,7 +372,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           // Journeys to trading posts (#270): the visit pass in the finish.
           journeys: createJourneyBattlePort(),
           // Mini-bosses (#190): a win ends the visit for its Keeper.
-          minibosses: createMinibossBattlePort(),
+          minibosses: createMinibossBattlePort(options.bossRules),
           ...(wsHub ? { publish: wsHub.publish } : {}),
         });
         const idempotencyStore = createIdempotencyStore(db);

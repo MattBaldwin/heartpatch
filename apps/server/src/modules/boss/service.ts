@@ -46,8 +46,11 @@ export interface BossService {
 }
 
 /** The boss module's side of a fight's end (#190): a win ends the visit for its Keeper. */
-export function createMinibossBattlePort(): MinibossBattlePort {
+export function createMinibossBattlePort(
+  rules: BossEventRules = BOSS_EVENTS,
+): MinibossBattlePort {
   return {
+    bundle: () => ({ ...rules.bundle }),
     ended: async (tx, battle, winner) => {
       if (winner === 'a') {
         await createBossRepo(tx).markWon(

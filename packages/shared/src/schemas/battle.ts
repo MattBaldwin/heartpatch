@@ -5,6 +5,7 @@ import { ContentIdSchema } from './data/common.js';
 import { BattleStatSchema, MoveSchema } from './data/moves.js';
 import { SpeciesSchema } from './data/species.js';
 import { ElementIdSchema, FeelingIdSchema } from './data/elements.js';
+import { ItemCountsSchema } from './inventory.js';
 
 /**
  * Battle inputs (design doc §6): the setup a battle starts from and the
@@ -480,6 +481,11 @@ export const BattleRewardsSchema = z.object({
    * patch-mate today (`'pair-cap'`). Null otherwise and for older battles.
    */
   unpaid: UnpaidReasonSchema.nullable().default(null),
+  /**
+   * What a won mini-boss fight put in side `a`'s bag (#190): item id →
+   * count. Null for every other battle, a loss or scoot, and older battles.
+   */
+  bundle: ItemCountsSchema.nullable().default(null),
   /**
    * Side `b`'s rewards (#728): the Keeper whose land held, or a friendly
    * battle's side-`b` player, win or lose. Null when side `b` earned

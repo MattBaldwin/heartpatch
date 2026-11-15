@@ -112,6 +112,7 @@ export const CLOTHING_DROPS: ClothingDropTable[] = [
     // outside the window a win finds nothing.
     source: 'battle',
     chance: 6, // TUNE
+    bossChance: 20, // TUNE: a mini-boss win (#190): the top step, as a rescue
     entries: [...HALLOWEEN_COSTUMES],
   },
   {

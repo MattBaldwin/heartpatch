@@ -143,5 +143,20 @@ export const SpeciesSchema = z.strictObject({
   evolutions: z.array(EvolutionSchema),
   visual: SpeciesVisualSchema,
   habitatPreferences: HabitatPreferencesSchema,
+  /**
+   * A mini-boss line (#190 plan §7): hidden from a player until they've met
+   * it (`hiddenUntilSeen`) and never wild (no spawn, guardian, shop or find
+   * table may hold it). Left out for every other species.
+   */
+  line: z.literal('boss').optional(),
 });
 export type Species = z.infer<typeof SpeciesSchema>;
+
+/**
+ * Whether a species stays unknown to a player until they've met it (#190
+ * plan §7): a secret one, or a mini-boss line. The one rule every view that
+ * withholds unmet species uses (catalog, battles' `speciesDefs`).
+ */
+export function hiddenUntilSeen(species: Pick<Species, 'rarity' | 'line'>): boolean {
+  return species.rarity === 'secret' || species.line === 'boss';
+}

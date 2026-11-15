@@ -357,6 +357,13 @@ describe.skipIf(!url)('mini-boss visits and fights (#190b, needs DATABASE_URL)',
     expect(battle.status).toBe('finished');
     expect(battle.view.phase).toMatchObject({ type: 'over', result: { winner: 'a' } });
     expect(battle.rewards?.coins).toEqual({ patch: 5, heart: 5 });
+    // The sure bundle, in the bag and the ledger against this battle.
+    expect(battle.rewards?.bundle).toEqual(RULES.bundle);
+    const ledger = await db.query.resourceLedger.findMany({
+      where: (t, { and, eq: is }) => and(is(t.userId, owner.id), is(t.reason, 'boss')),
+    });
+    expect(Object.fromEntries(ledger.map((l) => [l.itemId, l.delta]))).toEqual(RULES.bundle);
+    expect(ledger.every((l) => l.refId === battle.id)).toBe(true);
 
     expect((await visit(server, owner, mapId))!.state).toBe('beaten');
     const again = await fight(server, owner, mapId);

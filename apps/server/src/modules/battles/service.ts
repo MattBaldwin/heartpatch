@@ -58,6 +58,7 @@ import {
   type Species,
   type StartWildBattleRequest,
   setupSpecies,
+  hiddenUntilSeen,
 } from '@heartpatch/shared';
 import type { ChallengeRow } from '../challenges/repo.js';
 import { createChallengesRepo } from '../challenges/repo.js';
@@ -383,6 +384,8 @@ export interface MinibossBattlePort {
     winner: BattleSideId | 'draw',
     at: Date,
   ) => Promise<NewGameEvent[]>;
+  /** The guaranteed bundle a won fight pays (server-only rules), granted at step 11. */
+  bundle: () => ItemCounts;
 }
 
 /** What a capture try costs (design doc §6): one Heart Charm. */
@@ -585,7 +588,10 @@ function defsFor(
       // A species dropped from the data since (an old battle) is left out;
       // the client names it "Mystery squishy" rather than the read failing.
       const species = content.species.get(squishy.speciesId);
-      if (species && !PUBLIC_SPECIES.has(species.id)) speciesDefs.set(species.id, species);
+      // Met now: a secret or mini-boss species' def goes with the battle (#190).
+      if (species && (!PUBLIC_SPECIES.has(species.id) || hiddenUntilSeen(species))) {
+        speciesDefs.set(species.id, species);
+      }
       for (const id of squishy.moves) {
         const move = content.moves.get(id);
         if (move && !PUBLIC_MOVES.has(id)) moveDefs.set(id, move);
@@ -623,6 +629,7 @@ export function rewardsFor(
     fullXpResetAt: b.fullXpResetAt,
     coins: b.coins,
     unpaid: b.unpaid,
+    bundle: null,
     b,
   };
 }
@@ -1442,6 +1449,20 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         await grantItems(tx, { mapId: row.mapId, userId }, items, 'build-refund', refId);
       }
     }
+    // A won mini-boss fight's sure bundle (#190): its inventory rows (step
+    // 11) after the squishy locks, before coins and the events. A scoot pays none.
+    const bundle =
+      row.kind === 'miniboss' &&
+      options.minibosses &&
+      result.winner === PLAYER_SIDE &&
+      result.reason !== 'forfeit'
+        ? options.minibosses.bundle()
+        : null;
+    if (bundle) {
+      const owner = { mapId: row.mapId, userId: row.playerUserId };
+      await lockGrantRows(tx, row.mapId, [{ userId: owner.userId, items: bundle }]);
+      await grantItems(tx, owner, bundle, 'boss', row.id, at);
+    }
     const landEvents = tile.afterRefunds ? await tile.afterRefunds(tx, at) : [];
     // When full XP comes back (#201): wins count from the patch's midnight.
     const map = fellOff || defenderFellOff ? await createMapsRepo(tx).findMap(row.mapId) : null;
@@ -1571,6 +1592,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         fullXpResetAt,
         coins: paid.get(row.playerUserId) ?? { patch: 0, heart: 0 },
         unpaid: aUnpaid,
+        bundle,
         b:
           sideBUserId !== null
             ? {
@@ -1607,6 +1629,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         userId: row.playerUserId,
         mapId: row.mapId,
         tileId: null,
+        boss: row.kind === 'miniboss',
         at,
       });
     }

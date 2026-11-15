@@ -11,7 +11,9 @@ export const BOSS_EVENTS: BossEventRules = {
   minPartnerLevel: 18, // TUNE: no visits until some member's Partner is this grown
   minPlayerLevel: 12, // TUNE: under this, "Too big for now!"
   levelBonus: 2, // TUNE: a couple of levels above the Keeper's Partner
-  minLevel: 15, // TUNE:
+  minLevel: 15, // TUNE: so an early visit still feels BIG
   triesPerDay: 3, // TUNE: a loss costs nothing; the boss stays
   bag: [],
+  // TUNE: a win's sure bundle; 3 Heart Charms is one befriend ask (190c).
+  bundle: { 'heart-charm': 3, heartdust: 5, treats: 3 },
 };

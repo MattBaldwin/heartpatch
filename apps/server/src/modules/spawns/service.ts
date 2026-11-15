@@ -11,6 +11,7 @@ import {
   type PublicUser,
   type Species,
   type WildHints,
+  hiddenUntilSeen,
 } from '@heartpatch/shared';
 import {
   resolveWildSpawn,
@@ -192,10 +193,13 @@ export function createSpawnsService(options: SpawnsServiceOptions): SpawnsServic
     catalog: async (user, mapId) => {
       await requireMember(db, user, mapId);
       const seen = await store.listSeen(mapId, user.id);
-      // Secret species go only to a player who has met them (CLAUDE.md rule 6).
+      // Secret and mini-boss species go only to a player who has met them
+      // (CLAUDE.md rule 6, #190 `hiddenUntilSeen`).
       const speciesDefs = seen.flatMap(({ speciesId }) => {
         const species = data.species.get(speciesId);
-        return species && !PUBLIC_SPECIES.has(speciesId) ? [species] : [];
+        return species && (!PUBLIC_SPECIES.has(speciesId) || hiddenUntilSeen(species))
+          ? [species]
+          : [];
       });
       return {
         entries: seen.map((row) => ({

@@ -10,6 +10,7 @@ import { RECIPES } from './recipes.js';
 import { RESOURCES, RETIRED_RESOURCES as RETIRED } from './resources.js';
 import { SEASONS } from './seasons.js';
 import { GLIMMER_SWAP, SELL_RULES, TRADE_VALUES } from './trading.js';
+import { hiddenUntilSeen } from '../schemas/data/species.js';
 import { isWater } from '../schemas/data/terrains.js';
 import { TERRAINS } from './terrains.js';
 import { CELLAR_RULES } from './server/cellar.js';
@@ -209,5 +210,43 @@ describe('every season has something of its own (#735)', () => {
 
   it('the empty list only names seasons that are still empty', () => {
     expect([...empty].filter((id) => tagged.has(id))).toEqual([]);
+  });
+});
+
+describe('mini-boss lines (#190 plan §7)', () => {
+  /** Every species id a table names under `species` / `speciesId`, the boss bag aside. */
+  const wildIds = (root: unknown, skip: ReadonlySet<unknown>): Set<string> => {
+    const ids = new Set<string>();
+    const seen = new Set<unknown>();
+    const walk = (value: unknown, key: string | null) => {
+      if (value === null || typeof value !== 'object') {
+        if (typeof value === 'string' && (key === 'species' || key === 'speciesId')) ids.add(value);
+        return;
+      }
+      if (seen.has(value) || skip.has(value)) return;
+      seen.add(value);
+      for (const [k, v] of Object.entries(value)) walk(v, Array.isArray(value) ? key : k);
+    };
+    walk(root, null);
+    return ids;
+  };
+
+  it('never puts a boss line in a wild, guardian, shop or find table', async () => {
+    const server = await import('./server/index.js');
+    const shared = await import('../index.js');
+    const all = [...SPECIES, ...SECRET_SPECIES];
+    const bosses = all.filter((s) => s.line === 'boss').map((s) => s.id);
+    const named = wildIds({ server, shared }, new Set([server.BOSS_EVENTS]));
+    expect(named.size).toBeGreaterThan(10); // it reached the spawn and find tables
+    expect(bosses.filter((id) => named.has(id))).toEqual([]);
+    // The walk does find a table's species, so a boss there would fail.
+    expect(wildIds({ t: [{ entries: [{ species: 'x' }] }] }, new Set()).has('x')).toBe(true);
+  });
+
+  it('hides boss lines and secret species until seen, and nothing else', () => {
+    const base = SPECIES.find((s) => s.rarity !== 'secret')!;
+    expect(hiddenUntilSeen(base)).toBe(false);
+    expect(hiddenUntilSeen({ ...base, line: 'boss' })).toBe(true);
+    for (const s of SECRET_SPECIES) expect(hiddenUntilSeen(s), s.id).toBe(true);
   });
 });
