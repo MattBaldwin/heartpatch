@@ -240,7 +240,10 @@ function placementsFor(part: Part, height: number, rng: Rng): PartPlacement[] {
         layout.kind === 'ring' && layout.spread > 0 ? (a - part.around) / layout.spread : 0;
       const fan = splay * offset;
       const side = fan === 0 ? 0 : fan > 0 ? 1 : -1;
-      out.push({ around: a * DEG, up: u * DEG, size, tilt, splay: Math.abs(fan), side });
+      // A ring with `grow` makes its outer copies bigger (#234 round 11b).
+      const k = layout.kind === 'ring' && layout.grow ? 1 + layout.grow * Math.abs(offset) : 1;
+      const copySize: Vec3 = k === 1 ? size : [size[0] * k, size[1] * k, size[2] * k];
+      out.push({ around: a * DEG, up: u * DEG, size: copySize, tilt, splay: Math.abs(fan), side });
     }
     return out;
   }

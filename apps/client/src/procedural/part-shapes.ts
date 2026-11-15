@@ -149,41 +149,46 @@ function box(rings: number, segments: number): MeshArrays {
 }
 
 // TUNE: the bent dowel's centreline, in lengths of the whole stick.
-// Round 11 (#234): a real rake-tine hook, curling forward and back down by
-// 135° with a reach about 2.4× the dowel's thickness.
+// Round 11b (#234, v13): a leaf-rake tine. Long and straight, then a gentle,
+// wide 35° forward arc at the tip with no return curl, tapering to half its
+// root thickness at the tip.
 const BENT_STRAIGHT = 0.62; // straight from the root
-const BENT_RADIUS = 0.2; // the hook's curve
-const BENT_ANGLE = (135 * Math.PI) / 180; // how far the tip turns: forward, then back down
+const BENT_RADIUS = 0.5; // the tip's curve
+const BENT_ANGLE = (35 * Math.PI) / 180; // how far the tip turns forward
 const BENT_TIP = 0.06; // straight again after the bend
-const BENT_TUBE = 0.08; // the dowel's radius
+const BENT_TUBE = 0.08; // the dowel's radius at the root
+const BENT_TAPER = 0.5; // the tip's radius, as a fraction of the root's
+
+/** The `bent` dowel's centreline end point `[y, z]` and its whole length. */
+function bentEnd(): { y: number; z: number; total: number } {
+  const arcLen = BENT_RADIUS * BENT_ANGLE;
+  const y = BENT_STRAIGHT + BENT_RADIUS * Math.sin(BENT_ANGLE) + Math.cos(BENT_ANGLE) * BENT_TIP;
+  const z = BENT_RADIUS * (1 - Math.cos(BENT_ANGLE)) + Math.sin(BENT_ANGLE) * BENT_TIP;
+  return { y, z, total: BENT_STRAIGHT + arcLen + BENT_TIP };
+}
 
 /**
  * The `bent` dowel's own `[width, length, thickness]` before it is fitted
  * to the unit box. A part sized in these proportions keeps the dowel round
- * and the hook a circular curl, whatever its overall scale.
+ * and the tip a circular arc, whatever its overall scale. The bend never
+ * passes 90°, so the centreline's far end is its highest and most forward
+ * point; the root's round end adds its radius below, the tip's above.
  */
 export function bentProportions(): Vec3 {
-  const arcLen = BENT_RADIUS * BENT_ANGLE;
-  let maxY = 0;
-  for (let i = 0; i <= 200; i++) {
-    const a = (Math.min(i / 200, 1) * arcLen) / BENT_RADIUS;
-    maxY = Math.max(maxY, BENT_STRAIGHT + BENT_RADIUS * Math.sin(a));
-  }
-  const endY = BENT_STRAIGHT + BENT_RADIUS * Math.sin(BENT_ANGLE);
-  const endZ = BENT_RADIUS * (1 - Math.cos(BENT_ANGLE));
-  maxY = Math.max(maxY, endY + Math.cos(BENT_ANGLE) * BENT_TIP);
-  const maxZ = Math.max(endZ, endZ + Math.sin(BENT_ANGLE) * BENT_TIP);
-  return [2 * BENT_TUBE, maxY + 2 * BENT_TUBE, maxZ + 2 * BENT_TUBE];
+  const { y, z } = bentEnd();
+  const tip = BENT_TUBE * BENT_TAPER;
+  return [2 * BENT_TUBE, y + BENT_TUBE + tip, z + BENT_TUBE + tip];
 }
 
 /**
  * A round-ended dowel growing along +y that bends towards +z (the front)
- * near its tip: a rake tine. The bend stays in the yz plane, so x is the
- * same sideways direction all along. Analytic normals.
+ * near its tip and narrows towards it: a leaf-rake tine. The bend stays in
+ * the yz plane, so x is the same sideways direction all along. Analytic
+ * normals (the taper's slight slope is ignored, as on `fang`).
  */
 function bent(rings: number, segments: number): MeshArrays {
   const arcLen = BENT_RADIUS * BENT_ANGLE;
-  const total = BENT_STRAIGHT + arcLen + BENT_TIP;
+  const { total } = bentEnd();
   // The centreline point and unit tangent at distance `s` along it.
   const along = (s: number): { c: Vec3; t: Vec3 } => {
     if (s <= BENT_STRAIGHT) return { c: [0, s, 0], t: [0, 1, 0] };
@@ -193,6 +198,7 @@ function bent(rings: number, segments: number): MeshArrays {
     const rest = s - BENT_STRAIGHT - arcLen;
     return rest > 0 ? { c: [0, c[1] + t[1] * rest, c[2] + t[2] * rest], t } : { c, t };
   };
+  const radius = (s: number): number => BENT_TUBE * (1 - (1 - BENT_TAPER) * (s / total));
   const capRings = Math.max(2, Math.round(rings / 3));
   const bodyRings = rings * 2;
   const count = capRings * 2 + bodyRings;
@@ -212,6 +218,7 @@ function bent(rings: number, segments: number): MeshArrays {
       beta = 0;
     }
     const { c, t } = along(s);
+    const r = radius(s);
     // Perpendicular to the dowel in the yz plane: [0, -t.z, t.y].
     const across: Vec3 = [0, -t[2], t[1]];
     for (let k = 0; k <= segments; k++) {
@@ -222,7 +229,7 @@ function bent(rings: number, segments: number): MeshArrays {
         Math.sin(beta) * t[1] + Math.cos(beta) * ring[1],
         Math.sin(beta) * t[2] + Math.cos(beta) * ring[2],
       ]);
-      positions.push(c[0] + BENT_TUBE * n[0], c[1] + BENT_TUBE * n[1], c[2] + BENT_TUBE * n[2]);
+      positions.push(c[0] + r * n[0], c[1] + r * n[1], c[2] + r * n[2]);
       normals.push(...n);
     }
   }

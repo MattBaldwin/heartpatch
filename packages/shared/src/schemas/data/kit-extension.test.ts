@@ -180,3 +180,27 @@ describe('front anchor and standoff', () => {
     ]);
   });
 });
+
+describe('ring grow (#234 round 11b)', () => {
+  const ring = { ...bar, id: 'test-ring', slot: 'fangs' as const, shape: 'capsule' as const };
+  it('parses an optional grow on a ring, and keeps it in range', () => {
+    const grown = { ...ring, layout: { kind: 'ring', count: 5, spread: 60, grow: 0.12 } };
+    expect(PartSchema.safeParse(grown).success).toBe(true);
+    expect(
+      PartSchema.safeParse({ ...ring, layout: { kind: 'ring', count: 5, spread: 60 } }).success,
+    ).toBe(true);
+    for (const grow of [-0.1, 0.6]) {
+      expect(
+        PartSchema.safeParse({ ...ring, layout: { kind: 'ring', count: 5, spread: 60, grow } })
+          .success,
+      ).toBe(false);
+    }
+  });
+
+  it('only rings take grow', () => {
+    expect(
+      PartSchema.safeParse({ ...ring, layout: { kind: 'row', count: 3, to: 20, grow: 0.1 } })
+        .success,
+    ).toBe(false);
+  });
+});

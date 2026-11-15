@@ -146,11 +146,12 @@ export const DRAFT_PARTS: Part[] = [
   }),
 
   part({
-    // Freckles across the nose: on the head (cheeks slot), not the torso.
+    // Freckles across the nose: on the head, not the torso. Round 11b: tiny
+    // bumps in the ears slot, so the mouth cavity can take cheeks (plain dark).
     id: 'draft-face-freckles',
-    slot: 'cheeks',
+    slot: 'ears',
     shape: 'ellipsoid',
-    size: [0.03, 0.03, 0.014],
+    size: [0.03, 0.014, 0.03], // [width, out from the face, height]
     color: 'detail',
     layout: { kind: 'scatter', count: 8, aroundRange: 34, upRange: 6 },
     around: 0,
@@ -181,9 +182,12 @@ export const DRAFT_PARTS: Part[] = [
   // dark cavity behind the tines so it still reads as a mouth. No handle,
   // stub, knob or socket anywhere.
   // Round 11: a garden-rake head, not a comb. The tines come off the bar's
-  // FRONT face (`anchor: 'front'`), sparse and parallel, angled down and out
-  // towards the viewer, each ending in a big forward hook (`bent`), with a
-  // dark rivet at each root. 3, 4 and 5 tines by stage, built the same way.
+  // FRONT face (`anchor: 'front'`), with a dark rivet at each root.
+  // Round 11b (v13): each tine roots on its rivet in the middle of the bar's
+  // front face and passes over its lower edge, leaning ~42° towards the
+  // viewer; a leaf-rake tine (`bent`: tapered, a gentle, wide 35° forward arc at
+  // the tip, no curl); the row fans out 6° with the outer tines longer
+  // (ring `grow`). 3, 4 and 5 tines by stage, built the same way.
   part({
     // Pileup's baby crossbar: its mouth, a little wider than its face.
     id: 'draft-rake-bar-small',
@@ -195,7 +199,7 @@ export const DRAFT_PARTS: Part[] = [
     around: 0,
     up: -12,
     tilt: 12, // levels the plank on the curving face
-    sink: 0.45,
+    sink: 0.6, // TUNE: tucked into the cheeks, a lip not a plank (round 11b)
     jitter: 0,
     replaces: 'mouth',
   }),
@@ -204,16 +208,17 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tines-small',
     slot: 'fangs',
     shape: 'bent',
-    size: [0.062, 0.372, 0.207], // bentProportions() scaled: a round dowel, a round hook
+    size: [0.059, 0.4, 0.091], // bentProportions() scaled, so the dowel stays round
     color: 'metal',
-    layout: { kind: 'ring', count: 3, spread: 68 }, // TUNE: gaps ~2.5x a tine's thickness
+    layout: { kind: 'ring', count: 3, spread: 68, grow: 0.12 }, // TUNE: gaps ~2.5x a tine's thickness; outer tines longer
     around: 0,
-    up: -19, // TUNE: the bar's lower front face
-    tilt: 40, // TUNE: down and out, ~40 degrees towards the viewer (30 read as straight down head-on)
+    up: -12, // TUNE: the bar's middle, on its rivet
+    tilt: 42, // TUNE: ~42 degrees towards the viewer reads as ~27 in the 3/4 view (yaw 35)
+    splay: 6, // TUNE: a gentle fan, not claws
     sink: 0.04,
     jitter: 0,
     anchor: 'front',
-    standoff: 0.12, // TUNE: just inside the bar's front face
+    standoff: 0.112, // TUNE: on the bar's front face
   }),
   part({
     // A dark rivet at each tine's root on the bar's front face.
@@ -224,24 +229,24 @@ export const DRAFT_PARTS: Part[] = [
     color: 'ink',
     layout: { kind: 'ring', count: 3, spread: 68 },
     around: 0,
-    up: -17,
+    up: -12, // the bar's middle, on each tine's root
     tilt: 90, // straight out towards the viewer
     sink: 0.4,
     jitter: 0,
     anchor: 'front',
-    standoff: 0.13,
+    standoff: 0.122,
   }),
   part({
     // Pileup's mouth cavity behind its tines.
     id: 'draft-rake-mouth-small',
-    slot: 'ears',
+    slot: 'cheeks', // a head surface patch: plain dark, no rainbow rim (round 11b)
     shape: 'ellipsoid',
-    size: [0.44, 0.06, 0.22],
+    size: [0.48, 0.24, 0.03], // [width, height, depth]: a flat dark opening, not a plate
     color: 'ink',
     layout: { kind: 'single' },
     around: 0,
-    up: -34, // TUNE: under the bar, behind the tines
-    sink: 0.85, // recessed into the face
+    up: -25, // TUNE: its top tucked behind the bar
+    sink: 0.5, // flush with the face
     jitter: 0,
   }),
   part({
@@ -255,7 +260,7 @@ export const DRAFT_PARTS: Part[] = [
     around: 0,
     up: -16,
     tilt: 16, // levels the plank on the curving face
-    sink: 0.45,
+    sink: 0.6, // TUNE: tucked into the cheeks, a lip not a plank (round 11b)
     jitter: 0,
     replaces: 'mouth',
   }),
@@ -264,16 +269,17 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tines-mid',
     slot: 'fangs',
     shape: 'bent',
-    size: [0.067, 0.41, 0.228], // bentProportions() scaled: a round dowel, a round hook
+    size: [0.067, 0.45, 0.102], // bentProportions() scaled, so the dowel stays round
     color: 'metal',
-    layout: { kind: 'ring', count: 4, spread: 86 }, // TUNE: gaps ~2.5x a tine's thickness
+    layout: { kind: 'ring', count: 4, spread: 86, grow: 0.12 }, // TUNE: gaps ~2.5x a tine's thickness; outer tines longer
     around: 0,
-    up: -21, // TUNE: the bar's lower front face
-    tilt: 40, // TUNE: down and out, ~40 degrees towards the viewer (30 read as straight down head-on)
+    up: -16, // TUNE: the bar's middle, on its rivet
+    tilt: 42, // TUNE: ~42 degrees towards the viewer reads as ~27 in the 3/4 view (yaw 35)
+    splay: 6, // TUNE: a gentle fan, not claws
     sink: 0.04,
     jitter: 0,
     anchor: 'front',
-    standoff: 0.094, // TUNE: just inside the bar's front face
+    standoff: 0.085, // TUNE: on the bar's front face
   }),
   part({
     // A dark rivet at each tine's root on the bar's front face.
@@ -284,24 +290,24 @@ export const DRAFT_PARTS: Part[] = [
     color: 'ink',
     layout: { kind: 'ring', count: 4, spread: 86 },
     around: 0,
-    up: -19,
+    up: -16, // the bar's middle, on each tine's root
     tilt: 90, // straight out towards the viewer
     sink: 0.4,
     jitter: 0,
     anchor: 'front',
-    standoff: 0.104,
+    standoff: 0.095,
   }),
   part({
     // Rakeling's mouth cavity behind its tines.
     id: 'draft-rake-mouth',
-    slot: 'ears',
+    slot: 'cheeks', // a head surface patch: plain dark, no rainbow rim (round 11b)
     shape: 'ellipsoid',
-    size: [0.66, 0.06, 0.3],
+    size: [0.68, 0.3, 0.03], // [width, height, depth]: a flat dark opening, not a plate
     color: 'ink',
     layout: { kind: 'single' },
     around: 0,
-    up: -36, // TUNE: under the bar, behind the tines
-    sink: 0.85, // recessed into the face
+    up: -28, // TUNE: its top tucked behind the bar
+    sink: 0.5, // flush with the face
     jitter: 0,
   }),
   part({
@@ -315,7 +321,7 @@ export const DRAFT_PARTS: Part[] = [
     around: 0,
     up: -18,
     tilt: 18, // levels the plank on the curving face
-    sink: 0.45,
+    sink: 0.6, // TUNE: tucked into the cheeks, a lip not a plank (round 11b)
     jitter: 0,
     replaces: 'mouth',
   }),
@@ -324,16 +330,17 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tool-tines',
     slot: 'fangs',
     shape: 'bent',
-    size: [0.08, 0.49, 0.272], // bentProportions() scaled: a round dowel, a round hook
+    size: [0.08, 0.54, 0.123], // bentProportions() scaled, so the dowel stays round
     color: 'metal',
-    layout: { kind: 'ring', count: 5, spread: 105 }, // TUNE: gaps ~2.5x a tine's thickness
+    layout: { kind: 'ring', count: 5, spread: 105, grow: 0.12 }, // TUNE: gaps ~2.5x a tine's thickness; outer tines longer
     around: 0,
-    up: -25, // TUNE: the bar's lower front face
-    tilt: 40, // TUNE: down and out, ~40 degrees towards the viewer (30 read as straight down head-on)
+    up: -16.5, // TUNE: the bar's middle, on its rivet
+    tilt: 42, // TUNE: ~42 degrees towards the viewer reads as ~27 in the 3/4 view (yaw 35)
+    splay: 6, // TUNE: a gentle fan, not claws
     sink: 0.04,
     jitter: 0,
     anchor: 'front',
-    standoff: 0.148, // TUNE: just inside the bar's front face
+    standoff: 0.135, // TUNE: on the bar's front face
   }),
   part({
     // A dark rivet at each tine's root on the bar's front face.
@@ -344,24 +351,24 @@ export const DRAFT_PARTS: Part[] = [
     color: 'ink',
     layout: { kind: 'ring', count: 5, spread: 105 },
     around: 0,
-    up: -23,
+    up: -16.5, // the bar's middle, on each tine's root
     tilt: 90, // straight out towards the viewer
     sink: 0.4,
     jitter: 0,
     anchor: 'front',
-    standoff: 0.158,
+    standoff: 0.145,
   }),
   part({
     // Rakelet's mouth cavity behind the tines.
     id: 'draft-rake-tool-mouth',
-    slot: 'cheeks',
+    slot: 'cheeks', // a head surface patch: plain dark, no rainbow rim (round 11b)
     shape: 'ellipsoid',
-    size: [0.92, 0.06, 0.36], // round 11: bigger, so the tines read as teeth in a mouth
+    size: [0.92, 0.36, 0.03], // [width, height, depth]: a flat dark opening, not a plate
     color: 'ink',
     layout: { kind: 'single' },
     around: 0,
-    up: -38, // TUNE: under the bar, behind the tines
-    sink: 0.85, // recessed into the face
+    up: -30, // TUNE: its top tucked behind the bar
+    sink: 0.5, // flush with the face
     jitter: 0,
   }),
   part({

@@ -168,6 +168,13 @@ export const PartLayoutSchema = z.discriminatedUnion('kind', [
     kind: z.literal('ring'),
     count: z.number().int().min(2).max(16),
     spread: degrees(0, 180),
+    /**
+     * Opt-in (#234 round 11b): the outer copies are bigger, in proportion to
+     * how far round they sit, the outermost by nearly `grow` (0.1 is 10%
+     * bigger), so a leaf rake's tines read as a fan. Unset keeps every copy
+     * the same size, as before.
+     */
+    grow: z.number().min(0).max(0.5).optional(),
   }),
   /** `count` copies up the body at `around`, from `up` to `to` (a spine of spikes or fins). */
   z.strictObject({

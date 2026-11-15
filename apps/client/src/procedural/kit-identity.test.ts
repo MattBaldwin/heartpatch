@@ -232,11 +232,33 @@ describe('ring splay and the metal role (#234 round 8)', () => {
     expect(fan[0]?.splay).toBeLessThan((40 * Math.PI) / 180);
   });
 
-  it('keeps a ring without splay parallel', () => {
-    // Rakeling's tines set no splay.
-    for (const p of tinesOf('draft-rakeling').placements) {
+  it('keeps a ring without splay or grow parallel and the same size', () => {
+    // Rakeling's rivets set neither.
+    const rivets = squishyParams(
+      { id: 'draft-rakeling', visual: lookOf('draft-rakeling').visual },
+      'kit-ring',
+      drafts,
+    ).parts.find((p) => p.slot === 'horns');
+    expect(rivets?.placements).toHaveLength(4);
+    for (const p of rivets?.placements ?? []) {
       expect([p.splay, p.side]).toEqual([0, 0]);
+      expect(p.size).toEqual(rivets?.placements[0]?.size);
     }
+  });
+
+  it('makes outer copies of a ring with grow bigger, symmetrically (#234 round 11b)', () => {
+    const tines = tinesOf('draft-rakelet').placements;
+    expect(tines).toHaveLength(5);
+    const length = tines.map((p) => p.size[1]);
+    expect(length[0]).toBeCloseTo(length[4] ?? NaN);
+    expect(length[1]).toBeCloseTo(length[3] ?? NaN);
+    expect(length[0] ?? 0).toBeGreaterThan(length[1] ?? 0);
+    expect(length[1] ?? 0).toBeGreaterThan(length[2] ?? 0);
+    // grow 0.12: the outermost (offset 4/5) is 1 + 0.12 * 0.8 times the middle.
+    expect((length[0] ?? 0) / (length[2] ?? 1)).toBeCloseTo(1.096, 6);
+    // Each copy scales whole, so the dowel stays round.
+    for (const p of tines)
+      expect(p.size[0] / p.size[1]).toBeCloseTo(tines[2]!.size[0] / tines[2]!.size[1], 9);
   });
 
   it('colours metal parts the fixed metal grey', () => {
@@ -260,13 +282,29 @@ describe('ring splay and the metal role (#234 round 8)', () => {
   });
 });
 
-describe('bent hook proportions (#234 round 11)', () => {
-  it('curls into a hook at least twice the dowel thick', () => {
+describe('bent tine proportions (#234 round 11b)', () => {
+  it('ends in a gentle forward arc, not a hook', () => {
     const [width, length, thickness] = bentProportions();
-    // The hook's forward reach (thickness less the dowel) is 2-3x the dowel.
-    expect((thickness - width) / width).toBeGreaterThanOrEqual(2);
-    expect((thickness - width) / width).toBeLessThanOrEqual(3);
-    expect(length).toBeGreaterThan(thickness);
+    // The tip's forward reach (thickness less the dowel) is under the dowel's
+    // own thickness: a leaf-rake tip, not a return curl.
+    expect(thickness - width).toBeGreaterThan(0);
+    expect((thickness - width) / width).toBeLessThan(1);
+    expect(length / width).toBeGreaterThan(6);
+  });
+
+  it('tapers towards the tip', () => {
+    const mesh = partArrays('bent', LOD.high);
+    // Half-width in x near the root vs near the tip (y in the unit box).
+    let root = 0;
+    let tip = 0;
+    for (let i = 0; i < mesh.positions.length; i += 3) {
+      const x = Math.abs(mesh.positions[i] ?? 0);
+      const y = mesh.positions[i + 1] ?? 0;
+      if (y < -0.3) root = Math.max(root, x);
+      if (y > 0.3) tip = Math.max(tip, x);
+    }
+    expect(tip / root).toBeLessThan(0.8);
+    expect(tip / root).toBeGreaterThan(0.4);
   });
 
   it("sizes Rakelet's tines in the dowel's own proportions, so they stay round", () => {
@@ -350,9 +388,9 @@ describe("anchor: 'front' (#234 round 11)", () => {
         const r = root(partMatrix(body, head.scale, tines, p, head.offset));
         const d = [r[0]! - b[12]!, r[1]! - b[13]!, r[2]! - b[14]!];
         expect(Math.abs(along(d, 0)), id).toBeLessThan(0.5); // within the bar's width
-        expect(along(d, 1), id).toBeGreaterThan(0.25); // at its front face, not its underside
-        expect(along(d, 1), id).toBeLessThan(0.55);
-        expect(Math.abs(along(d, 2)), id).toBeLessThan(0.5); // within its height
+        expect(along(d, 1), id).toBeGreaterThan(0.4); // on its front face, not inside or under it
+        expect(along(d, 1), id).toBeLessThan(0.6);
+        expect(Math.abs(along(d, 2)), id).toBeLessThan(0.2); // in the middle of its height (round 11b)
       }
     }
   });
