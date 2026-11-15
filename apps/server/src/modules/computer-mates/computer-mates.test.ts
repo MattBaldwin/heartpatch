@@ -220,6 +220,22 @@ describe.skipIf(!url)('computer patch-mates (#386a, needs DATABASE_URL)', () => 
     expect((await setSwitch(server, owner, map.id, true)).statusCode).toBe(200);
   });
 
+  it('the switch stays shut on a Wild Isle (until 386e)', async () => {
+    const server = await start({ HP_COMPUTER_MATES: 'on', HP_WILD_ISLE: 'on' });
+    const owner = await player();
+    const made = await call(server, 'POST', '/maps', owner, {
+      name: 'Splash Cove',
+      timeZone: 'UTC',
+      patchType: 'wild-isle',
+    });
+    expect(made.statusCode).toBe(201);
+    const isle = MapResponseSchema.parse(made.json()).map;
+    const on = await setSwitch(server, owner, isle.id, true);
+    expect(on.statusCode).toBe(409);
+    expect(errorOf(on).message).toMatch(/Wild Isle/);
+    expect((await activeMates(isle.id)).length).toBe(0);
+  });
+
   it('is NOT_FOUND and left out of details while HP_COMPUTER_MATES is off', async () => {
     const server = await start({ HP_COMPUTER_MATES: 'off' });
     const owner = await player();
@@ -494,6 +510,23 @@ describe.skipIf(!url)('computer patch-mates (#386a, needs DATABASE_URL)', () => 
     // Land is never handed over: the leaver's tiles went wild, not to the friend.
     const leaverOld = await tilesOf(map.id, [smallest]);
     expect(leaverOld.length).toBe(0);
+  });
+
+  it('switching on when already on tops the patch back up to fillTo, and no further', async () => {
+    const server = await start();
+    const { owner, map, members } = await patchWith(server, 1);
+    expect((await setSwitch(server, owner, map.id, true)).statusCode).toBe(200);
+    expect((await activeMates(map.id)).length).toBe(COMPUTER_MATES.rules.fillTo - 2);
+    // A friend leaves: one kid and two mates.
+    expect((await call(server, 'POST', `/maps/${map.id}/leave`, members[0]!)).statusCode).toBe(204);
+    expect((await activeMates(map.id)).length).toBe(COMPUTER_MATES.rules.fillTo - 2);
+    // The owner switches on again: back to fillTo.
+    expect((await setSwitch(server, owner, map.id, true)).statusCode).toBe(200);
+    const topped = await activeMates(map.id);
+    expect(topped.length).toBe(COMPUTER_MATES.rules.fillTo - 1);
+    // Again: nothing more.
+    expect((await setSwitch(server, owner, map.id, true)).statusCode).toBe(200);
+    expect(await activeMates(map.id)).toEqual(topped);
   });
 
   it('join is never refused because of computer mates', async () => {

@@ -21,6 +21,7 @@ export { GUARDIAN_RULES } from './guardian-rules.js';
 export * from '../../hollow/rescue-guardians.js';
 export { RESCUE_GUARDIANS } from './rescue-guardians.js';
 export * from '../../schemas/data/long-night-secrets.js';
+export * from '../../computer-mates/policy.js';
 export {
   ComputerMateRulesSchema,
   ComputerMatesSecretsSchema,

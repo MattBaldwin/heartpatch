@@ -1,4 +1,4 @@
-import type { MapFillRules } from './map-fill-config.js';
+import { COMPUTER_MATES_GATE, COMPUTER_MATES_GATES, type MapFillRules } from './map-fill-config.js';
 import { MAP_FILL_LIMITS, type MapFillRun } from './map-fill.js';
 
 /** What one run comes to. */
@@ -30,7 +30,9 @@ export interface MapFillSummary {
 
 export function summariseMapFill(run: MapFillRun): MapFillSummary {
   const { seats } = run.scenario;
-  const keeps = seats.flatMap((seat, s) => (seat.stopsAfterDay === null ? [s] : []));
+  const keeps = seats.flatMap((seat, s) =>
+    seat.stopsAfterDay === null && seat.computer === undefined ? [s] : [],
+  );
   const sum = (pick: (d: MapFillRun['days'][number]) => number) =>
     run.days.reduce((total, d) => total + pick(d), 0);
   return {
@@ -190,9 +192,153 @@ export function renderMapFill(
     lines.push('');
   }
 
+  const mates = computerMatesGates(runs);
+  if (mates.rows.length > 0) {
+    lines.push('## Computer mates (#386c)');
+    lines.push('');
+    lines.push(mateRowsTable(mates.rows));
+    lines.push('');
+    for (const g of mates.gates) lines.push(`- ${g.pass ? 'PASS' : 'FAIL'} ${g.line}`);
+    lines.push('');
+  }
+
   lines.push('## Not modelled');
   lines.push('');
   for (const limit of MAP_FILL_LIMITS) lines.push(`- ${limit}`);
   lines.push('');
   return lines.join('\n');
+}
+
+/** One computer-mates gate line (#386c, plan §9): soft, printed PASS/FAIL. */
+export interface MateGate {
+  readonly gate: 'a' | 'c' | 'd';
+  readonly rules: string;
+  readonly pass: boolean;
+  readonly line: string;
+}
+
+/** A row per solo scenario: the kid's land against the 4-kid patch, and the mates'. */
+export interface MateRow {
+  readonly scenario: string;
+  readonly rules: string;
+  readonly kidTiles: number;
+  readonly fullKidTiles: number | null;
+  readonly percent: number | null;
+  readonly homeRingLost: number;
+  readonly mateTiles: readonly number[];
+  readonly mateCap: number | null;
+  readonly mateClaims: number;
+  readonly mateFires: number;
+  readonly mateGuards: number;
+}
+
+const outer = (run: MapFillRun, day: number, s: number) => {
+  const d = run.days[day - 1];
+  return d ? (d.tiles[s] ?? 0) - (d.homeRing[s] ?? 0) : 0;
+};
+
+/**
+ * The computer-mates gates (#386c): (a) a solo kid with 3 mates loses no
+ * home-ring tile and ends `byDay` with at least 100 − `withinPercent` % of
+ * the same kid's land in the 4-kid patch (the line says if it's above the
+ * ± band); (c) a mate never holds more outer land than its
+ * `landCapPercent` cap; (d) on a day nobody opens the patch, mates do nothing.
+ */
+export function computerMatesGates(runs: readonly MapFillRun[]): {
+  rows: MateRow[];
+  gates: MateGate[];
+} {
+  const { byDay, withinPercent, away } = COMPUTER_MATES_GATE;
+  const rows: MateRow[] = [];
+  const gates: MateGate[] = [];
+  const mates = (run: MapFillRun) =>
+    run.scenario.seats.flatMap((seat, s) => (seat.computer === undefined ? [] : [s]));
+  const sum = (run: MapFillRun, pick: (d: MapFillRun['days'][number], s: number) => number) =>
+    run.days.reduce((t, d) => t + mates(run).reduce((u, s) => u + pick(d, s), 0), 0);
+  const soloIds = [...COMPUTER_MATES_GATES.map((g) => g.solo), away];
+  for (const run of runs.filter((r) => soloIds.includes(r.scenario.id as never))) {
+    const pair = COMPUTER_MATES_GATES.find((g) => g.solo === run.scenario.id);
+    const full = pair
+      ? runs.find((r) => r.scenario.id === pair.full && r.rules.label === run.rules.label)
+      : undefined;
+    const kidTiles = run.days[byDay - 1]?.tiles[0] ?? 0;
+    const fullKidTiles = full ? (full.days[byDay - 1]?.tiles[0] ?? 0) : null;
+    const percent = fullKidTiles ? Math.round((kidTiles * 100) / fullKidTiles) : null;
+    const homeRingLost = Math.max(...run.days.map((d) => 7 - (d.homeRing[0] ?? 0)));
+    const mateCap = run.days.at(-1)?.mateCap.find((c) => c !== null) ?? null;
+    rows.push({
+      scenario: run.scenario.id,
+      rules: run.rules.label,
+      kidTiles,
+      fullKidTiles,
+      percent,
+      homeRingLost,
+      mateTiles: mates(run).map((s) => outer(run, byDay, s)),
+      mateCap,
+      mateClaims: sum(run, (d, s) => d.mateClaims[s] ?? 0),
+      mateFires: sum(run, (d, s) => d.mateFires[s] ?? 0),
+      mateGuards: sum(run, (d, s) => d.mateGuards[s] ?? 0),
+    });
+    const tag = `${run.scenario.id} / ${run.rules.label}`;
+    if (pair && percent !== null) {
+      // Plan §9 gates the floor (at least 90 %); the brief's band (±10 %)
+      // is printed too, so a kid well above the 4-kid row shows as such.
+      const pass = homeRingLost === 0 && percent >= 100 - withinPercent;
+      const band =
+        percent > 100 + withinPercent ? `above the ±${String(withinPercent)} % band` : 'in band';
+      gates.push({
+        gate: 'a',
+        rules: run.rules.label,
+        pass,
+        line: `(a) ${tag}: kid ${String(kidTiles)} tiles on day ${String(byDay)} vs ${String(fullKidTiles)} in ${pair.full} (${String(percent)} %, floor ${String(100 - withinPercent)} %, ${band}), home ring lost ${String(homeRingLost)}`,
+      });
+    }
+    let worst = 0;
+    for (const d of run.days) {
+      for (const s of mates(run)) {
+        const cap = d.mateCap[s] ?? 0;
+        worst = Math.max(worst, outer(run, d.day, s) - cap);
+      }
+    }
+    gates.push({
+      gate: 'c',
+      rules: run.rules.label,
+      pass: worst <= 0,
+      line: `(c) ${tag}: mates' most outer land over the cap (${String(mateCap)}) on any day: ${String(Math.max(0, worst))}`,
+    });
+    const cold = run.days.filter((d) => !d.warm);
+    const acted = cold.reduce(
+      (t, d) =>
+        t +
+        mates(run).reduce(
+          (u, s) => u + (d.mateClaims[s] ?? 0) + (d.mateFires[s] ?? 0) + (d.mateGuards[s] ?? 0),
+          0,
+        ),
+      0,
+    );
+    if (run.scenario.id === away) {
+      gates.push({
+        gate: 'd',
+        rules: run.rules.label,
+        pass: cold.length > 0 && acted === 0,
+        line: `(d) ${tag}: ${String(cold.length)} days nobody opened the patch, mate intents on them ${String(acted)}`,
+      });
+    }
+  }
+  return { rows, gates };
+}
+
+/** The computer-mates rows as a Markdown table. */
+export function mateRowsTable(rows: readonly MateRow[]): string {
+  const { byDay } = COMPUTER_MATES_GATE;
+  const out = [
+    `| Scenario | Rules | Kid tiles day ${String(byDay)} | 4-kid patch | % | Home ring lost | Mates' outer land day ${String(byDay)} | Mate cap | Mate claims / fires / guards |`,
+    '|---|---|---:|---:|---:|---:|---|---:|---|',
+  ];
+  for (const r of rows) {
+    out.push(
+      `| ${r.scenario} | ${r.rules} | ${String(r.kidTiles)} | ${cell(r.fullKidTiles)} | ${cell(r.percent)} | ${String(r.homeRingLost)} | ${r.mateTiles.join(' / ')} | ${cell(r.mateCap)} | ${String(r.mateClaims)} / ${String(r.mateFires)} / ${String(r.mateGuards)} |`,
+    );
+  }
+  return out.join('\n');
 }

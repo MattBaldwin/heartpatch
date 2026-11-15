@@ -2,7 +2,7 @@ import { GAME_DATA } from '../../src/data/index.js';
 import { HOLLOW_RULES } from '../../src/data/hollow.js';
 import { heartSeedOf, pickReclaimed, rollStrikes, strengthOf } from '../../src/hollow/index.js';
 import { isTradingPost } from '../../src/territory/reach.js';
-import { hexDistance, hexKey, hexNeighbors, type HexKey } from '../../src/hex/index.js';
+import { hexDistance, hexKey, hexNeighbors, type Hex, type HexKey } from '../../src/hex/index.js';
 import { generateMap, type MapTile } from '../../src/mapgen/index.js';
 import { isWater } from '../../src/schemas/data/terrains.js';
 import { deriveSeed, Rng } from '../../src/rng/index.js';
@@ -17,7 +17,19 @@ import {
 import { dailyLossCap } from '../../src/territory/index.js';
 import { canFade, landMood, tilesGoingWild, wildPerNight } from '../../src/territory/tending.js';
 import { TERRITORY_RULES } from '../../src/data/territory.js';
-import type { MapFillRules, MapFillScenario, Seat } from './map-fill-config.js';
+import { COMPUTER_MATES } from '../../src/data/server/computer-mates.js';
+import {
+  mateLandCap,
+  nextIntent,
+  type MateView,
+  type MateViewTile,
+} from '../../src/computer-mates/policy.js';
+import {
+  MATE_STEPS_WHILE_OPEN,
+  type MapFillRules,
+  type MapFillScenario,
+  type Seat,
+} from './map-fill-config.js';
 
 /*
  * A deterministic day-by-day map-fill model (owner decision 2026-10-06,
@@ -46,6 +58,7 @@ export const MAP_FILL_LIMITS = [
   'fences cost a fixed number of segments a play day, not modelled Emberwood',
   'gatherers and guards are folded into how much land a kid tends',
   "a kid who plays keeps all their land lit (`pnpm sim:fuel`'s gate); one away longer than a fire's stored fuel has all of it dark",
+  "computer mates (#386c) act through the shared `nextIntent` on days a kid plays, before the kids' claims; a step's claim is the server's plain claim (no battle); their fires and guards are counted, and their land is lit while the patch is warm like a kid's who plays",
 ] as const;
 
 /** Nights of fuel a Hearthfire stores: how long a kid's land stays lit while they're away (#277). */
@@ -83,6 +96,16 @@ export interface MapFillDay {
   readonly fenceHolds: number;
   /** Each seat's outer tiles that are fenced at the end of the day. */
   readonly fenced: readonly number[];
+  /** Whether a kid played today, so computer mates could act (rule C). */
+  readonly warm: boolean;
+  /** Each seat's home-ring tiles at the end of the day (7 for a seat that holds its home). */
+  readonly homeRing: readonly number[];
+  /** Computer mates' intents today, per seat (0 for kids). */
+  readonly mateClaims: readonly number[];
+  readonly mateFires: readonly number[];
+  readonly mateGuards: readonly number[];
+  /** Each computer mate's land cap (`mateLandCap`; null for kids). */
+  readonly mateCap: readonly (number | null)[];
 }
 
 /** A fence segment in the model: its tile, edge and energy left (%). */
@@ -154,6 +177,54 @@ export function runMapFill(
   const fencedFor = (t: MapTile, s: number) =>
     isTileFenced(t, tilesOf(s), segments.get(hexKey(t)) ?? [], tiles);
 
+  // Computer mates (#386c): their fires and guards on watch, by tile.
+  const personaOf = (seat: Seat) =>
+    seat.computer === undefined
+      ? null
+      : (COMPUTER_MATES.personas.find((p) => p.id === seat.computer) ?? null);
+  const mateFire = seats.map(() => new Map<HexKey, Hex>());
+  const mateGuard = seats.map(() => new Map<HexKey, Hex>());
+  const kidSeats = seats.flatMap((seat, s) => (seat.computer === undefined ? [s] : []));
+  const viewTiles = (): MateViewTile[] =>
+    tiles.map((t) => {
+      const o = ownerOf(hexKey(t));
+      return {
+        q: t.q,
+        r: t.r,
+        terrain: t.terrain,
+        homeSlot: t.homeSlot,
+        ownerUserId: o === null ? null : String(o),
+      };
+    });
+  /** What a mate sees, as the server's `act` builds it. */
+  const mateView = (s: number, catchUp: boolean, claimsToday: number): MateView => {
+    // Drop fires and guards on land the mate no longer holds.
+    for (const list of [mateFire[s], mateGuard[s]]) {
+      for (const key of [...(list?.keys() ?? [])]) if (ownerOf(key) !== s) list?.delete(key);
+    }
+    const guarded = [...(mateGuard[s]?.values() ?? [])];
+    return {
+      userId: String(s),
+      tiles: viewTiles(),
+      kids: kidSeats.flatMap((k) => {
+        const seed = seeds[k];
+        return seed ? [{ userId: String(k), heartSeed: seed }] : [];
+      }),
+      seats: scenario.mapSeats,
+      claimsToday,
+      catchUp,
+      fires: [...(mateFire[s]?.values() ?? [])],
+      built: mateFire.flatMap((m) => [...m.values()]),
+      guarded,
+      freeSquishies: Math.max(0, COMPUTER_MATES.rules.teamSize.min - guarded.length),
+      contested: [],
+    };
+  };
+  const capOf = (s: number) =>
+    seats[s]?.computer !== undefined
+      ? mateLandCap(viewTiles(), scenario.mapSeats, COMPUTER_MATES.rules)
+      : null;
+
   const days: MapFillDay[] = [];
   /** The last day each kid played (fuelled their fires). */
   const lastPlayed = seats.map(() => 0);
@@ -165,6 +236,46 @@ export function runMapFill(
     });
     const nothingToClaim = seats.map(() => false);
     const reclaimed = seats.map(() => 0);
+    const warm = playing.some(Boolean);
+    const mateClaims = seats.map(() => 0);
+    const mateFires = seats.map(() => 0);
+    const mateGuards = seats.map(() => 0);
+    if (warm) {
+      // Computer mates (#386c): catch-up steps when the kid opens the patch,
+      // then ordinary steps while it's open; every step tends and fuels.
+      const steps = [
+        ...Array.from({ length: COMPUTER_MATES.rules.catchUpSteps }, () => true),
+        ...Array.from({ length: MATE_STEPS_WHILE_OPEN }, () => false),
+      ];
+      steps.forEach((catchUp, step) => {
+        seats.forEach((seat, s) => {
+          const persona = personaOf(seat);
+          if (!persona) return;
+          const intent = nextIntent(
+            mateView(s, catchUp, mateClaims[s] ?? 0),
+            persona,
+            COMPUTER_MATES.rules,
+            Rng.fromSeed(
+              deriveSeed(config.rootSeed, scenario.id, rules.label, 'mate', s, day, step),
+            ),
+          );
+          if (intent?.kind === 'claim') {
+            const key = hexKey(intent);
+            owned.set(key, { owner: s, tendedAt: noon });
+            if (wentWildBefore.has(key)) reclaimed[s] = (reclaimed[s] ?? 0) + 1;
+            mateClaims[s] = (mateClaims[s] ?? 0) + 1;
+          } else if (intent?.kind === 'fire') {
+            mateFire[s]?.set(hexKey(intent), intent);
+            mateFires[s] = (mateFires[s] ?? 0) + 1;
+          } else if (intent?.kind === 'guard') {
+            mateGuard[s]?.set(hexKey(intent), intent);
+            mateGuards[s] = (mateGuards[s] ?? 0) + 1;
+          }
+          for (const o of owned.values()) if (o.owner === s) o.tendedAt = noon;
+          lastPlayed[s] = day;
+        });
+      });
+    }
     const done = seats.map((_, s) => !playing[s]);
     const tried = new Set<HexKey>();
 
@@ -419,6 +530,15 @@ export function runMapFill(
               t.homeSlot === null && (segments.get(hexKey(t)) ?? []).length > 0 && fencedFor(t, s),
           ).length,
       ),
+      warm,
+      homeRing: seats.map(
+        (_, s) =>
+          [...owned].filter(([k, o]) => o.owner === s && byKey.get(k)?.homeSlot === s).length,
+      ),
+      mateClaims,
+      mateFires,
+      mateGuards,
+      mateCap: seats.map((_, s) => capOf(s)),
     });
   }
   return { scenario, rules, neutral: neutral.length, days };
