@@ -206,6 +206,14 @@ describe.skipIf(!url)('computer patch-mates act (#386c, needs DATABASE_URL)', ()
       }
     }
     expect(claimedAny).toBe(true);
+    // Every claim told the patch (`tile.claimed`), one event per mate tile.
+    const claimed = await db.query.gameEvents.findMany({
+      where: (e, { and, eq }) => and(eq(e.mapId, mapId), eq(e.type, 'tile.claimed')),
+    });
+    const outerCount = tiles.filter(
+      (t) => t.ownerUserId !== null && mates.includes(t.ownerUserId) && t.homeSlot === null,
+    ).length;
+    expect(claimed.length).toBe(outerCount);
     // The kid's home ring is untouched.
     expect(tiles.filter((t) => t.homeSlot !== null && t.ownerUserId === kidId).length).toBe(7);
   }, 120_000);

@@ -199,6 +199,12 @@ async function stepWithin(
       await tending.claim(mapId, target.id, at);
       locked.set(target.id, userId);
       state.claims = (state.claims ?? 0) + 1;
+      events.push({
+        mapId,
+        type: 'tile.claimed',
+        actorUserId: userId,
+        payload: { userId, q: target.q, r: target.r, terrain: target.terrain, computer: true },
+      });
       applied = true;
     }
   }
