@@ -684,6 +684,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
           ...(await makeRoomWithin(repo, tx, {
             mapId,
             joinerId: joiner.id,
+            joinerName: joiner.username,
             actorUserId: user.id,
             maxPlayers: map.maxPlayers,
             at: now(),
@@ -740,8 +741,9 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       if (memberId === user.id) throw new AppError('FORBIDDEN', MESSAGES.removeSelf);
       // A computer patch-mate (#386) leaves only through the switch, which keeps
       // `computer_mates.next_act_at` and the `computer: true` event in step.
-      // `users.kind` never changes, so this read needs no lock.
-      if ((await createComputerMatesRepo(db).computerIds([memberId])).size > 0) {
+      // A mate never moves patches, so this read needs no lock; a mate from
+      // another patch gets the usual not-a-member answer from `depart`.
+      if ((await createComputerMatesRepo(db).personasOn(mapId)).has(memberId)) {
         throw new AppError('FORBIDDEN', MESSAGES.removeComputer);
       }
       await depart(mapId, memberId, user, 'member.removed');

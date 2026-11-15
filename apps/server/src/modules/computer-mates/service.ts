@@ -241,6 +241,8 @@ export async function makeRoomWithin(
   input: {
     mapId: string;
     joinerId: string;
+    /** The joiner's username: a mate with the same name leaves first (rule 9). */
+    joinerName: string;
     actorUserId: string;
     maxPlayers: number;
     at: Date;
@@ -251,6 +253,17 @@ export async function makeRoomWithin(
 ): Promise<string[]> {
   const mates = createComputerMatesRepo(tx);
   const left: string[] = [];
+  // No mate shares a kid's name (rule 9): a pre-0064 kid named Wren joining
+  // beside Wren the computer friend sends Wren home first, room or not.
+  const name = input.joinerName.toLowerCase();
+  const namesake = (await mates.listMates(input.mapId)).find(
+    (m) =>
+      m.active && COMPUTER_PERSONAS.find((p) => p.id === m.personaId)?.name.toLowerCase() === name,
+  );
+  if (namesake) {
+    await departMate(repo, tx, { ...input, mate: namesake, madeRoomFor: input.joinerId });
+    left.push(namesake.userId);
+  }
   for (;;) {
     const active = (await mates.listMates(input.mapId)).filter((m) => m.active);
     if (active.length === 0) return left;

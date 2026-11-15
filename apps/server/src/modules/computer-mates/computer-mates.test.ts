@@ -122,8 +122,8 @@ describe.skipIf(!url)('computer patch-mates (#386a, needs DATABASE_URL)', () => 
     return MapResponseSchema.parse(res.json()).map;
   }
 
-  async function bringIn(server: FastifyInstance, owner: Player, map: MapDetail) {
-    const p = await player();
+  async function bringIn(server: FastifyInstance, owner: Player, map: MapDetail, name?: string) {
+    const p = await player(name);
     const fresh = await getMap(server, map.id, owner);
     const res = await call(server, 'POST', '/maps/join', p, { code: fresh.admin!.invite!.code });
     expect(res.statusCode).toBe(201);
@@ -394,6 +394,35 @@ describe.skipIf(!url)('computer patch-mates (#386a, needs DATABASE_URL)', () => 
     expect(seated.map((m) => m.personaId)).not.toContain('bramble');
     const names = (await getMap(server, map.id, owner)).members.map((m) => m.user.username);
     expect(names.filter((n) => n.toLowerCase() === 'bramble')).toEqual(['BRAMBLE']);
+  });
+
+  it('approving a kid with a seated mate’s name sends that mate home first', async () => {
+    const server = await start();
+    const { owner, map } = await patchWith(server, 0);
+    await setSwitch(server, owner, map.id, true);
+    const seated = await activeMates(map.id);
+    const marigold = seated.find((m) => m.personaId === 'marigold')!;
+    expect(marigold).toBeDefined();
+    // A pre-0064 kid named Marigold (any case) joins. Without the name rule the
+    // least-land tie would send the earliest-created mate (Bramble) instead.
+    const kid = await bringIn(server, owner, map, 'mariGOLD');
+    const now = await activeMates(map.id);
+    expect(now.map((m) => m.personaId).sort()).toEqual(['bramble', 'pocket']);
+    const row = await db.query.computerMates.findFirst({
+      where: (t, { eq }) => eq(t.userId, marigold.userId),
+    });
+    expect(row!.nextActAt).toBeNull();
+    const left = (await eventsOf(map.id)).find(
+      (e) =>
+        e.type === 'member.left' &&
+        parseGameEventPayload('member.left', e.payload).userId === marigold.userId,
+    )!;
+    expect(parseGameEventPayload('member.left', left.payload)).toMatchObject({
+      computer: true,
+      madeRoomFor: kid.id,
+    });
+    const names = (await getMap(server, map.id, owner)).members.map((m) => m.user.username);
+    expect(names.filter((n) => n.toLowerCase() === 'marigold')).toEqual(['mariGOLD']);
   });
 
   it('the owner can’t remove a computer mate, only a real member', async () => {
