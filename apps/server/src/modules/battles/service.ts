@@ -77,6 +77,8 @@ import { consumeItems, grantItems, lockGrantRows } from '../inventory/service.js
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
 import type { MapRow } from '../maps/repo.js';
+import { heldLure } from '../post-shop/repo.js';
+import { consumeLure } from '../post-shop/service.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
 import { arenaFor } from './arena.js';
@@ -117,6 +119,12 @@ export interface WildEncounter {
    * Absent for squishies that aren't a tile's spawn (the dev route).
    */
   spawn?: { q: number; r: number; window: string };
+  /**
+   * Asked with `lure` (#729): true when the held Rare Lure made this squishy
+   * rarer (the start uses the lure up), false when nothing rarer lives there
+   * (it stays held). Absent when no lure was held.
+   */
+  lured?: boolean;
 }
 
 export interface WildEncounterContext {
@@ -126,6 +134,8 @@ export interface WildEncounterContext {
   now: Date;
   /** The tile the player picked, or null for the nearest wild squishy. */
   tile: Hex | null;
+  /** The player holds a Rare Lure (#729): roll one rarity tier up. */
+  lure?: boolean;
 }
 
 /**
@@ -1860,15 +1870,33 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           created: false,
         };
       }
+      // A Rare Lure from the post's Shop (#729): a plain read here; the start
+      // uses it up under its own update (`consumeLure`, step 5d).
+      const lure = map.kind === 'tutorial' ? null : await heldLure(db, mapId, user.id);
       const encounter = await options.findWildEncounter?.({
         mapId,
         userId: user.id,
         mapKind: map.kind,
         now: now(),
         tile: request.tile ?? null,
+        ...(lure ? { lure: true } : {}),
       });
       if (!encounter) throw new AppError('NOT_FOUND', MESSAGES.nobodyAround);
-      return startAgainst(user, mapId, encounter);
+      if (!lure || encounter.lured === undefined) return startAgainst(user, mapId, encounter);
+      const lured = encounter.lured;
+      const result = await startWith(user, mapId, (_tx, map) =>
+        Promise.resolve({
+          ...wildOpponent(map, encounter),
+          // Only a lure that changed the roll is used; else it waits for the next find.
+          ...(lured && {
+            started: async (tx: Executor, row: BattleRow) => {
+              await consumeLure(tx, lure.id, row.id, row.startedAt);
+              return [];
+            },
+          }),
+        }),
+      );
+      return result.created ? { ...result, battle: { ...result.battle, lured } } : result;
     },
 
     startAgainst,

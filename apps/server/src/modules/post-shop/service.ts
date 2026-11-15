@@ -1,0 +1,230 @@
+import {
+  addDays,
+  POST_SHOP,
+  POST_SHOP_BY_ID,
+  type BuyRequest,
+  type BuyResponse,
+  type Hex,
+  type PostShop,
+  type PostShopItem,
+  type PublicUser,
+  type ShopItemView,
+  type ShopView,
+} from '@heartpatch/shared';
+import { uuidv7 } from 'uuidv7';
+import type { Executor } from '../../db/client.js';
+import { AppError } from '../../lib/errors.js';
+import { instantOfLocalDate, localDate, nextLocalMidnight, type Clock } from '../../lib/time.js';
+import { createHeartCoinsRepo } from '../heart-coins/repo.js';
+import { spendHeartCoins } from '../heart-coins/service.js';
+import { grantItems, lockGrantRows } from '../inventory/service.js';
+import { requirePostAccess } from '../journeys/service.js';
+import { requireMember } from '../maps/members.js';
+import { createPostShopRepo, markLureUsed, SHOP_REASON, type PurchaseRow } from './repo.js';
+
+/*
+ * The trading post's Shop (#729; owner decisions 2026-11-15): a Rare Lure,
+ * a Heart Charm pack and a Potion crate, bought with Heart Coins at a post
+ * the player can use (connected, or a journey's visit pass, as Sell). Prices
+ * and caps are shared data (`POST_SHOP`); caps are per player per patch on
+ * the patch's own day, and "a week" is the last 7 patch days including
+ * today. Server-authoritative and atomic (CLAUDE.md rules 1 and 7): one
+ * transaction checks the cap under the Heart Coin balance lock, takes the
+ * coins against the purchase id, writes the purchase row and gives what was
+ * bought, or does none of it. Works with trading off (coins never trade).
+ * Not on the Tutorial Glade, which has no posts and pays no Heart Coins.
+ */
+
+// Kid-readable messages (style guide §6).
+const MESSAGES = {
+  cappedToday: "That's today's! Come back tomorrow for another. 🌙",
+  cappedWeek: (days: number) =>
+    days <= 1
+      ? "That's two lures this week! Your next one is ready tomorrow. ✨"
+      : `That's two lures this week! Your next one is ready in ${String(days)} days. ✨`,
+  holdingOne: 'You already have a lure waiting! Go find a squishy first. ✨',
+  tryAgain: 'Hmm, try that again!',
+} as const;
+
+/** The patch-day count of a week cap: today and the 6 days before it. */
+const WEEK_DAYS = 7;
+
+export interface PostShopService {
+  /** The Shop at the post at (q, r): prices, what's left under each cap, and my balance. */
+  view: (user: PublicUser, mapId: string, post: Hex) => Promise<ShopView>;
+  /** Buys one item at the post at (q, r). */
+  buy: (user: PublicUser, mapId: string, request: BuyRequest) => Promise<BuyResponse>;
+}
+
+export interface PostShopServiceOptions {
+  db: Executor;
+  clock?: Clock;
+  /** Live sync (`wsHub.publish`), called after commit. Never rejects. */
+  publish?: (mapId: string) => Promise<void>;
+  /** Tests pass other prices and caps; the game uses `POST_SHOP`. */
+  shop?: PostShop;
+}
+
+/** One item's cap and hold against my recent purchases, at patch day `today`. */
+function itemView(
+  item: PostShopItem,
+  rows: readonly PurchaseRow[],
+  map: { timeZone: string },
+  at: Date,
+  today: string,
+): ShopItemView & { capDays: number } {
+  const since = item.cap.per === 'day' ? today : addDays(today, -(WEEK_DAYS - 1));
+  const counted = rows.filter((r) => r.itemId === item.id && r.day >= since);
+  const left = Math.max(0, item.cap.count - counted.length);
+  const held = item.held !== undefined && rows.some((r) => r.itemId === item.id && !r.consumedAt);
+  // When one more fits: tomorrow for a day cap; for a week cap, the morning
+  // the oldest counted purchase is 7 patch days old.
+  const opensOn =
+    left > 0 ? null : item.cap.per === 'day' ? null : addDays(counted[0]!.day, WEEK_DAYS);
+  const nextAt =
+    left > 0
+      ? null
+      : opensOn
+        ? instantOfLocalDate({ date: opensOn, minute: 0 }, map.timeZone)
+        : nextLocalMidnight(at, map.timeZone);
+  return {
+    id: item.id,
+    price: item.price,
+    left,
+    nextAt: nextAt?.toISOString() ?? null,
+    status: held ? 'held' : left > 0 ? 'buy' : 'capped',
+    capDays: opensOn ? daysFrom(today, opensOn) : 1,
+  };
+}
+
+/** Whole patch days from `from` to `to`. */
+function daysFrom(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
+
+export function createPostShopService(options: PostShopServiceOptions): PostShopService {
+  const { db } = options;
+  const now = options.clock ?? (() => new Date());
+  const shop = options.shop ?? POST_SHOP;
+  const itemOf = (id: string) =>
+    options.shop ? shop.find((i) => i.id === id) : POST_SHOP_BY_ID.get(id as PostShopItem['id']);
+
+  /** The Shop at `at`, read through `exec` (inside or outside a transaction). */
+  async function viewOf(
+    exec: Executor,
+    map: { id: string; timeZone: string },
+    userId: string,
+    at: Date,
+  ): Promise<ShopView & { cards: ReturnType<typeof itemView>[] }> {
+    const today = localDate(at, map.timeZone);
+    const [rows, balance] = await Promise.all([
+      createPostShopRepo(exec).recent(map.id, userId, addDays(today, -(WEEK_DAYS - 1))),
+      createHeartCoinsRepo(exec).balance(map.id, userId),
+    ]);
+    const cards = shop.map((item) => itemView(item, rows, map, at, today));
+    return {
+      items: cards.map(({ capDays: _capDays, ...card }) => card),
+      lureHeld: rows.some((r) => r.itemId === 'rare-lure' && !r.consumedAt),
+      balance,
+      cards,
+    };
+  }
+  const publicView = ({ cards: _cards, ...view }: Awaited<ReturnType<typeof viewOf>>) => view;
+
+  return {
+    view: async (user, mapId, post) => {
+      const { map } = await requireMember(db, user, mapId, ['multiplayer']);
+      const at = now();
+      await requirePostAccess(db, { mapId, userId: user.id, post, at });
+      return publicView(await viewOf(db, map, user.id, at));
+    },
+
+    buy: async (user, mapId, request) => {
+      const item = itemOf(request.itemId);
+      if (!item) throw new AppError('NOT_FOUND');
+      await requireMember(db, user, mapId, ['multiplayer']);
+      const result = await createPostShopRepo(db).transaction(async (repo, tx) => {
+        const at = now();
+        const owner = { mapId, userId: user.id };
+        const { map } = await requireMember(tx, user, mapId, ['multiplayer']);
+        // 1. At a post I can use: connected, or a visit pass (#270).
+        await requirePostAccess(tx, { mapId, userId: user.id, post: request, at });
+        const purchaseId = uuidv7();
+
+        // 2. The bag rows a pack fills (tech spec §7 step 11), before the balance.
+        const items = item.effect.kind === 'items' ? item.effect.items : null;
+        if (items) await lockGrantRows(tx, mapId, [{ userId: user.id, items }]);
+
+        // 3. My Heart Coin balance on the patch (step 12b), then the caps
+        // under it: one player's purchases on a patch take turns here, so a
+        // double tap can't slip two past a cap.
+        await createHeartCoinsRepo(tx).lockBalance(mapId, user.id);
+        const card = (await viewOf(tx, map, user.id, at)).cards.find((c) => c.id === item.id)!;
+        if (card.status === 'held') throw new AppError('CONFLICT', MESSAGES.holdingOne);
+        if (card.status === 'capped') {
+          throw new AppError(
+            'CONFLICT',
+            item.cap.per === 'day' ? MESSAGES.cappedToday : MESSAGES.cappedWeek(card.capDays),
+          );
+        }
+
+        // 4. Pay against the purchase (`CONFLICT` "Not enough Heart Coins"
+        // and nothing written if short), then the row and what it gives.
+        const balance = await spendHeartCoins(tx, {
+          source: 'shop',
+          refId: purchaseId,
+          mapId,
+          userId: user.id,
+          amount: item.price,
+          at,
+        });
+        await repo.insert({
+          id: purchaseId,
+          mapId,
+          userId: user.id,
+          itemId: item.id,
+          price: item.price,
+          day: localDate(at, map.timeZone),
+          createdAt: at,
+        });
+        if (items) await grantItems(tx, owner, items, SHOP_REASON, purchaseId, at);
+
+        // 5. The buyer's other devices hear of it (step 13, last).
+        await repo.appendEvent({
+          mapId,
+          type: 'post.bought',
+          actorUserId: user.id,
+          payload: { userId: user.id, purchaseId, itemId: item.id, price: item.price, balance },
+        });
+        return {
+          bought: {
+            itemId: item.id,
+            price: item.price,
+            got: items ? { kind: 'items' as const, items } : { kind: 'lure' as const },
+          },
+          balance,
+          shop: publicView(await viewOf(tx, map, user.id, at)),
+        };
+      });
+      void options.publish?.(mapId);
+      return result;
+    },
+  };
+}
+
+/**
+ * Uses the player's held lure on the wild battle just started, inside its
+ * transaction (tech spec §7 step 5d). A lure already used (a double tap
+ * raced this one) is `CONFLICT`, which rolls the battle back: a lured
+ * squishy is never fought unpaid.
+ */
+export async function consumeLure(
+  tx: Executor,
+  lureId: string,
+  battleId: string,
+  at: Date,
+): Promise<void> {
+  if (!(await markLureUsed(tx, lureId, battleId, at))) {
+    throw new AppError('CONFLICT', MESSAGES.tryAgain);
+  }
+}

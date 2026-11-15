@@ -573,6 +573,12 @@ export const PlayerBattleSchema = z.object({
    * before. Absent on every other battle.
    */
   firstEver: z.boolean().optional(),
+  /**
+   * A wild battle just started while I held a Rare Lure (#729): true when the
+   * lure made the squishy one rarity tier rarer (and was used up), false when
+   * nothing rarer lives there (it's still waiting). Absent otherwise.
+   */
+  lured: z.boolean().optional(),
   startedAt: z.iso.datetime(),
   endedAt: z.iso.datetime().nullable(),
   /** Present only for a battle between two players (#29). */

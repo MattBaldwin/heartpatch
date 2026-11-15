@@ -54,6 +54,8 @@ import { callOffAsksOf, createChallengesService } from './modules/challenges/ser
 import { glimmerSwapRoutes } from './modules/glimmer-swap/routes.js';
 import { createGlimmerSwapService } from './modules/glimmer-swap/service.js';
 import { postSellRoutes } from './modules/post-sell/routes.js';
+import { postShopRoutes } from './modules/post-shop/routes.js';
+import { createPostShopService } from './modules/post-shop/service.js';
 import { createPostSellService } from './modules/post-sell/service.js';
 import { trickOrTreatRoutes } from './modules/trick-or-treat/routes.js';
 import { createTrickOrTreatService } from './modules/trick-or-treat/service.js';
@@ -539,6 +541,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // Selling extras to the trading post for Heart Coins (#601 PR 3).
         await api.register(
           postSellRoutes(createPostSellService({ db, clock }), {
+            hooks: authHooks,
+            idempotency,
+          }),
+        );
+        // The trading post's Shop: consumables for Heart Coins (#729).
+        await api.register(
+          postShopRoutes(createPostShopService({ db, clock, ...publish }), {
             hooks: authHooks,
             idempotency,
           }),
