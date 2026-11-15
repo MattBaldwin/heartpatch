@@ -133,4 +133,31 @@ export const BATTLE_RULES: BattleRules = {
     // every turn (32% in `pnpm sim`); Belly Flop as a second Steady brings it back.
     overrides: { thundermop: { 'belly-flop': 'steady' } },
   },
+
+  // Team battles (#190, owner decision 2026-11-15): a team of up to 3
+  // against a mini-boss.
+  team: {
+    spreadPercent: 60, // TUNE: an all-foes move hits each of several foes at 60%
+    target: {
+      lowEnergy: 1, // TUNE: a foe with half its energy gone weighs 1.5×
+      alreadyHitPercent: 25, // TUNE: a foe it already hit this round weighs 25%
+    },
+  },
+  boss: {
+    actionsPerRound: 2, // TUNE: but never more than the foes still standing
+    statusSkipsPerRound: 1, // TUNE: dizzy or sleepy costs it one action a round at most
+    // TUNE: a boss is a grown-up with 3× energy and a bit tougher (pnpm sim:boss).
+    stats: { hp: 300, attack: 100, defense: 110, speed: 100 },
+    // TUNE: plays to win like a guardian, a little greedier.
+    ai: {
+      focus: 3,
+      damage: 1,
+      heal: 0.6,
+      healBelow: 40,
+      boost: 0.2,
+      status: 0.35,
+      swap: 0,
+      swapBelow: 0,
+    },
+  },
 };

@@ -212,7 +212,7 @@ test('no offer in a plain tab; Not now is for good; Settings shows each state', 
   for (const side of HANDLES) await expect(page.getByTestId(`tray-handle-${side}`)).toBeHidden();
   // So do the night's chips ("He's watching tonight" peeked out under its foot
   // on an SE on its side). Read as CSS: by day the row has no chips to show.
-  const nightChips = page.locator('.night-chips');
+  const nightChips = page.getByTestId('night-chips');
   await expect(nightChips).toHaveCSS('visibility', 'hidden');
   await card.getByRole('button', { name: 'Not now' }).tap();
   await expect(card).toBeHidden();

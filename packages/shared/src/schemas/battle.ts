@@ -38,6 +38,12 @@ export const BattleSquishySetupSchema = z.strictObject({
    * the species' base stats and level when left out.
    */
   stats: BattleStatsSchema.optional(),
+  /**
+   * A mini-boss (#190): only side `b` of a team battle (`format`). Its stats
+   * are scaled by battle rules' `boss.stats`, it acts up to
+   * `boss.actionsPerRound` times a round and picks its own targets.
+   */
+  boss: z.literal(true).optional(),
 });
 
 /**
@@ -92,6 +98,13 @@ export const BattleSideSetupSchema = z.strictObject({
 });
 export type BattleSideSetup = z.infer<typeof BattleSideSetupSchema>;
 
+/** How many squishies each side has out at once in a team battle (#190). */
+export const BattleFormatSchema = z.strictObject({
+  a: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  b: z.literal(1),
+});
+export type BattleFormat = z.infer<typeof BattleFormatSchema>;
+
 export const BattleSetupSchema = z
   .strictObject({
     seed: SeedSchema,
@@ -107,6 +120,12 @@ export const BattleSetupSchema = z
      * (`CAPTURABLE_BATTLE_KINDS`), never for a rival's or a Keeper's.
      */
     gentle: z.literal(true).optional(),
+    /**
+     * A team battle (#190): side `a` has `a` squishies out at once (its
+     * whole team), side `b` one (a mini-boss). Every squishy out moves each
+     * round and nobody swaps. Left out, a battle is one-on-one as always.
+     */
+    format: BattleFormatSchema.optional(),
   })
   .superRefine((setup, ctx) => {
     const seen = new Set<string>();
@@ -141,7 +160,23 @@ const SlotSchema = z.number().int().min(0).max(5);
  * `rules.items.usesEach` times per side per battle. The bare `item` choice
  * is a sip with no move (the whole turn): battles logged before #403 used
  * it, so it stays, and replays as it always did.
+ *
+ * A team battle (#190, `BattleSetup.format`) takes only `team`: one pick per
+ * squishy still standing, and at most one free sip, by the squishy in
+ * `item.slot`. No swaps and no Heart Charms in a team battle.
  */
+/**
+ * One squishy's move in a team battle (#190): `slot` is its team slot,
+ * `target` the foe's slot (the first foe standing when left out, or when
+ * that foe is tuckered out before it moves).
+ */
+export const TeamPickSchema = z.strictObject({
+  slot: SlotSchema,
+  move: ContentIdSchema,
+  target: SlotSchema.optional(),
+});
+export type TeamPick = z.infer<typeof TeamPickSchema>;
+
 export const BattleChoiceSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal('move'),
@@ -151,6 +186,11 @@ export const BattleChoiceSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('swap'), slot: SlotSchema }),
   z.strictObject({ type: z.literal('capture'), sure: z.literal(true).optional() }),
   z.strictObject({ type: z.literal('item'), item: ContentIdSchema }),
+  z.strictObject({
+    type: z.literal('team'),
+    picks: z.array(TeamPickSchema).min(1).max(3),
+    item: z.strictObject({ item: ContentIdSchema, slot: SlotSchema }).optional(),
+  }),
 ]);
 export type BattleChoice = z.infer<typeof BattleChoiceSchema>;
 
@@ -212,6 +252,8 @@ export const BattleSquishyViewSchema = z.object({
   guard: z.number().int().min(-100).max(100).optional(),
   /** Said yes to a Heart Charm and left the fight (#279). */
   befriended: z.literal(true).optional(),
+  /** A mini-boss (#190). */
+  boss: z.literal(true).optional(),
   /**
    * The wardrobe accessory it wears (#373), for drawing only. The server adds
    * it when it builds a player's view (read through ownership, like the care
@@ -226,6 +268,8 @@ export const BattleSideViewSchema = z.object({
   controller: BattleControllerSchema,
   squishies: z.array(BattleSquishyViewSchema).min(1),
   active: z.number().int().min(0),
+  /** A team battle's slots on the field, in slot order (#190); `active` is the first standing. */
+  out: z.array(SlotSchema).optional(),
   itemsUsed: z.array(ContentIdSchema).default([]),
 });
 export type BattleSideView = z.infer<typeof BattleSideViewSchema>;
@@ -318,6 +362,8 @@ export const ClientBattleViewSchema = z.object({
   turnLimit: z.number().int().min(1).optional(),
   /** A player's steady moves are gentle with the AI side (#587). */
   gentle: z.literal(true).optional(),
+  /** A team battle (#190). */
+  format: BattleFormatSchema.optional(),
   sides: z.object({ a: BattleSideViewSchema, b: BattleSideViewSchema }),
   phase: BattlePhaseSchema,
   log: z.array(BattleEventSchema),

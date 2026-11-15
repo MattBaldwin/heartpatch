@@ -37,8 +37,7 @@ export const LIVE_TEXT = {
   secondsLeft: (n: number) => `${String(n)} seconds left`,
   resultWon: (name: string) => `You won against ${name}!`,
   resultLost: (name: string) => `${name} won this one!`,
-  friendlySub: 'Just for fun: nobody loses anything.',
-  friendlyNote: 'Friendly battles give no XP.',
+  friendlySub: 'Nobody loses anything in a friendly.',
   gaveUp: 'You gave up. No worries!',
   theyGaveUp: (name: string) => `${name} gave up. You win!`,
 } as const;
@@ -85,8 +84,8 @@ export function liveTurnInfo(
 
 /**
  * The defender's seat in a live defense (#29-C): their own land, held or
- * lost, and the server gives them no XP for it (only side `a` earns), so
- * the end card reads like the raid report's, not the challenger's.
+ * lost, so the end card's title reads like the raid report's, not the
+ * challenger's. A hold pays side `b` XP and coins too (#728).
  */
 export function isLiveDefender(battle: Pick<PlayerBattle, 'kind' | 'mySide' | 'live'>): boolean {
   return battle.live !== undefined && battle.kind === 'rival-tile' && battle.mySide !== 'a';

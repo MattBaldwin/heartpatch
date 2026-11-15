@@ -77,6 +77,52 @@ export const BattleMoveKindRulesSchema = z.strictObject({
 });
 export type BattleMoveKindRules = z.infer<typeof BattleMoveKindRulesSchema>;
 
+/**
+ * Team battles (#190): a side with several squishies out at once (a team of
+ * up to 3 against a mini-boss). Battle rules without this block (battles
+ * before #190) have no team format.
+ */
+export const BattleTeamRulesSchema = z.strictObject({
+  /** An `all-foes` move hits each foe at this % of its damage when it hits more than one. */
+  spreadPercent: z.number().int().min(1).max(100),
+  /**
+   * How an AI with several foes picks who to hit with a one-foe move: each
+   * standing foe weighs the move's matchup multiplier against it (element
+   * and feeling favoured weigh more) × (1 + `lowEnergy` × the share of its
+   * energy it has lost) × `alreadyHitPercent`% if this squishy already hit
+   * it this round, so it spreads its hits instead of piling on one.
+   */
+  target: z.strictObject({
+    lowEnergy: z.number().min(0),
+    alreadyHitPercent: z.number().int().min(1).max(100),
+  }),
+});
+export type BattleTeamRules = z.infer<typeof BattleTeamRulesSchema>;
+
+/**
+ * A mini-boss (#190): a squishy flagged `boss` in a team battle's setup.
+ * Battle rules without this block have no bosses.
+ */
+export const BattleBossRulesSchema = z.strictObject({
+  /** Moves it makes each round, never more than the foes still standing. */
+  actionsPerRound: z.number().int().min(1).max(4),
+  /**
+   * Actions a round it can lose to dizzy or sleepy; when it has lost this
+   * many it shakes the status off, so a team can't keep it asleep forever.
+   */
+  statusSkipsPerRound: z.number().int().min(0).max(4),
+  /** Its stats at its level, as % of a squishy's (energy, attack, defense, speed). */
+  stats: z.strictObject({
+    hp: z.number().int().min(1).max(1000),
+    attack: z.number().int().min(1).max(1000),
+    defense: z.number().int().min(1).max(1000),
+    speed: z.number().int().min(1).max(1000),
+  }),
+  /** How it picks its moves (the swap weights are unused: a boss never swaps). */
+  ai: BattleAiPolicyRulesSchema,
+});
+export type BattleBossRules = z.infer<typeof BattleBossRulesSchema>;
+
 /** How a status from a move behaves (the move schema's `status` effect). */
 export const BattleStatusRulesSchema = z
   .strictObject({
@@ -213,6 +259,10 @@ export const BattleRulesSchema = z.strictObject({
   items: z.strictObject({ usesEach: z.number().int().min(1).max(10) }),
   /** Steady and Big moves (#587); left out, every move plays as before #587. */
   moveKinds: BattleMoveKindRulesSchema.optional(),
+  /** Team battles (#190); left out, there is no team format. */
+  team: BattleTeamRulesSchema.optional(),
+  /** Mini-bosses (#190); left out, there are no bosses. */
+  boss: BattleBossRulesSchema.optional(),
 });
 export type BattleRules = z.infer<typeof BattleRulesSchema>;
 

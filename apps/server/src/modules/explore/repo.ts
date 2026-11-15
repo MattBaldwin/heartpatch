@@ -1,4 +1,5 @@
 import {
+  attackTargetProblem,
   EXPLORE_RULES,
   exploreLayout,
   firstHomeTiles,
@@ -140,8 +141,9 @@ export function createExploreRepo(db: Executor) {
      * by default). It never touches the player's other land outside home.
      * Its row is every one of its real spots searched under today's layout
      * (`seed` is the map's), replacing any row left from before, so a search
-     * there finds it finished as a real one would (#511). Null when there's
-     * no such tile.
+     * there finds it finished as a real one would (#511). Never a tile a real
+     * claim refuses, like a grey village tile (#581). Null when there's no
+     * such tile.
      */
     devMakeHomestead: async (
       mapId: string,
@@ -176,13 +178,24 @@ export function createExploreRepo(db: Executor) {
       // A napping one is out there too: it joined once and was cut off since.
       const napping = ask.joined === 'napping';
       const mineOut = all.filter((t) => t.ownerUserId === userId && t.homeSlot === null);
+      // Only land a real claim could take (#581): the same check a battle for
+      // a tile runs, so a grey village tile, a trading post or water is never
+      // made a homestead. Reach is the dev route's own (an unjoined one is
+      // three steps out on purpose), so `too-far` doesn't count. A restored
+      // village tile is skipped too: it's rare and the dev route needn't
+      // look it up.
+      const claimable = (t: (typeof all)[number]) => {
+        const problem = attackTargetProblem(t, all, userId, DEFAULT_PVP_MODE);
+        return problem === null || problem === 'too-far';
+      };
       const near = heart
         ? all.filter(
             (t) =>
               t.ownerUserId === null &&
               t.homeSlot === null &&
               hexDistance(t, heart) === (touchesHome ? 2 : 3) &&
-              !mineOut.some((m) => hexDistance(m, t) === 1),
+              !mineOut.some((m) => hexDistance(m, t) === 1) &&
+              claimable(t),
           )
         : [];
       // Land a building can go on, that keeps no spot the next map read

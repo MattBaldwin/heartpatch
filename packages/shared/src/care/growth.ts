@@ -204,11 +204,11 @@ export function battleXpPercent(
  * Whether one squishy's award in a finished battle counts toward its daily
  * falloff (`battleXpPercent`, #201): it was on the winning side, whichever
  * side that was (a held defence counts for the guard, #728). A friendly
- * battle (#728) counts win, lose or tie, so two friends trading losses
- * can't take un-faded XP all day; but only when the squishy was paid
+ * battle (#728, owner decision 2026-11-15: won only) counts the same way,
+ * a lost or tied one fills no slot, and only when the squishy was paid
  * something (`xp` > 0: for a friendly, the XP actually paid, not the
- * engine's): one who ran away, a scoot before any turn, a share that
- * rounded to 0, or a squishy that changed Keeper first used up nothing.
+ * engine's): a scoot before any turn, a share that rounded to 0, or a
+ * squishy that changed Keeper first used up nothing.
  */
 export function countsTowardFalloff(
   kind: BattleKind,
@@ -216,7 +216,7 @@ export function countsTowardFalloff(
   winner: BattleSideId | 'draw',
   xp: number,
 ): boolean {
-  if (kind === 'friendly') return xp > 0;
+  if (kind === 'friendly') return side === winner && xp > 0;
   return side === winner;
 }
 

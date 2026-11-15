@@ -120,8 +120,9 @@ export interface BattlesRepo {
   /**
    * How many finished battles each of `squishyIds` joined and won on this
    * map on `at`'s map-local day, on either side (#728: a guard's holds
-   * count), plus every friendly battle it was paid XP for, win or lose
-   * (#728, `countsTowardFalloff` on the paid amount, from `rewards`), for the daily battle-XP falloff
+   * count), friendlies included only when won and paid XP (#728, owner
+   * decision 2026-11-15; `countsTowardFalloff` on the paid amount, from
+   * `rewards`), for the daily battle-XP falloff
    * (`GROWTH_RULES.battleXpFalloff`). Missing ids won none.
    */
   winsToday: (
@@ -394,7 +395,8 @@ function queries(db: Executor): BattlesRepo {
         );
         for (const award of result.xp) {
           // Either side (#728): a challenger's wins, a guard's holds, and
-          // a friendly win or lose.
+          // a won friendly that paid something (a lost or tied one fills
+          // no slot, owner decision 2026-11-15).
           if (!wanted.has(award.squishyId)) continue;
           const xp = isFriendly ? (paid.get(award.squishyId) ?? 0) : award.xp;
           if (!countsTowardFalloff(row.kind, award.side, result.winner, xp)) continue;

@@ -3,8 +3,8 @@ import type { Config } from '../../config.js';
 
 /*
  * The Long Night feature switch (#727, `HP_LONG_NIGHT`), shaped like the
- * house's (`house/switch.ts`). It ships dark: off until the client PR
- * (#727e) flips it to `testers`. The Night is the whole patch's, so on
+ * house's (`house/switch.ts`). Off when unset; production runs it `on`
+ * through the compose default (#758). The Night is the whole patch's, so on
  * `testers` it runs on a patch with a tester among its members, and every
  * member there sees it.
  */

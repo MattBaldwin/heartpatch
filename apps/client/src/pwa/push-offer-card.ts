@@ -25,6 +25,8 @@ export function createPushOfferCard(root: HTMLElement, onChange: () => void): Pu
       'aria-modal': 'true',
       'aria-labelledby': 'push-offer-title',
       'data-testid': 'push-offer',
+      // Takes focus when it opens, so VoiceOver reads it (like the account card).
+      tabindex: '-1',
     },
     el('h2', { class: 'push-offer-title', id: 'push-offer-title' }, PUSH_OFFER_TEXT.title),
     el('p', { class: 'push-offer-line' }, PUSH_OFFER_TEXT.line),
@@ -46,6 +48,7 @@ export function createPushOfferCard(root: HTMLElement, onChange: () => void): Pu
     show: (next) => {
       offer = next;
       card.hidden = false;
+      card.focus({ preventScroll: true });
       onChange();
     },
     hide: () => {

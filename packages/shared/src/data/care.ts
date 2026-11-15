@@ -72,10 +72,12 @@ export const GROWTH_RULES: GrowthRules = {
   // `friendlyPercent` of that, before care × habitat and the falloff. The
   // engine sums every KO, and a friendly KOs a whole team, so paid in full
   // two friends snowballed (+10 levels by day 14 in `pnpm sim:progression`).
+  // A friendly fills one of the `fullWinsPerDay` slots only when won (owner
+  // decision 2026-11-15, `countsTowardFalloff`); a lost or tied one fills none.
   battleXpFalloff: {
     fullWinsPerDay: 7,
     afterPercent: 10,
-    friendlyPercent: 50, // TUNE: owner-approved lever (#728); engaged day 14: 39 / 39 vs `now` 41
+    friendlyPercent: 50, // TUNE: owner-approved lever (#728); engaged day 14: 41 / 41 vs `now` 41 (won-only slots, 2026-11-15)
     friendlyOneOpponent: true, // TUNE: owner decision 2026-11-14 (#728 option 1)
   },
 };

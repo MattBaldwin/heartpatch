@@ -24,17 +24,32 @@ export const BIG_AND_BOUNCY = 20;
  */
 const GROWN_UP_STAGE = 4;
 
-/** What the firsts need to know about species: rarity and evolution stage (`evolutionStages`). */
+/**
+ * What the firsts need to know about species: rarity, evolution stage
+ * (`evolutionStages`) and the rarity of its line (its base form's rarity).
+ */
 export interface FirstsFacts {
   readonly rarity: (speciesId: string) => Rarity | undefined;
   readonly stage: (speciesId: string) => number;
+  readonly lineRarity: (speciesId: string) => Rarity | undefined;
 }
 
 export function firstsFacts(species: ReadonlyMap<string, Species>): FirstsFacts {
   const stages = evolutionStages([...species.values()]);
+  const parent = new Map<string, string>();
+  for (const s of species.values()) for (const e of s.evolutions) parent.set(e.into, s.id);
+  const baseOf = (id: string): string => {
+    let at = id;
+    for (const seen = new Set<string>(); parent.has(at) && !seen.has(at);) {
+      seen.add(at);
+      at = parent.get(at) ?? at;
+    }
+    return at;
+  };
   return {
     rarity: (id) => species.get(id)?.rarity,
     stage: (id) => stages.get(id) ?? 1,
+    lineRarity: (id) => species.get(baseOf(id))?.rarity,
   };
 }
 
@@ -150,4 +165,71 @@ export function formatFirstsGate(
     ? 'PASS'
     : `FAIL: ${result.misses.map((g) => `day ${String(g.from)} → ${String(g.to)} (${String(g.days)} days)`).join(', ')}`;
   return `firsts gate (soft until #730; does not fail the run): ${rule}: ${verdict}`;
+}
+
+/** The rarity lines the per-tier line reports (#732), lowest first. */
+export const TIERS = ['common', 'uncommon', 'rare', 'epic', 'legendary'] as const;
+export type Tier = (typeof TIERS)[number];
+
+export interface TierFirst {
+  readonly tier: Tier;
+  /** null: never within the run. */
+  readonly day: number | null;
+}
+
+/**
+ * #732's per-tier line: the first day a befriended squishy (any team member
+ * but the Partner, the two day-1 teammates included) of each rarity line
+ * evolves. A line's rarity is its base
+ * form's, so a common line's rare grown-up counts as common; that's where
+ * this differs from the "rare evolved" and "epic evolved" firsts, which go by
+ * the evolving form's own rarity and count the Partner.
+ */
+export function tierFirstsOf(
+  days: readonly Pick<DayRecord, 'day' | 'evolved'>[],
+  facts: FirstsFacts,
+): TierFirst[] {
+  return TIERS.map((tier) => ({
+    tier,
+    day:
+      days.find((d) => d.evolved.some((e) => !e.partner && facts.lineRarity(e.from) === tier))
+        ?.day ?? null,
+  }));
+}
+
+/** "rare day 7, epic never (> day 60), …" */
+export function formatTierFirsts(firsts: readonly TierFirst[], runDays: number): string {
+  return firsts.map((f) => `${f.tier} ${formatFirst(f.day, runDays)}`).join(', ');
+}
+
+export interface TierGateResult {
+  readonly rows: readonly {
+    readonly tier: Tier;
+    readonly day: number | null;
+    readonly by: number;
+  }[];
+  readonly pass: boolean;
+}
+
+/** #732's per-tier gate on one kid's per-tier line: each listed tier by its day. */
+export function tierGate(
+  firsts: readonly TierFirst[],
+  byDay: Readonly<Partial<Record<Tier, number>>>,
+): TierGateResult {
+  const rows = TIERS.flatMap((tier) => {
+    const by = byDay[tier];
+    if (by === undefined) return [];
+    return [{ tier, day: firsts.find((f) => f.tier === tier)?.day ?? null, by }];
+  });
+  return { rows, pass: rows.every((r) => r.day !== null && r.day <= r.by) };
+}
+
+/** `#732 per-tier gate: rare ≤ day 10, epic ≤ day 20 (casual, collector): PASS` (or FAIL with the days). */
+export function formatTierGate(result: TierGateResult, kid: string, policy: string): string {
+  // TODO(#732 D1): make this a hard gate (fail the script and CI) once bench share lands.
+  const rule = result.rows.map((r) => `${r.tier} ≤ day ${String(r.by)}`).join(', ');
+  const verdict = result.pass
+    ? 'PASS'
+    : `FAIL: ${result.rows.map((r) => `${r.tier} ${r.day === null ? 'never' : `day ${String(r.day)}`}`).join(', ')}`;
+  return `#732 per-tier gate: ${rule} (${kid}, ${policy}): ${verdict} (soft until #732 D1; does not fail the run)`;
 }

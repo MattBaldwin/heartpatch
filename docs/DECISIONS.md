@@ -2203,3 +2203,61 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 - **Milestones say whether they count on the patch on screen** (#779, 731a): `GET /milestones?mapId=<uuid>` (zod `MilestonesQuerySchema`) adds `countsHere: boolean`; without `mapId` the field is absent, and a non-member gets the existing `requireMember` NOT_FOUND. One helper, `milestonesCount(map, rules)` in `modules/milestones/counts.ts`, is the rule for the consumer, the Rekindled drops and `countsHere` (multiplayer, at least `MILESTONE_RULES.minMembers` active members; never the Tutorial Glade).
 - **Push follow-ups** (#781): the friend nudge's repeat guard is a window, not a bucket: no claim if a `push_sends` row with key prefix `mapId/arriverUserId/` was claimed within `PUSH_RULES.friendRepeatHours`; otherwise the key is that prefix plus the next number, so concurrent claims still collide on the unique key. `claim` returns `claimed | sent | capped`, and a cap re-check counts in `capped`. The gatherers sweep skips accounts with today's claim (same `localDate` key). The push job logs at info only when it claimed something.
 
+## Supervisor 36 (2026-11-02 ~07:00 → 2026-11-14 ~02:35 UTC)
+
+- **The Next-up chip sits above the Hollow's night chips** (#780, 731b): the night chips own the bottom edge and one is up most nights, so hiding the chip under them would hide it most evenings. The chip (and Sprout's line) sit 8 px above them. JS measures only the chips row's height (`--next-up-row`); CSS places the chip from the same `env()` expression as the row's own `bottom` (`hollow.css` `.night-chips`; the two change together), so a late safe-area inset moves both. It still hides under the Hollow's cards and the narrator's card.
+- **The Goals row keeps its place on short screens** (#780): from 659 to 739 px upright the Adventure tray's rows sit 4 px slimmer (54 px, still 44pt+) and 2 px closer, so every row fits without scrolling (`short-screens.spec`). It gives way only under 659 px tall (a phone on its side, a mini in a Safari tab). The chip opens the same sheet everywhere.
+- **The solo card has Copy only, no Share button** (#780): the owner's decision 5 says "code + Copy". Kid words for "what's left" live per track in the client view ("Claim 3 more tiles"); a track without one falls back to its tier goal, so new content needs no code. The "All milestones" button waits for 731c.
+- **`MapView.giftWaiting`** (#783, 731c): an additive, optional `giftWaiting: boolean`, the payload the client already reads on map open. It is read-only on the server, so reading it never rolls or writes. `homeAlerts` uses it and then follows house replies after a claim. HomeHouse lives on `/home`, which is only read when the home screen opens, so `MapView` was the payload that fit. Recorded in TECH_SPEC's read-model additions.
+- **The gift dot goes on the Home row**, as in the mockup, not the Team row (#783). Milestones are hosted in the wardrobe screen's milestones mode (the list isn't forked). Medal pills replace the tier dots.
+- **No factory dot and no gatherer-full dot** (#783): the factory has no "full, waiting" state (its output goes to the bag), and the client auto-settles full gatherers on map open and at each `nextAt`, so "full, waiting" never lasts for the player. Mockup v4 showed a gatherer dot; the coordinator flagged it to the owner.
+
+**Owner decisions**
+- **#731 answered after 11 days** (owner, 2026-11-13): 731b merged as #780 after the supervisor re-verified the gates.
+- **#783 (731c): "Merge"** (owner, 2026-11-14).
+
+## Supervisor 37 (2026-11-14 ~02:35 → ~04:35 UTC)
+
+**Owner decisions**
+- **Harvest Scarf is Keeper-only** (owner, 2026-11-14): no squishy scarf and no `accessory.ts` neck-anchor change. The prototype moved 61 of 65 headed species and regressed Drizzledoze's scarves. Prototype: https://claude.ai/artifact/ALAtTkUkh5vDDgxCwVuA2k. Plan: #34 #issuecomment-6869750018 (#787).
+- **#34 lane 1 ships all three v3 pieces as captured** (owner, 2026-11-14): Leaf Crown as-is, Harvest Scarf, Patchwork Quilt Cape as a back-view item (rigid pieces can't drape; 12-piece cap). Captures: https://claude.ai/artifact/NNFFcfaX1BYBDbFmmt5f4n (#787, shipped as #786).
+- **#34 lane 2: the Leaf Pile Costume is design A, "Big Heap"** (owner, 2026-11-14; #787).
+
+## Supervisor 38 (2026-11-14 ~04:35 → ~06:55 UTC)
+
+- **Holds count toward the daily full-XP wins** (#790, 728a): a guard's holds count toward its `fullWinsPerDay` (7) alongside its challenge wins, so "7 wins a day" means wins on either side (plan §6).
+- **Side `b`'s coin ledger key is `('battle', uuidV5(battleId, SIDE_B_REF_NAMESPACE))`** (#790): no new coin source, so the Heart Coins sheet's "Battle wins" bar covers defence pay. Additive shared-contract changes approved with the plan: `BattleRewardsSchema.coins/.b`, `UnpaidReasonSchema`, `battle.ended.defender`, `RaidSchema.earned`, `CoinRules/HeartCoinRules.defenseWin`. 728c adds the `changes/` entry.
+
+**Owner decisions**
+- **#732 = S′ + D + B** (owner, 2026-11-14, from https://claude.ai/artifact/HyQr3C4pEy55xvnjn5QDtV; https://github.com/MattBaldwin/heartpatch/issues/732#issuecomment-6871601441):
+  - **S′, rare spawns** (data only): a meadow Moonmoth row (weight 2), an extra lake Cometsnail row, rare/epic/legendary weights ×2, plus a rare row on Pumpkin Fields and Coast. Its lane re-runs `pnpm sim:progression` and pastes the firsts rows before and after (the #736 gate).
+  - **B, per-tier Catalog goal** (display + milestone data), after S′.
+  - **D, bench share** (big): squishies that sit out a battle get 50% of the XP the best-paid squishy earned (`GROWTH_RULES.benchXpPercent: 50 // TUNE:`). It changes the XP grant in `battles/service.ts`, the same code #728 changes, so it gets a Fable plan after #728's server PRs, Opus code, and a Fable second reviewer on the first full review.
+  - The issue's A and C are skipped as written. T (Training ×5) is not taken.
+- **#728 plan approved with amendment v1.1** (owner, 2026-11-14; https://github.com/MattBaldwin/heartpatch/issues/728#issuecomment-6871818804):
+  - Issue numbers ship: `defenseWin` 3 + 3, `battleWin.friendly` 2 + 2, `paidWinsPerPairPerDay` 3, `friendlyPercent` 100; friendlies count toward `fullWinsPerDay` win or lose. All `// TUNE:` in data.
+  - Guardian-only holds pay no coins (XP still flows); the report nudges "Put a squishy on watch to earn from holds!".
+  - `friendlyPercent` 100 → 50 is pre-approved as a data-only PR if the family playtest shows friendlies heavy (the coordinator tells the owner after).
+  - Scooted battles of every kind: XP after a played turn, coins never (`unpaid: 'scooted'`).
+  - Order: 728a (defence pay) → 728d (sim gate) before or with 728b (friendly pay) → 728c (cards, Challenge report). One Opus lane per PR; 728a and 728b are big. No migration.
+
+## Supervisor 39 (2026-11-14 ~06:55 → ~10:45 UTC)
+
+- **Thanksgiving found pieces** (#786, #34 lane 1): the Leaf Crown is a forest/old-forest gather find (anywhere on captures), the Patchwork Quilt Cape is also a rescue thank-you, and the Harvest Scarf drops from gathers, captures and rescues. All weights are `// TUNE:` and follow the rarity ladder (100/60/30). The quilt stays a thin board from the front and side: a curved-panel shape would be a separate shared-schema decision.
+- **New Keeper items need a `keeper-params.test.ts` allowlist entry** (#786): that fingerprint test fails on any new Keeper item without it.
+- **The `sim:progression` friendly gate is soft until 728b settles friendly XP** (#793, 728d): it prints PASS/FAIL and exits 0 like the other sim gates. `now + friendlies` plays friendlies first in the day as extra battles (upper bound), with the whole team guarding every tile (upper bound on defence XP). The gate takes the kid of the pair whose level rises most, not kid 0.
+- **Pumpkin Fields rare = Mossmuffin, Coast rare = Lampfin** (weight 2 each; #789, #732 S′). Heartlet's Gap rate drops to 1 in 35 as a consequence of ×2; left as is pending an owner call.
+
+## Supervisor 40 (2026-11-14 ~10:45 → ~23:55 UTC)
+
+- **e2e traces don't record the screencast** (#788, #784): DOM snapshots and sources only. It costs CPU on CI's software renderer, and the stall it was suspected of happens without it.
+- **The e2e heartbeat beats over the console only** (#788): a beat `fetch` cut off by a reload is a WebKit page error that fails specs collecting them.
+- **A friendly counts toward `fullWinsPerDay` when the engine paid that squishy something** (#797, 728b): win, lose or tie; a leaver or a turn-0 scoot uses no slot. `winsToday` counts a friendly from its paid `rewards`, not the engine's XP.
+- **`paidWinsPerPairPerDay` counts non-forfeit wins on the patch's day**, each direction separately (#797).
+- **The `pnpm sim:progression` friendly gate is hard now** (#797).
+- **`finish` re-checks side a's squishies after the lock in a friendly**, as it does side b's (#797, round 2). Other kinds' side a is unchanged: a solo rescue's squishy fights while `hollowed`. `in-trade` and `hollowed` squishies earn nothing.
+- **The Leaf Pile Costume's gold collar sits on the `top` socket** (#794, #34 lane 2): each base's own torso, so it always stops under the chin. The heap layers use the costume box, so the face peeks out on every base (checked on Pip, Bramble and Rowan).
+
+**Owner decisions**
+- **#728 friendly XP = option 1** (owner, 2026-11-14; https://github.com/MattBaldwin/heartpatch/issues/728#issuecomment-6877762813): a friendly pays one opponent's worth of XP (the engine's `xpAwards` amount ÷ the number of opponents KO'd (at least 1), floored; with no KOs, the engine's `minimum` as is) scaled by `GROWTH_RULES.battleXpFalloff.friendlyPercent` = 50. Both knobs are data in `care.ts` `GROWTH_RULES` (`friendlyPercent` and a friendly one-opponent switch, on); the sim reads the same data. Why: the engine pays XP summed over every opponent KO'd, so a friendly that KOs a whole team paid about 4× a wild battle and snowballed between two friends. 728d's engaged day-14 levels: 39 / 40 vs `now` 40 (gate ≤ +1); the approved rule gave 36 / 51. The scooted rule is unchanged. Shipped in #797.
+- **#794 approved** (owner, 2026-11-14): the Cozy Harvest track and Leaf Pile Costume, from the captures at https://claude.ai/artifact/WnQkNdWUk2Pn5QKZkEDb9V (back reads bubbly rather than leafy; Rowan's 3/4 view has a side leaf over the far eye; noted to the owner). Merged as `1bddfb2`.
