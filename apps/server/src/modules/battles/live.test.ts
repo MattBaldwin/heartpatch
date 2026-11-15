@@ -550,6 +550,7 @@ describe.skipIf(!url)('live battles (#29, needs DATABASE_URL)', () => {
       fullXpResetAt: null,
       coins: { patch: 0, heart: 0 },
       unpaid: null,
+      bundle: null,
       b: rewards.b,
     });
     // `battle.ended` carries side a's XP; side b's reaches Sam through rewards

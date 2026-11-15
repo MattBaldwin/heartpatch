@@ -555,6 +555,7 @@ describe.skipIf(!url)('a won defence pays the defender (#728, needs DATABASE_URL
       fullXpResetAt: stored.b!.fullXpResetAt,
       coins: stored.b!.coins,
       unpaid: stored.b!.unpaid,
+      bundle: null,
       b: stored.b,
     });
     // Side a still sees its own stored rewards.
