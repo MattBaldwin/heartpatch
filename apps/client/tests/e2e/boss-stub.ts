@@ -61,17 +61,17 @@ function toBoss(b: Battle, options: BossStubOptions): Battle {
   const stomp = { ...base, id: STOMP, name: 'Big Stomp', targets: 'all-foes' };
   if (boss) {
     boss.moves = [STOMP, ...boss.moves.slice(0, 3)];
-    boss.boss = true;
+    boss['boss'] = true;
     boss.stats = { ...boss.stats, hp: boss.stats.hp * 3 };
-    boss.energy = boss.stats.hp;
+    boss['energy'] = boss.stats.hp;
   }
-  delete b.firstMeeting;
-  delete b.lured;
+  delete b['firstMeeting'];
+  delete b['lured'];
   const today = new Date().toISOString().slice(0, 10);
   return {
     ...b,
     kind: 'miniboss',
-    moveDefs: [...((b.moveDefs as Json[] | undefined) ?? []), stomp],
+    moveDefs: [...((b['moveDefs'] as Json[] | undefined) ?? []), stomp],
     view: {
       ...b.view,
       format: { a: team, b: 1 },
@@ -99,7 +99,7 @@ function playRound(
   const turn = b.view.turn;
   const mine = b.view.sides.a.squishies;
   const boss = b.view.sides.b.squishies[0]!;
-  const out = (b.view.sides.a.out as number[] | undefined) ?? [0];
+  const out = (b.view.sides.a['out'] as number[] | undefined) ?? [0];
   const log: Json[] = [...b.view.log];
   const won = (options.outcome ?? 'won') === 'won';
   const at = (side: 'a' | 'b', slot: number) => ({ turn, side, slot });
@@ -138,7 +138,8 @@ function playRound(
   }
   const energies = new Map<string, number>();
   for (const e of log) {
-    if (e.type === 'hit') energies.set(`${String(e.side)}${String(e.slot)}`, e.energy as number);
+    if (e['type'] === 'hit')
+      energies.set(`${String(e['side'])}${String(e['slot'])}`, e['energy'] as number);
   }
   const sides = { ...b.view.sides };
   for (const side of ['a', 'b'] as const) {
@@ -146,7 +147,7 @@ function playRound(
       ...sides[side],
       squishies: sides[side].squishies.map((s, slot) => ({
         ...s,
-        energy: energies.get(`${side}${String(slot)}`) ?? s.energy,
+        energy: energies.get(`${side}${String(slot)}`) ?? s['energy'],
       })),
     };
   }
@@ -185,8 +186,8 @@ function playRound(
     boss: {
       ...b.boss,
       triesLeftToday: won
-        ? b.boss?.triesLeftToday
-        : Math.max(0, (b.boss?.triesLeftToday as number) - 1),
+        ? b.boss?.['triesLeftToday']
+        : Math.max(0, (b.boss?.['triesLeftToday'] as number) - 1),
       asksLeft: won && options.winState !== 'have-one' ? 2 : 0,
       befriend: won ? (options.winState ?? 'offer') : 'none',
     },
@@ -209,7 +210,7 @@ export async function stubBossFight(page: Page, options: BossStubOptions = {}): 
     if (req.method() === 'POST' && /\/battles\/[^/]+\/actions$/.test(url) && last) {
       const body = req.postDataJSON() as { action: Json };
       stub.rounds.push(body.action);
-      const picks = (body.action.picks as { slot: number; move: string }[] | undefined) ?? [];
+      const picks = (body.action['picks'] as { slot: number; move: string }[] | undefined) ?? [];
       await route.fulfill({ json: { battle: keep(playRound(last, picks, options)) } });
       return;
     }
@@ -236,7 +237,7 @@ export async function stubBossFight(page: Page, options: BossStubOptions = {}): 
       return;
     }
     const json = (await reply.json()) as { battle?: Battle | null };
-    if (json.battle && json.battle.status === 'active')
+    if (json.battle && json.battle['status'] === 'active')
       json.battle = keep(toBoss(json.battle, options));
     await route.fulfill({ response: reply, json });
   });

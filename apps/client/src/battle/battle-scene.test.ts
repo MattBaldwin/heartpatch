@@ -319,4 +319,69 @@ describe('BattleScene', () => {
     expect(scene.meshes.length).toBe(0);
     expect(scene.lights.map((l) => l.name)).toEqual(['sun']);
   });
+  describe('a team battle (#190, arena A)', () => {
+    function team(slots: number[]) {
+      const scene = new Scene(engine);
+      scene.activeCamera = new TargetCamera('cam', Vector3.Zero(), scene);
+      const battle = new BattleScene(scene, {
+        registry,
+        lod: 'low',
+        tier: 'high',
+        content,
+        mySide: 'a',
+        keeper: null,
+        terrain: 'meadow',
+        timeOfDay: 'day',
+        battleId: '01a10948-604f-73db-bbd4-5cad0847932b',
+        reducedMotion: false,
+        safe: () => ({ top: 0.2, bottom: 0.6 }),
+        team: { slots },
+      });
+      const [one, two, three] = GAME_DATA.species;
+      const mine = [one!, two!, three!].slice(0, slots.length);
+      battle.prewarm(
+        'a',
+        mine.map((s, i) => ({ speciesId: s.id, instanceId: `mine-${String(i)}`, slot: slots[i] })),
+      );
+      mine.forEach((s, i) => {
+        battle.sendOut('a', s.id, `mine-${String(i)}`, 5, slots[i]);
+      });
+      battle.prewarm('b', [{ speciesId: one!.id, instanceId: 'boss' }]);
+      battle.sendOut('b', one!.id, 'boss');
+      battle.update(0);
+      return battle;
+    }
+
+    it.each([[[0]], [[0, 1]], [[0, 1, 2]]])('stands %j in a row, each on its own post', (slots) => {
+      const battle = team(slots);
+      expect(battle.stats.squishies).toBe(slots.length + 1);
+      const homes = slots.map((slot) => battle.homeOf('a', slot));
+      // Left to right in slot order, apart, all nearer the camera than the boss.
+      for (let i = 1; i < homes.length; i++) {
+        expect(homes[i]!.x).toBeGreaterThan(homes[i - 1]!.x + 1);
+      }
+      const boss = battle.homeOf('b');
+      for (const home of homes) expect(home.z).toBeLessThan(boss.z - 2);
+    });
+
+    it('acts a step out on the squishy in its slot, and a hit on the boss on the boss', () => {
+      const battle = team([0, 1, 2]);
+      const before = battle.stats.acts;
+      battle.perform(step('move', 'a', { slot: 2, move: GAME_DATA.moves[0]!.id }), 10);
+      battle.perform(step('hit', 'b', { effectiveness: 'normal' }), 700);
+      battle.update(1400);
+      expect(battle.stats.acts).toBeGreaterThan(before);
+      // A tuckered-out squishy in slot 1 lies down; the others stand.
+      battle.knockedOut('a', 1);
+      expect(battle.stats.down).toBe(1);
+    });
+
+    it('a shield bubble per squishy', () => {
+      const battle = team([0, 1, 2]);
+      battle.setShield('a', true, 2);
+      battle.update(10);
+      expect(battle.shieldShown('a', 2)).toBe(true);
+      expect(battle.shieldShown('a', 0)).toBe(false);
+    });
+  });
 });

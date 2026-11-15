@@ -1343,3 +1343,12 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   border-radius: 50%;
   background: #b8487a;
 }
+
+/* The result card sits over the fight: the team's plates step aside. */
+.battle-hud-team:has(.battle-result:not([hidden])) .boss-top {
+  display: none;
+}
+
+.boss-befriend-title {
+  text-wrap: balance;
+}

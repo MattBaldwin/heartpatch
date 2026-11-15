@@ -214,7 +214,7 @@ describe('a mini-boss fight on screen (#190)', () => {
   describe('the result card', () => {
     it('a win names the bundle the server put in the bag', () => {
       const card = bossResult(
-        won({ rewards: { bundle: { 'heart-charm': 3 } } as PlayerBattle['rewards'] }),
+        won({ rewards: { bundle: { 'heart-charm': 3 } } as unknown as PlayerBattle['rewards'] }),
         'Rakelet',
         NOW,
       )!;

@@ -85,9 +85,9 @@ test.describe('a mini-boss fight (#190)', () => {
     // One `team` round went out: a pick per squishy, no aiming.
     await expect.poll(() => stub.rounds.length).toBe(1);
     expect(stub.rounds[0]).toMatchObject({ type: 'team' });
-    expect((stub.rounds[0]!.picks as unknown[]).map((p) => (p as { slot: number }).slot)).toEqual([
-      0, 1, 2,
-    ]);
+    expect(
+      (stub.rounds[0]!['picks'] as unknown[]).map((p) => (p as { slot: number }).slot),
+    ).toEqual([0, 1, 2]);
 
     // The win: the bundle, then the ask.
     const card = page.getByTestId('battle-result');
@@ -108,7 +108,7 @@ test.describe('a mini-boss fight (#190)', () => {
     await expect(card.getByTestId('boss-befriend-joined')).toContainText('joined your patch! 💗');
 
     // Asks 1 then 2, each with its own key.
-    expect(stub.asks.map((a) => a.body.ask)).toEqual([1, 2]);
+    expect(stub.asks.map((a) => a.body['ask'])).toEqual([1, 2]);
     expect(stub.asks.every((a) => a.key && a.key.length > 8)).toBe(true);
     expect(stub.asks[0]!.key).not.toBe(stub.asks[1]!.key);
 
