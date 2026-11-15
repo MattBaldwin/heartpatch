@@ -10,6 +10,7 @@ import {
   COIN_RULES,
   HEART_COIN_RULES,
   hexNeighbors,
+  normalizeInviteCode,
   HOME_BASE_RULES,
   HOUSE_DATA,
   NAMING_RULES,
@@ -49,6 +50,8 @@ import { grantItems } from '../modules/inventory/service.js';
 import { createInventoryRepo } from '../modules/inventory/repo.js';
 import { createJourneyBattlePort, createJourneysService } from '../modules/journeys/service.js';
 import { createLoreConsumer } from '../modules/lore/consumer.js';
+import { createComputerMatesRepo } from '../modules/computer-mates/repo.js';
+import { createComputerMatesService } from '../modules/computer-mates/service.js';
 import { createMapsRepo } from '../modules/maps/repo.js';
 import { createMilestonesConsumer } from '../modules/milestones/consumer.js';
 import { createMilestonesService, milestoneRewardId } from '../modules/milestones/service.js';
@@ -3118,5 +3121,97 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
     expect(
       await db.select().from(houseResidents).where(eq(houseResidents.squishyId, ids[0]!)),
     ).toEqual([]);
+  });
+
+  describe('computer patch-mates (#386a)', () => {
+    const toggle = { mode: 'on' as const, testers: [] as string[] };
+    let at = new Date();
+    const mates = () => createComputerMatesService({ db, computerMates: toggle, clock: () => at });
+    const mapsService = () =>
+      createMapsService({ db, tutorialRequired: false, keeperRequired: false, clock: () => at });
+    const lockMates = (tx: Transaction, mapId: string) =>
+      createComputerMatesRepo(tx).lockMates(mapId);
+    const lockTilesOf = (tx: Transaction, mapId: string, userIds: string[]) =>
+      tx
+        .select({ id: tiles.id })
+        .from(tiles)
+        .where(and(eq(tiles.mapId, mapId), inArray(tiles.ownerUserId, userIds)))
+        .orderBy(asc(tiles.id))
+        .for('no key update');
+    const mateIds = async (mapId: string) =>
+      (await createComputerMatesRepo(db).listMates(mapId)).map((m) => m.userId);
+
+    /** A solo patch whose mates were made once and have since left (so their rows exist). */
+    async function matesPatch(prefix: string, on: boolean) {
+      at = new Date();
+      const kid = await player(prefix);
+      const map = await mapsService().create(kid, { name: 'Lock Mates', timeZone: 'UTC' });
+      await mates().setEnabled(kid, map.id, true);
+      if (!on) {
+        await mates().setEnabled(kid, map.id, false);
+        at = new Date(at.getTime() + 25 * 60 * 60 * 1000);
+      }
+      return { kid, mapId: map.id, ids: await mateIds(map.id) };
+    }
+
+    it('takes the seats lock before the mate rows (switch on, step 3 then 3a)', async () => {
+      const { kid, mapId } = await matesPatch('cmseats', false);
+      await holdThen(
+        (tx) => createMapsRepo(tx).lockSeats(mapId),
+        () => mates().setEnabled(kid, mapId, true),
+        (tx) => lockMates(tx, mapId),
+      );
+      expect(
+        (await createComputerMatesRepo(db).listMates(mapId)).filter((m) => m.active).length,
+      ).toBe(3);
+    });
+
+    it("takes the mate rows before a mate's users row (switch on, step 3a then 4)", async () => {
+      const { kid, mapId, ids } = await matesPatch('cmusers', false);
+      await holdThen(
+        (tx) => lockMates(tx, mapId),
+        () => mates().setEnabled(kid, mapId, true),
+        (tx) => createMapsRepo(tx).lockUser(ids[0]!),
+      );
+    });
+
+    it("departs every mate's tiles before `maps` (switch off, step 6 then 13)", async () => {
+      const { kid, mapId, ids } = await matesPatch('cmoff', true);
+      await holdThen(
+        (tx) => lockTilesOf(tx, mapId, ids),
+        () => mates().setEnabled(kid, mapId, false),
+        (tx) => lockMapRow(tx, mapId),
+      );
+      expect((await createComputerMatesRepo(db).listMates(mapId)).some((m) => m.active)).toBe(
+        false,
+      );
+    });
+
+    it('takes the mate rows before the joiner (approve, step 3a then 4)', async () => {
+      const { kid, mapId } = await matesPatch('cmapprove', true);
+      const friend = await player('cmfriend');
+      const invite = await mapsService().regenerateInvite(kid, mapId);
+      const { request } = await mapsService().join(friend, normalizeInviteCode(invite.code));
+      await holdThen(
+        (tx) => lockMates(tx, mapId),
+        () => mapsService().approve(kid, mapId, request.id),
+        (tx) => createMapsRepo(tx).lockUser(friend.id),
+      );
+      expect(
+        (await createComputerMatesRepo(db).listMates(mapId)).filter((m) => m.active).length,
+      ).toBe(2);
+    });
+
+    it("frees the leaving mate's tiles before `maps` (approve, step 6 then 13)", async () => {
+      const { kid, mapId, ids } = await matesPatch('cmroom', true);
+      const friend = await player('cmroomfriend');
+      const invite = await mapsService().regenerateInvite(kid, mapId);
+      const { request } = await mapsService().join(friend, normalizeInviteCode(invite.code));
+      await holdThen(
+        (tx) => lockTilesOf(tx, mapId, ids),
+        () => mapsService().approve(kid, mapId, request.id),
+        (tx) => lockMapRow(tx, mapId),
+      );
+    });
   });
 });

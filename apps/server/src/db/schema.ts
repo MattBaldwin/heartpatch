@@ -34,6 +34,8 @@ const id = () =>
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
 export const mapKind = pgEnum('map_kind', ['multiplayer', 'tutorial']);
+// A real kid, or a computer patch-mate (#386) the server plays on one patch.
+export const userKind = pgEnum('user_kind', ['player', 'computer']);
 // A patch's type (#621), chosen when it's made and never changed. Every rule
 // that differs reads it through shared `patchRules`; existing patches are cozy.
 export const patchType = pgEnum('patch_type', ['cozy', 'wild-isle']);
@@ -74,9 +76,14 @@ export const users = pgTable(
   {
     id: id(),
     username: text('username').notNull(),
-    passwordHash: text('password_hash').notNull(),
-    // The only personal detail we keep (design doc §18).
-    birthYear: smallint('birth_year').notNull(),
+    // Null only for a computer patch-mate (#386): the CHECK below makes sure
+    // a computer row has no secret to match, and a player row always has one.
+    passwordHash: text('password_hash'),
+    // The only personal detail we keep (design doc §18). Null for a computer mate.
+    birthYear: smallint('birth_year'),
+    // `computer` (#386): made for one patch and one persona, never logs in.
+    // Every "real Keepers only" rule reads this (`isPlayer`).
+    kind: userKind('kind').notNull().default('player'),
     // IANA zone from the device at signup; account-level daily caps reset at
     // its midnight (design doc §3). Validated by the auth service.
     timeZone: text('time_zone').notNull().default('UTC'),
@@ -102,8 +109,15 @@ export const users = pgTable(
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
-    // "Pumpkin" and "pumpkin" are the same player.
-    uniqueIndex('users_username_lower_key').on(sql`lower(${t.username})`),
+    // "Pumpkin" and "pumpkin" are the same player. Players only (#386):
+    // every patch has its own "Bramble", so computer names repeat.
+    uniqueIndex('users_username_lower_key')
+      .on(sql`lower(${t.username})`)
+      .where(sql`${t.kind} = 'player'`),
+    check(
+      'users_kind_credentials_check',
+      sql`(${t.kind} = 'player' and ${t.passwordHash} is not null and ${t.birthYear} is not null) or (${t.kind} = 'computer' and ${t.passwordHash} is null)`,
+    ),
     check('users_birth_year_range', sql`${t.birthYear} between 1900 and 2100`),
   ],
 );
@@ -337,6 +351,13 @@ export const maps = pgTable(
     // is `LONG_NIGHT_RULES.defaultWeekday` (owner decision Q5: Saturday for
     // every patch, old and new); a test keeps the two the same.
     longNightWeekday: smallint('long_night_weekday').default(6),
+    // The owner's computer patch-mates switch (#386): on fills the patch to
+    // `COMPUTER_MATE_RULES.fillTo` Keepers. Off by default; never on a tutorial map.
+    computerMates: boolean('computer_mates').notNull().default(false),
+    // When the switch last changed: turning it back on waits `toggleCooldownHours`.
+    computerMatesChangedAt: timestamptz('computer_mates_changed_at'),
+    // When a real member last opened the patch (#386c stamps it; mates act only while it's warm).
+    keepersSeenAt: timestamptz('keepers_seen_at'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
@@ -400,6 +421,40 @@ export const mapMembers = pgTable(
       .on(t.mapId, t.homeSlot)
       .where(sql`${t.status} = 'active'`),
     check('map_members_home_slot_nonnegative', sql`${t.homeSlot} >= 0`),
+  ],
+);
+
+/**
+ * Computer patch-mates (#386): one row per patch and persona, kept when the
+ * mate departs, so turning the switch back on brings the same `users` row
+ * back (per-pair daily caps carry over). Its lock comes right after the
+ * seats lock (tech spec §7, step 3a). `next_act_at` null = not on the patch.
+ */
+export const computerMates = pgTable(
+  'computer_mates',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    // `COMPUTER_PERSONAS` id (shared data).
+    personaId: text('persona_id').notNull(),
+    // Server-only: a mate's whole history replays from its seed and step (#386c).
+    seed: text('seed').notNull(),
+    step: integer('step').notNull().default(0),
+    nextActAt: timestamptz('next_act_at'),
+    // Per-behaviour last-done stamps (#386c-e).
+    state: jsonb('state').$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    unique('computer_mates_map_id_persona_id_key').on(t.mapId, t.personaId),
+    index('computer_mates_due_idx')
+      .on(t.nextActAt)
+      .where(sql`${t.nextActAt} is not null`),
+    check('computer_mates_step_nonnegative', sql`${t.step} >= 0`),
   ],
 );
 

@@ -37,6 +37,15 @@ export * from './schemas/data/naming.js';
 export * from './schemas/data/memory-puzzles.js';
 export * from './schemas/data/hollow.js';
 export * from './schemas/data/long-night.js';
+export {
+  ComputerPersonaIdSchema,
+  ComputerPersonaSchema,
+  ComputerPersonasSchema,
+  checkComputerPersonas,
+  isComputerPersonaName,
+  type ComputerPersona,
+  type ComputerPersonaId,
+} from './schemas/data/computer-mates.js';
 export * from './schemas/data/push.js';
 export * from './schemas/data/care.js';
 export * from './schemas/data/clothing.js';
@@ -94,6 +103,7 @@ export * from './data/home-base.js';
 export * from './data/naming.js';
 export * from './data/hollow.js';
 export * from './data/long-night.js';
+export * from './data/computer-personas.js';
 export * from './data/push.js';
 export * from './hollow/index.js';
 export * from './long-night/index.js';

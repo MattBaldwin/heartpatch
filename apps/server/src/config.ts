@@ -91,6 +91,15 @@ const ConfigSchema = z.object({
   // NOT_FOUND and sends nothing, `testers` subscribes and nudges only
   // `HP_PUSH_TESTERS` (each account decides for itself, not its patch), `on`
   // every player. Off by default; the prod compose file doesn't turn it on.
+  // Computer patch-mates (#386) feature switch: `off` answers the owner's
+  // switch route NOT_FOUND and leaves it out of patch details, `testers`
+  // opens it on patches owned by an `HP_COMPUTER_MATES_TESTERS` account,
+  // `on` everywhere. Off by default; the prod compose file keeps it off
+  // until the client lane (#386b) lands.
+  HP_COMPUTER_MATES: z.enum(['off', 'testers', 'on']).default('off'),
+  // Patch owners who get the switch while `HP_COMPUTER_MATES=testers`,
+  // comma-separated (case doesn't matter), as `HP_HOUSE_TESTERS`.
+  HP_COMPUTER_MATES_TESTERS: usernameList(),
   HP_PUSH: z.enum(['off', 'testers', 'on']).default('off'),
   // Usernames who get nudges while `HP_PUSH=testers`, comma-separated (case
   // doesn't matter), as `HP_HOUSE_TESTERS`.

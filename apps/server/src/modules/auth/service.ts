@@ -1,4 +1,6 @@
 import {
+  COMPUTER_PERSONAS,
+  isComputerPersonaName,
   formatRecoveryCode,
   type LoginRequest,
   type NewRecoveryCodeResponse,
@@ -102,6 +104,11 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
       if (!passes) throw new AppError('FORBIDDEN', MESSAGES.signupsClosed);
       const pass = await passes.check(input.signupCode);
       assertAllowedText(input.username, 'name');
+      // Computer patch-mates' names (#386) are reserved, so a kid never looks
+      // like a computer friend. Said as "taken": it is, on every patch.
+      if (isComputerPersonaName(COMPUTER_PERSONAS, input.username)) {
+        throw new AppError('CONFLICT', MESSAGES.usernameTaken);
+      }
       if (input.birthYear > now().getUTCFullYear()) {
         throw new AppError('VALIDATION_FAILED', MESSAGES.birthYear);
       }

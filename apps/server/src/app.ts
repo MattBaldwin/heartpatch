@@ -96,6 +96,9 @@ import { signupCodesRoutes } from './modules/signup-codes/routes.js';
 import { createSignupCodesService } from './modules/signup-codes/service.js';
 import { createMapsService } from './modules/maps/service.js';
 import { wildIsleSwitchOf } from './modules/maps/wild-isle-switch.js';
+import { computerMatesRoutes } from './modules/computer-mates/routes.js';
+import { createComputerMatesService } from './modules/computer-mates/service.js';
+import { computerMatesSwitchOf } from './modules/computer-mates/switch.js';
 import { longNightRoutes } from './modules/long-night/routes.js';
 import { createLongNightService } from './modules/long-night/service.js';
 import { longNightSwitchOf } from './modules/long-night/switch.js';
@@ -164,6 +167,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   const house = houseSwitchOf(config);
   // The Long Night (#727), off by default until the client PR (#727e).
   const longNight = longNightSwitchOf(config);
+  // Computer patch-mates (#386), off by default until the client lane (#386b).
+  const computerMates = computerMatesSwitchOf(config);
   // Evolution rolls are seeded with a server secret (#32); config refuses a
   // production start without it.
   setEvolutionSalt(config.HP_EVOLUTION_SALT);
@@ -269,25 +274,27 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           clock,
           ...(wsHub ? { publish: wsHub.publish } : {}),
         });
+        // A Keeper leaving calls off their trade offers (#271) and their asks (#29).
+        // Each on its own: one failing never keeps the other from running.
+        const departed = async (mapId: string, userId: string, actorUserId: string) => {
+          const results = await Promise.allSettled([
+            trades.memberLeft(mapId, userId, actorUserId),
+            callOffAsksOf(
+              { db, clock, ...(wsHub ? { publish: wsHub.publish } : {}) },
+              mapId,
+              userId,
+              actorUserId,
+            ),
+          ]);
+          for (const result of results) {
+            if (result.status === 'rejected') throw result.reason;
+          }
+        };
         const maps = createMapsService({
           db,
           house,
-          // A Keeper leaving calls off their trade offers (#271) and their asks (#29).
-          // Each on its own: one failing never keeps the other from running.
-          departed: async (mapId, userId, actorUserId) => {
-            const results = await Promise.allSettled([
-              trades.memberLeft(mapId, userId, actorUserId),
-              callOffAsksOf(
-                { db, clock, ...(wsHub ? { publish: wsHub.publish } : {}) },
-                mapId,
-                userId,
-                actorUserId,
-              ),
-            ]);
-            for (const result of results) {
-              if (result.status === 'rejected') throw result.reason;
-            }
-          },
+          departed,
+          computerMates,
           tutorialRequired: config.HP_TUTORIAL_REQUIRED,
           keeperRequired: config.HP_KEEPER_REQUIRED,
           // Who can make a Wild Isle (#621), off by default.
@@ -553,6 +560,20 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             idempotency,
             devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
+        );
+        // Computer patch-mates (#386): the owner's switch; mates hold seats only so far.
+        await api.register(
+          computerMatesRoutes(
+            createComputerMatesService({
+              db,
+              clock,
+              computerMates,
+              departed,
+              log: app.log,
+              ...publish,
+            }),
+            { hooks: authHooks },
+          ),
         );
         // The Long Night (#727): the owner's weekday and Juniper's Gap
         // encounters (wild battles); nightfall resolves it.

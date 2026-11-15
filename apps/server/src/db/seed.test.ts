@@ -133,7 +133,7 @@ describe.skipIf(!url)('seed (needs DATABASE_URL)', () => {
         );
       expect(accounts).toHaveLength(SEED_ACCOUNTS.length);
       for (const account of accounts) {
-        expect(await verifySecret(account.hash, SEED_PASSWORD), account.username).toBe(true);
+        expect(await verifySecret(account.hash ?? '', SEED_PASSWORD), account.username).toBe(true);
         expect(account.tutorialStep).toBeNull();
         if (account.username === SEED_FRESH_USERNAME) {
           expect(account).toMatchObject({
@@ -177,7 +177,7 @@ describe.skipIf(!url)('seed (needs DATABASE_URL)', () => {
         .select()
         .from(users)
         .where(eq(sql`lower(${users.username})`, SEED_USERNAMES[0]));
-      expect(await verifySecret(row!.passwordHash, SEED_PASSWORD)).toBe(true);
+      expect(await verifySecret(row!.passwordHash ?? '', SEED_PASSWORD)).toBe(true);
       expect(row!.cinematicSeenAt).not.toBeNull();
       expect(row!.tutorialCompletedAt).not.toBeNull();
     },

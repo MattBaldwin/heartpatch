@@ -104,8 +104,10 @@ const SETTING_COLUMN = {
 } as const;
 
 /** `u` (a `users` row) has a live device and this switch on (no settings row: on). */
+// Real Keepers only (#386): a computer patch-mate is never nudged.
 const reachable = (setting: keyof typeof SETTING_COLUMN, now: Date) => sql`
-  coalesce((select ps.${SETTING_COLUMN[setting]} from push_settings ps where ps.user_id = u.id), true)
+  u.kind = 'player'
+  and coalesce((select ps.${SETTING_COLUMN[setting]} from push_settings ps where ps.user_id = u.id), true)
   and exists (
     select 1 from push_subscriptions sub
     join sessions s on s.id = sub.session_id and s.expires_at > ${now.toISOString()}::timestamptz
@@ -392,7 +394,8 @@ export function createPushRepo(db: Executor): PushRepo {
         from map_members mm
         join users u on u.id = mm.user_id
         join maps m on m.id = mm.map_id and m.kind = 'multiplayer'
-        where mm.map_id = ${mapId} and mm.user_id = ${arriverUserId} and mm.status = 'active'`);
+        where mm.map_id = ${mapId} and mm.user_id = ${arriverUserId} and mm.status = 'active'
+          and u.kind = 'player'`);
       if (!arriver) return { arriver: null, recipients: [] };
       const rows = await db.execute<{ id: string; username: string; timeZone: string }>(sql`
         select u.id, u.username, u.time_zone as "timeZone"

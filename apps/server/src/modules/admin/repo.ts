@@ -35,6 +35,7 @@ import {
   users,
 } from '../../db/schema.js';
 import { TRADING_POST_TERRAIN } from '@heartpatch/shared';
+import { playerUser } from '../computer-mates/repo.js';
 
 // The admin console's reads and its own writes (#196). Commands that already
 // exist elsewhere (resets, join requests, invites, family codes) go through
@@ -349,9 +350,10 @@ export function createAdminRepo(db: Executor): AdminRepo {
         })
         .from(users)
         .leftJoin(adminTotp, eq(adminTotp.userId, users.id))
-        .where(eq(sql`lower(${users.username})`, username.toLowerCase()))
+        // Real Keepers only (#386): a computer mate has no password.
+        .where(and(eq(sql`lower(${users.username})`, username.toLowerCase()), playerUser))
         .limit(1);
-      if (!row) return null;
+      if (!row || row.passwordHash === null) return null;
       return {
         id: row.id,
         username: row.username,
@@ -587,7 +589,8 @@ export function createAdminRepo(db: Executor): AdminRepo {
         })
         .from(mapMembers)
         .innerJoin(users, eq(users.id, mapMembers.userId))
-        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.status, 'active')))
+        // Real Keepers only (#386).
+        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.status, 'active'), playerUser))
         .orderBy(desc(sql`${mapMembers.role} = 'owner'`), asc(mapMembers.joinedAt)),
 
     pendingRequests: async (mapId: string) =>
@@ -636,7 +639,8 @@ export function createAdminRepo(db: Executor): AdminRepo {
       limit: number,
       offset: number,
     ): Promise<Page<PlayerRow>> => {
-      const where = q ? ilike(users.username, contains(q)) : undefined;
+      // Real Keepers only (#386): computer patch-mates aren't players.
+      const where = q ? and(ilike(users.username, contains(q)), playerUser) : playerUser;
       const [rows, [total]] = await Promise.all([
         db
           .select(playerColumns(now))
@@ -661,7 +665,7 @@ export function createAdminRepo(db: Executor): AdminRepo {
         .from(users)
         .leftJoin(signupCodes, eq(signupCodes.id, users.signupCodeId))
         .leftJoin(inviter, eq(inviter.id, users.invitedBy))
-        .where(eq(users.id, userId))
+        .where(and(eq(users.id, userId), playerUser))
         .limit(1);
       return row ?? null;
     },
@@ -752,6 +756,7 @@ export function createAdminRepo(db: Executor): AdminRepo {
           .where(
             and(
               eq(maps.kind, 'multiplayer'),
+              playerUser,
               ilike(maps.name, contains(patch)),
               gte(mapMembers.joinedAt, from),
               lt(mapMembers.joinedAt, to),

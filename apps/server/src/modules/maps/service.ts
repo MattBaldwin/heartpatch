@@ -13,7 +13,6 @@ import {
   type TradingPostLabel,
   type CreateMapRequest,
   type GuardianHint,
-  type Hex,
   type Invite,
   type MapDetail,
   type MapMember,
@@ -41,11 +40,19 @@ import { newSeed } from '../../lib/rng.js';
 import { canonicalTimeZone, type Clock } from '../../lib/time.js';
 import { createAuthRepo } from '../auth/repo.js';
 import { seedHomeRingNodes, type HomeRingLog } from '../buildings/home-ring.js';
-import { listPublicBuildings, removeMemberBuildings } from '../buildings/service.js';
-import { createHouseRepo } from '../house/repo.js';
+import { listPublicBuildings } from '../buildings/service.js';
 import { giftWaitingOn } from '../house/service.js';
 import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from '../house/switch.js';
-import { listPublicFences, removeMemberFences } from '../fences/service.js';
+import { listPublicFences } from '../fences/service.js';
+import { departWithin, heartSeedOf } from './depart.js';
+import type { NewGameEvent } from '../../db/game-events.js';
+import { createComputerMatesRepo } from '../computer-mates/repo.js';
+import {
+  createComputerMatesService,
+  lockMatesFor,
+  makeRoomWithin,
+} from '../computer-mates/service.js';
+import type { ComputerMatesSwitch } from '../computer-mates/switch.js';
 import { seedExtraNodes } from './extra-nodes.js';
 import { createKeepersRepo } from '../keepers/repo.js';
 import { starterPick } from '../starters/service.js';
@@ -56,12 +63,9 @@ import { homesteadOf } from '../explore/homesteads.js';
 import { createExploreRepo } from '../explore/repo.js';
 import { listPostViews } from '../journeys/service.js';
 import { settleKeys } from '../communities/key-moves.js';
-import { createCommunitiesRepo } from '../communities/repo.js';
 import { communitiesView, storeCommunities, villageMorning } from '../communities/service.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { defaultGuardianData, tileGuardians } from '../territory/service.js';
-import { contentmentCheckpointsOf, writeContentmentCheckpoints } from '../jobs/contentment.js';
-import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { createMapsRepo, type JoinRequestRow, type MemberRow, type TileViewRow } from './repo.js';
 import { WILD_ISLE_OFF, wildIsleOpenFor, type WildIsleSwitch } from './wild-isle-switch.js';
@@ -109,6 +113,8 @@ export interface MapsServiceOptions {
   longNight?: LongNightSwitch;
   /** `HP_HOUSE` (#381): whose views say whether a House gift waits (#731c); off when left out. */
   house?: HouseSwitch;
+  /** `HP_COMPUTER_MATES` (#386): the switch in details; off when left out. */
+  computerMates?: ComputerMatesSwitch;
   clock?: Clock;
   /**
    * Live sync (`wsHub.publish`): called after a command that wrote game events
@@ -148,6 +154,7 @@ const MESSAGES = {
   resetOutOfScope:
     "This Keeper also plays in a patch you don't own. Ask the grown-up who runs Heartpatch to reset it.",
   noRoom: "This patch can't take new Keepers.",
+  resetComputer: "Computer friends don't have passwords. They just know!",
   notReady: (username: string) => `${username} is still getting ready. Try again soon!`,
   wildIsleClosed: "Wild Isles aren't open yet. Make a Cozy Patch for now!",
   wildIsleSeats: 'A Wild Isle is made for 6 Keepers. Try a Cozy Patch!',
@@ -220,14 +227,6 @@ function toPublicTile(
   };
 }
 
-/** The Heart Seed: the centre of a home base (a tile and its full ring). */
-function heartSeedOf(homeTiles: readonly Hex[]): Hex {
-  const n = homeTiles.length;
-  if (n === 0) throw new Error('heartSeedOf: no home tiles');
-  const sum = homeTiles.reduce((acc, h) => ({ q: acc.q + h.q, r: acc.r + h.r }), { q: 0, r: 0 });
-  return { q: sum.q / n, r: sum.r / n };
-}
-
 const toRequest = (r: JoinRequestRow): MyJoinRequest => ({
   ...r,
   createdAt: r.createdAt.toISOString(),
@@ -259,6 +258,11 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
   const wildIsle = options.wildIsle ?? WILD_ISLE_OFF;
   const longNight = options.longNight ?? LONG_NIGHT_OFF;
   const house = options.house ?? HOUSE_OFF;
+  const computerMatesState = createComputerMatesService({
+    db,
+    ...(options.computerMates ? { computerMates: options.computerMates } : {}),
+    ...(options.clock ? { clock: options.clock } : {}),
+  }).stateFor;
 
   const assertTutorialDone = async (user: PublicUser) => {
     if (!tutorialRequired) return;
@@ -305,6 +309,9 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       // The Long Night's weekday (#727), left out while it's switched off here.
       longNightWeekdayOn(db, longNight, mapId),
     ]);
+    const owner = members.find((m) => m.role === 'owner')?.user;
+    // The computer patch-mates switch (#386), left out while it's closed here.
+    const computerMates = owner ? await computerMatesState(mapId, owner) : undefined;
     let admin: MapDetail['admin'] = null;
     if (role === 'owner') {
       const [invite, requests] = await Promise.all([
@@ -327,6 +334,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       friendlyChallenges: map.friendlyChallenges,
       patchType,
       ...(longNightWeekday !== undefined ? { longNightWeekday } : {}),
+      ...(computerMates !== undefined ? { computerMates } : {}),
       role,
       maxPlayers: map.maxPlayers,
       members: members.map(toMember),
@@ -355,87 +363,25 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     type: 'member.removed' | 'member.left',
   ) =>
     store.transaction(async (repo, tx) => {
-      // Lock order: seats, the player, tiles, buildings, then maps (appendGameEvent).
-      await repo.lockSeats(mapId);
-      await repo.lockUser(memberId);
-      const membership = await repo.membership(mapId, memberId);
-      if (membership?.status !== 'active') {
+      const result = await departWithin(repo, tx, {
+        mapId,
+        memberId,
+        actorUserId: actor.id,
+        type,
+        at: now(),
+      });
+      if (result === 'not-member') {
         throw new AppError(
           'NOT_FOUND',
           type === 'member.left' ? MESSAGES.notFound : MESSAGES.notAMember,
         );
       }
-      if (membership.role === 'owner') {
+      if (result === 'owner') {
         throw new AppError(
           'FORBIDDEN',
           type === 'member.left' ? MESSAGES.ownerLeave : MESSAGES.removeSelf,
         );
       }
-      await repo.archiveMember(mapId, memberId);
-      const at = now();
-      // Their guards and gatherers stop with the land, and trainees with
-      // their Training Grounds (#376): what each job held so far is worked
-      // out while the land is still theirs, and written once it's released.
-      const jobs = createSquishyJobsRepo(tx);
-      // Only those whose job stops here: guards on their land, gatherers at
-      // work there and trainees. Any other row (the team, the Hollow, a
-      // trade) keeps its own count, and a rescue may be writing it right now.
-      const mine = await jobs.listMine(mapId, memberId);
-      const theirs = mine
-        .filter(
-          (r) => r.squishy.state === 'active' && (r.onWatch || r.atWork || r.training !== null),
-        )
-        .map((r) => r.squishy.id);
-      // Residents leaving the house (#381) fade at the normal rate from now:
-      // the time so far counts at the perk's (only those home to enjoy it;
-      // one in the Hollow or a trade already fades at the normal rate).
-      const living = mine
-        .filter((r) => r.squishy.state === 'active' && r.houseRoomId !== null)
-        .map((r) => r.squishy.id);
-      const checkpoints = await contentmentCheckpointsOf(
-        tx,
-        mapId,
-        [...new Set([...theirs, ...living])],
-        at,
-      );
-      const releasedTiles = await repo.releaseTiles(mapId, memberId);
-      // A won village's ring goes back with the land, and its name with it
-      // (#306 PR 3, owner 2026-10-19): the village stays restored, ownerless.
-      // The community rows after the tiles `releaseTiles` holds (step 6).
-      await createCommunitiesRepo(tx).uproot(mapId, memberId);
-      // Written here, before the buildings (tech spec §7 exception): the
-      // member's own commands wait on the archive and the account lock above,
-      // and every other writer of a guard or gatherer takes its tile first,
-      // which `releaseTiles` holds. Their residents' checkpoints join this
-      // early read on the same footing (#381): a move in or out is one of the
-      // member's own commands, behind the member row.
-      // Their residents leave the house under their squishy locks (step 10),
-      // taken with the job squishies in one id-ordered lock and before any
-      // inventory row (step 11), as every residency writer does.
-      const house = createHouseRepo(tx);
-      const residents = await house.residentSquishyIds(mapId, memberId);
-      await jobs.lockSquishies([...new Set([...theirs, ...residents])]);
-      await writeContentmentCheckpoints(tx, checkpoints, at);
-      await house.deleteResidents(residents);
-      // A returning player gets a fresh home base (#4), so their buildings go
-      // (#18); fires on their captured land give back what a lost fire does (#202).
-      const map = await repo.findMap(mapId);
-      const lostFires = map ? await removeMemberBuildings(tx, map, memberId, at) : [];
-      // Their fences come down too, with the take-down share back (#203).
-      // After the buildings' grants: safe, as every fence command takes the
-      // tile lock first, and this transaction already holds their tiles.
-      const lostFences = await removeMemberFences(tx, mapId, memberId);
-      // Their house goes with the buildings (#381; plan Q5), its gifts by
-      // cascade (step 8c; the residents left above, under their squishy locks).
-      await house.deleteHouse(mapId, memberId);
-      for (const event of lostFires) await repo.appendEvent(event);
-      for (const event of lostFences) await repo.appendEvent(event);
-      await repo.appendEvent({
-        mapId,
-        type,
-        actorUserId: actor.id,
-        payload: { userId: memberId, releasedTiles },
-      });
     });
 
   const service: MapsService = {
@@ -653,7 +599,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       await assertKeeperChosen(user);
       await assertTutorialDone(user);
       const attempt = () =>
-        store.transaction(async (repo) => {
+        store.transaction(async (repo, tx) => {
           const invite = await repo.findLiveInviteByCode(code, now());
           if (!invite) throw new AppError('NOT_FOUND', MESSAGES.badCode);
           // Ordered against approvals (which lock the joiner too), so a second
@@ -674,7 +620,10 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
           const pending = await repo.findPendingRequest(invite.mapId, user.id);
           if (pending) return { request: asRequest(pending), created: false };
           // A courtesy check so nobody waits on a full patch; approval re-checks under lock.
-          if ((await repo.activeHomeSlots(invite.mapId)).count >= map.maxPlayers) {
+          // Real Keepers only (#386): a computer mate always makes room for a friend.
+          if (
+            (await createComputerMatesRepo(tx).countActivePlayers(invite.mapId)) >= map.maxPlayers
+          ) {
             throw new AppError('CONFLICT', MESSAGES.full(map.maxPlayers));
           }
           const created = await repo.insertJoinRequest({
@@ -695,10 +644,13 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
 
     approve: async (user, mapId, requestId) => {
       await requireOwner(db, user, mapId);
-      await store.transaction(async (repo) => {
-        // Lock order: seats, request, the player, tiles, then maps (appendGameEvent).
+      const madeRoom: string[] = [];
+      await store.transaction(async (repo, tx) => {
+        // Lock order: seats, the patch's computer mates (3a, #386), request,
+        // the player, tiles, then maps (appendGameEvent).
         // Seats first, so two approvals racing for the last seat run one at a time.
         await repo.lockSeats(mapId);
+        await lockMatesFor(tx, mapId);
         const request = await repo.lockJoinRequest(mapId, requestId);
         if (!request) throw new AppError('NOT_FOUND', MESSAGES.requestNotFound);
         if (request.status !== 'pending') throw new AppError('CONFLICT', MESSAGES.requestAnswered);
@@ -721,6 +673,22 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         const map = await repo.findMap(mapId);
         if (!map) throw new AppError('NOT_FOUND', MESSAGES.notFound);
         // Read after taking the seats lock, so it sees every committed join.
+        // Real Keepers only (#386): a computer mate leaves to make room, the
+        // one with the least land first, in this transaction.
+        if ((await createComputerMatesRepo(tx).countActivePlayers(mapId)) >= map.maxPlayers) {
+          throw new AppError('CONFLICT', MESSAGES.full(map.maxPlayers));
+        }
+        const leaving: NewGameEvent[] = [];
+        madeRoom.push(
+          ...(await makeRoomWithin(repo, tx, {
+            mapId,
+            joinerId: joiner.id,
+            actorUserId: user.id,
+            maxPlayers: map.maxPlayers,
+            at: now(),
+            collect: leaving,
+          })),
+        );
         const seats = await repo.activeHomeSlots(mapId);
         if (seats.count >= map.maxPlayers) {
           throw new AppError('CONFLICT', MESSAGES.full(map.maxPlayers));
@@ -741,6 +709,8 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         // Hand-authored maps have no home slots to give.
         if (home.length === 0) throw new AppError('CONFLICT', MESSAGES.noRoom);
         await repo.decideJoinRequest({ mapId, requestId, status: 'approved', now: now() });
+        // `maps` last: the leavers' events, then the joiner's.
+        for (const event of leaving) await repo.appendEvent(event);
         await repo.appendEvent({
           mapId,
           type: 'member.joined',
@@ -753,6 +723,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
           },
         });
       });
+      for (const mateId of madeRoom) await afterDeparture(mapId, mateId, user.id);
       published(mapId);
     },
 
@@ -809,6 +780,10 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         const target = await repo.findUser(memberId);
         if (membership?.status !== 'active' || !target) {
           throw new AppError('NOT_FOUND', MESSAGES.notAMember);
+        }
+        // A computer patch-mate (#386) has no password to reset.
+        if ((await createComputerMatesRepo(tx).computerIds([memberId])).size > 0) {
+          throw new AppError('FORBIDDEN', MESSAGES.resetComputer);
         }
         // Decision D: only if every game map they're in is this owner's.
         if ((await repo.countMapsOwnedByOthers(memberId, user.id)) > 0) {
