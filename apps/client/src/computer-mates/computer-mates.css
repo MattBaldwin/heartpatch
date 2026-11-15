@@ -70,6 +70,7 @@
 
 /* The patch settings switch row (mockup `.sw`), the Challenges card look. */
 .cf-switch {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -190,6 +191,19 @@
   font-size: 14px;
   font-weight: 800;
   color: #6b4b6e;
+}
+
+/* Who's here: the secondary "Battle me?" drops under the name when the row is narrow (mockup 4a). */
+.friendly-row-computer {
+  flex-wrap: wrap;
+}
+
+.friendly-row-computer .friendly-row-text {
+  flex: 1 1 160px;
+}
+
+.friendly-row-computer > .hp-button {
+  margin-left: auto;
 }
 
 /* Under the name in a column (Who's here), the pill keeps its own width. */
