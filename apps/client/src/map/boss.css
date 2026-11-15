@@ -16,14 +16,29 @@
   display: none;
 }
 .boss-glow {
+  /* The approved mockup's gold boss tile: a warm halo with a solid gold hexagon plate (pointy-top, like the map's tiles) under the giant. */
   position: absolute;
   left: 50%;
-  top: calc(var(--boss-size) * 0.5);
-  width: calc(var(--boss-size) * 1.7);
-  height: calc(var(--boss-size) * 1.7);
-  margin: calc(var(--boss-size) * -0.85) 0 0 calc(var(--boss-size) * -0.85);
+  top: calc(var(--boss-size) * 0.66);
+  width: calc(var(--boss-size) * 1.9);
+  height: calc(var(--boss-size) * 1.5);
+  margin: calc(var(--boss-size) * -0.75) 0 0 calc(var(--boss-size) * -0.95);
   border-radius: 50%;
-  background: radial-gradient(rgb(255 201 77 / 55%), rgb(255 201 77 / 0%) 70%);
+  background: radial-gradient(rgb(255 205 60 / 75%), rgb(255 205 60 / 0%) 68%);
+  animation: boss-glow 2.2s ease-in-out infinite;
+}
+.boss-glow::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--boss-size) * 1.15);
+  height: calc(var(--boss-size) * 1.05);
+  margin: calc(var(--boss-size) * -0.525) 0 0 calc(var(--boss-size) * -0.575);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background:
+    radial-gradient(ellipse at 50% 38%, #fff3b0 0 18%, transparent 62%),
+    linear-gradient(#ffd84a, #f2a81d);
 }
 .boss-body {
   position: relative;
@@ -104,6 +119,15 @@
   font-size: 12px;
   font-weight: 800;
 }
+@keyframes boss-glow {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
 @keyframes boss-wobble {
   0%,
   100% {
@@ -114,7 +138,8 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .boss-body {
+  .boss-body,
+  .boss-glow {
     animation: none;
   }
 }

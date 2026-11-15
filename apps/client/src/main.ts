@@ -57,7 +57,7 @@ import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen, type MapLayer } from './map/map-screen.js';
 import { mapApi } from './map/map-api.js';
 import { createBossMarker } from './map/boss-marker.js';
-import { createBossPicker } from './map/boss-picker.js';
+import { createBossPicker, exceptBossTile } from './map/boss-picker.js';
 import { createBossStore } from './map/boss-store.js';
 import { bossPatchLine } from './map/boss-view.js';
 import { seasonsOn } from './map/map-dressing.js';
@@ -1486,7 +1486,7 @@ const maps = createMapScreen({
     land.tileActions,
     fences.tileActions,
     roads.tileActions,
-    territory.tileActions,
+    exceptBossTile(bossPicker, territory.tileActions),
     jobs.tileActions,
     journeys.tileActions,
     // On a patch-mate's home in the Halloween season (#515).

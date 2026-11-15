@@ -18,7 +18,37 @@ export interface BossPickerOptions {
   readonly now?: () => Date;
 }
 
-export function createBossPicker(options: BossPickerOptions): TileActions & { redraw: () => void } {
+export interface BossPicker extends TileActions {
+  redraw: () => void;
+  /** True when the boss's marker stands on this tile right now (its card owns the tile). */
+  claims: (tile: { q: number; r: number }) => boolean;
+}
+
+/**
+ * `other`'s actions everywhere except the boss's tile, where the boss card is
+ * the one state: "Let's go!" or its own refusal, never also "Too far away!"
+ * from the land rules (the boss stands on neutral land the Keeper may not touch).
+ */
+export function exceptBossTile(
+  picker: Pick<BossPicker, 'claims'>,
+  other: TileActions,
+): TileActions {
+  return {
+    show: (container, tile, view) => {
+      if (picker.claims(tile)) {
+        other.hide();
+        container.replaceChildren();
+        return;
+      }
+      other.show(container, tile, view);
+    },
+    hide: () => {
+      other.hide();
+    },
+  };
+}
+
+export function createBossPicker(options: BossPickerOptions): BossPicker {
   const { store } = options;
   const now = options.now ?? (() => new Date());
   let panel: { container: HTMLElement; q: number; r: number } | null = null;
@@ -74,6 +104,10 @@ export function createBossPicker(options: BossPickerOptions): TileActions & { re
   };
 
   return {
+    claims: (tile) => {
+      const marker = markerModel(store.visit, now(), store.nameOf);
+      return marker !== null && hexKey(marker) === hexKey(tile);
+    },
     show: (container, tile) => {
       if (!panel || panel.q !== tile.q || panel.r !== tile.r) problem = null;
       panel = { container, q: tile.q, r: tile.r };
