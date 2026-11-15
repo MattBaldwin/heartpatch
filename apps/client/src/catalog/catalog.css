@@ -55,11 +55,67 @@
   margin-top: 0;
 }
 
-.catalog-progress {
+/* The goal block (#732): one row per rarity tier, the first unfinished one
+   bold and framed, finished ones a soft tick. About one card-row tall in all. */
+.catalog-goal {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.catalog-tier {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  padding: 0 10px 0 6px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #7a2d55;
+}
+
+.catalog-tier .rarity-chip {
+  min-width: 96px;
+  padding: 1px 8px 1px 6px;
+  font-size: 12px;
+}
+
+.catalog-tier-count {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.catalog-tier-current {
+  background: rgb(255 255 255 / 85%);
+  box-shadow: inset 0 0 0 2px #f29bc0;
+  min-height: 30px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.catalog-tier-done {
+  opacity: 0.75;
+}
+
+.catalog-tier-check {
+  font-size: 18px;
+  font-weight: 800;
+  color: #b0467a;
+}
+
+.catalog-loading {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
   color: #7a2d55;
+}
+
+.catalog-loading:empty {
+  display: none;
 }
 
 .catalog-grid {

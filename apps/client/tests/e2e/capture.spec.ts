@@ -82,7 +82,8 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   await expect.poll(() => catalogState(page)).toMatchObject({ loading: false, seen: 1, caught: 1 });
   const known = (names: string[]) => names.filter((n) => n !== '???');
   expect(known((await catalogState(page))!.names)).toEqual(['Puddlepuff']);
-  await expect(page.getByTestId('catalog-progress')).toContainText('Friends 1');
+  // Their starter is the first Common friend: the Common row is the finish line (#732).
+  await expect(page.getByTestId('catalog-tier').first()).toContainText(/Common\s*1 of \d+ friends/);
   // The header's × closes it without scrolling the whole list (#150).
   await page.getByTestId('catalog-close-top').tap();
   await expect(page.getByTestId('catalog')).toBeHidden();
