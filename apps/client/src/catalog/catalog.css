@@ -56,7 +56,7 @@
 }
 
 /* The goal block (#732): one row per rarity tier, the first unfinished one
-   bold and framed, finished ones a soft tick. About one card-row tall in all. */
+   bold and framed, finished ones a soft tick. Roughly 150px in all. */
 .catalog-goal {
   display: flex;
   flex-direction: column;
@@ -206,6 +206,11 @@
    round × at its top is the one way out, so the grid gets the room the bottom
    Close used to take. */
 @media (max-height: 520px) and (min-width: 640px) {
+  /* Only the current finish line, so the grid keeps the room. */
+  .catalog-tier:not(.catalog-tier-current) {
+    display: none;
+  }
+
   .catalog {
     padding-bottom: calc(env(safe-area-inset-bottom) + 12px);
   }

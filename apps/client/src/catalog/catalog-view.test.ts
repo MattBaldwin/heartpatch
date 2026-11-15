@@ -152,7 +152,7 @@ describe('catalogPage (design doc §21: seen vs caught)', () => {
         { rarity: 'uncommon', caught: 0, seen: 0, total: 1, done: false, current: false },
       ]);
       expect(tierText(page.tiers[0]!)).toBe('1 of 2 friends · 2 seen');
-      expect(tierText(page.tiers[1]!)).toBe('0 of 1 friends');
+      expect(tierText(page.tiers[1]!)).toBe('0 of 1 friend');
     });
 
     it('reads a finished tier as done and moves the finish line on', () => {

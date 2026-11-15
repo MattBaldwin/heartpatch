@@ -49,7 +49,7 @@ export interface CatalogPage {
 /** A tier row's words: "9 of 30 friends", or "All found!" once done. Seen shows on the current row only. */
 export function tierText(tier: CatalogTier): string {
   if (tier.done) return 'All found!';
-  const friends = `${String(tier.caught)} of ${String(tier.total)} friends`;
+  const friends = `${String(tier.caught)} of ${String(tier.total)} ${tier.total === 1 ? 'friend' : 'friends'}`;
   return tier.current ? `${friends} · ${String(tier.seen)} seen` : friends;
 }
 
