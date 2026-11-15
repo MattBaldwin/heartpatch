@@ -75,7 +75,14 @@ import { FENCE_RESULTS, fenceResult, resultLine } from './result-line.js';
 import { coinLine, xpLines } from './result-card.js';
 import { keepGoing, KEEP_GOING_TEXT, type KeepGoingApi } from './keep-going.js';
 import { createBossBattle } from './boss-battle.js';
-import { BOSS_TEXT, bossSlot, isTeamBattle, slotsOut, teamXpLine } from './boss-view.js';
+import {
+  BOSS_TEXT,
+  bossSlot,
+  isTeamBattle,
+  slotsOut,
+  teamEvolvingRow,
+  teamXpLine,
+} from './boss-view.js';
 import { mapApi } from '../map/map-api.js';
 import { territoryApi } from '../territory/territory-api.js';
 import { COMMAND_RETRY_MS } from '../inventory/send-command.js';
@@ -889,14 +896,19 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       // One XP line for the whole team, and the coins ride in the card's
       // "You won …" line (mockup frame 3): the card fits under the boss.
       const nameOf = (id: string) => squishyName(names, mine, id);
-      const xp = teamXpLine(b.rewards?.xp ?? [], nameOf);
+      const awards = b.rewards?.xp ?? [];
+      const xp = teamXpLine(awards, nameOf);
+      // A benched teammate's cheer (#732) keeps its own softer line after the team's.
+      const cheers = xpLines(awards, nameOf);
+      const benchLines = cheers.lines.filter((_, i) => cheers.bench[i]);
       hud.setCaption(null);
       hud.showResult({
         title: bossCard.title,
         subtitle: bossCard.subtitle,
-        xp: [xp ?? MESSAGES.noXp],
-        // Each friend's evolving meter (#205), in a row under the team's line.
-        evolvingRow: xpLines(b.rewards?.xp ?? [], nameOf).evolving,
+        xp: xp !== null ? [xp, ...benchLines] : benchLines.length > 0 ? benchLines : [MESSAGES.noXp],
+        bench: [...(xp !== null ? [false] : []), ...benchLines.map(() => true)],
+        // Each fighter's evolving meter (#205), named, in a row under the team's line.
+        evolvingRow: teamEvolvingRow(awards, nameOf),
         lines: bossCard.lines,
         extra: bossCard.extra,
         done: MESSAGES.done,

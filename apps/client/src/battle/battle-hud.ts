@@ -120,9 +120,11 @@ export interface ResultInfo {
   evolving?: readonly ({ before: number; after: number } | null)[];
   /**
    * A team's evolving meters (#205) side by side under its one XP line (the
-   * boss card, #190): short ones, so the card still fits under the boss.
+   * boss card, #190): short ones, each named for its squishy ("Pip 35%"), so
+   * the card still fits under the boss. A null keeps its cell, empty, so the
+   * meters stay in the XP line's order.
    */
-  evolvingRow?: readonly ({ before: number; after: number } | null)[];
+  evolvingRow?: readonly ({ name: string; before: number; after: number } | null)[];
   /**
    * Which XP lines are a benched teammate's cheer (#732), by index: drawn
    * in the card's softer ink, as supporting cast. Missing: none.
@@ -304,12 +306,20 @@ export function createSheetHold(): {
 
 /**
  * One squishy's evolving meter on the result card (#205): the gain this battle
- * striped in. `compact` (a team's row on the boss card) drops the line under
- * the bar: the striped gain shows it.
+ * striped in. `compact` (a team's row on the boss card) is labelled with the
+ * squishy's name instead ("Pip 35%") and drops the line under the bar: the
+ * striped gain shows it.
  */
-function evolvingMeter(gain: { before: number; after: number }, compact: boolean): HTMLElement {
+function evolvingMeter(
+  gain: { before: number; after: number },
+  compact: { name: string } | null,
+): HTMLElement {
   const meter = evolvingMeterEl('battle-evolving');
-  const bar = evolvingBar(gain.after);
+  const full = evolvingBar(gain.after);
+  const bar =
+    compact && full
+      ? { ...full, label: full.ready ? `${compact.name} ✨` : compact.name }
+      : full;
   meter.update(bar, {
     gainedFrom: gain.before / 100,
     sub: compact
@@ -320,6 +330,9 @@ function evolvingMeter(gain: { before: number; after: number }, compact: boolean
   });
   return meter.root;
 }
+
+/** Room above a boss fight's result card on iPad, so the friends' feet clear its corners (#190). */
+const CARD_MARGIN_WIDE = 28; // TUNE:
 
 export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): BattleHud {
   const plate = (side: 'mine' | 'theirs') => {
@@ -961,14 +974,19 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
             const attrs: Record<string, string> = info.bench?.[i]
               ? { class: 'battle-xp-bench' }
               : {};
-            return gain ? el('li', attrs, line, evolvingMeter(gain, false)) : el('li', attrs, line);
+            return gain ? el('li', attrs, line, evolvingMeter(gain, null)) : el('li', attrs, line);
           }),
           ...(info.evolvingRow?.some(Boolean)
             ? [
                 el(
                   'li',
                   { class: 'battle-evolving-row' },
-                  ...info.evolvingRow.flatMap((gain) => (gain ? [evolvingMeter(gain, true)] : [])),
+                  // A squishy with no meter keeps an empty cell, so the rest stay in order.
+                  ...info.evolvingRow.map((gain) =>
+                    gain
+                      ? evolvingMeter(gain, gain)
+                      : el('div', { class: 'battle-evolving-blank', 'aria-hidden': 'true' }),
+                  ),
                 ),
               ]
             : []),
@@ -1034,7 +1052,10 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         const close = leave.getBoundingClientRect().bottom;
         const card = result.getBoundingClientRect().top;
         const top = Math.min(0.3, close > 0 ? (close + 8) / h : 0.12);
-        safe = { top, bottom: Math.max(top + 0.2, card > 0 ? (card - 8) / h : 0.5) };
+        // On iPad the card is narrower than the arena, so the friends either
+        // side stand near its top corners: a little more room keeps their feet clear.
+        const margin = window.innerWidth >= 600 ? CARD_MARGIN_WIDE : 8;
+        safe = { top, bottom: Math.max(top + 0.2, card > 0 ? (card - margin) / h : 0.5) };
         return safe;
       }
       if (team) {

@@ -99,6 +99,14 @@ test.describe('a mini-boss fight (#190)', () => {
     // Each friend's evolving meter (#205), in a row under the team's XP line.
     await expect(card.getByTestId('battle-evolving')).toHaveCount(3);
     await expect(card.getByTestId('battle-evolving').first()).toContainText('35%');
+    // Each meter is named for its squishy ("Pip 35%"), in the XP line's order.
+    const meters = await card.getByTestId('battle-evolving').allInnerTexts();
+    const named = meters.map((text) => text.replace(/\s*\d+%[\s\S]*$/, '').trim());
+    expect(named.every((name) => name.length > 0 && !name.includes('Evolving'))).toBe(true);
+    const xpLine = (await card.getByTestId('battle-xp').locator('li').first().innerText()).trim();
+    const at = named.map((name) => xpLine.indexOf(name));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((x, y) => x - y)).toEqual(at);
     await expect(card.getByTestId('boss-befriend-ask')).toContainText('to be your friend? 💗💗💗');
     // Counted again once the bundle landed: the 3 from before and the bundle's 3.
     await expect(card.getByTestId('boss-befriend-ask')).toContainText('You have 6 Heart Charms');

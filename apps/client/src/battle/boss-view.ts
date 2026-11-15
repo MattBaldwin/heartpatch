@@ -69,7 +69,6 @@ export const BOSS_TEXT = {
   give: (n: number) => `Give ${String(n)} Heart Charms 💗`,
   askAgain: (n: number) => `Ask again (${String(n)} 💗)`,
   needCharms: (n: number) => `You need ${String(n)} 💗`,
-  madeAtHome: 'Heart Charms are made at home.',
   makeCharms: 'Make Heart Charms 🏠',
   notYet: (name: string) => `Not yet! ${name} likes you a little more now.`,
   warmer: 'A little warmer',
@@ -371,11 +370,18 @@ export function wonLine(
  * when nobody earned: "Pip, Puff and Fizz each earned 12 XP!", or each
  * one's own amount when they differ. The server's awards, as sent.
  */
+/** The fighters who earned XP, in the server's order: a benched teammate's cheer (#732) is not one. */
+function teamEarned<A extends { readonly xp: number; readonly bench?: boolean }>(
+  awards: readonly A[],
+): A[] {
+  return awards.filter((award) => award.xp > 0 && award.bench !== true);
+}
+
 export function teamXpLine(
-  awards: readonly { readonly squishyId: string; readonly xp: number }[],
+  awards: readonly { readonly squishyId: string; readonly xp: number; readonly bench?: boolean }[],
   nameOf: (squishyId: string) => string,
 ): string | null {
-  const earned = awards.filter((award) => award.xp > 0);
+  const earned = teamEarned(awards);
   const first = earned[0];
   if (!first) return null;
   if (earned.length === 1) return REWARD_TEXT.earnedXp(nameOf(first.squishyId), first.xp);
@@ -385,6 +391,36 @@ export function teamXpLine(
   return BOSS_TEXT.teamXpEach(
     listed(earned.map((award) => `${nameOf(award.squishyId)} got ${String(award.xp)}\u00a0XP`)),
   );
+}
+
+/** One fighter's compact evolving meter on the boss card (#205): its name and the gain. */
+export interface TeamEvolving {
+  readonly name: string;
+  readonly before: number;
+  readonly after: number;
+}
+
+/**
+ * The boss card's row of evolving meters, one cell per fighter in
+ * `teamXpLine`'s order, so the meters line up with the names. A fighter with
+ * no meter (none sent) keeps a null cell; a row with no meters at all is empty.
+ */
+export function teamEvolvingRow(
+  awards: readonly {
+    readonly squishyId: string;
+    readonly xp: number;
+    readonly bench?: boolean;
+    readonly evolvingBefore?: number | null;
+    readonly evolvingAfter?: number | null;
+  }[],
+  nameOf: (squishyId: string) => string,
+): (TeamEvolving | null)[] {
+  const row = teamEarned(awards).map((award) =>
+    award.evolvingBefore != null && award.evolvingAfter != null
+      ? { name: nameOf(award.squishyId), before: award.evolvingBefore, after: award.evolvingAfter }
+      : null,
+  );
+  return row.some(Boolean) ? row : [];
 }
 
 export interface BossResultCard {
@@ -463,8 +499,8 @@ export type BefriendView =
       /** The ask button: its words, and whether it can be tapped. */
       readonly button: string;
       readonly enabled: boolean;
-      /** Too few charms: where they come from, and the button home. */
-      readonly needHint: string | null;
+      /** Too few charms: show "Make Heart Charms 🏠" (where they come from) beside the ask. */
+      readonly needCharms: boolean;
       /** The ask number to send (`asks made + 1`). */
       readonly ask: number;
     }
@@ -538,7 +574,7 @@ export function befriendView(input: {
             ? BOSS_TEXT.askAgain(cost)
             : BOSS_TEXT.give(cost),
         enabled: !short && charms !== null,
-        needHint: short ? BOSS_TEXT.madeAtHome : null,
+        needCharms: short,
         ask: asksMade + 1,
       };
     }

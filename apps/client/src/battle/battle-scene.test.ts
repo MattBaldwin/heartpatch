@@ -204,6 +204,30 @@ describe('BattleScene', () => {
     expect(scene.imageProcessingConfiguration.vignetteEnabled).toBe(true);
   });
 
+  it('tells a watcher after a render in which the camera moved, never while it holds still (#190)', () => {
+    const { scene, battle } = build('forest', true);
+    battle.sendOut('a', 'puddlepuff', 'mine-1');
+    battle.sendOut('b', 'emberbun', 'wild-1');
+    battle.update(0);
+    const moved = vi.fn();
+    const stop = battle.onCameraMoved(moved);
+    scene.render();
+    expect(moved).toHaveBeenCalledTimes(1);
+    battle.update(16);
+    scene.render();
+    expect(moved).toHaveBeenCalledTimes(1);
+    // A lean towards one side moves it (at once, with reduced motion).
+    battle.focusOn('a');
+    battle.update(32);
+    scene.render();
+    expect(moved).toHaveBeenCalledTimes(2);
+    stop();
+    battle.focusOn('b');
+    battle.update(48);
+    scene.render();
+    expect(moved).toHaveBeenCalledTimes(2);
+  });
+
   it('streams a strike’s trail along the dash, towards the other squishy', () => {
     const { scene, battle } = build();
     battle.sendOut('a', 'emberbun', 'mine-1');

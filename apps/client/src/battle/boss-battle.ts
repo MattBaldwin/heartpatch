@@ -13,7 +13,13 @@ import type { BattleHud } from './battle-hud.js';
 import type { PlaybackStep, ShownState } from './battle-playback.js';
 import type { BattleScene } from './battle-scene.js';
 import { otherSide, type BattleContent } from './battle-view.js';
-import { befriendPanel, mountBossHud, type OrderMover, type PickerMove } from './boss-hud.js';
+import {
+  befriendPanel,
+  type FriendSpot,
+  mountBossHud,
+  type OrderMover,
+  type PickerMove,
+} from './boss-hud.js';
 import {
   befriendView,
   bossCallout,
@@ -125,6 +131,15 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
   /** Frames left to wait for the arena's first picture before the plates line up. */
   let placing = 0;
   let placeFrame = 0;
+  /** The battle the plates were last lined up for, and the arena told when its camera moves. */
+  let placed: PlayerBattle | null = null;
+  let watching: BattleScene | null = null;
+  let unwatch: (() => void) | null = null;
+  const stopWatching = () => {
+    unwatch?.();
+    unwatch = null;
+    watching = null;
+  };
   /** One key per ask number, so a retried ask is the same ask. */
   const keys = new Map<number, string>();
 
@@ -213,14 +228,25 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
   /** Lines each friend's plate up under its body, once the arena has drawn it. */
   const place = (b: PlayerBattle) => {
     const scene = deps.scene();
-    const xs = new Map<number, number>();
+    const spots = new Map<number, FriendSpot>();
     for (const slot of slotsOut(b, b.mySide)) {
       const spot = scene?.screenSpot(b.mySide, slot, true);
-      if (spot) xs.set(slot, spot.x);
+      // `r` is half the body's height on screen, so its feet are `r` below its middle.
+      if (spot) spots.set(slot, { x: spot.x, feet: spot.y + spot.r });
     }
-    if (xs.size > 0) {
-      ui.placeFriends(xs);
+    if (spots.size > 0) {
+      ui.placeFriends(spots);
       placing = 0;
+      placed = b;
+      // The camera leans and pushes in as steps play: line them up again each
+      // time it moves, so a plate stays under its body (#190).
+      if (scene && watching !== scene) {
+        stopWatching();
+        watching = scene;
+        unwatch = scene.onCameraMoved(() => {
+          if (placed && battleId === placed.id) place(placed);
+        });
+      }
       return;
     }
     if (placing <= 0) return;
@@ -302,6 +328,8 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     close: () => {
       cancelAnimationFrame(placeFrame);
       placing = 0;
+      placed = null;
+      stopWatching();
       deps.hud.setTeam(null);
       ui.hidePicker();
       drawn = null;

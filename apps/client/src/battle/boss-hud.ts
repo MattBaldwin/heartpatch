@@ -40,7 +40,11 @@ export interface BossHud {
    * Puts each friend's plate under its body (page x in CSS px, by slot), so
    * the plates follow the arena's row; a slot left out stays in the plain row.
    */
-  placeFriends: (xs: ReadonlyMap<number, number>) => void;
+  /**
+   * Each friend's plate under its body: `x` its middle and `feet` its lowest
+   * point, in page pixels (`BattleScene.screenSpot`).
+   */
+  placeFriends: (spots: ReadonlyMap<number, FriendSpot>) => void;
   setChips: (chips: { tries: number | null; until: string | null }) => void;
   /** The "Round N" pill (mockup frame 1), or null to hide it. */
   setRound: (round: number | null) => void;
@@ -61,6 +65,17 @@ export interface BossHud {
 }
 
 const CALLOUT_MS = 1100; // TUNE: the HUD's own callout length
+
+/** Where a friend stands on screen, in page pixels. */
+export interface FriendSpot {
+  readonly x: number;
+  readonly feet: number;
+}
+
+/** A plate sits this far under the lowest friend's feet on a wide screen. */
+const PLATE_GAP = 8; // TUNE:
+/** From this width the sheet is a card and the row floats free of it (iPad). */
+const WIDE_MIN = 600;
 
 /** One mover on the order strip: the boss, or a friend by slot. */
 export interface OrderMover {
@@ -202,10 +217,10 @@ export function mountBossHud(): BossHud {
         }
       }
     },
-    placeFriends: (xs) => {
+    placeFriends: (spots) => {
       const row = friendRow.getBoundingClientRect();
       if (row.width <= 0) return;
-      const placed = [...friendNodes].every(([slot]) => xs.has(slot));
+      const placed = [...friendNodes].every(([slot]) => spots.has(slot));
       friendRow.classList.toggle('boss-friends-placed', placed);
       const gap = 8;
       const n = Math.max(1, friendNodes.size);
@@ -214,7 +229,7 @@ export function mountBossHud(): BossHud {
       const half = width / 2;
       // Left to right, each at least a plate and a gap from the last, inside the row.
       const order = [...friendNodes]
-        .map(([slot, node]) => ({ node, x: (xs.get(slot) ?? 0) - row.left }))
+        .map(([slot, node]) => ({ node, x: (spots.get(slot)?.x ?? 0) - row.left }))
         .sort((a, b) => a.x - b.x);
       let min = half;
       const lefts = order.map(({ x }) => {
@@ -232,6 +247,17 @@ export function mountBossHud(): BossHud {
         node.node.style.left = placed ? `${String(Math.round(lefts[i] ?? 0))}px` : '';
         node.node.style.width = placed ? `${String(Math.floor(width))}px` : '';
       });
+      // On iPad the row is pinned above the sheet's full share, well below the
+      // friends' feet: lift the plates (never lower them) to just under the
+      // lowest friend's feet, all in one line. The row's own box stays put, so
+      // the camera's frame (which reads it) doesn't chase the plates.
+      let lift = 0;
+      if (placed && window.innerWidth >= WIDE_MIN) {
+        let feet = 0;
+        for (const spot of spots.values()) feet = Math.max(feet, spot.feet);
+        lift = Math.min(0, Math.round(feet + PLATE_GAP - row.top));
+      }
+      friendRow.style.setProperty('--boss-plate-lift', `${String(lift)}px`);
     },
     setRound: (n) => {
       round.hidden = n === null;
@@ -482,9 +508,8 @@ export function befriendPanel(
       ask.addEventListener('click', () => {
         handlers.onAsk(view.ask);
       });
-      if (view.needHint) {
-        // "Make Heart Charms 🏠" says where charms come from, so the view's
-        // `needHint` line ("…made at home.") isn't drawn: the card stays short.
+      if (view.needCharms) {
+        // "Make Heart Charms 🏠" says where charms come from: the card stays short.
         const home = el(
           'button',
           {

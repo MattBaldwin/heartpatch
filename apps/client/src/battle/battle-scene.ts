@@ -49,7 +49,13 @@ import {
 } from './battle-config.js';
 import type { PlaybackStep } from './battle-playback.js';
 import type { BattleContent } from './battle-view.js';
-import { battleScale, CameraDirector, type FitPoint, type SafeRegion } from './camera-director.js';
+import {
+  battleScale,
+  CameraDirector,
+  type CameraShot,
+  type FitPoint,
+  type SafeRegion,
+} from './camera-director.js';
 import {
   actPose,
   actRunning,
@@ -277,6 +283,11 @@ export class BattleScene {
   #acts = 0;
   #salt = 1;
   #drawCalls = 0;
+  /** The last shot written (position, target, fov, lens shift), to tell when the camera moved. */
+  readonly #lastShot = new Float64Array(8).fill(Number.NaN);
+  #cameraMoved = false;
+  /** Told after a render whose camera moved (a HUD that lines things up under the fighters, #190). */
+  readonly #cameraWatchers = new Set<() => void>();
   #casterMeshes = -1;
   #imageProcessed = false;
 
@@ -403,6 +414,11 @@ export class BattleScene {
     });
     this.#afterRender = scene.onAfterRenderObservable.add(() => {
       this.#drawCalls = this.#instrumentation.drawCallsCounter.current;
+      // After the render the camera's matrices are this frame's, so `screenSpot` is current.
+      if (this.#cameraMoved) {
+        this.#cameraMoved = false;
+        for (const watcher of this.#cameraWatchers) watcher();
+      }
     });
 
     this.content = {
@@ -866,6 +882,38 @@ export class BattleScene {
     return { x: box.left + mid.x, y: box.top + mid.y, r: Math.max(24, Math.abs(mid.y - top.y)) };
   }
 
+  /**
+   * Calls `watcher` after each render in which the camera moved (a lean, a
+   * cue, a shake, a resize), never while it holds still. Returns the stop.
+   */
+  onCameraMoved(watcher: () => void): () => void {
+    this.#cameraWatchers.add(watcher);
+    return () => {
+      this.#cameraWatchers.delete(watcher);
+    };
+  }
+
+  #noteShot(shot: CameraShot): void {
+    // No array or closure per frame: each value is checked and kept in place.
+    let moved = this.#keep(0, shot.position.x);
+    moved = this.#keep(1, shot.position.y) || moved;
+    moved = this.#keep(2, shot.position.z) || moved;
+    moved = this.#keep(3, shot.target.x) || moved;
+    moved = this.#keep(4, shot.target.y) || moved;
+    moved = this.#keep(5, shot.target.z) || moved;
+    moved = this.#keep(6, shot.fov) || moved;
+    moved = this.#keep(7, shot.shift) || moved;
+    if (moved) this.#cameraMoved = true;
+  }
+
+  /** Keeps shot value `i`; true if it moved more than a thousandth (well under a screen point). */
+  #keep(i: number, v: number): boolean {
+    const last = this.#lastShot[i] ?? Number.NaN;
+    if (Math.abs(v - last) < 1e-3) return false;
+    this.#lastShot[i] = v;
+    return true;
+  }
+
   #placeBubbles(): void {
     for (const rig of this.#all) {
       const fighter = rig.out;
@@ -932,6 +980,7 @@ export class BattleScene {
   dispose(): void {
     this.#scene.onBeforeRenderObservable.remove(this.#beforeRender);
     this.#scene.onAfterRenderObservable.remove(this.#afterRender);
+    this.#cameraWatchers.clear();
     this.#effects.dispose();
     for (const rig of this.#all) rig.bubble?.dispose();
     this.#bubbleMaterial.dispose();
@@ -1150,6 +1199,7 @@ export class BattleScene {
       }
     }
     const shot = this.#camera.shot(this.#now, aspect, this.#framed(), this.#fit);
+    this.#noteShot(shot);
     camera.fov = shot.fov;
     camera.minZ = BATTLE_CAMERA.minZ;
     camera.maxZ = BATTLE_CAMERA.maxZ;

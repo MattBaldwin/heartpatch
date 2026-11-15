@@ -9,6 +9,7 @@ import {
   bossPlates,
   bossResult,
   bundleText,
+  teamEvolvingRow,
   teamXpLine,
   wonLine,
   goTo,
@@ -289,6 +290,52 @@ describe('a mini-boss fight on screen (#190)', () => {
       expect(teamXpLine([award('a', 0)], nameOf)).toBeNull();
     });
 
+    it("leaves a benched teammate's cheer out of the team's line (#732)", () => {
+      const names: Record<string, string> = { a: 'Pip', b: 'Puff', c: 'Fizz', d: 'Moss' };
+      const nameOf = (id: string) => names[id] ?? '?';
+      expect(
+        teamXpLine(
+          [
+            { squishyId: 'a', xp: 12 },
+            { squishyId: 'b', xp: 12 },
+            { squishyId: 'd', xp: 4, bench: true },
+          ],
+          nameOf,
+        ),
+      ).toBe('Pip and Puff each earned 12 XP!');
+      expect(teamXpLine([{ squishyId: 'd', xp: 4, bench: true }], nameOf)).toBeNull();
+    });
+
+    it('names each evolving meter and keeps an empty cell, in the XP line’s order', () => {
+      const names: Record<string, string> = { a: 'Pip', b: 'Puff', c: 'Fizz', d: 'Moss' };
+      const nameOf = (id: string) => names[id] ?? '?';
+      const award = (squishyId: string, xp: number, meter: boolean, bench?: boolean) => ({
+        squishyId,
+        xp,
+        evolvingBefore: meter ? 20 : null,
+        evolvingAfter: meter ? 35 : null,
+        ...(bench === undefined ? {} : { bench }),
+      });
+      expect(
+        teamEvolvingRow(
+          [
+            award('a', 12, true),
+            award('b', 9, false),
+            award('x', 0, true),
+            award('c', 9, true),
+            award('d', 4, true, true),
+          ],
+          nameOf,
+        ),
+      ).toEqual([
+        { name: 'Pip', before: 20, after: 35 },
+        null,
+        { name: 'Fizz', before: 20, after: 35 },
+      ]);
+      // No meters at all: no row.
+      expect(teamEvolvingRow([award('a', 12, false), award('b', 9, false)], nameOf)).toEqual([]);
+    });
+
     it('a win by scoot or without a bundle has no bundle line', () => {
       expect(bossResult(won(), 'Rakelet', NOW)!.lines).toEqual([]);
     });
@@ -355,6 +402,7 @@ describe('a mini-boss fight on screen (#190)', () => {
         asksLeft: 2,
         button: 'Give 3 Heart Charms 💗',
         enabled: true,
+        needCharms: false,
         ask: 1,
       });
     });
@@ -363,7 +411,7 @@ describe('a mini-boss fight on screen (#190)', () => {
       expect(view({ befriend: 'offer' }, { charms: 1 })).toMatchObject({
         button: 'You need 3 💗',
         enabled: false,
-        needHint: 'Heart Charms are made at home.',
+        needCharms: true,
         charmsLine: '💗 You have 1 Heart Charm',
       });
       expect(view({ befriend: 'offer' }, { charms: null })).toMatchObject({ enabled: false });
