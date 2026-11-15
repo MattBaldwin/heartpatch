@@ -81,7 +81,7 @@ describe('switchView', () => {
     expect(view?.on).toBe(true);
     expect(view?.tappable).toBe(true);
     expect(view?.livesHere).toBe(
-      '3 computer friends live here. They move over when real friends join.',
+      '3 Computer friends live here. They move over when real friends join.',
     );
   });
 
@@ -125,7 +125,7 @@ describe('switchView', () => {
 describe('livesHereLine', () => {
   it('reads right for one mate and for none yet', () => {
     expect(livesHereLine(['Pocket'], null)).toBe(
-      '1 computer friend lives here. They move over when real friends join.',
+      '1 Computer friend lives here. They move over when real friends join.',
     );
     expect(livesHereLine([], 'Mia')).toBe('Mia has Computer friends on.');
     expect(livesHereLine(['Pocket'], 'Mia')).toBe(

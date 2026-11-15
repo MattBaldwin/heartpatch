@@ -55,8 +55,8 @@ export function livesHereLine(names: readonly string[], ownerName: string | null
   if (names.length === 0) return 'Computer friends are on. They move in when there’s a free home.';
   const count =
     names.length === 1
-      ? '1 computer friend lives'
-      : `${String(names.length)} computer friends live`;
+      ? '1 Computer friend lives'
+      : `${String(names.length)} Computer friends live`;
   return `${count} here. They move over when real friends join.`;
 }
 

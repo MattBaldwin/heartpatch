@@ -111,7 +111,7 @@ test('the owner switches Computer friends on, and three badged mates move in (#3
   await expect(toggle).toHaveText('On');
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await expect(section.getByTestId('lobby-computer-note')).toContainText(
-    '3 computer friends live here.',
+    '3 Computer friends live here.',
   );
   const members = lobby.getByTestId('lobby-members');
   const mateRows = members.locator('[data-computer="true"]');
