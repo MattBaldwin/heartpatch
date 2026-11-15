@@ -79,6 +79,15 @@ describe('shopCards', () => {
   });
 });
 
+describe('an unknown status', () => {
+  it('shows a calm card with Buy off', () => {
+    const odd = { ...item({ id: 'rare-lure' }), status: 'sold-out' } as unknown as ShopItemView;
+    const [card] = shopCards(view([odd]), NOW);
+    expect(card).toMatchObject({ cream: true, canBuy: false });
+    expect(card?.state?.text).toBe('Not right now');
+  });
+});
+
 describe('daysUntil', () => {
   it('rounds up and is at least a day', () => {
     expect(daysUntil(new Date(NOW + 1).toISOString(), NOW)).toBe(1);

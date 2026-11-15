@@ -45,6 +45,8 @@ export const SHOP_TEXT = {
   heldWaiting: "You've got a lure waiting ✨",
   backTomorrow: 'Back tomorrow! 🌙',
   backSoon: 'Back soon!',
+  /** A status this build doesn't know (a newer server): safe, never a Buy. */
+  notNow: 'Not right now',
   sellingHelps: 'Selling helps!',
   yes: 'Buy',
   no: 'Not now',
@@ -120,6 +122,16 @@ function cardOf(item: ShopItemView, balance: number, nowMs: number): ShopCard {
           ? SHOP_TEXT.backSoon
           : SHOP_TEXT.backTomorrow;
     return { ...base, cream: true, state: { text, glow: false }, why: null, canBuy: false };
+  }
+  if (item.status !== 'buy') {
+    // A status from a newer server: say so calmly and keep Buy off.
+    return {
+      ...base,
+      cream: true,
+      state: { text: SHOP_TEXT.notNow, glow: false },
+      why: null,
+      canBuy: false,
+    };
   }
   const short = item.price - balance;
   return {
