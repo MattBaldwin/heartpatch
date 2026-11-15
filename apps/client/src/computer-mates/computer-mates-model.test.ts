@@ -129,7 +129,7 @@ describe('livesHereLine', () => {
 describe('hello and goodbye', () => {
   it('names every mate who moved in (the approval record’s words)', () => {
     expect(helloTitle(['Bramble', 'Marigold', 'Pocket'])).toBe(
-      'Bramble, Marigold and Pocket moved in next door! 🏡',
+      'Bramble, Marigold and Pocket moved in next door!\u00a0🏡',
     );
     expect(COMPUTER_TEXT.helloLine).toBe("They're run by the game.");
   });

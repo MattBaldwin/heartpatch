@@ -102,7 +102,8 @@ export function switchView(
 
 /** The hello card's title (approval record: the names, "moved in next door!"). */
 export function helloTitle(names: readonly string[]): string {
-  return `${nameList(names)} moved in next door! 🏡`;
+  // A no-break space keeps the house with the last word, never alone on a line.
+  return `${nameList(names)} moved in next door!\u00a0🏡`;
 }
 
 /**

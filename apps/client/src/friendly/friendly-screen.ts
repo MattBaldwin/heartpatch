@@ -257,8 +257,9 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
 
   /**
    * Computer friends (#386b, mockup 4a): always here, badged on every row,
-   * under their own label. Their "Battle me?" is secondary and rests until
-   * the server takes a friendly ask to a mate (#386e).
+   * under their own label. No "Battle me?" yet: a button that can't be
+   * tapped reads as broken, so it comes with the server's ask to a mate
+   * (#386e); the honest line under the list says battles are coming soon.
    */
   function computerRows(mates: readonly { userId: string; username: string }[]): HTMLElement[] {
     if (mates.length === 0) return [];
@@ -276,7 +277,6 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
             computerBadge(),
             el('span', { class: 'friendly-status' }, COMPUTER_TEXT.here),
           ),
-          button(FRIENDLY_TEXT.battleMe, () => undefined, { soft: true, disabled: true }),
         ),
       );
     }

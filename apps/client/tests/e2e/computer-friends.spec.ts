@@ -116,9 +116,15 @@ test('the owner switches Computer friends on, and three badged mates move in (#3
   await expect(kid.locator('.slot-icon')).toHaveCount(1);
   await expect(kid.getByTestId('computer-badge')).toHaveCount(0);
 
-  // On the patch: one card says hello to the mates who moved in.
+  // On the patch: Sprout's first-visit tray hint comes first, and the hello
+  // waits behind it (one card at a time). Then one card says hello to the
+  // mates who moved in.
   await visitPatch(lobby);
   const hello = page.getByTestId('computer-hello');
+  const hintOk = page.getByTestId('tray-hint-ok');
+  await expect(hintOk).toBeVisible({ timeout: 15_000 });
+  await expect(hello).toBeHidden();
+  await hintOk.tap();
   await expect(hello).toBeVisible({ timeout: 15_000 });
   await expect(hello.getByRole('heading')).toHaveText(
     'Bramble, Marigold and Pocket moved in next door! 🏡',
@@ -128,14 +134,13 @@ test('the owner switches Computer friends on, and three badged mates move in (#3
   await hello.getByTestId('computer-hello-ok').tap();
   await expect(hello).toBeHidden();
 
-  // Who's here: the mates sit under their own label, always here, badged, and
-  // their "Battle me?" rests until the server takes an ask to a mate (#386e).
+  // Who's here: the mates sit under their own label, always here, badged, with
+  // no "Battle me?" until the server takes an ask to a mate (#386e).
   await page.getByTestId('friendly-open').tap();
   const mates = page.getByTestId('friendly-computer-list');
   await expect(mates.getByRole('listitem')).toHaveCount(3);
   await expect(mates.getByTestId('computer-badge')).toHaveCount(3);
-  for (const ask of await mates.getByRole('button', { name: 'Battle me?' }).all()) {
-    await expect(ask).toBeDisabled();
-  }
+  await expect(mates.getByRole('button')).toHaveCount(0);
+  await expect(page.getByText('Battles with Computer friends are coming soon!')).toBeVisible();
   await page.context().close();
 });

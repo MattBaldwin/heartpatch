@@ -26,11 +26,16 @@ import {
 /** Gathers one batch of changes into one card or toast. */
 const GATHER_MS = 1200; // TUNE: a resync can land in two steps
 
+/** How often a hello that found the screen busy tries again. */
+const BUSY_RETRY_MS = 3000; // TUNE
+
 /** How long the goodbye toast stays. */
 const TOAST_MS = 5000; // TUNE
 
 export interface ComputerMatesNotesOptions {
   root: HTMLElement;
+  /** Something owns the screen (the tutorial, a battle, a sheet): the card waits. */
+  busy?: () => boolean;
   gatherMs?: number;
 }
 
@@ -129,6 +134,10 @@ export function createComputerMatesNotes(options: ComputerMatesNotesOptions): Co
 
   function flush(): void {
     timer = 0;
+    if (options.busy?.()) {
+      timer = window.setTimeout(flush, BUSY_RETRY_MS);
+      return;
+    }
     if (arrivals.length > 0) showHello(arrivals);
     const mate = departed[departed.length - 1];
     if (mate !== undefined && newKids.length > 0) showToast(goodbyeLine(mate, newKids[0] ?? null));
@@ -166,7 +175,12 @@ export function createComputerMatesNotes(options: ComputerMatesNotesOptions): Co
   }
 
   return {
-    layer: { attach: (_scene, view) => compare(view), update: compare },
+    layer: {
+      attach: (_scene, view) => {
+        compare(view);
+      },
+      update: compare,
+    },
     get debug() {
       return {
         hello: scrim.hidden ? null : (scrim.querySelector('.cf-hello-title')?.textContent ?? null),

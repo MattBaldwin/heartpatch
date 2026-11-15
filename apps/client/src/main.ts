@@ -1386,8 +1386,12 @@ const waterBuild = createTileBuild({
 });
 // Computer friends (#386b): a hello card when mates move in, and a toast
 // when one waves goodbye to make room for a real friend (a map layer: it
-// compares each newer view's roster with the last).
-const computerMatesNotes = createComputerMatesNotes({ root: document.body });
+// compares each newer view's roster with the last). The hello waits behind
+// the tutorial, a battle or another card, like What's new does.
+const computerMatesNotes = createComputerMatesNotes({
+  root: document.body,
+  busy: () => mapCovered() || whatsNewOpen || pushOfferOpen,
+});
 const maps = createMapScreen({
   root: document.body,
   // Every view read (open, resync) also says whether a House gift waits (#731c).

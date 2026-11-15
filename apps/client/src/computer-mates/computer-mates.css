@@ -115,11 +115,12 @@
   z-index: 60;
   display: grid;
   place-items: center;
-  padding: 16px;
+  padding: 16px max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left));
   background: rgb(74 49 80 / 35%);
 }
 
 .cf-hello {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -173,12 +174,14 @@
   top: calc(env(safe-area-inset-top, 0px) + 58px);
   left: 50%;
   z-index: 60;
+  box-sizing: border-box;
   width: min(420px, calc(100vw - 32px));
   padding: 12px 14px;
   border-radius: 18px;
   background: rgb(255 250 240 / 97%);
   box-shadow: 0 6px 18px rgb(107 75 110 / 18%);
   color: #4a3150;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
   font-size: 16px;
   font-weight: 800;
   text-align: center;
@@ -193,17 +196,9 @@
   color: #6b4b6e;
 }
 
-/* Who's here: the secondary "Battle me?" drops under the name when the row is narrow (mockup 4a). */
-.friendly-row-computer {
-  flex-wrap: wrap;
-}
-
+/* Who's here: a mate's name, badge and status fill the row (no "Battle me?" until #386e). */
 .friendly-row-computer .friendly-row-text {
-  flex: 1 1 160px;
-}
-
-.friendly-row-computer > .hp-button {
-  margin-left: auto;
+  flex: 1 1 auto;
 }
 
 /* Under the name in a column (Who's here), the pill keeps its own width. */
