@@ -1,4 +1,5 @@
 import { GAME_DATA, type DefenseStance, type Raid } from '@heartpatch/shared';
+import { coinsText } from '../battle/result-card.js';
 
 // Player-facing words for the challenge report (#16; style guide §2, §6, §9):
 // calm and reassuring, never shaming. A challenge is "Someone challenged your
@@ -21,6 +22,8 @@ export const RAID_TEXT = {
   noReplay: 'Nothing to watch for this one.',
   /** The style chip for a challenge I played myself (#29-C). */
   defendedLive: 'Defended live',
+  /** After a hold by the land's guardians alone (#728): one gentle nudge, never a scold. */
+  watchNudge: 'Put a squishy on watch to earn from holds!',
 } as const;
 
 /** The three defense styles, in the order the picker shows them. */
@@ -41,7 +44,7 @@ const FENCE_NAMES = new Map(
 /** One line per raid: who came by and how it went, kind either way. */
 export function raidLine(
   raid: Pick<Raid, 'attackerName' | 'outcome' | 'reason' | 'stance'> &
-    Partial<Pick<Raid, 'fence' | 'live'>>,
+    Partial<Pick<Raid, 'fence' | 'live' | 'earned'>>,
 ): string {
   const who = raid.attackerName;
   // I said "Defend now?" yes and played it myself (#29-C).
@@ -58,10 +61,18 @@ export function raidLine(
   }
   const defenders = raid.stance === null ? 'The land’s guardians' : 'Your squishies';
   switch (raid.outcome) {
-    case 'held':
-      return raid.reason === 'forfeit'
-        ? `${who} came to visit, then scooted home. Your land is safe!`
-        : `${who} tried to visit your land. ${defenders} held on!`;
+    case 'held': {
+      const earned = raid.earned ?? null;
+      const line =
+        raid.reason === 'forfeit'
+          ? `${who} came to visit, then scooted home. Your land is safe!`
+          : earned && earned.xp > 0
+            ? `${who} tried to visit your land. ${defenders} held on and earned ${String(earned.xp)} XP!`
+            : `${who} tried to visit your land. ${defenders} held on!`;
+      // The guardians held it with nobody on watch (#728): no pay, one nudge.
+      if (raid.stance === null && !earned) return `${line} ${RAID_TEXT.watchNudge}`;
+      return withEarned(line, raid, raid.reason === 'forfeit');
+    }
     case 'tie':
       return `${who} came to visit. It was a tie, and your land is safe!`;
     case 'lost':
@@ -74,12 +85,19 @@ export function raidLine(
 }
 
 /** A challenge I defended live (#29-C): proud either way, never shaming. */
-function liveRaidLine(who: string, raid: Pick<Raid, 'outcome' | 'reason'>): string {
+function liveRaidLine(
+  who: string,
+  raid: Pick<Raid, 'outcome' | 'reason'> & Partial<Pick<Raid, 'earned'>>,
+): string {
   switch (raid.outcome) {
     case 'held':
-      return raid.reason === 'forfeit'
-        ? `🛡️ You defended live! ${who} scooted home, and your land is safe.`
-        : `🛡️ You defended live and kept ${who} out. Your land is safe!`;
+      return withEarned(
+        raid.reason === 'forfeit'
+          ? `🛡️ You defended live! ${who} scooted home, and your land is safe.`
+          : `🛡️ You defended live and kept ${who} out. Your land is safe!`,
+        raid,
+        true,
+      );
     case 'tie':
       return `🛡️ You defended live against ${who}. A tie, and your land is safe!`;
     case 'lost':
@@ -89,6 +107,20 @@ function liveRaidLine(who: string, raid: Pick<Raid, 'outcome' | 'reason'>): stri
     case 'no-contest':
       return `🛡️ You came to defend, but everyone got distracted. Nothing changed!`;
   }
+}
+
+/**
+ * A hold's line plus what it paid (#728): the XP when `withXp` (the line
+ * didn't say it already), then the coins credited. Nothing for a row from
+ * before #728 (`earned` missing or null) or a hold that paid nothing.
+ */
+function withEarned(line: string, raid: Partial<Pick<Raid, 'earned'>>, withXp: boolean): string {
+  const earned = raid.earned ?? null;
+  if (!earned) return line;
+  const parts = [line];
+  if (withXp && earned.xp > 0) parts.push(`Your squishies earned ${String(earned.xp)} XP!`);
+  if (earned.patch + earned.heart > 0) parts.push(`You got ${coinsText(earned)}.`);
+  return parts.join(' ');
 }
 
 /**

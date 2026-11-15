@@ -188,9 +188,12 @@ test.describe('friendly battles (#29)', () => {
       .toBe('finished');
     for (const page of [lee, sam]) {
       await expect(page.getByTestId('battle-result')).toBeVisible({ timeout: 30_000 });
-      await expect(page.getByTestId('battle-result')).toContainText('Friendly battles give no XP');
+      await expect(page.getByTestId('battle-result')).toContainText('Nobody loses anything');
     }
     await expect(lee.getByTestId('battle-result')).toContainText(`You won against ${samName}`);
+    // Both teams learn a little; the winner gets a couple of coins (#728).
+    await expect(lee.getByTestId('battle-result')).toContainText('for the win!');
+    await expect(sam.getByTestId('battle-result')).toContainText('Good game!');
     expect(errors).toEqual([]);
   });
 
