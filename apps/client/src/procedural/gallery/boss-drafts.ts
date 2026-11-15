@@ -442,7 +442,7 @@ export const DRAFT_PARTS: Part[] = [
     jitter: 0.06,
   }),
   part({
-    // Two gold hair sticks through the bun: Momentum's fire glow accent (the
+    // Two gold hair sticks through the bun: Mommentum's fire glow accent (the
     // fire rule needs glow: 'accent'). Long enough to poke out of the bun.
     id: 'draft-hair-sticks',
     slot: 'horns',
@@ -463,7 +463,7 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-akimbo-arms',
     slot: 'arms',
     shape: 'capsule',
-    size: [0.15, 0.5, 0.15],
+    size: [0.16, 0.6, 0.16],
     color: 'primary',
     layout: { kind: 'pair' },
     around: 86,
@@ -473,14 +473,16 @@ export const DRAFT_PARTS: Part[] = [
     jitter: 0,
   }),
   part({
-    // ...and the forearm comes back up from the hip to meet it.
+    // ...and the forearm comes back up from the hip to meet it. Both run
+    // past the elbow into each other, so it reads as one bent arm (round 4:
+    // tip-to-tip they showed a break and read as two loose pieces).
     id: 'draft-akimbo-forearms',
     slot: 'back',
     shape: 'capsule',
-    size: [0.15, 0.46, 0.15],
+    size: [0.16, 0.56, 0.16],
     color: 'primary',
     layout: { kind: 'pair' },
-    around: 86,
+    around: 90,
     up: -22,
     tilt: 74,
     sink: 0.2,
@@ -657,17 +659,34 @@ export const DRAFT_PARTS: Part[] = [
     jitter: 0,
   }),
   part({
-    // Two struts holding up the boss's spoiler at the back of the kart.
-    id: 'draft-spoiler-struts',
-    slot: 'spikes',
+    // The boss's steering arms: the same angles as the others, a third
+    // longer (owner, round 4), so they reach out past the kart's front.
+    id: 'draft-steer-arms-long',
+    slot: 'arms',
     shape: 'capsule',
-    size: [0.08, 0.5, 0.08],
-    color: 'detail',
+    size: [0.19, 1.2, 0.19], // TUNE
+    color: 'primary',
     layout: { kind: 'pair' },
+    around: 40,
+    up: 60,
+    tilt: -60,
+    splay: -20,
+    sink: 0.15,
+    jitter: 0,
+  }),
+  part({
+    // The boss's whippy kart-flag antenna off the back, tall enough to show
+    // above his head (owner, round 4: replaces the spoiler, which read as
+    // bat wings from the front).
+    id: 'draft-kart-antenna',
+    slot: 'tail',
+    shape: 'capsule',
+    size: [0.06, 0.75, 0.06],
+    color: 'accent',
+    layout: { kind: 'chain', count: 3, step: 0.95, curl: 6, wave: 8, shrink: 0.85 },
     around: 160,
     up: 55,
-    tilt: 55,
-    splay: 0,
+    tilt: 62, // TUNE
     sink: 0.2,
     jitter: 0,
   }),
@@ -685,21 +704,6 @@ export const DRAFT_PARTS: Part[] = [
     tilt: 70,
     splay: 8,
     sink: 0.3,
-    jitter: 0,
-  }),
-  part({
-    // A big racing spoiler on the back (Rickeyride's new part): a wide flat
-    // wing standing out behind the kart, the boss's silhouette change.
-    id: 'draft-kart-spoiler',
-    slot: 'wings',
-    shape: 'ellipsoid',
-    size: [1.5, 0.45, 0.06],
-    color: 'detail',
-    layout: { kind: 'single' },
-    around: 180,
-    up: 80,
-    tilt: 30,
-    sink: 0.1,
     jitter: 0,
   }),
 ];
@@ -880,8 +884,8 @@ export const DRAFT_BOSS_LINES: readonly DraftBossLine[] = [
         },
       },
       {
-        id: 'draft-momentum',
-        name: 'Momentum',
+        id: 'draft-mommentum',
+        name: 'Mommentum',
         stage: 'boss',
         plannedRarity: 'mythic',
         visual: {
@@ -1075,10 +1079,9 @@ export const DRAFT_BOSS_LINES: readonly DraftBossLine[] = [
             'draft-wind-swoop',
             'draft-goggles',
             'draft-kart-wheels',
-            'draft-steer-arms',
+            'draft-steer-arms-long',
             'draft-exhaust-pipes',
-            'draft-spoiler-struts',
-            'draft-kart-spoiler',
+            'draft-kart-antenna',
           ],
           size: 1.8,
           finish: 'shimmer',
