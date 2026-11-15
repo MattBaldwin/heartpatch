@@ -2200,6 +2200,9 @@ export const raids = pgTable(
       .notNull()
       .references(() => tiles.id, { onDelete: 'cascade' }),
     attackerUserId: uuid('attacker_user_id').notNull(),
+    // The challenger was a computer patch-mate (#386), from its `users.kind`
+    // when the raid was written, so the report keeps saying so after it leaves.
+    attackerComputer: boolean('attacker_computer').notNull().default(false),
     defenderUserId: uuid('defender_user_id').notNull(),
     outcome: raidOutcome('outcome').notNull(),
     // `battle.ended`'s reason (`forfeit`: the challenger scooted home).

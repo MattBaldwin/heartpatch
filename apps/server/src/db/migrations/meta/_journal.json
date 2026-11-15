@@ -484,6 +484,13 @@
       "when": 1794740876223,
       "tag": "0068_tile_attacks_open",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1794766769426,
+      "tag": "0069_raid_attacker_computer",
+      "breakpoints": true
     }
   ]
 }
