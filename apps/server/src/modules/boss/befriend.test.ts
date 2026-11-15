@@ -85,12 +85,19 @@ describe.skipIf(!url)('mini-boss befriending (#190c, needs DATABASE_URL)', () =>
 
   it('spends 3 charms and rolls once, in one transaction, and says "not yet"', async () => {
     const { kid, battle } = await winner(NEVER);
-    expect(battle.boss).toMatchObject({ befriend: 'offer', asksLeft: 2, charmsPerAsk: 3 });
+    expect(battle.boss).toMatchObject({
+      befriend: 'offer',
+      asksLeft: 2,
+      charmsPerAsk: 3,
+      baseName: BASE_NAME,
+      warmth: 0,
+    });
 
     const first = await asked(kid, battle, 1);
     expect(first.outcome).toBe('not-yet');
     expect(first.squishyId).toBeNull();
-    expect(first.battle.boss).toMatchObject({ befriend: 'not-yet', asksLeft: 1 });
+    // One "not yet" of the four before the sure ask: one heart step warmer.
+    expect(first.battle.boss).toMatchObject({ befriend: 'not-yet', asksLeft: 1, warmth: 1 });
     // The bundle's 3 charms, ledgered against this battle.
     const ledger = await spent(kid);
     expect(ledger.map((l) => [l.itemId, l.delta, l.refId])).toEqual([
@@ -156,6 +163,10 @@ describe.skipIf(!url)('mini-boss befriending (#190c, needs DATABASE_URL)', () =>
     await asked(kid, battle, 1);
     await asked(kid, battle, 2);
     expect((await bond(kid))!.misses).toBe(2);
+    // Two misses of two: the top heart step, so the next ask always works.
+    expect((await h.call('GET', `/battles/${battle.id}`, kid)).json()).toMatchObject({
+      battle: { boss: { warmth: 4 } },
+    });
 
     // Next week's visit: the warmth is remembered, so the first ask always works.
     h.clock.setTime(h.clock.getTime() + WEEK_MS);

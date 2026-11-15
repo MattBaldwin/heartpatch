@@ -17,6 +17,7 @@ import {
   bossBefriendChance,
   bossBefriendRoll,
   bossJoinLevel,
+  bossWarmthStep,
   type BossEventRules,
 } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
@@ -248,7 +249,8 @@ export async function befriendBoss(
 
 /**
  * A mini-boss fight's extras for its Keeper (`PlayerBattle.boss`, #190 plan
- * §1), or undefined for any other battle. Reads only; never odds or warmth.
+ * §1), or undefined for any other battle. Reads only; never the odds or the
+ * misses (warmth goes out as a coarse 0–4 step).
  */
 export async function bossBattleView(
   db: Executor,
@@ -266,15 +268,20 @@ export async function bossBattleView(
     map && !out
       ? await repo.triesSince(row.mapId, row.playerUserId, localDayStart(at, map.timeZone))
       : rules.triesPerDay;
+  const bossSpecies = bossSpeciesOf(row);
+  const bond = await repo.findBond(row.mapId, row.playerUserId, bossSpecies);
   const base = {
     eventWindow: { id: window.windowId, endsAt: window.endsAt.toISOString() },
     triesLeftToday: Math.max(0, rules.triesPerDay - used),
     charmsPerAsk: rules.befriend.charmsPerAsk,
+    // The friend who joins is the line's base form (#820), named on the cards.
+    baseName: nameOf(baseFormOf(bossSpecies, EVOLUTION_STEPS)),
+    // A coarse step for the hearts, never the misses or the odds (rule 6).
+    warmth: bossWarmthStep(rules.befriend, bond?.misses ?? 0),
   };
   if (!won(row)) return { ...base, asksLeft: 0, befriend: 'none' };
   const asks = asksOf(await repo.findWonEncounter(row.mapId, row.playerUserId, row.id), row.id);
   if (asks.some((a) => a.outcome === 'joined')) return { ...base, asksLeft: 0, befriend: 'joined' };
-  const bond = await repo.findBond(row.mapId, row.playerUserId, bossSpeciesOf(row));
   if (bond?.befriendedAt) return { ...base, asksLeft: 0, befriend: 'have-one' };
   const asksLeft = asksOpen(row, rules, at)
     ? Math.max(0, rules.befriend.asksPerWin - asks.length)

@@ -63,6 +63,7 @@ const E2E_GROUPS = [
   [
     'auth',
     'battle-ui',
+    'boss-battle',
     'capture',
     'care-layout',
     'computer-friends',

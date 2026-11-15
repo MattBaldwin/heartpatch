@@ -399,7 +399,7 @@ export interface MinibossBattlePort {
   lastActionAt: (tx: Executor, battle: BattleRow) => Promise<Date | null>;
   /** The Keeper stepped the fight: its idle clock starts again (step 5e, after the battle). */
   acted: (tx: Executor, battle: BattleRow, at: Date) => Promise<void>;
-  /** `PlayerBattle.boss` for the fight's Keeper (190c): reads only, never odds or warmth. */
+  /** `PlayerBattle.boss` for the fight's Keeper (190c): reads only, never the odds or the misses. */
   view: (tx: Executor, battle: BattleRow, at: Date) => Promise<PlayerBattle['boss']>;
 }
 

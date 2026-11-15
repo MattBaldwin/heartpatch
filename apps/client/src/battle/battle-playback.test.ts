@@ -145,6 +145,26 @@ describe('playbackSteps', () => {
     expect(playbackSteps(live, content, 2)[0]?.text).toBe('Their Mallow used Moon Blink!');
   });
 
+  it('a mini-boss is a visitor, never "Wild" (#190)', () => {
+    const sides = b.view.sides;
+    const boss: PlayerBattle = {
+      ...b,
+      kind: 'miniboss',
+      view: {
+        ...b.view,
+        sides: {
+          ...sides,
+          b: {
+            ...sides.b,
+            squishies: sides.b.squishies.map((s) => ({ ...s, boss: true as const })),
+          },
+        },
+      },
+    };
+    const text = playbackSteps(boss, content, 2)[0]?.text;
+    expect(text).toBe('Mallow used Moon Blink!');
+  });
+
   it('names secret squishies and moves from the battle', () => {
     const steps = playbackSteps(b, content, 0);
     expect(steps.map((s) => s.text)).toEqual([

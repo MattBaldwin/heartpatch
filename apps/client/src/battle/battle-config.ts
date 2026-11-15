@@ -13,6 +13,38 @@ export const HOMES = {
   theirs: { x: 2.15, z: 1.9 }, // TUNE
 } as const;
 
+/**
+ * A team battle (#190, a mini-boss; owner-approved arena layout A): the
+ * player's squishies in a row on the near side, left to right in slot order,
+ * and the big boss alone on the far side, about 1.8× their size (plan §10).
+ */
+export const TEAM_ARENA = {
+  /** Where each of the player's squishies stands, for teams of 1, 2 and 3 (slot order). */
+  posts: {
+    1: [{ x: 0.4, z: -2.6 }],
+    2: [
+      { x: -1.45, z: -3.06 },
+      { x: 2.25, z: -2.14 },
+    ],
+    3: [
+      { x: -4.3, z: -3.77 },
+      { x: 0.4, z: -2.6 },
+      { x: 5.1, z: -1.43 },
+    ],
+  } as Readonly<Record<1 | 2 | 3, readonly { x: number; z: number }[]>>, // TUNE: a close-up squishy is ~2.5 wide, so 4.8 apart (gaps the boss shows through), across the camera's view (yaw −14°), near the camera
+  /** The boss: far back and centred on screen. */
+  boss: { x: -1.0, z: 9.5 }, // TUNE: far enough back that its feet stand above the row on screen
+  /** Where the Keeper stands: this far left of, and behind, the row's left end. */
+  keeperBeside: { x: 2.2, z: 1.2 }, // TUNE
+  /** The boss's size against a usual fighter's (plan §10: "about 1.8×"). */
+  bossScale: 2.2, // TUNE: drawn bigger than 1.8× because it stands further back; reads as ~1.8× on screen
+  /**
+   * The camera's tilt for a team fight: steeper than the 1-v-1's, so the
+   * boss's row stands clearly above the friends' on screen (arena A).
+   */
+  pitch: (21 * Math.PI) / 180, // TUNE
+} as const;
+
 export const FIGHTER = {
   /** Extra scale on the squishies (a close-up, like the gallery's). */
   scale: 2.7, // TUNE

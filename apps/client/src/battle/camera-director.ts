@@ -200,9 +200,10 @@ export class CameraDirector {
   }
 
   /** A new step's camera beat, starting at `now` (ms). */
-  cue(cue: CameraCue, now: number): void {
+  cue(cue: CameraCue, now: number, at?: { x: number; z: number }): void {
     const shift = this.#config.focusShift * (this.#reduced ? 0.4 : 1);
-    const home = cue.focus ? this.#homes[cue.focus] : null;
+    // `at`: the one fighter of a team the beat is about (#190), else the side's home.
+    const home = cue.focus ? (at ?? this.#homes[cue.focus]) : null;
     this.#want = {
       focusX: home ? (home.x - this.#config.aim.x) * shift : 0,
       focusZ: home ? (home.z - this.#config.aim.z) * shift : 0,
@@ -212,6 +213,20 @@ export class CameraDirector {
     if (!this.#reduced && cue.shake > 0) {
       this.#shake = { amount: cue.shake, roll: cue.roll, at: now + cue.shakeDelay };
     }
+  }
+
+  /**
+   * Leans the framing towards a ground point and holds it (the team picker's
+   * squishy, #190: the camera nudges to each one in turn), or back to the
+   * middle with null.
+   */
+  lean(at: { x: number; z: number } | null): void {
+    const shift = this.#config.focusShift * (this.#reduced ? 0.4 : 1);
+    this.#want = {
+      focusX: at ? (at.x - this.#config.aim.x) * shift : 0,
+      focusZ: at ? (at.z - this.#config.aim.z) * shift : 0,
+      push: 0,
+    };
   }
 
   /** Back to framing both fighters (the turn is over). */

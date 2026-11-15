@@ -1830,6 +1830,7 @@ const battles = createBattleScreen({
   root: document.body,
   // The full-XP reset is the server's time (#583).
   now: () => inventory.gameNow(),
+  timeZone: (mapId) => (maps.view?.map.id === mapId ? maps.view.map.timeZone : null),
   memberName,
   isGlade: (mapId) => mapId === glade,
   journey: {

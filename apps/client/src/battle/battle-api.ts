@@ -1,5 +1,7 @@
 import {
   BattleResponseSchema,
+  BossBefriendResponseSchema,
+  type BossBefriendResponse,
   CurrentBattleResponseSchema,
   SquishyResponseSchema,
   WildHintsResponseSchema,
@@ -62,6 +64,18 @@ export const battleApi = {
       schema: BattleResponseSchema,
       headers: { 'idempotency-key': key },
     }).then(battleOf),
+
+  /**
+   * Asks a beaten mini-boss to be your friend (#190 plan §3): `ask` is the
+   * ask number (asks made + 1); the same key and number again get the stored answer.
+   */
+  befriend: (battleId: string, ask: number, key: string): Promise<BossBefriendResponse> =>
+    apiCallFor(`/battles/${battleId}/befriend`, {
+      method: 'POST',
+      body: { ask },
+      schema: BossBefriendResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
 
   /** A cheer in a live battle (#29): a quick message or emoji id, never text. */
   cheer: async (battleId: string, messageId: string): Promise<void> => {
