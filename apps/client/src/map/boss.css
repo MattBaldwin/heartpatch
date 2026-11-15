@@ -1,7 +1,7 @@
 /* The mini-boss on the map (#190, 190f): a wobbling giant on a gold glow, from the approved mockups. */
 .boss-marker {
   position: fixed;
-  z-index: 1; /* with the other map overlays (flags, tile marks): under every panel and sheet */
+  z-index: 2; /* over the flags and tile marks (1) so its name stays readable; under every panel and sheet (3+) */
   top: 0;
   left: 0;
   display: flex;
@@ -10,7 +10,7 @@
   gap: 4px;
   pointer-events: none; /* taps go to the tile underneath: its card is the way in */
   --boss-size: 72px;
-  font-family: inherit;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif; /* body has no game font */
 }
 .boss-marker[hidden] {
   display: none;
