@@ -75,7 +75,7 @@ import { FENCE_RESULTS, fenceResult, resultLine } from './result-line.js';
 import { coinLine, xpLines } from './result-card.js';
 import { keepGoing, KEEP_GOING_TEXT, type KeepGoingApi } from './keep-going.js';
 import { createBossBattle } from './boss-battle.js';
-import { BOSS_TEXT, bossSlot, isTeamBattle, slotsOut } from './boss-view.js';
+import { BOSS_TEXT, bossSlot, isTeamBattle, slotsOut, teamXpLine } from './boss-view.js';
 import { mapApi } from '../map/map-api.js';
 import { territoryApi } from '../territory/territory-api.js';
 import { COMMAND_RETRY_MS } from '../inventory/send-command.js';
@@ -851,24 +851,14 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const bossCard = b.kind === 'miniboss' && !replaying ? bossFight.result(b, names) : null;
     if (bossCard && result) {
       const mine = b.view.sides[b.mySide];
-      const { lines, evolving } = xpLines(b.rewards?.xp ?? [], (id) =>
-        squishyName(names, mine, id),
-      );
-      if (lines.length === 0) lines.push(MESSAGES.noXp);
-      const coins = coinLine({
-        role: 'challenger',
-        rewards: b.rewards,
-        outcome: result.winner === b.mySide ? 'won' : 'lost',
-        scooted: result.reason === 'forfeit',
-        opponent: '',
-      });
-      if (coins) lines.push(coins);
+      // One XP line for the whole team, and the coins ride in the card's
+      // "You won …" line (mockup frame 3): the card fits under the boss.
+      const xp = teamXpLine(b.rewards?.xp ?? [], (id) => squishyName(names, mine, id));
       hud.setCaption(null);
       hud.showResult({
         title: bossCard.title,
         subtitle: bossCard.subtitle,
-        xp: lines,
-        evolving,
+        xp: [xp ?? MESSAGES.noXp],
         lines: bossCard.lines,
         extra: bossCard.extra,
         done: MESSAGES.done,

@@ -9,6 +9,8 @@ import {
   bossPlates,
   bossResult,
   bundleText,
+  teamXpLine,
+  wonLine,
   goTo,
   hereUntil,
   isAreaMove,
@@ -264,6 +266,29 @@ describe('a mini-boss fight on screen (#190)', () => {
       expect(card.lines).toEqual([BOSS_TEXT.bundle(bundleText({ 'heart-charm': 3 }))]);
     });
 
+    it('a win folds the coins into the bundle line', () => {
+      expect(wonLine({ 'heart-charm': 3 }, { patch: 5, heart: 2 })).toBe(
+        'You won 3 Heart Charms, 5\u00a0Patch\u00a0Coins and 💛\u00a02!',
+      );
+      expect(wonLine(null, { patch: 1, heart: 0 })).toBe('You won 1\u00a0Patch\u00a0Coin!');
+      expect(wonLine(null, { patch: 0, heart: 0 })).toBeNull();
+      expect(wonLine({}, null)).toBeNull();
+    });
+
+    it('one XP line names the whole team', () => {
+      const names: Record<string, string> = { a: 'Pip', b: 'Puff', c: 'Fizz' };
+      const nameOf = (id: string) => names[id] ?? '?';
+      const award = (squishyId: string, xp: number) => ({ squishyId, xp });
+      expect(teamXpLine([award('a', 12), award('b', 12), award('c', 12)], nameOf)).toBe(
+        'Pip, Puff and Fizz each earned 12 XP!',
+      );
+      expect(teamXpLine([award('a', 12), award('b', 9), award('c', 0)], nameOf)).toBe(
+        'XP for Pip\u00a012 and Puff\u00a09!',
+      );
+      expect(teamXpLine([award('a', 7)], nameOf)).toBe('Pip earned 7 XP!');
+      expect(teamXpLine([award('a', 0)], nameOf)).toBeNull();
+    });
+
     it('a win by scoot or without a bundle has no bundle line', () => {
       expect(bossResult(won(), 'Rakelet', NOW)!.lines).toEqual([]);
     });
@@ -393,7 +418,7 @@ describe('a mini-boss fight on screen (#190)', () => {
 
   it('every line follows the style guide', () => {
     const lines = Object.values(BOSS_TEXT).map((v) =>
-      typeof v === 'function' ? v(3 as never) : v,
+      typeof v === 'function' ? (v as (...args: never[]) => string)(3 as never, 3 as never) : v,
     );
     for (const line of lines) expect(findAvoidedWords(line)).toEqual([]);
   });

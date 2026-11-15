@@ -1398,6 +1398,21 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   margin: 0;
   font-size: 17px;
   font-weight: 900;
+  text-wrap: balance;
+}
+
+/* Two things side by side in the ask panel (hearts and "A little warmer",
+   the charm pill and the asks left, the ask and "Make Heart Charms"). */
+.boss-befriend-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 10px;
+}
+
+.boss-befriend-row > p {
+  margin: 0;
 }
 
 .boss-befriend-joined {
@@ -1459,11 +1474,30 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   box-sizing: border-box;
   max-height: calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 300px);
   overflow-y: auto;
+  gap: 6px;
+  padding: 16px;
   transform: none;
 }
 
-.boss-befriend-title {
-  text-wrap: balance;
+/* Short enough to fit in the lower half without scrolling (mockup frame 3):
+   one XP line, one "You won …" line, the ask panel's rows paired. */
+.battle-hud-team .battle-result .auth-title {
+  font-size: 24px;
+}
+
+.battle-hud-team .battle-result .battle-xp li {
+  padding-block: 2px;
+}
+
+.battle-hud-team .battle-result .boss-befriend {
+  margin: 4px 0;
+}
+
+/* A phone: the befriend panel says what happened, so the subtitle steps aside. */
+@media (max-width: 599px) {
+  .battle-hud-team .battle-result:has(.boss-befriend) > .auth-subtitle {
+    display: none;
+  }
 }
 
 /* Each friend's plate under its body (the arena's row, `placeFriends`). */

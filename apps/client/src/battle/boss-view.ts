@@ -10,6 +10,7 @@ import {
 } from '@heartpatch/shared';
 import { itemName } from '../inventory/bag-view.js';
 import { localDateIn } from '../map/map-dressing.js';
+import { coinsText, REWARD_TEXT } from './result-card.js';
 import type { ShownState } from './battle-playback.js';
 import { energyPercent, otherSide, type BattleContent } from './battle-view.js';
 
@@ -54,6 +55,9 @@ export const BOSS_TEXT = {
   lastDaySub: 'See you next time!',
   lastDayFine: 'That was its last day here. Another big friend will come along soon. 🍪',
   bundle: (things: string) => `You won ${things}!`,
+  // One XP line for the whole team (mockup frame 3): the card stays short.
+  teamXpSame: (names: string, xp: number) => `${names} each earned ${String(xp)} XP!`,
+  teamXpEach: (parts: string) => `XP for ${parts}!`,
   // The befriend moment (plan §3, the #820 ruling, mockup frame 3).
   ask: (name: string) => `Ask ${name} to be your friend? 💗💗💗`,
   charmsHave: (n: number) => `💗 You have ${String(n)} Heart ${n === 1 ? 'Charm' : 'Charms'}`,
@@ -326,19 +330,65 @@ export function countedName(n: number, name: string): string {
   return n === 1 || /(s|dust)$/i.test(name) ? name : `${name}s`;
 }
 
-/** "3 Heart Charms, 5 Heartdust and 3 Treats", in the bundle's order. */
-export function bundleText(bundle: ItemCounts): string {
-  const parts = Object.entries(bundle)
-    .filter(([, n]) => n > 0)
-    .map(([id, n]) => `${String(n)} ${countedName(n, itemName(id))}`);
+/** "a, b and c". */
+function listed(parts: readonly string[]): string {
   if (parts.length <= 1) return parts[0] ?? '';
   return `${parts.slice(0, -1).join(', ')} and ${parts.at(-1) ?? ''}`;
+}
+
+/** "3 Heart Charms, 5 Heartdust and 3 Treats", in the bundle's order. */
+export function bundleText(bundle: ItemCounts): string {
+  return listed(bundleParts(bundle));
+}
+
+function bundleParts(bundle: ItemCounts): string[] {
+  return Object.entries(bundle)
+    .filter(([, n]) => n > 0)
+    .map(([id, n]) => `${String(n)} ${countedName(n, itemName(id))}`);
+}
+
+/**
+ * The win's one rewards line (mockup frame 3): the bundle the server put in
+ * the bag, then the coins it credited, as one list ("You won 3 Heart Charms,
+ * 3 Treats, 5 Patch Coins and 💛 5!"), or null when nothing came. Never a
+ * client sum: each number is the server's.
+ */
+export function wonLine(
+  bundle: ItemCounts | null | undefined,
+  coins: { patch: number; heart: number } | null | undefined,
+): string | null {
+  const parts = bundle ? bundleParts(bundle) : [];
+  // Each coin kind its own item in the list, worded as on every other card.
+  if (coins && coins.patch > 0) parts.push(coinsText({ patch: coins.patch, heart: 0 }));
+  if (coins && coins.heart > 0) parts.push(coinsText({ patch: 0, heart: coins.heart }));
+  return parts.length > 0 ? BOSS_TEXT.bundle(listed(parts)) : null;
+}
+
+/**
+ * The boss card's one XP line for the whole team (mockup frame 3), or null
+ * when nobody earned: "Pip, Puff and Fizz each earned 12 XP!", or each
+ * one's own amount when they differ. The server's awards, as sent.
+ */
+export function teamXpLine(
+  awards: readonly { readonly squishyId: string; readonly xp: number }[],
+  nameOf: (squishyId: string) => string,
+): string | null {
+  const earned = awards.filter((award) => award.xp > 0);
+  const first = earned[0];
+  if (!first) return null;
+  if (earned.length === 1) return REWARD_TEXT.earnedXp(nameOf(first.squishyId), first.xp);
+  if (earned.every((award) => award.xp === first.xp)) {
+    return BOSS_TEXT.teamXpSame(listed(earned.map((award) => nameOf(award.squishyId))), first.xp);
+  }
+  return BOSS_TEXT.teamXpEach(
+    listed(earned.map((award) => `${nameOf(award.squishyId)}\u00a0${String(award.xp)}`)),
+  );
 }
 
 export interface BossResultCard {
   readonly title: string;
   readonly subtitle: string;
-  /** Extra lines under the XP: the bundle, the coins, the tries chip, the fine print. */
+  /** Extra lines under the XP: the bundle with the coins, the tries chip, the fine print. */
   readonly lines: readonly string[];
   readonly outcome: 'won' | 'lost' | 'out' | 'last-day';
 }
@@ -359,9 +409,8 @@ export function bossResult(
   if (!result || b.status !== 'finished') return null;
   const boss = b.boss;
   if (result.winner === b.mySide) {
-    const lines: string[] = [];
-    const bundle = b.rewards?.bundle;
-    if (bundle && Object.keys(bundle).length > 0) lines.push(BOSS_TEXT.bundle(bundleText(bundle)));
+    const line = wonLine(b.rewards?.bundle, b.rewards?.coins);
+    const lines = line ? [line] : [];
     return {
       title: BOSS_TEXT.wonTitle,
       subtitle: BOSS_TEXT.wonSub(bossName),

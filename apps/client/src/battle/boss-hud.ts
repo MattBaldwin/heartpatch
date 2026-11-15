@@ -433,19 +433,19 @@ export function befriendPanel(
         el('p', { class: 'battle-hint' }, view.line),
       );
     case 'ask': {
+      // Paired into rows so the card fits under the boss without scrolling.
+      const row = (...nodes: Node[]) => el('div', { class: 'boss-befriend-row' }, ...nodes);
       const children: Node[] = [];
       if (view.notYet) {
         children.push(
           el('p', { class: 'boss-befriend-title', 'data-testid': 'boss-not-yet' }, view.notYet),
-          warmthRow(view.warmth),
-          el('p', { class: 'boss-warmer' }, BOSS_TEXT.warmer),
+          row(warmthRow(view.warmth), el('p', { class: 'boss-warmer' }, BOSS_TEXT.warmer)),
         );
       } else {
         children.push(el('p', { class: 'boss-befriend-title' }, view.headline));
         // Warmer from an earlier visit's "not yet"s: the hearts carry across.
         if (view.warmth > 0) children.push(warmthRow(view.warmth));
       }
-      if (view.charmsLine) children.push(el('p', { class: 'boss-charm-pill' }, view.charmsLine));
       const dots = el('span', {
         class: 'boss-dots',
         role: 'img',
@@ -453,9 +453,11 @@ export function befriendPanel(
       });
       for (let i = 0; i < view.asksLeft; i++) dots.append(el('span', { class: 'boss-dot' }));
       children.push(
-        el('p', { class: 'battle-hint boss-asks-left' }, `${BOSS_TEXT.asksLeft} `, dots),
+        row(
+          ...(view.charmsLine ? [el('p', { class: 'boss-charm-pill' }, view.charmsLine)] : []),
+          el('p', { class: 'battle-hint boss-asks-left' }, `${BOSS_TEXT.asksLeft} `, dots),
+        ),
       );
-      if (view.needHint) children.push(el('p', { class: 'battle-hint' }, view.needHint));
       const ask = el(
         'button',
         {
@@ -469,8 +471,9 @@ export function befriendPanel(
       ask.addEventListener('click', () => {
         handlers.onAsk(view.ask);
       });
-      children.push(ask);
       if (view.needHint) {
+        // "Make Heart Charms 🏠" says where charms come from, so the view's
+        // `needHint` line ("…made at home.") isn't drawn: the card stays short.
         const home = el(
           'button',
           {
@@ -481,7 +484,9 @@ export function befriendPanel(
           BOSS_TEXT.makeCharms,
         );
         home.addEventListener('click', handlers.onHome);
-        children.push(home);
+        children.push(row(ask, home));
+      } else {
+        children.push(ask);
       }
       return panel('ask', ...children);
     }
