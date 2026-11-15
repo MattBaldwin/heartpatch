@@ -101,6 +101,10 @@ import { wildIsleSwitchOf } from './modules/maps/wild-isle-switch.js';
 import { computerMatesRoutes } from './modules/computer-mates/routes.js';
 import { createComputerMatesService } from './modules/computer-mates/service.js';
 import { computerMatesSwitchOf } from './modules/computer-mates/switch.js';
+import {
+  createComputerMateSteps,
+  type ComputerMateSteps,
+} from './modules/computer-mates/intents.js';
 import { longNightRoutes } from './modules/long-night/routes.js';
 import { createLongNightService } from './modules/long-night/service.js';
 import { longNightSwitchOf } from './modules/long-night/switch.js';
@@ -160,6 +164,11 @@ export interface BuildAppOptions {
    * the app. Called once the service exists, with whether push is on at all.
    */
   onPush?: (push: PushService, enabled: boolean) => void;
+  /**
+   * Computer patch-mates' steps (#386c) for `src/index.ts`, which runs their
+   * paced job next to the app. Called once they exist, unless the switch is off.
+   */
+  onComputerMates?: (steps: ComputerMateSteps) => void;
 }
 
 /** Builds the Fastify app without listening, so tests can use `app.inject()`. */
@@ -216,6 +225,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   // The friend nudge (#726d): the hub reports a player arriving on a patch;
   // the push service, built with the game routes below, takes it from there.
   let onArrival: ((mapId: string, userId: string) => void) | null = null;
+  // A real member opened the patch: computer mates may act (#386c, rule C).
+  let onKeeperSeen: ((mapId: string) => void) | null = null;
   const wsHub =
     db && authRepo
       ? createWsHub({
@@ -224,7 +235,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           sessionIsValid: async (token) => (await sessionUser(token)) !== null,
           logger: app.log,
           clock,
-          onSubscribed: (mapId, userId) => onArrival?.(mapId, userId),
+          onSubscribed: (mapId, userId) => {
+            onKeeperSeen?.(mapId);
+            onArrival?.(mapId, userId);
+          },
           ...options.wsHubOptions,
         })
       : null;
@@ -584,6 +598,22 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             { hooks: authHooks },
           ),
         );
+        // Their steps (#386c): a paced job in `src/index.ts`, only while a kid is around.
+        if (computerMates.mode !== 'off') {
+          const steps = createComputerMateSteps({
+            db,
+            clock,
+            ...publish,
+            ...(wsHub ? { openMaps: wsHub.openMaps } : {}),
+            log: app.log,
+          });
+          onKeeperSeen = (mapId) => {
+            void steps.seen(mapId).catch((err: unknown) => {
+              app.log.error({ err, mapId }, 'computer mates: stamping a visit failed');
+            });
+          };
+          options.onComputerMates?.(steps);
+        }
         // The Long Night (#727): the owner's weekday and Juniper's Gap
         // encounters (wild battles); nightfall resolves it.
         await api.register(

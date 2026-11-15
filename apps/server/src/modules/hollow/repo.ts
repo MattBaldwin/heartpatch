@@ -26,8 +26,10 @@ import {
   tileExplore,
   tiles,
   tileTending,
+  users,
 } from '../../db/schema.js';
 import { squishyAtWork } from '../jobs/repo.js';
+import { playerUser } from '../computer-mates/repo.js';
 import { activeMember } from '../maps/repo.js';
 
 const coords = z.strictObject({ q: z.number().int(), r: z.number().int() });
@@ -470,6 +472,9 @@ function queries(db: Executor): HollowRepo {
         })
         .from(squishies)
         .innerJoin(mapMembers, activeMember(squishies.mapId, squishies.ownerUserId))
+        // The Hollow Man never takes a computer patch-mate's squishy (#386c):
+        // no rescue loop for them. Their land still goes dark like anyone's.
+        .innerJoin(users, and(eq(users.id, squishies.ownerUserId), playerUser))
         .leftJoin(buildings, eq(buildings.id, squishies.habitatBuildingId))
         .leftJoin(habitatTile, eq(habitatTile.id, buildings.tileId))
         // The post and who holds its tile, not territory's `squishyOnWatch`:

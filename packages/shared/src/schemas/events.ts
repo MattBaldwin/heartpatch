@@ -530,6 +530,22 @@ export const GAME_EVENTS = {
     public: z.object({ userId: z.uuid(), fromUserId: z.uuid().nullable(), ...coords }),
   },
   /**
+   * A computer patch-mate claimed a wild tile (#386c; shared-contract
+   * addition approved by the coordinator). No battle: it takes the land the
+   * way a won capture does, without the attempt log, so `tile.captured`'s
+   * consumers (lore, settle, tutorial) never fire for it. Every member's map
+   * shows the new owner; `computer` stays server-side (`MapMember.computer`).
+   */
+  'tile.claimed': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      ...coords,
+      terrain: z.string(),
+      computer: z.literal(true),
+    }),
+    public: z.object({ userId: z.uuid(), ...coords }),
+  },
+  /**
    * Land that misses you (owner decision 2026-10-06, design review Q2): at a
    * nightfall, some of a player's long-untended land went wild again. The
    * tiles are neutral now and their guardians are back. Everyone sees which

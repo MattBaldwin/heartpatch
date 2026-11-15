@@ -13,9 +13,16 @@ import {
   NO_FADING,
   PART_TIME,
   WILD_ISLE_FILL_GATE,
+  COMPUTER_MATES_GATE,
+  SOLO_AWAY_AFTER_DAY,
   type MapFillScenario,
 } from './map-fill-config.js';
-import { awayTiles, renderMapFill, summariseMapFill } from './map-fill-report.js';
+import {
+  awayTiles,
+  computerMatesGates,
+  renderMapFill,
+  summariseMapFill,
+} from './map-fill-report.js';
 import { runMapFill } from './map-fill.js';
 
 const SHORT = { ...MAP_FILL_CONFIG, days: 60 };
@@ -139,5 +146,44 @@ describe('runMapFill', () => {
     expect(report).toMatch(/Tiles a kid keeps after stopping/);
     expect(report).toMatch(/\| 7 days \|/);
     expect(report).toMatch(/Challenges and fences/);
+  });
+});
+
+describe('computer mates in the map-fill model (#386c)', () => {
+  const days = { ...SHORT, days: COMPUTER_MATES_GATE.byDay };
+  const runs = [
+    runMapFill(scenario('casual-4-full'), FADING_GENTLE, days),
+    runMapFill(scenario('solo-casual-3-computers'), FADING_GENTLE, days),
+    runMapFill(scenario('solo-away-3-computers'), FADING_GENTLE, days),
+  ];
+  const { rows, gates } = computerMatesGates(runs);
+  const gate = (g: 'a' | 'c' | 'd') => gates.filter((x) => x.gate === g);
+
+  it('a solo kid with 3 mates keeps their home ring and at least 90 % of a 4-kid patch kid’s land (a)', () => {
+    expect(gate('a')).toHaveLength(1);
+    expect(gate('a').every((g) => g.pass)).toBe(true);
+    expect(rows.find((r) => r.scenario === 'solo-casual-3-computers')?.homeRingLost).toBe(0);
+  });
+
+  it('mates never hold more than their landCapPercent share (c)', () => {
+    expect(gate('c')).toHaveLength(2);
+    expect(gate('c').every((g) => g.pass)).toBe(true);
+  });
+
+  it('on a day nobody opens the patch, mates do nothing (d)', () => {
+    const away = runs[2]!;
+    const cold = away.days.filter((d) => d.day > SOLO_AWAY_AFTER_DAY);
+    expect(cold.length).toBeGreaterThan(0);
+    expect(cold.every((d) => !d.warm)).toBe(true);
+    expect(gate('d')).toHaveLength(1);
+    expect(gate('d')[0]!.pass).toBe(true);
+  });
+
+  it('mates claim, light fires and guard through the shared policy, the same each run', () => {
+    const solo = rows.find((r) => r.scenario === 'solo-casual-3-computers')!;
+    expect(solo.mateClaims).toBeGreaterThan(0);
+    expect(solo.mateFires).toBeGreaterThan(0);
+    expect(solo.mateGuards).toBeGreaterThan(0);
+    expect(runMapFill(scenario('solo-casual-3-computers'), FADING_GENTLE, days)).toEqual(runs[1]);
   });
 });

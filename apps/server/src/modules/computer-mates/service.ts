@@ -23,6 +23,7 @@ import type { NewGameEvent } from '../../db/game-events.js';
 import { departWithin, heartSeedOf } from '../maps/depart.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapsTxRepo } from '../maps/repo.js';
+import { createRaidsRepo } from '../raids/repo.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { createComputerMatesRepo, type MateRow } from './repo.js';
 import { COMPUTER_MATES_OFF, computerMatesOpenFor, type ComputerMatesSwitch } from './switch.js';
@@ -34,6 +35,7 @@ const MESSAGES = {
   notFound: "We couldn't find that patch.",
   ownerOnly: 'Only the patch owner can do that.',
   cooldown: 'Your computer friends are resting. Try again tomorrow!',
+  wildIsle: "Computer friends can't sail to a Wild Isle yet.",
 } as const;
 
 export interface ComputerMatesServiceOptions {
@@ -132,6 +134,14 @@ async function fillWithin(
   // keeps the name, and Bramble the computer friend sits this patch out. Six
   // personas for at most three seats, so the fill still completes.
   const taken = await mates.activePlayerNames(mapId);
+  // Step 4 for every returning mate, in user id order, before the first
+  // home claim (tiles, step 6): a lock after a tile would break the order.
+  // A mate made below is a row this transaction inserts, which doesn't count.
+  for (const mate of [...all]
+    .filter((m) => !m.active)
+    .sort((a, b) => (a.userId < b.userId ? -1 : 1))) {
+    await repo.lockUser(mate.userId);
+  }
   const seated: string[] = [];
   for (const persona of COMPUTER_PERSONAS) {
     if (seated.length >= want) break;
@@ -157,9 +167,10 @@ async function fillWithin(
         seed,
       });
     }
-    // Step 4 (users), as approve takes a joiner's.
-    await repo.lockUser(userId);
     await repo.upsertMember({ mapId, userId, role: 'member', homeSlot, joinedAt: at });
+    // Its guards play with the persona's stance (plan §1 E). The row was
+    // just written above, so this takes no new lock.
+    await createRaidsRepo(tx).setStance(mapId, userId, tuning.stance);
     const home = await repo.claimHomeTiles(mapId, homeSlot, userId);
     // A hand-authored map has no home slots: nobody to seat.
     if (home.length === 0) throw new AppError('CONFLICT', "This patch can't take new Keepers.");
@@ -312,6 +323,11 @@ export function createComputerMatesService(
       const found = await requireMember(db, user, mapId, ['multiplayer']);
       if (found.role !== 'owner') throw new AppError('FORBIDDEN', MESSAGES.ownerOnly);
       if (!computerMatesOpenFor(toggle, user)) throw new AppError('NOT_FOUND', MESSAGES.notFound);
+      // A mate's claim skips Wild Isle supply and homesteads (PR #814
+      // deviation 3), so the switch stays shut on a Wild Isle until 386e.
+      if (enabled && (await store.patchTypeOf(mapId)) === 'wild-isle') {
+        throw new AppError('CONFLICT', MESSAGES.wildIsle);
+      }
       const at = now();
       const departed: string[] = [];
       const state = await store.transaction(async (repo, tx) => {
@@ -323,6 +339,19 @@ export function createComputerMatesService(
         const current = await mates.switchOf(mapId);
         if (!current) throw new AppError('NOT_FOUND', MESSAGES.notFound);
         if (current.computerMates === enabled) {
+          // Already on: top up any seat a mate left (a friend who left, a
+          // mate that departed), up to fillTo again (#811 follow-up).
+          if (enabled) {
+            const events: NewGameEvent[] = [];
+            await fillWithin(repo, tx, {
+              mapId,
+              actorUserId: user.id,
+              at,
+              secrets,
+              collect: events,
+            });
+            for (const event of events) await repo.appendEvent(event);
+          }
           return {
             enabled,
             changeAt: enabled

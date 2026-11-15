@@ -13,6 +13,7 @@ import { relayoutHomes } from './modules/buildings/layout.js';
 import { relayoutTileUses } from './modules/buildings/tile-uses.js';
 import { placeMissingTradingPosts } from './modules/maps/trading-posts.js';
 import { placeMissingCommunities } from './modules/communities/backfill.js';
+import type { ComputerMateSteps } from './modules/computer-mates/intents.js';
 import type { HollowService } from './modules/hollow/service.js';
 import type { PushService } from './modules/push/service.js';
 import { createRaidsConsumer } from './modules/raids/consumer.js';
@@ -25,6 +26,7 @@ const db = createDbClient(config.DATABASE_URL);
 const clock = createClock(config);
 let hollowService: HollowService | undefined;
 let pushService: { service: PushService; enabled: boolean } | undefined;
+let computerMateSteps: ComputerMateSteps | undefined;
 const app = await buildApp({
   config,
   readinessChecks: [dbReadinessCheck(db)],
@@ -35,6 +37,9 @@ const app = await buildApp({
   },
   onPush: (service, enabled) => {
     pushService = { service, enabled };
+  },
+  onComputerMates: (steps) => {
+    computerMateSteps = steps;
   },
 });
 if (!hollowService) throw new Error('the Hollow Man needs the database');
@@ -62,6 +67,9 @@ const jobs = await startJobs({
     // A Hollowed village won in a battle (#306 PR 4).
     createCommunitySettleConsumer({ clock }),
   ],
+  // Computer patch-mates (#386c): a step each 20–60 minutes, only on patches
+  // a real member opened in the last warmMinutes; none while the switch is off.
+  ...(computerMateSteps ? { computerMates: computerMateSteps } : {}),
   // The Hollow Man (#21): night falls on each map at 19:00 map time (#277).
   // Then the dark land he won back goes wild, then untended land does, up
   // to one cap a night between them; a retry finds the Hollow's night done,
