@@ -3880,7 +3880,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
     });
 
     it("plays an all-AI challenge out without holding its expired prompt (playOut, #386e step 5 then finish's attempt row and tile; the prompt 9c in its own transaction first)", async () => {
-      const { mapId, mate, target, fights, challenge } = await mateChallengeSetup('cmplay', true);
+      const { mapId, mate, fights, challenge } = await mateChallengeSetup('cmplay', true);
       const started = await challenge();
       expect(started.created).toBe(true);
       const battleId = started.battle.id;
