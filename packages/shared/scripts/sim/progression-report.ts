@@ -507,7 +507,7 @@ function renderTierFirsts(
   return [
     '## First evolve by rarity line (#732)',
     '',
-    `The day a befriended squishy (any team member but the Partner) of each rarity line first evolves, for kid 0; a line's rarity is its base form's. Rules marked "(collector)" put a rarer friend on the team even when it's weaker; the rest only take a stronger one. ${gate ?? `#732 per-tier gate: not run (needs \`${TIER_GATE.rules.label}\`).`}`,
+    `The day a befriended squishy (any team member but the Partner, the two day-1 teammates included) of each rarity line first evolves, for kid 0; a line's rarity is its base form's. Rules marked "(collector)" put a rarer friend on the team even when it's weaker; the rest only take a stronger one. ${gate ?? `#732 per-tier gate: not run (needs \`${TIER_GATE.rules.label}\`).`}`,
     '',
     markdownTable(
       ['Rules', 'Map seats', 'Kid', ...TIERS],

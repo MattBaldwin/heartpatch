@@ -179,12 +179,16 @@ export interface TierFirst {
 
 /**
  * #732's per-tier line: the first day a befriended squishy (any team member
- * but the Partner) of each rarity line evolves. A line's rarity is its base
+ * but the Partner, the two day-1 teammates included) of each rarity line
+ * evolves. A line's rarity is its base
  * form's, so a common line's rare grown-up counts as common; that's where
  * this differs from the "rare evolved" and "epic evolved" firsts, which go by
  * the evolving form's own rarity and count the Partner.
  */
-export function tierFirstsOf(days: readonly DayRecord[], facts: FirstsFacts): TierFirst[] {
+export function tierFirstsOf(
+  days: readonly Pick<DayRecord, 'day' | 'evolved'>[],
+  facts: FirstsFacts,
+): TierFirst[] {
   return TIERS.map((tier) => ({
     tier,
     day:

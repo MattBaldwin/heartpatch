@@ -324,7 +324,11 @@ function grow(
   }
 }
 
-/** The rarity ladder, lowest first (`secret` last, as `RaritySchema` lists it). */
+/**
+ * The collector's rarity order, lowest first, as `RaritySchema` lists it:
+ * `mythic` and `secret` rank above `legendary` here (as the #732 options
+ * page's `RANK`), though `secret` is off the game's rarity ladder.
+ */
 const RARITY_RANK: readonly Rarity[] = RaritySchema.options;
 
 /**

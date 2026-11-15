@@ -7,6 +7,7 @@ import { TERRITORY_RULES } from '../../src/data/territory.js';
 import type { GrowthRules } from '../../src/schemas/data/care.js';
 import type { BattleAiPolicy } from '../../src/schemas/data/battle.js';
 import type { SpawnRules } from '../../src/schemas/data/spawn-rules.js';
+import type { Tier } from './progression-firsts.js';
 
 /**
  * Progression model settings (`pnpm sim:progression`). Like the battle sim,
@@ -260,7 +261,7 @@ export const WITH_FRIENDLIES_COLLECTOR_RULES: ProgressionRules = {
 export interface TierGate {
   readonly kid: string;
   readonly rules: ProgressionRules;
-  readonly byDay: Readonly<Partial<Record<'rare' | 'epic', number>>>;
+  readonly byDay: Readonly<Partial<Record<Tier, number>>>;
 }
 
 // TUNE: the issue's targets, rare ≤ day 10 and epic ≤ day 20, for a casual collector.

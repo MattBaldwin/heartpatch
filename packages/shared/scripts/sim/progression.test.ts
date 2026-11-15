@@ -438,8 +438,10 @@ describe('the collector befriend choice (#732 D3)', () => {
 
 describe("#732's per-tier first-evolve line", () => {
   const facts = firstsFacts(data.species);
-  const day = (n: number, evolved: DayRecord['evolved']): DayRecord =>
-    ({ day: n, evolved }) as unknown as DayRecord;
+  const day = (n: number, evolved: DayRecord['evolved']): Pick<DayRecord, 'day' | 'evolved'> => ({
+    day: n,
+    evolved,
+  });
 
   it('reports `never` cleanly when nothing evolves', () => {
     const firsts = tierFirstsOf([day(1, []), day(2, [])], facts);
