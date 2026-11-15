@@ -905,7 +905,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       hud.showResult({
         title: bossCard.title,
         subtitle: bossCard.subtitle,
-        xp: xp !== null ? [xp, ...benchLines] : benchLines.length > 0 ? benchLines : [MESSAGES.noXp],
+        xp:
+          xp !== null ? [xp, ...benchLines] : benchLines.length > 0 ? benchLines : [MESSAGES.noXp],
         bench: [...(xp !== null ? [false] : []), ...benchLines.map(() => true)],
         // Each fighter's evolving meter (#205), named, in a row under the team's line.
         evolvingRow: teamEvolvingRow(awards, nameOf),

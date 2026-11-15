@@ -317,9 +317,7 @@ function evolvingMeter(
   const meter = evolvingMeterEl('battle-evolving');
   const full = evolvingBar(gain.after);
   const bar =
-    compact && full
-      ? { ...full, label: full.ready ? `${compact.name} ✨` : compact.name }
-      : full;
+    compact && full ? { ...full, label: full.ready ? `${compact.name} ✨` : compact.name } : full;
   meter.update(bar, {
     gainedFrom: gain.before / 100,
     sub: compact
