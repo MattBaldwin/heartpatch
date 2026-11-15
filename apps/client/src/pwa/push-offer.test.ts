@@ -34,13 +34,14 @@ function setup(
   let hidden = 0;
   const busy = [...(opts.busy ?? [])];
   let patch = opts.patch === undefined ? 'map-1' : opts.patch;
+  let tutorial = opts.tutorial === undefined ? DONE : opts.tutorial;
   const deps: PushOfferDeps = {
     client: fake.client,
     offered: offeredStore(() => {
       if (store === 'blocked') throw new Error('SecurityError');
       return { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
     }),
-    tutorial: () => Promise.resolve(opts.tutorial === undefined ? DONE : opts.tutorial),
+    tutorial: () => Promise.resolve(tutorial),
     patch: () => patch,
     busy: () => busy.shift() ?? false,
     show: (offer) => shown.push(offer),
@@ -63,6 +64,9 @@ function setup(
     hidden: () => hidden,
     setPatch: (next: string | null) => {
       patch = next;
+    },
+    setTutorial: (next: Pick<TutorialState, 'status' | 'completedAt' | 'required'>) => {
+      tutorial = next;
     },
   };
 }
@@ -132,6 +136,22 @@ describe('the offer card shows', () => {
     expect(t.shown).toHaveLength(0);
     expect(t.offer.debug.state).toBe('idle');
     t.setPatch('map-2');
+    t.offer.maybeOffer();
+    await settle();
+    expect(t.shown).toHaveLength(1);
+  });
+
+  it('asks again on the same patch once the tutorial closes (main.ts calls it from onDone)', async () => {
+    const t = setup({ tutorial: { status: 'in-progress', completedAt: null, required: true } });
+    t.offer.maybeOffer();
+    await settle();
+    expect(t.offer.debug.state).toBe('idle');
+    t.setTutorial(DONE);
+    t.offer.maybeOffer();
+    await settle();
+    expect(t.shown).toHaveLength(1);
+    // Still once: a later close or patch never asks again.
+    t.shown[0]?.no();
     t.offer.maybeOffer();
     await settle();
     expect(t.shown).toHaveLength(1);

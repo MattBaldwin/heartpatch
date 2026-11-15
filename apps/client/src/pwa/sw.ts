@@ -1,12 +1,4 @@
-import { isWorkerRequest, type PageMessage, type WorkerDescription } from './messages.js';
-import { mapIdOf, nudgeFor } from './push-payload.js';
-import {
-  API_HEADERS,
-  PUSH_SUBSCRIPTION_URL,
-  loadVapidKey,
-  renewSubscription,
-  type PushSubscriptionLike,
-} from './push-subscription.js';
+import { loadVapidKey, renewSubscription, type PushSubscriptionLike } from './push-subscription.js';
 import {
   CACHE_PREFIX,
   SHELL_URL,
@@ -17,6 +9,7 @@ import {
   withoutRedirect,
   type PrecacheEntry,
 } from './shell-strategy.js';
+import { answerMessage, openNudge, putSubscription, showNudge } from './sw-handlers.js';
 
 // The service worker (issue #26, tech spec §6 "Offline"). It caches the app
 // shell so Heartpatch opens like an app, even on a flaky connection; gameplay
@@ -93,61 +86,31 @@ self.addEventListener('fetch', (event) => {
 });
 
 self.addEventListener('message', (event) => {
-  const message: unknown = event.data;
-  if (!isWorkerRequest(message)) return;
-  if (message.type === 'skip-waiting') {
-    void self.skipWaiting();
-    return;
-  }
-  const description: WorkerDescription = {
+  answerMessage(event.data, event.ports, {
     version: VERSION,
     cache: CACHE,
-    hasPath: PRECACHE.has(message.path),
-  };
-  event.ports[0]?.postMessage(description);
+    hasPath: (path) => PRECACHE.has(path),
+    skipWaiting: () => self.skipWaiting(),
+  });
 });
 
 // Push nudges (#726 plan, "Service worker"). The words come from the server
-// (`PUSH_TEXT`); the worker only shows them.
+// (`PUSH_TEXT`); the worker only shows them. The handlers are in
+// sw-handlers.ts, where they're unit-tested.
 
 self.addEventListener('push', (event) => {
-  // Always show something, even for a push it can't read: iOS ends a
-  // subscription after a few pushes that show nothing. No network work here.
-  const nudge = nudgeFor(event.data?.text() ?? null);
-  const options: NotificationOptions & { renotify: boolean } = {
-    body: nudge.body,
-    tag: nudge.tag,
-    data: nudge.data,
-    renotify: false,
-  };
   event.waitUntil(
-    Promise.all([
-      self.registration.showNotification(nudge.title, options),
-      // The app's start-up clears it (pwa.ts).
-      'setAppBadge' in self.navigator
-        ? self.navigator.setAppBadge(1).catch(() => undefined)
-        : undefined,
-    ]),
+    showNudge(event.data?.text() ?? null, {
+      showNotification: (title, options) => self.registration.showNotification(title, options),
+      setAppBadge:
+        'setAppBadge' in self.navigator ? (count) => self.navigator.setAppBadge(count) : undefined,
+    }),
   );
 });
 
-async function focusOrOpen(mapId: string | null): Promise<void> {
-  const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-  const open = windows[0];
-  if (open) {
-    const message: PageMessage = { type: 'open-map', mapId };
-    open.postMessage(message);
-    await open.focus();
-    return;
-  }
-  // No patch deep link exists yet: the app opens where it would anyway (the
-  // last patch, #160).
-  await self.clients.openWindow('/');
-}
-
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(focusOrOpen(mapIdOf(event.notification.data)));
+  event.waitUntil(openNudge(event.notification.data, self.clients));
 });
 
 /** Not in TypeScript's WebWorker lib yet. */
@@ -156,24 +119,13 @@ interface PushSubscriptionChangeEvent extends ExtendableEvent {
   readonly newSubscription: PushSubscriptionLike | null;
 }
 
-async function putSubscription(body: unknown): Promise<void> {
-  const response = await fetch(PUSH_SUBSCRIPTION_URL, {
-    method: 'PUT',
-    credentials: 'same-origin',
-    headers: API_HEADERS,
-    body: JSON.stringify(body),
-  });
-  await response.arrayBuffer();
-  if (!response.ok) throw new Error(`push subscription ${String(response.status)}`);
-}
-
 self.addEventListener('pushsubscriptionchange', (event: Event) => {
   const change = event as PushSubscriptionChangeEvent;
   change.waitUntil(
     renewSubscription(change.oldSubscription ?? null, change.newSubscription ?? null, {
       pushManager: self.registration.pushManager,
       loadKey: () => loadVapidKey(),
-      put: putSubscription,
+      put: (body) => putSubscription((url, init) => fetch(url, init), body),
     }).catch(() => false),
   );
 });

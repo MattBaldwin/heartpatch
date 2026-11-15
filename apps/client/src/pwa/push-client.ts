@@ -276,6 +276,9 @@ export function createPushClient(env: PushEnv) {
      * Start-up self-heal (#726 plan, "Start-up"): when permission is granted
      * and this device has a subscription, `PUT` it again (an upsert by
      * endpoint), at most once per `PUSH_HEAL_INTERVAL_MS`. Never throws.
+     * Call it once a player is signed in (main.ts's auth `onChange`): the
+     * route needs a session. An expired session's 401 is a quiet skip, and
+     * leaves no stamp, so the next sign-in heals.
      */
     async heal(): Promise<'healed' | 'skipped' | 'failed'> {
       if (off || !supported() || env.notification()?.permission !== 'granted') return 'skipped';
@@ -291,8 +294,10 @@ export function createPushClient(env: PushEnv) {
       if (!subscription) return 'skipped';
       try {
         if ((await put(subscription)) === 'off') return 'skipped';
-      } catch {
-        return 'failed';
+      } catch (err) {
+        return err instanceof ApiRequestError && err.code === 'UNAUTHENTICATED'
+          ? 'skipped'
+          : 'failed';
       }
       stamp();
       return 'healed';
@@ -327,9 +332,15 @@ export function createPushClient(env: PushEnv) {
 
 export type PushClient = ReturnType<typeof createPushClient>;
 
-/** The real browser, read when called (so importing this module touches nothing). */
+let browserEnv: PushEnv | null = null;
+
+/**
+ * The real browser, built on first call and kept for the page (Settings asks
+ * on every open). Each part reads the browser when called, so importing this
+ * module touches nothing and a kept env never goes stale.
+ */
 export function browserPushEnv(): PushEnv {
-  return {
+  browserEnv ??= {
     standalone: () =>
       isStandalone({
         iosStandalone: (navigator as Navigator & { standalone?: boolean }).standalone,
@@ -353,6 +364,7 @@ export function browserPushEnv(): PushEnv {
         setTimeout(resolve, ms);
       }),
   };
+  return browserEnv;
 }
 
 /** The app's push client (one per page, so "off" holds for the session). */

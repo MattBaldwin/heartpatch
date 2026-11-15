@@ -1596,6 +1596,9 @@ const tutorial = createTutorialScreen({
   onDone: (choice) => {
     if (choice === 'create') lobby.showCreate();
     else if (choice === 'join') lobby.showJoin();
+    // A run that ends over a patch (not the Glade) offers nudges now, not on
+    // the next map open (#726e follow-up). Still once per device.
+    pushOffer.maybeOffer();
   },
   onEntryChange: () => {
     lobby.refreshList();
@@ -2313,6 +2316,8 @@ mountAuth(document.body, {
     cinematic.setUser(user);
     // The lobby and tutorial wait for a Keeper and the story (`onReady` above).
     keeper.setUser(user);
+    // The push self-heal needs a session (#726e follow-up): never logged out.
+    if (user) void pushClient.heal();
     if (!user) {
       // The nudge offer is this player's question: it never waits for the next one.
       pushOffer.cancel();
