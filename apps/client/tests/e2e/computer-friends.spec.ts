@@ -149,17 +149,23 @@ test('the owner switches Computer friends on, and three badged mates move in (#3
   const brambleFlag = page.getByTestId('home-flag').filter({ hasText: 'Bramble' });
   await expect(brambleFlag.getByTestId('computer-badge')).toHaveText('Computer friend');
 
-  // Who's here: the mates sit under their own label, always here, badged, with
-  // no "Battle me?" until the server takes an ask to a mate (#386e).
+  // Who's here: the mates sit under their own label, always here, badged, each
+  // with a real "Battle me?" (#386f; the server answers for a mate at once).
   await page.getByTestId('friendly-open').tap();
   const mates = page.getByTestId('friendly-computer-list');
   await expect(mates.getByRole('listitem')).toHaveCount(3);
   await expect(mates.getByTestId('computer-badge')).toHaveCount(3);
-  await expect(mates.getByRole('button')).toHaveCount(0);
+  await expect(mates.getByRole('button', { name: 'Battle me?' })).toHaveCount(3);
   // Only mates here: the hint doesn't say nobody's here above a list of them.
   await expect(
     page.getByText('No other Keepers are here right now. Try again in a bit!'),
   ).toBeVisible();
-  await expect(page.getByText('Battles with Computer friends are coming soon!')).toBeVisible();
+  await expect(page.getByText('Battles with Computer friends are coming soon!')).toHaveCount(0);
+  // The card says who it is, with the badge and no level-gap line.
+  await mates.getByTestId('friendly-battle-mate').first().tap();
+  const card = page.getByTestId('friendly');
+  await expect(card.getByRole('heading')).toContainText('A friendly battle with');
+  await expect(card.getByTestId('friendly-mate-line').getByTestId('computer-badge')).toBeVisible();
+  await expect(card.getByTestId('friendly-gap')).toHaveCount(0);
   await page.context().close();
 });
