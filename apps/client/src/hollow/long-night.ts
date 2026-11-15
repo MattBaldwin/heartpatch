@@ -44,6 +44,26 @@ export function latestResult(
   return { ...last, gapClosesAt };
 }
 
+/** A beat past the strike, so the status asked then is the server's after it. */
+export const STRIKE_CHECK_SLACK_MS = 1_000;
+
+/**
+ * Minutes until the status should be asked again: when night falls or
+ * morning comes (`night.changesInMinutes`), or, on a Long Night, just after
+ * the strike, when the server first sends the Night's result
+ * (`longNight.last`, held back till then). A Keeper who opened the app at
+ * 7:29 and stays hears it at 7:30 without waiting for the next check.
+ */
+export function nextCheckMinutes(
+  status: Pick<HollowStatus, 'night' | 'tonight' | 'longNight' | 'now'>,
+): number {
+  const untilStrike = Date.parse(status.tonight.strikeAt) - Date.parse(status.now);
+  const strikeComing = status.longNight?.tonight === true && untilStrike > 0;
+  return strikeComing
+    ? Math.min(status.night.changesInMinutes, (untilStrike + STRIKE_CHECK_SLACK_MS) / 60_000)
+    : status.night.changesInMinutes;
+}
+
 export const WEEKDAY_NAMES: readonly string[] = [
   'Sunday',
   'Monday',

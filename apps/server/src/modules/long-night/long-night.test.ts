@@ -394,8 +394,17 @@ describe.skipIf(!url)('the Long Night, server resolve (#727c, needs DATABASE_URL
     expect(stats.body).not.toMatch(secret);
     expect(PatchStatsSchema.parse(stats.json()).keeperOfTheNight).toBeNull();
 
-    // A Keeper who missed it live reads how it went from the status (727e2):
+    // Before the strike the status keeps the result back (rules 1 and 4),
+    // to the millisecond: nightfall ran at 7:05, he strikes at 7:30.
+    expect(row!.strikeAt.toISOString()).toBe('2026-11-01T01:30:00.000Z');
+    expect((await statusOf(server, friend, mapId)).hollow.longNight).not.toHaveProperty('last');
+    clock.setTime(row!.strikeAt.getTime() - 1);
+    const early = await statusOf(server, friend, mapId);
+    expect(early.hollow.longNight).not.toHaveProperty('last');
+    expect(early.body).not.toContain('heldBy');
+    // From the strike, a Keeper who missed it live reads how it went (727e2):
     // not held, the land that stood, no crown.
+    clock.setTime(row!.strikeAt.getTime());
     expect((await statusOf(server, friend, mapId)).hollow.longNight?.last).toEqual({
       night: SATURDAY,
       held: false,
@@ -762,9 +771,16 @@ describe.skipIf(!url)('the Long Night, server resolve (#727c, needs DATABASE_URL
       const at = night.gapOpensAt!.getTime() - 60 * 60_000;
       clock.setTime(at);
       expect((await call(server, 'POST', gapPath(mapId), kid)).statusCode).toBe(409);
+      // Nor has the result been told: the strike hasn't come.
+      expect((await statusOf(server, kid, mapId)).hollow.longNight).not.toHaveProperty('last');
 
       const res = await call(server, 'POST', devPath(mapId), kid);
       expect(res.statusCode, res.body).toBe(200);
+      // The Gap opens at the strike, so the Night's result comes with it.
+      expect((await statusOf(server, kid, mapId)).hollow.longNight?.last).toMatchObject({
+        night: SATURDAY,
+        held: true,
+      });
       const opened = DevGapNowResponseSchema.parse(res.json());
       expect(opened).toEqual({
         night: SATURDAY,

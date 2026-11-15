@@ -28,7 +28,13 @@ import { journeyFor, journeyTeam } from '../../src/territory/journeys.js';
 import { isTradingPost } from '../../src/territory/reach.js';
 import { atWatchLevel, watchFloor } from '../../src/territory/watch-level.js';
 import type { JourneyRules } from '../../src/schemas/data/journeys.js';
-import type { KidProfile, ProgressionConfig, ProgressionRules } from './progression-config.js';
+import { RaritySchema, type Rarity } from '../../src/schemas/data/common.js';
+import type {
+  BefriendPolicy,
+  KidProfile,
+  ProgressionConfig,
+  ProgressionRules,
+} from './progression-config.js';
 
 /*
  * A deterministic day-by-day progression model (design review 2026-10-05,
@@ -44,6 +50,8 @@ import type { KidProfile, ProgressionConfig, ProgressionRules } from './progress
  * `befriendsPerDay`) when it's stronger than their weakest friend, and it
  * takes that friend's place on the team, at the level the growth rules give
  * it (`befriendedLevel`: below its first evolution with the shipped cap).
+ * With `rules.befriendPolicy: 'collector'` (#732 D3) a rarer friend joins
+ * in the least-rare friend's place even when it's weaker.
  *
  * Training Grounds (owner decision 2026-10-06): with `rules.training`, the
  * team trains overnight before each day's battles, as an upper bound.
@@ -68,6 +76,13 @@ export const MODEL_LIMITS = [
   'defences: the whole team stands guard on every tile (an upper bound on defence XP)',
 ] as const;
 
+/** One evolution on a kid's team; `partner` marks the Partner's own (#732 D3). */
+export interface Evolved {
+  readonly from: string;
+  readonly into: string;
+  readonly partner?: boolean;
+}
+
 /** One squishy on a kid's team. */
 export interface Member {
   readonly id: string;
@@ -84,7 +99,7 @@ export interface Kid {
   /** The Partner first, then the teammates (the team picker's default order). */
   readonly team: Member[];
   /** Evolutions on the team today, in order (the "firsts" report). */
-  readonly evolved: { from: string; into: string }[];
+  readonly evolved: Evolved[];
 }
 
 /** How one kid stands at the end of a day. */
@@ -111,7 +126,7 @@ export interface DayRecord {
   /** XP the Partner got today, after care × habitat. */
   readonly partnerXp: number;
   /** Every evolution on the team today (training, exploring and battles), in order. */
-  readonly evolved: readonly { readonly from: string; readonly into: string }[];
+  readonly evolved: readonly Evolved[];
   /** Species befriended today that joined the team. */
   readonly befriended: readonly string[];
   /** Juniper's Gap tiles won today. */
@@ -261,7 +276,7 @@ function play(
 
 /**
  * Grants battle XP to the members who joined, through the real growth rules.
- * `counts`: the battle counts toward the falloff (a win; any friendly, #728).
+ * `counts`: the battle counts toward the falloff (a win, by default).
  */
 export function grant(
   data: ModelData,
@@ -299,17 +314,53 @@ function grow(
   member.level = next.level;
   member.xp = next.xp;
   for (let step = evolutionAt(member.speciesId, member.level, data.evolutions); step;) {
-    kid.evolved.push({ from: member.speciesId, into: step.into });
+    kid.evolved.push({
+      from: member.speciesId,
+      into: step.into,
+      ...(member === kid.team[0] ? { partner: true } : {}),
+    });
     member.speciesId = step.into;
     step = evolutionAt(member.speciesId, member.level, data.evolutions);
   }
 }
 
 /**
- * Puts a newly befriended squishy in its weakest friend's place (never the
- * Partner's) when it's stronger. Returns whether it joined the team.
+ * The collector's rarity order, lowest first, as `RaritySchema` lists it:
+ * `mythic` and `secret` rank above `legendary` here (as the #732 options
+ * page's `RANK`), though `secret` is off the game's rarity ladder.
  */
-function befriend(kid: Kid, friend: { id: string; speciesId: string; level: number }): boolean {
+const RARITY_RANK: readonly Rarity[] = RaritySchema.options;
+
+/**
+ * Puts a newly befriended squishy on the team (never in the Partner's place)
+ * by `policy`: `'stronger'` takes the weakest friend's place when it's
+ * stronger; `'collector'` (#732 D3) takes the least-rare friend's place
+ * (the weakest of those) when it's rarer, otherwise falls back to
+ * `'stronger'`. Returns whether it joined the team.
+ */
+export function befriend(
+  data: Pick<ModelData, 'species'>,
+  kid: Kid,
+  friend: { id: string; speciesId: string; level: number },
+  policy: BefriendPolicy = 'stronger',
+): boolean {
+  if (policy === 'collector') {
+    const rank = (id: string) => RARITY_RANK.indexOf(data.species.get(id)?.rarity ?? 'common');
+    let least = 1;
+    for (let m = 2; m < kid.team.length; m++) {
+      const a = kid.team[m];
+      const b = kid.team[least];
+      if (!a || !b) continue;
+      const ra = rank(a.speciesId);
+      const rb = rank(b.speciesId);
+      if (ra < rb || (ra === rb && a.level < b.level)) least = m;
+    }
+    const current = kid.team[least];
+    if (current && rank(friend.speciesId) > rank(current.speciesId)) {
+      kid.team[least] = { ...friend, xp: 0, winsToday: 0 };
+      return true;
+    }
+  }
   let weakest = 1;
   for (let m = 2; m < kid.team.length; m++) {
     if ((kid.team[m]?.level ?? 0) < (kid.team[weakest]?.level ?? 0)) weakest = m;
@@ -371,9 +422,9 @@ function estimateRivalOdds(
  * Friendly `f` of `day` between the map's two kids (#728). Side a alternates
  * by day and by battle, so a kid with one a day isn't always side a. Both
  * sides earn `friendlyBattleXp` of the engine's XP (one opponent's worth with
- * `oneOpponent`, × `xpPercent` %), and every friendly counts toward the
- * falloff, win or lose. Returns which kid was
- * side a and each kid's Partner XP.
+ * `oneOpponent`, × `xpPercent` %), and a friendly counts toward the falloff
+ * only for the side that won (owner decision 2026-11-15). Returns which kid
+ * was side a, the side that won and each kid's Partner XP.
  */
 export function playFriendly(
   data: ModelData,
@@ -382,7 +433,7 @@ export function playFriendly(
   rules: ProgressionRules,
   day: number,
   f: number,
-): { sideA: number; partnerXp: number[] } {
+): { sideA: number; winner: 'a' | 'b' | null; partnerXp: number[] } {
   const a = (day + f) % 2;
   const b = 1 - a;
   const [kidA, kidB] = [kids[a], kids[b]];
@@ -403,12 +454,17 @@ export function playFriendly(
       result[side].set(id, friendlyBattleXp(xp, result.out[side], share));
     }
   }
-  // Win or lose, a friendly counts toward the falloff (`countsTowardFalloff`;
-  // the sim's AI never scoots, so the engine always pays something).
+  // Only the winner's friendly counts toward the falloff; a lost or tied one
+  // fills no slot (`countsTowardFalloff`, owner decision 2026-11-15; the
+  // sim's AI never scoots, so the engine always pays something).
   const partnerXp = [0, 0];
-  partnerXp[a] = grant(data, kidA, rules, result.a, result.winner === 'a', { counts: true });
-  partnerXp[b] = grant(data, kidB, rules, result.b, result.winner === 'b', { counts: true });
-  return { sideA: a, partnerXp };
+  partnerXp[a] = grant(data, kidA, rules, result.a, result.winner === 'a', {
+    counts: result.winner === 'a',
+  });
+  partnerXp[b] = grant(data, kidB, rules, result.b, result.winner === 'b', {
+    counts: result.winner === 'b',
+  });
+  return { sideA: a, winner: result.winner, partnerXp };
 }
 
 /** A hold (728a): the guards earn side b's XP, and it counts as their win. */
@@ -657,11 +713,12 @@ export function runProgression(
             rules.growth,
           );
           if (
-            befriend(kid, {
-              id: `friend-${String(day)}-${String(i)}`,
-              speciesId: spawn.speciesId,
-              level,
-            })
+            befriend(
+              data,
+              kid,
+              { id: `friend-${String(day)}-${String(i)}`, speciesId: spawn.speciesId, level },
+              rules.befriendPolicy,
+            )
           ) {
             befriended.push(spawn.speciesId);
           }

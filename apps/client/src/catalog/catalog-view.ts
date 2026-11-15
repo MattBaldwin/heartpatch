@@ -21,17 +21,48 @@ export interface CatalogCard {
   readonly secret: boolean;
 }
 
+/** The tiers with a goal, in the order a kid works through them. Secret has none (it never shows before it's met). */
+export const GOAL_TIERS = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'] as const;
+
+/** One rarity tier's goal: kinds befriended out of the kinds a kid can meet now. Counts only. */
+export interface CatalogTier {
+  readonly rarity: Rarity;
+  readonly caught: number;
+  readonly seen: number;
+  readonly total: number;
+  /** Every kind in the tier is a friend. */
+  readonly done: boolean;
+  /** The first unfinished tier: the kid's current finish line. */
+  readonly current: boolean;
+}
+
 export interface CatalogPage {
   readonly cards: readonly CatalogCard[];
   readonly seen: number;
   readonly caught: number;
   /** Cards on the page: the public roster plus any secret ones found. */
   readonly total: number;
-  /** One short line for the top of the page. */
-  readonly progress: string;
+  /** The goal block at the top: one row per tier that has kinds to find. */
+  readonly tiers: readonly CatalogTier[];
 }
 
-export function catalogPage(publicSpecies: readonly Species[], catalog: Catalog): CatalogPage {
+/** A tier row's words: "9 of 30 friends", or "All found!" once done. Seen shows on the current row only. */
+export function tierText(tier: CatalogTier): string {
+  if (tier.done) return 'All found!';
+  const friends = `${String(tier.caught)} of ${String(tier.total)} ${tier.total === 1 ? 'friend' : 'friends'}`;
+  return tier.current ? `${friends} · ${String(tier.seen)} seen` : friends;
+}
+
+/**
+ * `seasons` is the ids of the seasons on today for this patch. A seasonal kind
+ * counts toward its tier while its season is on, or once the kid has met it
+ * (so a total never takes away a friend they already made).
+ */
+export function catalogPage(
+  publicSpecies: readonly Species[],
+  catalog: Catalog,
+  seasons: readonly string[] = [],
+): CatalogPage {
   const entries = new Map(catalog.entries.map((e) => [e.speciesId, e]));
   const card = (species: Species, secret: boolean): CatalogCard => {
     const entry = entries.get(species.id);
@@ -55,9 +86,21 @@ export function catalogPage(publicSpecies: readonly Species[], catalog: Catalog)
   ];
   const seen = cards.filter((c) => c.seen).length;
   const caught = cards.filter((c) => c.caught).length;
-  const progress =
-    seen === 0
-      ? 'No squishies yet. Go find some!'
-      : `Seen ${String(seen)} of ${String(cards.length)} · Friends ${String(caught)}`;
-  return { cards, seen, caught, total: cards.length, progress };
+  const reachable = publicSpecies.filter(
+    (sp) => sp.season === undefined || seasons.includes(sp.season) || entries.has(sp.id),
+  );
+  const counts = GOAL_TIERS.map((rarity) => {
+    const kinds = reachable.filter((sp) => sp.rarity === rarity);
+    const caughtKinds = kinds.filter((sp) => entries.get(sp.id)?.firstCaughtAt != null).length;
+    return {
+      rarity,
+      caught: caughtKinds,
+      seen: kinds.filter((sp) => entries.has(sp.id)).length,
+      total: kinds.length,
+      done: kinds.length > 0 && caughtKinds === kinds.length,
+    };
+  }).filter((t) => t.total > 0);
+  const currentRarity = counts.find((t) => !t.done)?.rarity;
+  const tiers = counts.map((t) => ({ ...t, current: t.rarity === currentRarity }));
+  return { cards, seen, caught, total: cards.length, tiers };
 }

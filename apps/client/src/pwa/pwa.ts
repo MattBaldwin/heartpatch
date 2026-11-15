@@ -48,8 +48,10 @@ function browserPushStartEnv(): PushStartEnv {
 
 /**
  * Push at start-up (#726 plan, "Start-up"), in a Home Screen app with push
- * only: clear the badge a nudge set, now and whenever the app comes back,
- * and re-send this device's subscription (the self-heal, once a day).
+ * only: clear the badge a nudge set, now and whenever the app comes back.
+ * The self-heal waits for a signed-in player (main.ts calls
+ * `pushClient.heal()` from the auth `onChange`), so a logged-out start sends
+ * no `PUT` that can only 401.
  */
 export function startPush(client: PushClient, env: PushStartEnv = browserPushStartEnv()): void {
   if (!client.supported()) return;
@@ -57,5 +59,4 @@ export function startPush(client: PushClient, env: PushStartEnv = browserPushSta
   env.onVisible(() => {
     env.clearBadge();
   });
-  void client.heal();
 }

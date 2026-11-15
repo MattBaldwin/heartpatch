@@ -515,12 +515,21 @@ describe('countsTowardFalloff (#728)', () => {
     expect(countsTowardFalloff('tile', 'a', 'draw', 30)).toBe(false);
   });
 
-  it('counts a friendly win, lose or tie, once the engine paid the squishy something', () => {
+  it('counts a won friendly on either side, once it paid the squishy something', () => {
     expect(countsTowardFalloff('friendly', 'a', 'a', 30)).toBe(true);
-    expect(countsTowardFalloff('friendly', 'b', 'a', 12)).toBe(true);
-    expect(countsTowardFalloff('friendly', 'a', 'draw', 5)).toBe(true);
-    // The one who ran away, or a scoot before any turn: nothing used up.
-    expect(countsTowardFalloff('friendly', 'b', 'a', 0)).toBe(false);
+    expect(countsTowardFalloff('friendly', 'b', 'b', 12)).toBe(true);
+  });
+
+  it('never counts a lost or tied friendly (owner decision 2026-11-15)', () => {
+    expect(countsTowardFalloff('friendly', 'b', 'a', 12)).toBe(false);
+    expect(countsTowardFalloff('friendly', 'a', 'b', 12)).toBe(false);
+    expect(countsTowardFalloff('friendly', 'a', 'draw', 5)).toBe(false);
+    expect(countsTowardFalloff('friendly', 'b', 'draw', 5)).toBe(false);
+  });
+
+  it('never counts a won friendly that paid nothing: a scoot at turn 0, a share that rounded to 0', () => {
+    expect(countsTowardFalloff('friendly', 'a', 'a', 0)).toBe(false);
+    expect(countsTowardFalloff('friendly', 'b', 'b', 0)).toBe(false);
   });
 });
 
