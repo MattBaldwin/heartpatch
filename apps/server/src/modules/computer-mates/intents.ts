@@ -52,6 +52,8 @@ export interface ComputerMateStepsOptions {
   openMaps?: () => Iterable<string>;
   /** How often `seen` writes a patch's stamp, at most (ms). */
   seenThrottleMs?: number;
+  /** Where a failed stamp in `due` is reported; the sweep goes on without it. */
+  log?: { error: (obj: object, msg: string) => void };
 }
 
 export interface ComputerMateSteps {
@@ -86,11 +88,20 @@ export function createComputerMateSteps(options: ComputerMateStepsOptions): Comp
     const last = lastSeen.get(mapId);
     if (last !== undefined && at.getTime() - last < throttle) return;
     // Bounded: entries past the throttle are no use, so drop them now and then.
+    // If more than SEEN_MAX patches are all inside the window this scan runs on
+    // every call and the map still grows; fine at our scale (one entry per open
+    // patch), revisit with an LRU if that ever stops being true.
     if (lastSeen.size >= SEEN_MAX) {
       for (const [id, t] of lastSeen) if (at.getTime() - t >= throttle) lastSeen.delete(id);
     }
     lastSeen.set(mapId, at.getTime());
-    await createComputerMatesRepo(db).stampSeen(mapId, at);
+    try {
+      await createComputerMatesRepo(db).stampSeen(mapId, at);
+    } catch (err) {
+      // Not stamped: let the next call try again instead of waiting out the window.
+      lastSeen.delete(mapId);
+      throw err;
+    }
   };
 
   const due = async (limit = 200) => {
@@ -98,7 +109,14 @@ export function createComputerMateSteps(options: ComputerMateStepsOptions): Comp
     const warmSince = new Date(at.getTime() - rules.warmMinutes * MINUTE_MS);
     // A kid who has had the patch open longer than warmMinutes still counts:
     // the hub's open patches are stamped (throttled), so cold patches cost nothing.
-    for (const mapId of options.openMaps?.() ?? []) await seen(mapId);
+    // One failed stamp mustn't skip the sweep: log it and carry on.
+    for (const mapId of options.openMaps?.() ?? []) {
+      try {
+        await seen(mapId);
+      } catch (err: unknown) {
+        options.log?.error({ err, mapId }, 'computer mates: stamping an open patch failed');
+      }
+    }
     const repo = createComputerMatesRepo(db);
     return repo.dueMates(at, warmSince, limit);
   };

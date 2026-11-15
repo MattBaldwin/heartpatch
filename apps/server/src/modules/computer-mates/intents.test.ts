@@ -161,6 +161,22 @@ describe.skipIf(!url)('computer patch-mates act (#386c, needs DATABASE_URL)', ()
     expect((await open.due()).length).toBe(3);
   });
 
+  it('one failed stamp is logged and the sweep still runs', async () => {
+    const { mapId, mates } = await soloPatch();
+    clock = new Date(clock.getTime() + 2 * 60 * MINUTE_MS);
+    const errors: object[] = [];
+    // A bad id makes its stamp throw; the good patch after it still counts.
+    const steps = createComputerMateSteps({
+      db,
+      clock: () => clock,
+      openMaps: () => ['not-a-uuid', mapId],
+      log: { error: (obj) => errors.push(obj) },
+    });
+    const due = (await steps.due()).map((d) => d.userId);
+    expect(due).toEqual(expect.arrayContaining(mates));
+    expect(errors).toEqual([expect.objectContaining({ mapId: 'not-a-uuid' })]);
+  });
+
   it('act is idempotent per step, and a departed mate’s queued step does nothing', async () => {
     const { mapId, mates, cookies } = await soloPatch();
     const steps = createComputerMateSteps({ db, clock: () => clock });

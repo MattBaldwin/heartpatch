@@ -113,6 +113,7 @@ import {
   squishies,
   tileDefenders,
   tileClears,
+  tileAttacks,
   tiles,
   users,
 } from './schema.js';
@@ -3373,8 +3374,21 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
           ),
         );
       const near = { ...claimOnly, rules: { ...claimOnly.rules, kidHomeBuffer: 0 } };
+      // Hide the battle from the step's view, so the policy picks the target
+      // and only the re-check under the tile lock can stop the claim.
+      const openAttack = and(
+        eq(tileAttacks.tileId, target.id),
+        sql`${tileAttacks.endedAt} is null`,
+      );
+      const hidden = await db
+        .update(tileAttacks)
+        .set({ endedAt: at })
+        .where(openAttack)
+        .returning({ id: tileAttacks.id });
+      expect(hidden).toHaveLength(1);
       const step = await nextStep(near, mate!);
-      // A battle's finish holds the tile (6); the step waits there holding nothing later.
+      // A battle's start holds the tile (6) and writes its attack row in the
+      // same tx; the step waits there holding nothing later.
       await holdThen(
         (tx) =>
           tx
@@ -3385,11 +3399,17 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
             .for('update'),
         step.run,
         async (tx) => {
+          await tx
+            .update(tileAttacks)
+            .set({ endedAt: null })
+            .where(eq(tileAttacks.id, hidden[0]!.id));
           await createComputerMatesRepo(tx).lockTeam(mapId, mate!);
           await lockMapRow(tx, mapId);
         },
       );
-      expect(step.result()).toMatchObject({ intent: null, applied: false });
+      // The policy chose the claim (the target is the only tile it could
+      // take); the re-check under the lock refused it.
+      expect(step.result()).toMatchObject({ intent: 'claim', applied: false });
       const [stillWild] = await db.select().from(tiles).where(eq(tiles.id, target.id));
       expect(stillWild!.ownerUserId).toBeNull();
       // The kid's winning move still captures it.

@@ -596,6 +596,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             clock,
             ...publish,
             ...(wsHub ? { openMaps: wsHub.openMaps } : {}),
+            log: app.log,
           });
           onKeeperSeen = (mapId) => {
             void steps.seen(mapId).catch((err: unknown) => {
