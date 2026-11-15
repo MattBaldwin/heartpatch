@@ -100,6 +100,7 @@ const E2E_GROUPS = [
     'quality-budget',
     'roads',
     'sell-basket',
+    'post-shop',
     'smoke',
     'taps',
     'trick-or-treat',
