@@ -38,8 +38,11 @@ export interface BossService {
   current: (user: PublicUser, mapId: string) => Promise<BossVisit | null>;
   /** Starts a fight with the visiting boss, or resumes the battle going. */
   start: (user: PublicUser, mapId: string) => Promise<StartResult>;
-  /** Opens every patch's visit that's due (the sweep job); returns how many opened. */
-  sweep: () => Promise<number>;
+  /**
+   * Opens every patch's visit that's due (the sweep job); returns how many
+   * opened. Tests narrow it to their own patches (the database is shared).
+   */
+  sweep: (only?: readonly string[]) => Promise<number>;
 }
 
 /** The boss module's side of a fight's end (#190): a win ends the visit for its Keeper. */
@@ -205,11 +208,12 @@ export function createBossService(options: BossServiceOptions): BossService {
       });
     },
 
-    sweep: async () => {
+    sweep: async (only) => {
       if (rules.bag.length === 0) return 0;
       const at = now();
       let opened = 0;
       for (const map of await createBossRepo(db).listMaps()) {
+        if (only && !only.includes(map.id)) continue;
         const week = bossWeekOf(localDate(at, map.timeZone));
         const before = await createBossRepo(db).findWindow(map.id, week);
         if (before) continue;
