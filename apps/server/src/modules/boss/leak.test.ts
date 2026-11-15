@@ -1,9 +1,9 @@
 import { BossBefriendResponseSchema, PlayerBattleBossSchema } from '@heartpatch/shared';
-import type { BossEventRules } from '@heartpatch/shared/server';
+import { SECRET_SPECIES, type BossEventRules } from '@heartpatch/shared/server';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
 import type { GameEvent } from '../../db/game-events.js';
-import { BOSS_RULES, STAND_IN_BOSS, bossHarness } from '../../../tests/boss.js';
+import { BOSS_RULES, REAL_BAG_RULES, STAND_IN_BOSS, bossHarness } from '../../../tests/boss.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 
 const url = inject('testDatabaseUrl');
@@ -167,5 +167,56 @@ describe.skipIf(!url)('mini-boss secrets stay on the server (#190c, needs DATABA
       const shown = publicViewFor(PUBLIC_VIEWS, event, { userId: mate.id });
       expect(leaks(shown), `${event.type}: ${JSON.stringify(shown)}`).toEqual([]);
     }
+  });
+
+  it('the real bag (#234): an unmet boss is never named, nor any other boss in it', async () => {
+    await h.start(REAL_BAG_RULES, { miniBosses: 'on' });
+    const kid = await h.player();
+    const mapId = await h.patch(kid);
+    await h.grow(mapId, kid, 20);
+    await h.toVisit(mapId, REAL_BAG_RULES);
+    // Every boss in the bag, and once 234b-1 lands every form on the boss line.
+    const secrets = [
+      ...REAL_BAG_RULES.bag.map((b) => b.speciesId),
+      ...SECRET_SPECIES.filter((s) => s.line === 'boss').flatMap((s) => [s.id, s.name]),
+    ];
+    const named = (value: unknown) => secrets.filter((x) => JSON.stringify(value).includes(x));
+
+    const before = await h.call('GET', `/maps/${mapId}/boss`, kid);
+    expect(before.statusCode, before.body).toBe(200);
+    expect(before.json<{ boss: unknown }>().boss).not.toBeNull();
+    expect(named(before.json())).toEqual([]);
+    expect(leaks(before.json())).toEqual([]);
+    const events: GameEvent[] = await db.query.gameEvents.findMany({
+      where: (t, { eq }) => eq(t.mapId, mapId),
+    });
+    expect(events.map((e) => e.type)).toContain('boss.appeared');
+    for (const event of events) {
+      const shown = publicViewFor(PUBLIC_VIEWS, event, { userId: kid.id });
+      expect(named(shown), event.type).toEqual([]);
+    }
+
+    // The fight names the boss it is (marked seen), and only that one.
+    const [window] = await db.query.bossWindows.findMany({
+      where: (t, { eq }) => eq(t.mapId, mapId),
+    });
+    const battle = await h.fight(kid, mapId);
+    const others = REAL_BAG_RULES.bag
+      .map((b) => b.speciesId)
+      .filter((id) => id !== window!.speciesId);
+    expect(battle.speciesDefs.map((s) => s.id).filter((id) => others.includes(id))).toEqual([]);
+    expect(leaks(battle)).toEqual([]);
+  });
+
+  it('the switch closed (#234): nothing about the visit is sent', async () => {
+    await h.start(REAL_BAG_RULES, { miniBosses: 'off' });
+    const kid = await h.player();
+    const mapId = await h.patch(kid);
+    await h.grow(mapId, kid, 20);
+    await h.toVisit(mapId, REAL_BAG_RULES);
+    const res = await h.call('GET', `/maps/${mapId}/boss`, kid);
+    expect(res.json()).toEqual({ boss: null });
+    // Nor the dev looks, without dev tools.
+    expect((await h.call('GET', '/dev/boss-looks', kid)).statusCode).toBe(404);
   });
 });

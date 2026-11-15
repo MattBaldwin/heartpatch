@@ -13,6 +13,7 @@ import {
   speciesSeen,
   squishies,
   tiles,
+  users,
 } from '../../db/schema.js';
 import { activeMember } from '../maps/repo.js';
 import { heartSeeds } from '../territory/supply.js';
@@ -31,6 +32,8 @@ export interface BossMapRow {
   seed: string;
   timeZone: string;
   longNightWeekday: number | null;
+  /** The patch owner's username (the mini-boss switch, #234), or null with no owner. */
+  ownerUsername: string | null;
 }
 
 export interface BossRepo {
@@ -114,10 +117,19 @@ const mapColumns = {
   seed: maps.seed,
   timeZone: maps.timeZone,
   longNightWeekday: maps.longNightWeekday,
+  ownerUsername: users.username,
 };
+// The owner's seat (at most one per map, `map_members_one_owner_key`).
+const ownerSeat = and(eq(mapMembers.mapId, maps.id), eq(mapMembers.role, 'owner'));
 
 const withSeed = (
-  rows: { id: string; seed: string | null; timeZone: string; longNightWeekday: number | null }[],
+  rows: {
+    id: string;
+    seed: string | null;
+    timeZone: string;
+    longNightWeekday: number | null;
+    ownerUsername: string | null;
+  }[],
 ) => rows.flatMap((r) => (r.seed === null ? [] : [{ ...r, seed: r.seed }]));
 
 export function createBossRepo(db: Executor): BossRepo {
@@ -159,6 +171,8 @@ export function createBossRepo(db: Executor): BossRepo {
       const rows = await db
         .select(mapColumns)
         .from(maps)
+        .leftJoin(mapMembers, ownerSeat)
+        .leftJoin(users, eq(users.id, mapMembers.userId))
         .where(and(eq(maps.id, mapId), eq(maps.kind, 'multiplayer')));
       return withSeed(rows)[0] ?? null;
     },
@@ -168,6 +182,8 @@ export function createBossRepo(db: Executor): BossRepo {
         await db
           .select(mapColumns)
           .from(maps)
+          .leftJoin(mapMembers, ownerSeat)
+          .leftJoin(users, eq(users.id, mapMembers.userId))
           .where(and(eq(maps.kind, 'multiplayer'), isNotNull(maps.seed)))
           .orderBy(maps.id),
       ),

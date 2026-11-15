@@ -51,6 +51,7 @@ import { createFarHollowService } from './modules/far-hollow/service.js';
 import { journeysRoutes } from './modules/journeys/routes.js';
 import type { BossEventRules } from '@heartpatch/shared/server';
 import { bossRoutes } from './modules/boss/routes.js';
+import { minibossSwitchOf } from './modules/boss/switch.js';
 import {
   createBossService,
   createMinibossBattlePort,
@@ -642,16 +643,24 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           }),
         );
         // Mini-bosses (#190): this week's visit and its fights. The sweep job
-        // (`src/index.ts`) opens visits; no boss visits while the bag is empty.
+        // (`src/index.ts`) opens visits; no boss visits while the bag is empty
+        // or the mini-boss switch (#234, `HP_MINI_BOSSES`) is closed for the patch.
         const boss = createBossService({
           db,
           clock,
           battles,
+          miniBosses: minibossSwitchOf(config),
           ...publish,
           ...(options.bossRules && { rules: options.bossRules }),
         });
         options.onBoss?.(boss);
-        await api.register(bossRoutes(boss, { hooks: authHooks, idempotency }));
+        await api.register(
+          bossRoutes(boss, {
+            hooks: authHooks,
+            idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
+          }),
+        );
         // Push nudges (#726), off by default until the client lane (#726e).
         // Config makes sure the VAPID keys are there whenever it isn't off.
         const vapid = vapidOf(config);

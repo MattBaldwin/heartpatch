@@ -15,6 +15,7 @@ import { requireMember } from '../maps/members.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { befriendBoss, bossBattleView, joinedOn, type BefriendResult } from './befriend.js';
 import { createBossRepo, type BossMapRow, type BossWindowRow } from './repo.js';
+import { MINIBOSSES_OFF, minibossOpenFor, type MinibossSwitch } from './switch.js';
 
 // Kid-readable messages (style guide §6).
 const MESSAGES = {
@@ -34,6 +35,12 @@ export interface BossServiceOptions {
   publish?: (mapId: string) => Promise<void>;
   /** The schedule and bag; tests pass a stand-in boss (production's bag is empty). */
   rules?: BossEventRules;
+  /**
+   * The mini-boss switch (#234, `HP_MINI_BOSSES`), off by default: a closed
+   * patch behaves as an empty bag (no visit, a start is NOT_FOUND, the sweep
+   * skips it). A fight already going still finishes and can still befriend.
+   */
+  miniBosses?: MinibossSwitch;
 }
 
 export interface BossService {
@@ -81,6 +88,10 @@ export function createMinibossBattlePort(rules: BossEventRules = BOSS_EVENTS): M
 export function createBossService(options: BossServiceOptions): BossService {
   const { db, battles } = options;
   const rules = options.rules ?? BOSS_EVENTS;
+  const miniBosses = options.miniBosses ?? MINIBOSSES_OFF;
+  /** Whether a boss may visit this patch at all: a bag to draw from and the switch open. */
+  const openOn = (map: BossMapRow) =>
+    rules.bag.length > 0 && minibossOpenFor(miniBosses, map.ownerUsername);
   const now = options.clock ?? (() => new Date());
   const published = (mapId: string) => {
     void options.publish?.(mapId);
@@ -99,7 +110,8 @@ export function createBossService(options: BossServiceOptions): BossService {
     at: Date,
     { onlyNew = false } = {},
   ): Promise<BossWindowRow | null> => {
-    if (rules.bag.length === 0) return null;
+    // Closed (switch off, or nothing in the bag): as if no boss ever comes.
+    if (!openOn(map)) return null;
     const repo = createBossRepo(db);
     const week = bossWeekOf(localDate(at, map.timeZone));
     const pinned = await repo.findWindow(map.id, week);
@@ -253,11 +265,12 @@ export function createBossService(options: BossServiceOptions): BossService {
     },
 
     sweep: async (only) => {
-      if (rules.bag.length === 0) return 0;
+      if (rules.bag.length === 0 || miniBosses.mode === 'off') return 0;
       const at = now();
       let opened = 0;
       for (const map of await createBossRepo(db).listMaps()) {
         if (only && !only.includes(map.id)) continue;
+        if (!openOn(map)) continue;
         if (await openVisit(map, at, { onlyNew: true })) opened += 1;
       }
       return opened;

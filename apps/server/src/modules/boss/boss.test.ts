@@ -11,6 +11,8 @@ import {
 } from '@heartpatch/shared';
 import {
   BOSS_EVENTS,
+  SECRET_SPECIES,
+  baseFormOf,
   bossVisitFor,
   bossWeekOf,
   type BossEventRules,
@@ -27,6 +29,10 @@ import { SESSION_COOKIE } from '../auth/limits.js';
 import { createBattlesRepo, setupOf } from '../battles/repo.js';
 import { defaultBattleContent } from '../battles/service.js';
 import { newSessionToken } from '../auth/secrets.js';
+import { EVOLUTION_STEPS } from '../care/service.js';
+import { grantItems } from '../inventory/service.js';
+import { BOSS_START, REAL_BAG_IS_REAL, REAL_BAG_RULES, bossHarness } from '../../../tests/boss.js';
+import { BossLooksResponseSchema } from './routes.js';
 
 const url = inject('testDatabaseUrl');
 const errorOf = (res: { json: () => unknown }) =>
@@ -80,7 +86,8 @@ describe.skipIf(!url)('mini-boss visits and fights (#190b, needs DATABASE_URL)',
   });
 
   async function start(rules: BossEventRules = RULES) {
-    const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url! });
+    // The mini-boss switch (#234) open: these tests are about the visits.
+    const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url!, HP_MINI_BOSSES: 'on' });
     let sweep: ((only?: readonly string[]) => Promise<number>) | undefined;
     app = await buildApp({
       config,
@@ -561,5 +568,207 @@ describe.skipIf(!url)('mini-boss visits and fights (#190b, needs DATABASE_URL)',
     expect(battle.rewards?.coins).toEqual({ patch: 0, heart: 0 });
     expect(battle.rewards?.bundle ?? null).toBeNull();
     expect((await visit(server, owner, mapId))!.triesLeftToday).toBe(RULES.triesPerDay - 1);
+  });
+});
+
+const WEEK_MS = 7 * DAY_MS;
+// Every ask a yes: the befriend test is about which form joins, not the odds.
+const SURE_REAL: BossEventRules = {
+  ...REAL_BAG_RULES,
+  befriend: { ...REAL_BAG_RULES.befriend, basePercent: 100 },
+};
+const bagIds = REAL_BAG_RULES.bag.map((b) => b.speciesId);
+const BOSS_LINE = SECRET_SPECIES.filter((s) => s.line === 'boss');
+
+/*
+ * The mini-boss switch (#234, `HP_MINI_BOSSES`) over the real bag: the four
+ * bosses once lane 234b-1 fills it, four stand-ins until then
+ * (`REAL_BAG_RULES`), so these pass unchanged either way.
+ */
+describe.skipIf(!url)('the mini-boss switch over the real bag (#234, needs DATABASE_URL)', () => {
+  let client: DbClient;
+  let db: Database;
+  let h: ReturnType<typeof bossHarness>;
+
+  beforeAll(() => {
+    client = createDbClient(url!, { max: 10 });
+    db = client.db;
+    h = bossHarness(db, url!, 'bossswitch');
+  });
+  afterAll(() => client.close());
+  afterEach(() => h.close());
+
+  const windowsOf = (mapId: string) =>
+    db.query.bossWindows.findMany({
+      where: (t, { eq }) => eq(t.mapId, mapId),
+      orderBy: (t, { asc }) => asc(t.opensAt),
+    });
+  const eventTypes = async (mapId: string) =>
+    (await db.query.gameEvents.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) })).map(
+      (e) => e.type,
+    );
+
+  it('off: behaves as an empty bag, with the bosses in it', async () => {
+    await h.start(REAL_BAG_RULES, { miniBosses: 'off' });
+    const kid = await h.player();
+    const mapId = await h.patch(kid);
+    await h.grow(mapId, kid, 20);
+    await h.toVisit(mapId, REAL_BAG_RULES);
+
+    const res = await h.call('GET', `/maps/${mapId}/boss`, kid);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(BossVisitResponseSchema.parse(res.json()).boss).toBeNull();
+    expect(await h.sweep([mapId])).toBe(0);
+    const fight = await h.call('POST', `/maps/${mapId}/boss/battle`, kid);
+    expect(fight.statusCode, fight.body).toBe(404);
+    expect(errorOf(fight)).toBe('No big squishy around right now. Keep an eye out!');
+    expect(await windowsOf(mapId)).toEqual([]);
+    expect(await eventTypes(mapId)).not.toContain('boss.appeared');
+  });
+
+  it('testers: a boss visits only the patches a tester owns', async () => {
+    const tester = await h.player();
+    const other = await h.player();
+    // Usernames are matched case-blind, as every switch's testers list.
+    await h.start(REAL_BAG_RULES, {
+      miniBosses: 'testers',
+      testers: [tester.username.toUpperCase()],
+    });
+    const theirs = await h.patch(tester);
+    const notTheirs = await h.patch(other);
+    // The tester on someone else's patch doesn't open it: only the owner counts.
+    await h.join(notTheirs, other, tester);
+    for (const [mapId, who] of [
+      [theirs, tester],
+      [notTheirs, other],
+    ] as const)
+      await h.grow(mapId, who, 20);
+
+    await h.toVisit(notTheirs, REAL_BAG_RULES);
+    expect(await h.sweep([notTheirs])).toBe(0);
+    for (const who of [other, tester]) {
+      const res = await h.call('GET', `/maps/${notTheirs}/boss`, who);
+      expect(BossVisitResponseSchema.parse(res.json()).boss).toBeNull();
+    }
+    expect(await windowsOf(notTheirs)).toEqual([]);
+
+    await h.toVisit(theirs, REAL_BAG_RULES);
+    expect(await h.sweep([theirs])).toBe(1);
+    const res = await h.call('GET', `/maps/${theirs}/boss`, tester);
+    expect(BossVisitResponseSchema.parse(res.json()).boss).not.toBeNull();
+    const [window] = await windowsOf(theirs);
+    expect(bagIds).toContain(window!.speciesId);
+  });
+
+  it('on: every boss in the bag visits before one comes back', async () => {
+    await h.start(REAL_BAG_RULES, { miniBosses: 'on' });
+    const kid = await h.player();
+    const mapId = await h.patch(kid);
+    await h.grow(mapId, kid, 20);
+    // A shuffle bag per cycle: any 2n − 1 weeks in a row hold one whole cycle.
+    const weeks = 2 * bagIds.length - 1;
+    for (let week = 0; week < weeks; week++) {
+      h.clock.setTime(Date.parse(BOSS_START) + week * WEEK_MS);
+      await h.toVisit(mapId, REAL_BAG_RULES);
+      expect(await h.sweep([mapId])).toBe(1);
+    }
+    const visited = (await windowsOf(mapId)).map((w) => w.speciesId);
+    expect(visited).toHaveLength(weeks);
+    expect(new Set(visited)).toEqual(new Set(bagIds));
+    // Cut into cycles somewhere: no boss twice within one, and the whole one holds them all.
+    const n = bagIds.length;
+    const cycles = (offset: number) =>
+      [
+        visited.slice(0, offset),
+        visited.slice(offset, offset + n),
+        visited.slice(offset + n),
+      ].filter((c) => c.length > 0);
+    const fair = Array.from({ length: n }, (_, offset) => offset).some((offset) =>
+      cycles(offset).every(
+        (c) => new Set(c).size === c.length && (c.length < n || new Set(c).size === n),
+      ),
+    );
+    expect(fair, visited.join(', ')).toBe(true);
+  });
+
+  it('on: the fight sends the boss it shows, drawable from public parts, and a friend joins as its first form', async () => {
+    await h.start(SURE_REAL, { miniBosses: 'on' });
+    const kid = await h.player();
+    const mapId = await h.patch(kid);
+    await h.grow(mapId, kid, 20);
+    await h.toVisit(mapId, SURE_REAL);
+    const started = await h.fight(kid, mapId);
+    const bossId = (await windowsOf(mapId))[0]!.speciesId;
+    expect(bagIds).toContain(bossId);
+
+    // A secret boss's def rides with the battle (the client can't know it);
+    // a public stand-in is in GAME_DATA already. Never another boss in the bag.
+    const secret = SECRET_SPECIES.find((s) => s.id === bossId);
+    const sent = started.speciesDefs.map((s) => s.id);
+    if (secret) expect(sent).toContain(bossId);
+    for (const id of bagIds) if (id !== bossId) expect(sent).not.toContain(id);
+    const def = secret ?? GAME_DATA.species.find((s) => s.id === bossId)!;
+    const bodies = new Set(GAME_DATA.bodies.map((b) => b.id));
+    const parts = new Set(GAME_DATA.parts.map((p) => p.id));
+    expect(bodies.has(def.visual.body), def.visual.body).toBe(true);
+    for (const part of def.visual.parts) expect(parts.has(part), part).toBe(true);
+
+    const won = await h.playOut(kid, started);
+    expect(won.view.phase).toMatchObject({ type: 'over', result: { winner: 'a' } });
+    await grantItems(db, { mapId, userId: kid.id }, { 'heart-charm': 3 }, 'dev-grant');
+    const yes = await h.call('POST', `/battles/${won.id}/befriend`, kid, { ask: 1 });
+    expect(yes.statusCode, yes.body).toBe(200);
+    const { squishyId } = yes.json<{ squishyId: string }>();
+    const friend = await db.query.squishies.findFirst({
+      where: (t, { eq }) => eq(t.id, squishyId),
+    });
+    expect(friend?.speciesId).toBe(baseFormOf(bossId, EVOLUTION_STEPS));
+  });
+
+  it('a fight already going still finishes after the switch closes', async () => {
+    await h.start(REAL_BAG_RULES, { miniBosses: 'on' });
+    const kid = await h.player();
+    const mapId = await h.patch(kid);
+    await h.grow(mapId, kid, 20);
+    await h.toVisit(mapId, REAL_BAG_RULES);
+    const started = await h.fight(kid, mapId);
+    const at = h.clock.getTime();
+
+    await h.close();
+    h.clock.setTime(at);
+    await h.start(REAL_BAG_RULES, { miniBosses: 'off' });
+    // Closed: no visit to see, but the fight going comes back to its Keeper.
+    const res = await h.call('GET', `/maps/${mapId}/boss`, kid);
+    expect(BossVisitResponseSchema.parse(res.json()).boss).toBeNull();
+    const again = await h.call('POST', `/maps/${mapId}/boss/battle`, kid);
+    expect(again.statusCode, again.body).toBe(200);
+    const resumed = BattleResponseSchema.parse(again.json()).battle;
+    expect(resumed.id).toBe(started.id);
+    const done = await h.playOut(kid, resumed);
+    expect(done.status).not.toBe('active');
+    // And a new one doesn't start.
+    const next = await h.call('POST', `/maps/${mapId}/boss/battle`, kid);
+    expect(next.statusCode, next.body).toBe(404);
+  });
+
+  it('the dev boss looks: only with dev tools, every boss-line look in public shapes', async () => {
+    await h.start(REAL_BAG_RULES);
+    const kid = await h.player();
+    expect((await h.call('GET', '/dev/boss-looks', kid)).statusCode).toBe(404);
+    await h.close();
+
+    await h.start(REAL_BAG_RULES, { devTools: true });
+    const res = await h.call('GET', '/dev/boss-looks', kid);
+    expect(res.statusCode, res.body).toBe(200);
+    const { looks } = BossLooksResponseSchema.parse(res.json());
+    expect(looks.map((l) => l.id)).toEqual(BOSS_LINE.map((s) => s.id));
+    const bodies = new Set(GAME_DATA.bodies.map((b) => b.id));
+    const parts = new Set(GAME_DATA.parts.map((p) => p.id));
+    for (const look of looks) {
+      expect(bodies.has(look.visual.body), look.visual.body).toBe(true);
+      for (const part of look.visual.parts) expect(parts.has(part), part).toBe(true);
+    }
+    // Once the bag is the real one, every boss in it has a look.
+    if (REAL_BAG_IS_REAL) for (const id of bagIds) expect(looks.map((l) => l.id)).toContain(id);
   });
 });
