@@ -150,14 +150,24 @@ function box(rings: number, segments: number): MeshArrays {
 
 // TUNE: the bent dowel's centreline, in lengths of the whole stick.
 // Round 11b (#234, v13): a leaf-rake tine. Long and straight, then a gentle,
-// wide 35° forward arc at the tip with no return curl, tapering to half its
+// wide forward arc at the tip with no return curl, tapering to half its
 // root thickness at the tip.
-const BENT_STRAIGHT = 0.62; // straight from the root
+// v14: the arc stops at 30° and the last ~13% runs straight on as a short
+// forward foot, so the tip never flicks up into a J.
+const BENT_STRAIGHT = 0.55; // straight from the root
 const BENT_RADIUS = 0.5; // the tip's curve
-const BENT_ANGLE = (35 * Math.PI) / 180; // how far the tip turns forward
-const BENT_TIP = 0.06; // straight again after the bend
+const BENT_ANGLE = (30 * Math.PI) / 180; // how far the tip turns forward
+const BENT_TIP = 0.12; // the forward foot: straight again after the bend
 const BENT_TUBE = 0.08; // the dowel's radius at the root
 const BENT_TAPER = 0.5; // the tip's radius, as a fraction of the root's
+
+/**
+ * How far the `bent` tine's tip turns (degrees) and the share of its length
+ * that runs straight on after the turn (the forward foot).
+ */
+export function bentTip(): { turn: number; foot: number } {
+  return { turn: (BENT_ANGLE * 180) / Math.PI, foot: BENT_TIP / bentEnd().total };
+}
 
 /** The `bent` dowel's centreline end point `[y, z]` and its whole length. */
 function bentEnd(): { y: number; z: number; total: number } {

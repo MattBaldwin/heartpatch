@@ -820,7 +820,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       );
       const color = linear(part.color);
       // Faces and patterns stay plain vinyl; sticking-out parts share the body's tier and glow.
-      // Metal parts (rake tines) stay plain metal, without the vinyl finish (#234).
+      // Metal parts (rake tines) and mouth stand-ins (the rake bar) stay plain, without the vinyl finish (#234).
       const finish = (part.surface || part.plain ? 0 : tier + rareGlow) + glow(part.glow);
       const onHead = part.host === 'head' && params.head && headBody;
       const hostBody = onHead ? headBody : body;

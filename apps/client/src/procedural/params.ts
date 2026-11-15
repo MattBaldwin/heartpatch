@@ -88,7 +88,7 @@ export interface PartParams {
   readonly anchor?: 'behind' | 'front';
   /** With `anchor: 'front'`: how far in front of the face's centre line it roots, world units. */
   readonly standoff?: number;
-  /** Set only on `metal` parts (#234 round 11): plain metal, without the rarity's vinyl finish. */
+  /** Set only on `metal` parts and mouth stand-ins (#234): plain, without the rarity's vinyl finish. */
   readonly plain?: true;
   /** Lit from inside (the species' `glow`: every non-face part, or only `accent` ones). */
   readonly glow: boolean;
@@ -308,8 +308,11 @@ function placementsFor(part: Part, height: number, rng: Rng): PartPlacement[] {
   }
 
   // Single and paired parts get one wobble, mirrored on both sides, so faces stay symmetric.
-  const a = (part.around + wobble(rng, VARIATION.placementDeg)) * DEG;
-  const u = (part.up + wobble(rng, VARIATION.placementDeg)) * DEG;
+  // A mouth stand-in (the rake bar) holds still: its tines and rivets are rings
+  // rooted on it, which don't wobble, so a wobbling bar slid off them (#234 v14).
+  const steady = part.replaces === 'mouth';
+  const a = (part.around + (steady ? 0 : wobble(rng, VARIATION.placementDeg))) * DEG;
+  const u = (part.up + (steady ? 0 : wobble(rng, VARIATION.placementDeg))) * DEG;
   if (layout.kind === 'single') {
     return [{ around: part.around === 0 ? 0 : a, up: u, size, tilt, splay, side: 0 }];
   }
@@ -416,7 +419,9 @@ export function squishyParams(
       flip: part.flip ?? false,
       ...(part.anchor === 'behind' || part.anchor === 'front' ? { anchor: part.anchor } : {}),
       ...(part.anchor === 'front' ? { standoff: (part.standoff ?? 0) * hostHeight } : {}),
-      ...(part.color === 'metal' ? { plain: true as const } : {}),
+      // Metal (rake tines, rivets) and a part that stands in for the mouth (the
+      // rake bar) skip the rarity's vinyl finish, like the rest of the face (#234 v14).
+      ...(part.color === 'metal' || part.replaces === 'mouth' ? { plain: true as const } : {}),
       glow:
         !surfaceSlots.has(part.slot) &&
         (visual.glow === 'body' || (visual.glow === 'accent' && part.color === 'accent')),

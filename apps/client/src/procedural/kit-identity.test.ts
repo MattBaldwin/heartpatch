@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { FIXED_COLORS, LOD } from './config.js';
 import { DRAFT_BODIES, DRAFT_PARTS, draftLooks } from './gallery/boss-drafts.js';
 import { squishyParams, type PartPlacement } from './params.js';
-import { bentProportions, partArrays } from './part-shapes.js';
+import { bentProportions, bentTip, partArrays } from './part-shapes.js';
 import { partMatrix } from './placement.js';
 
 /**
@@ -254,8 +254,8 @@ describe('ring splay and the metal role (#234 round 8)', () => {
     expect(length[1]).toBeCloseTo(length[3] ?? NaN);
     expect(length[0] ?? 0).toBeGreaterThan(length[1] ?? 0);
     expect(length[1] ?? 0).toBeGreaterThan(length[2] ?? 0);
-    // grow 0.12: the outermost (offset 4/5) is 1 + 0.12 * 0.8 times the middle.
-    expect((length[0] ?? 0) / (length[2] ?? 1)).toBeCloseTo(1.096, 6);
+    // grow 0.22: the outermost (offset 4/5) is 1 + 0.22 * 0.8 times the middle.
+    expect((length[0] ?? 0) / (length[2] ?? 1)).toBeCloseTo(1.176, 6);
     // Each copy scales whole, so the dowel stays round.
     for (const p of tines)
       expect(p.size[0] / p.size[1]).toBeCloseTo(tines[2]!.size[0] / tines[2]!.size[1], 9);
@@ -271,14 +271,15 @@ describe('ring splay and the metal role (#234 round 8)', () => {
     ]);
   });
 
-  it('keeps metal parts plain, without the vinyl finish', () => {
+  it('keeps metal parts and the rake bar (a mouth stand-in) plain, without the vinyl finish', () => {
     expect(tinesOf('draft-rakelet').plain).toBe(true);
     const bar = squishyParams(
       { id: 'draft-rakelet', visual: lookOf('draft-rakelet').visual },
       'kit-ring',
       drafts,
     ).parts.find((p) => p.slot === 'mane');
-    expect(bar && 'plain' in bar).toBe(false);
+    // v14: under the boss shimmer the wooden bar read salmon pink.
+    expect(bar?.plain).toBe(true);
   });
 });
 
@@ -290,6 +291,12 @@ describe('bent tine proportions (#234 round 11b)', () => {
     expect(thickness - width).toBeGreaterThan(0);
     expect((thickness - width) / width).toBeLessThan(1);
     expect(length / width).toBeGreaterThan(6);
+  });
+
+  it('stops the arc at 30 degrees and runs straight on for the last tenth, so the tip never flicks up (v14)', () => {
+    const { turn, foot } = bentTip();
+    expect(turn).toBeLessThanOrEqual(30);
+    expect(foot).toBeGreaterThanOrEqual(0.1);
   });
 
   it('tapers towards the tip', () => {
@@ -365,11 +372,58 @@ describe("anchor: 'front' (#234 round 11)", () => {
     expect(at(0, 90).every(Number.isFinite)).toBe(true);
   });
 
-  it("roots Rakelet's tines on each stage's bar front face", () => {
+  it("turns a fanned copy's curl outwards with its fan, as a rotation, mirrored left and right (v14)", () => {
+    const copy = (side: -1 | 0 | 1) =>
+      partMatrix(
+        orb,
+        scale,
+        { ...part, standoff: 0.1 },
+        {
+          around: 0,
+          up: (-20 * Math.PI) / 180,
+          size: [0.05, 0.4, 0.05],
+          tilt: (42 * Math.PI) / 180,
+          splay: side === 0 ? 0 : (15 * Math.PI) / 180,
+          side,
+        },
+      );
+    const zOf = (m: readonly number[]) => [m[8]! / 0.05, m[9]! / 0.05, m[10]! / 0.05];
+    const [l, mid, r] = [copy(-1), copy(0), copy(1)].map(zOf);
+    expect(mid![0]).toBeCloseTo(0); // the middle tine curls straight forward
+    expect(r![0]).toBeGreaterThan(0.3); // outwards, to the right
+    expect(l![0]).toBeCloseTo(-r![0]!);
+    expect(l![1]).toBeCloseTo(r![1]!);
+    expect(l![2]).toBeCloseTo(r![2]!);
+    // Still a rotation (right-handed), so no copy turns inside out.
+    const m = copy(1);
+    const det =
+      m[0]! * (m[5]! * m[10]! - m[6]! * m[9]!) -
+      m[1]! * (m[4]! * m[10]! - m[6]! * m[8]!) +
+      m[2]! * (m[4]! * m[9]! - m[5]! * m[8]!);
+    expect(det).toBeGreaterThan(0);
+  });
+
+  it('holds the rake bar still on every squishy, so it never slides off its rivets (v14)', () => {
     const registry = visualRegistry({
       bodies: [...GAME_DATA.bodies, ...DRAFT_BODIES],
       parts: [...GAME_DATA.parts, ...DRAFT_PARTS],
     });
+    const look = draftLooks().find((l) => l.id === 'draft-pileup')!;
+    const bars = ['kit-front', 'gallery-1', 'abc'].map(
+      (iid) =>
+        squishyParams({ id: look.id, visual: look.visual }, iid, registry).parts.find(
+          (p) => p.slot === 'mane',
+        )!.placements[0],
+    );
+    for (const b of bars) expect(b).toEqual(bars[0]);
+  });
+
+  it("roots Rakelet's tines on each stage's bar front face, under a rivet set into it", () => {
+    const registry = visualRegistry({
+      bodies: [...GAME_DATA.bodies, ...DRAFT_BODIES],
+      parts: [...GAME_DATA.parts, ...DRAFT_PARTS],
+    });
+    const luma = (c: readonly number[]) => 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!;
     for (const id of ['draft-pileup', 'draft-rakeling', 'draft-rakelet']) {
       const look = draftLooks().find((l) => l.id === id)!;
       const params = squishyParams({ id, visual: look.visual }, 'kit-front', registry);
@@ -377,21 +431,43 @@ describe("anchor: 'front' (#234 round 11)", () => {
       const body = registry.bodies.get(look.visual.head!.body)!;
       const bar = params.parts.find((p) => p.slot === 'mane')!;
       const tines = params.parts.find((p) => p.slot === 'fangs')!;
+      const rivets = params.parts.find((p) => p.slot === 'horns')!;
+      const cavity = params.parts.find((p) => p.slot === 'cheeks')!;
       const b = partMatrix(body, head.scale, bar, bar.placements[0]!, head.offset);
       const axis = (k: number) => [b[k * 4]!, b[k * 4 + 1]!, b[k * 4 + 2]!];
-      const along = (v: number[], k: number) => {
-        const a = axis(k);
-        const n = Math.hypot(a[0]!, a[1]!, a[2]!);
-        return (v[0]! * a[0]! + v[1]! * a[1]! + v[2]! * a[2]!) / n / n; // in bar sizes
+      // Where a point sits on the bar, in bar sizes from its centre: axis 1
+      // is out of the face (0.5 is the front face), axis 2 its height.
+      const on = (p: number[]) => {
+        const d = [p[0]! - b[12]!, p[1]! - b[13]!, p[2]! - b[14]!];
+        return [0, 1, 2].map((k) => {
+          const a = axis(k);
+          return (
+            (d[0]! * a[0]! + d[1]! * a[1]! + d[2]! * a[2]!) / (a[0]! ** 2 + a[1]! ** 2 + a[2]! ** 2)
+          );
+        });
       };
-      for (const p of tines.placements) {
-        const r = root(partMatrix(body, head.scale, tines, p, head.offset));
-        const d = [r[0]! - b[12]!, r[1]! - b[13]!, r[2]! - b[14]!];
-        expect(Math.abs(along(d, 0)), id).toBeLessThan(0.5); // within the bar's width
-        expect(along(d, 1), id).toBeGreaterThan(0.4); // on its front face, not inside or under it
-        expect(along(d, 1), id).toBeLessThan(0.6);
-        expect(Math.abs(along(d, 2)), id).toBeLessThan(0.2); // in the middle of its height (round 11b)
-      }
+      expect(rivets.placements).toHaveLength(tines.placements.length);
+      tines.placements.forEach((p, i) => {
+        const t = on(root(partMatrix(body, head.scale, tines, p, head.offset)));
+        const rm = partMatrix(body, head.scale, rivets, rivets.placements[i]!, head.offset);
+        const r = on([rm[12]!, rm[13]!, rm[14]!]);
+        for (const [what, at] of [
+          ['tine root', t],
+          ['rivet', r],
+        ] as const) {
+          expect(Math.abs(at[0]!), `${id} ${what}`).toBeLessThan(0.5); // within the bar's width
+          // On the visible front face itself, not floating in front of it (a
+          // floating rivet drifts up or down the face as the camera moves, v14).
+          expect(Math.abs(at[1]! - 0.5), `${id} ${what}`).toBeLessThan(0.1);
+          expect(Math.abs(at[2]!), `${id} ${what}`).toBeLessThan(0.1); // mid-height
+        }
+        // The rivet sits over the tine's root and is wider than the tine, so
+        // the tine's round end can't poke up above it towards the bar's top.
+        expect(Math.abs(t[0]! - r[0]!), id).toBeLessThan(0.02);
+        expect(rivets.placements[i]!.size[0], id).toBeGreaterThan(p.size[0]);
+      });
+      // A rivet, not a hole: lighter than the dark mouth behind the tines.
+      expect(luma(rivets.color), id).toBeGreaterThan(luma(cavity.color) * 2);
     }
   });
 });

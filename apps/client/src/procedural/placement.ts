@@ -15,6 +15,8 @@ const FRONT: Vec3 = [0, 0, -1];
 /** Legs lean out at most this far (radians) and sink at most this share into the body. */
 const MAX_LEG_SPLAY = (60 * Math.PI) / 180;
 const MAX_LEG_SINK = 0.8;
+/** `anchor: 'front'`: how far a fanned copy's front turns outwards, in multiples of its fan angle (#234 v14). */
+const FRONT_CURL_TURN = 3; // TUNE
 
 const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const scaled = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
@@ -184,6 +186,13 @@ export function partMatrix(
     let front = flatten(FRONT, y);
     if (len(front) < 1e-3) front = [0, -1, 0];
     z = normalize(front);
+    // A fanned copy's front (where a bent tine curls) turns outwards with its
+    // fan, so the curl shows in the outline head-on (#234 v14). A rotation
+    // about the copy's own axis: never a mirror.
+    if (placement.splay !== 0 && placement.side !== 0) {
+      const outwards = normalize(flatten(flatten([placement.side, 0, 0], y), z));
+      z = lean(z, outwards, FRONT_CURL_TURN * placement.splay);
+    }
     x = cross(y, z);
     centre = add(root, scaled(y, length / 2 - part.sink * length + part.lift));
   } else {
