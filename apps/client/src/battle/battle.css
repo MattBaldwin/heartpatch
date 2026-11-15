@@ -553,6 +553,54 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   display: none;
 }
 
+/* A Rare Lure is held (#729): a gold-and-lilac halo that pulses (opacity only). */
+.battle-entry.battle-entry-lure {
+  position: relative;
+  box-shadow:
+    0 3px 0 #8f3360,
+    0 0 0 3px #ffe08a,
+    0 0 18px 6px rgb(255 214 107 / 65%);
+}
+
+.battle-entry.battle-entry-lure::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 24px;
+  box-shadow: 0 0 26px 10px rgb(168 130 255 / 55%);
+  opacity: 0.9;
+  animation: battle-lure-pulse 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.battle-entry.battle-entry-lure::after {
+  content: '✨';
+  position: absolute;
+  right: 14px;
+  top: -10px;
+  font-size: 20px;
+  filter: drop-shadow(0 0 4px #fff);
+  pointer-events: none;
+}
+
+@keyframes battle-lure-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .battle-entry.battle-entry-lure::before {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .battle-energy-fill {
     transition: none;

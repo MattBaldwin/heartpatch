@@ -689,6 +689,12 @@ const postScreen = createPostScreen({
     void inventory.refresh();
     void heartCoins.refresh();
   },
+  // A Shop buy (#729) spends 💛, may fill the bag, and may hold a lure: Find a squishy glows.
+  onBought: (shop) => {
+    void inventory.refresh();
+    void heartCoins.refresh();
+    battles.setLureHeld(shop.lureHeld);
+  },
 });
 const journeys = createJourneyScreen({
   now: () => inventory.gameNow(),

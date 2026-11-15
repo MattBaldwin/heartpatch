@@ -25,9 +25,9 @@ import { clothingIcon, clothingSlotIcon, itemIcon } from '../inventory/item-icon
 // checks everything again (CLAUDE.md rule 1): this only shapes the request
 // and says what's waiting. Copy follows docs/STYLE_GUIDE.md.
 
-export type PostTab = 'trade' | 'gift' | 'mailbox' | 'swap' | 'sell';
+export type PostTab = 'trade' | 'gift' | 'mailbox' | 'swap' | 'sell' | 'shop';
 /** The Glimmer swap (#523) comes last: the post's own counter, not a patch-mate. */
-export const POST_TABS: readonly PostTab[] = ['trade', 'gift', 'mailbox', 'swap', 'sell'];
+export const POST_TABS: readonly PostTab[] = ['trade', 'gift', 'mailbox', 'swap', 'sell', 'shop'];
 
 const SPECIES = new Map(GAME_DATA.species.map((s) => [s.id, s]));
 const RESOURCES = new Map(GAME_DATA.resources.map((r) => [r.id, r]));
@@ -39,9 +39,10 @@ export const TRADE_TEXT = {
   tabs: {
     trade: '🔁 Trade',
     gift: '🎁 Gift',
-    mailbox: '📬 Mailbox',
+    mailbox: '📬 Mail',
     swap: '💎 Swap',
     sell: '🏷️ Sell',
+    shop: '🛍️ Shop',
   } satisfies Record<PostTab, string>,
   connected: '🔗 Connected',
   open: (ms: number) => `⏳ Open ${String(Math.max(1, Math.ceil(ms / 60_000)))} min`,
@@ -332,13 +333,14 @@ export const waiting = (view: TradesView): MailboxEntry[] =>
 
 /** The tabs' little number badges. */
 export function tabBadges(view: TradesView | null, me: string): Record<PostTab, number> {
-  if (!view) return { trade: 0, gift: 0, mailbox: 0, swap: 0, sell: 0 };
+  if (!view) return { trade: 0, gift: 0, mailbox: 0, swap: 0, sell: 0, shop: 0 };
   return {
     trade: offersToMe(view, me).length,
     gift: 0,
     mailbox: waiting(view).length,
     swap: 0,
     sell: 0,
+    shop: 0,
   };
 }
 
