@@ -49,6 +49,13 @@ import { hollowRoutes } from './modules/hollow/routes.js';
 import { farHollowRoutes } from './modules/far-hollow/routes.js';
 import { createFarHollowService } from './modules/far-hollow/service.js';
 import { journeysRoutes } from './modules/journeys/routes.js';
+import type { BossEventRules } from '@heartpatch/shared/server';
+import { bossRoutes } from './modules/boss/routes.js';
+import {
+  createBossService,
+  createMinibossBattlePort,
+  type BossService,
+} from './modules/boss/service.js';
 import { challengesRoutes } from './modules/challenges/routes.js';
 import { callOffAsksOf, createChallengesService } from './modules/challenges/service.js';
 import { glimmerSwapRoutes } from './modules/glimmer-swap/routes.js';
@@ -164,6 +171,13 @@ export interface BuildAppOptions {
    * the app. Called once the service exists, with whether push is on at all.
    */
   onPush?: (push: PushService, enabled: boolean) => void;
+  /**
+   * Mini-boss visits (#190) for `src/index.ts`, which runs their sweep job
+   * next to the app. Called once the service exists.
+   */
+  onBoss?: (boss: BossService) => void;
+  /** Tests only: mini-boss rules with a stand-in boss (production's bag is empty, #190). */
+  bossRules?: BossEventRules;
   /**
    * Computer patch-mates' steps (#386c) for `src/index.ts`, which runs their
    * paced job next to the app. Called once they exist, unless the switch is off.
@@ -371,6 +385,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           tileBattles: createTileBattlePort(),
           // Journeys to trading posts (#270): the visit pass in the finish.
           journeys: createJourneyBattlePort(),
+          // Mini-bosses (#190): a win ends the visit for its Keeper.
+          minibosses: createMinibossBattlePort(options.bossRules),
           ...(wsHub ? { publish: wsHub.publish } : {}),
         });
         const idempotencyStore = createIdempotencyStore(db);
@@ -623,6 +639,17 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
+        // Mini-bosses (#190): this week's visit and its fights. The sweep job
+        // (`src/index.ts`) opens visits; no boss visits while the bag is empty.
+        const boss = createBossService({
+          db,
+          clock,
+          battles,
+          ...publish,
+          ...(options.bossRules && { rules: options.bossRules }),
+        });
+        options.onBoss?.(boss);
+        await api.register(bossRoutes(boss, { hooks: authHooks, idempotency }));
         // Push nudges (#726), off by default until the client lane (#726e).
         // Config makes sure the VAPID keys are there whenever it isn't off.
         const vapid = vapidOf(config);

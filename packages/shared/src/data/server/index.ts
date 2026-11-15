@@ -83,3 +83,6 @@ export const SERVER_GAME_DATA: ServerGameData = {
   secretEvolutions: SECRET_EVOLUTIONS,
   evolutionOdds: EVOLUTION_ODDS,
 };
+export * from '../../schemas/data/boss-events.js';
+export * from '../../boss/schedule.js';
+export { BOSS_EVENTS } from './boss-events.js';

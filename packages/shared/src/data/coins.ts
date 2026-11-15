@@ -10,7 +10,15 @@ export const COIN_RULES: CoinRules = {
   // ways. A journey (#270) is a gate, not a farm: no coins. A friendly win
   // (#728) pays a little, at most `CHALLENGE_RULES.paidWinsPerPairPerDay` a day
   // over the same patch-mate, and never on a scoot.
-  battleWin: { wild: 2, tile: 3, 'rival-tile': 3, rescue: 0, journey: 0, friendly: 2 },
+  battleWin: {
+    wild: 2,
+    tile: 3,
+    'rival-tile': 3,
+    rescue: 0,
+    journey: 0,
+    friendly: 2,
+    miniboss: 5, // TUNE: a mini-boss win (#190), at most once a week
+  },
   // TUNE: a held defence (#728) pays the Keeper what taking that land would.
   defenseWin: { 'rival-tile': 3 },
   // TUNE: a new friend or a new tile is worth more than a win.

@@ -231,16 +231,17 @@ const LogSchema = ClientBattleViewSchema.shape.log;
 
 /**
  * A battle's whole setup, as `replayBattle` takes it: its seed and stored
- * sides, plus a fence battle's turn limit (#203) and a gentle battle's flag
- * (#587), which live in its state.
+ * sides, plus a fence battle's turn limit (#203), a gentle battle's flag
+ * (#587) and a team battle's format (#190), which live in its state.
  */
 export function setupOf(row: Pick<BattleRow, 'seed' | 'setup' | 'state'>): BattleSetup {
-  const { turnLimit, gentle } = row.state;
+  const { turnLimit, gentle, format } = row.state;
   return {
     seed: row.seed,
     sides: row.setup,
     ...(turnLimit !== undefined && { turnLimit }),
     ...(gentle && { gentle }),
+    ...(format && { format }),
   };
 }
 

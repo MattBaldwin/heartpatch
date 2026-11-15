@@ -97,6 +97,14 @@ export const GameDataSchema = z
           'secret species are server-only: add them to SECRET_SPECIES in packages/shared/src/data/server/secret-species.ts',
         );
       }
+      // #190 plan §7: a boss stays off the client catalog until met, and
+      // only the secret path keeps an unseen species out of it.
+      if (s.line === 'boss') {
+        report(
+          ['species', i, 'line'],
+          'boss species are server-only: add them to SECRET_SPECIES in packages/shared/src/data/server/secret-species.ts',
+        );
+      }
       checkSpeciesVisual(s.visual, visuals, ['species', i, 'visual'], report);
       if (s.rarity !== 'secret') checkSpeciesArt(s, visuals, data.artRules, ['species', i], report);
       checkRef(seasons, 'season', s.season, ['species', i, 'season'], report);

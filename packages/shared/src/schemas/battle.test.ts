@@ -143,8 +143,14 @@ describe('BattleRewardsSchema (#201)', () => {
       fullXpResetAt: null,
       coins: null,
       unpaid: null,
+      bundle: null,
       b: null,
     });
+  });
+
+  it('reads a mini-boss bundle (#190), null when left out', () => {
+    const parsed = BattleRewardsSchema.parse({ xp: [], percent: 100, bundle: { treats: 3 } });
+    expect(parsed.bundle).toEqual({ treats: 3 });
   });
 
   it('reads side b rewards (#728), with no unpaid reason by default', () => {

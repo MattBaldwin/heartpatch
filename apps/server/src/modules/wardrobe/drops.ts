@@ -39,6 +39,8 @@ export interface FoundDropEvent {
   percent?: number;
   /** A capture of a rival's land: the table's `rivalChance` instead of its `chance` (#261). */
   rival?: boolean;
+  /** A won mini-boss fight (#190): the table's `bossChance` instead of its `chance`. */
+  boss?: boolean;
   at: Date;
 }
 
@@ -82,7 +84,12 @@ export async function rollFoundDrop(
     terrain: place.terrain ?? undefined,
   };
   const percent = Math.min(100, Math.max(0, event.percent ?? 100));
-  const base = event.rival && table.rivalChance !== undefined ? table.rivalChance : table.chance;
+  const base =
+    event.rival && table.rivalChance !== undefined
+      ? table.rivalChance
+      : event.boss && table.bossChance !== undefined
+        ? table.bossChance
+        : table.chance;
   const rolled = { ...table, chance: Math.floor(((devChance ?? base) * percent) / 100) };
   const rng = options.rng ?? Rng.fromSeed(newSeed());
   const itemId = pickClothingDrop(rolled, context, CLOTHING_BY_ID, rng);

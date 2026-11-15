@@ -5,6 +5,7 @@ import { ContentIdSchema } from './data/common.js';
 import { BattleStatSchema, MoveSchema } from './data/moves.js';
 import { SpeciesSchema } from './data/species.js';
 import { ElementIdSchema, FeelingIdSchema } from './data/elements.js';
+import { ItemCountsSchema } from './inventory.js';
 
 /**
  * Battle inputs (design doc §6): the setup a battle starts from and the
@@ -388,6 +389,7 @@ export const BattleKindSchema = z.enum([
   'rescue',
   'journey',
   'friendly',
+  'miniboss',
 ]);
 export type BattleKind = z.infer<typeof BattleKindSchema>;
 
@@ -479,6 +481,11 @@ export const BattleRewardsSchema = z.object({
    * patch-mate today (`'pair-cap'`). Null otherwise and for older battles.
    */
   unpaid: UnpaidReasonSchema.nullable().default(null),
+  /**
+   * What a won mini-boss fight put in side `a`'s bag (#190): item id →
+   * count. Null for every other battle, a loss or scoot, and older battles.
+   */
+  bundle: ItemCountsSchema.nullable().default(null),
   /**
    * Side `b`'s rewards (#728): the Keeper whose land held, or a friendly
    * battle's side-`b` player, win or lose. Null when side `b` earned
@@ -630,6 +637,17 @@ export const PlayerBattleActionSchema = z.discriminatedUnion('type', [
    * from before #403 send it; new ones sip with `move`'s `item`.
    */
   z.strictObject({ type: z.literal('item'), item: ContentIdSchema }),
+  /**
+   * A team battle's round (#190, a mini-boss): one pick per squishy still
+   * standing, and at most one free sip (costs one from the bag), as the
+   * engine's `team` choice. Only in a team battle; every other battle
+   * refuses it, and a team battle refuses every other turn action.
+   */
+  z.strictObject({
+    type: z.literal('team'),
+    picks: z.array(TeamPickSchema).min(1).max(3),
+    item: z.strictObject({ item: ContentIdSchema, slot: SlotSchema }).optional(),
+  }),
 ]);
 export type PlayerBattleAction = z.infer<typeof PlayerBattleActionSchema>;
 

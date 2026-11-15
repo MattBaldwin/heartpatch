@@ -190,6 +190,7 @@ export * from './schemas/hollow-stage.js';
 export * from './schemas/journeys.js';
 export * from './schemas/trading.js';
 export * from './schemas/post-shop.js';
+export * from './schemas/boss.js';
 export * from './schemas/raids.js';
 export * from './schemas/quick-messages.js';
 export * from './schemas/challenges.js';

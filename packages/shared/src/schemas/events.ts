@@ -1550,6 +1550,26 @@ export const GAME_EVENTS = {
     public: z.object({ night: LocalDateSchema, closesAt: z.iso.datetime() }),
   },
   /**
+   * A mini-boss came stomping onto the patch (#190): its visit's `window`
+   * (the patch-local Monday of its week), its tile and when it leaves.
+   * Never the species, the schedule or the next boss (CLAUDE.md rule 6):
+   * the boss module keeps those in `boss_windows`, server-side.
+   */
+  'boss.appeared': {
+    internal: z.strictObject({
+      window: LocalDateSchema,
+      q: z.number().int(),
+      r: z.number().int(),
+      endsAt: z.iso.datetime(),
+    }),
+    public: z.object({
+      window: LocalDateSchema,
+      q: z.number().int(),
+      r: z.number().int(),
+      endsAt: z.iso.datetime(),
+    }),
+  },
+  /**
    * The Hollow Man took one of a player's squishies to the Hollow (#21). Only
    * its owner gets this live (`PUBLIC_VIEWS` override); others see
    * `hollow.nightfall`.

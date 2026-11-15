@@ -22,11 +22,17 @@ import {
   type PlayerBattleAction,
 } from '@heartpatch/shared';
 import {
+  BOSS_EVENTS,
+  bossVisitFor,
+  bossWeekOf,
   COMPUTER_MATES,
   RESCUE_GUARDIANS,
+  type BossEventRules,
   type ComputerMatesSecrets,
   type LoreEntry,
 } from '@heartpatch/shared/server';
+import { createBossService, createMinibossBattlePort } from '../modules/boss/service.js';
+import { instantOfLocalDate, localDate } from '../lib/time.js';
 import { createBattlesRepo } from '../modules/battles/repo.js';
 import { createBattlesService, defaultBattleContent } from '../modules/battles/service.js';
 import { createBuildingsRepo } from '../modules/buildings/repo.js';
@@ -116,6 +122,8 @@ import {
   tileAttacks,
   tiles,
   users,
+  battles,
+  bossEncounters,
 } from './schema.js';
 import { bigMove } from '../../tests/big-move.js';
 
@@ -629,6 +637,118 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
     const [row] = await db.select().from(journeys).where(eq(journeys.battleId, battle.id));
     expect(row).toMatchObject({ outcome: 'won' });
     expect(row!.visitUntil).not.toBeNull();
+  });
+
+  /** A mini-boss visit (#190) on a fresh patch, and the kid's fight one move from winning. */
+  async function minibossOneMoveFromWinning(prefix: string) {
+    const kid = await player(prefix);
+    const map = await createMapsService({
+      db,
+      tutorialRequired: false,
+      keeperRequired: false,
+    }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
+    const mapId = map.id;
+    const team = await db
+      .insert(squishies)
+      .values(
+        [20, 100, 100].map((level) => ({
+          mapId,
+          ownerUserId: kid.id,
+          speciesId: STARTERS.speciesIds[0]!,
+          element: 'fire' as const,
+          feeling: 'cozy' as const,
+          level,
+        })),
+      )
+      .returning({ id: squishies.id });
+    await db
+      .update(mapMembers)
+      .set({ starterSquishyId: team[0]!.id })
+      .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, kid.id)));
+    const boss = GAME_DATA.species.find((s) => s.id !== STARTERS.speciesIds[0])!;
+    const rules: BossEventRules = {
+      ...BOSS_EVENTS,
+      bag: [{ speciesId: boss.id, terrains: [GAME_DATA.terrains[0]!.id] }],
+    };
+    const [row] = await db.select().from(maps).where(eq(maps.id, mapId));
+    const clock = new Date('2026-11-16T12:00:00Z');
+    const week = bossWeekOf(localDate(clock, 'UTC'));
+    const plan = bossVisitFor(row!.seed!, week, row!.longNightWeekday ?? null, rules)!;
+    const opensAt = instantOfLocalDate(
+      { date: plan.opensOn, minute: rules.opensAtHour * 60 },
+      'UTC',
+    );
+    clock.setTime(opensAt.getTime() + 60_000);
+    const content = defaultBattleContent();
+    const fights = createBattlesService({
+      db,
+      content,
+      clock: () => clock,
+      minibosses: createMinibossBattlePort(rules),
+    });
+    const bosses = createBossService({ db, battles: fights, rules, clock: () => clock });
+    const { battle } = await bosses.start(kid, mapId);
+    let finishing: { action: PlayerBattleAction; turn: number } | null = null;
+    for (let i = 0; i < content.rules.maxTurns + 5 && !finishing; i++) {
+      const { state } = (await createBattlesRepo(db).findBattle(battle.id))!;
+      const side = state.sides.a;
+      const picks = (side.out ?? [])
+        .filter((slot) => side.squishies[slot]!.energy > 0)
+        .map((slot) => ({ slot, move: side.squishies[slot]!.moves[0]! }));
+      const action: PlayerBattleAction = { type: 'team', picks };
+      const next = applyBattleAction(content, state, {
+        type: 'turn',
+        choices: { a: { type: 'team', picks } },
+      });
+      if (next.phase.type === 'over') {
+        expect(next.phase.result.winner).toBe('a');
+        finishing = { action, turn: state.turn };
+      } else {
+        await fights.act(kid, battle.id, { action, turn: state.turn });
+      }
+    }
+    if (!finishing) throw new Error('the mini-boss fight never got one move from winning');
+    const lockEncounter = (tx: Transaction) =>
+      tx
+        .select({ windowId: bossEncounters.windowId })
+        .from(bossEncounters)
+        .where(and(eq(bossEncounters.mapId, mapId), eq(bossEncounters.userId, kid.id)))
+        .for('update');
+    return { kid, mapId, team, battle, fights, bosses, finishing, lockEncounter };
+  }
+
+  it("takes a mini-boss win's visit row after the battle and before the squishies (battles `finish`, #190 step 5e)", async () => {
+    const { kid, team, battle, fights, finishing, lockEncounter } =
+      await minibossOneMoveFromWinning('stomper');
+    // Hold the Keeper's visit row, let the winning move queue there holding
+    // the battle, then take a fighter as nightfall would: the finish must not
+    // hold the squishy yet (a deadlock, 40P01, or the lock timeout otherwise).
+    await holdThen(
+      lockEncounter,
+      () => fights.act(kid, battle.id, finishing),
+      (tx) => lockSquishy(tx, team[1]!.id),
+    );
+    const [row] = await db.select().from(bossEncounters).where(eq(bossEncounters.userId, kid.id));
+    expect(row!.wonBattleId).toBe(battle.id);
+  });
+
+  it("takes a mini-boss start's visit row after the battle and before `maps` (#190 step 5e)", async () => {
+    const { kid, mapId, battle, fights, bosses, lockEncounter } =
+      await minibossOneMoveFromWinning('restomper');
+    const { state } = (await createBattlesRepo(db).findBattle(battle.id))!;
+    await fights.act(kid, battle.id, { action: { type: 'forfeit' }, turn: state.turn });
+    // A second fight upserts the visit row right after inserting its battle:
+    // held here, the start waits on it without holding `maps` yet.
+    await holdThen(
+      lockEncounter,
+      () => bosses.start(kid, mapId),
+      (tx) => lockMapRow(tx, mapId),
+    );
+    const fightsNow = await db
+      .select({ id: battles.id })
+      .from(battles)
+      .where(and(eq(battles.playerUserId, kid.id), eq(battles.status, 'active')));
+    expect(fightsNow).toHaveLength(1);
   });
 
   it("rolls a capture's found clothing after the battle's squishy locks (battles `finish`, #84)", async () => {

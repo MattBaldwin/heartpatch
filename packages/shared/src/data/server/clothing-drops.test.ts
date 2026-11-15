@@ -104,6 +104,17 @@ describe('clothing drop tables (server-only)', () => {
     ]);
   });
 
+  it('finds the top step’s chance after a mini-boss win, and only won battles beat one', () => {
+    const battle = CLOTHING_DROPS.find((t) => t.source === 'battle')!;
+    const top = Math.max(...CLOTHING_DROPS.map((t) => t.chance));
+    expect(battle.bossChance).toBe(top);
+    const tables = copy();
+    tables.find((t) => t.source === 'gather')!.bossChance = 50;
+    expect(checkClothingDrops(tables, CLOTHING, TERRAINS, SET_PIECES)).toEqual([
+      'drops[0].bossChance: only a won battle beats a mini-boss',
+    ]);
+  });
+
   it('keep finds rare: a small chance per event', () => {
     for (const table of CLOTHING_DROPS) expect(table.chance).toBeLessThanOrEqual(25);
   });

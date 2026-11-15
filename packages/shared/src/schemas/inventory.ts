@@ -43,6 +43,8 @@ export const ItemChangeReasonSchema = z.enum([
   'repair',
   /** Exploring your land (#199): finds, and the wear on the tool a search used. */
   'explore',
+  /** A mini-boss win's guaranteed bundle (#190), ledgered against the battle. */
+  'boss',
   /** Trades and gifts (#271): held for an offer, landed by it, or given back. */
   'trade-escrow',
   'trade',

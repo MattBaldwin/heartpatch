@@ -14,6 +14,7 @@ const rewards = (over: Partial<BattleRewards> = {}): BattleRewards => ({
   fullXpResetAt: null,
   coins: { patch: 3, heart: 3 },
   unpaid: null,
+  bundle: null,
   b: null,
   ...over,
 });
