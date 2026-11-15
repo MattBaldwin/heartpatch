@@ -2,6 +2,7 @@ import { BUILDINGS } from '../../src/data/buildings.js';
 import { GROWTH_RULES } from '../../src/data/care.js';
 import { EXPLORE_RULES } from '../../src/data/explore.js';
 import { JOB_RULES } from '../../src/data/jobs.js';
+import { COMPUTER_MATES } from '../../src/data/server/computer-mates.js';
 import { SPAWN_RULES } from '../../src/data/server/spawn-rules.js';
 import { TERRITORY_RULES } from '../../src/data/territory.js';
 import type { GrowthRules } from '../../src/schemas/data/care.js';
@@ -104,6 +105,26 @@ export interface ProgressionRules {
     readonly lossCapPerDay: number;
     readonly maxDefenders: number;
     readonly guardLevel: { readonly partnerBonus: number };
+  };
+  /**
+   * One kid alone on the map (#386e, plan §9), or two (none): the second kid
+   * doesn't exist, so nobody plays friendlies with or challenges the kid
+   * unless `computerMates` stand in.
+   */
+  readonly solo?: boolean;
+  /**
+   * Computer patch-mates for a `solo` kid (#386e), or none. Friendlies
+   * (`friendlies.perDay`, paid as between two kids) are played against a
+   * mate, and the mates challenge the kid's land `challengesPerWeek` times a
+   * week (spread evenly, none in the `defences` shield), each against the
+   * kid's guards as a rival's would be (`defences`). A mate fields the kid's
+   * own team with every level at max(1, the kid's Partner level +
+   * `levelOffset`). Mates' coins caps (`paidWinsPerDayVsComputers`) don't
+   * touch XP, so they aren't modelled.
+   */
+  readonly computerMates?: {
+    readonly levelOffset: number;
+    readonly challengesPerWeek: number;
   };
 }
 
@@ -247,6 +268,46 @@ export const WITH_FRIENDLIES_RULES: ProgressionRules = {
  * Partner level on `day` by at most `maxLevels` (first map size).
  */
 export const FRIENDLY_GATE: FriendlyGate = { kid: 'engaged', day: 14, maxLevels: 1 }; // the issue's criterion 2
+
+/**
+ * One kid of each kind alone on the map (#386e, plan §9): no friendlies, no
+ * defences, no rival. The "before" for `SOLO_MATES_RULES`.
+ */
+export const SOLO_RULES: ProgressionRules = {
+  ...CURRENT_RULES,
+  label: 'solo',
+  solo: true,
+};
+
+/**
+ * The solo kid plus computer patch-mates (#386e): friendlies against a mate
+ * at `WITH_FRIENDLIES_RULES`' volume and pay, and the mates' gentle
+ * challenges on the kid's land under the same defence rules.
+ */
+export const SOLO_MATES_RULES: ProgressionRules = {
+  ...SOLO_RULES,
+  label: 'solo + computer mates',
+  friendlies: WITH_FRIENDLIES_RULES.friendlies,
+  defences: WITH_FRIENDLIES_RULES.defences,
+  computerMates: {
+    // TUNE: the middle of the personas' offsets (−1 mildest … −3), as `COMPUTER_MATES.personas` has them.
+    levelOffset: -2,
+    challengesPerWeek: COMPUTER_MATES.rules.challengesPerPatchWeek.gentle,
+  },
+};
+
+/**
+ * #386e's gate (plan §9): each kind's solo-with-mates Partner level on each
+ * of `days` is within `maxPercent` % of the same kind's `WITH_FRIENDLIES_RULES`
+ * row on the first map size (the pair's mean, two kids who play friendlies
+ * and defend).
+ */
+export interface SoloGate {
+  readonly days: readonly number[];
+  readonly maxPercent: number;
+}
+
+export const SOLO_GATE: SoloGate = { days: [14, 30], maxPercent: 10 }; // TUNE: plan §9, ±10 %
 
 /**
  * The shipped data with the bench at 25 % (#732: 25–50 is pre-approved as

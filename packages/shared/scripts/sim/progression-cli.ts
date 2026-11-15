@@ -16,6 +16,8 @@ import {
   NO_FALLOFF_RULES,
   NO_TRAINING_RULES,
   PROGRESSION_CONFIG,
+  SOLO_MATES_RULES,
+  SOLO_RULES,
   UNCAPPED_BEFRIEND_RULES,
   WITH_EXPLORE_RULES,
   WITH_FRIENDLIES_BENCH_25_RULES,
@@ -25,7 +27,9 @@ import {
 import { JOURNEY_RULES } from '../../src/data/journeys.js';
 import {
   formatFriendlyGate,
+  formatSoloGate,
   friendlyGate,
+  soloGate,
   journeyGateMisses,
   renderProgression,
   summarise,
@@ -76,6 +80,14 @@ for (const rules of [
     for (const kid of PROGRESSION_CONFIG.kids) {
       runs.push(runProgression(data, PROGRESSION_CONFIG, rules, kid, seats));
     }
+  }
+}
+// #386e: one kid alone, and alone with computer mates, on the first map size only.
+for (const rules of [SOLO_RULES, SOLO_MATES_RULES]) {
+  for (const kid of PROGRESSION_CONFIG.kids) {
+    runs.push(
+      runProgression(data, PROGRESSION_CONFIG, rules, kid, PROGRESSION_CONFIG.seats[0] ?? 4),
+    );
   }
 }
 const odds = wildOdds(data, PROGRESSION_CONFIG, [-2, -1, 0, 1], 200);
@@ -156,4 +168,17 @@ if (!friendly) throw new Error('the friendly gate needs the now and now + friend
 // Hard since 728b shipped the owner's friendly XP rule: a FAIL fails the run.
 console.log(`  ${formatFriendlyGate(friendly)}`);
 if (!friendly.passes) process.exitCode = 1;
+// Solo and computer mates (#386e): each kind within ±10 % of the friendlies pair on days 14 and 30.
+const solo = soloGate(runs, PROGRESSION_CONFIG);
+if (!solo) throw new Error('the solo gate needs the solo, solo + mates and now + friendlies runs');
+for (const row of solo) {
+  for (const d of row.days) {
+    console.log(
+      `  solo ${row.kid.padEnd(7)} day ${String(d.day)}: solo Lv ${String(d.solo)} (${String(d.soloPercent)} %), ` +
+        `solo + mates Lv ${String(d.mates)} (${String(d.matesPercent)} %), pair ${d.paired.join(' / ')}`,
+    );
+  }
+}
+console.log(`  ${formatSoloGate(solo)}`);
+if (!solo.every((r) => r.passes)) process.exitCode = 1;
 console.log(`Report: ${reportPath}`);

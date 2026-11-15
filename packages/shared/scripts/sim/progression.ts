@@ -62,6 +62,10 @@ import type {
  * each other's land too, where the owner's team stands guard and a hold pays
  * the guards XP.
  *
+ * Solo and computer mates (#386e): with `rules.solo` the kid is alone on the
+ * map, and with `rules.computerMates` the friendlies are against a computer
+ * mate and the mates challenge the kid's land a few times a week.
+ *
  * Not modelled (see `MODEL_LIMITS`): care and habitat changes, gathering, the
  * Hollow Man, the capture roll itself (a win stands in for a befriend), and
  * (without `rules.defences`) challenging the other kid.
@@ -75,6 +79,7 @@ export const MODEL_LIMITS = [
   'exploring: the kid always has the tools, and finds are not counted',
   'no challenges between the two kids, except under rules with defences (#728)',
   'defences: the whole team stands guard on every tile (an upper bound on defence XP)',
+  "computer mates (#386e): they claim no land, a lost defence costs no tile, and a mate fields the kid's own team at the Partner level + the offset",
 ] as const;
 
 /** One evolution on a kid's team; `partner` marks the Partner's own (#732 D3). */
@@ -263,6 +268,36 @@ function duel(
   return { winner, a: xpOf('a'), b: xpOf('b'), out: { a: outOf('b'), b: outOf('a') } };
 }
 
+/** Computer mates' squishy ids carry this (#386e). */
+const MATE = 'mate:';
+
+/**
+ * A computer mate's team (#386e): the kid's own team, every member at
+ * max(1, the kid's Partner level + `levelOffset`), on the kid's policy.
+ */
+export function mateTeam(
+  kid: Kid,
+  config: ProgressionConfig,
+  levelOffset: number,
+): BattleSideSetup {
+  const level = Math.max(1, (kid.team[0]?.level ?? 1) + levelOffset);
+  return {
+    controller: { type: 'ai', policy: config.kidPolicy },
+    squishies: kid.team.map((m) => ({ id: `${MATE}${m.id}`, speciesId: m.speciesId, level })),
+  };
+}
+
+/**
+ * How many times the computer mates challenge a solo kid's land on `day`
+ * (#386e): `perWeek` spread evenly over each 7 days, none in the new-player
+ * shield (days 1–`shieldDays`), so at most `perWeek` a week.
+ */
+export function mateChallenges(day: number, perWeek: number, shieldDays: number): number {
+  if (day <= shieldDays || perWeek <= 0) return 0;
+  const d = (day - 1) % 7;
+  return Math.floor(((d + 1) * perWeek) / 7) - Math.floor((d * perWeek) / 7);
+}
+
 /** Plays one battle; returns whether the kid won and the base XP each member earned. */
 function play(
   data: ModelData,
@@ -426,6 +461,54 @@ function estimateRivalOdds(
   return Math.floor((wins * 100) / config.estimateGames);
 }
 
+/** The battles service's friendly share (`friendlyBattleXp`), from the variant's knobs. */
+function friendlyShare(rules: ProgressionRules) {
+  return {
+    battleXpFalloff: {
+      fullWinsPerDay: 1,
+      afterPercent: 100,
+      friendlyPercent: rules.friendlies?.xpPercent ?? 100,
+      friendlyOneOpponent: rules.friendlies?.oneOpponent ?? false,
+    },
+  };
+}
+
+/**
+ * Friendly `f` of `day` between a solo kid and a computer mate (#386e), paid
+ * to the kid as a friendly between two kids (`playFriendly`): the kid is side
+ * a on even `day + f`, and the friendly counts toward the falloff only when
+ * the kid won. The mate earns nothing. Returns the kid's side, the side that
+ * won and the kid's Partner XP.
+ */
+export function playMateFriendly(
+  data: ModelData,
+  kid: Kid,
+  config: ProgressionConfig,
+  rules: ProgressionRules,
+  levelOffset: number,
+  day: number,
+  f: number,
+): { kidSide: 'a' | 'b'; winner: 'a' | 'b' | null; partnerXp: number } {
+  const kidSide = (day + f) % 2 === 0 ? 'a' : 'b';
+  const seed = deriveSeed(config.rootSeed, 'mate-friendly', kid.profile.id, day, f);
+  const mate = mateTeam(kid, config, levelOffset);
+  const result =
+    kidSide === 'a'
+      ? duel(data, teamSide(kid, config), mate, seed)
+      : duel(data, mate, sideB(kid.team, config), seed);
+  const share = friendlyShare(rules);
+  const out = result.out[kidSide];
+  const xp = new Map(
+    [...result[kidSide]].map(([id, v]) => [id, friendlyBattleXp(v, out, share)] as const),
+  );
+  const won = result.winner === kidSide;
+  return {
+    kidSide,
+    winner: result.winner,
+    partnerXp: grant(data, kid, rules, xp, won, { counts: won }),
+  };
+}
+
 /**
  * Friendly `f` of `day` between the map's two kids (#728). Side a alternates
  * by day and by battle, so a kid with one a day isn't always side a. Both
@@ -448,15 +531,7 @@ export function playFriendly(
   if (!kidA || !kidB) throw new Error('a friendly needs two kids');
   const seed = deriveSeed(config.rootSeed, 'friendly', kidA.profile.id, day, f);
   const result = duel(data, teamSide(kidA, config), sideB(kidB.team, config), seed);
-  // The battles service's friendly share (`friendlyBattleXp`), from the variant's knobs.
-  const share = {
-    battleXpFalloff: {
-      fullWinsPerDay: 1,
-      afterPercent: 100,
-      friendlyPercent: rules.friendlies?.xpPercent ?? 100,
-      friendlyOneOpponent: rules.friendlies?.oneOpponent ?? false,
-    },
-  };
+  const share = friendlyShare(rules);
   for (const side of ['a', 'b'] as const) {
     for (const [id, xp] of result[side]) {
       result[side].set(id, friendlyBattleXp(xp, result.out[side], share));
@@ -509,7 +584,7 @@ export function rivalTargets(
   return tiles.filter((t) => owner.get(hexKey(t)) === rival && t.homeSlot === null);
 }
 
-/** Runs two kids of one kind on one map for `config.days` days. */
+/** Runs two kids of one kind (one with `rules.solo`) on one map for `config.days` days. */
 export function runProgression(
   data: ModelData,
   config: ProgressionConfig,
@@ -519,7 +594,8 @@ export function runProgression(
 ): ProgressionRun {
   const map = generateMap(GAME_DATA, { seed: config.mapSeed, playerCount: seats });
   const tiles = map.tiles;
-  const kids: Kid[] = [0, 1].map((slot) => ({
+  const seated = rules.solo ? 1 : 2;
+  const kids: Kid[] = Array.from({ length: seated }, (_, slot) => ({
     profile,
     slot,
     team: [
@@ -534,7 +610,7 @@ export function runProgression(
   // Owner by tile: a kid's slot, or null. Empty seats' home rings can never be taken.
   const owner = new Map<HexKey, number | null>();
   for (const t of tiles)
-    owner.set(hexKey(t), t.homeSlot !== null && t.homeSlot < 2 ? t.homeSlot : null);
+    owner.set(hexKey(t), t.homeSlot !== null && t.homeSlot < seated ? t.homeSlot : null);
   // Trading posts (#269) are never claimed.
   const neutralTiles = tiles.filter((t) => t.homeSlot === null && !isTradingPost(t));
   const neutralLeft = () => neutralTiles.filter((t) => owner.get(hexKey(t)) === null);
@@ -599,7 +675,16 @@ export function runProgression(
     const lost = kids.map(() => 0);
     const holdXp = kids.map(() => 0);
 
+    const mates = rules.computerMates;
     for (let f = 0; f < friendlies; f++) {
+      if (rules.solo) {
+        // A solo kid's friendlies are against a computer mate (#386e).
+        const [kid] = kids;
+        if (!kid || !mates) throw new Error('a solo kid plays friendlies only with computer mates');
+        const played = playMateFriendly(data, kid, config, rules, mates.levelOffset, day, f);
+        partnerXp[0] = (partnerXp[0] ?? 0) + played.partnerXp;
+        continue;
+      }
       playFriendly(data, kids, config, rules, day, f).partnerXp.forEach((xp, k) => {
         partnerXp[k] = (partnerXp[k] ?? 0) + xp;
       });
@@ -683,6 +768,26 @@ export function runProgression(
           if (t.terrain === GAP_TERRAIN) gapWins[k] = (gapWins[k] ?? 0) + 1;
         }
       });
+    }
+
+    // The computer mates' challenges on a solo kid's land (#386e): the kid's
+    // guards at the watch floor, as against a rival; a hold pays them.
+    if (rules.solo && mates && defences) {
+      const [kid] = kids;
+      const count = mateChallenges(day, mates.challengesPerWeek, defences.shieldDays);
+      for (let c = 0; kid && c < count; c++) {
+        const floor = watchFloor(kid.team[0]?.level ?? null, defences.guardLevel);
+        const guards = sideB(kid.team, config, defences.maxDefenders, floor);
+        const seed = deriveSeed(config.rootSeed, 'mate-challenge', profile.id, day, c);
+        const result = duel(data, mateTeam(kid, config, mates.levelOffset), guards, seed);
+        defended[0] = (defended[0] ?? 0) + 1;
+        if (result.winner === 'b') {
+          held[0] = (held[0] ?? 0) + 1;
+          const gained = payHold(data, kid, rules, result.b);
+          partnerXp[0] = (partnerXp[0] ?? 0) + gained;
+          holdXp[0] = (holdXp[0] ?? 0) + gained;
+        }
+      }
     }
 
     // Wild battles with the rest of the day's battles.
