@@ -194,3 +194,16 @@ describe('what a hold paid (#728)', () => {
     }
   });
 });
+
+describe('a Computer friend challenger (#386f)', () => {
+  const base = {
+    attackerName: 'Marigold',
+    outcome: 'held' as const,
+    reason: 'ko' as never,
+    stance: 'balanced' as const,
+  };
+  it('names it honestly in the words', () => {
+    expect(raidLine(base, true)).toContain('Marigold (Computer friend)');
+    expect(raidLine(base)).not.toContain('Computer friend');
+  });
+});
