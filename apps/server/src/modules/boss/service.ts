@@ -229,7 +229,8 @@ export function createBossService(options: BossServiceOptions): BossService {
           },
           tile: { q: window.q, r: window.r },
           // The Keeper's row for this visit (step 5e), right after the battle.
-          // (The start then marks the boss seen, so the marker names it.)
+          // (`startWith` then marks the boss seen (step 11, once per Keeper and
+          // species, `ON CONFLICT DO NOTHING`), so the marker names it; #190g's test.)
           started: async (inner, battle) => {
             await createBossRepo(inner).insertEncounter(
               mapId,
