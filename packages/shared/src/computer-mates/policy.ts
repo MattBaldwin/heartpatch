@@ -2,6 +2,8 @@ import { GAME_DATA } from '../data/index.js';
 import { TRADE_VALUES } from '../data/trading.js';
 import { hexDistance, hexKey, hexNeighbors, type Hex, type HexKey } from '../hex/index.js';
 import type { Rng } from '../rng/index.js';
+import { TERRITORY_RULES } from '../data/territory.js';
+import type { PvpMode } from '../schemas/maps.js';
 import type { ComputerMateRules, ComputerPersonaTuning } from '../schemas/data/computer-mates.js';
 import { isTradableResource } from '../schemas/data/resources.js';
 import type { TradeValues } from '../schemas/data/trading.js';
@@ -49,6 +51,25 @@ export interface MateView {
   readonly contested: readonly Hex[];
   /** Trades and gifts (386d); absent (the map-fill sim) means none. */
   readonly trading?: MateTradingView;
+  /** Challenging a kid's tile (386e); absent means never. */
+  readonly challenge?: MateChallengeView;
+}
+
+/**
+ * What a mate's tile challenge reads (386e, plan §1 D "Challenge a kid's
+ * tile"). The server checks every one of these again under its locks.
+ */
+export interface MateChallengeView {
+  /** The patch's PvP mode: Off never challenges. */
+  readonly pvpMode: PvpMode;
+  /** Challenges every mate made on this patch in the last 7 days. */
+  readonly thisWeek: number;
+  /** The patch's local hour (0–23): never in quiet hours. */
+  readonly localHour: number;
+  /** The mate is in a battle already (one at a time). */
+  readonly busy: boolean;
+  /** Kids still inside their new-player shield. */
+  readonly shielded: readonly string[];
 }
 
 /** A kid's open offer or gift to the mate, valued by `TRADE_VALUES` (the server knows every species). */
@@ -116,7 +137,8 @@ export type MateIntent =
       readonly toUserId: string;
       readonly give: readonly MateItemLine[];
       readonly noteId: string;
-    };
+    }
+  | { readonly kind: 'challenge'; readonly q: number; readonly r: number };
 
 /** The intents that act on a tile. */
 export type MateTileIntent = Extract<MateIntent, { q: number }>;
@@ -223,6 +245,68 @@ export function borderFacingKids(view: MateView): Hex[] {
     )
     .sort((a, b) => nearest(a, seeds) - nearest(b, seeds) || byHex(a, b))
     .map((t) => ({ q: t.q, r: t.r }));
+}
+
+/** Whether `hour` (patch time) is inside the quiet hours (they may wrap past midnight). */
+export function inQuietHours(hour: number, rules: Pick<ComputerMateRules, 'quietHours'>): boolean {
+  const { from, to } = rules.quietHours;
+  if (from === to) return false;
+  return from < to ? hour >= from && hour < to : hour >= from || hour < to;
+}
+
+/** Challenges all mates may still make this patch week, in this PvP mode. */
+export function challengesLeft(
+  challenge: Pick<MateChallengeView, 'pvpMode' | 'thisWeek'>,
+  rules: ComputerMateRules,
+): number {
+  return Math.max(0, rules.challengesPerPatchWeek[challenge.pvpMode] - challenge.thisWeek);
+}
+
+/**
+ * Whether a mate may challenge right now (plan §1 C, D): never in catch-up,
+ * in Off, past the weekly cap, in quiet hours, or while already battling.
+ */
+export function mayChallenge(view: MateView, rules: ComputerMateRules): boolean {
+  const c = view.challenge;
+  return (
+    c !== undefined &&
+    !view.catchUp &&
+    !c.busy &&
+    c.pvpMode !== 'off' &&
+    challengesLeft(c, rules) > 0 &&
+    !inQuietHours(c.localHour, rules)
+  );
+}
+
+/**
+ * The kid's tile a mate challenges next, or null (plan §1 D): a border tile
+ * next to the mate's land, never a home ring or never-fade ring tile (more
+ * than `kidHomeBuffer` and `keepRadius` from the kid's Heart Seed), never a
+ * contested tile, never a shielded kid's, and only from a kid who holds at
+ * least `minKidTiles` outside home. `attackTargetProblem` with the patch's
+ * PvP mode has the last word, as for a kid. Nearest the mate's home first.
+ */
+export function challengeTarget(view: MateView, rules: ComputerMateRules): Hex | null {
+  const c = view.challenge;
+  if (!c) return null;
+  const home = homeOf(view);
+  const contested = new Set(view.contested.map(hexKey));
+  const shielded = new Set(c.shielded);
+  const buffer = Math.max(rules.kidHomeBuffer, TERRITORY_RULES.tending.keepRadius);
+  const options = view.kids.flatMap((kid) => {
+    if (shielded.has(kid.userId)) return [];
+    const land = view.tiles.filter((t) => t.ownerUserId === kid.userId && t.homeSlot === null);
+    if (land.length < rules.minKidTiles) return [];
+    return land.filter(
+      (t) =>
+        !contested.has(hexKey(t)) &&
+        hexDistance(t, kid.heartSeed) > buffer &&
+        attackTargetProblem(t, view.tiles, view.userId, c.pvpMode) === null,
+    );
+  });
+  const score = (t: Hex) => (home ? hexDistance(t, home) : 0);
+  const [best] = options.sort((a, b) => score(a) - score(b) || byHex(a, b));
+  return best ? { q: best.q, r: best.r } : null;
 }
 
 const TRADABLE = new Set(GAME_DATA.resources.filter(isTradableResource).map((r) => r.id));
@@ -356,7 +440,7 @@ export function offerToAnswer(
  * One intent for this step, or null to only tend. A fire on dark land comes
  * first (outside catch-up), then a kid's offer that has waited long enough;
  * otherwise claim, guard, offer or gift, weighted by the persona, among
- * what's allowed now. Catch-up steps only claim and tend.
+ * what's allowed now, and (386e) a challenge on a kid's tile. Catch-up steps only claim and tend.
  */
 export function nextIntent(
   view: MateView,
@@ -401,6 +485,12 @@ export function nextIntent(
     if (persona.weights.gift > 0 && trading.giftsThisWeek < rules.giftsPerPatchWeek) {
       const gift = mateGift(trading, rules, rng);
       if (gift) options.push({ weight: persona.weights.gift, intent: gift });
+    }
+  }
+  if (persona.weights.challenge > 0 && mayChallenge(view, rules)) {
+    const target = challengeTarget(view, rules);
+    if (target) {
+      options.push({ weight: persona.weights.challenge, intent: { kind: 'challenge', ...target } });
     }
   }
   if (options.length === 0) return null;

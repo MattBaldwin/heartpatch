@@ -4,30 +4,40 @@ import {
   deriveSeed,
   fuelSpace,
   HOME_BASE_RULES,
+  hexDistance,
+  LIVE_BATTLE_RULES,
   Rng,
+  stancePolicy,
+  TERRITORY_RULES,
   tradeValuer,
   type TradeLine,
   type ValuedLine,
 } from '@heartpatch/shared';
 import {
+  challengesLeft,
   COMPUTER_MATES,
+  inQuietHours,
   mateTeamLevel,
   nextIntent,
   type ComputerMatesSecrets,
+  type ComputerPersonaTuning,
   type MateIncomingOffer,
   type MateIntent,
   type MateTradingView,
   type MateView,
 } from '@heartpatch/shared/server';
-import type { Database, Transaction } from '../../db/client.js';
+import type { Database, Executor, Transaction } from '../../db/client.js';
 import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { localDate, localDayStart, mapLocalTime, type Clock } from '../../lib/time.js';
+import { createBattlesRepo } from '../battles/repo.js';
+import type { BattlesService } from '../battles/service.js';
 import { BUILDING_DATA, toPublicBuilding } from '../buildings/hearthfire.js';
 import { createBuildingsRepo } from '../buildings/repo.js';
 import { heartSeedOf } from '../maps/depart.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { createTendingRepo, createTerritoryRepo } from '../territory/repo.js';
+import type { ComputerChallenge, TerritoryService } from '../territory/service.js';
 import { createTradesRepo } from '../trades/repo.js';
 import { createTradesService } from '../trades/service.js';
 import { createComputerMatesRepo, mateTransaction, type MateState } from './repo.js';
@@ -130,6 +140,12 @@ export interface ComputerMateStepsOptions {
   seenThrottleMs?: number;
   /** Where a failed stamp in `due` is reported; the sweep goes on without it. */
   log?: { error: (obj: object, msg: string) => void };
+  /** A challenge on a kid's tile (#386e) starts through territory's own `prepare`. */
+  territory?: Pick<TerritoryService, 'attackAsComputer'>;
+  /** The mate's battle is played out, or its live deadlines settled, on each step (#386e). */
+  battles?: Pick<BattlesService, 'settleComputer'>;
+  /** The "Defend now?" window (#29-C): a challenge's next step comes right after it. */
+  defensePromptSeconds?: number;
 }
 
 export interface ComputerMateSteps {
@@ -200,8 +216,58 @@ export function createComputerMateSteps(options: ComputerMateStepsOptions): Comp
   const act = async (userId: string, step: number): Promise<MateStepResult | null> => {
     const at = now();
     const out = await mateTransaction(db, (tx) => stepWithin(tx, userId, step, at, secrets));
-    if (out) void options.publish?.(out.mapId);
-    return out?.result ?? null;
+    if (!out) return null;
+    void options.publish?.(out.mapId);
+    // Its battle (#386e), each in its own transactions after the step's:
+    // a battle start takes the seat first (tech spec §7 step 0), never
+    // after the step's row locks, so it can't run inside the step.
+    const going = (await options.battles?.settleComputer(out.mapId, userId)) ?? false;
+    if (!out.challenge || going || !options.territory) return out.result;
+    const applied = await challenge(out.mapId, userId, out.challenge, at);
+    return { ...out.result, applied };
+  };
+
+  /**
+   * A challenge on a kid's tile (plan §1 D, §6): territory's `attackAsComputer`,
+   * every raid rule a kid's has plus the mates' own, rechecked under the
+   * tile lock and the patch's challenge lock. A refusal does nothing. One
+   * nobody is asked to defend plays out at once; while "Defend now?" waits,
+   * the mate's next step comes just after the window, to play it out then.
+   */
+  const challenge = async (
+    mapId: string,
+    userId: string,
+    target: { q: number; r: number; persona: ComputerPersonaTuning },
+    at: Date,
+  ): Promise<boolean> => {
+    const territory = options.territory;
+    if (!territory) return false;
+    const computer: ComputerChallenge = {
+      controller: { type: 'ai', policy: stancePolicy(target.persona.stance) },
+      check: (tx, input) => challengeCheck(tx, input, rules),
+    };
+    try {
+      const started = await territory.attackAsComputer(
+        // Only its id is read (its seat, member row and side a).
+        { id: userId, username: '' },
+        mapId,
+        { q: target.q, r: target.r },
+        computer,
+      );
+      if (!started.created) return false;
+    } catch (err) {
+      if (err instanceof AppError) return false;
+      throw err;
+    }
+    const going = (await options.battles?.settleComputer(mapId, userId)) ?? false;
+    if (going) {
+      const window = options.defensePromptSeconds ?? LIVE_BATTLE_RULES.defensePromptSeconds;
+      await createComputerMatesRepo(db).wakeBy(
+        userId,
+        new Date(at.getTime() + window * 1000 + MINUTE_MS),
+      );
+    }
+    return true;
   };
 
   return { seen, due, act };
@@ -213,7 +279,12 @@ async function stepWithin(
   step: number,
   at: Date,
   secrets: ComputerMatesSecrets,
-): Promise<{ mapId: string; result: MateStepResult } | null> {
+): Promise<{
+  mapId: string;
+  result: MateStepResult;
+  /** A challenge to start once the step commits (#386e). */
+  challenge?: { q: number; r: number; persona: ComputerPersonaTuning };
+} | null> {
   const { rules } = secrets;
   const mates = createComputerMatesRepo(tx);
   // Step 3a: the mate's row. Departing (switch off, a friend's seat) sets
@@ -280,6 +351,13 @@ async function stepWithin(
     ...(catchUp
       ? {}
       : {
+          challenge: {
+            pvpMode: map.pvpMode,
+            thisWeek: await mates.challengesSince(mapId, new Date(at.getTime() - WEEK_MS)),
+            localHour: Math.floor(mapLocalTime(at, map.timeZone).minute / 60),
+            busy: (await createBattlesRepo(tx).findActive(mapId, userId)) !== null,
+            shielded: await shieldedKids(tx, mapId, [...homes.keys()], at),
+          },
           trading: await tradingView(tx, {
             mapId,
             userId,
@@ -473,5 +551,62 @@ async function stepWithin(
       fuelled,
       levelled,
     },
+    ...(intent?.kind === 'challenge' && {
+      challenge: { q: intent.q, r: intent.r, persona },
+    }),
   };
+}
+
+/** Kids on the patch still inside their new-player shield (the raid rule's own hours). */
+async function shieldedKids(
+  tx: Transaction,
+  mapId: string,
+  kidIds: readonly string[],
+  at: Date,
+): Promise<string[]> {
+  const territory = createTerritoryRepo(tx);
+  const out: string[] = [];
+  for (const kidId of kidIds) {
+    const joinedAt = await territory.joinedAt(mapId, kidId);
+    const shieldEnds =
+      (joinedAt?.getTime() ?? 0) + TERRITORY_RULES.newPlayerShieldHours * 3_600_000;
+    if (joinedAt && shieldEnds > at.getTime()) out.push(kidId);
+  }
+  return out;
+}
+
+/**
+ * The mates' own challenge rules (plan §1 D), in the attack's start
+ * transaction right after its tile lock (step 6): the patch's challenge
+ * lock first, so two mates can't both take the week's last challenge,
+ * then the weekly cap for the patch's PvP mode, quiet hours, a kid's tile
+ * only (never a mate's, never wild), never one already being battled for,
+ * never within `kidHomeBuffer` or the never-fade ring of the kid's Heart
+ * Seed, and only from a kid holding `minKidTiles` outside home. The raid
+ * rules (shield, loss cap, tries, cooldown, PvP Off) are `prepare`'s own.
+ */
+async function challengeCheck(
+  tx: Executor,
+  input: Parameters<ComputerChallenge['check']>[1],
+  rules: ComputerMatesSecrets['rules'],
+): Promise<void> {
+  const { map, at, tile, tiles } = input;
+  const mates = createComputerMatesRepo(tx);
+  await mates.lockChallenges(map.id);
+  const refuse = (): never => {
+    throw new AppError('CONFLICT', 'A computer friend can’t challenge that tile right now.');
+  };
+  const hour = Math.floor(mapLocalTime(at, map.timeZone).minute / 60);
+  if (inQuietHours(hour, rules)) refuse();
+  const thisWeek = await mates.challengesSince(map.id, new Date(at.getTime() - WEEK_MS));
+  if (challengesLeft({ pvpMode: map.pvpMode, thisWeek }, rules) <= 0) refuse();
+  const kidId = tile.ownerUserId;
+  if (kidId === null || (await mates.computerIds([kidId])).size > 0) refuse();
+  if ((await mates.openAttackTileIds(map.id)).has(tile.id)) refuse();
+  const land = tiles.filter((t) => t.ownerUserId === kidId);
+  if (land.filter((t) => t.homeSlot === null).length < rules.minKidTiles) refuse();
+  const home = land.filter((t) => t.homeSlot !== null);
+  if (home.length === 0) refuse();
+  const buffer = Math.max(rules.kidHomeBuffer, TERRITORY_RULES.tending.keepRadius);
+  if (hexDistance(tile, heartSeedOf(home)) <= buffer) refuse();
 }

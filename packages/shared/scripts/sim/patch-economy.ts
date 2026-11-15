@@ -1,4 +1,5 @@
 import { BUILDINGS } from '../../src/data/buildings.js';
+import { CHALLENGE_RULES } from '../../src/data/challenges.js';
 import { EXPLORE_RULES } from '../../src/data/explore.js';
 import { HEART_COIN_RULES } from '../../src/data/heart-coins.js';
 import { HOLLOW_RULES } from '../../src/data/hollow.js';
@@ -211,9 +212,10 @@ export const PAID_FRIENDLY_WINS_PER_PAIR = 3; // TUNE: owner decision 2026-11-14
 
 /**
  * Paid friendly wins over computer mates a day, all mates together (plan
- * §1 F, `paidWinsPerDayVsComputers`; 386e ships the data value).
+ * §1 F): the data's `paidWinsPerDayVsComputers` (386e), so the sim and the
+ * server can't drift.
  */
-export const PAID_FRIENDLY_WINS_VS_COMPUTERS = 3; // TUNE: #386 plan §1 F
+export const PAID_FRIENDLY_WINS_VS_COMPUTERS = CHALLENGE_RULES.paidWinsPerDayVsComputers;
 
 /** The kid's play on day `day` of a solo row (#386d): who they can battle. */
 export function soloKid(
