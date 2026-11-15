@@ -191,10 +191,24 @@ export const DRAFT_PARTS: Part[] = [
     jitter: 0,
   }),
   part({
-    // Rakeling's short tines, hanging straight down from the plank.
+    // Rakeling's knobs at its plank's ends (round 6), so its short handle
+    // grows out of the tool instead of floating beside its cheek.
+    id: 'draft-rake-caps-mid',
+    slot: 'cheeks',
+    shape: 'ellipsoid',
+    size: [0.2, 0.2, 0.2],
+    color: 'detail',
+    layout: { kind: 'pair' },
+    around: 76, // TUNE
+    up: -16,
+    sink: 0.3,
+    jitter: 0,
+  }),
+  part({
+    // Rakeling's short, pointed tines, hanging straight down from the plank.
     id: 'draft-rake-tines-mid',
     slot: 'fangs',
-    shape: 'capsule',
+    shape: 'cone', // round 6: pointed, like the boss's
     size: [0.06, 0.26, 0.06],
     color: 'detail',
     layout: { kind: 'ring', count: 5, spread: 40 },
@@ -218,13 +232,13 @@ export const DRAFT_PARTS: Part[] = [
     jitter: 0,
   }),
   part({
-    // Pileup's little comb of baby tines under its baby plank.
+    // Pileup's three baby tines under its baby plank.
     id: 'draft-rake-tines-small',
     slot: 'fangs',
-    shape: 'capsule',
-    size: [0.05, 0.12, 0.05],
+    shape: 'cone', // round 6: three pointed baby tines, not a comb's row
+    size: [0.06, 0.15, 0.06],
     color: 'detail',
-    layout: { kind: 'ring', count: 5, spread: 26 },
+    layout: { kind: 'ring', count: 3, spread: 28 },
     around: 0,
     up: -15,
     tilt: -88,
@@ -247,19 +261,18 @@ export const DRAFT_PARTS: Part[] = [
     replaces: 'mouth',
   }),
   part({
-    // Rakeling's shorter handle, standing behind its head from the plank's
-    // height and centre, on the same diagonal as the boss's.
+    // Rakeling's shorter handle (one piece): from the plank's end beside its
+    // cheek, on the same diagonal as the boss's.
     id: 'draft-rake-handle-short',
     slot: 'horns',
     shape: 'capsule',
     size: [0.08, 1.2, 0.08],
     color: 'detail',
     layout: { kind: 'single' },
-    around: 0,
+    around: 78, // TUNE: out of the knob at the plank's end
     up: -16,
-    tilt: 6,
-    splay: 50, // TUNE: diagonal, like the boss's
-    anchor: 'behind',
+    tilt: 62, // TUNE: diagonal, like the boss's
+    sink: 0.15,
     jitter: 0,
   }),
   part({
@@ -287,7 +300,7 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tool-bar',
     slot: 'mane',
     shape: 'box',
-    size: [1.3, 0.08, 0.15], // [width, depth off the face, height]
+    size: [1.3, 0.12, 0.22], // [width, depth off the face, height]; round 6: thicker
     color: 'detail',
     layout: { kind: 'single' },
     around: 0,
@@ -298,48 +311,65 @@ export const DRAFT_PARTS: Part[] = [
     replaces: 'mouth',
   }),
   part({
-    // Short, evenly spaced tines hanging straight down from the plank, much
-    // shorter than the head is tall: the long handle does the "rake" talking.
+    // Round 6: a round knob capping each end of the plank, so it reads as a
+    // rake head rather than a strip.
+    id: 'draft-rake-tool-caps',
+    slot: 'cheeks',
+    shape: 'ellipsoid',
+    size: [0.26, 0.26, 0.26],
+    color: 'detail',
+    layout: { kind: 'pair' },
+    around: 76, // TUNE: at the plank's ends, where the handle roots
+    up: -18,
+    sink: 0.3,
+    jitter: 0,
+  }),
+  part({
+    // Round 6: five widely spaced tines (not a comb's even row), each leaning
+    // forward towards its tip like a real rake's.
     id: 'draft-rake-tool-tines',
     slot: 'fangs',
-    shape: 'capsule',
-    size: [0.075, 0.4, 0.075],
+    shape: 'cone', // pointed tips, not a comb's blunt teeth
+    size: [0.09, 0.42, 0.09],
     color: 'detail',
-    layout: { kind: 'ring', count: 7, spread: 44 },
+    layout: { kind: 'ring', count: 5, spread: 50 },
     around: 0,
-    up: -21,
-    tilt: -90, // TUNE
+    up: -22,
+    tilt: -62, // TUNE: 28° forward of straight down
     sink: 0.1,
     jitter: 0,
   }),
   part({
-    // The long handle stands just behind the head (`anchor: 'behind'`), its
-    // foot at the plank's height and centre, rising well above the leaf pile
-    // and leaning back a little.
+    // Round 6: the long handle grows from the plank's end beside his cheek
+    // and rises on a diagonal past the side of his head, so the join shows
+    // from the front. Three pieces in line (a straight chain), because one
+    // part is capped at 1.5 head heights; they overlap by more than half so
+    // the rounded ends don't pinch into a seam: about 2.5 in all, 2.2 head
+    // heights of rise above the plank.
     id: 'draft-rake-tool-handle',
     slot: 'horns',
     shape: 'capsule',
-    size: [0.12, 1.5, 0.12],
+    size: [0.12, 1.3, 0.12],
     color: 'detail',
-    layout: { kind: 'single' },
-    around: 0,
+    layout: { kind: 'chain', count: 3, step: 0.45, curl: 0, wave: 0, shrink: 1 },
+    around: 78, // TUNE: out of the knob at the plank's end
     up: -18,
-    tilt: 8, // TUNE: leans back
-    splay: 50, // TUNE: carried on the diagonal, over his right shoulder
-    anchor: 'behind',
+    tilt: 62, // TUNE: diagonal, leaning out past the leaf pile
+    sink: 0.15,
     jitter: 0,
   }),
   part({
-    // A green leaf standing on top of the leaf pile (round 5: bigger, so it shows).
+    // A green leaf mid-fall on the leaf pile (round 6: wider than tall, flat,
+    // tipped over sideways so it can't read as a horn).
     id: 'draft-falling-leaf-top',
     slot: 'ears',
     shape: 'teardrop',
-    size: [0.3, 0.42, 0.06],
+    size: [0.42, 0.3, 0.05],
     color: 'primary',
     layout: { kind: 'single' },
-    around: 20,
-    up: 84,
-    tilt: 15,
+    around: 40,
+    up: 74,
+    tilt: -25,
     sink: 0.2,
     jitter: 0,
   }),
@@ -763,7 +793,7 @@ export interface DraftBossLine {
   readonly forms: readonly [DraftBossForm, DraftBossForm, DraftBossForm];
 }
 
-const RAKELET_PALETTE = ['#9fd46e', '#fff6dc', '#f08a3c', '#7a4a2e'];
+const RAKELET_PALETTE = ['#9fd46e', '#fff6dc', '#f08a3c', '#d9a465']; // round 6: light wood detail
 const MOM_PALETTE = ['#ff8a6a', '#fff0e6', '#ffd166', '#8a3550'];
 const DAD_PALETTE = ['#a9d4f5', '#f4fbff', '#e2574c', '#f7f1ea'];
 const RICKEY_PALETTE = ['#ffd84a', '#bff0ff', '#3f8fe8', '#4a3a5c'];
@@ -815,6 +845,7 @@ export const DRAFT_BOSS_LINES: readonly DraftBossLine[] = [
             'draft-soft-brows',
             'draft-rake-bar',
             'draft-rake-tines-mid',
+            'draft-rake-caps-mid',
             'draft-rake-handle-short',
             'draft-face-freckles',
             'draft-leaf-pile-hair',
@@ -842,6 +873,7 @@ export const DRAFT_BOSS_LINES: readonly DraftBossLine[] = [
             'draft-fierce-brows',
             'draft-rake-tool-bar',
             'draft-rake-tool-tines',
+            'draft-rake-tool-caps',
             'draft-rake-tool-handle',
             'draft-leaf-pile-hair',
             'draft-falling-leaf-top',
