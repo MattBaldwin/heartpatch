@@ -82,7 +82,8 @@ describe('boss schedule (#190)', () => {
   });
 
   it('checks the rules: the shipped ones, and a bad bag', () => {
-    const species = new Set([...GAME_DATA.species, ...SECRET_SPECIES].map((s) => s.id));
+    // Ruling (#190 round 2): boss species live in SECRET_SPECIES with line 'boss'.
+    const species = new Set(SECRET_SPECIES.filter((s) => s.line === 'boss').map((s) => s.id));
     const terrains = new Set(GAME_DATA.terrains.map((t) => t.id));
     const items = new Set(GAME_DATA.resources.map((r) => r.id));
     expect(checkBossEventRules(BOSS_EVENTS, species, terrains, items)).toEqual([]);

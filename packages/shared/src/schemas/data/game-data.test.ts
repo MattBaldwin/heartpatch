@@ -144,6 +144,15 @@ describe('checkGameData', () => {
     ]);
   });
 
+  it('keeps boss species out of the public table (#190 plan §7)', () => {
+    const problems = problemsAfter((d) => {
+      d.species[0]!.line = 'boss';
+    });
+    expect(problems).toEqual([
+      'species["fixture-puddlepuff"].line: boss species are server-only: add them to SECRET_SPECIES in packages/shared/src/data/server/secret-species.ts',
+    ]);
+  });
+
   it('reports evolution chains that loop', () => {
     const problems = problemsAfter((d) => {
       d.species[1]!.evolutions = [{ into: 'fixture-puddlepuff', level: 30 }];

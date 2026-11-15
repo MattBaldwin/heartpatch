@@ -502,7 +502,8 @@ describe.skipIf(!url)('mini-boss visits and fights (#190b, needs DATABASE_URL)',
     expect(battle.status).toBe('active');
     battle = await act(server, owner, battle, { type: 'forfeit' });
     expect(battle.view.phase).toMatchObject({ type: 'over', result: { reason: 'forfeit' } });
-    expect(battle.rewards?.coins ?? { patch: 0, heart: 0 }).toEqual({ patch: 0, heart: 0 });
+    expect(battle.rewards).not.toBeNull();
+    expect(battle.rewards?.coins).toEqual({ patch: 0, heart: 0 });
     expect(battle.rewards?.bundle ?? null).toBeNull();
     expect((await visit(server, owner, mapId))!.triesLeftToday).toBe(RULES.triesPerDay - 1);
   });

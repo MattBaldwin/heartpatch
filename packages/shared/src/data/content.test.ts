@@ -11,6 +11,8 @@ import { RESOURCES, RETIRED_RESOURCES as RETIRED } from './resources.js';
 import { SEASONS } from './seasons.js';
 import { GLIMMER_SWAP, SELL_RULES, TRADE_VALUES } from './trading.js';
 import { hiddenUntilSeen } from '../schemas/data/species.js';
+import { checkGameData } from '../schemas/data/game-data.js';
+import { GAME_DATA } from './index.js';
 import { isWater } from '../schemas/data/terrains.js';
 import { TERRAINS } from './terrains.js';
 import { CELLAR_RULES } from './server/cellar.js';
@@ -234,8 +236,8 @@ describe('mini-boss lines (#190 plan §7)', () => {
   it('never puts a boss line in a wild, guardian, shop or find table', async () => {
     const server = await import('./server/index.js');
     const shared = await import('../index.js');
-    const all = [...SPECIES, ...SECRET_SPECIES];
-    const bosses = all.filter((s) => s.line === 'boss').map((s) => s.id);
+    // Boss species live in SECRET_SPECIES only; checkGameData refuses one in SPECIES.
+    const bosses = SECRET_SPECIES.filter((s) => s.line === 'boss').map((s) => s.id);
     const named = wildIds({ server, shared }, new Set([server.BOSS_EVENTS]));
     expect(named.size).toBeGreaterThan(10); // it reached the spawn and find tables
     expect(bosses.filter((id) => named.has(id))).toEqual([]);
@@ -248,5 +250,17 @@ describe('mini-boss lines (#190 plan §7)', () => {
     expect(hiddenUntilSeen(base)).toBe(false);
     expect(hiddenUntilSeen({ ...base, line: 'boss' })).toBe(true);
     for (const s of SECRET_SPECIES) expect(hiddenUntilSeen(s), s.id).toBe(true);
+  });
+
+  it('never ships a boss line in the public catalog', () => {
+    expect(SPECIES.filter((s) => s.line === 'boss').map((s) => s.id)).toEqual([]);
+    expect(GAME_DATA.species.filter((s) => s.line === 'boss').map((s) => s.id)).toEqual([]);
+    // Nothing from SECRET_SPECIES (where boss lines live) reaches the client table.
+    const publicIds = new Set(GAME_DATA.species.map((s) => s.id));
+    expect(SECRET_SPECIES.filter((s) => publicIds.has(s.id)).map((s) => s.id)).toEqual([]);
+    // A boss slipped into the public table fails the data check.
+    const boss = { ...SPECIES[0]!, id: 'fixture-boss', line: 'boss' as const };
+    const problems = checkGameData({ ...GAME_DATA, species: [...GAME_DATA.species, boss] });
+    expect(problems.some((p) => p.includes('boss species are server-only'))).toBe(true);
   });
 });
