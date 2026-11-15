@@ -13,6 +13,31 @@ export const HOMES = {
   theirs: { x: 2.15, z: 1.9 }, // TUNE
 } as const;
 
+/**
+ * A team battle (#190, a mini-boss; owner-approved arena layout A): the
+ * player's squishies in a row on the near side, left to right in slot order,
+ * and the big boss alone on the far side, about 1.8× their size (plan §10).
+ */
+export const TEAM_ARENA = {
+  /** Where each of the player's squishies stands, for teams of 1, 2 and 3 (slot order). */
+  posts: {
+    1: [{ x: 0, z: -1.3 }],
+    2: [
+      { x: -0.85, z: -1.5 },
+      { x: 0.85, z: -1.08 },
+    ],
+    3: [
+      { x: -1.7, z: -1.72 },
+      { x: 0, z: -1.3 },
+      { x: 1.7, z: -0.88 },
+    ],
+  } as Readonly<Record<1 | 2 | 3, readonly { x: number; z: number }[]>>, // TUNE: across the camera's view (yaw −14°)
+  /** The boss: far and centred on screen. */
+  boss: { x: -0.1, z: 3.0 }, // TUNE
+  /** The boss's size against a usual fighter's (plan §10: "about 1.8×"). */
+  bossScale: 1.8, // TUNE
+} as const;
+
 export const FIGHTER = {
   /** Extra scale on the squishies (a close-up, like the gallery's). */
   scale: 2.7, // TUNE

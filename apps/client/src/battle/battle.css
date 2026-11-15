@@ -1034,3 +1034,312 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
     flex-wrap: nowrap;
   }
 }
+
+/* ── A mini-boss fight (#190, owner-approved arena A and picker A1) ───────── */
+
+.battle-hud-team .battle-plate {
+  display: none;
+}
+
+.battle-hud-team .battle-top {
+  justify-content: flex-end;
+}
+
+.boss-top {
+  pointer-events: none;
+}
+
+.boss-plate {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 112px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  left: calc(env(safe-area-inset-left) + 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 8px 12px;
+  border: 2px solid rgb(255 255 255 / 80%);
+  border-radius: 18px;
+  background: rgb(255 250 240 / 94%);
+  box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
+}
+
+.boss-plate-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.boss-plate-chips:empty,
+.boss-plate-chips:not(:has(:not([hidden]))) {
+  display: none;
+}
+
+.boss-name {
+  overflow: hidden;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boss-level {
+  font-size: 13px;
+  font-weight: 800;
+  opacity: 0.75;
+}
+
+.boss-plate .battle-energy {
+  height: 14px;
+}
+
+.boss-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.boss-chip-gold {
+  margin-left: auto;
+  background: #ffe9a8;
+  color: #6b4a06;
+}
+
+.boss-chip-try {
+  background: #d9ecff;
+  color: #1f4f7a;
+}
+
+.boss-chip-until {
+  background: #ffe1d3;
+  color: #8a3a12;
+}
+
+.boss-callout {
+  position: absolute;
+  top: 34%;
+  left: calc(env(safe-area-inset-left) + 6px);
+  z-index: 2;
+  padding: 6px 10px;
+  border: 3px solid #2d1b33;
+  border-radius: 10px;
+  background: #ffe34d;
+  color: #2d1b33;
+  font-weight: 900;
+  transform: rotate(-6deg);
+}
+
+.boss-callout-small {
+  top: -30px;
+  left: 50%;
+  font-size: 13px;
+  transform: translateX(-50%) rotate(-6deg);
+  white-space: nowrap;
+}
+
+.boss-callout-show {
+  animation: boss-pop 180ms ease-out;
+}
+
+@keyframes boss-pop {
+  from {
+    scale: 0.6;
+  }
+
+  to {
+    scale: 1;
+  }
+}
+
+.boss-friends {
+  position: absolute;
+  right: calc(env(safe-area-inset-right) + 10px);
+  bottom: calc(var(--battle-sheet-h, 37vh) + 8px);
+  left: calc(env(safe-area-inset-left) + 10px);
+  display: flex;
+  justify-content: space-around;
+  gap: 8px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.boss-friend {
+  position: relative;
+  display: flex;
+  flex: 0 1 114px;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 2px solid rgb(255 255 255 / 80%);
+  border-radius: 14px;
+  background: rgb(255 250 240 / 94%);
+  box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
+}
+
+.boss-friend-name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boss-friend .battle-energy {
+  height: 10px;
+}
+
+.boss-friend-down {
+  opacity: 0.6;
+}
+
+.boss-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.boss-steps {
+  display: flex;
+  gap: 6px;
+}
+
+.boss-step {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 14px;
+  background: #fff3e4;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.boss-step-current {
+  outline: 3px solid #b8487a;
+  background: #fff;
+}
+
+.boss-step-name {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.boss-step-status {
+  overflow: hidden;
+  font-size: 11px;
+  opacity: 0.8;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boss-moves {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.hp-button.boss-move {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 56px;
+}
+
+.boss-move-picked {
+  outline: 3px solid #b8487a;
+}
+
+.boss-move-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.boss-tag {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 70%);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.boss-tag-area {
+  background: #ffe9a8;
+  color: #6b4a06;
+}
+
+.boss-picker-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.boss-befriend {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+  text-align: center;
+}
+
+.boss-befriend-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.boss-befriend-joined {
+  padding: 10px;
+  border: 4px solid #ffc94d;
+  border-radius: 22px;
+}
+
+.boss-charm-pill {
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: inset 0 0 0 2px #f2a4bb;
+  font-weight: 800;
+}
+
+.boss-warmth {
+  display: flex;
+  gap: 4px;
+  font-size: 22px;
+}
+
+.boss-heart:not(.boss-heart-lit) {
+  filter: grayscale(1);
+  opacity: 0.35;
+}
+
+.boss-warmer {
+  margin: 0;
+  color: #b8487a;
+  font-weight: 800;
+}
+
+.boss-dots {
+  display: inline-flex;
+  gap: 4px;
+  vertical-align: middle;
+}
+
+.boss-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #b8487a;
+}

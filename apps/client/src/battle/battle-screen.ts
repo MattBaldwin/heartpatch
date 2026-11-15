@@ -74,6 +74,8 @@ import { revealPlan, showRareReveal, wildOf, type RareReveal } from './rare-reve
 import { FENCE_RESULTS, fenceResult, resultLine } from './result-line.js';
 import { coinLine, xpLines } from './result-card.js';
 import { keepGoing, KEEP_GOING_TEXT, type KeepGoingApi } from './keep-going.js';
+import { createBossBattle } from './boss-battle.js';
+import { BOSS_TEXT, bossSlot, isTeamBattle, slotsOut } from './boss-view.js';
 import { mapApi } from '../map/map-api.js';
 import { territoryApi } from '../territory/territory-api.js';
 import { COMMAND_RETRY_MS } from '../inventory/send-command.js';
@@ -207,6 +209,13 @@ export interface BattleDebug {
   readonly safe: SafeRegion;
   /** Idle breathing: `stopped` once the device was judged too slow for it this battle (#397). */
   readonly breathing: 'live' | 'stopped';
+  /** A mini-boss fight (#190): the picker's round and the asks seen; null otherwise. */
+  readonly boss: {
+    readonly picking: number | null;
+    readonly picks: Readonly<Record<number, string>>;
+    readonly asks: number;
+    readonly misses: number;
+  } | null;
 }
 
 /** Dev-only controls over the battle clock (`?battle-clock=manual`), for frame-exact captures. */
@@ -577,6 +586,37 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     },
   });
 
+  // A mini-boss fight's team HUD, picker and befriend moment (#190).
+  const bossFight = createBossBattle({
+    hud,
+    scene: () => scene3d,
+    nameOf: (b, side, slot) => {
+      const squishy = b.view.sides[side].squishies[slot];
+      if (!squishy || !content) return 'Your squishy';
+      return plateName(content, squishy, side === b.mySide ? nicknames : undefined);
+    },
+    submit: (action) => {
+      void submit(action);
+    },
+    now: gameNow,
+    charms: () => charms,
+    refreshCharms: (b) => refreshCharms(b),
+    befriend: api.befriend,
+    newKey: newIdempotencyKey,
+    replace: (b) => {
+      if (battle?.id !== b.id) return;
+      battle = b;
+      content = new BattleContent(b);
+      showResult(b);
+    },
+    home: () => {
+      close();
+    },
+    invalidate: () => {
+      options.invalidate();
+    },
+  });
+
   const later = (ms: number, fn: () => void): void => {
     clock.later(ms, fn);
   };
@@ -604,6 +644,16 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   /** Fills a side's plate from the view, with the energy currently shown. */
   const plate = (side: BattleSideId): void => {
     if (!battle || !content || !shown) return;
+    if (isTeamBattle(battle)) {
+      // A team battle (#190): four plates, and each squishy's own shield bubble.
+      bossFight.plates(battle, shown, content);
+      for (const slot of slotsOut(battle, side)) {
+        const chips = shown[side].chips[slot] ?? NO_CHIPS;
+        const energy = shown[side].energy[slot] ?? 0;
+        scene3d?.setShield(side, (chips.shield || chips.guard) && energy > 0, slot);
+      }
+      return;
+    }
     const { squishies } = battle.view.sides[side];
     const slot = shown[side].active;
     const squishy = squishies[slot];
@@ -660,6 +710,14 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
 
   const controlsFor = (b: PlayerBattle): ControlMode => {
     const names = content;
+    if (isTeamBattle(b)) {
+      // A team battle (#190): picker A1 in the sheet; no swaps, charms or live picks.
+      const canPick =
+        names !== null && b.status === 'active' && !replaying && !waiting && queue.length === 0;
+      if (names) bossFight.controls(b, names, canPick);
+      if (canPick && b.view.phase.type === 'turn') return { type: 'hidden' };
+      return b.status === 'active' && !replaying ? { type: 'waiting' } : { type: 'hidden' };
+    }
     if (!names || b.status !== 'active' || replaying) return { type: 'hidden' };
     const bench = benchOf(b, b.mySide).map(({ slot, squishy }) => ({
       slot,
@@ -782,6 +840,34 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const names = content;
     if (!names) return;
     const result = b.view.phase.type === 'over' ? b.view.phase.result : null;
+    // A mini-boss fight (#190): its own card, the bundle, the befriend moment.
+    const bossCard = b.kind === 'miniboss' && !replaying ? bossFight.result(b, names) : null;
+    if (bossCard && result) {
+      const mine = b.view.sides[b.mySide];
+      const { lines, evolving } = xpLines(b.rewards?.xp ?? [], (id) =>
+        squishyName(names, mine, id),
+      );
+      if (lines.length === 0) lines.push(MESSAGES.noXp);
+      const coins = coinLine({
+        role: 'challenger',
+        rewards: b.rewards,
+        outcome: result.winner === b.mySide ? 'won' : 'lost',
+        scooted: result.reason === 'forfeit',
+        opponent: '',
+      });
+      if (coins) lines.push(coins);
+      hud.setCaption(null);
+      hud.showResult({
+        title: bossCard.title,
+        subtitle: bossCard.subtitle,
+        xp: lines,
+        evolving,
+        lines: bossCard.lines,
+        extra: bossCard.extra,
+        done: MESSAGES.done,
+      });
+      return;
+    }
     // A fence battle (#203): its own words, whoever's watching.
     const fenceSide = (['a', 'b'] as const).find((side) =>
       b.view.sides[side].squishies.some((s) => s.fence !== undefined),
@@ -1037,19 +1123,26 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         hud.setCaption('Your squishy is tuckered out. Who comes out next?');
       } else if (battle.view.log.length === 0) {
         hud.setCaption(
-          battle.kind === 'tile'
-            ? MESSAGES.guardiansStart
-            : battle.kind === 'rival-tile'
-              ? isLiveDefender(battle)
-                ? LIVE_TEXT.defendStart
-                : MESSAGES.rivalStart
-              : battle.kind === 'rescue'
-                ? MESSAGES.shadowsStart
-                : battle.kind === 'journey'
-                  ? JOURNEY_TEXT.startCaption
-                  : battle.kind === 'friendly'
-                    ? LIVE_TEXT.startCaption(opponentName(battle))
-                    : wildStartCaption(battle),
+          battle.kind === 'miniboss'
+            ? BOSS_TEXT.start(
+                content?.speciesName(
+                  battle.view.sides[otherSide(battle.mySide)].squishies[bossSlot(battle)]
+                    ?.speciesId ?? '',
+                ) ?? '',
+              )
+            : battle.kind === 'tile'
+              ? MESSAGES.guardiansStart
+              : battle.kind === 'rival-tile'
+                ? isLiveDefender(battle)
+                  ? LIVE_TEXT.defendStart
+                  : MESSAGES.rivalStart
+                : battle.kind === 'rescue'
+                  ? MESSAGES.shadowsStart
+                  : battle.kind === 'journey'
+                    ? JOURNEY_TEXT.startCaption
+                    : battle.kind === 'friendly'
+                      ? LIVE_TEXT.startCaption(opponentName(battle))
+                      : wildStartCaption(battle),
         );
       }
     } else {
@@ -1262,7 +1355,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       scene3d.cheer(reaction.move, t, reaction.strength);
       keeperReactions += 1;
     }
-    if (step.callout) hud.callout(plateSideOf(battle.mySide, step.side), step.callout);
+    if (isTeamBattle(battle)) bossFight.step(battle, step, content);
+    else if (step.callout) hud.callout(plateSideOf(battle.mySide, step.side), step.callout);
     plate(step.side);
     options.invalidate();
     later(step.ms, playNext);
@@ -1291,6 +1385,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       void refreshPotions(next);
     }
     hud.setControls(replaying ? { type: 'hidden' } : { type: 'waiting' });
+    if (isTeamBattle(next)) bossFight.playing();
     if (queue.length === 0) settle();
     else playNext();
   };
@@ -1364,8 +1459,44 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       battleId: battle.id,
       reducedMotion: reducedMotion.matches,
       safe: () => hud.safe(),
+      ...(isTeamBattle(battle) ? { team: { slots: slotsOut(battle, battle.mySide) } } : {}),
     });
     lastTier = tier;
+    if (isTeamBattle(battle)) {
+      // A team battle (#190): each squishy out on its own post, nobody on a bench.
+      const b = battle;
+      for (const side of ['a', 'b'] as const) {
+        const out = slotsOut(b, side);
+        built.prewarm(
+          side,
+          out.flatMap((slot) => {
+            const s = b.view.sides[side].squishies[slot];
+            return s
+              ? [
+                  {
+                    speciesId: s.speciesId,
+                    instanceId: s.id,
+                    level: s.level,
+                    accessory: s.accessory ?? null,
+                    slot,
+                  },
+                ]
+              : [];
+          }),
+        );
+        for (const slot of out) {
+          const s = b.view.sides[side].squishies[slot];
+          if (!s) continue;
+          built.sendOut(side, s.speciesId, s.id, s.level, slot);
+          if ((shown[side].energy[slot] ?? 1) === 0) built.knockedOut(side, slot);
+          const chips = shown[side].chips[slot] ?? NO_CHIPS;
+          built.setShield(side, chips.shield || chips.guard, slot);
+        }
+      }
+      built.update(now());
+      scene3d = built;
+      return built.content;
+    }
     for (const side of ['a', 'b'] as const) {
       // Every squishy that might come out later is built now, not mid-turn.
       built.prewarm(
@@ -1464,6 +1595,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         },
       });
     }
+    if (isTeamBattle(next)) bossFight.open(next);
+    else bossFight.close();
     hud.show();
     options.showScene(build);
     settle();
@@ -1545,6 +1678,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     content = null;
     shown = null;
     scene3d = null;
+    bossFight.close();
     hud.hide();
     options.showScene(null);
     entry.hidden = mapId === null;
@@ -1675,6 +1809,14 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         clock: now(),
         safe: hud.safe(),
         breathing: breath.slow ? ('stopped' as const) : ('live' as const),
+        boss: isTeamBattle(battle)
+          ? {
+              picking: bossFight.debug.picker?.steps[bossFight.debug.picker.at]?.slot ?? null,
+              picks: bossFight.debug.picker?.picks ?? {},
+              asks: bossFight.debug.asks,
+              misses: bossFight.debug.misses,
+            }
+          : null,
       };
     },
     get dev(): BattleDevControls | null {

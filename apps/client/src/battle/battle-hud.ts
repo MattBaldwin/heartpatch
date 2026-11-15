@@ -128,11 +128,29 @@ export interface ResultInfo {
   keepGoing?: { label: string; onKeepGoing: () => void };
   /** A rare friend or a first of its kind: the card celebrates (#391). */
   cheer?: { readonly info: BefriendCheer; readonly reducedMotion: boolean };
+  /** Lines under the XP that aren't XP (a mini-boss's bundle and tries, #190). */
+  lines?: readonly string[];
+  /** A panel above the buttons (a mini-boss's befriend moment, #190). */
+  extra?: HTMLElement | null;
+}
+
+/**
+ * A team battle's own HUD pieces (#190, arena A): they take the place of the
+ * two pills. `top` goes over the fight, `sheet` in the sheet above the
+ * controls; the fight is framed between `topEdge`'s bottom and `bottomEdge`'s top.
+ */
+export interface TeamHudSlots {
+  readonly top: HTMLElement;
+  readonly sheet: HTMLElement;
+  readonly topEdge: HTMLElement;
+  readonly bottomEdge: HTMLElement;
 }
 
 export interface BattleHud {
   /** Where a live battle's bar goes (#29), at the top of the sheet; hidden otherwise. */
   readonly liveSlot: HTMLElement;
+  /** A team battle's plates and picker in place of the pills (#190), or back to the pills (null). */
+  setTeam: (team: TeamHudSlots | null) => void;
   show: () => void;
   hide: () => void;
   setPlate: (side: 'mine' | 'theirs', info: PlateInfo) => void;
@@ -368,6 +386,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     controls,
     problem,
   );
+  let team: TeamHudSlots | null = null;
   // The craft tip for an empty bag floats over the fight just above the sheet,
   // so it never takes height from the sheet (and with it from the fight). A
   // tap puts it away; it also fades by itself (battle.css).
@@ -805,6 +824,18 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
 
   return {
     liveSlot,
+    setTeam: (next) => {
+      if (team === next) return;
+      team?.top.remove();
+      team?.sheet.remove();
+      team = next;
+      hud.classList.toggle('battle-hud-team', next !== null);
+      if (next) {
+        hud.insertBefore(next.top, sheet);
+        sheet.insertBefore(next.sheet, controls);
+      }
+      forget();
+    },
     show: () => {
       hud.hidden = false;
       forget();
@@ -905,6 +936,14 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         ...(info.nudge
           ? [el('p', { class: 'battle-hint', 'data-testid': 'battle-nudge' }, info.nudge)]
           : []),
+        ...(info.lines ?? []).map((line) =>
+          el(
+            'p',
+            { class: 'battle-hint battle-result-line', 'data-testid': 'battle-result-line' },
+            line,
+          ),
+        ),
+        ...(info.extra ? [info.extra] : []),
         resultNote,
         el(
           'div',
@@ -948,6 +987,18 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     safe: () => {
       if (safe) return safe;
       const h = window.innerHeight || 1;
+      if (team) {
+        // A team battle (#190): between the boss's plate and the friends' row.
+        const edge = team.topEdge.getBoundingClientRect().bottom;
+        const floor = team.bottomEdge.getBoundingClientRect().top;
+        const reserved = Number.parseFloat(getComputedStyle(sheet).maxHeight);
+        const share = reserved > 0 ? Math.min(reserved / h, 0.6) : SHEET_SHARE;
+        safe = {
+          top: Math.min(0.4, edge > 0 ? (edge + 10) / h : 0.18),
+          bottom: Math.min(1 - share, floor > 0 ? floor / h : 1 - share),
+        };
+        return safe;
+      }
       const pillBottom = Math.max(
         plates.mine.node.getBoundingClientRect().bottom,
         plates.theirs.node.getBoundingClientRect().bottom,

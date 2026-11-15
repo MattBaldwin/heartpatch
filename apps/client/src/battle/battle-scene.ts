@@ -39,7 +39,14 @@ import { buildFence } from '../map/fence-props.js';
 import { vinyl } from '../map/map-scene.js';
 import { arenaPlan, arenaSeed } from './arena-layout.js';
 import { buildArena, type Arena, type ArenaStats } from './arena.js';
-import { BATTLE_CAMERA, CHOREO, FIGHTER, HOMES, SHIELD_BUBBLE } from './battle-config.js';
+import {
+  BATTLE_CAMERA,
+  CHOREO,
+  FIGHTER,
+  HOMES,
+  SHIELD_BUBBLE,
+  TEAM_ARENA,
+} from './battle-config.js';
 import type { PlaybackStep } from './battle-playback.js';
 import type { BattleContent } from './battle-view.js';
 import { battleScale, CameraDirector, type FitPoint, type SafeRegion } from './camera-director.js';
@@ -126,6 +133,12 @@ export interface BattleSceneOptions {
   readonly reducedMotion: boolean;
   /** Where the fight may be drawn: between the HUD's pills and its sheet (fractions of the height). */
   readonly safe: () => SafeRegion;
+  /**
+   * A team battle (#190, a mini-boss; arena layout A): the player's slots on
+   * the field, each on its own post in a row, and the other side's one
+   * squishy drawn big as the boss. Left out, a battle is one-on-one.
+   */
+  readonly team?: { readonly slots: readonly number[] };
 }
 
 /** A squishy that may come out for a side (or a fence, #203: its building id). */
@@ -136,6 +149,8 @@ export interface TeamMember {
   readonly level?: number;
   /** The wardrobe accessory it wears (#373), for drawing only. */
   readonly accessory?: string | null;
+  /** A team battle's slot (#190): which post it stands on. */
+  readonly slot?: number;
 }
 
 interface Fighter {
@@ -161,6 +176,10 @@ interface FenceStand {
 
 interface Rig {
   readonly side: BattleSideId;
+  /** A team battle's post (#190): the slot it holds; null one-on-one (whoever is out). */
+  readonly slot: number | null;
+  /** The mini-boss (#190): drawn `TEAM_ARENA.bossScale` times bigger. */
+  readonly boss: boolean;
   readonly root: TransformNode;
   readonly tilt: TransformNode;
   readonly turn: TransformNode;
@@ -181,6 +200,9 @@ interface Rig {
   pose: Pose;
   /** Flopped over (tuckered out). */
   down: boolean;
+  /** A potion's sparkle shield over it (#214), and its bubble (made with the scene). */
+  shielded: boolean;
+  bubble: Mesh | null;
 }
 
 interface ActCueAt {
@@ -193,16 +215,19 @@ interface ActCueAt {
 
 interface EffectCueAt {
   readonly cue: EffectCue;
+  /** The fighter it's at, and the one it flies to (`bolt`, `charm`). */
+  readonly rig: Rig;
+  readonly other: Rig;
   readonly at: number;
   readonly duration: number;
 }
 
 interface SquishCueAt {
   readonly cue: SquishCue;
+  readonly rig: Rig;
   readonly at: number;
 }
 
-const SIDES: readonly BattleSideId[] = ['a', 'b'];
 /** Each fighter's two contact shadows: the whole and a softer inner share. */
 const SHADOW_SHARES: readonly number[] = [1, 0.72];
 
@@ -213,25 +238,24 @@ export class BattleScene {
   /** The mood's contact-shadow stretch, read once (the shadows are written every frame). */
   readonly #shadowStretch: number;
   readonly #arena: Arena;
+  /** Each side's lead fighter: the one out, or a team's middle post (#190). */
   readonly #rigs: Record<BattleSideId, Rig>;
+  /** Each side's posts: one, or a team's row (#190). */
+  readonly #posts: Record<BattleSideId, readonly Rig[]>;
+  /** Every rig, a and b. */
+  readonly #all: readonly Rig[];
   readonly #keepers: KeeperField;
   readonly #keeper: KeeperHandle | null;
   readonly #effects: EffectPool;
-  /** A potion's sparkle shield over each side's squishy (#214), made with the scene. */
-  readonly #bubbles: Record<BattleSideId, Mesh>;
   readonly #bubbleMaterial: StandardMaterial;
   /** Shared by every fence (#203); made with the first. */
   #fenceMaterial: Material | null = null;
-  readonly #shielded: Record<BattleSideId, boolean> = { a: false, b: false };
   readonly #camera: CameraDirector;
   readonly #shadows: Mesh;
-  readonly #shadowMatrices = new Float32Array(4 * 16);
-  readonly #fit: FitPoint[] = [
-    { x: 0, z: 0, r: 0, h: 0 },
-    { x: 0, z: 0, r: 0, h: 0 },
-    { x: 0, z: 0, r: 0, h: 0 },
-    { x: 0, z: 0, r: 0, h: 0 },
-  ];
+  /** Two contact shadows per rig, written every frame. */
+  readonly #shadowMatrices: Float32Array;
+  /** Two fit points per rig: where it stands and where it is now. */
+  readonly #fit: FitPoint[];
   /** The HUD's safe region plus the lowest row the stage shows (#652), reused every frame. */
   readonly #framing = { top: 0, bottom: 1, floor: 1 };
   readonly #instrumentation: SceneInstrumentation;
@@ -245,9 +269,9 @@ export class BattleScene {
   #actCues: ActCueAt[] = [];
   #effectCues: EffectCueAt[] = [];
   #squishCues: SquishCueAt[] = [];
-  readonly #pendingSwaps: { side: BattleSideId; at: number; member: TeamMember }[] = [];
-  /** The last move played, for the hit that follows it. */
-  #lastMove: { move: string; user: BattleSideId } | null = null;
+  readonly #pendingSwaps: { rig: Rig; at: number; member: TeamMember }[] = [];
+  /** The last move played (and its user's slot, #190), for the hit that follows it. */
+  #lastMove: { move: string; user: BattleSideId; slot: number } | null = null;
   #playing: { kind: PlaybackStep['kind']; start: number; ms: number } | null = null;
   #now = 0;
   #acts = 0;
@@ -265,21 +289,53 @@ export class BattleScene {
     this.#shadowStretch = plan.mood.shadowStretch;
     this.#arena = buildArena(scene, { plan, lowTier, reducedMotion: options.reducedMotion });
 
-    const homeOf = (side: BattleSideId) => (side === options.mySide ? HOMES.mine : HOMES.theirs);
-    this.#rigs = {
-      a: this.#rig(
-        'a',
-        homeOf('a'),
-        homeOf('b'),
-        CHOREO.ready.otherPhase * (options.mySide === 'a' ? 0 : 1),
-      ),
-      b: this.#rig(
-        'b',
-        homeOf('b'),
-        homeOf('a'),
-        CHOREO.ready.otherPhase * (options.mySide === 'b' ? 0 : 1),
-      ),
-    };
+    const mine = options.mySide;
+    const team = options.team?.slots.slice(0, 3) ?? [];
+    if (team.length > 0) {
+      // A team battle (#190): the player's row on the near side, the boss far.
+      const posts = TEAM_ARENA.posts[team.length as 1 | 2 | 3];
+      const boss = TEAM_ARENA.boss;
+      const row = team.map((slot, i) =>
+        this.#rig(
+          mine,
+          posts[i] ?? HOMES.mine,
+          boss,
+          (CHOREO.ready.otherPhase * i) / team.length,
+          slot,
+        ),
+      );
+      const lead = row[Math.floor(row.length / 2)] ?? row[0];
+      if (!lead) throw new Error('a team battle needs a squishy');
+      const bossRig = this.#rig(mine === 'a' ? 'b' : 'a', boss, lead.home, CHOREO.ready.otherPhase);
+      const postsOf = (side: BattleSideId) => (side === mine ? row : [bossRig]);
+      const leadOf = (side: BattleSideId) => (side === mine ? lead : bossRig);
+      this.#posts = { a: postsOf('a'), b: postsOf('b') };
+      this.#rigs = { a: leadOf('a'), b: leadOf('b') };
+    } else {
+      const homeOf = (side: BattleSideId) => (side === mine ? HOMES.mine : HOMES.theirs);
+      this.#rigs = {
+        a: this.#rig(
+          'a',
+          homeOf('a'),
+          homeOf('b'),
+          CHOREO.ready.otherPhase * (mine === 'a' ? 0 : 1),
+        ),
+        b: this.#rig(
+          'b',
+          homeOf('b'),
+          homeOf('a'),
+          CHOREO.ready.otherPhase * (mine === 'b' ? 0 : 1),
+        ),
+      };
+      this.#posts = { a: [this.#rigs.a], b: [this.#rigs.b] };
+    }
+    this.#all = [...this.#posts.a, ...this.#posts.b];
+    this.#shadowMatrices = new Float32Array(this.#all.length * SHADOW_SHARES.length * 16);
+    this.#fit = this.#all.flatMap(() => [
+      { x: 0, z: 0, r: 0, h: 0 },
+      { x: 0, z: 0, r: 0, h: 0 },
+    ]);
+    const keeperHome = this.#rigs[mine].home;
 
     // The player's Keeper, at their squishy's back like a coach, seen in the gap between the fighters.
     this.#keepers = new KeeperField(scene, { data: KEEPER_DATA, lod: options.lod });
@@ -288,8 +344,8 @@ export class BattleScene {
       ? this.#keepers.add(
           options.keeper,
           {
-            x: HOMES.mine.x + FIGHTER.keeper.offset.x,
-            z: HOMES.mine.z + FIGHTER.keeper.offset.z,
+            x: keeperHome.x + FIGHTER.keeper.offset.x,
+            z: keeperHome.z + FIGHTER.keeper.offset.z,
             yaw: FIGHTER.keeper.yaw,
             lean: place.lean * FIGHTER.keeper.leanShare,
             scale: place.scale,
@@ -312,14 +368,17 @@ export class BattleScene {
     this.#bubbleMaterial.specularColor = new Color3(1, 1, 1);
     this.#bubbleMaterial.specularPower = 48;
     this.#bubbleMaterial.alpha = SHIELD_BUBBLE.alpha;
-    const bubble = (side: BattleSideId) => {
-      const mesh = CreateSphere(`battle-shield-${side}`, { diameter: 1, segments: 16 }, scene);
+    for (const rig of this.#all) {
+      const mesh = CreateSphere(
+        `battle-shield-${rig.side}${rig.slot === null ? '' : String(rig.slot)}`,
+        { diameter: 1, segments: 16 },
+        scene,
+      );
       mesh.material = this.#bubbleMaterial;
       mesh.isPickable = false;
       mesh.setEnabled(false);
-      return mesh;
-    };
-    this.#bubbles = { a: bubble('a'), b: bubble('b') };
+      rig.bubble = mesh;
+    }
     this.#camera = new CameraDirector(
       { a: this.#rigs.a.home, b: this.#rigs.b.home },
       options.reducedMotion,
@@ -347,6 +406,7 @@ export class BattleScene {
     home: { x: number; z: number },
     other: { x: number; z: number },
     phase: number,
+    slot: number | null = null,
   ): Rig {
     const scene = this.#scene;
     const dx = other.x - home.x;
@@ -354,9 +414,10 @@ export class BattleScene {
     const len = Math.hypot(dx, dz) || 1;
     const fx = dx / len;
     const fz = dz / len;
-    const root = new TransformNode(`battle-rig-${side}`, scene);
-    const tilt = new TransformNode(`battle-rig-${side}-tilt`, scene);
-    const turn = new TransformNode(`battle-rig-${side}-turn`, scene);
+    const name = `battle-rig-${side}${slot === null ? '' : String(slot)}`;
+    const root = new TransformNode(name, scene);
+    const tilt = new TransformNode(`${name}-tilt`, scene);
+    const turn = new TransformNode(`${name}-turn`, scene);
     tilt.parent = root;
     turn.parent = tilt;
     root.position.set(home.x, 0, home.z);
@@ -376,6 +437,8 @@ export class BattleScene {
     });
     return {
       side,
+      slot,
+      boss: this.#options.team !== undefined && side !== this.#options.mySide,
       root,
       tilt,
       turn,
@@ -392,7 +455,29 @@ export class BattleScene {
       act: null,
       pose: REST,
       down: false,
+      shielded: false,
+      bubble: null,
     };
+  }
+
+  /** The rig for `side`'s squishy in `slot`: a team's post (#190), else the side's one rig. */
+  #rigAt(side: BattleSideId, slot?: number | null): Rig {
+    const posts = this.#posts[side];
+    if (posts.length === 1 || slot === undefined || slot === null) return this.#rigs[side];
+    return posts.find((r) => r.slot === slot) ?? this.#rigs[side];
+  }
+
+  /** Where `side`'s squishy in `slot` stands (a ground point), for the HUD and tests. */
+  homeOf(side: BattleSideId, slot?: number | null): { x: number; z: number } {
+    return this.#rigAt(side, slot).home;
+  }
+
+  /**
+   * Leans the camera towards one of a team's squishies (#190: the picker's
+   * turn nudges to each one), or back to the middle with null.
+   */
+  focusOn(side: BattleSideId | null, slot?: number | null): void {
+    this.#camera.lean(side === null ? null : this.#rigAt(side, slot).home);
   }
 
   /**
@@ -401,20 +486,21 @@ export class BattleScene {
    */
   prewarm(side: BattleSideId, team: readonly TeamMember[]): void {
     for (const member of team) {
-      if (!this.#fighter(side, member.speciesId, member.instanceId, member.accessory)) {
-        this.#fenceStand(side, member.speciesId, member.instanceId, member.level ?? 1);
+      const rig = this.#rigAt(side, member.slot);
+      if (!this.#fighter(rig, member.speciesId, member.instanceId, member.accessory)) {
+        this.#fenceStand(rig, member.speciesId, member.instanceId, member.level ?? 1);
       }
     }
-    this.#rigs[side].field.flush();
+    for (const rig of this.#posts[side]) rig.field.flush();
   }
 
   #fighter(
-    side: BattleSideId,
+    rig: Rig,
     speciesId: string,
     instanceId: string,
     accessory?: string | null,
   ): Fighter | null {
-    const rig = this.#rigs[side];
+    const side = rig.side;
     const known = rig.bench.get(instanceId);
     if (known) return known;
     const species = this.#options.content.species.get(speciesId);
@@ -429,7 +515,7 @@ export class BattleScene {
     const [sx, , sz] = handle.params.body.scale;
     // Hat included, so plates and the camera clear it.
     const tall = rig.field.heightOf(handle);
-    const scale = battleScale(tall);
+    const scale = battleScale(tall) * (rig.boss ? TEAM_ARENA.bossScale : 1);
     const fighter: Fighter = {
       handle,
       species,
@@ -443,13 +529,7 @@ export class BattleScene {
   }
 
   /** A fence for `side` (#203), built hidden the first time; null when `id` isn't a fence. */
-  #fenceStand(
-    side: BattleSideId,
-    id: string,
-    instanceId: string,
-    level: number,
-  ): FenceStand | null {
-    const rig = this.#rigs[side];
+  #fenceStand(rig: Rig, id: string, instanceId: string, level: number): FenceStand | null {
     const known = rig.fences.get(instanceId);
     if (known) return known;
     if (!this.#options.content.fences.has(id)) return null;
@@ -475,14 +555,23 @@ export class BattleScene {
   }
 
   /** Puts `speciesId` out for `side` (replacing whoever was out); a fence id puts a fence up. */
-  sendOut(side: BattleSideId, speciesId: string, instanceId: string, level = 1): void {
-    const rig = this.#rigs[side];
-    const next = this.#fighter(side, speciesId, instanceId);
+  sendOut(
+    side: BattleSideId,
+    speciesId: string,
+    instanceId: string,
+    level = 1,
+    slot?: number,
+  ): void {
+    this.#sendOut(this.#rigAt(side, slot), speciesId, instanceId, level);
+  }
+
+  #sendOut(rig: Rig, speciesId: string, instanceId: string, level: number): void {
+    const next = this.#fighter(rig, speciesId, instanceId);
     if (rig.out && rig.out !== next) {
       rig.field.move(rig.out.handle, { x: 0, z: 0, yaw: 0, scale: 0 });
     }
     rig.out = next;
-    const fence = next ? null : this.#fenceStand(side, speciesId, instanceId, level);
+    const fence = next ? null : this.#fenceStand(rig, speciesId, instanceId, level);
     if (rig.fence && rig.fence !== fence) rig.fence.mesh.setEnabled(false);
     rig.fence = fence;
     fence?.mesh.setEnabled(true);
@@ -494,8 +583,8 @@ export class BattleScene {
   }
 
   /** Lays a side's squishy down at once (a resumed battle where it's already tuckered out). */
-  knockedOut(side: BattleSideId): void {
-    const rig = this.#rigs[side];
+  knockedOut(side: BattleSideId, slot?: number): void {
+    const rig = this.#rigAt(side, slot);
     rig.down = true;
     rig.act = {
       kind: 'faint',
@@ -519,8 +608,15 @@ export class BattleScene {
     this.#now = now;
     const other = step.side === 'a' ? 'b' : 'a';
     if ((step.kind === 'move' || step.kind === 'miss') && step.move) {
-      this.#lastMove = { move: step.move, user: step.side };
+      this.#lastMove = { move: step.move, user: step.side, slot: step.slot };
     }
+    // Who a cue is about (#190): the step's squishy on its side; on the other
+    // side, the last move's user, else that side's lead (the boss).
+    const last = this.#lastMove;
+    const rigOf = (side: BattleSideId): Rig =>
+      side === step.side
+        ? this.#rigAt(side, step.slot)
+        : this.#rigAt(side, last?.user === side ? last.slot : null);
     const moveId = step.kind === 'move' || step.kind === 'miss' ? step.move : this.#lastMove?.move;
     const user = step.kind === 'move' || step.kind === 'miss' ? step.side : this.#lastMove?.user;
     const plan = planStep(step, {
@@ -532,22 +628,25 @@ export class BattleScene {
     });
     this.#playing = { kind: step.kind, start: now, ms: step.ms };
     for (const cue of plan.acts) {
-      const rig = this.#rigs[cue.side];
+      const rig = rigOf(cue.side);
       if (cue.kind === 'swap-in' && extra.incoming) {
         // The new squishy comes out when the drop starts (the old one has hopped away).
         const incoming = extra.incoming;
         this.#actCues.push({ rig, kind: 'swap-out', at: now + cue.delay, ms: 0, strength: 0 });
         this.#effectCues.push({
           cue: { kind: 'dust', side: cue.side, delay: cue.delay, element: null, strength: 0 },
+          rig,
+          other: rigOf(cue.side === 'a' ? 'b' : 'a'),
           at: now + cue.delay,
           duration: 0,
         });
         this.#squishCues.push({
           cue: { side: cue.side, move: 'jiggle', delay: cue.delay, strength: 0 },
+          rig,
           at: now + cue.delay,
         });
         // A marker cue: sendOut runs when it comes due (see #runActCue).
-        this.#pendingSwaps.push({ side: cue.side, at: now + cue.delay, member: incoming });
+        this.#pendingSwaps.push({ rig, at: now + cue.delay, member: incoming });
       }
       this.#actCues.push({
         rig,
@@ -568,18 +667,29 @@ export class BattleScene {
                 ? 2200
                 : step.ms * 0.9
               : 0;
-      this.#effectCues.push({ cue, at: now + cue.delay, duration });
+      this.#effectCues.push({
+        cue,
+        rig: rigOf(cue.side),
+        other: rigOf(cue.side === 'a' ? 'b' : 'a'),
+        at: now + cue.delay,
+        duration,
+      });
     }
-    for (const cue of plan.squish) this.#squishCues.push({ cue, at: now + cue.delay });
-    this.#camera.cue(plan.camera, now);
-    // Anyone left at arm's length by a dash that landed nothing hops home.
-    const bystander = step.kind === 'hit' ? null : this.#rigs[other];
-    if (
-      bystander &&
-      bystander.act &&
-      bystander.act.kind === 'dash' &&
-      !plan.acts.some((a) => a.side === other)
-    ) {
+    for (const cue of plan.squish)
+      this.#squishCues.push({ cue, rig: rigOf(cue.side), at: now + cue.delay });
+    const focus = plan.camera.focus;
+    this.#camera.cue(plan.camera, now, focus ? rigOf(focus).home : undefined);
+    // Anyone left at arm's length by a dash that landed nothing hops home
+    // (in a team battle, any squishy this step doesn't move, #190).
+    if (step.kind === 'hit') return;
+    const cued = new Set(plan.acts.map((a) => rigOf(a.side)));
+    const bystanders = this.#options.team
+      ? this.#all.filter((r) => !cued.has(r))
+      : plan.acts.some((a) => a.side === other)
+        ? []
+        : [this.#rigs[other]];
+    for (const bystander of bystanders) {
+      if (bystander.act?.kind !== 'dash') continue;
       this.#actCues.push({
         rig: bystander,
         kind: 'return',
@@ -613,7 +723,12 @@ export class BattleScene {
       const swap = this.#pendingSwaps[i];
       if (swap && swap.at <= now) {
         this.#pendingSwaps.splice(i, 1);
-        this.sendOut(swap.side, swap.member.speciesId, swap.member.instanceId, swap.member.level);
+        this.#sendOut(
+          swap.rig,
+          swap.member.speciesId,
+          swap.member.instanceId,
+          swap.member.level ?? 1,
+        );
       }
     }
     // Acts that came due start from the pose the fighter is in now.
@@ -629,15 +744,14 @@ export class BattleScene {
     });
     this.#squishCues = this.#squishCues.filter((cue) => {
       if (cue.at > now) return true;
-      const rig = this.#rigs[cue.cue.side];
+      const { rig } = cue;
       if (rig.out && cue.cue.strength > 0)
         rig.field.play(rig.out.handle, cue.cue.move, now, cue.cue.strength);
       return false;
     });
     let moving =
       this.#actCues.length > 0 || this.#effectCues.length > 0 || this.#squishCues.length > 0;
-    for (const side of SIDES) {
-      const rig = this.#rigs[side];
+    for (const rig of this.#all) {
       const running = actRunning(rig.act, now);
       let pose: Pose;
       if (
@@ -673,8 +787,7 @@ export class BattleScene {
 
   /** True while an act, an effect or the camera is mid-motion (not just breathing or a bob). */
   isPlaying(now: number): boolean {
-    for (const side of SIDES) {
-      const rig = this.#rigs[side];
+    for (const rig of this.#all) {
       if (actRunning(rig.act, now)) return true;
       if (rig.out && rig.field.isPlaying(rig.out.handle, now)) return true;
     }
@@ -686,13 +799,13 @@ export class BattleScene {
   }
 
   /** Shows or hides the sparkle shield over a side's squishy (from its pill's chips). */
-  setShield(side: BattleSideId, on: boolean): void {
-    this.#shielded[side] = on;
+  setShield(side: BattleSideId, on: boolean, slot?: number): void {
+    this.#rigAt(side, slot).shielded = on;
   }
 
   /** True while a side's sparkle shield shows (the dev hook and tests). */
-  shieldShown(side: BattleSideId): boolean {
-    return this.#bubbles[side].isEnabled();
+  shieldShown(side: BattleSideId, slot?: number): boolean {
+    return this.#rigAt(side, slot).bubble?.isEnabled() ?? false;
   }
 
   /**
@@ -700,8 +813,8 @@ export class BattleScene {
    * middle in CSS pixels and half its height, or null with nobody out or
    * nothing drawn yet.
    */
-  screenSpot(side: BattleSideId): { x: number; y: number; r: number } | null {
-    const rig = this.#rigs[side];
+  screenSpot(side: BattleSideId, slot?: number): { x: number; y: number; r: number } | null {
+    const rig = this.#rigAt(side, slot);
     const fighter = rig.out;
     const camera = this.#scene.activeCamera;
     const canvas = this.#scene.getEngine().getRenderingCanvas();
@@ -723,11 +836,11 @@ export class BattleScene {
   }
 
   #placeBubbles(): void {
-    for (const side of SIDES) {
-      const rig = this.#rigs[side];
+    for (const rig of this.#all) {
       const fighter = rig.out;
-      const mesh = this.#bubbles[side];
-      const show = this.#shielded[side] && fighter !== null && !rig.down && rig.pose.scale > 0.05;
+      const mesh = rig.bubble;
+      if (!mesh) continue;
+      const show = rig.shielded && fighter !== null && !rig.down && rig.pose.scale > 0.05;
       mesh.setEnabled(show);
       if (!show) continue;
       const c = this.#centre(rig, rig.pose, fighter);
@@ -739,30 +852,31 @@ export class BattleScene {
   }
 
   setLod(lod: SquishyLod): void {
-    for (const side of SIDES) this.#rigs[side].field.setLod(lod);
+    for (const rig of this.#all) rig.field.setLod(lod);
     this.#keepers.setLod(lod);
     this.#casterMeshes = -1;
   }
 
   get stats(): BattleSceneStats {
-    const a = this.#rigs.a.field.stats;
-    const b = this.#rigs.b.field.stats;
+    const fields = this.#all.map((rig) => rig.field.stats);
+    const sum = (key: 'meshes' | 'instances' | 'shadowLook') =>
+      fields.reduce((n, f) => n + f[key], 0);
     return {
-      squishies: (this.#rigs.a.out ? 1 : 0) + (this.#rigs.b.out ? 1 : 0),
-      meshes: a.meshes + b.meshes,
-      instances: a.instances + b.instances,
-      shadowLook: a.shadowLook + b.shadowLook,
-      accessories: [this.#rigs.a, this.#rigs.b].reduce(
+      squishies: this.#all.filter((rig) => rig.out).length,
+      meshes: sum('meshes'),
+      instances: sum('instances'),
+      shadowLook: sum('shadowLook'),
+      accessories: this.#all.reduce(
         (n, rig) =>
           n + [...rig.bench.values()].filter((f) => rig.field.accessoryOf(f.handle)).length,
         0,
       ),
-      lod: a.lod,
+      lod: this.#rigs.a.field.stats.lod,
       keeper: this.#keeper !== null,
       arena: this.#arena.stats,
       effects: this.#effects.stats,
       acts: this.#acts,
-      down: (this.#rigs.a.down ? 1 : 0) + (this.#rigs.b.down ? 1 : 0),
+      down: this.#all.filter((rig) => rig.down).length,
       reducedMotion: this.#options.reducedMotion,
       drawCalls: this.#drawCalls,
       camera: this.#cameraStat(),
@@ -788,12 +902,11 @@ export class BattleScene {
     this.#scene.onBeforeRenderObservable.remove(this.#beforeRender);
     this.#scene.onAfterRenderObservable.remove(this.#afterRender);
     this.#effects.dispose();
-    for (const side of SIDES) this.#bubbles[side].dispose();
+    for (const rig of this.#all) rig.bubble?.dispose();
     this.#bubbleMaterial.dispose();
     this.#fenceMaterial?.dispose();
     this.#keepers.dispose();
-    for (const side of SIDES) {
-      const rig = this.#rigs[side];
+    for (const rig of this.#all) {
       rig.field.dispose();
       rig.root.dispose();
     }
@@ -839,11 +952,9 @@ export class BattleScene {
   }
 
   #spawn(c: EffectCueAt): void {
-    const { cue } = c;
-    const rig = this.#rigs[cue.side];
+    const { cue, rig, other } = c;
     const fighter = rig.out ?? rig.fence;
     if (!fighter) return;
-    const other = this.#rigs[cue.side === 'a' ? 'b' : 'a'];
     const at = { ...this.#centre(rig, rig.pose, fighter) };
     let to: Point | undefined;
     let path: ((t: number) => Point) | undefined;
@@ -916,8 +1027,7 @@ export class BattleScene {
     const uz = k.z / alen;
     const m = this.#shadowMatrices;
     let i = 0;
-    for (const side of SIDES) {
-      const rig = this.#rigs[side];
+    for (const rig of this.#all) {
       for (const share of SHADOW_SHARES) {
         const o = i * 16;
         i++;
@@ -989,8 +1099,7 @@ export class BattleScene {
     const aspect = engine.getRenderWidth() / Math.max(1, engine.getRenderHeight());
     // What must stay on screen: both fighters where they stand and where they are now.
     let i = 0;
-    for (const side of SIDES) {
-      const rig = this.#rigs[side];
+    for (const rig of this.#all) {
       // Ears, tails and a squash all reach past the body; a wide margin keeps every bit on screen (#142).
       const r = (rig.out?.radius ?? 1) * 1.35 + 0.6;
       const h = (rig.out?.height ?? 2) * 1.25 + 0.3;
