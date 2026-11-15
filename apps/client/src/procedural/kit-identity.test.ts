@@ -7,7 +7,8 @@ import {
   type PartShape,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { LOD } from './config.js';
+import { FIXED_COLORS, LOD } from './config.js';
+import { DRAFT_BODIES, DRAFT_PARTS, draftLooks } from './gallery/boss-drafts.js';
 import { squishyParams, type PartPlacement } from './params.js';
 import { partArrays } from './part-shapes.js';
 import { partMatrix } from './placement.js';
@@ -176,3 +177,51 @@ const GOLDEN_SHAPES: Record<string, string> = {
   arc: '98b102a9a5f19af0',
 };
 const GOLDEN_ROSTER = 'df66e5c157262849';
+
+describe('ring splay and the metal role (#234 round 8)', () => {
+  const drafts = visualRegistry({
+    bodies: [...GAME_DATA.bodies, ...DRAFT_BODIES],
+    parts: [...GAME_DATA.parts, ...DRAFT_PARTS],
+  });
+  const tinesOf = (id: string) => {
+    const look = draftLooks().find((l) => l.id === id);
+    if (!look) throw new Error(`no look ${id}`);
+    const params = squishyParams({ id, visual: look.visual }, 'kit-ring', drafts);
+    const tines = params.parts.find((p) => p.id.endsWith('-tines'));
+    if (!tines) throw new Error(`no tines on ${id}`);
+    return tines;
+  };
+
+  it('fans a ring out with splay: mirrored, growing towards the ends', () => {
+    const fan = tinesOf('draft-rakelet-fan').placements;
+    expect(fan).toHaveLength(11);
+    const middle = fan[5];
+    expect(middle?.splay).toBe(0);
+    expect(middle?.side).toBe(0);
+    for (let i = 0; i < 5; i++) {
+      const left = fan[i];
+      const right = fan[10 - i];
+      expect(left?.side).toBe(-1);
+      expect(right?.side).toBe(1);
+      expect(left?.splay).toBeCloseTo(right?.splay ?? NaN);
+      expect(left?.splay ?? 0).toBeGreaterThan(fan[i + 1]?.splay ?? 0);
+    }
+    expect(fan[0]?.splay).toBeLessThan((40 * Math.PI) / 180);
+  });
+
+  it('keeps a ring without splay parallel', () => {
+    for (const p of tinesOf('draft-rakelet').placements) {
+      expect([p.splay, p.side]).toEqual([0, 0]);
+    }
+  });
+
+  it('colours metal parts the fixed metal grey', () => {
+    const [r, g, b] = tinesOf('draft-rakelet').color;
+    const hex = FIXED_COLORS.metal;
+    expect([r, g, b].map((c) => Math.round(c * 255))).toEqual([
+      parseInt(hex.slice(1, 3), 16),
+      parseInt(hex.slice(3, 5), 16),
+      parseInt(hex.slice(5, 7), 16),
+    ]);
+  });
+});

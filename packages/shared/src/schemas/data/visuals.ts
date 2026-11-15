@@ -84,6 +84,8 @@ export type PartShape = z.infer<typeof PartShapeSchema>;
  * Which colour a part takes. `primary`, `secondary`, `accent` and `detail`
  * are the species palette's 1st to 4th colours (a missing one falls back to
  * the one before it); `ink`, `white` and `blush` are fixed toy colours.
+ * `metal` (#234 kit extension, appended) is a fixed cool grey for tool metal
+ * such as rake tines.
  */
 export const PaletteRoleSchema = z.enum([
   'primary',
@@ -93,6 +95,7 @@ export const PaletteRoleSchema = z.enum([
   'ink',
   'white',
   'blush',
+  'metal',
 ]);
 export type PaletteRole = z.infer<typeof PaletteRoleSchema>;
 
@@ -210,7 +213,10 @@ export const PartSchema = z.strictObject({
   tilt: degrees(-90, 90).optional(),
   /**
    * Paired parts lean outwards, away from the middle (sticking-out parts),
-   * or turn outwards like eyebrows (surface parts).
+   * or turn outwards like eyebrows (surface parts). On a `ring` (#234 kit
+   * extension) the copies fan out: each leans sideways, away from `around`,
+   * in proportion to how far round it sits, the outermost by nearly `splay`
+   * (a leaf rake's tines). Unset leaves a ring's copies parallel, as before.
    */
   splay: degrees(-90, 90).optional(),
   /** How far the part sinks into the body: 0 sits on it, 1 is fully sunk. */

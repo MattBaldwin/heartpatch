@@ -201,6 +201,7 @@ function paletteColors(
     ink: inkHex ? hexToRgb(inkHex) : ink,
     white,
     blush: hexToRgb(FIXED_COLORS.blush),
+    metal: hexToRgb(FIXED_COLORS.metal),
   };
 }
 
@@ -226,7 +227,13 @@ function placementsFor(part: Part, height: number, rng: Rng): PartPlacement[] {
         layout.kind === 'row'
           ? part.up + ((layout.to - part.up) * i) / (layout.count - 1)
           : part.up;
-      out.push({ around: a * DEG, up: u * DEG, size, tilt, splay: 0, side: 0 });
+      // A ring with `splay` fans out (#234): each copy leans away from
+      // `around` in proportion to its offset; unset stays parallel.
+      const offset =
+        layout.kind === 'ring' && layout.spread > 0 ? (a - part.around) / layout.spread : 0;
+      const fan = splay * offset;
+      const side = fan === 0 ? 0 : fan > 0 ? 1 : -1;
+      out.push({ around: a * DEG, up: u * DEG, size, tilt, splay: Math.abs(fan), side });
     }
     return out;
   }
