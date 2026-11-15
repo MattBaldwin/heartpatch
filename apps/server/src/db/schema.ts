@@ -62,6 +62,7 @@ export const battleKind = pgEnum('battle_kind', [
   'rescue',
   'journey',
   'friendly',
+  'miniboss',
 ]);
 /** `no-contest`: the server called it off (content re-tuned mid-battle). */
 export const battleStatus = pgEnum('battle_status', ['active', 'finished', 'no-contest']);
@@ -2403,6 +2404,88 @@ export const postPurchases = pgTable(
       .on(t.mapId, t.userId)
       .where(sql`${t.itemId} = 'rare-lure' and ${t.consumedAt} is null`),
     check('post_purchases_price_positive', sql`${t.price} > 0`),
+  ],
+);
+
+/**
+ * A mini-boss's visit to a patch (#190): one row per patch and week, written
+ * once by the boss module when the visit opens (the insert is the
+ * idempotency), so its boss and tile are pinned even if land changes hands
+ * mid-visit. `window_id` is the patch-local Monday of its week. Server-only:
+ * the species and the schedule never reach a client that hasn't met it.
+ */
+export const bossWindows = pgTable(
+  'boss_windows',
+  {
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    windowId: date('window_id', { mode: 'string' }).notNull(),
+    speciesId: text('species_id').notNull(),
+    q: smallint('q').notNull(),
+    r: smallint('r').notNull(),
+    opensAt: timestamptz('opens_at').notNull(),
+    endsAt: timestamptz('ends_at').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.mapId, t.windowId] }),
+    check('boss_windows_ends_after_opens', sql`${t.endsAt} > ${t.opensAt}`),
+  ],
+);
+
+/**
+ * One Keeper's go at one visit (#190): written when they first fight it.
+ * `won_battle_id` is set by the win that ends the visit for them; `asks` is
+ * the befriend asks after it (190c). Tries are counted from `battles`, so a
+ * no-contest gives its try back with no bookkeeping.
+ */
+export const bossEncounters = pgTable(
+  'boss_encounters',
+  {
+    mapId: uuid('map_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    windowId: date('window_id', { mode: 'string' }).notNull(),
+    wonBattleId: uuid('won_battle_id').references(() => battles.id, { onDelete: 'set null' }),
+    asks: jsonb('asks').notNull().default([]),
+    createdAt: timestamptz('created_at').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.mapId, t.userId, t.windowId] }),
+    foreignKey({
+      name: 'boss_encounters_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'boss_encounters_window_fk',
+      columns: [t.mapId, t.windowId],
+      foreignColumns: [bossWindows.mapId, bossWindows.windowId],
+    }).onDelete('cascade'),
+  ],
+);
+
+/**
+ * A Keeper's bond with one boss kind (#190, written by 190c's befriend): the
+ * "not yet"s so far, and the squishy once one joined. One per player per kind.
+ */
+export const bossBonds = pgTable(
+  'boss_bonds',
+  {
+    mapId: uuid('map_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    speciesId: text('species_id').notNull(),
+    misses: integer('misses').notNull().default(0),
+    squishyId: uuid('squishy_id').references(() => squishies.id, { onDelete: 'set null' }),
+    befriendedAt: timestamptz('befriended_at'),
+  },
+  (t) => [
+    primaryKey({ columns: [t.mapId, t.userId, t.speciesId] }),
+    foreignKey({
+      name: 'boss_bonds_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }).onDelete('cascade'),
+    check('boss_bonds_misses_nonnegative', sql`${t.misses} >= 0`),
   ],
 );
 

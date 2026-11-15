@@ -388,6 +388,7 @@ export const BattleKindSchema = z.enum([
   'rescue',
   'journey',
   'friendly',
+  'miniboss',
 ]);
 export type BattleKind = z.infer<typeof BattleKindSchema>;
 

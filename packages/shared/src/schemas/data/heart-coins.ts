@@ -45,6 +45,7 @@ export const HeartCoinRulesSchema = z.strictObject({
     rescue: coins,
     journey: coins,
     friendly: coins,
+    miniboss: coins,
   }),
   /**
    * Heart Coins for the Keeper whose land held (#728), as `CoinRules.defenseWin`,
