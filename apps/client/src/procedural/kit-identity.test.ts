@@ -122,7 +122,7 @@ describe("anchor: 'behind'", () => {
     const face = rows(
       partMatrix(orb, scale, { ...part, anchor: undefined, surface: true }, placement),
     )[3];
-    expect(bottom).toBeCloseTo(face?.[1] ?? NaN, 1);
+    expect(bottom).toBeCloseTo(face[1] ?? NaN, 1);
   });
 
   it('leans back with positive tilt', () => {
