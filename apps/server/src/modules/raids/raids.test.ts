@@ -330,7 +330,11 @@ describe.skipIf(!url)('raids (needs DATABASE_URL)', () => {
       );
       const seen = await report(server, rival, mapId);
       expect(seen.raids).toEqual([
-        expect.objectContaining({ id: row!.id, attackerName: kid.username, attackerComputer: true }),
+        expect.objectContaining({
+          id: row!.id,
+          attackerName: kid.username,
+          attackerComputer: true,
+        }),
       ]);
     });
 

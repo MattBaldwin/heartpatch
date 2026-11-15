@@ -42,6 +42,18 @@ const FENCE_NAMES = new Map(
   GAME_DATA.buildings.filter((b) => b.kind === 'fence').map((b) => [b.id, b.name]),
 );
 
+/**
+ * Whether a challenge came from a Computer friend (#386): the server's
+ * `attackerComputer`, written with the raid so it holds after the mate leaves
+ * the patch. Older servers leave it out, so fall back to today's member list.
+ */
+export function raidByComputer(
+  raid: Pick<Raid, 'attackerUserId'> & Partial<Pick<Raid, 'attackerComputer'>>,
+  isMember?: (userId: string) => boolean,
+): boolean {
+  return raid.attackerComputer ?? isMember?.(raid.attackerUserId) === true;
+}
+
 /** One line per raid: who came by and how it went, kind either way. */
 export function raidLine(
   raid: Pick<Raid, 'attackerName' | 'outcome' | 'reason' | 'stance'> &
