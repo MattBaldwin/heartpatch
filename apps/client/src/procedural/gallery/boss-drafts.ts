@@ -147,21 +147,62 @@ export const DRAFT_PARTS: Part[] = [
 
   // ── Rakelet: rake-tine teeth, leaf-pile hair, one leaf sliding off ─────
   part({
-    // A wide, straight comb of white tines right across the mouth (not two
-    // buck teeth under the nose): seven short tines hanging from one row.
-    id: 'draft-rake-tines',
-    slot: 'fangs',
-    shape: 'capsule',
-    size: [0.045, 0.13, 0.045],
+    // The rake head is the whole lower face (owner, round 3): a wide flat
+    // bar right across it, wider than the face...
+    id: 'draft-rake-bar',
+    slot: 'mane',
+    shape: 'ellipsoid',
+    size: [1.05, 0.1, 0.16],
     color: 'white',
-    layout: { kind: 'ring', count: 7, spread: 26 },
+    layout: { kind: 'single' },
     around: 0,
-    up: -6,
-    tilt: -84,
-    sink: 0.6,
+    up: -18,
+    sink: 0.5,
     jitter: 0,
   }),
   part({
+    // ...long, countable tines hanging from it as the teeth, reaching well
+    // below the chin and leaning a little forward of the mouth...
+    id: 'draft-rake-tines',
+    slot: 'fangs',
+    shape: 'capsule',
+    size: [0.055, 0.6, 0.055],
+    color: 'white',
+    layout: { kind: 'ring', count: 8, spread: 48 },
+    around: 0,
+    up: -19,
+    tilt: -62,
+    sink: 0.08,
+    jitter: 0,
+  }),
+  part({
+    id: 'draft-rake-tines-mid',
+    slot: 'fangs',
+    shape: 'capsule',
+    size: [0.055, 0.46, 0.055],
+    color: 'white',
+    layout: { kind: 'ring', count: 7, spread: 44 },
+    around: 0,
+    up: -19,
+    tilt: -62,
+    sink: 0.08,
+    jitter: 0,
+  }),
+  part({
+    // ...and a dark open mouth behind them, so the tines read as teeth.
+    id: 'draft-rake-mouth',
+    slot: 'ears',
+    shape: 'ellipsoid',
+    size: [0.7, 0.08, 0.42],
+    color: 'ink',
+    layout: { kind: 'single' },
+    around: 0,
+    up: -36,
+    sink: 0.7,
+    jitter: 0,
+  }),
+  part({
+    // Pileup's little comb of baby tines.
     id: 'draft-rake-tines-small',
     slot: 'fangs',
     shape: 'capsule',
@@ -172,6 +213,20 @@ export const DRAFT_PARTS: Part[] = [
     up: -6,
     tilt: -84,
     sink: 0.45,
+    jitter: 0,
+  }),
+  part({
+    // The rake's handle: a long stick out of the back, over the shoulder.
+    id: 'draft-rake-handle',
+    slot: 'tail',
+    shape: 'capsule',
+    size: [0.07, 1.5, 0.07],
+    color: 'detail',
+    layout: { kind: 'single' },
+    around: 115,
+    up: 30,
+    tilt: 28,
+    sink: 0.3,
     jitter: 0,
   }),
   part({
@@ -207,12 +262,12 @@ export const DRAFT_PARTS: Part[] = [
     slot: 'horns',
     shape: 'teardrop',
     size: [0.22, 0.3, 0.06],
-    color: 'detail',
+    color: 'accent',
     layout: { kind: 'single' },
-    around: 96,
-    up: -20,
-    tilt: -40,
-    sink: 0.08,
+    around: 68,
+    up: 30,
+    tilt: -70,
+    sink: 0.02,
     jitter: 0,
   }),
   part({
@@ -221,13 +276,29 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-lanky-arms',
     slot: 'arms',
     shape: 'capsule',
-    size: [0.13, 1.35, 0.13],
+    size: [0.15, 0.9, 0.15],
     color: 'primary',
     layout: { kind: 'pair' },
     around: 86,
     up: 30,
     tilt: -84,
     splay: 9,
+    sink: 0.15,
+    jitter: 0,
+  }),
+  part({
+    // The long forearm from the same shoulder, thinner and splayed a little
+    // further out: the arm tapers and bends at the elbow (boss form).
+    id: 'draft-lanky-forearms',
+    slot: 'back',
+    shape: 'capsule',
+    size: [0.115, 1.35, 0.115],
+    color: 'primary',
+    layout: { kind: 'pair' },
+    around: 86,
+    up: 30,
+    tilt: -85,
+    splay: 12,
     sink: 0.15,
     jitter: 0,
   }),
@@ -522,18 +593,34 @@ export const DRAFT_PARTS: Part[] = [
     jitter: 0,
   }),
   part({
-    // Twin exhaust pipes at the back (boss form).
+    // Twin hot-rod exhaust stacks standing up at the back (Revvy's new
+    // part): tall enough to show over the kart from the front.
     id: 'draft-exhaust-pipes',
     slot: 'back',
     shape: 'capsule',
-    size: [0.14, 0.45, 0.14],
+    size: [0.16, 0.7, 0.16],
     color: 'detail',
     layout: { kind: 'pair' },
-    around: 170,
-    up: -20,
-    tilt: -5,
-    splay: 6,
-    sink: 0.2,
+    around: 145,
+    up: 30,
+    tilt: 70,
+    splay: 8,
+    sink: 0.3,
+    jitter: 0,
+  }),
+  part({
+    // A big racing spoiler on the back (Rickeyride's new part): a wide flat
+    // wing standing out behind the kart, the boss's silhouette change.
+    id: 'draft-kart-spoiler',
+    slot: 'wings',
+    shape: 'ellipsoid',
+    size: [1.4, 0.55, 0.1],
+    color: 'accent',
+    layout: { kind: 'single' },
+    around: 180,
+    up: 55,
+    tilt: 25,
+    sink: 0.3,
     jitter: 0,
   }),
 ];
@@ -557,7 +644,7 @@ export interface DraftBossLine {
   readonly forms: readonly [DraftBossForm, DraftBossForm, DraftBossForm];
 }
 
-const RAKELET_PALETTE = ['#9fd46e', '#fff6dc', '#f08a3c', '#d6533a'];
+const RAKELET_PALETTE = ['#9fd46e', '#fff6dc', '#f08a3c', '#7a4a2e'];
 const MOM_PALETTE = ['#ff8a6a', '#fff0e6', '#ffd166', '#8a3550'];
 const DAD_PALETTE = ['#a9d4f5', '#f4fbff', '#e2574c', '#f7f1ea'];
 const RICKEY_PALETTE = ['#ffd84a', '#bff0ff', '#3f8fe8', '#4a3a5c'];
@@ -608,7 +695,9 @@ export const DRAFT_BOSS_LINES: readonly DraftBossLine[] = [
             'dot-eyes',
             'draft-soft-brows',
             'open-mouth',
-            'draft-rake-tines',
+            'draft-rake-bar',
+            'draft-rake-tines-mid',
+            'draft-rake-mouth',
             'draft-face-freckles',
             'draft-leaf-pile-hair',
             'draft-lanky-arms',
@@ -634,11 +723,14 @@ export const DRAFT_BOSS_LINES: readonly DraftBossLine[] = [
             'sharp-eyes',
             'draft-fierce-brows',
             'open-mouth',
+            'draft-rake-bar',
             'draft-rake-tines',
-            'draft-face-freckles',
+            'draft-rake-mouth',
             'draft-leaf-pile-hair',
             'draft-falling-leaf',
+            'draft-rake-handle',
             'draft-lanky-arms',
+            'draft-lanky-forearms',
             'draft-lanky-legs',
           ],
           size: 1.88,
@@ -912,6 +1004,7 @@ export const DRAFT_BOSS_LINES: readonly DraftBossLine[] = [
             'draft-kart-feet',
             'draft-exhaust-pipes',
             'draft-kart-fins',
+            'draft-kart-spoiler',
           ],
           size: 1.8,
           finish: 'shimmer',
