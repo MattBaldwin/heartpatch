@@ -1202,6 +1202,23 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
 }
 
+/* Each plate wears its turn-order dot's colour (pink, yellow, green), so the
+   strip's initials point at the right friend. */
+.boss-friend-tint-0 {
+  background: rgb(255 226 238 / 96%);
+  border-color: #ffc2dc;
+}
+
+.boss-friend-tint-1 {
+  background: rgb(255 244 200 / 96%);
+  border-color: #ffe48a;
+}
+
+.boss-friend-tint-2 {
+  background: rgb(226 245 219 / 96%);
+  border-color: #bfe8b0;
+}
+
 .boss-friend-name {
   overflow: hidden;
   font-size: 13px;

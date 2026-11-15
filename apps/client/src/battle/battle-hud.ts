@@ -447,7 +447,9 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     safe = null;
   };
   const stopWatchingSheet = watchLayout([sheet], placeTip);
-  const stopWatching = watchLayout([hud, plates.mine.node, plates.theirs.node], forget);
+  // The result card too: a boss fight frames the fight above it (#190), and
+  // each ask's answer changes its height.
+  const stopWatching = watchLayout([hud, plates.mine.node, plates.theirs.node, result], forget);
 
   const button = (
     label: string,
@@ -994,6 +996,16 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     safe: () => {
       if (safe) return safe;
       const h = window.innerHeight || 1;
+      if (team && !result.hidden) {
+        // A boss fight's card (#190) sits low, and the plates step aside
+        // under it: frame the fight between the ✕ and the card's top edge,
+        // so the boss stays in view above the card (mockup frame 3).
+        const close = leave.getBoundingClientRect().bottom;
+        const card = result.getBoundingClientRect().top;
+        const top = Math.min(0.3, close > 0 ? (close + 8) / h : 0.12);
+        safe = { top, bottom: Math.max(top + 0.2, card > 0 ? (card - 8) / h : 0.5) };
+        return safe;
+      }
       if (team) {
         // A team battle (#190): between the boss's plate and the friends' row.
         const edge = team.topEdge.getBoundingClientRect().bottom;

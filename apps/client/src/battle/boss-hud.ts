@@ -178,7 +178,11 @@ export function mountBossHud(): BossHud {
           callout.hidden = true;
           const wrap = el(
             'div',
-            { class: 'boss-friend', 'data-testid': `boss-friend-${String(friend.slot)}` },
+            {
+              // The same colour as its dot in the turn-order strip (`m.who % 3`).
+              class: `boss-friend boss-friend-tint-${String(friend.slot % 3)}`,
+              'data-testid': `boss-friend-${String(friend.slot)}`,
+            },
             name,
             b.track,
             callout,
