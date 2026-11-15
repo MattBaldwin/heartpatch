@@ -13,7 +13,7 @@ import {
   bossWeekOf,
   type BossEventRules,
 } from '@heartpatch/shared/server';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { expect } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
@@ -59,7 +59,12 @@ export function bossHarness(db: Database, url: string, prefix: string) {
   let app: FastifyInstance | undefined;
   let counter = 0;
 
-  const call = (method: 'GET' | 'POST', path: string, who: BossPlayer, payload?: object) => {
+  const call = (
+    method: 'GET' | 'POST',
+    path: string,
+    who: BossPlayer,
+    payload?: object,
+  ): Promise<LightMyRequestResponse> => {
     if (!app) throw new Error('bossHarness: call start() first');
     return app.inject({
       method,
