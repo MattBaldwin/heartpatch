@@ -7,7 +7,6 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDbClient, type DbClient } from './client.js';
 import { migrationsFolder, runMigrations } from './migrator.js';
-import { users } from './schema.js';
 
 const url = inject('testDatabaseUrl');
 
@@ -65,10 +64,12 @@ describe.skipIf(!url)('migration 0035 on saved Keepers (#289, needs DATABASE_URL
     }));
     const ids: string[] = [];
     for (const [i, keeper] of saved.entries()) {
-      const [user] = await db
-        .insert(users)
-        .values({ username: `m0035_${String(i)}`, passwordHash: 'x', birthYear: 2013 })
-        .returning({ id: users.id });
+      // Raw SQL: `users` gained a column after 0035 (#386).
+      const [user] = (await db.execute(sql`
+        insert into users (id, username, password_hash, birth_year)
+        values (gen_random_uuid(), ${`m0035_${String(i)}`}, 'x', 2013) returning id`)) as unknown as {
+        id: string;
+      }[];
       ids.push(user!.id);
       // Raw SQL: the code schema lists the columns this migration adds.
       await db.execute(

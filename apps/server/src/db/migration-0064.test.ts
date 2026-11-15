@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { eq, sql } from 'drizzle-orm';
 import { describe, expect, inject, it } from 'vitest';
-import { createDbClient } from './client.js';
-import { migrationsFolder } from './migrator.js';
+import { databaseBefore } from '../../tests/before-migration.js';
+import { migrationsFolder, runMigrations } from './migrator.js';
 import { computerMates, maps, users } from './schema.js';
 
 const url = inject('testDatabaseUrl');
@@ -36,9 +36,12 @@ describe('migration 0064 (computer patch-mates)', () => {
   });
 
   it.skipIf(!url)('guards credentials by kind, and rolls back (needs DATABASE_URL)', async () => {
-    const client = createDbClient(url ?? '', { max: 1, quiet: true });
+    // A scratch database of its own: the rollback deletes every computer
+    // user, and other files' mates on the shared database hold foreign keys.
+    const scratch = await databaseBefore(url!, '0064_computer_mates');
     try {
-      const { db } = client;
+      const { db } = scratch.client;
+      await runMigrations(db);
       const tag = `m0064_${String(process.pid)}`;
       // A player still needs a password and a birth year.
       await expect(
@@ -95,10 +98,8 @@ describe('migration 0064 (computer patch-mates)', () => {
           throw new Error('rollback');
         }),
       ).rejects.toThrow('rollback');
-      await db.delete(maps).where(eq(maps.id, map!.id));
-      await db.execute(sql`delete from users where username ilike ${`${tag}_%`}`);
     } finally {
-      await client.close();
+      await scratch.drop();
     }
   });
 });
