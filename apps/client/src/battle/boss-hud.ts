@@ -102,7 +102,7 @@ export function mountBossHud(): BossHud {
     node.textContent = text;
     node.hidden = false;
     node.classList.remove('boss-callout-show');
-    void node.offsetWidth; // restart the pop
+    node.getBoundingClientRect(); // a style flush, so the pop restarts
     node.classList.add('boss-callout-show');
     const timer = window.setTimeout(() => {
       timers.delete(timer);

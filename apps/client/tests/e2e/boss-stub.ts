@@ -1,3 +1,4 @@
+import { GAME_DATA } from '@heartpatch/shared';
 import type { Page, Request } from '@playwright/test';
 
 /**
@@ -45,13 +46,21 @@ export interface BossStub {
 }
 
 const DAY = 24 * 60 * 60 * 1000;
+const STOMP = 'big-stomp';
 
 function toBoss(b: Battle, options: BossStubOptions): Battle {
   const mine = b.view.sides.a;
   const theirs = b.view.sides.b;
   const team = Math.min(3, mine.squishies.length);
   const boss = theirs.squishies[0];
+  // Its big stomp hits every foe at once (an area move, `targets: 'all-foes'`),
+  // sent as a move def the way a secret boss move is.
+  const base =
+    GAME_DATA.moves.find((m) => m.id === boss?.moves[0] && m.power > 0) ??
+    GAME_DATA.moves.find((m) => m.power > 0)!;
+  const stomp = { ...base, id: STOMP, name: 'Big Stomp', targets: 'all-foes' };
   if (boss) {
+    boss.moves = [STOMP, ...boss.moves.slice(0, 3)];
     boss.boss = true;
     boss.stats = { ...boss.stats, hp: boss.stats.hp * 3 };
     boss.energy = boss.stats.hp;
@@ -62,6 +71,7 @@ function toBoss(b: Battle, options: BossStubOptions): Battle {
   return {
     ...b,
     kind: 'miniboss',
+    moveDefs: [...((b.moveDefs as Json[] | undefined) ?? []), stomp],
     view: {
       ...b.view,
       format: { a: team, b: 1 },
@@ -175,7 +185,7 @@ function playRound(
     boss: {
       ...b.boss,
       triesLeftToday: won
-        ? (b.boss?.triesLeftToday as number)
+        ? b.boss?.triesLeftToday
         : Math.max(0, (b.boss?.triesLeftToday as number) - 1),
       asksLeft: won && options.winState !== 'have-one' ? 2 : 0,
       befriend: won ? (options.winState ?? 'offer') : 'none',

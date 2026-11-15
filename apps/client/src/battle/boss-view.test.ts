@@ -348,6 +348,6 @@ describe('a mini-boss fight on screen (#190)', () => {
     const lines = Object.values(BOSS_TEXT).map((v) =>
       typeof v === 'function' ? v(3 as never) : v,
     );
-    for (const line of lines) expect(findAvoidedWords(String(line))).toEqual([]);
+    for (const line of lines) expect(findAvoidedWords(line)).toEqual([]);
   });
 });
