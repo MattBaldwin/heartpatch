@@ -342,11 +342,14 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     render();
     try {
       const res = await sendCommand(sendDeps, (key) => shops.buy(mapId(), request, key), stillHere);
-      if (res && stillHere()) {
-        shop = res.shop;
-        shopDone = shopReceipt(res);
-        shopConfirm = null;
+      if (res) {
+        // The money is spent and the server holds the item, even if I left the post.
         options.onBought?.(res.shop);
+        if (stillHere()) {
+          shop = res.shop;
+          shopDone = shopReceipt(res);
+          shopConfirm = null;
+        }
       }
     } catch (err) {
       if (stillHere()) {

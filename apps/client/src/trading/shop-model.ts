@@ -17,9 +17,20 @@ import {
 /** Per item: the picture, the name and the one kid line (copy, not rules). */
 export const SHOP_ITEMS: Record<
   PostShopItemId,
-  { readonly icon: string; readonly name: string; readonly line: string }
+  {
+    readonly icon: string;
+    readonly name: string;
+    readonly line: string;
+    /** Added after "Need 💛 N more" when the card is too dear. */
+    readonly poorHint?: string;
+  }
 > = {
-  'rare-lure': { icon: '🔮', name: 'Rare Lure', line: 'Your next wild find leans rarer!' },
+  'rare-lure': {
+    icon: '🔮',
+    name: 'Rare Lure',
+    line: 'Your next wild find leans rarer!',
+    poorHint: 'Selling helps!',
+  },
   'heart-charm-pack': {
     icon: '💖',
     name: 'Heart Charm pack',
@@ -47,7 +58,6 @@ export const SHOP_TEXT = {
   backSoon: 'Back soon!',
   /** A status this build doesn't know (a newer server): safe, never a Buy. */
   notNow: 'Not right now',
-  sellingHelps: 'Selling helps!',
   yes: 'Buy',
   no: 'Not now',
   noUndo: 'Coins spent are spent.',
@@ -123,7 +133,9 @@ function cardOf(item: ShopItemView, balance: number, nowMs: number): ShopCard {
           : SHOP_TEXT.backTomorrow;
     return { ...base, cream: true, state: { text, glow: false }, why: null, canBuy: false };
   }
-  if (item.status !== 'buy') {
+  // Widened on purpose: a newer server may send a status this build doesn't know.
+  const status: string = item.status;
+  if (status !== 'buy') {
     // A status from a newer server: say so calmly and keep Buy off.
     return {
       ...base,
@@ -140,8 +152,8 @@ function cardOf(item: ShopItemView, balance: number, nowMs: number): ShopCard {
     state: null,
     why:
       short > 0
-        ? item.id === 'rare-lure'
-          ? `${SHOP_TEXT.needMore(short)}. ${SHOP_TEXT.sellingHelps}`
+        ? copy.poorHint
+          ? `${SHOP_TEXT.needMore(short)}. ${copy.poorHint}`
           : SHOP_TEXT.needMore(short)
         : null,
     canBuy: short <= 0,

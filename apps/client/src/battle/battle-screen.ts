@@ -420,14 +420,18 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
 
   /** A Rare Lure from the Shop is waiting (#729): Find a squishy glows. */
   let lureHeld = false;
+  /** The newest wild-hints ask; a buy bumps it so an older reply can't dim the glow. */
+  let hintSeq = 0;
   /** What the last wild start said about the lure, for the battle's first line. */
   let lureSaid: string | null = null;
   const lureNote = () => note.textContent === WILD_TEXT.lureNear;
   const setLure = (held: boolean): void => {
     lureHeld = held;
+    hintSeq += 1;
     enter.classList.toggle('battle-entry-lure', held);
-    if (held && !enter.disabled && !battle) note.textContent = WILD_TEXT.lureNear;
-    else if (!held && lureNote()) note.textContent = '';
+    if (held && !enter.disabled && !battle && (!note.textContent || lureNote())) {
+      note.textContent = WILD_TEXT.lureNear;
+    } else if (!held && lureNote()) note.textContent = '';
   };
 
   /**
@@ -440,10 +444,12 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const id = mapId;
     const who = user;
     if (!id) return;
+    const seq = ++hintSeq;
     api
       .wildHints(id)
       .then((hints) => {
-        if (mapId !== id || user !== who) return;
+        // A newer ask (or a buy) has answered since: this one is stale.
+        if (mapId !== id || user !== who || seq !== hintSeq) return;
         const glade = options.isGlade?.(id) ?? false;
         options.onWildHints?.(id, tilesToMark(hints.tiles, glade));
         // The glow follows the server (a lure used on another device goes dark).
