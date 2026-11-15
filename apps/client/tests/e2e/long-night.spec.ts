@@ -227,8 +227,9 @@ test('a Long Night: the countdown, the live feed, the reveal and the crown', asy
   );
   expect(stats.status).toBe(200);
   expect(stats.body.keeperOfTheNight ?? null).toBeNull();
-  // The status carries the Night's result for a Keeper who missed it (727e2).
-  expect((await read()).longNight?.last).toMatchObject({ night: fell.body.night, held: true });
+  // The status keeps the Night's result back until the strike (7:30 PM map
+  // time, server-side): by day it isn't there yet.
+  expect((await read()).longNight?.last).toBeUndefined();
 
   // The morning report follows the reveal. The reveal already told the
   // Night on this device, so the report carries no Long Night block.
@@ -243,6 +244,9 @@ test('a Long Night: the countdown, the live feed, the reveal and the crown', asy
   const gapNow = await api<{ night: string }>(page, 'POST', `/maps/${mapId}/dev/gap-now`);
   expect(gapNow.status, JSON.stringify(gapNow.body)).toBe(200);
   expect(gapNow.body.night).toBe(fell.body.night);
+  // The Gap opens at the strike, so now the status carries the Night's
+  // result for a Keeper who missed it (727e2).
+  expect((await read()).longNight?.last).toMatchObject({ night: fell.body.night, held: true });
   await expect
     .poll(async () => (await hollowState(page))?.longNight.gap, { timeout: 30_000 })
     .toBe('available');

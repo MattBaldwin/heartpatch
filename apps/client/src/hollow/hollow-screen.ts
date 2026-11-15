@@ -34,7 +34,7 @@ import {
   trickOrTreatLines,
   unseenReports,
 } from './hollow-report.js';
-import { placeOf } from './dark-land.js';
+import { placeOf, terrainName } from './dark-land.js';
 import { createNightShow, domCaption, type NightShowDebug, type ShowWalk } from './night-show.js';
 import {
   NIGHT_TEXT,
@@ -53,6 +53,7 @@ import {
   gapState,
   latestResult,
   LONG_NIGHT_TEXT,
+  nextCheckMinutes,
   noticeChip,
   noticeChipText,
   reportLines,
@@ -657,7 +658,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       const tile = options.show?.tileAt(beat);
       switch (beat.kind) {
         case 'enter':
-          return LONG_NIGHT_TEXT.feedAt(name, placeOf(tile).replace(/^your /, ''));
+          return LONG_NIGHT_TEXT.feedAt(name, terrainName(tile));
         case 'recoil':
           return (tile?.homeSlot ?? null) !== null
             ? LONG_NIGHT_TEXT.feedHome(name)
@@ -1451,7 +1452,10 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     render();
   }
 
-  /** Asks again when night falls or morning comes (the map's time, from the server). */
+  /**
+   * Asks again when night falls or morning comes (the map's time, from the
+   * server), or at a Long Night's strike (`nextCheckMinutes`).
+   */
   function scheduleNightCheck(minutes: number): void {
     clearTimeout(nightTimer);
     const at = generation;
@@ -1477,7 +1481,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       status = fresh;
       clockOffset = Date.parse(fresh.now) - now();
       options.layer.setNight(replaying || fresh.night.isNight);
-      scheduleNightCheck(fresh.night.changesInMinutes);
+      scheduleNightCheck(nextCheckMinutes(fresh));
       report = unseenReports(fresh.reports, seenNight());
       const fall = pendingFall;
       // A status asked for before the event (it answers from before nightfall)
