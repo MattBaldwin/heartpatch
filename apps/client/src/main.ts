@@ -589,6 +589,8 @@ let pushOfferOpen = false;
 const raidReport = createRaidReport({
   root: document.body,
   entryRoot: trays.slot('adventure'),
+  isComputer: (userId) =>
+    maps.view?.members.some((m) => m.user.id === userId && m.computer) ?? false,
   watch: (replay) => {
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) {
       battles.watch(replay.start, replay.end);
@@ -1677,6 +1679,8 @@ const lorebook = createLorebook({
 const defense = createDefensePrompt({
   root: document.body,
   nameOf: (userId) => maps.view?.members.find((m) => m.user.id === userId)?.user.username ?? null,
+  isComputer: (userId) =>
+    maps.view?.members.some((m) => m.user.id === userId && m.computer) ?? false,
   openBattle: (battle) => {
     // The server has seated them already: whatever is open steps aside.
     catalog.close();

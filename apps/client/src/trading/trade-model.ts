@@ -67,6 +67,15 @@ export const TRADE_TEXT = {
     `${String(things)} ${things === 1 ? 'thing' : 'things'} for ${name}\u00a0🎁`,
   giftPickFirst: 'Tap things to pick a gift',
   giftConfirmTitle: 'Send this gift? 🎁',
+  /** The offer card from a Computer friend (#386f): the badge sits beside the name. */
+  mateWouldLikeToTrade: (name: string) => `${name} (Computer friend) would like to trade!`,
+  mateWouldLike: ' would like to trade!',
+  /** Under "Send offer" for a Computer friend: a fair offer is never lost to their daily limit. */
+  mateWaits: (name: string) =>
+    `${name} only trades a few times a day. A fair offer waits safely at the post until they can!`,
+  mateSureTitle: 'Are you sure? 🤔',
+  mateSureNote: (name: string) =>
+    `A squishy that goes to ${name} stays with ${name} for good. You can't take it back.`,
   giftConfirmTo: (name: string) => `To ${name}`,
   giftConfirmNote: (name: string) =>
     `${name} picks it up at the post. You can take it back until\u00a0then.`,
@@ -515,4 +524,9 @@ export function meterLook(
     marker: tip === 'none' ? null : Math.min(96, Math.max(4, 50 - 50 * lean)),
     fairHalf: 50 * band,
   };
+}
+
+/** True when a pick holds a squishy (one that goes to a Computer friend is gone for good, #386f). */
+export function givesSquishy(lines: readonly { kind: string }[]): boolean {
+  return lines.some((l) => l.kind === 'squishy');
 }

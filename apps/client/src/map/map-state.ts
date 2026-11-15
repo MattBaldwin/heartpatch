@@ -180,6 +180,21 @@ export class MapState {
         });
         return changed ? 'refresh' : 'none';
       }
+      case 'tile.claimed': {
+        // A computer patch-mate claimed a wild tile (#386c): no battle, so no
+        // cooldown. It's the mate's now, with no wild guardians to hint at.
+        // Its homestead and what's around it only the server knows (#242).
+        const parsed = GAME_EVENTS['tile.claimed'].public.safeParse(event.data);
+        if (!parsed.success) return 'resync';
+        const changed = this.patchTile(parsed.data, {
+          ownerUserId: parsed.data.userId,
+          defenders: 0,
+          gathering: null,
+          guardianHint: null,
+          homestead: null,
+        });
+        return changed ? 'refresh' : 'none';
+      }
       case 'tile.explored': {
         // Its owner searched every spot (#199): the map shows a sparkle.
         const parsed = GAME_EVENTS['tile.explored'].public.safeParse(event.data);

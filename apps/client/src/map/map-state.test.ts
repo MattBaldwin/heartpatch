@@ -106,6 +106,19 @@ describe('MapState', () => {
     expect(state.apply(event('tile.cleared', cleared))).toBe('resync');
   });
 
+  it('recolours a tile live when a computer mate claims it (#386f)', () => {
+    const view = testView(2);
+    const tile = view.tiles.find((t) => t.homeSlot === null && t.ownerUserId === null)!;
+    const state = new MapState(view);
+    const at = { userId: userId(2), q: tile.q, r: tile.r };
+    expect(state.apply(event('tile.claimed', at))).toBe('refresh');
+    expect(state.tileAt(hexKey(tile))?.ownerUserId).toBe(userId(2));
+    expect(state.tileAt(hexKey(tile))?.guardianHint).toBeNull();
+    // A tile this copy doesn't have: nothing to draw. Malformed: refetch.
+    expect(state.apply(event('tile.claimed', { ...at, q: 99 }))).toBe('none');
+    expect(state.apply(event('tile.claimed', { q: 'here' }))).toBe('resync');
+  });
+
   it("dresses a member's Keeper live when their outfit changes (#43)", () => {
     const state = new MapState(testView(2));
     const changed = { userId: userId(2), wearing: ['witch-hat', 'ghost-cape'] };

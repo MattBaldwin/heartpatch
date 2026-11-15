@@ -35,6 +35,7 @@ import {
   thingsIn,
   tabBadges,
   togglePick,
+  givesSquishy,
   TRADE_TEXT,
   tradeEventForMe,
   waiting,
@@ -421,5 +422,18 @@ describe('meterLook (#305)', () => {
       expect(words).not.toMatch(/\d/);
       expect(findAvoidedWords(words)).toEqual([]);
     }
+  });
+});
+
+describe('trades with Computer friends (#386f)', () => {
+  it('words the offer card with the badge text', () => {
+    expect(TRADE_TEXT.mateWouldLikeToTrade('Marigold')).toBe(
+      'Marigold (Computer friend) would like to trade!',
+    );
+  });
+  it('asks "Are you sure?" only when a squishy goes', () => {
+    expect(givesSquishy([{ kind: 'item' }])).toBe(false);
+    expect(givesSquishy([{ kind: 'item' }, { kind: 'squishy' }])).toBe(true);
+    expect(TRADE_TEXT.mateSureNote('Marigold')).toContain('for good');
   });
 });

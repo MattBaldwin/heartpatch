@@ -24,6 +24,7 @@ import { el, messageOf } from '../ui/dom.js';
 import { glimmerSwapApi, type GlimmerSwapApi } from './glimmer-swap-api.js';
 import { hoursToReset, SWAP_TEXT, swapCards, swapsLeft } from './glimmer-swap-model.js';
 import { postConfirm, postSheet } from './post-confirm.js';
+import { computerAvatar, computerBadge } from '../computer-mates/computer-badge.js';
 import { sellApi, type SellApi } from './sell-api.js';
 import { shopApi, type ShopApi } from './shop-api.js';
 import { buyRequest, receipt as shopReceipt, SHOP_TEXT } from './shop-model.js';
@@ -58,6 +59,7 @@ import {
   setItemQuantity,
   SHELF_FILTERS,
   SHELF_SORTS,
+  givesSquishy,
   shelfLines,
   stepItem,
   tabBadges,
@@ -202,6 +204,8 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   let working = false;
   /** The "Send this gift?" sheet is up (#655). */
   let giftConfirm = false;
+  /** The "Are you sure?" before a squishy goes to a Computer friend (#386f). */
+  let tradeConfirm = false;
   /** The Gift tab's "Who's it for?" sheet is up. */
   let matePicker = false;
   let note = '';
@@ -251,6 +255,13 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   const slotOf = (id: string) => mapView?.members.find((m) => m.user.id === id)?.homeSlot ?? null;
   const nameOf = (id: string) =>
     mapView?.members.find((m) => m.user.id === id)?.user.username ?? TRADE_TEXT.someone;
+  const isMate = (id: string | null) =>
+    id !== null && mapView?.members.find((m) => m.user.id === id)?.computer !== undefined;
+  /** A face for a patch-mate: the plum key square for a Computer friend, never a kid's letter. */
+  const faceOf = (id: string, name: string, cls: string): HTMLElement =>
+    isMate(id)
+      ? computerAvatar('dot')
+      : el('span', { class: `post-face ${cls}`, 'aria-hidden': 'true' }, name.slice(0, 1));
   const passOver = () => post !== null && postChip(post.passUntil, now()) === null;
 
   // ---- loading -------------------------------------------------------------
@@ -445,6 +456,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     working = true;
     note = '';
     giftConfirm = false;
+    tradeConfirm = false;
     render();
     try {
       const view = await sendCommand(sendDeps, send, stillHere);
@@ -619,16 +631,19 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
                 'data-testid': 'post-mate',
                 'data-user': u.id,
               },
-              ...(slotNo !== null
-                ? [slotIcon(slotNo)]
-                : [
-                    el(
-                      'span',
-                      { class: 'post-face', 'aria-hidden': 'true' },
-                      u.username.slice(0, 1),
-                    ),
-                  ]),
+              ...(isMate(u.id)
+                ? [computerAvatar('dot')]
+                : slotNo !== null
+                  ? [slotIcon(slotNo)]
+                  : [
+                      el(
+                        'span',
+                        { class: 'post-face', 'aria-hidden': 'true' },
+                        u.username.slice(0, 1),
+                      ),
+                    ]),
               el('span', { class: 'post-mate-row-name' }, u.username),
+              ...(isMate(u.id) ? [computerBadge()] : []),
               ...(on ? [el('span', { 'aria-hidden': 'true' }, '✓')] : []),
             );
             b.addEventListener('click', () => {
@@ -683,11 +698,24 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       el(
         'div',
         { class: 'post-row' },
-        el('span', { class: 'post-face theirs', 'aria-hidden': 'true' }, from.slice(0, 1)),
+        faceOf(offer.fromUserId, from, 'theirs'),
         el(
           'div',
           {},
-          el('b', {}, TRADE_TEXT.wantsToTrade(from)),
+          isMate(offer.fromUserId)
+            ? el(
+                'b',
+                {
+                  'data-testid': 'post-offer-mate',
+                  role: 'group',
+                  'aria-label': TRADE_TEXT.mateWouldLikeToTrade(from),
+                },
+                from,
+                ' ',
+                computerBadge(),
+                TRADE_TEXT.mateWouldLike,
+              )
+            : el('b', {}, TRADE_TEXT.wantsToTrade(from)),
           ...(said ? [el('div', { class: 'post-small' }, `“${said}”`)] : []),
         ),
       ),
@@ -742,6 +770,12 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       'primary',
       () => {
         if (to === null) return;
+        // A squishy that goes to a Computer friend stays with it for good: ask first (#386f).
+        if (isMate(to) && givesSquishy(give)) {
+          tradeConfirm = true;
+          render();
+          return;
+        }
         const request = offerRequest(at(), 'trade', to, give, want, noteId);
         void command((key) => api.send(mapId(), request, key), TRADE_TEXT.sent(name));
       },
@@ -752,7 +786,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         ? ''
         : problem && (give.length > 0 || want.length > 0)
           ? problem
-          : TRADE_TEXT.waitsSafely(name);
+          : isMate(to)
+            ? TRADE_TEXT.mateWaits(name)
+            : TRADE_TEXT.waitsSafely(name);
     // Stuck to the sheet's bottom, so "Send" (and what I picked) is on screen
     // while picking (style guide §3); the hint scrolls, to keep the bar short.
     return [
@@ -778,7 +814,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     const picked = pickedViews(give, my === null ? undefined : shelves.get(my));
     const problem = sendProblem('gift', give, []);
     const chipWords = [
-      el('span', { class: 'post-face theirs small', 'aria-hidden': 'true' }, name.slice(0, 1)),
+      to !== null && isMate(to)
+        ? computerAvatar('dot')
+        : el('span', { class: 'post-face theirs small', 'aria-hidden': 'true' }, name.slice(0, 1)),
       el('span', { class: 'post-to-name' }, TRADE_TEXT.toChip(name)),
     ];
     const toChip = el(
@@ -839,6 +877,40 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     ];
   }
 
+  /** "Are you sure?" before a squishy goes to a Computer friend in a trade (#386f). */
+  function tradeConfirmSheet(): HTMLElement | null {
+    const to = mate;
+    const my = me();
+    if (to === null || my === null) return null;
+    const name = nameOf(to);
+    const picked = pickedViews(give, shelves.get(my));
+    return postConfirm({
+      title: TRADE_TEXT.mateSureTitle,
+      testId: 'post-trade-confirm',
+      lines: [
+        { icon: '💌', text: TRADE_TEXT.giftConfirmTo(name) },
+        ...picked.map((l) => {
+          const look = lineLook(l);
+          return { icon: look.icon || '🧸', text: look.name };
+        }),
+      ],
+      note: TRADE_TEXT.mateSureNote(name),
+      yes: TRADE_TEXT.sendYes,
+      no: TRADE_TEXT.notNow,
+      button,
+      onYes: () => {
+        const request = offerRequest(at(), 'trade', to, give, want, noteId);
+        void command((key) => api.send(mapId(), request, key), TRADE_TEXT.sent(name));
+      },
+      onNo: () => {
+        tradeConfirm = false;
+        render();
+        body.querySelector<HTMLElement>('[data-testid="post-send"]')?.focus();
+      },
+      yesDisabled: passOver(),
+    });
+  }
+
   /** "Send this gift? 🎁": exactly what goes, to whom, before it leaves. */
   function giftConfirmSheet(): HTMLElement | null {
     const to = mate;
@@ -846,8 +918,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     if (to === null || my === null) return null;
     const name = nameOf(to);
     const picked = pickedViews(give, shelves.get(my));
+    const forever = isMate(to) && givesSquishy(give);
     return postConfirm({
-      title: TRADE_TEXT.giftConfirmTitle,
+      title: forever ? TRADE_TEXT.mateSureTitle : TRADE_TEXT.giftConfirmTitle,
       testId: 'post-gift-confirm',
       lines: [
         { icon: '💌', text: TRADE_TEXT.giftConfirmTo(name) },
@@ -856,7 +929,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           return { icon: look.icon || '🧸', text: look.name };
         }),
       ],
-      note: TRADE_TEXT.giftConfirmNote(name),
+      note: forever ? TRADE_TEXT.mateSureNote(name) : TRADE_TEXT.giftConfirmNote(name),
       yes: TRADE_TEXT.sendYes,
       no: TRADE_TEXT.notNow,
       button,
@@ -1371,7 +1444,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       return [...offers, make, ...offersFromMe(view, my, 'trade').map(outgoing)];
     }
     const picked = myMeter();
+    const sheet = tradeConfirm ? tradeConfirmSheet() : null;
     return [
+      ...(sheet ? [sheet] : []),
       ...offers,
       // The note first, in one row, so it shows whole before any scroll (owner, #305).
       notes(),
@@ -1679,6 +1754,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           note = '';
           menu = null;
           giftConfirm = false;
+          tradeConfirm = false;
           matePicker = false;
           render();
         });
@@ -1842,7 +1918,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     if (on && ticker === undefined) {
       // Not while a confirm sheet is up: a redraw would take its focus.
       ticker = window.setInterval(() => {
-        if (sellConfirm === null && !giftConfirm && !matePicker) render();
+        if (sellConfirm === null && !giftConfirm && !tradeConfirm && !matePicker) render();
       }, 15_000);
     } else if (!on && ticker !== undefined) {
       window.clearInterval(ticker);
@@ -1863,6 +1939,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     sorts = { mine: 'name', theirs: 'name' };
     menu = null;
     giftConfirm = false;
+    tradeConfirm = false;
     matePicker = false;
     composing = false;
     swap = null;

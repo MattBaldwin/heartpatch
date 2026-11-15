@@ -8,8 +8,8 @@ export const DEFENSE_TEXT = {
   /** The card's title. */
   title: 'Defend now?',
   /** Who's visiting: their name, or a kind stand-in. */
-  visiting: (name: string | null) =>
-    `${name ?? 'Someone'} is challenging your land! Play your squishies yourself?`,
+  visiting: (name: string | null, computer = false) =>
+    `${name ?? 'Someone'}${computer ? ' (Computer friend)' : ''} is challenging your land! Play your squishies yourself?`,
   /** If they say no, nothing bad happens. */
   calm: 'Not now? Your squishies on watch will play on their own.',
   defend: 'Defend!',

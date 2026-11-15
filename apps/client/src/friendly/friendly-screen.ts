@@ -63,7 +63,7 @@ export interface FriendlyScreen {
 type Mode =
   | { type: 'closed' }
   | { type: 'list' }
-  | { type: 'card'; who: OnlineMember }
+  | { type: 'card'; who: OnlineMember; computer?: boolean }
   | { type: 'waiting'; challenge: ChallengeView }
   | { type: 'declined'; name: string };
 
@@ -261,9 +261,9 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
 
   /**
    * Computer friends (#386b, mockup 4a): always here, badged on every row,
-   * under their own label. No "Battle me?" yet: a button that can't be
-   * tapped reads as broken, so it comes with the server's ask to a mate
-   * (#386e); the honest line under the list says battles are coming soon.
+   * under their own label. "Battle me?" is real since #386e: the server
+   * answers for a mate at once, so the tap goes to the same card and ask as
+   * a kid's (the card says it's a Computer friend).
    */
   function computerRows(mates: readonly { userId: string; username: string }[]): HTMLElement[] {
     if (mates.length === 0) return [];
@@ -281,19 +281,38 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
             computerBadge(),
             el('span', { class: 'friendly-status' }, COMPUTER_TEXT.here),
           ),
+          button(
+            FRIENDLY_TEXT.battleMe,
+            () => {
+              // A mate has no team level to compare (the server picks its side).
+              mode = {
+                type: 'card',
+                who: {
+                  userId: mate.userId,
+                  username: mate.username,
+                  teamLevel: view?.myTeamLevel ?? 0,
+                  inBattle: false,
+                },
+                computer: true,
+              };
+              note = '';
+              render();
+            },
+            { testId: 'friendly-battle-mate' },
+          ),
         ),
       );
     }
     return [
       el('p', { class: 'cf-section' }, COMPUTER_TEXT.heading),
       list,
-      el('p', { class: 'friendly-hint' }, `${COMPUTER_TEXT.hereHint} ${COMPUTER_TEXT.battleSoon}`),
+      el('p', { class: 'friendly-hint' }, COMPUTER_TEXT.hereHint),
     ];
   }
 
-  function renderCard(who: OnlineMember): HTMLElement[] {
+  function renderCard(who: OnlineMember, computer = false): HTMLElement[] {
     const mine = view?.myTeamLevel ?? 0;
-    const gap = gapLine(mine, who.teamLevel, who.username);
+    const gap = computer ? null : gapLine(mine, who.teamLevel, who.username);
     const id = mapId;
     return [
       el(
@@ -301,13 +320,23 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
         { class: 'friendly-pair', 'aria-hidden': 'true' },
         avatar(user?.username ?? FRIENDLY_TEXT.you),
         el('span', { class: 'friendly-and' }, FRIENDLY_TEXT.and),
-        avatar(who.username),
+        computer ? computerAvatar('avatar') : avatar(who.username),
       ),
       el(
         'h2',
         { class: 'friendly-title friendly-center', id: 'friendly-title' },
         FRIENDLY_TEXT.cardTitle(who.username),
       ),
+      ...(computer
+        ? [
+            el(
+              'p',
+              { class: 'friendly-center', 'data-testid': 'friendly-mate-line' },
+              computerBadge(),
+            ),
+            el('p', { class: 'friendly-hint friendly-center' }, COMPUTER_TEXT.battleLine),
+          ]
+        : []),
       ...(gap ? [el('p', { class: 'friendly-gap', 'data-testid': 'friendly-gap' }, gap)] : []),
       el(
         'div',
@@ -347,8 +376,11 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
 
   function renderWaiting(challenge: ChallengeView): HTMLElement[] {
     const name = nameOf(challenge.toUserId);
+    const mate = mapId
+      ? options.members(mapId).some((m) => m.userId === challenge.toUserId && m.computer)
+      : false;
     return [
-      avatar(name),
+      mate ? computerAvatar('avatar') : avatar(name),
       el(
         'h2',
         { class: 'friendly-title friendly-center', id: 'friendly-title' },
@@ -393,7 +425,7 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
         mode.type === 'list'
           ? renderList()
           : mode.type === 'card'
-            ? renderCard(mode.who)
+            ? renderCard(mode.who, mode.computer)
             : mode.type === 'waiting'
               ? renderWaiting(mode.challenge)
               : mode.type === 'declined'

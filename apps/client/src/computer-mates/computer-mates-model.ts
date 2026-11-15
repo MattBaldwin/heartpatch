@@ -29,7 +29,8 @@ export const COMPUTER_TEXT = {
   /** Who's here: mates are always here. */
   here: 'Here now',
   hereHint: "Computer friends are run by the game, so they're always here.",
-  battleSoon: 'Battles with Computer friends are coming soon!',
+  /** On the friendly card for a mate: honest, and it keeps its own pace. */
+  battleLine: "They're run by the game, and they play fair. Just for fun!",
   /** Who's here with only mates around: "nobody here" would contradict the list. */
   noKidsHere: 'No other Keepers are here right now. Try again in a bit!',
 } as const;

@@ -89,3 +89,10 @@ describe('defense prompt (#29-C)', () => {
     expect(DEFENSE_TEXT.visiting('Lee')).toMatch(/^Lee is challenging your land!/);
   });
 });
+
+describe('a Computer friend challenging (#386f)', () => {
+  it('says so on the card', () => {
+    expect(DEFENSE_TEXT.visiting('Marigold', true)).toContain('Marigold (Computer friend)');
+    expect(DEFENSE_TEXT.visiting('Marigold')).not.toContain('Computer friend');
+  });
+});

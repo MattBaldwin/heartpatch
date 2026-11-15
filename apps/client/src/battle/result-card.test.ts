@@ -207,9 +207,9 @@ describe('a friendly battle (#728)', () => {
     );
   });
 
-  it('says the computer-friend cap with the pair-cap line until 386f words it (#386e)', () => {
+  it('says the computer-friend cap in its own words (#386f)', () => {
     expect(friendly({ rewards: rewards({ coins: null, unpaid: 'computer-cap' }) })).toBe(
-      "You've won your coins from Lee today. XP still counts!",
+      'Lee has played a lot today! No more coins from Computer friends until tomorrow. XP still counts!',
     );
   });
 

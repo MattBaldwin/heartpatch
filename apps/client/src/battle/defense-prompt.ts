@@ -22,6 +22,8 @@ export interface DefensePromptOptions {
   api?: DefenseApi;
   /** Who's challenging, by user id (the patch's members), for the card. */
   nameOf: (userId: string) => string | null;
+  /** True for a Computer friend's user id (#386f): the card says so. */
+  isComputer?: (userId: string) => boolean;
   /** "Defend!" worked: the battle from my side. */
   openBattle: (battle: PlayerBattle) => void;
   now?: () => number;
@@ -133,7 +135,10 @@ export function createDefensePrompt(options: DefensePromptOptions): DefensePromp
     prompt = next;
     // Counted from when it arrived, for as long as the server gave it.
     deadline = now() + next.windowMs;
-    who.textContent = DEFENSE_TEXT.visiting(options.nameOf(next.fromUserId));
+    who.textContent = DEFENSE_TEXT.visiting(
+      options.nameOf(next.fromUserId),
+      options.isComputer?.(next.fromUserId) === true,
+    );
     note.textContent = '';
     defend.disabled = false;
     notNow.disabled = false;
