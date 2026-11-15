@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { api, draws, hook, idle, waitForLiveMap } from './dev-hook.js';
+import { api, draws, hook, idle, liveMapId, waitForLiveMap } from './dev-hook.js';
 import { expectRoomyLabels, freshResize, holdResizes, still, turnLikeIos } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { realTap, realTapAt } from './touch.js';
@@ -94,7 +94,7 @@ test('one real tap works every battle action, and the HUD fits the screen', asyn
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await expect(page.getByTestId('map-hud')).toContainText('Tap Patch');
-  const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
+  const mapId = await liveMapId(page);
 
   // Name the starter (#141): the pill and the Swap button use it.
   const care = await api<{ squishies: { id: string }[] }>(page, 'GET', `/maps/${mapId}/care`);
@@ -457,7 +457,7 @@ for (const { name, bench, noCharms, fourMoves } of SHEET_CASES) {
       await realTap(await trayButton(page, 'battle-dev-grant'));
       await expect(page.locator('.battle-entry-note')).toContainText('joined you');
     }
-    if (fourMoves) await leadWithFourMoves(page, (await hook<{ id: string }>(page, 'map'))!.id);
+    if (fourMoves) await leadWithFourMoves(page, await liveMapId(page));
     await realTap(await trayButton(page, 'battle-dev-fight'));
     await expect(page.getByTestId('battle-hud')).toBeVisible();
     await settled(page);
@@ -513,7 +513,7 @@ for (const screen of TURN_SCREENS) {
     await visitPatch(lobby);
     await realTap(await trayButton(page, 'battle-dev-grant'));
     await expect(page.locator('.battle-entry-note')).toContainText('joined you');
-    await leadWithFourMoves(page, (await hook<{ id: string }>(page, 'map'))!.id);
+    await leadWithFourMoves(page, await liveMapId(page));
     await realTap(await trayButton(page, 'battle-dev-fight'));
     await expect(page.getByTestId('battle-hud')).toBeVisible();
     const first = await settled(page);

@@ -1,6 +1,6 @@
 import { CARE_RULES, findAvoidedWords, moodFor } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { api, hook } from './dev-hook.js';
+import { api, hook, liveMapId } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
 import { careFromRoster, closeRoster } from './roster.js';
@@ -117,7 +117,7 @@ test('feeds a Pie from the food row, and the Bag opens care with Frosty Treats p
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
   await playerWithFriend(page);
-  const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
+  const mapId = await liveMapId(page);
 
   // Only Treats: no row, Feed as it's always been.
   await (await trayButton(page, 'home-open')).tap();
