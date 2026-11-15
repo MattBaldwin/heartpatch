@@ -335,7 +335,15 @@ export class BattleScene {
       { x: 0, z: 0, r: 0, h: 0 },
       { x: 0, z: 0, r: 0, h: 0 },
     ]);
-    const keeperHome = this.#rigs[mine].home;
+    // A team battle (#190): the Keeper stands beside the row's left end, not between friends.
+    const left = this.#posts[mine][0];
+    const keeperHome =
+      team.length > 0 && left
+        ? {
+            x: left.home.x - FIGHTER.keeper.offset.x - TEAM_ARENA.keeperBeside.x,
+            z: left.home.z - FIGHTER.keeper.offset.z + TEAM_ARENA.keeperBeside.z,
+          }
+        : this.#rigs[mine].home;
 
     // The player's Keeper, at their squishy's back like a coach, seen in the gap between the fighters.
     this.#keepers = new KeeperField(scene, { data: KEEPER_DATA, lod: options.lod });

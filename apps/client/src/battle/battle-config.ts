@@ -34,6 +34,8 @@ export const TEAM_ARENA = {
   } as Readonly<Record<1 | 2 | 3, readonly { x: number; z: number }[]>>, // TUNE: a close-up squishy is ~2.5 wide, so 3.8 apart, across the camera's view (yaw −14°), near the camera
   /** The boss: far back and centred on screen. */
   boss: { x: -1.0, z: 5.2 }, // TUNE
+  /** Where the Keeper stands: this far left of, and behind, the row's left end. */
+  keeperBeside: { x: 2.2, z: 1.2 }, // TUNE
   /** The boss's size against a usual fighter's (plan §10: "about 1.8×"). */
   bossScale: 1.8, // TUNE
 } as const;

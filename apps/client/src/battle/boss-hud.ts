@@ -161,17 +161,31 @@ export function mountBossHud(): BossHud {
       if (row.width <= 0) return;
       const placed = [...friendNodes].every(([slot]) => xs.has(slot));
       friendRow.classList.toggle('boss-friends-placed', placed);
-      for (const [slot, node] of friendNodes) {
-        const x = xs.get(slot);
-        if (!placed || x === undefined) {
-          node.node.style.left = '';
-          continue;
-        }
-        // Inside the row, a plate's half-width from either edge.
-        const half = Math.min(57, row.width / 6);
-        const left = Math.max(half, Math.min(row.width - half, x - row.left));
-        node.node.style.left = `${String(Math.round(left))}px`;
+      const gap = 6;
+      const n = Math.max(1, friendNodes.size);
+      // Never wider than a third of the row less the gaps, so plates never overlap.
+      const width = Math.min(114, (row.width - gap * (n - 1)) / n);
+      const half = width / 2;
+      // Left to right, each at least a plate and a gap from the last, inside the row.
+      const order = [...friendNodes]
+        .map(([slot, node]) => ({ node, x: (xs.get(slot) ?? 0) - row.left }))
+        .sort((a, b) => a.x - b.x);
+      let min = half;
+      const lefts = order.map(({ x }) => {
+        const left = Math.max(min, x);
+        min = left + width + gap;
+        return left;
+      });
+      // Pushed past the right edge: slide the lot back in.
+      let max = row.width - half;
+      for (let i = lefts.length - 1; i >= 0; i--) {
+        lefts[i] = Math.min(lefts[i] ?? 0, max);
+        max = (lefts[i] ?? 0) - width - gap;
       }
+      order.forEach(({ node }, i) => {
+        node.node.style.left = placed ? `${String(Math.round(lefts[i] ?? 0))}px` : '';
+        node.node.style.width = placed ? `${String(Math.floor(width))}px` : '';
+      });
     },
     setChips: (chips) => {
       tries.hidden = chips.tries === null;
