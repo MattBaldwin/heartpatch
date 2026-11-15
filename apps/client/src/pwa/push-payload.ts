@@ -40,7 +40,10 @@ export const PUSH_KINDS: readonly PushKind[] = [
 /** `PUSH_RULES.maxPayloadBytes` (a test checks they match). */
 export const MAX_PAYLOAD_BYTES = 2_048;
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// zod's `z.uuid()` (RFC 9562): version digit 1-8, variant digit 8-b, or the
+// nil and max ids. The server's map ids are v7 (`uuidv7()`), so not v4 only.
+const UUID =
+  /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|0{8}-0{4}-0{4}-0{4}-0{12}|f{8}-f{4}-f{4}-f{4}-f{12})$/i;
 
 function text(value: unknown, max: number): string | null {
   return typeof value === 'string' && value.length >= 1 && value.length <= max ? value : null;

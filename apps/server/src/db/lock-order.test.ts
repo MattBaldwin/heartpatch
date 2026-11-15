@@ -48,6 +48,8 @@ import { createHollowService } from '../modules/hollow/service.js';
 import { grantItems } from '../modules/inventory/service.js';
 import { createInventoryRepo } from '../modules/inventory/repo.js';
 import { createJourneyBattlePort, createJourneysService } from '../modules/journeys/service.js';
+import { createLongNightRepo } from '../modules/long-night/repo.js';
+import { createLongNightService } from '../modules/long-night/service.js';
 import { createLoreConsumer } from '../modules/lore/consumer.js';
 import { createMapsRepo } from '../modules/maps/repo.js';
 import { createMilestonesConsumer } from '../modules/milestones/consumer.js';
@@ -776,6 +778,62 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
       (tx) => createHouseRepo(tx).lockHouse(mapId, kid.id, 1, new Date()),
     );
     expect(await createHouseRepo(db).level(mapId, kid.id)).toBe(2);
+  });
+
+  it("takes the Night's row before `maps` (long-night `claimGap`, #727d step 9 then 13)", async () => {
+    const kid = await player('gapclaim');
+    const map = await createMapsService({
+      db,
+      tutorialRequired: false,
+      keeperRequired: false,
+    }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
+    const species = GAME_DATA.species[0]!;
+    await db.insert(squishies).values({
+      mapId: map.id,
+      ownerUserId: kid.id,
+      speciesId: species.id,
+      element: species.element,
+      feeling: species.feeling,
+    });
+    // A held Night whose Gap is open now, with my encounter unclaimed.
+    const at = Date.now();
+    await createLongNightRepo(db).insert({
+      mapId: map.id,
+      night: '2026-10-31',
+      ranAt: new Date(at - 3_600_000),
+      strikeAt: new Date(at - 1_800_000),
+      held: true,
+      outcomes: [
+        {
+          userId: kid.id,
+          counted: true,
+          held: true,
+          firesLit: 0,
+          fuelNights: 0,
+          percent: 0,
+          gapSpeciesId: species.id,
+          gapClaimedAt: null,
+          gapBattleId: null,
+        },
+      ],
+      keeperOfNightUserId: null,
+      gapOpensAt: new Date(at - 1_800_000),
+      gapClosesAt: new Date(at + 3_600_000),
+      seed: 'lock-order',
+      contentHash: 'lock-order',
+    });
+    const service = createLongNightService({
+      db,
+      longNight: { mode: 'on', testers: [] },
+      battles: createBattlesService({ db }),
+    });
+    await holdThen(
+      (tx) => createLongNightRepo(tx).lockLatest(map.id),
+      () => service.claimGap(kid, map.id),
+      (tx) => lockMapRow(tx, map.id),
+    );
+    const claimed = (await createLongNightRepo(db).latest(map.id))!.outcomes[0]!;
+    expect(claimed.gapBattleId).not.toBeNull();
   });
 
   it('takes the house before the inventory rows (house `build`, #381 step 8c then 11)', async () => {

@@ -280,6 +280,15 @@ const windowOf = (row: LongNightRow) =>
   row.gapOpensAt && row.gapClosesAt ? { opensAt: row.gapOpensAt, closesAt: row.gapClosesAt } : null;
 
 /**
+ * Has the Night's strike come at `at` (game clock)? Its stored `strikeAt`
+ * (7:30 PM map-local), or its Gap's opening if that came sooner (the dev
+ * "Gap now" route, 727e2): the Gap opens at the strike, so an open Gap
+ * means it has landed.
+ */
+const struck = (row: LongNightRow, at: Date) =>
+  at.getTime() >= Math.min(row.strikeAt.getTime(), row.gapOpensAt?.getTime() ?? Infinity);
+
+/**
  * The Hollow status's `longNight` block for me (#727): the weekday, whether
  * the night the show is about is a Long Night, the next one's nightfall and
  * an open Gap. Undefined while it's switched off for the patch (left out of
@@ -334,16 +343,19 @@ export async function longNightStatus(
               mine !== undefined && mine.gapSpeciesId !== null && mine.gapClaimedAt === null,
           }
         : null,
-    // The Night's result for a Keeper who missed it live (727e2). The
-    // row's outcomes are in member order, as the event's `heldBy`.
-    ...(latest && {
-      last: {
-        night: latest.night,
-        held: latest.held,
-        heldBy: latest.outcomes.filter((o) => o.held).map((o) => o.userId),
-        keeperOfNight: latest.keeperOfNightUserId,
-      },
-    }),
+    // The Night's result for a Keeper who missed it live (727e2), from the
+    // strike on (rules 1 and 4): before it, it's left out, so whether the
+    // patch held is never told early. The row's outcomes are in member
+    // order, as the event's `heldBy`.
+    ...(latest &&
+      struck(latest, at) && {
+        last: {
+          night: latest.night,
+          held: latest.held,
+          heldBy: latest.outcomes.filter((o) => o.held).map((o) => o.userId),
+          keeperOfNight: latest.keeperOfNightUserId,
+        },
+      }),
   };
 }
 
@@ -366,7 +378,7 @@ export async function rescueRewardsMultiplierOn(
 }
 
 /**
- * A Gap squishy's level: the Keeper's Partner's, as the top of a wild
+ * `gapLevel` — a Gap squishy's level: the Keeper's Partner's, as the top of a wild
  * spawn's `partnerOffset` (a rare one is a step harder, owner decision
  * 2026-10-07), else the top of the plain range. No roll: the species was
  * the roll.

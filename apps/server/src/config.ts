@@ -81,8 +81,9 @@ const ConfigSchema = z.object({
   // The Long Night (#727) feature switch: `off` runs every nightfall as an
   // ordinary night and leaves the Long Night out of every reply, `testers`
   // runs it only on patches with an `HP_LONG_NIGHT_TESTERS` member (the
-  // whole patch sees it there), `on` everywhere. Off until the client PR (#727e) merges, so a rollback never
-  // strands a client.
+  // whole patch sees it there), `on` everywhere. Off when unset; production
+  // turns it on as a compose default, `${HP_LONG_NIGHT:-on}` (#758), and a
+  // value in `.env` still wins.
   HP_LONG_NIGHT: z.enum(['off', 'testers', 'on']).default('off'),
   // Usernames who see the Long Night while `HP_LONG_NIGHT=testers`,
   // comma-separated (case doesn't matter), as `HP_HOUSE_TESTERS`.

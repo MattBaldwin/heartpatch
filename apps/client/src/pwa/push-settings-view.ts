@@ -42,7 +42,6 @@ export interface PushSettingsViewOptions extends NudgesDeps {
   onAnswered: () => void;
 }
 
-/** The group for the Settings list: an empty box until the row's state is read. */
 /**
  * Whether The Long Night's switch shows: nudges on, and the patch behind
  * Settings has a Long Night day (`longNight` asks; a failed ask is no).
@@ -60,6 +59,7 @@ export function nudgeSwitches(state: NudgesState, longNight: boolean): NudgeSwit
   return longNight ? ['dusk', 'gatherers', 'friend', 'longNight'] : ['dusk', 'gatherers', 'friend'];
 }
 
+/** The group for the Settings list: an empty box until the row's state is read. */
 export function pushSettingsView(options: PushSettingsViewOptions): Node[] {
   const box = el('div', { class: 'push-settings-box' });
 

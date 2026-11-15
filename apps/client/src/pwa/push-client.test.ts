@@ -315,6 +315,21 @@ describe('heal (start-up self-heal)', () => {
     expect((f.store as Map<string, string>).has(PUSH_HEALED_AT_KEY)).toBe(false);
   });
 
+  it('skips quietly on a 401 (signed out) and leaves no stamp, so the next sign-in heals', async () => {
+    const f = fakeEnv({
+      permission: 'granted',
+      existing: true,
+      reply: () => ({
+        status: 401,
+        body: { error: { code: 'UNAUTHENTICATED', message: 'Sign in first!' } },
+      }),
+    });
+    const client = createPushClient(f.env);
+    expect(await client.heal()).toBe('skipped');
+    expect(client.isOff()).toBe(false);
+    expect((f.store as Map<string, string>).has(PUSH_HEALED_AT_KEY)).toBe(false);
+  });
+
   it('turns push off on NOT_FOUND', async () => {
     const f = fakeEnv({ permission: 'granted', existing: true, reply: () => notFound });
     const client = createPushClient(f.env);
@@ -385,7 +400,7 @@ describe('startPush', () => {
     return { env, events, show: () => visible?.() };
   }
 
-  it('clears the badge now and on every return, and self-heals', async () => {
+  it('clears the badge now and on every return, and leaves the self-heal to sign-in', async () => {
     const f = fakeEnv({ permission: 'granted', existing: true });
     const s = startEnv();
     startPush(createPushClient(f.env), s.env);
@@ -393,7 +408,8 @@ describe('startPush', () => {
     s.show();
     expect(s.events).toEqual(['clear', 'clear']);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(f.calls.map((c) => c.method)).toEqual(['PUT']);
+    // No PUT before anyone is signed in: it could only 401.
+    expect(f.calls).toEqual([]);
   });
 
   it('does nothing outside a Home Screen app with push', () => {
