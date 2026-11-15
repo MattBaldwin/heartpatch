@@ -193,6 +193,24 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
+- **State (supervisor 41, 2026-11-15): read this first; the supervisor 40 and 39 blocks below are history.** Decisions are in DECISIONS "Supervisor 41"; the mini-boss rules are in GAME_DESIGN §27.
+  - **Merged under supervisor 41:** #817, #814, #818, #819, #821, #824, #820, #826, #823, #825, #816, #822, #815, #828. Owner SHIP-OK on #816, #822, #815 and #828.
+  - **Open PRs:**
+    - **#827 (190e arena client):** captures v3 and a delta review in progress. Device frame-time capture is deferred to before 234b.
+    - **#829 (386f mates client):** round 1 fixed (`af757fca`), round 2 APPROVE (two reviewers), delta review of `af757fca..824673f` posted. Remaining gates: captures page, render-check, owner SHIP-OK, CI green (known #784 WebKit tap-stall reds accepted).
+    - **#810 (234a boss art, draft):** Rakelet v15 awaits an owner decision after 9 render-check rounds. 234b waits on it and on the names and move redrafts listed in the PR's "What 234b needs".
+    - **#830 (chore, deflake `works.test.ts`):** awaiting CI.
+  - **Pending owner items:**
+    - Is the duplicate boss ask's "team treat" a real grant, and what is it? (#820; today it is refused with no spend.)
+    - The mate allowlist and the online-only and fences vetoes check (#819, #823).
+  - **Follow-ups:**
+    - `Raid.attackerComputer?` (additive server change, set from `users.kind` at raid creation; #829).
+    - Per-package lint.
+    - Device frame-time capture before 234b enables bosses.
+    - `species_seen` write at boss battle start (190c/190f).
+    - Rivet collars on Rakelet need two-tone parts (kit follow-up).
+    - 386f's non-blocking items (listed in DECISIONS) and 190e's `battle.kind` check on `POST …/boss/battle`.
+    - HP_COMPUTER_MATES stays off until 386b (#815) and 386f (#829) are both merged and the owner agrees.
 - **Update (supervisor 40, 2026-11-14 ~22:00 UTC): this supersedes the OWNER QUESTION and #797 lines in the block below.**
   - The owner merged **#797 (728b)** himself (`6fe4bf6`, merge commit of `c118829`).
   - The owner approved #794, and supervisor 40 merged it as `1bddfb2`.
