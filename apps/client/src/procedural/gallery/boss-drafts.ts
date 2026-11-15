@@ -194,7 +194,7 @@ export const DRAFT_PARTS: Part[] = [
     // Rakeling's knobs at its plank's ends (round 6), so its short handle
     // grows out of the tool instead of floating beside its cheek.
     id: 'draft-rake-caps-mid',
-    slot: 'cheeks',
+    slot: 'ears', // its freckles hold `cheeks`; a sphere sits the same either way
     shape: 'ellipsoid',
     size: [0.2, 0.2, 0.2],
     color: 'detail',
