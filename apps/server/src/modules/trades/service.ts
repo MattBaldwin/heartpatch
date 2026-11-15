@@ -23,6 +23,7 @@ import {
   type TradeShelf,
   type TradesView,
 } from '@heartpatch/shared';
+import { COMPUTER_MATES, type ComputerMateRules } from '@heartpatch/shared/server';
 import type { Executor, Transaction } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
@@ -133,8 +134,53 @@ export interface TradesService {
   pickup: (user: PublicUser, mapId: string, request: PickupRequest) => Promise<TradesView>;
   /** The patch owner's switch; off calls off every open offer. */
   setTrading: (user: PublicUser, mapId: string, on: boolean) => Promise<boolean>;
-  /** A player left (or the owner, `actorUserId`, removed them): their open offers, both ways, go back. */
+  /**
+   * A player left (or the owner, `actorUserId`, removed them): their open
+   * offers, both ways, go back. A computer patch-mate's waiting gift stays
+   * in the kid's mailbox (#386d): it's the kid's to pick up.
+   */
   memberLeft: (mapId: string, userId: string, actorUserId: string) => Promise<void>;
+  /**
+   * A computer patch-mate sends a trade offer or a gift (#386d) inside its
+   * step's transaction (`tx`, its `computer_mates` row held, step 3a). Shares
+   * `send`'s core; skips only the member row (the mate row serialises its
+   * sends) and `requirePostAccess`. Its items are made at send: nothing
+   * leaves a bag. Returns the offer's id.
+   */
+  sendAsComputer: (
+    tx: Transaction,
+    events: NewGameEvent[],
+    input: ComputerSendInput,
+  ) => Promise<string>;
+  /**
+   * A computer patch-mate answers a kid's trade (yes or no) or picks up a
+   * kid's gift (yes), inside its step's transaction. Shares `accept`,
+   * `decline` and `pickup`'s cores; skips only `requirePostAccess`. What the
+   * kid asked for is made at the yes. `alsoLock` is the mate's team: taken in
+   * the same id-ordered squishy lock (step 10), so the step's later team
+   * lock holds nothing new.
+   */
+  answerAsComputer: (
+    tx: Transaction,
+    events: NewGameEvent[],
+    input: ComputerAnswerInput,
+  ) => Promise<void>;
+}
+
+/** What a computer patch-mate sends (#386d): items only, a preset note. */
+export interface ComputerSendInput {
+  mapId: string;
+  mateId: string;
+  request: Omit<SendOfferRequest, 'q' | 'r'>;
+}
+
+/** A computer patch-mate's answer to a kid's offer or gift (#386d). */
+export interface ComputerAnswerInput {
+  mapId: string;
+  mateId: string;
+  offerId: string;
+  answer: 'accept' | 'decline';
+  alsoLock: readonly string[];
 }
 
 export interface TradesServiceOptions {
@@ -144,6 +190,8 @@ export interface TradesServiceOptions {
   publish?: (mapId: string) => Promise<void>;
   /** Tests pass their own rules. */
   rules?: TradeRules;
+  /** Computer patch-mates' rules (#386d; tests pass their own). */
+  computerRules?: ComputerMateRules;
 }
 
 type Counts = Record<string, number>;
@@ -178,6 +226,7 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
   const { db } = options;
   const now = options.clock ?? (() => new Date());
   const rules = options.rules ?? TRADE_RULES;
+  const computerRules = options.computerRules ?? COMPUTER_MATES.rules;
   const published = (mapIds: readonly string[]) => {
     for (const mapId of mapIds) void options.publish?.(mapId);
   };
@@ -243,6 +292,7 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
     status: 'declined' | 'cancelled' | 'expired',
     actorUserId: string | null,
     at: Date,
+    alsoLock: readonly string[] = [],
   ) => {
     if (offers.length === 0) return;
     const repo = createTradesRepo(tx);
@@ -264,7 +314,10 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
       });
     }
     // Squishies (step 10), then clothing (10b), each in one id-ordered lock.
-    const held = await repo.lockSquishies(offers.flatMap((o) => squishyIds(giveOf(o.id))));
+    const held = await repo.lockSquishies([
+      ...alsoLock,
+      ...offers.flatMap((o) => squishyIds(giveOf(o.id))),
+    ]);
     for (const offer of offers) {
       const mine = held.filter(
         (s) => s.ownerUserId === offer.fromUserId && squishyIds(giveOf(offer.id)).includes(s.id),
@@ -279,8 +332,13 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
       const mine = pieces.filter((p) => p.heldByOfferId === offer.id).map((p) => p.id);
       await repo.movePieces(mine, offer.fromUserId, null);
     }
-    // Inventory (step 11): every row first, then the grants.
-    const grants = offers.map((o) => ({ userId: o.fromUserId, items: itemCounts(giveOf(o.id)) }));
+    // Inventory (step 11): every row first, then the grants. A computer
+    // mate's items were made at send (#386d): they go nowhere, not to a bag.
+    const computers = await repo.computerIds(offers.map((o) => o.fromUserId));
+    const grants = offers.map((o) => ({
+      userId: o.fromUserId,
+      items: computers.has(o.fromUserId) ? {} : itemCounts(giveOf(o.id)),
+    }));
     const [first] = offers;
     if (first) await lockGrantRows(tx, first.mapId, grants);
     for (const [i, offer] of offers.entries()) {
@@ -329,6 +387,7 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
     userId: string,
     locked: readonly TradeSquishyRow[] = [],
   ): Promise<OfferSide> => {
+    if ((await repo.computerIds([userId])).has(userId)) return computerSide;
     const [all, items, pieces, starter] = await Promise.all([
       repo.squishiesOf(mapId, userId),
       repo.bagOf(mapId, userId),
@@ -355,6 +414,21 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
         held: p.heldByOfferId !== null,
       })),
     };
+  };
+
+  /**
+   * A computer patch-mate's side (#386d): no squishy or clothing to ask for
+   * (they offer items only, owner decision 6), and `shelfPerItem` of every
+   * tradable item, made when a yes needs it (they have no bag).
+   */
+  const computerShelf: Record<string, number> = Object.fromEntries(
+    [...TRADABLE_ITEMS].sort().map((id) => [id, computerRules.shelfPerItem]),
+  );
+  const computerSide: OfferSide = {
+    squishies: [],
+    items: computerShelf,
+    tradableItems: TRADABLE_ITEMS,
+    clothing: [],
   };
 
   const refuse = (problem: OfferProblem | null) => {
@@ -494,6 +568,18 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
       throw new AppError('NOT_FOUND', MESSAGES.notPatchMate);
     }
     await expireDue(mapId);
+    if ((await repo.computerIds([targetUserId])).has(targetUserId)) {
+      return {
+        userId: targetUserId,
+        squishies: [],
+        items: Object.entries(computerShelf).map(([itemId, quantity]) => ({
+          kind: 'item' as const,
+          itemId,
+          quantity,
+        })),
+        clothing: [],
+      };
+    }
     const [pets, bag, pieces, starter, seen] = await Promise.all([
       repo.squishiesOf(mapId, targetUserId),
       repo.bagOf(mapId, targetUserId),
@@ -559,194 +645,237 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
     }
     if (request.toUserId === user.id) throw new AppError('VALIDATION_FAILED', MESSAGES.self);
     await run(async (tx, events) => {
-      const at = now();
-      const repo = createTradesRepo(tx);
       await requireMember(tx, user, mapId);
       // One send at a time per player (step 2), so the open-offer limits hold.
       await createMapsRepo(tx).lockMember(mapId, user.id);
-      await requireTrading(repo, mapId);
-      if (!(await repo.isActiveMember(mapId, request.toUserId))) {
-        throw new AppError('NOT_FOUND', MESSAGES.notPatchMate);
-      }
-      await requirePostAccess(tx, { mapId, userId: user.id, post: request, at });
-      const open = await repo.openCounts(mapId, user.id, request.toUserId);
-      if (open.toThem >= rules.openPerPair) throw new AppError('CONFLICT', MESSAGES.onePerPair);
-      if (open.sent >= rules.openPerSender) {
-        throw new AppError('CONFLICT', MESSAGES.tooManyOpen(open.sent));
-      }
-      const { give, want } = request;
-      // A quick look first, so a bad offer is refused before any lock.
-      refuse(
-        offerProblem(
-          { kind: request.kind, give, want },
-          await sideOf(repo, mapId, user.id),
-          await sideOf(repo, mapId, request.toUserId),
-          rules,
-        ),
-      );
+      await sendWithin(tx, events, user.id, mapId, request, request);
+    });
+    return viewOf(db, mapId, user.id);
+  };
 
-      const gifts = pieceIds(give);
-      if (gifts.length > 0) await createWardrobeRepo(tx).lockWorn(user.id); // step 4
-      // Escrow, under locks, checked again with what the locks hold. Locked
-      // before the offer's lines go in: their foreign keys would otherwise
-      // take key-share locks on the pieces first (tech spec §7, lock first).
-      const pets = await repo.lockSquishies(squishyIds(give)); // step 10
-      const pieces = await repo.lockPieces(gifts); // step 10b
-      refuse(sideProblem(give, await sideOf(repo, mapId, user.id, pets), rules));
-      if (pieces.some((p) => p.userId !== user.id || p.heldByOfferId !== null)) {
-        refuse('not-theirs');
-      }
-      const offer = await repo.insertOffer({
+  /**
+   * `send`'s core, under the sender's lock (a kid's member row, step 2, or a
+   * computer mate's own row, step 3a). `post` is null only for a computer
+   * mate: no post check, and its items are made here (nothing leaves a bag).
+   */
+  const sendWithin = async (
+    tx: Transaction,
+    events: NewGameEvent[],
+    senderId: string,
+    mapId: string,
+    request: Omit<SendOfferRequest, 'q' | 'r'>,
+    post: PostAtRequest | null,
+  ): Promise<string> => {
+    const user = { id: senderId };
+    const noteId = request.noteId ?? null;
+    const at = now();
+    const repo = createTradesRepo(tx);
+    await requireTrading(repo, mapId);
+    if (!(await repo.isActiveMember(mapId, request.toUserId))) {
+      throw new AppError('NOT_FOUND', MESSAGES.notPatchMate);
+    }
+    if (post) await requirePostAccess(tx, { mapId, userId: user.id, post, at });
+    const open = await repo.openCounts(mapId, user.id, request.toUserId);
+    if (open.toThem >= rules.openPerPair) throw new AppError('CONFLICT', MESSAGES.onePerPair);
+    if (open.sent >= rules.openPerSender) {
+      throw new AppError('CONFLICT', MESSAGES.tooManyOpen(open.sent));
+    }
+    const { give, want } = request;
+    // A quick look first, so a bad offer is refused before any lock.
+    refuse(
+      offerProblem(
+        { kind: request.kind, give, want },
+        await sideOf(repo, mapId, user.id),
+        await sideOf(repo, mapId, request.toUserId),
+        rules,
+      ),
+    );
+
+    const gifts = pieceIds(give);
+    if (gifts.length > 0) await createWardrobeRepo(tx).lockWorn(user.id); // step 4
+    // Escrow, under locks, checked again with what the locks hold. Locked
+    // before the offer's lines go in: their foreign keys would otherwise
+    // take key-share locks on the pieces first (tech spec §7, lock first).
+    const pets = await repo.lockSquishies(squishyIds(give)); // step 10
+    const pieces = await repo.lockPieces(gifts); // step 10b
+    refuse(sideProblem(give, await sideOf(repo, mapId, user.id, pets), rules));
+    if (pieces.some((p) => p.userId !== user.id || p.heldByOfferId !== null)) {
+      refuse('not-theirs');
+    }
+    const offer = await repo.insertOffer({
+      mapId,
+      kind: request.kind,
+      fromUserId: user.id,
+      toUserId: request.toUserId,
+      noteId,
+      createdAt: at,
+      expiresAt: new Date(at.getTime() + rules.offerDays * 24 * 60 * 60_000),
+    });
+    await repo.insertLines(offer.id, 'give', give);
+    await repo.insertLines(offer.id, 'want', want);
+    if (request.kind === 'gift') {
+      await repo.insertMailbox({
         mapId,
+        userId: request.toUserId,
+        offerId: offer.id,
+        kind: 'gift',
+        lines: give,
+        readyAt: at,
+      });
+    }
+
+    // Off to the post with no job: contentment so far counts at its old job's rate (#376).
+    await checkpointContentment(tx, mapId, squishyIds(give), at);
+    await repo.setSquishyState(squishyIds(give), 'in-trade');
+    await repo.movePieces(gifts, user.id, offer.id);
+    await takeOffGone(
+      tx,
+      user.id,
+      pieces.map((p) => p.itemId),
+      events,
+    );
+    const items = itemCounts(give);
+    if (hasAny(items) && post) {
+      await consumeItems(tx, { mapId, userId: user.id }, items, 'trade-escrow', offer.id); // step 11
+    }
+    await repo.ledger({ mapId, offerId: offer.id, event: 'offered', actorUserId: user.id, at });
+    events.push({
+      mapId,
+      type: 'trade.offered',
+      actorUserId: user.id,
+      payload: {
+        offerId: offer.id,
         kind: request.kind,
         fromUserId: user.id,
         toUserId: request.toUserId,
         noteId,
-        createdAt: at,
-        expiresAt: new Date(at.getTime() + rules.offerDays * 24 * 60 * 60_000),
-      });
-      await repo.insertLines(offer.id, 'give', give);
-      await repo.insertLines(offer.id, 'want', want);
-      if (request.kind === 'gift') {
-        await repo.insertMailbox({
-          mapId,
-          userId: request.toUserId,
-          offerId: offer.id,
-          kind: 'gift',
-          lines: give,
-          readyAt: at,
-        });
-      }
-
-      // Off to the post with no job: contentment so far counts at its old job's rate (#376).
-      await checkpointContentment(tx, mapId, squishyIds(give), at);
-      await repo.setSquishyState(squishyIds(give), 'in-trade');
-      await repo.movePieces(gifts, user.id, offer.id);
-      await takeOffGone(
-        tx,
-        user.id,
-        pieces.map((p) => p.itemId),
-        events,
-      );
-      const items = itemCounts(give);
-      if (hasAny(items)) {
-        await consumeItems(tx, { mapId, userId: user.id }, items, 'trade-escrow', offer.id); // step 11
-      }
-      await repo.ledger({ mapId, offerId: offer.id, event: 'offered', actorUserId: user.id, at });
-      events.push({
-        mapId,
-        type: 'trade.offered',
-        actorUserId: user.id,
-        payload: {
-          offerId: offer.id,
-          kind: request.kind,
-          fromUserId: user.id,
-          toUserId: request.toUserId,
-          noteId,
-          give,
-          want,
-        },
-      });
+        give,
+        want,
+      },
     });
-    return viewOf(db, mapId, user.id);
+    return offer.id;
   };
 
   const accept = async (user: PublicUser, mapId: string, offerId: string, post: PostAtRequest) => {
     await requireMember(db, user, mapId);
     await expireDue(mapId);
     await run(async (tx, events) => {
-      const at = now();
-      const repo = createTradesRepo(tx);
       await requireMember(tx, user, mapId);
-      await requireTrading(repo, mapId);
-      await requirePostAccess(tx, { mapId, userId: user.id, post, at });
-      const peek = (await repo.linesOf([offerId])).filter((l) => l.side === 'want');
-      if (peek.some((l) => l.line.kind === 'clothing')) {
-        await createWardrobeRepo(tx).lockWorn(user.id); // step 4
-      }
-      const offer = await openOffer(tx, mapId, offerId, at); // step 9b
-      if (offer.toUserId !== user.id) throw new AppError('NOT_FOUND', MESSAGES.noOffer);
-      if (offer.kind === 'gift') throw new AppError('CONFLICT', MESSAGES.giftPickup);
-      if (!(await repo.isActiveMember(mapId, offer.fromUserId))) {
-        throw new AppError('CONFLICT', MESSAGES.gone);
-      }
-      const lines = await repo.linesOf([offer.id]);
-      const give = lines.filter((l) => l.side === 'give').map((l) => l.line);
-      const want = lines.filter((l) => l.side === 'want').map((l) => l.line);
-
-      // Both players' squishies in one id-ordered lock (step 10), then pieces (10b).
-      const pets = await repo.lockSquishies([...squishyIds(give), ...squishyIds(want)]);
-      // Both sides change hands: they leave their Keepers' houses (#381) under
-      // those locks, in this transaction, so a refusal below puts every bed
-      // back (atomic economy, CLAUDE.md rule 7).
-      await leaveHouse(tx, {
-        mapId,
-        squishyIds: [...squishyIds(give), ...squishyIds(want)],
-        at,
-        rehomed: true,
-      });
-      const pieces = await repo.lockPieces([...pieceIds(give), ...pieceIds(want)]);
-      // The want side is checked again now: the patch-mate may have changed.
-      refuse(sideProblem(want, await sideOf(repo, mapId, user.id, pets), rules));
-      const wantPieces = pieces.filter((p) => pieceIds(want).includes(p.id));
-      if (wantPieces.some((p) => p.userId !== user.id || p.heldByOfferId !== null)) {
-        refuse('not-theirs');
-      }
-      const heldPets = pets.filter((p) => squishyIds(give).includes(p.id));
-      if (heldPets.some((p) => p.ownerUserId !== offer.fromUserId || p.state !== 'in-trade')) {
-        throw new Error(`trades: offer ${offer.id} lost a held squishy`);
-      }
-
-      // The sender's side lands with me now.
-      await repo.moveSquishies(squishyIds(give), user.id, 'active');
-      await repo.movePieces(pieceIds(give), user.id, null);
-      // My side goes to the sender's mailbox, held until they pick it up,
-      // its contentment so far counted at its old job's rate (#376).
-      await checkpointContentment(tx, mapId, squishyIds(want), at);
-      await repo.moveSquishies(squishyIds(want), offer.fromUserId, 'in-trade');
-      await repo.movePieces(pieceIds(want), offer.fromUserId, offer.id);
-      await takeOffGone(
-        tx,
-        user.id,
-        wantPieces.map((p) => p.itemId),
-        events,
-      );
-      await repo.insertMailbox({
-        mapId,
-        userId: offer.fromUserId,
-        offerId: offer.id,
-        kind: 'trade',
-        lines: want,
-        readyAt: at,
-      });
-
-      // Inventory (step 11): both item sets' rows first.
-      const got = itemCounts(give);
-      const paid = itemCounts(want);
-      await lockGrantRows(tx, mapId, [{ userId: user.id, items: { ...got, ...paid } }]);
-      if (hasAny(paid)) {
-        await consumeItems(tx, { mapId, userId: user.id }, paid, 'trade-escrow', offer.id);
-      }
-      if (hasAny(got)) await grantItems(tx, { mapId, userId: user.id }, got, 'trade', offer.id);
-      const spawns = createSpawnsRepo(tx);
-      for (const pet of heldPets) await spawns.markCaught(mapId, user.id, pet.speciesId, at);
-
-      await repo.setStatus([offer.id], 'accepted', at);
-      await repo.ledger({ mapId, offerId: offer.id, event: 'accepted', actorUserId: user.id, at });
-      events.push({
-        mapId,
-        type: 'trade.answered',
-        actorUserId: user.id,
-        payload: {
-          offerId: offer.id,
-          kind: offer.kind,
-          fromUserId: offer.fromUserId,
-          toUserId: offer.toUserId,
-          answer: 'accepted',
-        },
-      });
+      await acceptWithin(tx, events, user.id, mapId, offerId, post, []);
     });
     return viewOf(db, mapId, user.id);
+  };
+
+  /**
+   * `accept`'s core. `post` is null only for a computer mate saying yes: no
+   * post check, and what the kid asked of it is made here. `alsoLock` joins
+   * the one id-ordered squishy lock (a mate's team, #386d).
+   */
+  const acceptWithin = async (
+    tx: Transaction,
+    events: NewGameEvent[],
+    userId: string,
+    mapId: string,
+    offerId: string,
+    post: PostAtRequest | null,
+    alsoLock: readonly string[],
+  ) => {
+    const user = { id: userId };
+    const at = now();
+    const repo = createTradesRepo(tx);
+    await requireTrading(repo, mapId);
+    if (post) await requirePostAccess(tx, { mapId, userId: user.id, post, at });
+    const peek = (await repo.linesOf([offerId])).filter((l) => l.side === 'want');
+    if (peek.some((l) => l.line.kind === 'clothing')) {
+      await createWardrobeRepo(tx).lockWorn(user.id); // step 4
+    }
+    const offer = await openOffer(tx, mapId, offerId, at); // step 9b
+    if (offer.toUserId !== user.id) throw new AppError('NOT_FOUND', MESSAGES.noOffer);
+    if (offer.kind === 'gift') throw new AppError('CONFLICT', MESSAGES.giftPickup);
+    if (!(await repo.isActiveMember(mapId, offer.fromUserId))) {
+      throw new AppError('CONFLICT', MESSAGES.gone);
+    }
+    const lines = await repo.linesOf([offer.id]);
+    const give = lines.filter((l) => l.side === 'give').map((l) => l.line);
+    const want = lines.filter((l) => l.side === 'want').map((l) => l.line);
+
+    // Both players' squishies in one id-ordered lock (step 10), then pieces (10b).
+    const pets = await repo.lockSquishies([...alsoLock, ...squishyIds(give), ...squishyIds(want)]);
+    // Both sides change hands: they leave their Keepers' houses (#381) under
+    // those locks, in this transaction, so a refusal below puts every bed
+    // back (atomic economy, CLAUDE.md rule 7).
+    await leaveHouse(tx, {
+      mapId,
+      squishyIds: [...squishyIds(give), ...squishyIds(want)],
+      at,
+      rehomed: true,
+    });
+    const pieces = await repo.lockPieces([...pieceIds(give), ...pieceIds(want)]);
+    // The want side is checked again now: the patch-mate may have changed.
+    refuse(sideProblem(want, await sideOf(repo, mapId, user.id, pets), rules));
+    const wantPieces = pieces.filter((p) => pieceIds(want).includes(p.id));
+    if (wantPieces.some((p) => p.userId !== user.id || p.heldByOfferId !== null)) {
+      refuse('not-theirs');
+    }
+    const heldPets = pets.filter((p) => squishyIds(give).includes(p.id));
+    if (heldPets.some((p) => p.ownerUserId !== offer.fromUserId || p.state !== 'in-trade')) {
+      throw new Error(`trades: offer ${offer.id} lost a held squishy`);
+    }
+
+    // The sender's side lands with me now.
+    await repo.moveSquishies(squishyIds(give), user.id, 'active');
+    await repo.movePieces(pieceIds(give), user.id, null);
+    // My side goes to the sender's mailbox, held until they pick it up,
+    // its contentment so far counted at its old job's rate (#376).
+    await checkpointContentment(tx, mapId, squishyIds(want), at);
+    await repo.moveSquishies(squishyIds(want), offer.fromUserId, 'in-trade');
+    await repo.movePieces(pieceIds(want), offer.fromUserId, offer.id);
+    await takeOffGone(
+      tx,
+      user.id,
+      wantPieces.map((p) => p.itemId),
+      events,
+    );
+    // A computer mate takes what it asked for home at once (#386d): it
+    // never visits a post, so nothing waits in its mailbox. It asks for
+    // items only, so nothing is left held.
+    const fromComputer = (await repo.computerIds([offer.fromUserId])).has(offer.fromUserId);
+    await repo.insertMailbox({
+      mapId,
+      userId: offer.fromUserId,
+      offerId: offer.id,
+      kind: 'trade',
+      lines: want,
+      readyAt: at,
+      ...(fromComputer ? { pickedUpAt: at } : {}),
+    });
+
+    // Inventory (step 11): both item sets' rows first.
+    const got = itemCounts(give);
+    const paid = itemCounts(want);
+    await lockGrantRows(tx, mapId, [{ userId: user.id, items: { ...got, ...paid } }]);
+    // A computer mate's side is made at its yes (#386d): nothing leaves a bag.
+    if (hasAny(paid) && post) {
+      await consumeItems(tx, { mapId, userId: user.id }, paid, 'trade-escrow', offer.id);
+    }
+    if (hasAny(got)) await grantItems(tx, { mapId, userId: user.id }, got, 'trade', offer.id);
+    const spawns = createSpawnsRepo(tx);
+    for (const pet of heldPets) await spawns.markCaught(mapId, user.id, pet.speciesId, at);
+
+    await repo.setStatus([offer.id], 'accepted', at);
+    await repo.ledger({ mapId, offerId: offer.id, event: 'accepted', actorUserId: user.id, at });
+    events.push({
+      mapId,
+      type: 'trade.answered',
+      actorUserId: user.id,
+      payload: {
+        offerId: offer.id,
+        kind: offer.kind,
+        fromUserId: offer.fromUserId,
+        toUserId: offer.toUserId,
+        answer: 'accepted',
+      },
+    });
   };
 
   /** Decline and cancel: the offer goes back, from anywhere (no post needed). */
@@ -754,134 +883,167 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
     await requireMember(db, user, mapId);
     await expireDue(mapId);
     await run(async (tx, events) => {
-      const at = now();
       await requireMember(tx, user, mapId);
-      const offer = await openOffer(tx, mapId, offerId, at);
-      const mine = who === 'to' ? offer.toUserId : offer.fromUserId;
-      if (mine !== user.id) throw new AppError('NOT_FOUND', MESSAGES.noOffer);
-      await sendBack(tx, [offer], who === 'to' ? 'declined' : 'cancelled', user.id, at);
-      const { fromUserId, toUserId } = offer;
-      events.push(
-        who === 'to'
-          ? {
-              mapId,
-              type: 'trade.answered',
-              actorUserId: user.id,
-              payload: { offerId, kind: offer.kind, fromUserId, toUserId, answer: 'declined' },
-            }
-          : {
-              mapId,
-              type: 'trade.cancelled',
-              actorUserId: user.id,
-              payload: { offerId, fromUserId, toUserId, reason: 'cancelled' },
-            },
-      );
+      await answerNoWithin(tx, events, user.id, mapId, offerId, who, []);
     });
     return viewOf(db, mapId, user.id);
+  };
+
+  /** Decline and cancel's core; `alsoLock` joins the squishy lock (a mate's team, #386d). */
+  const answerNoWithin = async (
+    tx: Transaction,
+    events: NewGameEvent[],
+    userId: string,
+    mapId: string,
+    offerId: string,
+    who: 'to' | 'from',
+    alsoLock: readonly string[],
+  ) => {
+    const user = { id: userId };
+    const at = now();
+    const offer = await openOffer(tx, mapId, offerId, at);
+    const mine = who === 'to' ? offer.toUserId : offer.fromUserId;
+    if (mine !== user.id) throw new AppError('NOT_FOUND', MESSAGES.noOffer);
+    await sendBack(tx, [offer], who === 'to' ? 'declined' : 'cancelled', user.id, at, alsoLock);
+    const { fromUserId, toUserId } = offer;
+    events.push(
+      who === 'to'
+        ? {
+            mapId,
+            type: 'trade.answered',
+            actorUserId: user.id,
+            payload: { offerId, kind: offer.kind, fromUserId, toUserId, answer: 'declined' },
+          }
+        : {
+            mapId,
+            type: 'trade.cancelled',
+            actorUserId: user.id,
+            payload: { offerId, fromUserId, toUserId, reason: 'cancelled' },
+          },
+    );
   };
 
   const pickup = async (user: PublicUser, mapId: string, request: PickupRequest) => {
     await requireMember(db, user, mapId);
     await expireDue(mapId);
     await run(async (tx, events) => {
-      const at = now();
-      const repo = createTradesRepo(tx);
       await requireMember(tx, user, mapId);
       // Picking up works even with trading off: it's already mine.
-      await requirePostAccess(tx, { mapId, userId: user.id, post: request, at });
+      await requirePostAccess(tx, { mapId, userId: user.id, post: request, at: now() });
       const tile = await createTerritoryRepo(tx).findTile(mapId, request.q, request.r);
-      const peek = await repo.waitingOf(mapId, user.id);
-      const wanted = request.ids ? peek.filter((m) => request.ids?.includes(m.id)) : peek;
-      if (wanted.length === 0 || !tile) return;
-      // Offers then mailbox rows (step 9b), each in id order.
-      const offers = await repo.lockOffers(wanted.map((m) => m.offerId));
-      const rows = (
-        await repo.lockWaiting(
-          mapId,
-          user.id,
-          wanted.map((m) => m.id),
-        )
-      ).filter((m) => {
-        if (m.kind !== 'gift') return true;
-        // A gift still open and in time (one that ran out just now goes home instead).
-        const gift = offers.find((o) => o.id === m.offerId);
-        return gift?.status === 'open' && gift.expiresAt > at;
-      });
-      if (rows.length === 0) return;
-      const gifts = offers.filter((o) => o.kind === 'gift' && rows.some((m) => m.offerId === o.id));
-      const lines = rows.flatMap((m) => m.lines);
-
-      const pets = await repo.lockSquishies(squishyIds(lines)); // step 10
-      const heldPets = pets.filter((p) => p.state === 'in-trade');
-      // A gift's squishies change hands now: they leave the giver's house
-      // (#381), kept until here so a gift said no to costs no bed. A trade's
-      // already left at its yes.
-      await leaveHouse(tx, {
-        mapId,
-        squishyIds: heldPets.map((p) => p.id),
-        at,
-        rehomed: true,
-      });
-      const pieces = await repo.lockPieces(pieceIds(lines)); // step 10b
-      await repo.moveSquishies(
-        heldPets.map((p) => p.id),
-        user.id,
-        'active',
-      );
-      const offerIds = new Set(rows.map((m) => m.offerId));
-      await repo.movePieces(
-        pieces
-          .filter((p) => p.heldByOfferId !== null && offerIds.has(p.heldByOfferId))
-          .map((p) => p.id),
-        user.id,
-        null,
-      );
-      const items = itemCounts(lines);
-      await lockGrantRows(tx, mapId, [{ userId: user.id, items }]); // step 11
-      for (const row of rows) {
-        const counts = itemCounts(row.lines);
-        if (hasAny(counts)) {
-          await grantItems(tx, { mapId, userId: user.id }, counts, 'trade', row.offerId);
-        }
-      }
-      const spawns = createSpawnsRepo(tx);
-      for (const pet of heldPets) await spawns.markCaught(mapId, user.id, pet.speciesId, at);
-
-      await repo.pickedUp(
-        rows.map((m) => m.id),
-        at,
-        tile.id,
-      );
-      await repo.setStatus(
-        gifts.map((g) => g.id),
-        'accepted',
-        at,
-      );
-      for (const row of rows) {
-        await repo.ledger({
-          mapId,
-          offerId: row.offerId,
-          event: 'picked-up',
-          actorUserId: user.id,
-          at,
-        });
-      }
-      for (const gift of gifts) {
-        events.push({
-          mapId,
-          type: 'gift.collected',
-          actorUserId: user.id,
-          payload: { offerId: gift.id, fromUserId: gift.fromUserId, toUserId: gift.toUserId },
-        });
-      }
-      events.push({
-        mapId,
-        type: 'mailbox.collected',
-        actorUserId: user.id,
-        payload: { userId: user.id, mailboxIds: rows.map((m) => m.id), offerIds: [...offerIds] },
-      });
+      if (!tile) return;
+      await pickupWithin(tx, events, user.id, mapId, request.ids ?? null, tile.id, []);
     });
     return viewOf(db, mapId, user.id);
+  };
+
+  /**
+   * `pickup`'s core: `ids` null takes every waiting entry. `postTileId` is
+   * null only for a computer mate taking a kid's gift (#386d), which never
+   * visits a post; `alsoLock` joins the squishy lock (its team).
+   */
+  const pickupWithin = async (
+    tx: Transaction,
+    events: NewGameEvent[],
+    userId: string,
+    mapId: string,
+    ids: readonly string[] | null,
+    postTileId: string | null,
+    alsoLock: readonly string[],
+  ) => {
+    const user = { id: userId };
+    const at = now();
+    const repo = createTradesRepo(tx);
+    const peek = await repo.waitingOf(mapId, user.id);
+    const wanted = ids ? peek.filter((m) => ids.includes(m.id)) : peek;
+    if (wanted.length === 0) return;
+    // Offers then mailbox rows (step 9b), each in id order.
+    const offers = await repo.lockOffers(wanted.map((m) => m.offerId));
+    const rows = (
+      await repo.lockWaiting(
+        mapId,
+        user.id,
+        wanted.map((m) => m.id),
+      )
+    ).filter((m) => {
+      if (m.kind !== 'gift') return true;
+      // A gift still open and in time (one that ran out just now goes home instead).
+      const gift = offers.find((o) => o.id === m.offerId);
+      return gift?.status === 'open' && gift.expiresAt > at;
+    });
+    if (rows.length === 0) return;
+    const gifts = offers.filter((o) => o.kind === 'gift' && rows.some((m) => m.offerId === o.id));
+    const lines = rows.flatMap((m) => m.lines);
+
+    const pets = await repo.lockSquishies([...alsoLock, ...squishyIds(lines)]); // step 10
+    const heldPets = pets.filter((p) => p.state === 'in-trade');
+    // A gift's squishies change hands now: they leave the giver's house
+    // (#381), kept until here so a gift said no to costs no bed. A trade's
+    // already left at its yes.
+    await leaveHouse(tx, {
+      mapId,
+      squishyIds: heldPets.map((p) => p.id),
+      at,
+      rehomed: true,
+    });
+    const pieces = await repo.lockPieces(pieceIds(lines)); // step 10b
+    await repo.moveSquishies(
+      heldPets.map((p) => p.id),
+      user.id,
+      'active',
+    );
+    const offerIds = new Set(rows.map((m) => m.offerId));
+    await repo.movePieces(
+      pieces
+        .filter((p) => p.heldByOfferId !== null && offerIds.has(p.heldByOfferId))
+        .map((p) => p.id),
+      user.id,
+      null,
+    );
+    const items = itemCounts(lines);
+    await lockGrantRows(tx, mapId, [{ userId: user.id, items }]); // step 11
+    for (const row of rows) {
+      const counts = itemCounts(row.lines);
+      if (hasAny(counts)) {
+        await grantItems(tx, { mapId, userId: user.id }, counts, 'trade', row.offerId);
+      }
+    }
+    const spawns = createSpawnsRepo(tx);
+    for (const pet of heldPets) await spawns.markCaught(mapId, user.id, pet.speciesId, at);
+
+    await repo.pickedUp(
+      rows.map((m) => m.id),
+      at,
+      postTileId,
+    );
+    await repo.setStatus(
+      gifts.map((g) => g.id),
+      'accepted',
+      at,
+    );
+    for (const row of rows) {
+      await repo.ledger({
+        mapId,
+        offerId: row.offerId,
+        event: 'picked-up',
+        actorUserId: user.id,
+        at,
+      });
+    }
+    for (const gift of gifts) {
+      events.push({
+        mapId,
+        type: 'gift.collected',
+        actorUserId: user.id,
+        payload: { offerId: gift.id, fromUserId: gift.fromUserId, toUserId: gift.toUserId },
+      });
+    }
+    events.push({
+      mapId,
+      type: 'mailbox.collected',
+      actorUserId: user.id,
+      payload: { userId: user.id, mailboxIds: rows.map((m) => m.id), offerIds: [...offerIds] },
+    });
   };
 
   /** Calls off these open offers (locked by `lock`), with `reason`. */
@@ -945,7 +1107,32 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
     },
 
     memberLeft: async (mapId, userId, actorUserId) => {
-      await callOff(mapId, actorUserId, 'left', (repo) => repo.lockOpenOffers(mapId, { userId }));
+      await callOff(mapId, actorUserId, 'left', async (repo) => {
+        const open = await repo.lockOpenOffers(mapId, { userId });
+        // A computer mate's gift already waits in the kid's mailbox: it stays (#386d).
+        if (!(await repo.computerIds([userId])).has(userId)) return open;
+        return open.filter((o) => !(o.kind === 'gift' && o.fromUserId === userId));
+      });
+    },
+
+    sendAsComputer: (tx, events, { mapId, mateId, request }) =>
+      sendWithin(tx, events, mateId, mapId, request, null),
+
+    answerAsComputer: async (tx, events, { mapId, mateId, offerId, answer, alsoLock }) => {
+      const [offer] = await createTradesRepo(tx).lockOffers([offerId]); // step 9b
+      if (offer?.mapId !== mapId || offer.toUserId !== mateId) {
+        throw new AppError('NOT_FOUND', MESSAGES.noOffer);
+      }
+      if (answer === 'decline') {
+        await answerNoWithin(tx, events, mateId, mapId, offerId, 'to', alsoLock);
+      } else if (offer.kind === 'gift') {
+        const waiting = (await createTradesRepo(tx).waitingOf(mapId, mateId))
+          .filter((m) => m.offerId === offerId)
+          .map((m) => m.id);
+        await pickupWithin(tx, events, mateId, mapId, waiting, null, alsoLock);
+      } else {
+        await acceptWithin(tx, events, mateId, mapId, offerId, null, alsoLock);
+      }
     },
   };
 }

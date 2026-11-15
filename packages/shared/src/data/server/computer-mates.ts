@@ -20,6 +20,8 @@ export const COMPUTER_MATES: ComputerMatesSecrets = {
     giftsPerPatchWeek: 2, // TUNE
     giftMaxValue: 6, // TUNE: about one gather cycle of a common resource
     minFairPercent: 85, // TUNE
+    offerValue: { min: 12, max: 32 }, // TUNE: 386d, a few stacks of everyday goodies
+    shelfPerItem: 10, // TUNE: 386d, made at the answer (mates have no bag)
     challengesPerPatchWeek: { on: 4, gentle: 2, off: 0 }, // TUNE: owner decision 2
     quietHours: { from: 21, to: 7 }, // TUNE: patch time
     teamSize: { min: 3, max: 4 }, // TUNE

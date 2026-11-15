@@ -5,23 +5,31 @@ import {
   fuelSpace,
   HOME_BASE_RULES,
   Rng,
+  tradeValuer,
+  type TradeLine,
+  type ValuedLine,
 } from '@heartpatch/shared';
 import {
   COMPUTER_MATES,
   mateTeamLevel,
   nextIntent,
   type ComputerMatesSecrets,
+  type MateIncomingOffer,
   type MateIntent,
+  type MateTradingView,
   type MateView,
 } from '@heartpatch/shared/server';
 import type { Database, Transaction } from '../../db/client.js';
 import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { localDate, mapLocalTime, type Clock } from '../../lib/time.js';
+import { AppError } from '../../lib/errors.js';
+import { localDate, localDayStart, mapLocalTime, type Clock } from '../../lib/time.js';
 import { BUILDING_DATA, toPublicBuilding } from '../buildings/hearthfire.js';
 import { createBuildingsRepo } from '../buildings/repo.js';
 import { heartSeedOf } from '../maps/depart.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { createTendingRepo, createTerritoryRepo } from '../territory/repo.js';
+import { createTradesRepo } from '../trades/repo.js';
+import { createTradesService } from '../trades/service.js';
 import { createComputerMatesRepo, mateTransaction, type MateState } from './repo.js';
 
 const MINUTE_MS = 60 * 1000;
@@ -31,6 +39,73 @@ const SEEN_MAX = 10_000;
 const FIRE_ID = 'hearthfire';
 /** A fire stands in its tile's middle (#204). */
 const FIRE_SPOT = 0;
+const WEEK_MS = 7 * 24 * 60 * MINUTE_MS;
+
+/**
+ * What a mate's trade and gift choices read (#386d): the kids' open offers
+ * to it (valued with every species known: server-side only), the caps'
+ * counts, and the kids it may send to with their tradable items.
+ */
+async function tradingView(
+  tx: Transaction,
+  input: { mapId: string; userId: string; kidIds: readonly string[]; timeZone: string; at: Date },
+): Promise<MateTradingView> {
+  const { mapId, userId, kidIds, at } = input;
+  const repo = createTradesRepo(tx);
+  const enabled = await repo.tradingEnabled(mapId);
+  const open = (await repo.openOffersOf(mapId, userId)).filter((o) => o.expiresAt > at);
+  const toMe = open
+    .filter((o) => o.toUserId === userId)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : 1));
+  const lines = await repo.linesOf(toMe.map((o) => o.id));
+  const pets = new Map(
+    (
+      await repo.squishiesByIds(
+        lines.flatMap((l) => (l.line.kind === 'squishy' ? [l.line.squishyId] : [])),
+      )
+    ).map((p) => [p.id, p]),
+  );
+  const pieces = new Map(
+    (
+      await repo.piecesByIds(
+        lines.flatMap((l) => (l.line.kind === 'clothing' ? [l.line.clothingId] : [])),
+      )
+    ).map((p) => [p.id, p]),
+  );
+  const valued = (line: TradeLine): ValuedLine => {
+    if (line.kind === 'item') return line;
+    if (line.kind === 'clothing') {
+      return { kind: 'clothing', itemId: pieces.get(line.clothingId)?.itemId ?? '' };
+    }
+    const pet = pets.get(line.squishyId);
+    return { kind: 'squishy', speciesId: pet?.speciesId ?? null, level: pet?.level ?? 1 };
+  };
+  const incoming: MateIncomingOffer[] = toMe.map((o) => {
+    const side = (which: 'give' | 'want') =>
+      lines.filter((l) => l.offerId === o.id && l.side === which).map((l) => l.line);
+    return {
+      id: o.id,
+      kind: o.kind,
+      waitedMinutes: (at.getTime() - o.createdAt.getTime()) / MINUTE_MS,
+      giveValue: tradeValuer.sideValue(side('give').map(valued)),
+      wantValue: tradeValuer.sideValue(side('want').map(valued)),
+      wantsItemsOnly: side('want').every((l) => l.kind === 'item'),
+    };
+  });
+  const counts = await repo.computerTradeCounts(
+    mapId,
+    userId,
+    localDayStart(at, input.timeZone),
+    new Date(at.getTime() - WEEK_MS),
+  );
+  const busy = new Set(open.filter((o) => o.fromUserId === userId).map((o) => o.toUserId));
+  const kids = [];
+  for (const kidId of [...kidIds].sort()) {
+    if (busy.has(kidId) || !(await repo.isActiveMember(mapId, kidId))) continue;
+    kids.push({ userId: kidId, bag: await repo.bagOf(mapId, kidId) });
+  }
+  return { enabled, incoming, ...counts, kids };
+}
 
 /** What one step did (tests and logs). */
 export interface MateStepResult {
@@ -201,10 +276,24 @@ async function stepWithin(
     guarded: posts.map((p) => ({ q: p.q, r: p.r })),
     freeSquishies: team.filter((s) => s.state === 'active' && !posted.has(s.id)).length,
     contested: tiles.filter((t) => contested.has(t.id)).map((t) => ({ q: t.q, r: t.r })),
+    ...(catchUp
+      ? {}
+      : {
+          trading: await tradingView(tx, {
+            mapId,
+            userId,
+            kidIds: [...homes.keys()],
+            timeZone: map.timeZone,
+            at,
+          }),
+        }),
   };
   const intent = nextIntent(view, persona, rules, Rng.fromSeed(deriveSeed(row.seed, step)));
+  const tileIntent = intent && 'q' in intent ? intent : null;
   const target =
-    intent === null ? undefined : tiles.find((t) => t.q === intent.q && t.r === intent.r);
+    tileIntent === null
+      ? undefined
+      : tiles.find((t) => t.q === tileIntent.q && t.r === tileIntent.r);
 
   // Step 6: their outer land (to tend) and the intent's tile, one id-ordered lock.
   const outerIds = tiles
@@ -297,6 +386,48 @@ async function stepWithin(
         });
         applied = true;
       }
+    }
+  }
+
+  // Step 9b–11: a trade or gift, through trades' own cores (plan §6), in a
+  // savepoint so a refusal (a kid's squishy got busy, the offer was answered
+  // a moment ago) undoes only the trade and the step still tends. The
+  // mate's team joins the trade's one squishy lock (step 10), so the team
+  // lock below takes nothing new after the inventory rows (11).
+  const trade = intent && !('q' in intent) ? intent : null;
+  if (trade) {
+    const trades = createTradesService({ db: tx, clock: () => at });
+    const tradeEvents: NewGameEvent[] = [];
+    try {
+      await mateTransaction(tx, async (sp) => {
+        if (trade.kind === 'answer-offer') {
+          await trades.answerAsComputer(sp, tradeEvents, {
+            mapId,
+            mateId: userId,
+            offerId: trade.offerId,
+            answer: trade.answer,
+            alsoLock: team.map((s) => s.id),
+          });
+        } else {
+          const items = (lines: readonly { itemId: string; quantity: number }[]) =>
+            lines.map((l) => ({ kind: 'item' as const, ...l }));
+          await trades.sendAsComputer(sp, tradeEvents, {
+            mapId,
+            mateId: userId,
+            request: {
+              kind: trade.kind === 'offer' ? 'trade' : 'gift',
+              toUserId: trade.toUserId,
+              give: items(trade.give),
+              want: trade.kind === 'offer' ? items(trade.want) : [],
+              noteId: trade.noteId,
+            },
+          });
+        }
+      });
+      events.push(...tradeEvents);
+      applied = true;
+    } catch (err) {
+      if (!(err instanceof AppError)) throw err;
     }
   }
 

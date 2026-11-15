@@ -1,6 +1,10 @@
+import { GAME_DATA } from '../data/index.js';
+import { TRADE_VALUES } from '../data/trading.js';
 import { hexDistance, hexKey, hexNeighbors, type Hex, type HexKey } from '../hex/index.js';
 import type { Rng } from '../rng/index.js';
 import type { ComputerMateRules, ComputerPersonaTuning } from '../schemas/data/computer-mates.js';
+import { isTradableResource } from '../schemas/data/resources.js';
+import type { TradeValues } from '../schemas/data/trading.js';
 import { isTradingPost, isWaterTerrain } from '../territory/reach.js';
 import { attackTargetProblem, type TerritoryTile } from '../territory/index.js';
 
@@ -43,12 +47,77 @@ export interface MateView {
   readonly freeSquishies: number;
   /** Tiles someone is battling for right now (an open `tile_attacks` row): never claimed. */
   readonly contested: readonly Hex[];
+  /** Trades and gifts (386d); absent (the map-fill sim) means none. */
+  readonly trading?: MateTradingView;
 }
+
+/** A kid's open offer or gift to the mate, valued by `TRADE_VALUES` (the server knows every species). */
+export interface MateIncomingOffer {
+  readonly id: string;
+  readonly kind: 'trade' | 'gift';
+  /** Minutes since the kid sent it. */
+  readonly waitedMinutes: number;
+  /** The kid's side. */
+  readonly giveValue: number;
+  /** What the kid asks of the mate. */
+  readonly wantValue: number;
+  /** The kid asks for items only (a mate never gives a squishy or clothing). */
+  readonly wantsItemsOnly: boolean;
+}
+
+/** What a mate's trade and gift choices read (386d). Caps count across all mates unless noted. */
+export interface MateTradingView {
+  /** The owner's trading switch. */
+  readonly enabled: boolean;
+  /** Open offers and gifts to this mate, oldest first. */
+  readonly incoming: readonly MateIncomingOffer[];
+  /** Trades and gifts with a mate finished this patch day, all mates. */
+  readonly completedToday: number;
+  /** Gifts mates sent in the last 7 days, all mates. */
+  readonly giftsThisWeek: number;
+  /** Offers this mate sent in the last 7 days. */
+  readonly offersThisWeek: number;
+  /** Kids this mate may send to now (nothing open from it to them), with their tradable items. */
+  readonly kids: readonly {
+    readonly userId: string;
+    readonly bag: Readonly<Record<string, number>>;
+  }[];
+}
+
+/** One stack of an item on one side of a mate's offer or gift. */
+export interface MateItemLine {
+  readonly itemId: string;
+  readonly quantity: number;
+}
+
+/** The preset notes a mate's offer and gift carry: the only words a mate ever sends (plan §1 E). */
+export const MATE_NOTES = { offer: 'want-to-trade', gift: 'heart' } as const;
 
 export type MateIntent =
   | { readonly kind: 'claim'; readonly q: number; readonly r: number }
   | { readonly kind: 'fire'; readonly q: number; readonly r: number }
-  | { readonly kind: 'guard'; readonly q: number; readonly r: number };
+  | { readonly kind: 'guard'; readonly q: number; readonly r: number }
+  | {
+      readonly kind: 'answer-offer';
+      readonly offerId: string;
+      readonly answer: 'accept' | 'decline';
+    }
+  | {
+      readonly kind: 'offer';
+      readonly toUserId: string;
+      readonly give: readonly MateItemLine[];
+      readonly want: readonly MateItemLine[];
+      readonly noteId: string;
+    }
+  | {
+      readonly kind: 'gift';
+      readonly toUserId: string;
+      readonly give: readonly MateItemLine[];
+      readonly noteId: string;
+    };
+
+/** The intents that act on a tile. */
+export type MateTileIntent = Extract<MateIntent, { q: number }>;
 
 /** Tiles anyone could ever hold outside a home: no home ring, post, water or grey village. */
 export function claimableTiles<T extends MateViewTile>(tiles: readonly T[]): T[] {
@@ -154,10 +223,123 @@ export function borderFacingKids(view: MateView): Hex[] {
     .map((t) => ({ q: t.q, r: t.r }));
 }
 
+/** Items anyone may trade that have a value: what a mate can make for a trade or gift. */
+const MATE_ITEMS: readonly string[] = GAME_DATA.resources
+  .filter(isTradableResource)
+  .map((r) => r.id)
+  .filter((id) => (TRADE_VALUES.items[id] ?? 0) > 0)
+  .sort();
+
+/** Whether two sides are inside the fair band: the smaller is at least `minFairPercent` of the bigger. */
+export function insideFairBand(a: number, b: number, rules: ComputerMateRules): boolean {
+  if (a <= 0 || b <= 0) return false;
+  return Math.min(a, b) * 100 >= Math.max(a, b) * rules.minFairPercent;
+}
+
+/**
+ * A mate's answer to a kid's offer (plan §1 D): a gift is always welcome; a
+ * trade is a yes only for items (never a squishy or clothing), with the kid's
+ * side worth at least `minFairPercent` of the mate's, and not lopsided the
+ * kid's way either (a mate never takes a lopsided trade, plan §1 E).
+ */
+export function mateSaysYes(
+  offer: MateIncomingOffer,
+  rules: ComputerMateRules,
+  values: TradeValues = TRADE_VALUES,
+): boolean {
+  if (offer.kind === 'gift') return true;
+  if (!offer.wantsItemsOnly || offer.wantValue <= 0 || offer.giveValue <= 0) return false;
+  return (
+    offer.giveValue * 100 >= offer.wantValue * rules.minFairPercent &&
+    offer.giveValue < values.lopsided * offer.wantValue
+  );
+}
+
+const itemsValue = (lines: readonly MateItemLine[], values: TradeValues) =>
+  lines.reduce((sum, l) => sum + (values.items[l.itemId] ?? 0) * l.quantity, 0);
+
+/**
+ * A mate's own offer to a kid, or null: items only, asking for one stack the
+ * kid has (worth about `offerValue`), giving one stack of another item,
+ * always inside the fair band.
+ */
+export function mateOffer(
+  trading: MateTradingView,
+  rules: ComputerMateRules,
+  rng: Rng,
+  values: TradeValues = TRADE_VALUES,
+): Extract<MateIntent, { kind: 'offer' }> | null {
+  const kids = trading.kids.filter((k) => MATE_ITEMS.some((id) => (k.bag[id] ?? 0) > 0));
+  if (kids.length === 0) return null;
+  const kid = rng.pick(kids);
+  const target = rng.int(rules.offerValue.min, rules.offerValue.max);
+  const wantable = MATE_ITEMS.filter((id) => (kid.bag[id] ?? 0) > 0);
+  const wantId = rng.pick(wantable);
+  const each = values.items[wantId] ?? 0;
+  const quantity = Math.max(1, Math.min(kid.bag[wantId] ?? 0, Math.round(target / each)));
+  const want = [{ itemId: wantId, quantity }];
+  const wantValue = itemsValue(want, values);
+  // Every other item, from a seeded start: the first that fits the band.
+  const others = MATE_ITEMS.filter((id) => id !== wantId);
+  const start = rng.int(0, Math.max(0, others.length - 1));
+  for (let i = 0; i < others.length; i++) {
+    const giveId = others[(start + i) % others.length]!;
+    const per = values.items[giveId] ?? 0;
+    const giveQty = Math.max(1, Math.round(wantValue / per));
+    const give = [{ itemId: giveId, quantity: giveQty }];
+    if (insideFairBand(itemsValue(give, values), wantValue, rules)) {
+      return { kind: 'offer', toUserId: kid.userId, give, want, noteId: MATE_NOTES.offer };
+    }
+  }
+  return null;
+}
+
+/** A small gift for a kid, or null: one stack worth at most `giftMaxValue`. */
+export function mateGift(
+  trading: MateTradingView,
+  rules: ComputerMateRules,
+  rng: Rng,
+  values: TradeValues = TRADE_VALUES,
+): Extract<MateIntent, { kind: 'gift' }> | null {
+  const items = MATE_ITEMS.filter((id) => (values.items[id] ?? 0) <= rules.giftMaxValue);
+  if (trading.kids.length === 0 || items.length === 0) return null;
+  const kid = rng.pick(trading.kids);
+  const itemId = rng.pick(items);
+  const quantity = Math.max(1, Math.floor(rules.giftMaxValue / (values.items[itemId] ?? 1)));
+  return {
+    kind: 'gift',
+    toUserId: kid.userId,
+    give: [{ itemId, quantity }],
+    noteId: MATE_NOTES.gift,
+  };
+}
+
+/**
+ * The kid's offer to answer now, or null: the oldest one that has waited
+ * `answerMinutes`. A no is always allowed; a yes waits while the patch
+ * day's `completedPerPatchDay` is used up (the offer stays open).
+ */
+export function offerToAnswer(
+  trading: MateTradingView,
+  persona: ComputerPersonaTuning,
+  rules: ComputerMateRules,
+): Extract<MateIntent, { kind: 'answer-offer' }> | null {
+  const room = trading.completedToday < rules.completedPerPatchDay;
+  for (const offer of trading.incoming) {
+    if (offer.waitedMinutes < persona.answerMinutes) continue;
+    const yes = mateSaysYes(offer, rules);
+    if (yes && !room) continue;
+    // A gift can't be said no to from here: it waits for room.
+    return { kind: 'answer-offer', offerId: offer.id, answer: yes ? 'accept' : 'decline' };
+  }
+  return null;
+}
+
 /**
  * One intent for this step, or null to only tend. A fire on dark land comes
- * first (outside catch-up); otherwise claim or guard, weighted by the
- * persona, among what's allowed now.
+ * first (outside catch-up), then a kid's offer that has waited long enough;
+ * otherwise claim, guard, offer or gift, weighted by the persona, among
+ * what's allowed now. Catch-up steps only claim and tend.
  */
 export function nextIntent(
   view: MateView,
@@ -168,6 +350,11 @@ export function nextIntent(
   if (!view.catchUp && view.fires.length < firesWanted(view, rules)) {
     const spot = fireSpot(view);
     if (spot) return { kind: 'fire', ...spot };
+  }
+  const trading = view.catchUp || !view.trading?.enabled ? undefined : view.trading;
+  if (trading) {
+    const answer = offerToAnswer(trading, persona, rules);
+    if (answer) return answer;
   }
   const options: { weight: number; intent: MateIntent }[] = [];
   if (
@@ -188,6 +375,16 @@ export function nextIntent(
     const guarded = new Set(view.guarded.map(hexKey));
     const spot = borderFacingKids(view).find((t) => !guarded.has(hexKey(t)));
     if (spot) options.push({ weight: persona.weights.guard, intent: { kind: 'guard', ...spot } });
+  }
+  if (trading && trading.completedToday < rules.completedPerPatchDay) {
+    if (persona.weights.trade > 0 && trading.offersThisWeek < persona.offersPerWeek) {
+      const offer = mateOffer(trading, rules, rng);
+      if (offer) options.push({ weight: persona.weights.trade, intent: offer });
+    }
+    if (persona.weights.gift > 0 && trading.giftsThisWeek < rules.giftsPerPatchWeek) {
+      const gift = mateGift(trading, rules, rng);
+      if (gift) options.push({ weight: persona.weights.gift, intent: gift });
+    }
   }
   if (options.length === 0) return null;
   return rng.weighted(options).intent;
