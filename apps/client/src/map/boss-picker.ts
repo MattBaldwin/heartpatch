@@ -48,6 +48,19 @@ export function exceptBossTile(
   };
 }
 
+/**
+ * The info panel's lines for the boss's tile: just the land's name and kind.
+ * The wild guards and the gatherer line are about ordinary wild land, and the
+ * boss card says the rest.
+ */
+export function bossTileInfo<T extends { guardians: string | null; gatherer: string | null }>(
+  picker: Pick<BossPicker, 'claims'>,
+  info: T,
+  tile: { q: number; r: number },
+): T {
+  return picker.claims(tile) ? { ...info, guardians: null, gatherer: null } : info;
+}
+
 export function createBossPicker(options: BossPickerOptions): BossPicker {
   const { store } = options;
   const now = options.now ?? (() => new Date());

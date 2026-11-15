@@ -57,7 +57,7 @@ import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen, type MapLayer } from './map/map-screen.js';
 import { mapApi } from './map/map-api.js';
 import { createBossMarker } from './map/boss-marker.js';
-import { createBossPicker, exceptBossTile } from './map/boss-picker.js';
+import { bossTileInfo, createBossPicker, exceptBossTile } from './map/boss-picker.js';
 import { createBossStore } from './map/boss-store.js';
 import { bossPatchLine } from './map/boss-view.js';
 import { seasonsOn } from './map/map-dressing.js';
@@ -1467,6 +1467,7 @@ const maps = createMapScreen({
     lobby.showMessage(message);
   },
   waterTileActions: waterBuild.tileActions,
+  tileInfo: (info, tile) => bossTileInfo(bossPicker, info, tile),
   // Meet it first (#209): the tuft the player tapped is what they came for.
   tileActions: combineTileActions(
     wildPicker.tileActions,

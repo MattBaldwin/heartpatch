@@ -2,7 +2,7 @@ import type { BossVisit } from '@heartpatch/shared';
 import { describe, expect, it, vi } from 'vitest';
 import type { TileActions } from './map-screen.js';
 import type { BossStore } from './boss-store.js';
-import { createBossPicker, exceptBossTile } from './boss-picker.js';
+import { bossTileInfo, createBossPicker, exceptBossTile } from './boss-picker.js';
 
 const NOW = new Date('2026-11-14T12:00:00');
 const visit: BossVisit = {
@@ -68,5 +68,22 @@ describe('exceptBossTile', () => {
     const other = landRules();
     exceptBossTile(pickerOf(visit), other).hide();
     expect(other.hide).toHaveBeenCalled();
+  });
+});
+
+describe('bossTileInfo', () => {
+  const info = {
+    title: 'Meadow',
+    guardians: 'Guarded by 1 Joy squishy • easy',
+    gatherer: 'Squishies gather 🌿 Greens here.',
+  };
+  it('drops the wild guards and gatherer lines on the boss tile only', () => {
+    const picker = pickerOf(visit);
+    expect(bossTileInfo(picker, info, { q: 1, r: -2 })).toEqual({
+      title: 'Meadow',
+      guardians: null,
+      gatherer: null,
+    });
+    expect(bossTileInfo(picker, info, { q: 0, r: 0 })).toBe(info);
   });
 });
