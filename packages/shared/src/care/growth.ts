@@ -240,6 +240,37 @@ export function friendlyBattleXp(
   return Math.floor((one * (falloff?.friendlyPercent ?? 100)) / 100);
 }
 
+/**
+ * Who sat on the bench (#732): a side's squishies that were on the team but
+ * never came out (`joined === false`). A squishy that came out for one turn
+ * fought. A side with no squishies (a fence) has no bench.
+ */
+export function benchedIn(side: {
+  readonly squishies: readonly {
+    readonly id: string;
+    readonly joined: boolean;
+    readonly fence?: string | undefined;
+  }[];
+}): string[] {
+  return side.squishies.filter((s) => !s.joined && s.fence === undefined).map((s) => s.id);
+}
+
+/**
+ * A benched squishy's base XP (#732): `benchXpPercent` of the best
+ * kind-adjusted award on its side (after Gentle's and the friendly shares),
+ * floored; 0 with the knob off or absent, or no award. Each bench squishy
+ * then takes its own falloff and its own care × habitat, like a fighter.
+ */
+export function benchXp(
+  sideAwards: readonly { readonly xp: number }[],
+  rules: Pick<GrowthRules, 'benchXpPercent'>,
+): number {
+  const percent = rules.benchXpPercent ?? 0;
+  if (percent <= 0) return 0;
+  const best = sideAwards.reduce((most, a) => Math.max(most, a.xp), 0);
+  return Math.floor((best * percent) / 100);
+}
+
 /** How far a squishy is toward its next evolution (#205), for the evolving meter. */
 export interface EvolvingMeter {
   /** 0–100, floored. 100: past the level, it evolves on its next XP. */

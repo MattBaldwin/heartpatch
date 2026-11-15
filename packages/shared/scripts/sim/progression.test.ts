@@ -8,6 +8,8 @@ import {
   WITH_EXPLORE_RULES,
   WITH_FRIENDLIES_RULES,
   SHIPPED_FRIENDLY_XP,
+  SHIPPED_BENCH_XP,
+  BENCH_25_RULES,
   PROGRESSION_CONFIG,
   type ProgressionConfig,
 } from './progression-config.js';
@@ -93,8 +95,10 @@ describe('headline numbers (a short run, so data changes show up here)', () => {
     );
     // Wave 2's kinds (#382) reshuffled the seeded wild fights: the casual kid's days 2 and 3 moved.
     // #730 quartered the XP curve's knees: both kids pull ahead once past Lv 16.
+    // #732's bench grows the casual kid's friends, who then win more of the
+    // fights the Partner would have lost: its days 2–4 and 6 moved up.
     expect(levels).toEqual([
-      [8, 11, 15, 18, 20, 21],
+      [8, 13, 16, 19, 20, 22],
       [14, 20, 23, 26, 28, 31],
     ]);
   });
@@ -119,7 +123,9 @@ describe('headline numbers (a short run, so data changes show up here)', () => {
   }, 30_000); // four 30-day runs: 2.3 s alone, 3.1 s under coverage, 13.8 s with the CPUs oversubscribed (#429)
 
   it('moves no target by more than a day with exploring (#199, owner decision 2026-10-07 Q6)', () => {
-    const month: ProgressionConfig = { ...PROGRESSION_CONFIG, days: 30, estimateGames: 4 };
+    // Gap odds from 8 games, as above: at 4, #732's bench reshuffled the
+    // casual kid's estimate to day 5 without exploring and 7 with (7 / 7 at 8).
+    const month: ProgressionConfig = { ...PROGRESSION_CONFIG, days: 30, estimateGames: 8 };
     for (const kid of [casual!, engaged!]) {
       const now = summarise(runProgression(data, month, CURRENT_RULES, kid, 4), month);
       const exploring = summarise(runProgression(data, month, WITH_EXPLORE_RULES, kid, 4), month);
@@ -303,7 +309,9 @@ describe('friendlies and defences (#728)', () => {
     expect(payHold(data, guard, WITH_FRIENDLIES_RULES, new Map([['partner', 40]]))).toBeGreaterThan(
       0,
     );
-    expect(guard.team.map((m) => m.winsToday)).toEqual([1, 0]);
+    // The guard that never came out sat on the bench (#732): paid, and its slot filled too.
+    expect(guard.team.map((m) => m.winsToday)).toEqual([1, 1]);
+    expect(guard.team[1]!.xp).toBeGreaterThan(0);
 
     // A lost wild battle doesn't count, and past `fullWinsPerDay` a battle pays the falloff's share.
     const member = guard.team[0]!;
@@ -462,7 +470,7 @@ describe("#732's per-tier first-evolve line", () => {
     const result = tierGate(firsts, { rare: 10, epic: 20 });
     expect(result.pass).toBe(false);
     expect(formatTierGate(result, 'casual', 'collector')).toBe(
-      '#732 per-tier gate: rare ≤ day 10, epic ≤ day 20 (casual, collector): FAIL: rare never, epic never (soft until #732 D1; does not fail the run)',
+      '#732 per-tier gate: rare ≤ day 10, epic ≤ day 20 (casual, collector): FAIL: rare never, epic never (soft, #732 owner decision 2026-11-15; does not fail the run)',
     );
   });
 
@@ -492,4 +500,60 @@ describe("#732's per-tier first-evolve line", () => {
     expect(report).toContain('## First evolve by rarity line (#732)');
     expect(report).toContain('| now (collector) | 4 | casual |');
   }, 30_000);
+});
+
+describe("#732's bench share in the sim", () => {
+  const kidOf = (): Kid => ({
+    profile: engaged!,
+    slot: 0,
+    team: [
+      { id: 'partner', speciesId: 'emberbun', level: 12, xp: 0, winsToday: 0 },
+      { id: 'friend-1', speciesId: 'pebblesnooze', level: 8, xp: 0, winsToday: 0 },
+    ],
+    evolved: [],
+  });
+
+  it('reads the shipped knob, as the battles service pays it', () => {
+    expect(SHIPPED_BENCH_XP).toBe(GROWTH_RULES.benchXpPercent);
+    expect(CURRENT_RULES.benchXpPercent).toBe(SHIPPED_BENCH_XP);
+    expect(WITH_FRIENDLIES_RULES.benchXpPercent).toBe(SHIPPED_BENCH_XP);
+    expect(BENCH_25_RULES.benchXpPercent).toBe(25);
+  });
+
+  it('pays a bench member half the best award in grant, and takes a slot on a win only', () => {
+    const won = kidOf();
+    grant(data, won, CURRENT_RULES, new Map([['partner', 41]]), true);
+    const [partner, bench] = won.team;
+    // The same as the friend fighting for floor(41 × 50 %) = 20 itself, with the bench off.
+    const same = kidOf();
+    grant(data, same, { ...CURRENT_RULES, benchXpPercent: 0 }, new Map([['friend-1', 20]]), true);
+    expect(bench!.xp).toBe(same.team[1]!.xp);
+    expect(bench!.xp).toBeGreaterThan(0);
+    expect(partner!.xp).toBeGreaterThan(0);
+    expect(won.team.map((m) => m.winsToday)).toEqual([1, 1]);
+    const lost = kidOf();
+    grant(data, lost, CURRENT_RULES, new Map([['partner', 5]]), false);
+    expect(lost.team.map((m) => m.winsToday)).toEqual([0, 0]);
+    expect(lost.team[1]!.xp).toBeGreaterThan(0);
+  });
+
+  it('pays the bench nothing with the knob at 0, and nothing when the side earned nothing', () => {
+    const off = kidOf();
+    grant(data, off, { ...CURRENT_RULES, benchXpPercent: 0 }, new Map([['partner', 41]]), true);
+    expect(off.team[1]).toMatchObject({ xp: 0, winsToday: 0 });
+    const scoot = kidOf();
+    grant(data, scoot, CURRENT_RULES, new Map([['partner', 0]]), true);
+    expect(scoot.team[1]).toMatchObject({ xp: 0, winsToday: 0 });
+  });
+
+  it('pays only the guards on watch on a hold: a member past maxDefenders was not in the setup', () => {
+    const rules = {
+      ...WITH_FRIENDLIES_RULES,
+      defences: { ...WITH_FRIENDLIES_RULES.defences!, maxDefenders: 1 },
+    };
+    const guard = kidOf();
+    payHold(data, guard, rules, new Map([['partner', 40]]));
+    expect(guard.team.map((m) => m.winsToday)).toEqual([1, 0]);
+    expect(guard.team[1]!.xp).toBe(0);
+  });
 });

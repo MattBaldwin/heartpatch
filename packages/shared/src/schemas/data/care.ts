@@ -203,6 +203,14 @@ export const GrowthRulesSchema = z
         friendlyOneOpponent: z.boolean().optional(),
       })
       .optional(),
+    /**
+     * A benched teammate's share (%) of the best award on its side (#732):
+     * a squishy on the team that never came out earns this much of the
+     * best kind-adjusted base (after Gentle's and the friendly shares,
+     * before its own falloff and care × habitat). Optional: left out or 0,
+     * the bench earns nothing.
+     */
+    benchXpPercent: z.number().int().min(0).max(100).optional(),
   })
   .superRefine((rules, ctx) => {
     if (rules.habitat.bothPercent < rules.habitat.onePercent) {

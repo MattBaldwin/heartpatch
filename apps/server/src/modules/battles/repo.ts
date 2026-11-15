@@ -118,7 +118,8 @@ export interface BattlesRepo {
   /** Does the player have a squishy that isn't in the Hollow (busy ones too)? */
   hasActiveSquishy: (mapId: string, userId: string) => Promise<boolean>;
   /**
-   * How many finished battles each of `squishyIds` joined and won on this
+   * How many finished battles each of `squishyIds` joined (or sat on the
+   * bench for, #732, counted from `rewards`) and won on this
    * map on `at`'s map-local day, on either side (#728: a guard's holds
    * count), friendlies included only when won and paid XP (#728, owner
    * decision 2026-11-15; `countsTowardFalloff` on the paid amount, from
@@ -384,22 +385,28 @@ function queries(db: Executor): BattlesRepo {
       const wanted = new Set(squishyIds);
       for (const row of rows) {
         const result = ResultSchema.parse(row.result);
-        // A friendly counts what each side was actually paid (#728): its
-        // share of the engine's XP, and nothing for a squishy that changed
-        // Keeper, went to the post or the Hollow before the finish.
+        // What each side was actually paid (#728, #732): a friendly's share,
+        // nothing for a squishy that changed Keeper, went to the post or the
+        // Hollow before the finish, and the bench (benched teammates are in
+        // `rewards`, never in the engine's `result.xp`). Rows stored before
+        // `rewards` count from the engine's awards; a friendly has none.
         const isFriendly = row.kind === 'friendly';
-        const rewards =
-          isFriendly && row.rewards !== null ? BattleRewardsSchema.parse(row.rewards) : null;
-        const paid = new Map<string, number>(
-          [...(rewards?.xp ?? []), ...(rewards?.b?.xp ?? [])].map((x) => [x.squishyId, x.xp]),
-        );
-        for (const award of result.xp) {
+        const rewards = row.rewards === null ? null : BattleRewardsSchema.parse(row.rewards);
+        const paid: { side: BattleSideId; squishyId: string; xp: number }[] = rewards
+          ? [
+              ...rewards.xp.map((x) => ({ side: 'a' as const, ...x })),
+              ...(rewards.b?.xp ?? []).map((x) => ({ side: 'b' as const, ...x })),
+            ]
+          : isFriendly
+            ? []
+            : result.xp;
+        for (const award of paid) {
           // Either side (#728): a challenger's wins, a guard's holds, and
           // a won friendly that paid something (a lost or tied one fills
-          // no slot, owner decision 2026-11-15).
+          // no slot, owner decision 2026-11-15). A bench squishy's count
+          // works the same way (#732).
           if (!wanted.has(award.squishyId)) continue;
-          const xp = isFriendly ? (paid.get(award.squishyId) ?? 0) : award.xp;
-          if (!countsTowardFalloff(row.kind, award.side, result.winner, xp)) continue;
+          if (!countsTowardFalloff(row.kind, award.side, result.winner, award.xp)) continue;
           wins.set(award.squishyId, (wins.get(award.squishyId) ?? 0) + 1);
         }
       }

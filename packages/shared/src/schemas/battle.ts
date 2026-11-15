@@ -430,6 +430,12 @@ const RewardXpSchema = z.object({
    */
   evolvingBefore: EvolvingPercentSchema,
   evolvingAfter: EvolvingPercentSchema,
+  /**
+   * True when it sat on the bench (#732): on the team, never came out, and
+   * paid a share of the best award on its side. Absent on fighters and on
+   * battles stored before it.
+   */
+  bench: z.boolean().optional(),
 });
 
 /**
