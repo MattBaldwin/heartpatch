@@ -460,6 +460,21 @@ export class BattleScene {
     };
   }
 
+  /**
+   * The boss's scale (#190 plan §10): about 1.8× the team's height, whatever
+   * its own size, so a big boss of a small kind still towers and one of a
+   * tall kind doesn't fill the sky. Its own close-up scale ×1.8 until the
+   * team is built.
+   */
+  #bossScale(tall: number): number {
+    const team = this.#posts[this.#options.mySide]
+      .flatMap((rig) => [...rig.bench.values()])
+      .map((f) => f.height);
+    if (team.length === 0 || tall <= 0) return battleScale(tall) * TEAM_ARENA.bossScale;
+    const mean = team.reduce((a, b) => a + b, 0) / team.length;
+    return (mean * TEAM_ARENA.bossScale) / tall;
+  }
+
   /** The rig for `side`'s squishy in `slot`: a team's post (#190), else the side's one rig. */
   #rigAt(side: BattleSideId, slot?: number | null): Rig {
     const posts = this.#posts[side];
@@ -515,7 +530,7 @@ export class BattleScene {
     const [sx, , sz] = handle.params.body.scale;
     // Hat included, so plates and the camera clear it.
     const tall = rig.field.heightOf(handle);
-    const scale = battleScale(tall) * (rig.boss ? TEAM_ARENA.bossScale : 1);
+    const scale = rig.boss ? this.#bossScale(tall) : battleScale(tall);
     const fighter: Fighter = {
       handle,
       species,
@@ -813,7 +828,11 @@ export class BattleScene {
    * middle in CSS pixels and half its height, or null with nobody out or
    * nothing drawn yet.
    */
-  screenSpot(side: BattleSideId, slot?: number): { x: number; y: number; r: number } | null {
+  screenSpot(
+    side: BattleSideId,
+    slot?: number,
+    atHome = false,
+  ): { x: number; y: number; r: number } | null {
     const rig = this.#rigAt(side, slot);
     const fighter = rig.out;
     const camera = this.#scene.activeCamera;
@@ -823,8 +842,10 @@ export class BattleScene {
     if (box.width <= 0 || box.height <= 0) return null;
     const viewport = camera.viewport.toGlobal(box.width, box.height);
     const transform = camera.getTransformationMatrix();
-    const c = this.#centre(rig, rig.pose, fighter);
-    const half = (fighter.height * rig.pose.scale) / 2;
+    // `atHome`: where it stands, not where a dash has taken it (a plate under it, #190).
+    const pose = atHome ? REST : rig.pose;
+    const c = this.#centre(rig, pose, fighter);
+    const half = (fighter.height * pose.scale) / 2;
     const mid = Vector3.Project(new Vector3(c.x, c.y, c.z), Matrix.Identity(), transform, viewport);
     const top = Vector3.Project(
       new Vector3(c.x, c.y + half, c.z),

@@ -1352,3 +1352,16 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 .boss-befriend-title {
   text-wrap: balance;
 }
+
+/* Each friend's plate under its body (the arena's row, `placeFriends`). */
+.boss-friends-placed {
+  display: block;
+  height: 44px;
+}
+
+.boss-friends-placed > .boss-friend {
+  position: absolute;
+  bottom: 0;
+  width: min(114px, 32%);
+  transform: translateX(-50%);
+}

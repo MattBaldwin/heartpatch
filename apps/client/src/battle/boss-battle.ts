@@ -24,6 +24,7 @@ import {
   hereUntil,
   isAreaMove,
   pickerFor,
+  slotsOut,
   pickMove,
   sameAgain,
   teamAction,
@@ -97,6 +98,9 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
   let problem: string | null = null;
   /** The bag was counted for the ask (the card waits for it once). */
   let counting = false;
+  /** Frames left to wait for the arena's first picture before the plates line up. */
+  let placing = 0;
+  let placeFrame = 0;
   /** One key per ask number, so a retried ask is the same ask. */
   const keys = new Map<number, string>();
 
@@ -176,6 +180,26 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     deps.invalidate();
   };
 
+  /** Lines each friend's plate up under its body, once the arena has drawn it. */
+  const place = (b: PlayerBattle) => {
+    const scene = deps.scene();
+    const xs = new Map<number, number>();
+    for (const slot of slotsOut(b, b.mySide)) {
+      const spot = scene?.screenSpot(b.mySide, slot, true);
+      if (spot) xs.set(slot, spot.x);
+    }
+    if (xs.size > 0) {
+      ui.placeFriends(xs);
+      placing = 0;
+      return;
+    }
+    if (placing <= 0) return;
+    placing -= 1;
+    placeFrame = requestAnimationFrame(() => {
+      if (battleId === b.id) place(b);
+    });
+  };
+
   const showAsk = (b: PlayerBattle, ask: number) => {
     if (busy || battleId !== b.id) return;
     busy = true;
@@ -216,6 +240,8 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
   return {
     open: (b) => {
       if (battleId !== b.id) reset(b.id);
+      // The arena takes a few frames to build: try for up to a second or so.
+      placing = 90;
       deps.hud.setTeam({
         top: ui.top,
         sheet: ui.picker,
@@ -224,6 +250,8 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
       });
     },
     close: () => {
+      cancelAnimationFrame(placeFrame);
+      placing = 0;
       deps.hud.setTeam(null);
       ui.hidePicker();
       drawn = null;
@@ -231,6 +259,8 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     },
     plates: (b, shown, names) => {
       ui.setPlates(bossPlates(b, shown, names, (side, slot) => deps.nameOf(b, side, slot)));
+      cancelAnimationFrame(placeFrame);
+      place(b);
       const boss = b.boss;
       ui.setChips({
         tries: boss ? boss.triesLeftToday : null,

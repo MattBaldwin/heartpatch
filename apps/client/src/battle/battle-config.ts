@@ -21,19 +21,19 @@ export const HOMES = {
 export const TEAM_ARENA = {
   /** Where each of the player's squishies stands, for teams of 1, 2 and 3 (slot order). */
   posts: {
-    1: [{ x: 0.2, z: -1.4 }],
+    1: [{ x: 0.4, z: -2.6 }],
     2: [
-      { x: -1.45, z: -1.81 },
-      { x: 1.85, z: -0.99 },
+      { x: -1.45, z: -3.06 },
+      { x: 2.25, z: -2.14 },
     ],
     3: [
-      { x: -3.0, z: -2.19 },
-      { x: 0.2, z: -1.4 },
-      { x: 3.4, z: -0.61 },
+      { x: -3.3, z: -3.52 },
+      { x: 0.4, z: -2.6 },
+      { x: 4.1, z: -1.68 },
     ],
-  } as Readonly<Record<1 | 2 | 3, readonly { x: number; z: number }[]>>, // TUNE: a close-up squishy is ~2.5 wide, so 3.3 apart, across the camera's view (yaw −14°)
+  } as Readonly<Record<1 | 2 | 3, readonly { x: number; z: number }[]>>, // TUNE: a close-up squishy is ~2.5 wide, so 3.8 apart, across the camera's view (yaw −14°), near the camera
   /** The boss: far back and centred on screen. */
-  boss: { x: -1.0, z: 4.6 }, // TUNE
+  boss: { x: -1.0, z: 5.2 }, // TUNE
   /** The boss's size against a usual fighter's (plan §10: "about 1.8×"). */
   bossScale: 1.8, // TUNE
 } as const;

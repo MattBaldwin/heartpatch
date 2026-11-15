@@ -36,6 +36,11 @@ export interface BossHud {
   /** In the sheet, above the caption's controls: the picker. */
   readonly picker: HTMLElement;
   setPlates: (plates: BossPlates) => void;
+  /**
+   * Puts each friend's plate under its body (page x in CSS px, by slot), so
+   * the plates follow the arena's row; a slot left out stays in the plain row.
+   */
+  placeFriends: (xs: ReadonlyMap<number, number>) => void;
   setChips: (chips: { tries: number | null; until: string | null }) => void;
   /** "Stomp again!" next to the boss, or a friend's callout over its plate. */
   callout: (who: 'boss' | number, text: string) => void;
@@ -149,6 +154,23 @@ export function mountBossHud(): BossHud {
           node.node.remove();
           friendNodes.delete(slot);
         }
+      }
+    },
+    placeFriends: (xs) => {
+      const row = friendRow.getBoundingClientRect();
+      if (row.width <= 0) return;
+      const placed = [...friendNodes].every(([slot]) => xs.has(slot));
+      friendRow.classList.toggle('boss-friends-placed', placed);
+      for (const [slot, node] of friendNodes) {
+        const x = xs.get(slot);
+        if (!placed || x === undefined) {
+          node.node.style.left = '';
+          continue;
+        }
+        // Inside the row, a plate's half-width from either edge.
+        const half = Math.min(57, row.width / 6);
+        const left = Math.max(half, Math.min(row.width - half, x - row.left));
+        node.node.style.left = `${String(Math.round(left))}px`;
       }
     },
     setChips: (chips) => {
