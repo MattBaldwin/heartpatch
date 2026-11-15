@@ -15,7 +15,6 @@ import { describe, expect, it } from 'vitest';
 import {
   DRAFT_BODIES,
   DRAFT_BOSS_LINES,
-  DRAFT_BOSS_VARIANTS,
   DRAFT_PARTS,
   DRAFT_PREFIX,
   draftLooks,
@@ -39,9 +38,7 @@ const forms = DRAFT_BOSS_LINES.flatMap((line) =>
 
 describe('the #234 mini-boss drafts', () => {
   it('stays out of the shipped data', () => {
-    const ids = [...DRAFT_BODIES, ...DRAFT_PARTS, ...forms, ...DRAFT_BOSS_VARIANTS].map(
-      (x) => x.id,
-    );
+    const ids = [...DRAFT_BODIES, ...DRAFT_PARTS, ...forms].map((x) => x.id);
     for (const id of ids) expect(id.startsWith(DRAFT_PREFIX), id).toBe(true);
     const shipped = new Set([...SPECIES, ...BODIES, ...PARTS].map((x) => x.id));
     expect(ids.filter((id) => shipped.has(id))).toEqual([]);
@@ -51,7 +48,7 @@ describe('the #234 mini-boss drafts', () => {
   it('validates against the shared schemas (with the #234 kit extension)', () => {
     for (const b of DRAFT_BODIES) expect(BodySchema.safeParse(b).success, b.id).toBe(true);
     for (const p of DRAFT_PARTS) expect(PartSchema.safeParse(p).success, p.id).toBe(true);
-    for (const f of [...forms, ...DRAFT_BOSS_VARIANTS]) {
+    for (const f of forms) {
       expect(SpeciesVisualSchema.safeParse(f.visual).success, f.id).toBe(true);
     }
   });
@@ -90,37 +87,11 @@ describe('the #234 mini-boss drafts', () => {
   });
 
   it('shows every form in the gallery', () => {
-    expect(draftLooks().map((l) => l.id)).toEqual(
-      [...forms, ...DRAFT_BOSS_VARIANTS].map((f) => f.id),
-    );
-  });
-
-  it("builds the boss variants within the art rules, as their line's boss form", () => {
-    const problems: string[] = [];
-    const report = (path: readonly (string | number)[], message: string) => {
-      problems.push(`${path.join('.')}: ${message}`);
-    };
-    for (const v of DRAFT_BOSS_VARIANTS) {
-      const line = DRAFT_BOSS_LINES.find((l) => v.id.startsWith(l.forms[2].id));
-      expect(line, v.id).toBeDefined();
-      expect(v.visual.parts.length, v.id).toBeLessThanOrEqual(12);
-      const species = {
-        id: v.id,
-        name: v.name,
-        element: line!.element,
-        feeling: line!.feeling,
-        rarity: v.plannedRarity,
-        visual: v.visual,
-        evolutions: [],
-      };
-      checkSpeciesVisual(v.visual, registry, [v.id], report);
-      checkSpeciesArt(species, registry, ART_RULES, [v.id], report);
-    }
-    expect(problems).toEqual([]);
+    expect(draftLooks().map((l) => l.id)).toEqual(forms.map((f) => f.id));
   });
 
   it('gives Rakelet no handle at any stage: its mouth is the rake', () => {
-    const rakelet = [...DRAFT_BOSS_LINES[0]!.forms, ...DRAFT_BOSS_VARIANTS];
+    const rakelet = DRAFT_BOSS_LINES[0]!.forms;
     for (const f of rakelet) {
       expect(
         f.visual.parts.filter((id) => /handle|caps/.test(id)),
@@ -134,11 +105,16 @@ describe('the #234 mini-boss drafts', () => {
       const tines = f.visual.parts
         .map((id) => registry.parts.get(id)!)
         .find((p) => p.slot === 'fangs');
-      // Bent rake tines; Pileup's are straight stubs (round 10).
-      expect([tines?.shape, tines?.color], f.id).toEqual([
-        f.id === 'draft-pileup' ? 'capsule' : 'bent',
-        'metal',
-      ]);
+      // Hooked metal tines off the bar's front face, 3, 4 and 5 by stage (round 11).
+      expect([tines?.shape, tines?.color, tines?.anchor], f.id).toEqual(['bent', 'metal', 'front']);
     }
+    expect(
+      rakelet.map((f) => {
+        const tines = f.visual.parts
+          .map((id) => registry.parts.get(id)!)
+          .find((p) => p.slot === 'fangs');
+        return tines?.layout.kind === 'ring' ? tines.layout.count : 0;
+      }),
+    ).toEqual([3, 4, 5]);
   });
 });

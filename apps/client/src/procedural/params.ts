@@ -81,8 +81,15 @@ export interface PartParams {
   /** Extra distance out from the surface, world units (eye glints sit on the eye). */
   readonly lift: number;
   readonly flip: boolean;
-  /** Set only for a part that stands behind its host (`anchor: 'behind'`); unset grows from the surface. */
-  readonly anchor?: 'behind';
+  /**
+   * Set only for a part that stands behind its host (`anchor: 'behind'`) or
+   * in a straight line in front of its face (`'front'`); unset grows from the surface.
+   */
+  readonly anchor?: 'behind' | 'front';
+  /** With `anchor: 'front'`: how far in front of the face's centre line it roots, world units. */
+  readonly standoff?: number;
+  /** Set only on `metal` parts (#234 round 11): plain metal, without the rarity's vinyl finish. */
+  readonly plain?: true;
   /** Lit from inside (the species' `glow`: every non-face part, or only `accent` ones). */
   readonly glow: boolean;
   readonly placements: readonly PartPlacement[];
@@ -404,7 +411,9 @@ export function squishyParams(
       sink: part.sink ?? 0,
       lift: 0,
       flip: part.flip ?? false,
-      ...(part.anchor === 'behind' ? { anchor: 'behind' as const } : {}),
+      ...(part.anchor === 'behind' || part.anchor === 'front' ? { anchor: part.anchor } : {}),
+      ...(part.anchor === 'front' ? { standoff: (part.standoff ?? 0) * hostHeight } : {}),
+      ...(part.color === 'metal' ? { plain: true as const } : {}),
       glow:
         !surfaceSlots.has(part.slot) &&
         (visual.glow === 'body' || (visual.glow === 'accent' && part.color === 'accent')),

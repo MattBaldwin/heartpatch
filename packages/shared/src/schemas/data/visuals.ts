@@ -236,8 +236,20 @@ export const PartSchema = z.strictObject({
    * for the left). So a rake handle in line with a bar on the face rises behind the
    * head without being hidden inside it. Unset is `surface`, today's
    * behaviour.
+   *
+   * `front` (#234 round 11) lines a sticking-out part up in front of its
+   * host's face instead of on the curved surface, like the tines along a
+   * rake head: each copy starts at the height and sideways spot of
+   * `around`/`up`, `standoff` in front of the face's centre line at that
+   * height (so every copy roots on one straight line, the front of a bar),
+   * and grows straight down, leaning forward towards the viewer by `tilt`.
    */
-  anchor: z.enum(['surface', 'behind']).optional(),
+  anchor: z.enum(['surface', 'behind', 'front']).optional(),
+  /**
+   * Opt-in with `anchor: 'front'` (#234 round 11): how far in front of the
+   * face's centre line the part roots, relative to host height.
+   */
+  standoff: z.number().min(0).max(0.5).optional(),
   /**
    * Opt-in (#234 kit extension): this part stands in for the species' mouth,
    * so a feeling face kit's mouth requirement (`ART_RULES.feelingFaces`) is
@@ -309,6 +321,12 @@ export function checkSpeciesVisual(
         at,
         `part "${id}" can't stand behind its host: only sticking-out single or pair parts can`,
       );
+    }
+    if (part.anchor === 'front' && (SURFACE_SLOTS.includes(part.slot) || part.slot === 'legs')) {
+      report(at, `part "${id}" can't stand in front of its host: only sticking-out parts can`);
+    }
+    if (part.standoff !== undefined && part.anchor !== 'front') {
+      report(at, `part "${id}" has a standoff but isn't anchored in front of its host`);
     }
   });
   const replacer = visual.parts.find((id) => registry.parts.get(id)?.replaces === 'mouth');

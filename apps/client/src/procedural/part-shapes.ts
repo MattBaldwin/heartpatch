@@ -149,11 +149,32 @@ function box(rings: number, segments: number): MeshArrays {
 }
 
 // TUNE: the bent dowel's centreline, in lengths of the whole stick.
+// Round 11 (#234): a real rake-tine hook, curling forward and back down by
+// 135° with a reach about 2.4× the dowel's thickness.
 const BENT_STRAIGHT = 0.62; // straight from the root
-const BENT_RADIUS = 0.22; // the bend's curve
-const BENT_ANGLE = (45 * Math.PI) / 180; // how far the tip turns forward
-const BENT_TIP = 0.16; // straight again after the bend
-const BENT_TUBE = 0.11; // the dowel's radius
+const BENT_RADIUS = 0.2; // the hook's curve
+const BENT_ANGLE = (135 * Math.PI) / 180; // how far the tip turns: forward, then back down
+const BENT_TIP = 0.06; // straight again after the bend
+const BENT_TUBE = 0.08; // the dowel's radius
+
+/**
+ * The `bent` dowel's own `[width, length, thickness]` before it is fitted
+ * to the unit box. A part sized in these proportions keeps the dowel round
+ * and the hook a circular curl, whatever its overall scale.
+ */
+export function bentProportions(): Vec3 {
+  const arcLen = BENT_RADIUS * BENT_ANGLE;
+  let maxY = 0;
+  for (let i = 0; i <= 200; i++) {
+    const a = (Math.min(i / 200, 1) * arcLen) / BENT_RADIUS;
+    maxY = Math.max(maxY, BENT_STRAIGHT + BENT_RADIUS * Math.sin(a));
+  }
+  const endY = BENT_STRAIGHT + BENT_RADIUS * Math.sin(BENT_ANGLE);
+  const endZ = BENT_RADIUS * (1 - Math.cos(BENT_ANGLE));
+  maxY = Math.max(maxY, endY + Math.cos(BENT_ANGLE) * BENT_TIP);
+  const maxZ = Math.max(endZ, endZ + Math.sin(BENT_ANGLE) * BENT_TIP);
+  return [2 * BENT_TUBE, maxY + 2 * BENT_TUBE, maxZ + 2 * BENT_TUBE];
+}
 
 /**
  * A round-ended dowel growing along +y that bends towards +z (the front)

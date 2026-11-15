@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { FIXED_COLORS, LOD } from './config.js';
 import { DRAFT_BODIES, DRAFT_PARTS, draftLooks } from './gallery/boss-drafts.js';
 import { squishyParams, type PartPlacement } from './params.js';
-import { partArrays } from './part-shapes.js';
+import { bentProportions, partArrays } from './part-shapes.js';
 import { partMatrix } from './placement.js';
 
 /**
@@ -179,21 +179,44 @@ const GOLDEN_SHAPES: Record<string, string> = {
 const GOLDEN_ROSTER = 'df66e5c157262849';
 
 describe('ring splay and the metal role (#234 round 8)', () => {
+  // A leaf-rake fan (round 8's variant B, dropped in round 11) keeps ring `splay` tested.
+  const fanPart = {
+    id: 'test-fan-tines',
+    slot: 'fangs' as const,
+    shape: 'bent' as const,
+    size: [0.06, 0.52, 0.1] as [number, number, number],
+    color: 'metal' as const,
+    layout: { kind: 'ring' as const, count: 11, spread: 40 },
+    around: 0,
+    up: -22,
+    tilt: -82,
+    splay: 40,
+    sink: 0.1,
+    jitter: 0,
+  };
   const drafts = visualRegistry({
     bodies: [...GAME_DATA.bodies, ...DRAFT_BODIES],
-    parts: [...GAME_DATA.parts, ...DRAFT_PARTS],
+    parts: [...GAME_DATA.parts, ...DRAFT_PARTS, fanPart],
   });
-  const tinesOf = (id: string) => {
+  const lookOf = (id: string) => {
     const look = draftLooks().find((l) => l.id === id);
     if (!look) throw new Error(`no look ${id}`);
-    const params = squishyParams({ id, visual: look.visual }, 'kit-ring', drafts);
-    const tines = params.parts.find((p) => p.id.includes('-tines'));
+    return look;
+  };
+  const tinesOf = (id: string, visual = lookOf(id).visual) => {
+    const params = squishyParams({ id, visual }, 'kit-ring', drafts);
+    const tines = params.parts.find((p) => p.slot === 'fangs');
     if (!tines) throw new Error(`no tines on ${id}`);
     return tines;
   };
 
   it('fans a ring out with splay: mirrored, growing towards the ends', () => {
-    const fan = tinesOf('draft-rakelet-fan').placements;
+    const rakelet = lookOf('draft-rakelet').visual;
+    const visual = {
+      ...rakelet,
+      parts: rakelet.parts.map((id) => (id === 'draft-rake-tool-tines' ? fanPart.id : id)),
+    };
+    const fan = tinesOf('test-fan', visual).placements;
     expect(fan).toHaveLength(11);
     const middle = fan[5];
     expect(middle?.splay).toBe(0);
@@ -210,7 +233,7 @@ describe('ring splay and the metal role (#234 round 8)', () => {
   });
 
   it('keeps a ring without splay parallel', () => {
-    // Rakeling's tines set no splay (Rakelet A's lean in a little, round 10).
+    // Rakeling's tines set no splay.
     for (const p of tinesOf('draft-rakeling').placements) {
       expect([p.splay, p.side]).toEqual([0, 0]);
     }
@@ -224,5 +247,113 @@ describe('ring splay and the metal role (#234 round 8)', () => {
       parseInt(hex.slice(3, 5), 16),
       parseInt(hex.slice(5, 7), 16),
     ]);
+  });
+
+  it('keeps metal parts plain, without the vinyl finish', () => {
+    expect(tinesOf('draft-rakelet').plain).toBe(true);
+    const bar = squishyParams(
+      { id: 'draft-rakelet', visual: lookOf('draft-rakelet').visual },
+      'kit-ring',
+      drafts,
+    ).parts.find((p) => p.slot === 'mane');
+    expect(bar && 'plain' in bar).toBe(false);
+  });
+});
+
+describe('bent hook proportions (#234 round 11)', () => {
+  it('curls into a hook at least twice the dowel thick', () => {
+    const [width, length, thickness] = bentProportions();
+    // The hook's forward reach (thickness less the dowel) is 2-3x the dowel.
+    expect((thickness - width) / width).toBeGreaterThanOrEqual(2);
+    expect((thickness - width) / width).toBeLessThanOrEqual(3);
+    expect(length).toBeGreaterThan(thickness);
+  });
+
+  it("sizes Rakelet's tines in the dowel's own proportions, so they stay round", () => {
+    const [w, l, t] = bentProportions();
+    for (const part of DRAFT_PARTS.filter((p) => p.shape === 'bent' && p.anchor === 'front')) {
+      const k = part.size[1] / l;
+      expect(part.size[0] / k, part.id).toBeCloseTo(w, 1);
+      expect(part.size[2] / k, part.id).toBeCloseTo(t, 1);
+    }
+  });
+});
+
+describe("anchor: 'front' (#234 round 11)", () => {
+  const orb = BODIES.find((b) => b.id === 'orb');
+  if (!orb) throw new Error('no orb body');
+  const scale: [number, number, number] = [1, 1, 1];
+  const part = { surface: false, sink: 0, lift: 0, flip: false, anchor: 'front' as const };
+  const at = (around: number, tilt = 0, standoff = 0.1) =>
+    partMatrix(
+      orb,
+      scale,
+      { ...part, standoff },
+      {
+        around: (around * Math.PI) / 180,
+        up: (-20 * Math.PI) / 180,
+        size: [0.05, 0.4, 0.05],
+        tilt: (tilt * Math.PI) / 180,
+        splay: 0,
+        side: 0,
+      },
+    );
+  const root = (m: readonly number[]) => [
+    (m[12] ?? 0) - (m[4] ?? 0) / 2,
+    (m[13] ?? 0) - (m[5] ?? 0) / 2,
+    (m[14] ?? 0) - (m[6] ?? 0) / 2,
+  ];
+
+  it('roots copies on one straight line in front of the face, evenly spaced', () => {
+    const roots = [-60, -30, 0, 30, 60].map((a) => root(at(a)));
+    const face = roots[2]!;
+    for (const r of roots) {
+      expect(r[2]).toBeCloseTo(face[2] ?? NaN, 9); // one straight line, not the face's curve
+      expect(r[1]).toBeCloseTo(face[1] ?? NaN, 9);
+    }
+    const gaps = roots.slice(1).map((r, i) => (r[0] ?? 0) - (roots[i]![0] ?? 0));
+    for (const g of gaps) expect(g).toBeCloseTo(gaps[0] ?? NaN, 9);
+    // `standoff` moves the line towards the viewer (-z).
+    expect(root(at(0, 0, 0.2))[2]).toBeCloseTo((face[2] ?? 0) - 0.1, 9);
+  });
+
+  it('grows straight down, leaning towards the viewer by tilt, all parallel', () => {
+    const m = at(0, 30);
+    expect(m[4]).toBeCloseTo(0);
+    expect(-(m[5] ?? 0) / 0.4).toBeCloseTo(Math.cos(Math.PI / 6));
+    expect(-(m[6] ?? 0) / 0.4).toBeCloseTo(Math.sin(Math.PI / 6));
+    expect(at(60, 30).slice(0, 12)).toEqual(m.slice(0, 12));
+    // Straight out towards the viewer (a rivet) still has a finite frame.
+    expect(at(0, 90).every(Number.isFinite)).toBe(true);
+  });
+
+  it("roots Rakelet's tines on each stage's bar front face", () => {
+    const registry = visualRegistry({
+      bodies: [...GAME_DATA.bodies, ...DRAFT_BODIES],
+      parts: [...GAME_DATA.parts, ...DRAFT_PARTS],
+    });
+    for (const id of ['draft-pileup', 'draft-rakeling', 'draft-rakelet']) {
+      const look = draftLooks().find((l) => l.id === id)!;
+      const params = squishyParams({ id, visual: look.visual }, 'kit-front', registry);
+      const head = params.head!;
+      const body = registry.bodies.get(look.visual.head!.body)!;
+      const bar = params.parts.find((p) => p.slot === 'mane')!;
+      const tines = params.parts.find((p) => p.slot === 'fangs')!;
+      const b = partMatrix(body, head.scale, bar, bar.placements[0]!, head.offset);
+      const axis = (k: number) => [b[k * 4]!, b[k * 4 + 1]!, b[k * 4 + 2]!];
+      const along = (v: number[], k: number) => {
+        const a = axis(k);
+        const n = Math.hypot(a[0]!, a[1]!, a[2]!);
+        return (v[0]! * a[0]! + v[1]! * a[1]! + v[2]! * a[2]!) / n / n; // in bar sizes
+      };
+      for (const p of tines.placements) {
+        const r = root(partMatrix(body, head.scale, tines, p, head.offset));
+        const d = [r[0]! - b[12]!, r[1]! - b[13]!, r[2]! - b[14]!];
+        expect(Math.abs(along(d, 0)), id).toBeLessThan(0.5); // within the bar's width
+        expect(along(d, 1), id).toBeGreaterThan(0.25); // at its front face, not its underside
+        expect(along(d, 1), id).toBeLessThan(0.55);
+        expect(Math.abs(along(d, 2)), id).toBeLessThan(0.5); // within its height
+      }
+    }
   });
 });

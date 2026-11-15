@@ -177,17 +177,19 @@ export const DRAFT_PARTS: Part[] = [
   }),
   // Round 8 (owner decision): "Rakelet should never have a handle. His
   // mouth is the rake." Every stage's mouth is a rake head on its own: a
-  // wooden crossbar (`box`, `replaces: 'mouth'`) wider than the face so it
-  // overhangs both cheeks, thin evenly spaced metal tines hanging from it as
-  // the teeth and bending forward at the tips (`bent`), and a dark cavity
-  // behind them so it still reads as a mouth. The tine count grows by stage
-  // (4, 6, 10). No handle, stub, knob or socket anywhere.
+  // wooden crossbar (`box`, `replaces: 'mouth'`) wider than the face, and a
+  // dark cavity behind the tines so it still reads as a mouth. No handle,
+  // stub, knob or socket anywhere.
+  // Round 11: a garden-rake head, not a comb. The tines come off the bar's
+  // FRONT face (`anchor: 'front'`), sparse and parallel, angled down and out
+  // towards the viewer, each ending in a big forward hook (`bent`), with a
+  // dark rivet at each root. 3, 4 and 5 tines by stage, built the same way.
   part({
     // Pileup's baby crossbar: its mouth, a little wider than its face.
     id: 'draft-rake-bar-small',
     slot: 'mane',
     shape: 'box',
-    size: [1.1, 0.14, 0.24], // [width, depth off the face, height]: a chunky plank, not a stick
+    size: [1.1, 0.14, 0.2], // [width, depth off the face, height]; TUNE
     color: 'detail',
     layout: { kind: 'single' },
     around: 0,
@@ -198,21 +200,36 @@ export const DRAFT_PARTS: Part[] = [
     replaces: 'mouth',
   }),
   part({
-    // Pileup's four baby tines.
+    // Pileup's three baby tines.
     id: 'draft-rake-tines-small',
     slot: 'fangs',
-    // Round 10: thick, straight, parallel stubs rooted in the bar (the
-    // round-9 thin bent tines read as claws or drips).
-    shape: 'capsule',
-    size: [0.1, 0.38, 0.1],
+    shape: 'bent',
+    size: [0.062, 0.372, 0.207], // bentProportions() scaled: a round dowel, a round hook
     color: 'metal',
-    layout: { kind: 'ring', count: 4, spread: 34 },
+    layout: { kind: 'ring', count: 3, spread: 68 }, // TUNE: gaps ~2.5x a tine's thickness
     around: 0,
-    up: -8, // TUNE: behind the bar, so each tine grows out of its underside
-    tilt: -64, // TUNE: down and a little forward, clear of the face
-    splay: -26, // TUNE: cancels the face's curve so the stubs hang parallel
-    sink: 0.1,
+    up: -19, // TUNE: the bar's lower front face
+    tilt: 40, // TUNE: down and out, ~40 degrees towards the viewer (30 read as straight down head-on)
+    sink: 0.04,
     jitter: 0,
+    anchor: 'front',
+    standoff: 0.12, // TUNE: just inside the bar's front face
+  }),
+  part({
+    // A dark rivet at each tine's root on the bar's front face.
+    id: 'draft-rake-rivets-small',
+    slot: 'horns',
+    shape: 'ellipsoid',
+    size: [0.06, 0.03, 0.06],
+    color: 'ink',
+    layout: { kind: 'ring', count: 3, spread: 68 },
+    around: 0,
+    up: -17,
+    tilt: 90, // straight out towards the viewer
+    sink: 0.4,
+    jitter: 0,
+    anchor: 'front',
+    standoff: 0.13,
   }),
   part({
     // Pileup's mouth cavity behind its tines.
@@ -223,8 +240,8 @@ export const DRAFT_PARTS: Part[] = [
     color: 'ink',
     layout: { kind: 'single' },
     around: 0,
-    up: -36,
-    sink: 0.85, // TUNE: recessed into the face behind the tines
+    up: -34, // TUNE: under the bar, behind the tines
+    sink: 0.85, // recessed into the face
     jitter: 0,
   }),
   part({
@@ -232,29 +249,47 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-bar',
     slot: 'mane',
     shape: 'box',
-    size: [1.12, 0.1, 0.15], // deep enough that the face can't poke through it; short overhang (round 10)
+    size: [1.12, 0.1, 0.14], // [width, depth off the face, height]; TUNE
     color: 'detail',
     layout: { kind: 'single' },
     around: 0,
     up: -16,
-    tilt: 16,
+    tilt: 16, // levels the plank on the curving face
     sink: 0.45,
     jitter: 0,
     replaces: 'mouth',
   }),
   part({
-    // Rakeling's six tines.
+    // Rakeling's four tines.
     id: 'draft-rake-tines-mid',
     slot: 'fangs',
     shape: 'bent',
-    size: [0.06, 0.42, 0.1],
+    size: [0.067, 0.41, 0.228], // bentProportions() scaled: a round dowel, a round hook
     color: 'metal',
-    layout: { kind: 'ring', count: 6, spread: 44 },
+    layout: { kind: 'ring', count: 4, spread: 86 }, // TUNE: gaps ~2.5x a tine's thickness
     around: 0,
-    up: -12, // TUNE: behind the bar, so each tine grows out of its underside
-    tilt: -62, // TUNE: angled out so they clear the face and chest
-    sink: 0.1,
+    up: -21, // TUNE: the bar's lower front face
+    tilt: 40, // TUNE: down and out, ~40 degrees towards the viewer (30 read as straight down head-on)
+    sink: 0.04,
     jitter: 0,
+    anchor: 'front',
+    standoff: 0.094, // TUNE: just inside the bar's front face
+  }),
+  part({
+    // A dark rivet at each tine's root on the bar's front face.
+    id: 'draft-rake-rivets-mid',
+    slot: 'horns',
+    shape: 'ellipsoid',
+    size: [0.065, 0.032, 0.065],
+    color: 'ink',
+    layout: { kind: 'ring', count: 4, spread: 86 },
+    around: 0,
+    up: -19,
+    tilt: 90, // straight out towards the viewer
+    sink: 0.4,
+    jitter: 0,
+    anchor: 'front',
+    standoff: 0.104,
   }),
   part({
     // Rakeling's mouth cavity behind its tines.
@@ -265,85 +300,68 @@ export const DRAFT_PARTS: Part[] = [
     color: 'ink',
     layout: { kind: 'single' },
     around: 0,
-    up: -36, // TUNE: low enough that it never shows through the bar
-    sink: 0.85, // recessed into the face behind the tines
+    up: -36, // TUNE: under the bar, behind the tines
+    sink: 0.85, // recessed into the face
     jitter: 0,
   }),
   part({
-    // Rakelet A (garden rake): a long straight crossbar, well wider than his
-    // face, as his jaw and upper lip.
+    // Rakelet's crossbar: a straight rake head, well wider than his face, as his jaw and upper lip.
     id: 'draft-rake-tool-bar',
     slot: 'mane',
     shape: 'box',
-    size: [1.3, 0.16, 0.22], // TUNE: overhangs both cheeks; trimmed (rounds 9-10) so the 3/4 doesn't jut
+    size: [1.3, 0.16, 0.18], // [width, depth off the face, height]; TUNE
     color: 'detail',
     layout: { kind: 'single' },
     around: 0,
     up: -18,
-    tilt: 18,
+    tilt: 18, // levels the plank on the curving face
     sink: 0.45,
     jitter: 0,
     replaces: 'mouth',
   }),
   part({
-    // ...ten thin, evenly spaced, parallel metal tines as his teeth.
+    // Rakelet's five tines.
     id: 'draft-rake-tool-tines',
     slot: 'fangs',
     shape: 'bent',
-    // Round 10: fewer, thicker, shorter tines with wide gaps, so a rake
-    // rather than a comb; thickness ~1.8x width deepens the forward hook.
-    size: [0.085, 0.54, 0.15],
+    size: [0.08, 0.49, 0.272], // bentProportions() scaled: a round dowel, a round hook
     color: 'metal',
-    layout: { kind: 'ring', count: 8, spread: 50 }, // TUNE: even spacing across the bar
+    layout: { kind: 'ring', count: 5, spread: 105 }, // TUNE: gaps ~2.5x a tine's thickness
     around: 0,
-    up: -14, // TUNE: behind the bar, so each tine grows out of its underside
-    tilt: -62, // TUNE: down and a little forward, clear of the face; the bend does the rest
-    splay: -12, // TUNE: leans the outer tines back in against the face's curve, so all stay parallel
-    sink: 0.1,
+    up: -25, // TUNE: the bar's lower front face
+    tilt: 40, // TUNE: down and out, ~40 degrees towards the viewer (30 read as straight down head-on)
+    sink: 0.04,
     jitter: 0,
+    anchor: 'front',
+    standoff: 0.148, // TUNE: just inside the bar's front face
   }),
   part({
-    // Rakelet's mouth cavity behind the tines (both variants).
+    // A dark rivet at each tine's root on the bar's front face.
+    id: 'draft-rake-tool-rivets',
+    slot: 'horns',
+    shape: 'ellipsoid',
+    size: [0.075, 0.035, 0.075],
+    color: 'ink',
+    layout: { kind: 'ring', count: 5, spread: 105 },
+    around: 0,
+    up: -23,
+    tilt: 90, // straight out towards the viewer
+    sink: 0.4,
+    jitter: 0,
+    anchor: 'front',
+    standoff: 0.158,
+  }),
+  part({
+    // Rakelet's mouth cavity behind the tines.
     id: 'draft-rake-tool-mouth',
     slot: 'cheeks',
     shape: 'ellipsoid',
-    size: [0.8, 0.06, 0.28],
+    size: [0.92, 0.06, 0.36], // round 11: bigger, so the tines read as teeth in a mouth
     color: 'ink',
     layout: { kind: 'single' },
     around: 0,
-    up: -46, // TUNE: well below the bar, so no dark strip shows under it
-    sink: 0.85, // TUNE: recessed into the face behind the tines
-    jitter: 0,
-  }),
-  part({
-    // Rakelet B (leaf rake): a shorter crossbar the tines fan out from.
-    id: 'draft-rake-fan-bar',
-    slot: 'mane',
-    shape: 'box',
-    size: [1.35, 0.12, 0.2], // TUNE: shorter than A's but still past both cheeks
-    color: 'detail',
-    layout: { kind: 'single' },
-    around: 0,
-    up: -18,
-    tilt: 18,
-    sink: 0.45,
-    jitter: 0,
-    replaces: 'mouth',
-  }),
-  part({
-    // ...eleven long tines that fan out (ring `splay`, #234 kit extension)
-    // into the classic leaf-rake silhouette, bending forward at the tips.
-    id: 'draft-rake-fan-tines',
-    slot: 'fangs',
-    shape: 'bent',
-    size: [0.06, 0.52, 0.1],
-    color: 'metal',
-    layout: { kind: 'ring', count: 11, spread: 40 },
-    around: 0,
-    up: -22,
-    tilt: -82,
-    splay: 40, // TUNE: the outermost tines lean out by nearly this much
-    sink: 0.1,
+    up: -38, // TUNE: under the bar, behind the tines
+    sink: 0.85, // recessed into the face
     jitter: 0,
   }),
   part({
@@ -807,6 +825,7 @@ export const DRAFT_BOSS_LINES: readonly DraftBossLine[] = [
             'draft-soft-brows',
             'draft-rake-bar-small',
             'draft-rake-tines-small',
+            'draft-rake-rivets-small',
             'draft-rake-mouth-small',
             'draft-face-freckles',
             'draft-leaf-tuft',
@@ -834,6 +853,7 @@ export const DRAFT_BOSS_LINES: readonly DraftBossLine[] = [
             'draft-soft-brows',
             'draft-rake-bar',
             'draft-rake-tines-mid',
+            'draft-rake-rivets-mid',
             'draft-rake-mouth',
             'draft-face-freckles',
             'draft-leaf-pile-hair',
@@ -861,6 +881,7 @@ export const DRAFT_BOSS_LINES: readonly DraftBossLine[] = [
             'draft-fierce-brows',
             'draft-rake-tool-bar',
             'draft-rake-tool-tines',
+            'draft-rake-tool-rivets',
             'draft-rake-tool-mouth',
             'draft-leaf-pile-hair',
             'draft-falling-leaf-top',
@@ -1148,41 +1169,13 @@ export const DRAFT_BOSS_LINES: readonly DraftBossLine[] = [
   },
 ];
 
-const rakeletLine = DRAFT_BOSS_LINES.find((line) => line.key === 'rakelet');
-if (!rakeletLine) throw new Error('no Rakelet line');
-const rakeletA = rakeletLine.forms[2];
-
-/**
- * Round 8: alternative boss forms the owner picks between. Rakelet A (the
- * line's own boss form) has a garden-rake mouth; B swaps in a leaf-rake
- * mouth, its tines fanning out from a shorter crossbar. The losing variant
- * is dropped once the owner picks.
- */
-export const DRAFT_BOSS_VARIANTS: readonly DraftBossForm[] = [
-  {
-    ...rakeletA,
-    id: 'draft-rakelet-fan',
-    name: 'Rakelet B',
-    visual: {
-      ...rakeletA.visual,
-      parts: rakeletA.visual.parts.map((id) =>
-        id === 'draft-rake-tool-bar'
-          ? 'draft-rake-fan-bar'
-          : id === 'draft-rake-tool-tines'
-            ? 'draft-rake-fan-tines'
-            : id,
-      ),
-    },
-  },
-];
-
 /** Every draft form as a gallery look, at its planned rarity's material tier. */
 export function draftLooks(): {
   id: string;
   visual: SpeciesVisual;
   rarity: 'legendary' | 'mythic';
 }[] {
-  return [...DRAFT_BOSS_LINES.flatMap((line) => line.forms), ...DRAFT_BOSS_VARIANTS].map((f) => ({
+  return DRAFT_BOSS_LINES.flatMap((line) => line.forms).map((f) => ({
     id: f.id,
     visual: f.visual,
     rarity: f.plannedRarity,

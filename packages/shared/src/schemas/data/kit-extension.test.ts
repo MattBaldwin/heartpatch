@@ -127,3 +127,56 @@ describe('kit extension checks', () => {
     ]);
   });
 });
+
+// #234 round 11: `anchor: 'front'` with `standoff` (tines along a rake head).
+describe('front anchor and standoff', () => {
+  const tines: Part = {
+    id: 'test-rake-front-tines',
+    slot: 'fangs',
+    shape: 'bent',
+    size: [0.08, 0.5, 0.27],
+    color: 'metal',
+    layout: { kind: 'ring', count: 5, spread: 40 },
+    around: 0,
+    up: -20,
+    tilt: 30,
+    jitter: 0,
+    anchor: 'front',
+    standoff: 0.08,
+  };
+
+  function problems(extra: Part[], parts: string[]): string[] {
+    const reg = visualRegistry({ bodies: BODIES, parts: [...PARTS, bar, ...extra] });
+    const out: string[] = [];
+    checkSpeciesVisual({ body: 'blob', parts }, reg, ['v'], (path, message) => {
+      out.push(`${path.join('.')}: ${message}`);
+    });
+    return out;
+  }
+
+  it('parses, and keeps standoff in range', () => {
+    expect(PartSchema.safeParse(tines).success).toBe(true);
+    expect(PartSchema.safeParse({ ...tines, standoff: -0.1 }).success).toBe(false);
+    expect(PartSchema.safeParse({ ...tines, standoff: 0.6 }).success).toBe(false);
+  });
+
+  it('accepts a ring of front-anchored tines under a bar', () => {
+    expect(problems([tines], ['dot-eyes', 'test-rake-bar', 'test-rake-front-tines'])).toEqual([]);
+  });
+
+  it('only lets sticking-out parts stand in front, and standoff needs the front anchor', () => {
+    const onFace = { ...tines, id: 'test-front-mouth', slot: 'mouth' as const };
+    const loose = {
+      ...tines,
+      id: 'test-loose-standoff',
+      slot: 'horns' as const,
+      anchor: undefined,
+    };
+    expect(
+      problems([onFace, loose], ['dot-eyes', 'test-front-mouth', 'test-loose-standoff']),
+    ).toEqual([
+      expect.stringContaining('"test-front-mouth" can\'t stand in front'),
+      expect.stringContaining('"test-loose-standoff" has a standoff'),
+    ]);
+  });
+});
