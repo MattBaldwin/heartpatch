@@ -49,7 +49,7 @@ function artProblems(parts: string[]): string[] {
     parts,
     size: 1,
     finish: 'vinyl',
-  } as SpeciesVisual;
+  };
   const out: string[] = [];
   checkSpeciesArt(
     { id: 'puff', element: 'water', feeling: 'silly', rarity: 'common', visual },

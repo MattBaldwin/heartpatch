@@ -43,9 +43,9 @@ function rosterMatrices(): number[] {
     for (const part of params.parts) {
       const onHead = part.host === 'head' && params.head && head;
       const hostBody = onHead ? head : body;
-      const hostScale = onHead ? params.head!.scale : params.body.scale;
+      const hostScale = onHead ? params.head.scale : params.body.scale;
       const hostAt: [number, number, number] = onHead
-        ? [...params.head!.offset]
+        ? [...params.head.offset]
         : [0, params.lift, 0];
       for (const p of part.placements) {
         out.push(...partMatrix(hostBody, hostScale, part, p, hostAt));
@@ -103,7 +103,8 @@ describe("anchor: 'behind'", () => {
     side: 0,
   };
   const part = { surface: false, sink: 0, lift: 0, flip: false, anchor: 'behind' as const };
-  const rows = (m: readonly number[]) => [
+  type Rows = [number[], number[], number[], number[]];
+  const rows = (m: readonly number[]): Rows => [
     m.slice(0, 3),
     m.slice(4, 7),
     m.slice(8, 11),
