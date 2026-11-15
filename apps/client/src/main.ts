@@ -105,10 +105,13 @@ import { createStarterScreen } from './starters/starter-screen.js';
 import { createTerritoryScreen } from './territory/territory-screen.js';
 import { createFenceScreen, withFences } from './fences/fence-screen.js';
 import { tutorialApi } from './tutorial/tutorial-api.js';
+import { patchDay } from './tutorial/sprout-tips.js';
+import { createSproutTipsScreen } from './tutorial/sprout-tips-screen.js';
 import { createTutorialScreen, opensByItself } from './tutorial/tutorial-screen.js';
 import { el, messageOf } from './ui/dom.js';
 import {
   GAME_DATA,
+  GAME_EVENTS,
   hexKey,
   hexToWorld,
   visualRegistry,
@@ -1464,6 +1467,7 @@ const maps = createMapScreen({
     // The first patch after graduation offers nudges, once (#726, owner answer 5).
     if (mapId !== null) pushOffer.maybeOffer();
     trays.setVisible(mapId !== null);
+    sproutTips.setOnPatch(mapId !== null && mapId !== glade);
     mapSquishies.hidden = mapId === null || mapId === glade;
     recipeBook.setMap(mapId);
     // The Next-up chip reads the patch on screen's goals; never on the Glade (#731).
@@ -1520,6 +1524,11 @@ const maps = createMapScreen({
       nextUp.refresh();
     // A patch-mate's Legendary friend (#391).
     patchLine.liveEvent(event);
+    // My own first evolution on a patch, not the tutorial's (Sprout's tip, #731).
+    if (event.type === 'squishy.evolved' && event.mapId !== glade) {
+      const evolved = GAME_EVENTS['squishy.evolved'].public.safeParse(event.data);
+      if (evolved.success && evolved.data.userId === signedIn?.id) sproutTips.evolved();
+    }
   },
 });
 // The Keeper's Recipe Book (owner decision 2026-10-05): from the My
@@ -1899,6 +1908,7 @@ const keeper = createKeeperScreen({
       if (signedIn?.id !== user.id) return;
       lobby.setUser(user);
       tutorial.setUser(user);
+      sproutTips.setUser(user.id);
     });
   },
   onEditOpen: () => {
@@ -2169,7 +2179,7 @@ const whatsNew = createWhatsNew({
 // off the map and behind anything else at the top or over the map (a card, a
 // sheet, the "What landed" banner, Sprout's hint, another toast); the land
 // chip steps aside for it (patch-line.css).
-const TOP_NOTES = '.land-toast, .tray-say, .friendly-toast, .wardrobe-toast';
+const TOP_NOTES = '.land-toast, .tray-say, .friendly-toast, .wardrobe-toast, .sprout-tip';
 const patchLineBusy = (): boolean =>
   hudMapId === null ||
   // The lobby (its list, or Settings over a patch) owns the screen (#726).
@@ -2194,6 +2204,36 @@ const patchLine = createPatchLine({
   playerName: (userId) =>
     maps.view?.members.find((m) => m.user.id === userId)?.user.username ?? null,
   kindName: (speciesId) => GAME_DATA.species.find((s) => s.id === speciesId)?.name ?? null,
+});
+// Sprout's week-two tips (#731 item 5): four one-time lines, each when its
+// thing first shows on a patch (never the Glade). They wait behind a battle,
+// the tutorial, a sheet or card, and the patch line, like the line does.
+const sproutTips = createSproutTipsScreen({
+  root: document.body,
+  busy: () =>
+    mapCovered() ||
+    patchLineBusy() ||
+    patchLine.debug.showing !== null ||
+    [...document.querySelectorAll('.next-up-sprout')].some((note) => boxOf(note) !== null),
+  facts: () => {
+    const view = maps.view;
+    const me = view?.members.find((member) => member.user.id === signedIn?.id);
+    return {
+      postFlag: postFlags.shown > 0,
+      hollowedVillage:
+        communityFlags.shown.length > 0 &&
+        (view?.communities?.some((village) => village.ownerUserId === null) ?? false),
+      // The game's clock (the server's time as the bag has it), not the device's.
+      day: me ? patchDay(me.joinedAt, inventory.gameNow()) : null,
+    };
+  },
+  storage: (() => {
+    try {
+      return window.localStorage;
+    } catch {
+      return null;
+    }
+  })(),
 });
 // Push nudges (#726): the offer card, the first time a patch is on screen
 // after graduation in a Home Screen app, in its turn (one card at a time,
@@ -2319,6 +2359,7 @@ mountAuth(document.body, {
       lobbyCoins.set(null);
       lobby.setUser(null);
       tutorial.setUser(null);
+      sproutTips.setUser(null);
     }
   },
 });
