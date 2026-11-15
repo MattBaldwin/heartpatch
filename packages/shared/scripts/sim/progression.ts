@@ -276,7 +276,7 @@ function play(
 
 /**
  * Grants battle XP to the members who joined, through the real growth rules.
- * `counts`: the battle counts toward the falloff (a win; any friendly, #728).
+ * `counts`: the battle counts toward the falloff (a win, by default).
  */
 export function grant(
   data: ModelData,
@@ -422,9 +422,9 @@ function estimateRivalOdds(
  * Friendly `f` of `day` between the map's two kids (#728). Side a alternates
  * by day and by battle, so a kid with one a day isn't always side a. Both
  * sides earn `friendlyBattleXp` of the engine's XP (one opponent's worth with
- * `oneOpponent`, × `xpPercent` %), and every friendly counts toward the
- * falloff, win or lose. Returns which kid was
- * side a and each kid's Partner XP.
+ * `oneOpponent`, × `xpPercent` %), and a friendly counts toward the falloff
+ * only for the side that won (owner decision 2026-11-15). Returns which kid
+ * was side a, the side that won and each kid's Partner XP.
  */
 export function playFriendly(
   data: ModelData,
@@ -433,7 +433,7 @@ export function playFriendly(
   rules: ProgressionRules,
   day: number,
   f: number,
-): { sideA: number; partnerXp: number[] } {
+): { sideA: number; winner: 'a' | 'b' | null; partnerXp: number[] } {
   const a = (day + f) % 2;
   const b = 1 - a;
   const [kidA, kidB] = [kids[a], kids[b]];
@@ -454,12 +454,17 @@ export function playFriendly(
       result[side].set(id, friendlyBattleXp(xp, result.out[side], share));
     }
   }
-  // Win or lose, a friendly counts toward the falloff (`countsTowardFalloff`;
-  // the sim's AI never scoots, so the engine always pays something).
+  // Only the winner's friendly counts toward the falloff; a lost or tied one
+  // fills no slot (`countsTowardFalloff`, owner decision 2026-11-15; the
+  // sim's AI never scoots, so the engine always pays something).
   const partnerXp = [0, 0];
-  partnerXp[a] = grant(data, kidA, rules, result.a, result.winner === 'a', { counts: true });
-  partnerXp[b] = grant(data, kidB, rules, result.b, result.winner === 'b', { counts: true });
-  return { sideA: a, partnerXp };
+  partnerXp[a] = grant(data, kidA, rules, result.a, result.winner === 'a', {
+    counts: result.winner === 'a',
+  });
+  partnerXp[b] = grant(data, kidB, rules, result.b, result.winner === 'b', {
+    counts: result.winner === 'b',
+  });
+  return { sideA: a, winner: result.winner, partnerXp };
 }
 
 /** A hold (728a): the guards earn side b's XP, and it counts as their win. */

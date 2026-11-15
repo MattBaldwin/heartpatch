@@ -586,19 +586,6 @@ describe.skipIf(!url)('live battles (#29, needs DATABASE_URL)', () => {
     expect(await ledgerOf(battleId)).toEqual({ patch: [], heart: [] });
   });
 
-  it("the loser's friendly counts toward its falloff (#728)", async () => {
-    const server = await start();
-    const [lee, sam] = [await player(), await player()];
-    const mapId = await patch(server, lee, sam);
-    await strong(server, mapId, lee);
-    const [samOnly] = await squishiesOf(mapId, sam.id);
-    const repo = createBattlesRepo(db);
-    expect((await repo.winsToday(mapId, [samOnly!.id], clock)).get(samOnly!.id)).toBeUndefined();
-    const battleId = await leeWins(server, mapId, lee, sam);
-    expect((await rewardsOf(battleId)).b!.xp.map((x) => x.squishyId)).toEqual([samOnly!.id]);
-    expect((await repo.winsToday(mapId, [samOnly!.id], clock)).get(samOnly!.id)).toBe(1);
-  });
-
   /**
    * A friendly `winner` is sure to win against `loser`, sitting in `seat`
    * (side `b`: the loser asked for it). The winner's coins and why unpaid.
@@ -626,6 +613,39 @@ describe.skipIf(!url)('live battles (#29, needs DATABASE_URL)', () => {
       ledger: await ledgerOf(seat === 'a' ? battleId : sideBRefId(battleId)),
     };
   };
+
+  it("a lost friendly uses no falloff slot; the winner's does (#728, owner decision 2026-11-15)", async () => {
+    const server = await start();
+    const [lee, sam] = [await player(), await player()];
+    const mapId = await patch(server, lee, sam);
+    await strong(server, mapId, lee);
+    const [samOnly] = await squishiesOf(mapId, sam.id);
+    const [leeLead] = (await squishiesOf(mapId, lee.id)).filter((x) => x.level >= 40);
+    const repo = createBattlesRepo(db);
+    const winsOf = async () =>
+      Object.fromEntries(await repo.winsToday(mapId, [samOnly!.id, leeLead!.id], clock));
+    expect(await winsOf()).toEqual({});
+    const battleId = await leeWins(server, mapId, lee, sam);
+    // Sam's squishy was paid for the loss, but only Lee's winner fills a slot.
+    expect((await rewardsOf(battleId)).b!.xp.map((x) => x.squishyId)).toEqual([samOnly!.id]);
+    expect(await winsOf()).toEqual({ [leeLead!.id]: 1 });
+    // Sam loses all of today's full-XP slots' worth of friendlies, as copies of the first.
+    const full = GROWTH_RULES.battleXpFalloff!.fullWinsPerDay;
+    await db.execute(
+      `insert into battles
+       select (jsonb_populate_record(null::battles, to_jsonb(b) || jsonb_build_object('id', gen_random_uuid()))).*
+       from battles b, generate_series(1, ${String(full - 1)})
+       where b.id = '${battleId}'`,
+    );
+    expect(await winsOf()).toEqual({ [leeLead!.id]: full });
+    // Sam's next win still pays its squishy in full: none of its slots were used.
+    await setSquishy(leeLead!.id, `state = 'hollowed'`);
+    await setSquishy(samOnly!.id, 'level = 40');
+    const { rewards } = await friendlyWin(server, mapId, sam, lee, 'b');
+    expect(rewards.b!.xp.map((x) => x.squishyId)).toEqual([samOnly!.id]);
+    expect(rewards.b!.fullXpResetAt).toBeNull();
+    expect(await winsOf()).toEqual({ [leeLead!.id]: full, [samOnly!.id]: 1 });
+  });
 
   it('the 4th win over the same patch-mate today pays XP, no coins, from either seat; another patch-mate and the other way round still pay (#728)', async () => {
     const server = await start();
@@ -755,7 +775,9 @@ describe.skipIf(!url)('live battles (#29, needs DATABASE_URL)', () => {
         [gone!.id, kept!.id, leeGone!.id],
         clock,
       );
-      expect(Object.fromEntries(wins), name).toEqual({ [kept!.id]: 1 });
+      // Lee's lead left before the finish: unpaid, so its win fills no slot;
+      // Sam's kept squishy was paid, but for a loss (owner decision 2026-11-15).
+      expect(Object.fromEntries(wins), name).toEqual({});
       // Lee still won: the win's coins are the Keeper's, not the squishy's.
       expect(rewards.unpaid, name).toBeNull();
     }
