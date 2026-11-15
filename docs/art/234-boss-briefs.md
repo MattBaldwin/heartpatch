@@ -7,7 +7,7 @@ The draft data lives in `apps/client/src/procedural/gallery/boss-drafts.ts`. It 
 ## Body style without a contract change (plan §8)
 
 - **No new slot, primitive, schema field or rule.** Every new part is a data entry built from the existing five primitives (ellipsoid, capsule, cone, teardrop, arc), using the existing layouts (`single`, `pair`, `ring`, `row`, `scatter`, `quad`, `chain`) and the shared squishy material.
-- **Where things go:** hair in `crown` and `mane`; rake-tine teeth and moustaches in `fangs`; a cap brim, goggles, Momentum's hair sticks and the falling leaf in `horns`; Momentum's bangs in `mane`; Papa Brrr's belly patch in `pattern`; Momentum's forearms (the second arm piece) in `back`; Rickeyride's feet in `tail`, his exhaust pipes in `back` and his fins in `spikes`; freckles in `cheeks`, so they sit on the head; Rickeyride's wheels in `legs` (the `quad` layout, so they grow to the ground).
+- **Where things go:** hair in `crown` and `mane`; rake-tine teeth and moustaches in `fangs`; Rakelet's rake bar in `mane` and the dark mouth behind his tines in `ears`; a cap brim, goggles, Momentum's hair sticks and the falling leaf in `horns`; Momentum's bangs in `mane`; Papa Brrr's belly patch in `pattern`; Momentum's forearms (the second arm piece) in `back`; Rakelet's rake handle in `tail` and his forearms in `back`; Rickeyride's exhaust pipes in `back`, his spoiler struts in `spikes` and his spoiler in `wings`; freckles in `cheeks`, so they sit on the head; Rickeyride's wheels in `legs` (the `quad` layout, so they grow to the ground).
 - **New draft bodies:** `draft-upright` is the taller upright torso, still a soft blob with a slight waist. The others are `draft-cardigan` (it flares at the hem), `draft-dad-belly` (widest at the belly) and `draft-kart` (a low, boxy bumper kart).
 - **Faces keep each feeling's face kit** (`ART_RULES.feelingFaces`, ART_BIBLE §1.6): silly has dot or sharp eyes and an open mouth; brave has brave brows; cozy has oval eyes and blush; joy has happy eyes. The human touch comes from brows (all four have them, and few squishies do), hair, moustaches and freckles, not from a new eye shape. A dedicated "human-style eye" part would need `feelingFaces` widened, which is an art-rule change, so it is left out.
 - **Still squishies, never Keepers:** the head is big on a toy blob body, limbs are capsules with no hands or fingers, and there is no skin tone (the body colour carries the element).
@@ -16,9 +16,10 @@ The draft data lives in `apps/client/src/procedural/gallery/boss-drafts.ts`. It 
 ## The briefs
 
 ### Rakelet (Leaf · Silly) · Pileup → Rakeling → **Rakelet**
-- **Hook:** a grin made of rake tines (a wide, straight comb of seven white tines right across the mouth). His hair is a heap of autumn leaves, and one red leaf is always sliding off.
+- **Hook:** his whole lower face is a rake head (owner, round 3): a flat white bar wider than his face, eight long tines hanging from it as his teeth with a dark mouth behind them, and the rake's handle sticking up over his shoulder. His hair is a heap of autumn leaves, and one russet leaf is always sliding off it.
+- **Stages:** Pileup has a little comb of five baby tines; Rakeling gains the bar, seven tines and the lanky arms; Rakelet gains eight long tines, the handle, the falling leaf and a second arm piece (a thinner forearm splayed a little further out, so the arm bends).
 - **Silhouette:** tall and lanky, with long arms hanging to his knees and a messy leafy top.
-- **Palette:** leaf green `#9fd46e`, cream, autumn orange `#f08a3c`, red `#d6533a`. Freckles across the nose.
+- **Palette:** leaf green `#9fd46e`, cream, autumn orange `#f08a3c`, rake-handle brown `#7a4a2e`. Freckles across the nose.
 - **Nearest kind and the difference:** Glowgourd (toothy grin, leaf arms). Rakelet is tall and thin, his teeth are one straight row hanging down, he has a leaf heap rather than a stem, and he has no pumpkin body. Bristlebloom and Thistleknight share green and upright, but their dominant parts are thistles, not a leaf heap.
 
 ### Mom: **Momentum** (proposed; alt *Mama Flare*) · Momo → Mamarama → **Momentum** (Fire · Brave)
@@ -38,10 +39,10 @@ The draft data lives in `apps/client/src/procedural/gallery/boss-drafts.ts`. It 
 - **Nearest kind and the difference:** Drowsiberg and Slumberberg (yeti, strong arms) and Gnomguard (beard, cap). Papa Brrr has no fur ruff or fangs, a flat forward brim instead of a pointed cap, sneakers, and a moustache rather than a beard.
 
 ### Rickeyride (Spark · Silly) · Zoomlet → Revvy → **Rickeyride**
-- **Hook:** he never stands still. He is a kid squishy who is half bumper kart: a boxy kart body on four chunky wheels, hair blown straight back, goggles on his forehead, arms reaching forward to steer and his feet propped on the front deck.
+- **Hook:** he never stands still. He is a kid squishy who is half bumper kart: a boxy kart body on four chunky wheels, hair blown straight back, goggles on his forehead, and arms reaching forward to steer.
 - **Feeling (coordinator ruling 1):** silly, not joy. Joy's face kit needs closed happy-arc eyes; silly allows open dot eyes with an open mouth, which fits "never stands still". `ART_RULES.feelingFaces` is unchanged. Note: Rakelet is also silly, so the four no longer have four different feelings.
-- **Legs (ruling 4):** the wheels keep the `legs` slot. His feet are a pair of shoes in the free `tail` slot, sticking forward off the kart's front deck, and his arms come out of the top of the kart. No schema change.
-- **Stages:** Zoomlet has a small hair swoop; Revvy gains the full swoop, goggles and twin exhaust pipes; Rickeyride gains fierce brows and two racing fins at the back. The round-1 racing stripe (a white blade), spoiler (a floating block) and exhaust puffs (a pale ball) are gone.
+- **Legs (ruling 4):** the wheels keep the `legs` slot. His arms come out of the top of the kart. **LIMITED: feet.** Round 2's shoes on the front deck read as headlights, so round 3 removes them (coordinator render-check); he has no feet. No schema change.
+- **Stages:** Zoomlet has a small hair swoop; Revvy gains the full swoop, goggles and twin exhaust pipes; Rickeyride gains fierce brows and a blue racing spoiler on two struts at the back. The exhaust stacks now stand up so they show from the front. The round-1 racing stripe and exhaust puffs and the round-2 fins and feet are gone.
 - **Silhouette:** low and wide (the only low, wide, boxy squishy), with a big head poking out of the top.
 - **Palette:** spark yellow `#ffd84a`, light cyan (goggles, puffs), blue hair `#3f8fe8`, dark wheels `#4a3a5c`.
 - **Nearest kind and the difference:** Fuzzbolt, Zipkit, Frizzbolt and Thundermop (yellow, spark, standing) are cats and mops on legs. Rickeyride has a kart body and wheels and no ears. Zingaling is spark and joy, but it is a hovering star.
