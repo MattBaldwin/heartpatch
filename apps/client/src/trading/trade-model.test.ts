@@ -12,6 +12,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import {
   fitName,
+  POST_TABS,
   lineKey,
   lineLook,
   linesInWords,
@@ -86,6 +87,14 @@ const view = (over: Partial<TradesView>): TradesView => ({
   returns: [],
   now: '2026-11-04T16:00:00.000Z',
   ...over,
+});
+
+describe('the post tabs (#729)', () => {
+  it('are six, with Shop last and Mailbox shortened to Mail', () => {
+    expect(POST_TABS).toEqual(['trade', 'gift', 'mailbox', 'swap', 'sell', 'shop']);
+    expect(TRADE_TEXT.tabs.shop).toBe('🛍️ Shop');
+    expect(TRADE_TEXT.tabs.mailbox).toBe('📬 Mail');
+  });
 });
 
 describe('trade model (#271)', () => {
@@ -191,8 +200,15 @@ describe('trade model (#271)', () => {
     expect(offersFromMe(v, ME, 'trade').map((o) => o.id)).toEqual([ID(51)]);
     expect(offersFromMe(v, ME, 'gift').map((o) => o.id)).toEqual([ID(52)]);
     expect(waiting(v).map((m) => m.id)).toEqual([ID(70), ID(71)]);
-    expect(tabBadges(v, ME)).toEqual({ trade: 1, gift: 0, mailbox: 2, swap: 0, sell: 0 });
-    expect(tabBadges(null, ME)).toEqual({ trade: 0, gift: 0, mailbox: 0, swap: 0, sell: 0 });
+    expect(tabBadges(v, ME)).toEqual({ trade: 1, gift: 0, mailbox: 2, swap: 0, sell: 0, shop: 0 });
+    expect(tabBadges(null, ME)).toEqual({
+      trade: 0,
+      gift: 0,
+      mailbox: 0,
+      swap: 0,
+      sell: 0,
+      shop: 0,
+    });
     const names = (id: string) => (id === SAM ? 'StarSam' : 'Someone');
     expect(mailboxTitle(mail({}), names)).toBe('A gift from StarSam!');
     expect(mailboxTitle(mail({ kind: 'trade' }), names)).toBe('Your trade with StarSam is done!');

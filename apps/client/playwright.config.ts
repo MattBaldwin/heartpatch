@@ -54,6 +54,7 @@ const E2E_GROUPS = [
     'hollowed-explore',
     'hollowed-restore',
     'landscape-phone',
+    'post-shop',
     'recipe-book',
     'squishy-gallery',
     'tutorial-flow',
