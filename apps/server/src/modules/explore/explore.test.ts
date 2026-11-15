@@ -14,6 +14,8 @@ import {
   EXPLORE_RULES,
   searchSpots,
   ExploreTileResponseSchema,
+  firstHomeTiles,
+  heartSeedOf,
   hexDistance,
   hexKey,
   hexNeighbors,
@@ -1047,6 +1049,36 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     });
     expect(again.json()).toEqual(at);
     expect((await view(server, kid, mapId, at)).progress.searched).toBe(seen.spots.length);
+  });
+
+  it('dev: never makes a grey village tile a homestead, as a real claim never takes one (#581)', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    const tiles = await tilesOf(mapId);
+    const village = tiles.find((t) => t.communityId !== null)!;
+    const heart = heartSeedOf(firstHomeTiles(tiles.filter((t) => t.ownerUserId === kid.id)))!;
+    // Every free tile two steps out (where a joined homestead goes) is a
+    // grey village's meadow: land the route would otherwise happily take.
+    const ring = tiles.filter(
+      (t) => t.ownerUserId === null && t.homeSlot === null && hexDistance(t, heart) === 2,
+    );
+    expect(ring.length).toBeGreaterThan(1);
+    const ids = ring.map((t) => `'${t.id}'`).join(', ');
+    await db.execute(
+      `update tiles set terrain = 'meadow', node_resource = null, community_id = '${village.communityId!}' where id in (${ids})`,
+    );
+    const refused = await call(server, 'POST', `/maps/${mapId}/dev/homestead`, kid);
+    expect(refused.statusCode, refused.body).toBe(409);
+    expect(
+      (await tilesOf(mapId)).filter((t) => t.ownerUserId === kid.id && t.homeSlot === null),
+    ).toEqual([]);
+    // One of them plain land again: that's the one it takes.
+    const plain = ring[ring.length - 1]!;
+    await db.execute(`update tiles set community_id = null where id = '${plain.id}'`);
+    const made = await call(server, 'POST', `/maps/${mapId}/dev/homestead`, kid);
+    expect(made.statusCode, made.body).toBe(201);
+    expect(made.json()).toEqual({ q: plain.q, r: plain.r });
   });
 
   it('a joined row short of spots drops its homestead on the next search instead of a 500 (#511)', async () => {
