@@ -67,7 +67,12 @@ export interface FirstDef {
   readonly id: string;
   readonly label: string;
   readonly test: Test | null;
+  /** Whether a run models this first at all (none: always); a run that doesn't shows "not modelled". */
+  readonly modelled?: (days: readonly DayRecord[]) => boolean;
 }
+
+/** Mini-boss firsts (#190) are modelled only under rules with `boss`. */
+const withBoss = (days: readonly DayRecord[]) => days.some((d) => d.boss !== undefined);
 
 /** #736's list, in its order. "Rare evolved" and "epic evolved": a squishy of that rarity (or rarer) evolves. */
 export const FIRSTS: readonly FirstDef[] = [
@@ -97,6 +102,25 @@ export const FIRSTS: readonly FirstDef[] = [
     test: (d, f) => d.evolved.some((e) => f.stage(e.into) >= GROWN_UP_STAGE),
   },
   { id: 'map-full', label: 'map full', test: (d) => d.neutralLeft === 0 },
+  // #190 (plan §9): meeting a boss counts when it's out on the patch, "Too big for now!" included.
+  {
+    id: 'first-boss-met',
+    label: 'boss met',
+    test: (d) => d.boss?.out === true,
+    modelled: withBoss,
+  },
+  {
+    id: 'first-boss-beaten',
+    label: 'boss beaten',
+    test: (d) => d.boss?.won === true,
+    modelled: withBoss,
+  },
+  {
+    id: 'first-boss-friend',
+    label: 'boss friend',
+    test: (d) => (d.boss?.friend ?? null) !== null,
+    modelled: withBoss,
+  },
 ];
 
 /** A first's day; null: never within the run; 'not modelled': the model can't tell. */
@@ -110,10 +134,13 @@ export interface First {
 
 /** The day of each first in a kid's run, in `FIRSTS` order. */
 export function firstsOf(days: readonly DayRecord[], facts: FirstsFacts): First[] {
-  return FIRSTS.map(({ id, label, test }) => ({
+  return FIRSTS.map(({ id, label, test, modelled }) => ({
     id,
     label,
-    day: test === null ? 'not modelled' : (days.find((d) => test(d, facts))?.day ?? null),
+    day:
+      test === null || (modelled && !modelled(days))
+        ? 'not modelled'
+        : (days.find((d) => test(d, facts))?.day ?? null),
   }));
 }
 

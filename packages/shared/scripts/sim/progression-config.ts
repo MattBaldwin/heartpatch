@@ -1,13 +1,17 @@
 import { BUILDINGS } from '../../src/data/buildings.js';
+import { BOSS_EVENTS } from '../../src/data/server/boss-events.js';
+import { STARTERS } from '../../src/data/starters.js';
 import { GROWTH_RULES } from '../../src/data/care.js';
 import { EXPLORE_RULES } from '../../src/data/explore.js';
 import { JOB_RULES } from '../../src/data/jobs.js';
 import { COMPUTER_MATES } from '../../src/data/server/computer-mates.js';
 import { SPAWN_RULES } from '../../src/data/server/spawn-rules.js';
 import { TERRITORY_RULES } from '../../src/data/territory.js';
+import type { BossEventRules } from '../../src/schemas/data/boss-events.js';
 import type { GrowthRules } from '../../src/schemas/data/care.js';
 import type { BattleAiPolicy } from '../../src/schemas/data/battle.js';
 import type { SpawnRules } from '../../src/schemas/data/spawn-rules.js';
+import { FACTORY_CONFIG } from './factory-config.js';
 import type { Tier } from './progression-firsts.js';
 
 /**
@@ -125,6 +129,49 @@ export interface ProgressionRules {
   readonly computerMates?: {
     readonly levelOffset: number;
     readonly challengesPerWeek: number;
+  };
+  /**
+   * Mini-boss visits (#190 plan §2, §3), or none (`BossModel`): a weekly
+   * window in `play`, fought through the real team format, and the Heart
+   * Charm asks after a win, paid from the kid's modelled charm supply.
+   */
+  readonly boss?: BossModel;
+}
+
+/**
+ * The mini-boss model (#190 plan §9). `events` is the shipped
+ * `BOSS_EVENTS` with a sim-only stand-in bag (the shipped bag is empty
+ * until 234b), so the schedule, tries, levels and bundle are the server's.
+ */
+export interface BossModel {
+  readonly events: BossEventRules;
+  /** Stand-in bosses: this many grown-ups of different elements (`standInBosses`). */
+  readonly standIns: number;
+  /** Fights a kid starts on each patch-local day the boss is out (capped at `events.triesPerDay`). */
+  readonly triesPerDay: Readonly<Record<string, number>>;
+  /** The befriend ask after a win (plan §3, the numbers 190c ships). */
+  readonly befriend: {
+    readonly charmsPerAsk: number;
+    readonly asksPerWin: number;
+    readonly basePercent: number;
+    /** Per squishy of the kid's still standing at the win. */
+    readonly perStandingPercent: number;
+    /** Per earlier "not yet" from this boss kind (warmth carries across visits). */
+    readonly perMissPercent: number;
+    /** The ask after this many misses always works. */
+    readonly sureAfterMisses: number;
+    /** A friend joins at this share (%) of the Partner's level, at least `minJoinLevel`, below its first evolution. */
+    readonly joinLevelPercent: number;
+    readonly minJoinLevel: number;
+  };
+  /** The kid's Heart Charm supply (none of it is in the base model). */
+  readonly charms: {
+    /** Charms in the bag on day 1 (the starter gift). */
+    readonly start: number;
+    /** Charms a kid makes a day (crafting). */
+    readonly perDay: Readonly<Record<string, number>>;
+    /** Charms a wild befriend costs, on average (the capture rolls). */
+    readonly perWildFriend: number;
   };
 }
 
@@ -343,6 +390,57 @@ export const WITH_FRIENDLIES_COLLECTOR_RULES: ProgressionRules = {
   ...WITH_FRIENDLIES_RULES,
   label: 'now + friendlies (collector)',
   befriendPolicy: 'collector',
+};
+
+/**
+ * The shipped data plus mini-boss visits (#190): a variant, not
+ * `CURRENT_RULES`, because the shipped boss bag is empty until the boss
+ * content lands (234b). The report holds it to `BOSS_GATE`.
+ */
+export const WITH_BOSS_RULES: ProgressionRules = {
+  ...CURRENT_RULES,
+  label: 'now + boss',
+  boss: {
+    events: BOSS_EVENTS,
+    standIns: 3, // as `pnpm sim:boss`
+    // TUNE: plan §9: a casual kid tries once a day while it's out; an engaged kid uses every try.
+    triesPerDay: { casual: 1, engaged: BOSS_EVENTS.triesPerDay },
+    // Plan §3 (owner-approved 2026-11-15); modelled from the plan, not 190c's code.
+    befriend: {
+      charmsPerAsk: 3,
+      asksPerWin: 2,
+      basePercent: 20,
+      perStandingPercent: 5,
+      perMissPercent: 15,
+      sureAfterMisses: 4,
+      joinLevelPercent: 50, // owner decision 4: half the Partner's level…
+      minJoinLevel: 5, // …at least 5, below its first evolution
+    },
+    charms: {
+      start: STARTERS.firstPickGift['heart-charm'] ?? 0,
+      perDay: FACTORY_CONFIG.charmsPerDay, // the factory model's guess, so the sims agree
+      perWildFriend: 2, // TUNE: guess; a near-out capture is 60–90 % for common to rare
+    },
+  },
+};
+
+/**
+ * #190's gates (plan §9): the first boss beaten and the first boss friend
+ * by these days (each kid kind, first map size, kid 0), and the boss's XP
+ * moving day-14 and day-30 levels by at most `maxLevels` against the run
+ * without bosses.
+ */
+export interface BossGate {
+  readonly byDay: Readonly<Record<string, { readonly beaten: number; readonly friend: number }>>;
+  readonly xpDays: readonly number[];
+  readonly maxLevels: number;
+}
+
+// TUNE: plan §9's targets (owner-approved 2026-11-15).
+export const BOSS_GATE: BossGate = {
+  byDay: { casual: { beaten: 21, friend: 45 }, engaged: { beaten: 14, friend: 28 } },
+  xpDays: [14, 30],
+  maxLevels: 1,
 };
 
 /**

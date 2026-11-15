@@ -22,8 +22,10 @@ import {
   WITH_EXPLORE_RULES,
   WITH_FRIENDLIES_BENCH_25_RULES,
   WITH_FRIENDLIES_COLLECTOR_RULES,
+  WITH_BOSS_RULES,
   WITH_FRIENDLIES_RULES,
 } from './progression-config.js';
+import { bossGate, formatBossGate } from './progression-boss-report.js';
 import { JOURNEY_RULES } from '../../src/data/journeys.js';
 import {
   formatFriendlyGate,
@@ -75,6 +77,8 @@ for (const rules of [
   // #732 D1: the bench at 25 %, beside the shipped 50 % in `now`.
   BENCH_25_RULES,
   WITH_FRIENDLIES_BENCH_25_RULES,
+  // #190: mini-boss visits, beside `now` (the no-boss comparison).
+  WITH_BOSS_RULES,
 ]) {
   for (const seats of PROGRESSION_CONFIG.seats) {
     for (const kid of PROGRESSION_CONFIG.kids) {
@@ -129,7 +133,8 @@ console.log(
 // Firsts (#736): the shipped rules and #728's friendlies variant, kid 0 of each run.
 const gate = PROGRESSION_CONFIG.firstsGate;
 for (const run of runs.filter(
-  (r) => r.rules === CURRENT_RULES || r.rules === WITH_FRIENDLIES_RULES,
+  (r) =>
+    r.rules === CURRENT_RULES || r.rules === WITH_FRIENDLIES_RULES || r.rules === WITH_BOSS_RULES,
 )) {
   const firsts = firstsOf(run.kids[0]?.days ?? [], facts);
   console.log(
@@ -181,4 +186,9 @@ for (const row of solo) {
 }
 console.log(`  ${formatSoloGate(solo)}`);
 if (!solo.every((r) => r.passes)) process.exitCode = 1;
+
+// #190: mini-boss firsts and the XP gate; soft (reports, never fails the run).
+const boss = bossGate(runs, PROGRESSION_CONFIG, facts);
+if (!boss) throw new Error('the boss gate needs the now and now + boss runs');
+for (const line of formatBossGate(boss, PROGRESSION_CONFIG.days)) console.log(`  ${line}`);
 console.log(`Report: ${reportPath}`);

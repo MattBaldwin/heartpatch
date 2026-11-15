@@ -1,4 +1,5 @@
 import { addXp, grantedXp, xpForLevel } from '../../src/care/growth.js';
+import { renderBoss } from './progression-boss-report.js';
 import { BATTLE_RULES } from '../../src/data/battle.js';
 import { GUARDIAN_RULES } from '../../src/data/server/guardian-rules.js';
 import {
@@ -483,6 +484,7 @@ export function renderProgression(
     ...(info.firsts ? renderTierFirsts(runs, config, info.firsts) : []),
     ...renderFriendlies(runs, config),
     ...renderSolo(runs, config),
+    ...(info.firsts ? renderBoss(runs, config, info.firsts) : []),
     "## What a Juniper's Gap win pays",
     '',
     'An average Gap team (three guardians at the middle of their levels), at the day the Gap is ready.',

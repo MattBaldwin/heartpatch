@@ -20,7 +20,7 @@ import { SPAWN_TABLES } from '../../src/data/server/spawn-tables.js';
 import { hexKey, hexNeighbors, type HexKey } from '../../src/hex/index.js';
 import { generateMap, type MapTile } from '../../src/mapgen/index.js';
 import { deriveSeed } from '../../src/rng/index.js';
-import type { BattleSideSetup } from '../../src/schemas/battle.js';
+import type { BattleSetup, BattleSideSetup } from '../../src/schemas/battle.js';
 import type { Species } from '../../src/schemas/data/species.js';
 import { resolveWildSpawn, type SpawnData } from '../../src/spawns/resolve.js';
 import { spawnWindowAt, type SpawnWindow } from '../../src/spawns/window.js';
@@ -30,6 +30,16 @@ import { isTradingPost } from '../../src/territory/reach.js';
 import { atWatchLevel, watchFloor } from '../../src/territory/watch-level.js';
 import type { JourneyRules } from '../../src/schemas/data/journeys.js';
 import { RaritySchema, type Rarity } from '../../src/schemas/data/common.js';
+import {
+  askPercent,
+  askRoll,
+  baseFormOf,
+  bossLevel,
+  joinLevel,
+  standInBag,
+  visitOn,
+  type BossDay,
+} from './progression-boss.js';
 import type {
   BefriendPolicy,
   KidProfile,
@@ -80,6 +90,7 @@ export const MODEL_LIMITS = [
   'no challenges between the two kids, except under rules with defences (#728)',
   'defences: the whole team stands guard on every tile (an upper bound on defence XP)',
   "computer mates (#386e): they claim no land, a lost defence costs no tile, and a mate fields the kid's own team at the Partner level + the offset",
+  'mini-bosses (#190): stand-in bosses, no Long Night weekday, boss coins and the found roll not counted; Heart Charms are counted only under rules with bosses',
 ] as const;
 
 /** One evolution on a kid's team; `partner` marks the Partner's own (#732 D3). */
@@ -145,6 +156,8 @@ export interface DayRecord {
   /** XP the Partner got from holds today, and tiles the other kid took today (#728). */
   readonly defenceXp: number;
   readonly tilesLost: number;
+  /** Mini-boss visits and the kid's Heart Charms (#190); only under rules with `boss`. */
+  readonly boss?: BossDay;
 }
 
 export interface KidRun {
@@ -243,6 +256,7 @@ function duel(
   a: BattleSideSetup,
   b: BattleSideSetup,
   seed: string,
+  format?: BattleSetup['format'],
 ): {
   winner: 'a' | 'b' | null;
   a: Map<string, number>;
@@ -250,7 +264,11 @@ function duel(
   /** Opponents each side tuckered out. */
   out: { a: number; b: number };
 } {
-  const { state } = autoplayBattle(data.content, { seed, sides: { a, b } });
+  const { state } = autoplayBattle(data.content, {
+    seed,
+    ...(format ? { format } : {}),
+    sides: { a, b },
+  });
   if (state.phase.type !== 'over') throw new Error('autoplay always finishes');
   const { result } = state.phase;
   const xpOf = (side: 'a' | 'b') =>
@@ -628,6 +646,18 @@ export function runProgression(
     return n;
   };
   const searched = kids.map(() => 0);
+  // Mini-boss visits (#190): the stand-in bag, each kid's charms, warmth and friends.
+  const bossModel = rules.boss;
+  const bossEvents = bossModel && {
+    ...bossModel.events,
+    bag: standInBag(bossModel.standIns),
+  };
+  const charms = kids.map(() => bossModel?.charms.start ?? 0);
+  const misses = kids.map(() => new Map<string, number>());
+  const bossFriends = kids.map(() => new Set<string>());
+  const beatenWeeks = kids.map(() => new Set<string>());
+  /** Per visit (window id): whether the patch was ready when it opened. */
+  const visitReady = new Map<string, boolean>();
   for (let day = 1; day <= config.days; day++) {
     const date = dateOf(config, day);
     const guardianWindow = spawnWindowAt({ date, hour: 12 }, GUARDIAN_RULES.windowHours);
@@ -790,6 +820,108 @@ export function runProgression(
       }
     }
 
+    // Mini-boss visit (#190): after tile tries, before wild battles; on top of `battlesPerDay`.
+    const bossDays: (Omit<BossDay, 'charms' | 'charmsWild' | 'charmsShort'> | null)[] = kids.map(
+      () => null,
+    );
+    if (bossModel && bossEvents) {
+      const visit = visitOn(config.mapSeed, date, bossEvents);
+      if (visit && !visitReady.has(visit.week)) {
+        // No visits until some member's Partner is grown enough (read when it opens).
+        const ready = kids.some((kid) => (kid.team[0]?.level ?? 0) >= bossEvents.minPartnerLevel);
+        visitReady.set(visit.week, ready);
+      }
+      const out = visit !== null && visitReady.get(visit.week) === true;
+      kids.forEach((kid, k) => {
+        const income = bossModel.charms.perDay[profile.id] ?? 0;
+        charms[k] = (charms[k] ?? 0) + income;
+        const partnerLevel = kid.team[0]?.level ?? 0;
+        const canFight = out && partnerLevel >= bossEvents.minPlayerLevel;
+        let tries = 0;
+        let won = false;
+        let asks = 0;
+        let friend: string | null = null;
+        let bundle = 0;
+        let spent = 0;
+        const beaten = visit !== null && beatenWeeks[k]?.has(visit.week) === true;
+        if (visit && canFight && !beaten) {
+          const allowed = Math.min(bossModel.triesPerDay[profile.id] ?? 0, bossEvents.triesPerDay);
+          const fighters = kid.team.slice(0, 3);
+          const level = bossLevel(partnerLevel, bossEvents, rules.growth.maxLevel);
+          while (tries < allowed && !won) {
+            const seed = deriveSeed(config.rootSeed, 'boss', profile.id, k, day, tries);
+            tries += 1;
+            const result = duel(
+              data,
+              {
+                controller: { type: 'ai', policy: config.kidPolicy },
+                squishies: fighters.map((m) => ({
+                  id: m.id,
+                  speciesId: m.speciesId,
+                  level: m.level,
+                })),
+              },
+              {
+                controller: { type: 'ai', policy: 'guardian' },
+                squishies: [{ id: 'boss', speciesId: visit.speciesId, level, boss: true }],
+              },
+              seed,
+              { a: fighters.length as 1 | 2 | 3, b: 1 },
+            );
+            won = result.winner === 'a';
+            // Engine XP for every fighter, one win in the falloff (plan §6).
+            partnerXp[k] =
+              (partnerXp[k] ?? 0) + grant(data, kid, rules, result.a, won, { setup: fighters });
+            if (!won) continue;
+            beatenWeeks[k]?.add(visit.week);
+            for (const [item, n] of Object.entries(bossEvents.bundle)) {
+              if (item === 'heart-charm') bundle += n;
+            }
+            charms[k] = (charms[k] ?? 0) + bundle;
+            const standing = fighters.length - result.out.b;
+            const befriend_ = bossModel.befriend;
+            if (bossFriends[k]?.has(visit.speciesId)) continue;
+            for (let ask = 1; ask <= befriend_.asksPerWin; ask++) {
+              if ((charms[k] ?? 0) < befriend_.charmsPerAsk) break;
+              charms[k] = (charms[k] ?? 0) - befriend_.charmsPerAsk;
+              spent += befriend_.charmsPerAsk;
+              asks += 1;
+              const kidMisses = misses[k];
+              const missed = kidMisses?.get(visit.speciesId) ?? 0;
+              const percent = askPercent(standing, missed, befriend_);
+              if (askRoll(deriveSeed(seed, 'ask', ask), percent)) {
+                friend = visit.speciesId;
+                bossFriends[k]?.add(visit.speciesId);
+                const base = baseFormOf(visit.speciesId, data.species);
+                befriend(
+                  data,
+                  kid,
+                  {
+                    id: `boss-friend-${visit.speciesId}`,
+                    speciesId: base,
+                    level: joinLevel(base, partnerLevel, data.species, befriend_),
+                  },
+                  rules.befriendPolicy,
+                );
+                break;
+              }
+              kidMisses?.set(visit.speciesId, missed + 1);
+            }
+          }
+        }
+        bossDays[k] = {
+          out,
+          canFight,
+          tries,
+          won,
+          asks,
+          friend,
+          charmsIn: income + bundle,
+          charmsBoss: spent,
+        };
+      });
+    }
+
     // Wild battles with the rest of the day's battles.
     kids.forEach((kid, k) => {
       const spawnData: SpawnData = {
@@ -802,6 +934,9 @@ export function runProgression(
       const land = tiles.filter((t) => owner.get(hexKey(t)) === k);
       const wild = profile.battlesPerDay - (tileBattles[k] ?? 0);
       const befriended: string[] = [];
+      let charmsWild = 0;
+      let charmsShort = 0;
+      let wildAsks = 0;
       for (let i = 0; i < wild; i++) {
         const hour = cycle(WILD_HOURS, i);
         const window = spawnWindowAt({ date, hour }, rules.spawn.windowHours);
@@ -824,6 +959,15 @@ export function runProgression(
         const { won, xp } = play(data, kid, config, opponent, seed);
         partnerXp[k] = (partnerXp[k] ?? 0) + grant(data, kid, rules, xp, won);
         if (won && befriended.length < profile.befriendsPerDay) {
+          if (bossModel && wildAsks < profile.befriendsPerDay) {
+            // The day's first befriends cost charms, joining the team or not.
+            wildAsks += 1;
+            const want = bossModel.charms.perWildFriend;
+            const paid = Math.min(want, charms[k] ?? 0);
+            charms[k] = (charms[k] ?? 0) - paid;
+            charmsWild += paid;
+            charmsShort += want - paid;
+          }
           const level = befriendedLevel(
             spawn.speciesId,
             spawn.level,
@@ -865,6 +1009,9 @@ export function runProgression(
         defencesHeld: held[k] ?? 0,
         defenceXp: holdXp[k] ?? 0,
         tilesLost: lost[k] ?? 0,
+        ...(bossDays[k]
+          ? { boss: { ...bossDays[k], charms: charms[k] ?? 0, charmsWild, charmsShort } }
+          : {}),
       });
     });
   }
