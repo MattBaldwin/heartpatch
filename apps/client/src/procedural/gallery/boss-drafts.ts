@@ -72,6 +72,19 @@ export const DRAFT_BODIES: Body[] = [
     bottomFlat: 0.55,
     jitter: 0.03,
   },
+  {
+    // Rakelet's head: wide and flat-faced, so the rake bar spans wider than
+    // the body; nearly oval, so a ring of tines comes out evenly spaced.
+    id: 'draft-rake-head',
+    width: 1.3,
+    height: 1.0,
+    depth: 0.92,
+    squareness: 0.15,
+    taper: 0,
+    peak: 0,
+    bottomFlat: 0.3,
+    jitter: 0.02,
+  },
 ];
 
 const part = (p: Part): Part => p;
@@ -227,6 +240,88 @@ export const DRAFT_PARTS: Part[] = [
     up: 5,
     tilt: 38,
     sink: 0.3,
+    jitter: 0,
+  }),
+  // Rakelet (round 4): the rake is ONE wooden tool that is his mouth. A
+  // bar wider than his body across the face, six long tines hanging from it,
+  // and the handle rooted at the bar's centre, running up through the head
+  // and out behind it. No mouth oval, no nose.
+  part({
+    id: 'draft-rake-tool-bar',
+    slot: 'mane',
+    shape: 'ellipsoid',
+    size: [1.2, 0.08, 0.2], // [width, depth off the face, height]
+    color: 'detail',
+    layout: { kind: 'single' },
+    around: 0,
+    // Centred on the mouth line and tall enough to cover the silly face
+    // kit's required `open-mouth` (that "o" read as a nose) whatever its
+    // placement wobble: the bar is the mouth.
+    up: -3,
+    sink: 0.5,
+    jitter: 0,
+  }),
+  part({
+    // Each tine is longer than the head is tall, with clear gaps between.
+    id: 'draft-rake-tool-tines',
+    slot: 'fangs',
+    shape: 'capsule',
+    size: [0.085, 1.05, 0.085],
+    color: 'detail',
+    layout: { kind: 'ring', count: 6, spread: 52 },
+    around: 0,
+    up: -5,
+    // Leaning forward off the face, like a rake held out, not bars on him.
+    tilt: -72, // TUNE
+    sink: 0.1,
+    jitter: 0,
+  }),
+  part({
+    // Rises from the middle of the back of the head, leaning back, in line
+    // with the bar's centre: from the front it stands straight up behind
+    // the leaf pile. (A stick grown from the bar itself has to run up
+    // through the face: that try read as "a pole through his head".)
+    id: 'draft-rake-tool-handle',
+    slot: 'horns',
+    shape: 'capsule',
+    size: [0.09, 1.5, 0.09],
+    color: 'detail',
+    layout: { kind: 'single' },
+    around: 180,
+    up: 35,
+    tilt: 30, // TUNE: at the back, positive tips it up towards vertical
+    sink: 0.35,
+    jitter: 0,
+  }),
+  part({
+    // Small and tipped over on top of the leaf pile, mid-fall.
+    id: 'draft-falling-leaf-top',
+    slot: 'ears',
+    shape: 'teardrop',
+    size: [0.2, 0.28, 0.05],
+    color: 'detail',
+    layout: { kind: 'single' },
+    around: 35,
+    up: 72,
+    tilt: -70,
+    sink: 0.15,
+    jitter: 0,
+  }),
+  part({
+    // Drooping lanky arms: one soft, unjointed piece each side (no elbow
+    // seam), thin at the shoulder and swelling to a heavy hanging hand.
+    id: 'draft-droop-arms',
+    slot: 'arms',
+    shape: 'teardrop',
+    size: [0.26, 1.15, 0.26],
+    color: 'primary',
+    layout: { kind: 'pair' },
+    around: 70,
+    up: 30,
+    tilt: -84, // TUNE
+    splay: 6,
+    flip: true,
+    sink: 0.15,
     jitter: 0,
   }),
   part({
@@ -707,19 +802,17 @@ export const DRAFT_BOSS_LINES: readonly DraftBossLine[] = [
             'sharp-eyes',
             'draft-fierce-brows',
             'open-mouth',
-            'draft-rake-bar',
-            'draft-rake-tines',
-            'draft-rake-mouth',
+            'draft-rake-tool-bar',
+            'draft-rake-tool-tines',
+            'draft-rake-tool-handle',
             'draft-leaf-pile-hair',
-            'draft-falling-leaf',
-            'draft-rake-handle',
-            'draft-lanky-arms',
-            'draft-lanky-forearms',
+            'draft-falling-leaf-top',
+            'draft-droop-arms',
             'draft-lanky-legs',
           ],
           size: 1.88,
           finish: 'shimmer',
-          head: { body: 'orb', size: 0.86, forward: 0.06, up: 0.8 },
+          head: { body: 'draft-rake-head', size: 0.86, forward: 0.06, up: 0.8 },
           stance: 0.38,
           pose: 'upright',
           attackPart: 'fangs',
