@@ -524,6 +524,11 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   text-wrap: balance;
 }
 
+/* A benched teammate's cheer line (#732): the card's softer ink, same size. */
+.battle-xp li.battle-xp-bench {
+  color: #6b4b6e;
+}
+
 /* ── The entry buttons (in the Adventure tray) ─────────────────────── */
 
 .battle-entry-box {
@@ -551,6 +556,50 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 
 .battle-entry-note:empty {
   display: none;
+}
+
+/* A Rare Lure is held (#729): a gold ring and lilac halo that breathe. The
+   tray draws the button's picture on ::before, so the glow is the button's
+   own shadow and the sparkle sits on ::after. */
+.tray-section > .battle-entry-box > .battle-entry.battle-entry-lure {
+  box-shadow:
+    0 4px 0 #7a2d55,
+    0 0 0 3px #ffe08a,
+    0 0 14px 4px rgb(168 130 255 / 70%);
+  animation: battle-lure-pulse 2.4s ease-in-out infinite;
+}
+
+.tray-section > .battle-entry-box > .battle-entry.battle-entry-lure::after {
+  content: '✨';
+  position: absolute;
+  right: 14px;
+  top: -10px;
+  font-size: 20px;
+  filter: drop-shadow(0 0 4px #fff);
+  pointer-events: none;
+}
+
+@keyframes battle-lure-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 4px 0 #7a2d55,
+      0 0 0 3px #ffe08a,
+      0 0 6px 1px rgb(168 130 255 / 30%);
+  }
+
+  50% {
+    box-shadow:
+      0 4px 0 #7a2d55,
+      0 0 0 3px #ffe08a,
+      0 0 16px 5px rgb(168 130 255 / 80%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tray-section > .battle-entry-box > .battle-entry.battle-entry-lure {
+    animation: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

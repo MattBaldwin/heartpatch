@@ -477,6 +477,13 @@
       "when": 1794731908063,
       "tag": "0067_boss_idle",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1794740876223,
+      "tag": "0068_tile_attacks_open",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { findAvoidedWords, type MilestoneNews } from '@heartpatch/shared';
+import { findAvoidedWords, MILESTONE_TRACKS, type MilestoneNews } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import {
   barPercent,
@@ -131,5 +131,35 @@ describe('the celebration', () => {
     expect(mayEarnMilestone({ type: 'tutorial.advanced', data: { stepId: null } }, ME)).toBe(true);
     // Chat earns nothing.
     expect(mayEarnMilestone({ type: 'chat.quick', data: { userId: ME } }, ME)).toBe(false);
+  });
+});
+
+describe('the Big Friend track (#190)', () => {
+  const def = MILESTONE_TRACKS.find((m) => m.id === 'big-friend');
+  it('is a visible teaser that names no boss, with its three tiers', () => {
+    expect(def?.secret).toBe(false);
+    expect(def?.tiers.map((t) => t.threshold)).toEqual([1, 4, 10]);
+    expect(def?.tiers[0]?.goal).toBe('Beat a BIG squishy.');
+    expect(JSON.stringify(def)).not.toMatch(/rakelet/i);
+  });
+  it('draws like any other track', () => {
+    const shown: ShownTrack = {
+      hidden: false,
+      id: 'big-friend',
+      name: 'Big Friend',
+      secret: false,
+      season: null,
+      progress: 1,
+      tiers: (def?.tiers ?? []).map((t, i) => ({
+        tier: i + 1,
+        threshold: t.threshold,
+        goal: t.goal,
+        reward: { coins: t.coins, clothing: null, title: t.title },
+        earnedAt: i === 0 ? EARNED : null,
+      })),
+    };
+    expect(earnedCount(shown)).toBe(1);
+    expect(nextTier(shown)?.goal).toBe('Beat 4 BIG squishies.');
+    expect(progressLabel(shown)).toContain('1');
   });
 });

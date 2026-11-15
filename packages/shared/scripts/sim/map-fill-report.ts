@@ -1,3 +1,4 @@
+import { COMPUTER_MATES } from '../../src/data/server/computer-mates.js';
 import { COMPUTER_MATES_GATE, COMPUTER_MATES_GATES, type MapFillRules } from './map-fill-config.js';
 import { MAP_FILL_LIMITS, type MapFillRun } from './map-fill.js';
 
@@ -211,7 +212,7 @@ export function renderMapFill(
 
 /** One computer-mates gate line (#386c, plan §9): soft, printed PASS/FAIL. */
 export interface MateGate {
-  readonly gate: 'a' | 'c' | 'd';
+  readonly gate: 'a' | 'b' | 'c' | 'd';
   readonly rules: string;
   readonly pass: boolean;
   readonly line: string;
@@ -305,6 +306,27 @@ export function computerMatesGates(runs: readonly MapFillRun[]): {
       rules: run.rules.label,
       pass: worst <= 0,
       line: `(c) ${tag}: mates' most outer land over the cap (${String(mateCap)}) on any day: ${String(Math.max(0, worst))}`,
+    });
+    // (b) 386e: a kid loses at most the weekly challenge cap to mates in
+    // any 7 days, though every challenge wins in the model.
+    const weekCap = COMPUTER_MATES.rules.challengesPerPatchWeek[run.rules.pvpMode];
+    let worstWeek = 0;
+    run.days.forEach((_, i) => {
+      const week = run.days.slice(Math.max(0, i - 6), i + 1);
+      for (const s of run.scenario.seats.keys()) {
+        if (mates(run).includes(s)) continue;
+        worstWeek = Math.max(
+          worstWeek,
+          week.reduce((t, d) => t + (d.lostToMates[s] ?? 0), 0),
+        );
+      }
+    });
+    const challenges = sum(run, (d, s) => d.mateChallenges[s] ?? 0);
+    gates.push({
+      gate: 'b',
+      rules: run.rules.label,
+      pass: worstWeek <= weekCap,
+      line: `(b) ${tag}: most tiles a kid lost to mates in any 7 days ${String(worstWeek)} (cap ${String(weekCap)}), mate challenges in all ${String(challenges)}`,
     });
     const cold = run.days.filter((d) => !d.warm);
     const acted = cold.reduce(

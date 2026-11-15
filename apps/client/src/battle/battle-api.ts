@@ -11,6 +11,7 @@ import {
   type OwnedSquishy,
   type PlayerBattle,
   type PlayerBattleAction,
+  type WildHints,
 } from '@heartpatch/shared';
 import { apiCall, apiCallFor } from '../net/api.js';
 
@@ -26,9 +27,9 @@ export const battleApi = {
     }).then((res) => res.battle),
 
   /** Tiles in reach with a wild squishy right now, nearest first (no species: a hint). */
-  wildHints: (mapId: string): Promise<readonly Hex[]> =>
+  wildHints: (mapId: string): Promise<WildHints> =>
     apiCallFor(`/maps/${mapId}/wild`, { method: 'GET', schema: WildHintsResponseSchema }).then(
-      (res) => res.wild.tiles,
+      (res) => res.wild,
     ),
 
   /**

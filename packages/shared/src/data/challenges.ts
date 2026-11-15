@@ -8,6 +8,7 @@ export const CHALLENGE_RULES: ChallengeRules = {
   notNowRestMinutes: 5, // TUNE: "Not now!" means a little while
   levelGapNote: 5, // TUNE: a team this many levels apart is a real mismatch
   paidWinsPerPairPerDay: 3, // TUNE: #728; past it a win over that patch-mate still pays XP
+  paidWinsPerDayVsComputers: 3, // TUNE: #386e, all computer mates together (owner decision 5)
 };
 
 /**

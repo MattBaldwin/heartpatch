@@ -123,6 +123,11 @@ export interface ResultInfo {
    * boss card, #190): short ones, so the card still fits under the boss.
    */
   evolvingRow?: readonly ({ before: number; after: number } | null)[];
+  /**
+   * Which XP lines are a benched teammate's cheer (#732), by index: drawn
+   * in the card's softer ink, as supporting cast. Missing: none.
+   */
+  bench?: readonly boolean[];
   /** One extra hint line ("Weaken a wild squishy, then…"), if any. */
   nudge?: string;
   done: string;
@@ -953,7 +958,12 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
           { class: 'battle-xp', 'data-testid': 'battle-xp' },
           ...info.xp.map((line, i) => {
             const gain = info.evolving?.[i];
-            return gain ? el('li', {}, line, evolvingMeter(gain, false)) : el('li', {}, line);
+            const attrs: Record<string, string> = info.bench?.[i]
+              ? { class: 'battle-xp-bench' }
+              : {};
+            return gain
+              ? el('li', attrs, line, evolvingMeter(gain, false))
+              : el('li', attrs, line);
           }),
           ...(info.evolvingRow?.some(Boolean)
             ? [

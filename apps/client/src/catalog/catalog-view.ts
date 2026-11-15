@@ -19,6 +19,8 @@ export interface CatalogCard {
   readonly caught: boolean;
   /** A secret squishy the player found. */
   readonly secret: boolean;
+  /** A mini-boss line squishy the player has met (#190): it only ever shows once met. */
+  readonly boss: boolean;
 }
 
 /** The tiers with a goal, in the order a kid works through them. Secret has none (it never shows before it's met). */
@@ -74,15 +76,17 @@ export function catalogPage(
       seen: entry !== undefined,
       caught: entry?.firstCaughtAt != null,
       secret,
+      boss: species.line === 'boss',
     };
   };
   const publicIds = new Set(publicSpecies.map((s) => s.id));
   const cards = [
     ...publicSpecies.map((s) => card(s, false)),
-    // Only secrets the player has met come with the catalog.
+    // Only secrets and boss lines the player has met come with the catalog
+    // (#190: never a "???" card or a count before; `hiddenUntilSeen`).
     ...catalog.speciesDefs
       .filter((s) => !publicIds.has(s.id) && entries.has(s.id))
-      .map((s) => card(s, true)),
+      .map((s) => card(s, s.rarity === 'secret')),
   ];
   const seen = cards.filter((c) => c.seen).length;
   const caught = cards.filter((c) => c.caught).length;

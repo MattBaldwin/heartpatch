@@ -7,6 +7,9 @@ import type { BattleRewards } from '@heartpatch/shared';
 
 export const REWARD_TEXT = {
   earnedXp: (name: string, xp: number) => `${name} earned ${String(xp)} XP!`,
+  /** A teammate that sat on the bench (#732): its share, never the percent. */
+  cheeredXp: (name: string, xp: number) =>
+    `${name} cheered from the side and earned ${String(xp)} XP!`,
   /** The challenger's card, a win that paid (#728). */
   earned: (coins: string) => `You earned ${coins}.`,
   /** A held defence, live (#728). */
@@ -35,25 +38,47 @@ function paid(coins: BattleRewards['coins']): coins is { patch: number; heart: n
   return coins !== null && coins.patch + coins.heart > 0;
 }
 
-/** One "Pebblesnooze earned 12 XP!" line per squishy that earned, with its evolving meter. */
+/**
+ * One "Pebblesnooze earned 12 XP!" line per squishy that earned, with its
+ * evolving meter. Bench rows (#732) get a "cheered from the side" line and
+ * come after the fighters; a row without `bench` (a fighter, or a battle
+ * stored before #732) reads as before.
+ */
 export function xpLines(
   awards: readonly {
     squishyId: string;
     xp: number;
     evolvingBefore?: number | null;
     evolvingAfter?: number | null;
+    bench?: boolean;
   }[],
   nameOf: (squishyId: string) => string,
-): { lines: string[]; evolving: ({ before: number; after: number } | null)[] } {
-  const earned = awards.filter((award) => award.xp > 0);
+): {
+  lines: string[];
+  evolving: ({ before: number; after: number } | null)[];
+  /** Which lines are bench cheers, by index, so the card can soften them. */
+  bench: boolean[];
+} {
+  const paidXp = awards.filter((award) => award.xp > 0);
+  // The server already lists bench rows last; keep that order whatever it sends.
+  const earned = [
+    ...paidXp.filter((award) => award.bench !== true),
+    ...paidXp.filter((award) => award.bench === true),
+  ];
   return {
-    lines: earned.map((award) => REWARD_TEXT.earnedXp(nameOf(award.squishyId), award.xp)),
+    lines: earned.map((award) =>
+      (award.bench === true ? REWARD_TEXT.cheeredXp : REWARD_TEXT.earnedXp)(
+        nameOf(award.squishyId),
+        award.xp,
+      ),
+    ),
     // Each one's evolving meter, before and after (#205), from the server.
     evolving: earned.map((award) =>
       award.evolvingBefore != null && award.evolvingAfter != null
         ? { before: award.evolvingBefore, after: award.evolvingAfter }
         : null,
     ),
+    bench: earned.map((award) => award.bench === true),
   };
 }
 
@@ -80,7 +105,9 @@ export function coinLine(input: {
   switch (rewards.unpaid) {
     case 'scooted':
       return role === 'defender' ? REWARD_TEXT.heldScooted(opponent) : REWARD_TEXT.friendlyGaveUp;
+    // The combined cap over computer mates (#386e) shares the pair-cap line until 386f words it apart.
     case 'pair-cap':
+    case 'computer-cap':
       return role === 'friendly' ? REWARD_TEXT.friendlyPairCap(opponent) : null;
     case 'guardians':
       return null;

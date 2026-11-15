@@ -11,6 +11,7 @@ import {
   sidesToAct,
   battleXpPercent,
   CHALLENGE_RULES,
+  stancePolicy,
   befriendedLevel,
   joiningSpecies,
   CAPTURABLE_BATTLE_KINDS,
@@ -62,7 +63,7 @@ import {
 } from '@heartpatch/shared';
 import type { ChallengeRow } from '../challenges/repo.js';
 import { createChallengesRepo } from '../challenges/repo.js';
-import { SERVER_GAME_DATA, serverBattleData } from '@heartpatch/shared/server';
+import { COMPUTER_MATES, SERVER_GAME_DATA, serverBattleData } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import type { NewGameEvent } from '../../db/game-events.js';
@@ -83,6 +84,7 @@ import { heldLure } from '../post-shop/repo.js';
 import { consumeLure } from '../post-shop/service.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
+import { createComputerMatesRepo } from '../computer-mates/repo.js';
 import { arenaFor } from './arena.js';
 import { liveView, nextDeadline, settleTimeouts } from './live.js';
 import { DEV_WILD_LEVEL } from './limits.js';
@@ -163,6 +165,11 @@ export interface TileOpponent {
   team?: TeamSquishyRow[];
   /** Turns the battle lasts at most (a fence battle, #203). */
   turnLimit?: number;
+  /**
+   * Side `a` is a computer patch-mate (#386e): the AI plays it with this
+   * controller, and the battle earns side `a` nothing (see `finish`).
+   */
+  attacker?: Extract<BattleSideSetup['controller'], { type: 'ai' }>;
 }
 
 /**
@@ -475,6 +482,13 @@ export interface BattlesService {
     challengeId: string,
     answer: 'yes' | 'not-now',
   ) => Promise<{ challenge: ChallengeRow; battle: PlayerBattle | null }>;
+  /**
+   * A computer patch-mate's battle (#386e), noticed on its step: a
+   * challenge both sides of which are the AI's plays out once no "Defend
+   * now?" prompt is in time, and a live one's passed deadlines settle (the
+   * kid's own, as any read does). True while it's still going.
+   */
+  settleComputer: (mapId: string, userId: string) => Promise<boolean>;
   /** A cheer in a live battle (#29): a quick message or emoji id, never text. */
   cheer: (user: PublicUser, battleId: string, request: BattleCheerRequest) => Promise<void>;
   /** Dev/test only: a squishy for the player on this map. */
@@ -532,6 +546,28 @@ interface Opponent {
   /** Who of the team fights, when not all of them (`TileOpponent.team`). */
   team?: TeamSquishyRow[];
   turnLimit?: number;
+  /** A computer attacker's controller (`TileOpponent.attacker`). */
+  attacker?: TileOpponent['attacker'];
+}
+
+/**
+ * The AI controller a computer patch-mate battles with (#386e): its
+ * persona's stance, as its guards defend. Null for a real Keeper.
+ */
+async function computerController(
+  tx: Executor,
+  mapId: string,
+  userId: string,
+): Promise<Extract<BattleSideSetup['controller'], { type: 'ai' }> | null> {
+  const personaId = (await createComputerMatesRepo(tx).personasOn(mapId)).get(userId);
+  if (personaId === undefined) return null;
+  const persona = COMPUTER_MATES.personas.find((p) => p.id === personaId);
+  return { type: 'ai', policy: stancePolicy(persona?.stance ?? 'balanced') };
+}
+
+/** Both sides are the AI's (a computer mate's challenge nobody defends live, #386e): it plays itself. */
+function playsItself(state: BattleState): boolean {
+  return state.sides.a.controller.type === 'ai' && state.sides.b.controller.type === 'ai';
 }
 
 /**
@@ -560,6 +596,7 @@ const MESSAGES = {
   notLive: 'Cheers are for battles with a friend!',
   unknownCheer: "We don't know that cheer.",
   busy: 'Someone is already in a battle. Try again in a bit!',
+  mateNeverAsks: 'Computer friends wait for you to ask them!',
   notYourself: "You can't battle yourself, silly!",
   friendlyTutorial: 'Friendly battles happen on a patch with friends!',
   friendlyOff: 'Friendly battles are switched off on this patch.',
@@ -852,7 +889,9 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           side,
           opponentOf(row, live, side),
           row.status === 'active',
-          isOnline(row.mapId, opponentOf(row, live, side)),
+          // A computer mate's side (#386e) is the AI's: always here.
+          row.state.sides[otherSide(side)].controller.type === 'ai' ||
+            isOnline(row.mapId, opponentOf(row, live, side)),
           now(),
         ),
       }),
@@ -989,6 +1028,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
    */
   const abandoned = async (tx: Executor, row: BattleRow, at: Date): Promise<boolean> => {
     if (row.status !== 'active') return false;
+    // A computer mate's challenge (#386e): side `a` is the AI, which never
+    // leaves and can't forfeit. A kid defending it live who walks away is
+    // covered by the live deadlines instead (`settleLive`): their defense
+    // style plays each turn, as for any defender, so the battle ends with an
+    // honest result and the kid's defence pay follows the usual rules.
+    if (row.state.sides.a.controller.type === 'ai') return false;
     // A mini-boss fight left alone (#190 plan §12) counts the same way.
     const boss = options.minibosses;
     if (row.kind === 'miniboss' && boss) {
@@ -1015,6 +1060,9 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       await endNoContest(repo, tx, row, at);
       return true;
     }
+    // A computer mate's challenge nobody defends live (#386e) plays itself
+    // to the end, before it could ever count as left.
+    if (playsItself(row.state)) return playOut(repo, tx, row, at);
     if (await abandoned(tx, row, at)) {
       const action: BattleAction = { type: 'forfeit', side: PLAYER_SIDE };
       const state = applyBattleAction(content, row.state, action);
@@ -1022,6 +1070,45 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       return true;
     }
     return false;
+  };
+
+  /**
+   * Plays a locked battle whose two sides are both the AI's to its end
+   * (#386e: a computer mate's tile challenge with no defender seated), the
+   * way a wild battle's AI side answers: each step is a `turn` with no
+   * choices, so the engine picks for both and `replayBattle` still holds.
+   * Waits while a "Defend now?" prompt is still pending (false): one past
+   * its time is expired first by `settleDefense` in its own transaction
+   * (`resolved` runs it before this), so this never holds the prompt (9c)
+   * while `finish` takes the tile and its defenders (6). The prompt is read
+   * without a lock. That's safe because a prompt only ever leaves pending
+   * (expired, answered, or called off by `callOffAsksOf` when a Keeper
+   * leaves, which doesn't take the battle lock), and accepting one, the only
+   * write that seats a defender, takes this battle's lock first, which is
+   * held here. Lock order: the battle (held), then `finish`'s.
+   */
+  const playOut = async (
+    repo: BattlesTxRepo,
+    tx: Executor,
+    row: BattleRow,
+    at: Date,
+  ): Promise<boolean> => {
+    const prompt = mayAwaitDefender(row) ? await createChallengesRepo(tx).defenseFor(row) : null;
+    if (prompt?.status === 'pending') return false;
+    let state = row.state;
+    const actions = [...row.actions];
+    for (
+      let guard = 0;
+      state.phase.type === 'turn' && guard < 4 * content.rules.maxTurns;
+      guard++
+    ) {
+      const action: BattleAction = { type: 'turn', choices: {} };
+      state = applyBattleAction(content, state, action);
+      actions.push(action);
+    }
+    if (state.phase.type !== 'over') throw new Error(`playOut: ${row.id} did not end`);
+    await finish(repo, tx, row, actions, state, at);
+    return true;
   };
 
   /**
@@ -1067,12 +1154,14 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
    */
   const resolved = async (seen: BattleRow): Promise<BattleRow> => {
     if (seen.status !== 'active') return seen;
-    await settleDefense(seen);
+    const waiting = await settleDefense(seen);
     // The defender may have said yes since `seen` was read: side `b` is theirs now.
     const row = mayAwaitDefender(seen) ? ((await store.findBattle(seen.id)) ?? seen) : seen;
     const live = await createLiveBattlesRepo(db).find(row.id);
     if (
       row.contentHash === content.contentHash &&
+      // One that plays itself waits only for a prompt still in time (#386e).
+      !(playsItself(row.state) && waiting === null) &&
       !(await abandoned(db, row, now())) &&
       !liveDue(row, live, now())
     ) {
@@ -1330,6 +1419,17 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     const liveBattles = createLiveBattlesRepo(tx);
     const friendUserId = isFriendly ? await friendOf(liveBattles, row.id) : null;
     await liveBattles.end(row.id);
+    // A computer patch-mate on either side (#386e) earns nothing that
+    // matters: no XP, bench, coins, catalog, finds or befriending. Side `a`
+    // is one in its own tile challenge, side `b` in a kid's friendly or
+    // defending its own tile against a kid's attack.
+    const defense = tile.defense ?? null;
+    const sideBPlayer = defense?.userId ?? friendUserId;
+    const computers = await createComputerMatesRepo(tx).computerIds(
+      sideBPlayer === null ? [row.playerUserId] : [row.playerUserId, sideBPlayer],
+    );
+    const aComputer = computers.has(row.playerUserId);
+    const bComputer = sideBPlayer !== null && computers.has(sideBPlayer);
     // A friendly battle (#728, owner decision 2026-11-14) pays both sides
     // one opponent's worth of the engine's XP at `friendlyPercent`
     // (`friendlyBattleXp`), before care × habitat and the falloff.
@@ -1341,18 +1441,20 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // earn the engine's side-`b` XP. Gentle's share never applies to them
     // (it is the challenger's), and guardians standing in earn nothing.
     // A friendly's side `b` is the friend's own team, win or lose.
-    const defense = tile.defense ?? null;
-    const sideBUserId = defense?.userId ?? friendUserId;
+    const sideBUserId = bComputer ? null : sideBPlayer;
     const theirs = new Set(defense?.ownSquishyIds ?? []);
     const sideBAwards = result.xp
-      .filter((award) => award.side === 'b' && (isFriendly || theirs.has(award.squishyId)))
+      .filter(
+        (award) =>
+          award.side === 'b' && sideBUserId !== null && (isFriendly || theirs.has(award.squishyId)),
+      )
       .map((award) => ({ ...award, xp: isFriendly ? friendlyXp(award) : award.xp }))
       .filter((award) => award.xp > 0);
     // Gentle mode's share (owner decision 2026-10-03): challenging a much
     // smaller player pays part of the battle's XP, win or lose. Never a
     // friendly's (both said yes): its own share above instead.
     const awards = result.xp
-      .filter((award) => award.side === PLAYER_SIDE)
+      .filter((award) => award.side === PLAYER_SIDE && !aComputer)
       .map((award) => ({
         ...award,
         xp: isFriendly ? friendlyXp(award) : Math.floor((award.xp * tile.xpPercent) / 100),
@@ -1368,7 +1470,9 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // the battle, so it is taken before the ownership re-check below.
     const benchOf = (ids: readonly string[], base: number) =>
       base > 0 ? ids.map((squishyId) => ({ squishyId, xp: base })) : [];
-    const playerBench = benchOf(benchedIn(state.sides[PLAYER_SIDE]), benchXp(awards, GROWTH_RULES));
+    const playerBench = aComputer
+      ? []
+      : benchOf(benchedIn(state.sides[PLAYER_SIDE]), benchXp(awards, GROWTH_RULES));
     const defenderBench =
       sideBUserId === null
         ? []
@@ -1517,7 +1621,9 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     ];
     // Befriended in this last step (design doc §6, #279): each one joins
     // the player. Ones befriended earlier in a guardian battle joined then.
-    const friends = await welcome(repo, tx, row, befriendedIn(row.state, state), at);
+    const friends = aComputer
+      ? []
+      : await welcome(repo, tx, row, befriendedIn(row.state, state), at);
     const captured = row.kind === 'wild' ? (friends[0] ?? null) : null;
     // Patch Coins (#45): a win, and a befriended squishy or a claimed tile,
     // each once per battle. Gentle's share scales them like the XP and the
@@ -1546,8 +1652,26 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         friendlyWinner.loserUserId,
         at,
       )) >= CHALLENGE_RULES.paidWinsPerPairPerDay;
+    // Over a computer mate (#386e, owner decision 5): also at most
+    // `paidWinsPerDayVsComputers` wins over all of them together, said apart
+    // as `'computer-cap'`. Concurrency: a kid is in one battle at a time (the
+    // battle seat) and this runs under the battle's lock before `repo.finish`,
+    // so two of the kid's friendlies can't both count the same last paid win
+    // (the same pattern as the pair cap).
+    const computerCapped =
+      !pairCapped &&
+      bComputer &&
+      friendlyWinner?.userId === row.playerUserId &&
+      (await repo.friendlyWinsAgainstComputersToday(row.mapId, row.playerUserId, at)) >=
+        CHALLENGE_RULES.paidWinsPerDayVsComputers;
     /** Why a winning side got no win coins, or null. */
-    const winUnpaid: UnpaidReason | null = scooted ? 'scooted' : pairCapped ? 'pair-cap' : null;
+    const winUnpaid: UnpaidReason | null = scooted
+      ? 'scooted'
+      : pairCapped
+        ? 'pair-cap'
+        : computerCapped
+          ? 'computer-cap'
+          : null;
     // A held defence (#728) pays the Keeper under the same `battle` caps,
     // keyed `sideBRefId` so it can't collide with the challenger's credit.
     // Never for a scooted challenger, nor for land the guardians held alone
@@ -1574,8 +1698,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         userId: row.playerUserId,
         refId: row.id,
         source: 'battle',
-        patch: won && !aUnpaid ? share(COIN_RULES.battleWin[row.kind], tile.xpPercent) : 0,
-        heart: won && !aUnpaid ? share(HEART_COIN_RULES.battleWin[row.kind], tile.xpPercent) : 0,
+        patch:
+          won && !aUnpaid && !aComputer ? share(COIN_RULES.battleWin[row.kind], tile.xpPercent) : 0,
+        heart:
+          won && !aUnpaid && !aComputer
+            ? share(HEART_COIN_RULES.battleWin[row.kind], tile.xpPercent)
+            : 0,
       },
       {
         // A befriended wild squishy, or a claimed tile (befriending its
@@ -1583,8 +1711,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         userId: row.playerUserId,
         refId: row.id,
         source: 'capture',
-        patch: capture(COIN_RULES),
-        heart: capture(HEART_COIN_RULES),
+        patch: aComputer ? 0 : capture(COIN_RULES),
+        heart: aComputer ? 0 : capture(HEART_COIN_RULES),
       },
       ...(sideBUserId !== null && sideBWin
         ? [
@@ -1636,7 +1764,9 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // `clothing.found` is this transaction's first event and takes `maps`.
     // Taking a rival's land finds more (#261). A won wild battle rolls its
     // own table (#261). One piece per battle, however often a finish is retried.
-    if (tile.drop) {
+    if (aComputer) {
+      // A computer mate finds nothing (#386e).
+    } else if (tile.drop) {
       await rollFoundDrop(tx, {
         source: 'capture',
         refId: row.id,
@@ -1887,7 +2017,10 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         const fielded = opponent.team ?? team;
         const setup: BattleSetup = {
           seed: newSeed(),
-          sides: { a: { controller: { type: 'player' }, squishies: fielded }, b: opponent.side },
+          sides: {
+            a: { controller: opponent.attacker ?? { type: 'player' }, squishies: fielded },
+            b: opponent.side,
+          },
           ...(opponent.turnLimit !== undefined && { turnLimit: opponent.turnLimit }),
           // Steady moves are gentle (#587) only where a Heart Charm works:
           // never with a rival's guards or land.
@@ -1918,13 +2051,16 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           arena,
         });
         const events = (await opponent.started?.(tx, row)) ?? [];
-        // Meeting a squishy fills in its catalog page (design doc §21).
-        await createSpawnsRepo(tx).markSeen(
-          mapId,
-          user.id,
-          setupSpecies(opponent.side.squishies),
-          row.startedAt,
-        );
+        // Meeting a squishy fills in its catalog page (design doc §21). A
+        // computer mate has no catalog (#386e).
+        if (!opponent.attacker) {
+          await createSpawnsRepo(tx).markSeen(
+            mapId,
+            user.id,
+            setupSpecies(opponent.side.squishies),
+            row.startedAt,
+          );
+        }
         await repo.appendEvent({
           mapId,
           type: 'battle.started',
@@ -2239,11 +2375,21 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           }
           const [aTeam = [], bTeam = []] = teams;
           const at = now();
+          // A computer patch-mate (#386e) is always here: the AI plays its
+          // side in its persona's stance, so its picks are instant (side `b`
+          // owes no live pick, `sidesToAct`).
+          const mate = await computerController(tx, mapId, bUserId);
+          // Invariant: a mate never sends a friendly ask (plan §1 D/E), so it's
+          // never side `a`. Fail closed if that ever changes: `finish` pays a
+          // computer side `a` nothing only for its tile challenges.
+          if ((await createComputerMatesRepo(tx).computerIds([aUserId])).size > 0) {
+            throw new AppError('CONFLICT', MESSAGES.mateNeverAsks);
+          }
           const setup: BattleSetup = {
             seed: newSeed(),
             sides: {
               a: { controller: { type: 'player' }, squishies: aTeam },
-              b: { controller: { type: 'player' }, squishies: bTeam },
+              b: { controller: mate ?? { type: 'player' }, squishies: bTeam },
             },
           };
           const state = startBattle(content, setup);
@@ -2275,10 +2421,11 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
             coverPolicy: { a: liveRules.coverPolicy, b: liveRules.coverPolicy },
           });
           const events = (await started?.(tx, row)) ?? [];
-          // Each Keeper meets the other's squishies (the catalog, design doc §21).
+          // Each Keeper meets the other's squishies (the catalog, design doc
+          // §21); a computer mate keeps no catalog (#386e).
           const spawns = createSpawnsRepo(tx);
           await spawns.markSeen(mapId, aUserId, setupSpecies(bTeam), at);
-          await spawns.markSeen(mapId, bUserId, setupSpecies(aTeam), at);
+          if (!mate) await spawns.markSeen(mapId, bUserId, setupSpecies(aTeam), at);
           await repo.appendEvent({
             mapId,
             type: 'battle.started',
@@ -2395,6 +2542,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         return 'answered' as const;
       });
       published(mapId);
+      // A computer mate's challenge (#386e) nobody will defend live plays
+      // out now, so the kid sees how their guards did straight away.
+      if (answer === 'not-now' || outcome !== 'answered') {
+        const left = await store.findBattle(battleId);
+        if (left?.status === 'active' && playsItself(left.state)) await resolved(left);
+      }
       if (outcome === 'gone') throw new AppError('CONFLICT', MESSAGES.defenseGone);
       if (outcome === 'busy') throw new AppError('CONFLICT', MESSAGES.busy);
       const challenge = (await prompts.find(challengeId)) ?? asked;
@@ -2402,6 +2555,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       const row = await store.findBattle(battleId);
       if (!row) throw new AppError('NOT_FOUND', MESSAGES.notFound);
       return { challenge, battle: await toPlayerBattle(db, row, await seatOf(db, row, user.id)) };
+    },
+
+    settleComputer: async (mapId, userId) => {
+      const going = await store.findActive(mapId, userId);
+      if (!going) return false;
+      return (await resolved(going)).status === 'active';
     },
 
     cheer: async (user, battleId, request) => {

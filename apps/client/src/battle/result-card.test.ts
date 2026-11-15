@@ -19,7 +19,18 @@ const rewards = (over: Partial<BattleRewards> = {}): BattleRewards => ({
   ...over,
 });
 
-const names = (id: string) => (id === PEBBLE ? 'Pebblesnooze' : 'Mossmuffin');
+const MOCHI = '0190a000-0000-7000-8000-000000000003';
+const FERN = '0190a000-0000-7000-8000-000000000004';
+const THEIRS = '0190a000-0000-7000-8000-000000000005';
+
+const NAMES: Record<string, string> = {
+  [PEBBLE]: 'Pebblesnooze',
+  [MOSS]: 'Mossmuffin',
+  [MOCHI]: 'Mochi',
+  [FERN]: 'Fernpuff',
+  [THEIRS]: 'Theirbun',
+};
+const names = (id: string) => NAMES[id] ?? 'Your squishy';
 
 type Input = Parameters<typeof coinLine>[0];
 const line = (over: Partial<Input>) =>
@@ -41,6 +52,103 @@ describe('XP lines on the result card (#728)', () => {
 
   it('has nothing for an old battle with no rewards', () => {
     expect(xpLines([], names).lines).toEqual([]);
+  });
+});
+
+describe('bench XP on the result card (#732)', () => {
+  type Row = BattleRewards['xp'][number];
+  const row = (squishyId: string, xp: number, over: Partial<Row> = {}): Row => ({
+    squishyId,
+    xp,
+    evolvingBefore: 10,
+    evolvingAfter: 20,
+    ...over,
+  });
+
+  it('cheers a benched teammate after the fighters on a wild win', () => {
+    const { lines, evolving, bench } = xpLines(
+      [row(PEBBLE, 12), row(MOSS, 8), row(MOCHI, 6, { bench: true })],
+      names,
+    );
+    expect(bench).toEqual([false, false, true]);
+    expect(lines).toEqual([
+      'Pebblesnooze earned 12 XP!',
+      'Mossmuffin earned 8 XP!',
+      'Mochi cheered from the side and earned 6 XP!',
+    ]);
+    expect(evolving).toEqual([
+      { before: 10, after: 20 },
+      { before: 10, after: 20 },
+      { before: 10, after: 20 },
+    ]);
+  });
+
+  it('shows only my side of a friendly, benches and all', () => {
+    const friendly = rewards({
+      xp: [row(PEBBLE, 5), row(MOCHI, 2, { bench: true })],
+      b: {
+        userId: '0190a000-0000-7000-8000-0000000000ff',
+        xp: [row(THEIRS, 5), row(FERN, 2, { bench: true })],
+        fullXpResetAt: null,
+        coins: null,
+        unpaid: null,
+      },
+    });
+    expect(xpLines(friendly.xp, names).lines).toEqual([
+      'Pebblesnooze earned 5 XP!',
+      'Mochi cheered from the side and earned 2 XP!',
+    ]);
+  });
+
+  it('cheers benched guards on a hold', () => {
+    expect(
+      xpLines(
+        [row(PEBBLE, 10), row(MOCHI, 5, { bench: true }), row(FERN, 5, { bench: true })],
+        names,
+      ).lines,
+    ).toEqual([
+      'Pebblesnooze earned 10 XP!',
+      'Mochi cheered from the side and earned 5 XP!',
+      'Fernpuff cheered from the side and earned 5 XP!',
+    ]);
+  });
+
+  it('keeps fighters first, even if a bench row comes early', () => {
+    expect(xpLines([row(MOCHI, 6, { bench: true }), row(PEBBLE, 12)], names).lines).toEqual([
+      'Pebblesnooze earned 12 XP!',
+      'Mochi cheered from the side and earned 6 XP!',
+    ]);
+  });
+
+  it('says nothing for a 0-XP bench row', () => {
+    const { lines, evolving, bench } = xpLines(
+      [row(PEBBLE, 12), row(MOCHI, 0, { bench: true })],
+      names,
+    );
+    expect(lines).toEqual(['Pebblesnooze earned 12 XP!']);
+    expect(evolving).toHaveLength(1);
+    expect(bench).toEqual([false]);
+  });
+
+  it('gives a bench squishy that evolved no meter, like a fighter that evolved', () => {
+    const { lines, evolving } = xpLines(
+      [row(PEBBLE, 12), row(MOCHI, 6, { bench: true, evolvingBefore: 96, evolvingAfter: null })],
+      names,
+    );
+    expect(lines[1]).toBe('Mochi cheered from the side and earned 6 XP!');
+    expect(evolving).toEqual([{ before: 10, after: 20 }, null]);
+  });
+
+  it('reads rows without `bench` (fighters, battles before #732) exactly as before', () => {
+    const legacy = [row(PEBBLE, 12), row(MOSS, 4, { evolvingBefore: null, evolvingAfter: null })];
+    expect(xpLines(legacy, names)).toEqual({
+      lines: ['Pebblesnooze earned 12 XP!', 'Mossmuffin earned 4 XP!'],
+      evolving: [{ before: 10, after: 20 }, null],
+      bench: [false, false],
+    });
+    expect(xpLines([row(PEBBLE, 12, { bench: false })], names).lines).toEqual([
+      'Pebblesnooze earned 12 XP!',
+    ]);
   });
 });
 
@@ -95,6 +203,12 @@ describe('a friendly battle (#728)', () => {
 
   it('says the pair cap kindly', () => {
     expect(friendly({ rewards: rewards({ coins: null, unpaid: 'pair-cap' }) })).toBe(
+      "You've won your coins from Lee today. XP still counts!",
+    );
+  });
+
+  it('says the computer-friend cap with the pair-cap line until 386f words it (#386e)', () => {
+    expect(friendly({ rewards: rewards({ coins: null, unpaid: 'computer-cap' }) })).toBe(
       "You've won your coins from Lee today. XP still counts!",
     );
   });

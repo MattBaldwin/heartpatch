@@ -457,22 +457,20 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
+        const territory = createTerritoryService({
+          db,
+          clock,
+          battles,
+          ...publish,
+          // "Defend now?" (#29-C) goes to a defender whose app is open.
+          ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
+        });
         await api.register(
-          territoryRoutes(
-            createTerritoryService({
-              db,
-              clock,
-              battles,
-              ...publish,
-              // "Defend now?" (#29-C) goes to a defender whose app is open.
-              ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
-            }),
-            {
-              hooks: authHooks,
-              idempotency,
-              devTools: config.HP_DEV_SQUISHY_GRANTS,
-            },
-          ),
+          territoryRoutes(territory, {
+            hooks: authHooks,
+            idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
+          }),
         );
         // The raid log and defense style (#16); the raid-log consumer writes
         // the rows (`modules/raids/consumer.ts`, started in index.ts).
@@ -619,8 +617,12 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           const steps = createComputerMateSteps({
             db,
             clock,
+            // Their challenges and battles (#386e), through territory's and battles' own code.
+            territory,
+            battles,
             ...publish,
-            ...(wsHub ? { openMaps: wsHub.openMaps } : {}),
+            // A mate challenges only a kid with the patch open right now (#823 ruling).
+            ...(wsHub ? { openMaps: wsHub.openMaps, isOnline: wsHub.isOnline } : {}),
             log: app.log,
           });
           onKeeperSeen = (mapId) => {

@@ -31,7 +31,15 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, not, or, sql } from 'dr
 import { z } from 'zod';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { battles, liveBattles, mapMembers, maps, squishies, tiles } from '../../db/schema.js';
+import {
+  battles,
+  liveBattles,
+  mapMembers,
+  maps,
+  squishies,
+  tiles,
+  users,
+} from '../../db/schema.js';
 import { squishyAtWork } from '../jobs/repo.js';
 import { squishyOnWatch } from '../territory/repo.js';
 
@@ -141,6 +149,17 @@ export interface BattlesRepo {
     mapId: string,
     winnerUserId: string,
     loserUserId: string,
+    at: Date,
+  ) => Promise<number>;
+  /**
+   * Friendly battles `winnerUserId` won on side `a` against any computer
+   * patch-mate on this map on `at`'s map-local day, not a scoot (#386e,
+   * `CHALLENGE_RULES.paidWinsPerDayVsComputers`). A mate never asks, so it
+   * is always side `b`. Finished ones only, like `friendlyWinsAgainstToday`.
+   */
+  friendlyWinsAgainstComputersToday: (
+    mapId: string,
+    winnerUserId: string,
     at: Date,
   ) => Promise<number>;
   /** Row-locks the squishies until commit (XP is written under it, care's `applyXp`). */
@@ -438,6 +457,28 @@ function queries(db: Executor): BattlesRepo {
                 sql`${battles.result}->>'winner' = 'b'`,
               ),
             ),
+            sql`(${battles.endedAt} at time zone ${maps.timeZone})::date = (${at.toISOString()}::timestamptz at time zone ${maps.timeZone})::date`,
+          ),
+        );
+      return row?.n ?? 0;
+    },
+
+    friendlyWinsAgainstComputersToday: async (mapId, winnerUserId, at) => {
+      const [row] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(battles)
+        .innerJoin(liveBattles, eq(liveBattles.battleId, battles.id))
+        .innerJoin(users, eq(users.id, liveBattles.bUserId))
+        .innerJoin(maps, eq(maps.id, battles.mapId))
+        .where(
+          and(
+            eq(battles.mapId, mapId),
+            eq(battles.kind, 'friendly'),
+            eq(battles.status, 'finished'),
+            eq(battles.playerUserId, winnerUserId),
+            eq(users.kind, 'computer'),
+            sql`${battles.result}->>'reason' <> 'forfeit'`,
+            sql`${battles.result}->>'winner' = 'a'`,
             sql`(${battles.endedAt} at time zone ${maps.timeZone})::date = (${at.toISOString()}::timestamptz at time zone ${maps.timeZone})::date`,
           ),
         );

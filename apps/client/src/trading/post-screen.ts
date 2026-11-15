@@ -5,6 +5,8 @@ import {
   type SellBasketResponse,
   type SellLine,
   type SellView,
+  type PostShopItemId,
+  type ShopView,
   type TradeTip,
   type PublicUser,
   type TradeLine,
@@ -23,6 +25,9 @@ import { glimmerSwapApi, type GlimmerSwapApi } from './glimmer-swap-api.js';
 import { hoursToReset, SWAP_TEXT, swapCards, swapsLeft } from './glimmer-swap-model.js';
 import { postConfirm, postSheet } from './post-confirm.js';
 import { sellApi, type SellApi } from './sell-api.js';
+import { shopApi, type ShopApi } from './shop-api.js';
+import { buyRequest, receipt as shopReceipt, SHOP_TEXT } from './shop-model.js';
+import { shopTab } from './shop-tab.js';
 import {
   basketLines,
   clampBasket,
@@ -85,8 +90,11 @@ export interface PostScreenOptions {
   api?: TradeApi;
   swapApi?: GlimmerSwapApi;
   sellApi?: SellApi;
+  shopApi?: ShopApi;
   /** A sale went through (#601 PR 4): the 💛 pill and the bag read again. */
   onSold?: () => void;
+  /** A purchase went through (#729): the 💛 pill and the bag read again, and the Find a squishy glow. */
+  onBought?: (shop: ShopView) => void;
   /**
    * The game clock in ms, the server's (main passes the bag's, `gameNow`): the
    * visit pass it counts down is server time (#561). Tests pass a fake.
@@ -148,6 +156,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   const api = options.api ?? tradeApi;
   const swapApi = options.swapApi ?? glimmerSwapApi;
   const sells = options.sellApi ?? sellApi;
+  const shops = options.shopApi ?? shopApi;
   const now = options.now ?? (() => Date.now());
 
   let user: PublicUser | null = null;
@@ -169,6 +178,11 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   let sellNote = '';
   /** The cap meter as last drawn, so it slides to the next. */
   let sellMeter: MeterParts | null = null;
+  /** What the post sells me (#729), loaded when the Shop tab opens. */
+  let shop: ShopView | null = null;
+  let shopConfirm: PostShopItemId | null = null;
+  let shopDone: { title: string; line: string } | null = null;
+  let shopNote = '';
   /** The last sale, for the tab's "Yay!" card. */
   let sold: SellBasketResponse['sold'] | null = null;
   /** The next draw brings the "Yay!" card into view (once, right after a sale). */
@@ -298,6 +312,56 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         swapPick = null;
         render();
       }
+    }
+  }
+
+  /** Reads the Shop tab again; an old server without it says the shop is closed. */
+  async function loadShop(): Promise<void> {
+    const at_ = generation;
+    if (!mapView) return;
+    try {
+      const view = await shops.view(mapView.map.id, at());
+      if (at_ === generation) {
+        // Keep shopNote: a refused buy re-reads the shop, and its words must stay up.
+        shop = view;
+      }
+    } catch (err) {
+      if (at_ === generation) shopNote = shop ? messageOf(err) : SHOP_TEXT.closed;
+    }
+    if (at_ === generation) render();
+  }
+
+  /** One purchase: the server prices, caps and applies it; a retry with the same key never buys twice. */
+  async function buyCommand(id: PostShopItemId): Promise<void> {
+    if (working || !post) return;
+    const gen = generation;
+    const stillHere = () => gen === generation;
+    const request = buyRequest(id, at());
+    working = true;
+    shopNote = '';
+    render();
+    try {
+      const res = await sendCommand(sendDeps, (key) => shops.buy(mapId(), request, key), stillHere);
+      if (res) {
+        // The money is spent and the server holds the item, even if I left the post.
+        options.onBought?.(res.shop);
+        if (stillHere()) {
+          shop = res.shop;
+          shopDone = shopReceipt(res);
+          shopConfirm = null;
+        }
+      }
+    } catch (err) {
+      if (stillHere()) {
+        // The server's own words (a cap from another device, not enough 💛),
+        // then read what it sees now.
+        shopNote = messageOf(err);
+        shopConfirm = null;
+        void loadShop();
+      }
+    } finally {
+      working = false;
+      if (stillHere()) render();
     }
   }
 
@@ -1603,7 +1667,11 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           sellConfirm = null;
           sellNote = '';
           sold = null;
+          shopConfirm = null;
+          shopDone = null;
+          shopNote = '';
           if (t === 'swap') void loadSwap();
+          if (t === 'shop') void loadShop();
           if (t === 'sell') void loadSell();
           give = [];
           want = [];
@@ -1622,7 +1690,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       ? TRADE_TEXT.closed
       : // The Glimmer swap and selling work with trading off: nobody else is
         // involved (#523, #601).
-        trades?.tradingEnabled === false && tab !== 'swap' && tab !== 'sell'
+        trades?.tradingEnabled === false && tab !== 'swap' && tab !== 'sell' && tab !== 'shop'
         ? TRADE_TEXT.tradingOff
         : '';
     // The Swap tab shows its own note in its bar, where the kid is looking.
@@ -1631,6 +1699,38 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
 
     if (!trades) {
       body.replaceChildren(el('p', { class: 'post-tiny' }, '…'));
+      return;
+    }
+    if (tab === 'shop') {
+      body.replaceChildren(
+        ...shopTab(
+          {
+            view: shop,
+            confirming: shopConfirm,
+            receipt: shopDone,
+            note: shopNote,
+            passOver: passOver(),
+            nowMs: now(),
+          },
+          {
+            button,
+            onAsk: (id) => {
+              shopConfirm = id;
+              shopDone = null;
+              shopNote = '';
+              render();
+              body.querySelector<HTMLElement>('[data-testid="post-shop-confirm-yes"]')?.focus();
+            },
+            onCancel: () => {
+              shopConfirm = null;
+              render();
+            },
+            onBuy: (id) => {
+              void buyCommand(id);
+            },
+          },
+        ),
+      );
       return;
     }
     if (tab === 'sell') {
@@ -1773,6 +1873,10 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     sellNote = '';
     sellMeter = null;
     sold = null;
+    shop = null;
+    shopConfirm = null;
+    shopDone = null;
+    shopNote = '';
   }
 
   function close(): void {

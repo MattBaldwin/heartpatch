@@ -6,6 +6,8 @@ import type {
   PublicUser,
   WsEventMessage,
 } from '@heartpatch/shared';
+import { computerAvatar, computerBadge } from '../computer-mates/computer-badge.js';
+import { COMPUTER_TEXT } from '../computer-mates/computer-mates-model.js';
 import { battleApi } from '../battle/battle-api.js';
 import { GameClock } from '../inventory/game-clock.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
@@ -30,7 +32,7 @@ export interface FriendlyScreenOptions {
   api?: FriendlyApi;
   battles?: Pick<typeof battleApi, 'get'>;
   /** The patch's members (names for the sheet, and who's away). */
-  members: (mapId: string) => readonly { userId: string; username: string }[];
+  members: (mapId: string) => readonly { userId: string; username: string; computer?: boolean }[];
   /** Opens a battle that just started (the battle screen). */
   openBattle: (battle: PlayerBattle) => void;
   /** Opens the team picker for the map ("Change" on the card). */
@@ -189,7 +191,10 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
     nodes.push(el('p', { class: 'friendly-intro' }, FRIENDLY_TEXT.intro));
     const list = el('ul', { class: 'friendly-list', 'data-testid': 'friendly-list' });
     const online = view?.online ?? [];
+    const members = mapId ? options.members(mapId) : [];
+    const mates = new Set(members.filter((m) => m.computer).map((m) => m.userId));
     for (const who of online) {
+      if (mates.has(who.userId)) continue;
       list.append(
         el(
           'li',
@@ -220,7 +225,9 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
       );
     }
     const here = new Set(online.map((o) => o.userId));
-    for (const member of mapId ? options.members(mapId) : []) {
+    // Computer friends (#386b) get their own group below, always here.
+    for (const member of members) if (member.computer) here.add(member.userId);
+    for (const member of members) {
       if (member.userId === user?.id || here.has(member.userId)) continue;
       list.append(
         el(
@@ -241,10 +248,47 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
       el(
         'p',
         { class: 'friendly-hint' },
-        online.length === 0 ? FRIENDLY_TEXT.nobodyHere : FRIENDLY_TEXT.onlyHere,
+        online.some((o) => !mates.has(o.userId))
+          ? FRIENDLY_TEXT.onlyHere
+          : mates.size > 0
+            ? COMPUTER_TEXT.noKidsHere
+            : FRIENDLY_TEXT.nobodyHere,
       ),
     );
+    nodes.push(...computerRows(members.filter((m) => m.computer)));
     return nodes;
+  }
+
+  /**
+   * Computer friends (#386b, mockup 4a): always here, badged on every row,
+   * under their own label. No "Battle me?" yet: a button that can't be
+   * tapped reads as broken, so it comes with the server's ask to a mate
+   * (#386e); the honest line under the list says battles are coming soon.
+   */
+  function computerRows(mates: readonly { userId: string; username: string }[]): HTMLElement[] {
+    if (mates.length === 0) return [];
+    const list = el('ul', { class: 'friendly-list', 'data-testid': 'friendly-computer-list' });
+    for (const mate of mates) {
+      list.append(
+        el(
+          'li',
+          { class: 'friendly-row friendly-row-computer', 'data-user': mate.userId },
+          computerAvatar('avatar'),
+          el(
+            'span',
+            { class: 'friendly-row-text' },
+            el('span', { class: 'friendly-name' }, mate.username),
+            computerBadge(),
+            el('span', { class: 'friendly-status' }, COMPUTER_TEXT.here),
+          ),
+        ),
+      );
+    }
+    return [
+      el('p', { class: 'cf-section' }, COMPUTER_TEXT.heading),
+      list,
+      el('p', { class: 'friendly-hint' }, `${COMPUTER_TEXT.hereHint} ${COMPUTER_TEXT.battleSoon}`),
+    ];
   }
 
   function renderCard(who: OnlineMember): HTMLElement[] {

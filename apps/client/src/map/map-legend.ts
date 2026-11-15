@@ -1,4 +1,5 @@
 import type { MapMember } from '@heartpatch/shared';
+import { computerBadge } from '../computer-mates/computer-badge.js';
 import { el } from '../ui/dom.js';
 import { COMMUNITY_TEXT } from '../hollowed/community-model.js';
 import {
@@ -24,6 +25,8 @@ export interface LegendEntry {
   readonly color: string;
   readonly icon: KeeperIcon;
   readonly line: BorderLine;
+  /** A computer patch-mate (#386b): the row wears the Computer friend badge. */
+  readonly computer: boolean;
 }
 
 /** Every Keeper with a home on the map, in home-slot order (their colour's order). */
@@ -40,6 +43,7 @@ export function legendEntries(members: readonly MapMember[], userId: string | nu
           color: PLAYER_COLORS[slot % PLAYER_COLORS.length] ?? '#ffffff',
           icon: BORDER.icons[slot % BORDER.icons.length] ?? 'heart',
           line: BORDER.lines[slot % BORDER.lines.length] ?? 'solid',
+          computer: m.computer !== undefined,
         },
       ];
     })
@@ -145,6 +149,7 @@ export function slotIcon(slot: number, size = 18): SVGSVGElement {
       slot,
       name: '',
       mine: false,
+      computer: false,
       color: PLAYER_COLORS[slot % PLAYER_COLORS.length] ?? '#ffffff',
       icon: BORDER.icons[slot % BORDER.icons.length] ?? 'heart',
       line: BORDER.lines[slot % BORDER.lines.length] ?? 'solid',
@@ -215,6 +220,7 @@ export function mountMapLegend(): MapLegend {
             { class: `map-legend-row${e.mine ? ' map-legend-mine' : ''}` },
             icon(e, 20),
             el('span', { class: 'map-legend-name' }, legendLabel(e)),
+            ...(e.computer ? [computerBadge()] : []),
             lineSample(e),
           ),
         ),

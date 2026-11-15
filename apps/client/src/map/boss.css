@@ -1,0 +1,180 @@
+/* The mini-boss on the map (#190, 190f): a wobbling giant on a gold glow, from the approved mockups. */
+.boss-marker {
+  position: fixed;
+  z-index: 2; /* over the flags and tile marks (1) so its name stays readable; under every panel and sheet (3+) */
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none; /* taps go to the tile underneath: its card is the way in */
+  --boss-size: 72px;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif; /* body has no game font */
+}
+.boss-marker[hidden] {
+  display: none;
+}
+.boss-glow {
+  /* The approved mockup's gold boss tile: a warm halo with a solid gold hexagon plate (pointy-top, squashed like the map's tiles, with a thick rim) on the one tile the giant stands on. */
+  position: absolute;
+  left: 50%;
+  top: calc(var(--boss-size) * 0.78);
+  width: calc(var(--boss-size) * 1.9);
+  height: calc(var(--boss-size) * 1.3);
+  margin: calc(var(--boss-size) * -0.65) 0 0 calc(var(--boss-size) * -0.95);
+  border-radius: 50%;
+  background: radial-gradient(rgb(255 205 60 / 80%), rgb(255 205 60 / 0%) 70%);
+  animation: boss-glow 2.2s ease-in-out infinite;
+}
+.boss-glow::before,
+.boss-glow::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--boss-size) * 1.3);
+  height: calc(var(--boss-size) * 0.85);
+  margin: calc(var(--boss-size) * -0.425) 0 0 calc(var(--boss-size) * -0.65);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+.boss-glow::before {
+  /* The tile's side wall. */
+  transform: translateY(calc(var(--boss-size) * 0.1));
+  background: #b97a0c;
+}
+.boss-glow::after {
+  background:
+    radial-gradient(ellipse at 50% 40%, #fff3b0 0 20%, transparent 65%),
+    linear-gradient(#ffd84a, #f2a81d);
+}
+.boss-body {
+  position: relative;
+  width: var(--boss-size);
+  height: calc(var(--boss-size) * 0.9);
+  border-radius: 50% 50% 46% 46% / 58% 58% 42% 42%;
+  background:
+    radial-gradient(circle at 32% 24%, rgb(255 255 255 / 75%) 0 7%, transparent 8%),
+    linear-gradient(#f4b27a, #e07f3f);
+  box-shadow:
+    inset -3px -4px 0 rgb(0 0 0 / 9%),
+    0 6px 0 rgb(40 70 50 / 18%);
+  transform-origin: bottom;
+  animation: boss-wobble 2.2s ease-in-out infinite;
+}
+.boss-eye {
+  position: absolute;
+  top: 38%;
+  width: 9%;
+  height: 12%;
+  border-radius: 50%;
+  background: #3a2540;
+}
+.boss-eye-l {
+  left: 28%;
+}
+.boss-eye-r {
+  right: 28%;
+}
+.boss-mouth {
+  position: absolute;
+  left: 44%;
+  top: 56%;
+  width: 12%;
+  height: 6%;
+  border-bottom: 2px solid #3a2540;
+  border-radius: 0 0 10px 10px;
+}
+.boss-bang {
+  position: absolute;
+  right: -10%;
+  top: -12%;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border: 3px solid #2d1b33;
+  border-radius: 13px;
+  background: #ffe34d;
+  color: #2d1b33;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 20px;
+  text-align: center;
+}
+.boss-label {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.boss-name {
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: #4a2c43;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+}
+.boss-until {
+  padding: 1px 10px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: inset 0 0 0 2px #ffc94d;
+  color: #6b4a06;
+  font-size: 12px;
+  font-weight: 800;
+}
+@keyframes boss-glow {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes boss-wobble {
+  0%,
+  100% {
+    transform: rotate(-3deg) scale(1);
+  }
+  50% {
+    transform: rotate(3deg) scale(1.03);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .boss-body,
+  .boss-glow {
+    animation: none;
+  }
+}
+
+/* The tile card's slot (#190): same look as the other tile actions. */
+.boss-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  text-align: center;
+}
+.boss-card-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+}
+.boss-card-body {
+  margin: 0;
+  font-weight: 600;
+}
+.boss-chip {
+  padding: 2px 12px;
+  border-radius: 999px;
+  background: #d9ecff;
+  color: #1f4f7a;
+  font-size: 13px;
+  font-weight: 800;
+}

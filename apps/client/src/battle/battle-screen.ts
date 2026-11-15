@@ -32,7 +32,7 @@ import { lodFor } from '../procedural/motion.js';
 import { formatWait, GameClock } from '../inventory/game-clock.js';
 import { el, messageOf } from '../ui/dom.js';
 import { battleApi } from './battle-api.js';
-import { nearbyNote, tilesToMark } from './wild-pick.js';
+import { entryNote, lureLine, tilesToMark, WILD_TEXT } from './wild-pick.js';
 import { ManualClock, realClock, type BattleClock } from './battle-clock.js';
 import { BREATHING_FRAME_MS, PLAYBACK, RARE_REVEAL, RETRY_AFTER_MS } from './battle-config.js';
 import { mountBattleHud, plateSideOf, type BattleHud, type ControlMode } from './battle-hud.js';
@@ -243,6 +243,8 @@ export interface BattleScreen {
    */
   watch: (start: PlayerBattle, end: PlayerBattle) => void;
   close: () => void;
+  /** A Rare Lure was bought (or isn't held any more): Find a squishy glows (#729). */
+  setLureHeld: (held: boolean) => void;
   /**
    * Meets the wild squishy on `tile` of map `mapId` (#209, Meet it in the
    * tile panel), the way Find a squishy meets the nearest. Rejects with a
@@ -430,6 +432,22 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   }
   const mayOpen = () => options.canOpen?.() !== false;
 
+  /** A Rare Lure from the Shop is waiting (#729): Find a squishy glows. */
+  let lureHeld = false;
+  /** The newest wild-hints ask; a buy bumps it so an older reply can't dim the glow. */
+  let hintSeq = 0;
+  /** What the last wild start said about the lure, for the battle's first line. */
+  let lureSaid: string | null = null;
+  const lureNote = () => note.textContent === WILD_TEXT.lureNear;
+  const setLure = (held: boolean): void => {
+    lureHeld = held;
+    hintSeq += 1;
+    enter.classList.toggle('battle-entry-lure', held);
+    if (held && !enter.disabled && !battle && (!note.textContent || lureNote())) {
+      note.textContent = WILD_TEXT.lureNear;
+    } else if (!held && lureNote()) note.textContent = '';
+  };
+
   /**
    * "6 nearby! Or tap a rustle to pick.": the tiles in reach with a wild
    * squishy (tiles only, no species, this spawn window only), counted under
@@ -440,14 +458,18 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const id = mapId;
     const who = user;
     if (!id) return;
+    const seq = ++hintSeq;
     api
       .wildHints(id)
-      .then((tiles) => {
-        if (mapId !== id || user !== who) return;
+      .then((hints) => {
+        // A newer ask (or a buy) has answered since: this one is stale.
+        if (mapId !== id || user !== who || seq !== hintSeq) return;
         const glade = options.isGlade?.(id) ?? false;
-        options.onWildHints?.(id, tilesToMark(tiles, glade));
-        if (enter.disabled || note.textContent) return;
-        note.textContent = nearbyNote(tiles.length, !glade);
+        options.onWildHints?.(id, tilesToMark(hints.tiles, glade));
+        // The glow follows the server (a lure used on another device goes dark).
+        setLure(hints.lureHeld === true);
+        if (enter.disabled || (note.textContent && !lureNote())) return;
+        note.textContent = entryNote(hints.tiles.length, !glade, lureHeld);
       })
       .catch(() => {
         // Only a hint: the button still works without it.
@@ -484,8 +506,15 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       note.textContent = messageOf(err);
     });
   };
+  /** A wild start, remembering what it said about the lure (start replies only, never a resume). */
+  const startWild = async (id: string, tile?: Hex): Promise<PlayerBattle> => {
+    const started = await api.startWild(id, tile);
+    lureSaid = lureLine(started.lured);
+    if (started.lured === true) setLure(false);
+    return started;
+  };
   enter.addEventListener('click', () => {
-    busy((id) => api.startWild(id));
+    busy((id) => startWild(id));
   });
   // Back from the background (hours, maybe a new spawn window): fresh tufts.
   document.addEventListener('visibilitychange', () => {
@@ -817,10 +846,16 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     names: BattleContent,
     b: PlayerBattle,
     role: 'defender' | 'friendly',
-  ): { xp: string[]; evolving: ({ before: number; after: number } | null)[] } => {
+  ): {
+    xp: string[];
+    evolving: ({ before: number; after: number } | null)[];
+    bench: boolean[];
+  } => {
     const result = b.view.phase.type === 'over' ? b.view.phase.result : null;
     const mine = b.view.sides[b.mySide];
-    const { lines, evolving } = xpLines(b.rewards?.xp ?? [], (id) => squishyName(names, mine, id));
+    const { lines, evolving, bench } = xpLines(b.rewards?.xp ?? [], (id) =>
+      squishyName(names, mine, id),
+    );
     if (lines.length === 0) lines.push(MESSAGES.noXp);
     const fullXpAt = b.rewards?.fullXpResetAt;
     const fullXpLeft = fullXpAt ? Date.parse(fullXpAt) - gameNow() : 0;
@@ -840,7 +875,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       opponent: opponentName(b),
     });
     if (coins) lines.push(coins);
-    return { xp: lines, evolving };
+    return { xp: lines, evolving, bench };
   };
 
   const showResult = (b: PlayerBattle): void => {
@@ -968,7 +1003,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     // What the server granted (Gentle's share, care and habitat included);
     // a battle from before rewards were stored has only the engine's base XP.
     const awards = b.rewards?.xp ?? (result?.xp ?? []).filter((award) => award.side === b.mySide);
-    const { lines: xp, evolving } = xpLines(awards, (id) => squishyName(names, mine, id));
+    const { lines: xp, evolving, bench } = xpLines(awards, (id) => squishyName(names, mine, id));
     const glade = options.isGlade?.(b.mapId) ?? false;
     const friends = newFriends(b).map((id) => names.speciesName(id));
     const joined = friends.length > 0;
@@ -1012,7 +1047,12 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     hud.setCaption(null);
     const lines = xp.length > 0 ? xp : [MESSAGES.noXp];
     // Guardians befriended before the land was lost still came along (#279).
-    if (joined && result?.winner !== b.mySide) lines.unshift(joinedLine(friends));
+    // The meters and bench flags shift with it, so each stays on its own squishy's line.
+    if (joined && result?.winner !== b.mySide) {
+      lines.unshift(joinedLine(friends));
+      evolving.unshift(null);
+      bench.unshift(false);
+    }
     if (b.rewards && b.rewards.percent < 100) lines.push(MESSAGES.gentleNote(b.rewards.percent));
     // The reset is the server's time: counted on the game clock (#583).
     const fullXpAt = b.rewards?.fullXpResetAt;
@@ -1039,6 +1079,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       ...(journey ? { title: journey.title, subtitle: journey.subtitle } : {}),
       xp: lines,
       evolving,
+      bench,
       done: journey?.done ?? MESSAGES.done,
       ...(nudge ? { nudge } : {}),
       ...(cheer ? { cheer: { info: cheer, reducedMotion: reducedMotion.matches } } : {}),
@@ -1619,6 +1660,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     }
     if (frame === 0) frame = requestAnimationFrame(tick);
     startReveal(next, replay);
+    if (lureSaid && !replay) hud.setCaption(lureSaid);
+    lureSaid = null;
   }
 
   /**
@@ -1691,6 +1734,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   }
 
   return {
+    setLureHeld: setLure,
     setMap: async (next) => {
       mapId = next;
       if (next === null) {
@@ -1742,7 +1786,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     meetWild: async (id, tile) => {
       if (id !== mapId) return;
       try {
-        await run((current) => api.startWild(current, tile));
+        await run((current) => startWild(current, tile));
       } catch (err) {
         refreshNearby();
         throw err;
