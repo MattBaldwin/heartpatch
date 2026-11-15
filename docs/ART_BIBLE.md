@@ -145,6 +145,8 @@ Shared data shapes this chapter adds (all additive; no id is renamed or removed,
 - **Visual-only species edits.** Ids, names, elements, feelings, rarities, moves, stats, evolution levels and spawn tables are untouched.
 - **Golden hashes:** `paramsHash` covers every visual field, so the pinned squishy hashes (`params.test.ts` and the gallery e2e) change once, on purpose.
 
+**Addendum (#234, mini-boss lines; draft until the owner approves the renders).** The four boss lines (Rakelet, Mom, Dad, Rickeyride) need **no contract change**. Every new part is a data entry on the existing five primitives and layouts: hair in `crown`/`mane`, rake-tine teeth and moustaches in `fangs`, a cap brim, goggles, earrings and a falling leaf in `horns`, cardigan buttons in `pattern`, freckles in `cheeks` (so they sit on the head) and kart wheels in `legs` (`quad`). There are four new bodies: a taller `upright` torso, a hem-flared cardigan, a round dad belly and a boxy kart. Each form keeps its feeling's face kit (§1.6), and brows carry the human touch. They still read as squishies, never Keepers: a big head on a toy blob body, capsule limbs, one body colour. Briefs, the duplication matrix and the render page: `docs/art/234-boss-briefs.md`. The drafts live in the dev gallery only (`/gallery.html?drafts`) until lane 234b ships them.
+
 ### 1.10 Roster
 
 Every line, baby → kid → teen (#443). The Kid column is stage 2, at about ×1.15 the baby's size; it keeps the baby's face and adds a preview of its teen's parts. The Teen column is stage 3, at ×1.25–1.35 the baby's size. The grown-ups (stage 4) join this chapter with their Phase 2 batches (#495).

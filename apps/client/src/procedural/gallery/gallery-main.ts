@@ -1,6 +1,13 @@
 import type { Engine } from '@babylonjs/core/Engines/engine';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { CLOTHING_BY_ID, GAME_DATA, visualRegistry, type ClothingItem } from '@heartpatch/shared';
+import {
+  CLOTHING_BY_ID,
+  GAME_DATA,
+  KEEPER_DATA,
+  defaultKeeperConfig,
+  visualRegistry,
+  type ClothingItem,
+} from '@heartpatch/shared';
 import { boot } from '../../engine/boot.js';
 import { setPerfReports } from '../../engine/perf-report.js';
 import { countGl } from '../../engine/gl-counters.js';
@@ -14,6 +21,8 @@ import { lodFor, type SquishyView } from '../motion.js';
 import { accessoryItem } from '../accessory.js';
 import { paramsHash, squishyParams } from '../params.js';
 import type { SquishyField, SquishyHandle } from '../squishy-field.js';
+import type { KeeperField } from '../keeper/keeper-field.js';
+import { DRAFT_BODIES, DRAFT_PARTS, draftLooks } from './boss-drafts.js';
 import { buildGalleryScene } from './gallery-scene.js';
 import { galleryLooks } from './showcase.js';
 import '../../styles.css';
@@ -28,6 +37,7 @@ setPerfReports(false);
  * body and part; tap a squishy to jiggle it.
  *
  * Query flags: `?count=50` (stress test), `?look=showcase-3` (or a comma list), `?view=closeup`,
+ * `?drafts` (the #234 mini-boss drafts), `?row` (one line), `?spacing=4`, `?keeper=pip` (a Keeper for scale),
  * `?yaw=180` (turn them round), `?pitch=15`, `?distance=14` and `?drop=3` (the camera, and how far below it the floor sits), `?still` (no breathing, so the scene goes
  * idle), `?shadow` (the rescue guardians' shadow look), `?accessory=tiny-crown,snuggle-scarf`
  * (wardrobe accessories, one per squishy in turn, #340), plus the main page's
@@ -49,8 +59,18 @@ const params = new URLSearchParams(window.location.search);
 const pinTier = isQualityTier(params.get('tier'));
 const tier = pickInitialTier(params.get('tier'), params.get('quality'));
 const view: SquishyView = params.get('view') === 'closeup' ? 'closeUp' : 'map';
-const registry = visualRegistry(GAME_DATA);
-const allLooks = galleryLooks(GAME_DATA.species, GAME_DATA.bodies, GAME_DATA.parts);
+/** `?drafts` (#234): the mini-boss mockup looks and their draft bodies and parts. Never shipped. */
+const drafts = params.has('drafts');
+const registry = visualRegistry({
+  bodies: drafts ? [...GAME_DATA.bodies, ...DRAFT_BODIES] : GAME_DATA.bodies,
+  parts: drafts ? [...GAME_DATA.parts, ...DRAFT_PARTS] : GAME_DATA.parts,
+});
+const allLooks = [
+  ...(drafts ? draftLooks() : []),
+  ...galleryLooks(GAME_DATA.species, GAME_DATA.bodies, GAME_DATA.parts),
+];
+/** `?keeper=pip` puts one Keeper at the end of the row, for scale (#234). */
+const keeperBase = KEEPER_DATA.bases.find((b) => b.id === params.get('keeper'));
 const lookParam = params.get('look');
 const lookIds = lookParam?.split(',') ?? [];
 const looks = lookParam ? lookIds.flatMap((id) => allLooks.filter((l) => l.id === id)) : allLooks;
@@ -82,6 +102,7 @@ const accessories = (params.get('accessory') ?? '').split(',').flatMap((id): Clo
 
 let stage: Stage | null = null;
 let field: SquishyField | null = null;
+let keepers: KeeperField | null = null;
 let shownTier: QualityTier | null = null;
 let lastTapped: number | null = null;
 let animating = false;
@@ -108,6 +129,7 @@ await boot(canvas, {
       target,
       (scene) => {
         field?.dispose();
+        keepers?.dispose();
         const built = buildGalleryScene(scene, registry, {
           looks,
           count,
@@ -118,8 +140,12 @@ await boot(canvas, {
           shadow,
           accessories,
           drop: Number(params.get('drop')) || 0,
+          row: params.has('row'),
+          ...(Number(params.get('spacing')) > 0 && { spacing: Number(params.get('spacing')) }),
+          ...(keeperBase && { keeper: defaultKeeperConfig(keeperBase) }),
         });
         field = built.field;
+        keepers = built.keepers;
         return built.content;
       },
       tier,
@@ -147,6 +173,7 @@ function frame(): void {
       s.invalidate();
     }
     animating = field.update(performance.now());
+    if (keepers?.update(performance.now())) animating = true;
     if (animating) s.invalidate();
   }
   requestAnimationFrame(frame);
