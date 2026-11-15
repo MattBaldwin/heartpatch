@@ -166,4 +166,15 @@ describe('BattleRewardsSchema (#201)', () => {
       BattleRewardsSchema.parse({ xp: [], percent: 100, b: { ...parsed.b, unpaid: 'sulked' } }),
     ).toThrow();
   });
+
+  it('marks a bench award (#732), and reads rows stored before it without the marker', () => {
+    const squishyId = '00000000-0000-4000-8000-000000000002';
+    const row = { squishyId, xp: 11, evolvingBefore: null, evolvingAfter: null };
+    const parsed = BattleRewardsSchema.parse({
+      xp: [row, { ...row, bench: true }],
+      percent: 100,
+    });
+    expect(parsed.xp[0]).not.toHaveProperty('bench');
+    expect(parsed.xp[1]?.bench).toBe(true);
+  });
 });

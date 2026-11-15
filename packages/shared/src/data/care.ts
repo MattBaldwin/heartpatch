@@ -80,4 +80,7 @@ export const GROWTH_RULES: GrowthRules = {
     friendlyPercent: 50, // TUNE: owner-approved lever (#728); engaged day 14: 41 / 41 vs `now` 41 (won-only slots, 2026-11-15)
     friendlyOneOpponent: true, // TUNE: owner decision 2026-11-14 (#728 option 1)
   },
+  // TUNE: owner decision 2026-11-15 (#732): a benched teammate earns half the
+  // best award on its side; 25–50 is pre-approved. Sim numbers in PR #732 D1.
+  benchXpPercent: 50,
 };

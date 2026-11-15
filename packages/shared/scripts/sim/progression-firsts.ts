@@ -226,10 +226,10 @@ export function tierGate(
 
 /** `#732 per-tier gate: rare ≤ day 10, epic ≤ day 20 (casual, collector): PASS` (or FAIL with the days). */
 export function formatTierGate(result: TierGateResult, kid: string, policy: string): string {
-  // TODO(#732 D1): make this a hard gate (fail the script and CI) once bench share lands.
+  // TODO(#732): a hard gate (fail the script and CI) once the owner makes it one; soft in D1 (owner decision 2026-11-15).
   const rule = result.rows.map((r) => `${r.tier} ≤ day ${String(r.by)}`).join(', ');
   const verdict = result.pass
     ? 'PASS'
     : `FAIL: ${result.rows.map((r) => `${r.tier} ${r.day === null ? 'never' : `day ${String(r.day)}`}`).join(', ')}`;
-  return `#732 per-tier gate: ${rule} (${kid}, ${policy}): ${verdict} (soft until #732 D1; does not fail the run)`;
+  return `#732 per-tier gate: ${rule} (${kid}, ${policy}): ${verdict} (soft, #732 owner decision 2026-11-15; does not fail the run)`;
 }
