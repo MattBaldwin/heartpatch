@@ -269,6 +269,7 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
     if (mates.length === 0) return [];
     const list = el('ul', { class: 'friendly-list', 'data-testid': 'friendly-computer-list' });
     for (const mate of mates) {
+      const seen = view?.online.find((o) => o.userId === mate.userId);
       list.append(
         el(
           'li',
@@ -279,27 +280,33 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
             { class: 'friendly-row-text' },
             el('span', { class: 'friendly-name' }, mate.username),
             computerBadge(),
-            el('span', { class: 'friendly-status' }, COMPUTER_TEXT.here),
+            el(
+              'span',
+              { class: 'friendly-status' },
+              seen?.inBattle ? FRIENDLY_TEXT.inBattle : COMPUTER_TEXT.here,
+            ),
           ),
-          button(
-            FRIENDLY_TEXT.battleMe,
-            () => {
-              // A mate has no team level to compare (the server picks its side).
-              mode = {
-                type: 'card',
-                who: {
-                  userId: mate.userId,
-                  username: mate.username,
-                  teamLevel: view?.myTeamLevel ?? 0,
-                  inBattle: false,
+          // The server lists a mate with its real team level and busy state.
+          seen?.inBattle
+            ? button(FRIENDLY_TEXT.busy, () => undefined, { soft: true, disabled: true })
+            : button(
+                FRIENDLY_TEXT.battleMe,
+                () => {
+                  mode = {
+                    type: 'card',
+                    who: seen ?? {
+                      userId: mate.userId,
+                      username: mate.username,
+                      teamLevel: view?.myTeamLevel ?? 0,
+                      inBattle: false,
+                    },
+                    computer: true,
+                  };
+                  note = '';
+                  render();
                 },
-                computer: true,
-              };
-              note = '';
-              render();
-            },
-            { testId: 'friendly-battle-mate' },
-          ),
+                { testId: 'friendly-battle-mate' },
+              ),
         ),
       );
     }
@@ -312,7 +319,7 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
 
   function renderCard(who: OnlineMember, computer = false): HTMLElement[] {
     const mine = view?.myTeamLevel ?? 0;
-    const gap = computer ? null : gapLine(mine, who.teamLevel, who.username);
+    const gap = gapLine(mine, who.teamLevel, who.username);
     const id = mapId;
     return [
       el(
@@ -576,6 +583,19 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
       if (mode.type === 'card') render();
       return;
     }
+    // A Computer friend answers inside the same request (#386e): the reply is
+    // already a yes with a battle, or a not now. A live event may have got
+    // there first, so only act while the card is still up.
+    if (sent.status === 'accepted' && sent.battleId) {
+      void joinBattle(sent.battleId);
+      return;
+    }
+    if (sent.status === 'declined') {
+      if (mode.type === 'card') mode = { type: 'declined', name: who.username };
+      render();
+      return;
+    }
+    if (mode.type !== 'card') return;
     mode = { type: 'waiting', challenge: sent };
     armExpiry();
     render();
@@ -610,7 +630,11 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
   }
 
   /** The asker's side of a "Battle!": open the battle that just started. */
+  const joined = new Set<string>();
   async function joinBattle(battleId: string): Promise<void> {
+    // The live event and a mate's instant reply can both say so: open it once.
+    if (joined.has(battleId)) return;
+    joined.add(battleId);
     const at = ticket;
     try {
       const battle = await battles.get(battleId);

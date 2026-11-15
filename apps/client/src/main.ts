@@ -48,6 +48,7 @@ import { createJobs, openTeamPicker } from './squishies/jobs/index.js';
 import { workMoods } from './squishies/jobs/jobs-view.js';
 import { createChatScreen } from './chat/chat-screen.js';
 import { createComputerMatesNotes } from './computer-mates/computer-mates-notes.js';
+import { isComputer } from './computer-mates/computer-mates-model.js';
 import { createFriendlyScreen } from './friendly/friendly-screen.js';
 import { createCloseUpScreen, type CloseUpFrom } from './close-up/close-up-screen.js';
 import { onPanelFocus } from './building/panel-focus.js';
@@ -590,7 +591,7 @@ const raidReport = createRaidReport({
   root: document.body,
   entryRoot: trays.slot('adventure'),
   isComputer: (userId) =>
-    maps.view?.members.some((m) => m.user.id === userId && m.computer) ?? false,
+    maps.view?.members.some((m) => m.user.id === userId && isComputer(m)) ?? false,
   watch: (replay) => {
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) {
       battles.watch(replay.start, replay.end);
@@ -1680,7 +1681,7 @@ const defense = createDefensePrompt({
   root: document.body,
   nameOf: (userId) => maps.view?.members.find((m) => m.user.id === userId)?.user.username ?? null,
   isComputer: (userId) =>
-    maps.view?.members.some((m) => m.user.id === userId && m.computer) ?? false,
+    maps.view?.members.some((m) => m.user.id === userId && isComputer(m)) ?? false,
   openBattle: (battle) => {
     // The server has seated them already: whatever is open steps aside.
     catalog.close();

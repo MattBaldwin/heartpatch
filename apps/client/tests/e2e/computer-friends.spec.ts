@@ -166,6 +166,31 @@ test('the owner switches Computer friends on, and three badged mates move in (#3
   const card = page.getByTestId('friendly');
   await expect(card.getByRole('heading')).toContainText('A friendly battle with');
   await expect(card.getByTestId('friendly-mate-line').getByTestId('computer-badge')).toBeVisible();
-  await expect(card.getByTestId('friendly-gap')).toHaveCount(0);
+  // A mate answers inside the ask's own reply. A "Not now" reply goes straight
+  // to the kind "can't battle right now" screen, never to a stuck "Asking…".
+  await page.route(/\/api\/v1\/maps\/[0-9a-f-]{36}\/challenges$/, async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const body = route.request().postDataJSON() as { toUserId: string };
+    const now = Date.now();
+    return route.fulfill({
+      json: {
+        challenge: {
+          id: '00000000-0000-4000-8000-000000000391',
+          kind: 'friendly',
+          status: 'declined',
+          fromUserId: '00000000-0000-4000-8000-000000000392',
+          toUserId: body.toUserId,
+          fromTeamLevel: 1,
+          toTeamLevel: 1,
+          createdAt: new Date(now).toISOString(),
+          expiresAt: new Date(now + 60_000).toISOString(),
+          battleId: null,
+        },
+      },
+    });
+  });
+  await card.getByTestId('friendly-ask-send').tap();
+  await expect(card.getByTestId('friendly-okay')).toBeVisible();
+  await expect(card.getByTestId('friendly-never-mind')).toHaveCount(0);
   await page.context().close();
 });

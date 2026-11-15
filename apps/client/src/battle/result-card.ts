@@ -21,8 +21,7 @@ export const REWARD_TEXT = {
   friendlyLost: 'Good game! Everyone learned something.',
   friendlyPairCap: (name: string) => `You've won your coins from ${name} today. XP still counts!`,
   /** The combined daily cap over Computer friends (#386e); pair-cap wins when both apply. */
-  friendlyComputerCap: (name: string) =>
-    `${name} has played a lot today! No more coins from Computer friends until tomorrow. XP still counts!`,
+  friendlyComputerCap: () => `You've won your coins from Computer friends today. XP still counts!`,
   friendlyGaveUp: 'No coins for a give-up. XP still counts!',
 } as const;
 
@@ -111,7 +110,7 @@ export function coinLine(input: {
     case 'pair-cap':
       return role === 'friendly' ? REWARD_TEXT.friendlyPairCap(opponent) : null;
     case 'computer-cap':
-      return role === 'friendly' ? REWARD_TEXT.friendlyComputerCap(opponent) : null;
+      return role === 'friendly' ? REWARD_TEXT.friendlyComputerCap() : null;
     case 'guardians':
       return null;
     case null:

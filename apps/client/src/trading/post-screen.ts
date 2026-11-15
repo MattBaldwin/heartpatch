@@ -25,6 +25,7 @@ import { glimmerSwapApi, type GlimmerSwapApi } from './glimmer-swap-api.js';
 import { hoursToReset, SWAP_TEXT, swapCards, swapsLeft } from './glimmer-swap-model.js';
 import { postConfirm, postSheet } from './post-confirm.js';
 import { computerAvatar, computerBadge } from '../computer-mates/computer-badge.js';
+import { isComputer } from '../computer-mates/computer-mates-model.js';
 import { sellApi, type SellApi } from './sell-api.js';
 import { shopApi, type ShopApi } from './shop-api.js';
 import { buyRequest, receipt as shopReceipt, SHOP_TEXT } from './shop-model.js';
@@ -256,7 +257,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   const nameOf = (id: string) =>
     mapView?.members.find((m) => m.user.id === id)?.user.username ?? TRADE_TEXT.someone;
   const isMate = (id: string | null) =>
-    id !== null && mapView?.members.find((m) => m.user.id === id)?.computer !== undefined;
+    id !== null && mapView?.members.some((m) => m.user.id === id && isComputer(m)) === true;
   /** A face for a patch-mate: the plum key square for a Computer friend, never a kid's letter. */
   const faceOf = (id: string, name: string, cls: string): HTMLElement =>
     isMate(id)
@@ -705,11 +706,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           isMate(offer.fromUserId)
             ? el(
                 'b',
-                {
-                  'data-testid': 'post-offer-mate',
-                  role: 'group',
-                  'aria-label': TRADE_TEXT.mateWouldLikeToTrade(from),
-                },
+                { 'data-testid': 'post-offer-mate' },
                 from,
                 ' ',
                 computerBadge(),
@@ -1446,7 +1443,6 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     const picked = myMeter();
     const sheet = tradeConfirm ? tradeConfirmSheet() : null;
     return [
-      ...(sheet ? [sheet] : []),
       ...offers,
       // The note first, in one row, so it shows whole before any scroll (owner, #305).
       notes(),
@@ -1468,6 +1464,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         ),
       ]),
       ...offersFromMe(view, my, 'trade').map(outgoing),
+      ...(sheet ? [sheet] : []),
     ];
   }
 
@@ -1867,6 +1864,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     body.replaceChildren(...parts);
     fitNames(body);
     // A sheet that's up keeps the keyboard on itself, even after a redraw.
+    if (tab === 'trade' && tradeConfirm && !body.contains(document.activeElement)) {
+      body.querySelector<HTMLElement>('[data-testid="post-trade-confirm-yes"]')?.focus();
+    }
     if (tab === 'gift' && !body.contains(document.activeElement)) {
       const first = giftConfirm
         ? body.querySelector<HTMLElement>('[data-testid="post-gift-confirm-yes"]')

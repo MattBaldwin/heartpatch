@@ -1,3 +1,4 @@
+import { COMPUTER_TEXT } from '../computer-mates/computer-mates-model.js';
 import type { WsEventMessage } from '@heartpatch/shared';
 
 // "Defend now?" (#29-C): a rival is challenging land I'm standing watch on
@@ -9,7 +10,7 @@ export const DEFENSE_TEXT = {
   title: 'Defend now?',
   /** Who's visiting: their name, or a kind stand-in. */
   visiting: (name: string | null, computer = false) =>
-    `${name ?? 'Someone'}${computer ? ' (Computer friend)' : ''} is challenging your land! Play your squishies yourself?`,
+    `${name ?? 'Someone'}${computer ? ` (${COMPUTER_TEXT.badge})` : ''} is challenging your land! Play your squishies yourself?`,
   /** If they say no, nothing bad happens. */
   calm: 'Not now? Your squishies on watch will play on their own.',
   defend: 'Defend!',
