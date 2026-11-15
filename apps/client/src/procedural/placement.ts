@@ -49,6 +49,17 @@ export function surfaceFrame(
   return { point, normal, towardsTop, side };
 }
 
+/** How far back (+z, world units) the host reaches at its deepest, before any offset. */
+function hostBack(body: Body, bodyScale: Vec3): number {
+  let back = 0;
+  const steps = 24;
+  for (let i = 0; i <= steps; i++) {
+    const up = -Math.PI / 2 + (Math.PI * i) / steps;
+    back = Math.max(back, surfacePoint(body, Math.PI, up)[2] * bodyScale[2]);
+  }
+  return back;
+}
+
 /** Rotates unit `a` towards unit `b` (perpendicular to it) by `angle`. */
 function lean(a: Vec3, b: Vec3, angle: number): Vec3 {
   return normalize(add(scaled(a, Math.cos(angle)), scaled(b, Math.sin(angle))));
@@ -77,7 +88,9 @@ function pitched(v: Vec3, angle: number): Vec3 {
 export function partMatrix(
   body: Body,
   bodyScale: Vec3,
-  part: Pick<PartParams, 'surface' | 'sink' | 'lift' | 'flip'> & { readonly slot?: string },
+  part: Pick<PartParams, 'surface' | 'sink' | 'lift' | 'flip' | 'anchor'> & {
+    readonly slot?: string;
+  },
   placement: PartPlacement,
   offset: Vec3 = [0, 0, 0],
 ): Mat4 {
@@ -132,6 +145,24 @@ export function partMatrix(
     x = cross(y, z);
     const out = (thickness / 2) * (1 - part.sink) + part.lift;
     centre = add(f.point, scaled(f.normal, out));
+  } else if (part.anchor === 'behind') {
+    // Stands just clear of the host's back at this spot's height and
+    // sideways position, growing straight up and leaning back by `tilt`
+    // (out by `splay` for a pair): a handle in line with a bar on the face,
+    // rising behind the head instead of hidden inside it.
+    const back = hostBack(body, bodyScale) + offset[2];
+    const standoff = (Math.max(width, thickness) / 2) * (1 - part.sink);
+    const base: Vec3 = [f.point[0], f.point[1], back + standoff];
+    let dir = lean([0, 1, 0], [0, 0, 1], placement.tilt);
+    // A pair leans out by `splay`; a single leans towards +x (negative: −x).
+    const sideways = placement.side === 0 ? 1 : placement.side;
+    if (placement.splay !== 0) {
+      dir = lean(dir, normalize(flatten([sideways, 0, 0], dir)), placement.splay);
+    }
+    y = dir;
+    z = normalize(flatten(FRONT, y));
+    x = cross(y, z);
+    centre = add(base, scaled(y, length / 2 + part.lift));
   } else {
     // Grows out along the normal, leaning towards the top and outwards.
     let dir = lean(f.normal, f.towardsTop, placement.tilt);

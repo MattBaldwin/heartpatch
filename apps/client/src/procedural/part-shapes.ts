@@ -25,7 +25,7 @@ function pointed(k: number): Profile {
   ];
 }
 
-const PROFILES: Readonly<Record<Exclude<PartShape, 'arc'>, Profile>> = {
+const PROFILES: Readonly<Record<Exclude<PartShape, 'arc' | 'box'>, Profile>> = {
   ellipsoid: (t) => [0.5 * Math.sin(Math.PI * t), -0.5 * Math.cos(Math.PI * t)],
   // A soft rounded cylinder: a squarish superellipse revolved.
   capsule: (t) => [
@@ -121,6 +121,33 @@ function arc(rings: number, segments: number): MeshArrays {
   return { positions, normals, indices: gridIndices(total, segments) };
 }
 
+/** How square a `box` is: towards 0 is sharp, 1 is an ellipsoid. TUNE */
+const BOX_ROUNDNESS = 0.22;
+
+/**
+ * A softly rounded block (a superellipsoid), its flat sides facing ±x, ±y
+ * and ±z, so a shallow size is a straight plank instead of a bulging bean.
+ * Analytic normals from the superellipsoid's dual.
+ */
+function box(rings: number, segments: number): MeshArrays {
+  const e = BOX_ROUNDNESS;
+  const c = (w: number, m: number) => spow(Math.cos(w), m);
+  const s = (w: number, m: number) => spow(Math.sin(w), m);
+  const positions: number[] = [];
+  const normals: number[] = [];
+  for (let i = 0; i <= rings; i++) {
+    const v = -Math.PI / 2 + (Math.PI * i) / rings;
+    for (let k = 0; k <= segments; k++) {
+      const u = (2 * Math.PI * k) / segments;
+      positions.push(c(v, e) * s(u, e), s(v, e), -c(v, e) * c(u, e));
+      normals.push(
+        ...normalize([c(v, 2 - e) * s(u, 2 - e), s(v, 2 - e), -c(v, 2 - e) * c(u, 2 - e)]),
+      );
+    }
+  }
+  return { positions, normals, indices: gridIndices(rings, segments) };
+}
+
 function gridIndices(rings: number, segments: number): number[] {
   const indices: number[] = [];
   const row = segments + 1;
@@ -199,6 +226,8 @@ export function partArrays(shape: PartShape, lod: LodSettings): MeshArrays {
   const mesh =
     shape === 'arc'
       ? arc(lod.partRings, lod.partSegments)
-      : lathe(PROFILES[shape], lod.partRings, lod.partSegments);
+      : shape === 'box'
+        ? box(lod.partRings, lod.partSegments)
+        : lathe(PROFILES[shape], lod.partRings, lod.partSegments);
   return orientTriangles(fitUnitBox(mesh));
 }

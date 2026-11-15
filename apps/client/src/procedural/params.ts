@@ -81,6 +81,8 @@ export interface PartParams {
   /** Extra distance out from the surface, world units (eye glints sit on the eye). */
   readonly lift: number;
   readonly flip: boolean;
+  /** Set only for a part that stands behind its host (`anchor: 'behind'`); unset grows from the surface. */
+  readonly anchor?: 'behind';
   /** Lit from inside (the species' `glow`: every non-face part, or only `accent` ones). */
   readonly glow: boolean;
   readonly placements: readonly PartPlacement[];
@@ -395,6 +397,7 @@ export function squishyParams(
       sink: part.sink ?? 0,
       lift: 0,
       flip: part.flip ?? false,
+      ...(part.anchor === 'behind' ? { anchor: 'behind' as const } : {}),
       glow:
         !surfaceSlots.has(part.slot) &&
         (visual.glow === 'body' || (visual.glow === 'accent' && part.color === 'accent')),

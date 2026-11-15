@@ -61,9 +61,12 @@ export const SURFACE_SLOTS: readonly PartSlot[] = ['eyes', 'brows', 'mouth', 'ch
 /**
  * The primitive a part is built from; each has one geometry builder in the
  * client. `arc` is a curved tube (smiles, closed eyes, curly tails), opening
- * upwards unless the part sets `flip`.
+ * upwards unless the part sets `flip`. `box` is a flat, softly rounded block
+ * whose sides line up with the part's width, length and thickness, so a
+ * shallow `size` makes a straight bar or plank that doesn't bulge in the
+ * middle (#234 kit extension; new shapes go at the end).
  */
-export const PartShapeSchema = z.enum(['ellipsoid', 'capsule', 'cone', 'teardrop', 'arc']);
+export const PartShapeSchema = z.enum(['ellipsoid', 'capsule', 'cone', 'teardrop', 'arc', 'box']);
 export type PartShape = z.infer<typeof PartShapeSchema>;
 
 /**
@@ -207,6 +210,23 @@ export const PartSchema = z.strictObject({
   highlight: z.boolean().optional(),
   /** Per-squishy size variance as a fraction. */
   jitter: z.number().min(0).max(0.3),
+  /**
+   * Opt-in (#234 kit extension). `behind` stands a sticking-out `single` or
+   * `pair` part just behind its host instead of on the surface: it starts at
+   * the height (and sideways spot) of `around`/`up`, clear of the host's back,
+   * and grows straight up, leaning back by `tilt` and sideways by `splay`
+   * (outwards for a pair; towards the viewer's right for a single, negative
+   * for the left). So a rake handle in line with a bar on the face rises behind the
+   * head without being hidden inside it. Unset is `surface`, today's
+   * behaviour.
+   */
+  anchor: z.enum(['surface', 'behind']).optional(),
+  /**
+   * Opt-in (#234 kit extension): this part stands in for the species' mouth,
+   * so a feeling face kit's mouth requirement (`ART_RULES.feelingFaces`) is
+   * met by it and no mouth part is drawn (a rake bar that is the mouth).
+   */
+  replaces: z.enum(['mouth']).optional(),
 });
 export type Part = z.infer<typeof PartSchema>;
 
@@ -262,7 +282,25 @@ export function checkSpeciesVisual(
       report(at, `parts "${other}" and "${id}" both use the ${part.slot} slot`);
     }
     slots.set(part.slot, id);
+    if (
+      part.anchor === 'behind' &&
+      (SURFACE_SLOTS.includes(part.slot) ||
+        part.slot === 'legs' ||
+        (part.layout.kind !== 'single' && part.layout.kind !== 'pair'))
+    ) {
+      report(
+        at,
+        `part "${id}" can't stand behind its host: only sticking-out single or pair parts can`,
+      );
+    }
   });
+  const replacer = visual.parts.find((id) => registry.parts.get(id)?.replaces === 'mouth');
+  if (replacer !== undefined && slots.has('mouth')) {
+    report(
+      [...path, 'parts'],
+      `part "${replacer}" replaces the mouth, so "${slots.get('mouth')}" isn't needed`,
+    );
+  }
   if (visual.head && !registry.bodies.has(visual.head.body)) {
     report([...path, 'head', 'body'], `unknown head body "${visual.head.body}"`);
   }

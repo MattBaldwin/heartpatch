@@ -45,7 +45,7 @@ describe('the #234 mini-boss drafts', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('validates against the shared schemas, with no new contract', () => {
+  it('validates against the shared schemas (with the #234 kit extension)', () => {
     for (const b of DRAFT_BODIES) expect(BodySchema.safeParse(b).success, b.id).toBe(true);
     for (const p of DRAFT_PARTS) expect(PartSchema.safeParse(p).success, p.id).toBe(true);
     for (const f of forms) expect(SpeciesVisualSchema.safeParse(f.visual).success, f.id).toBe(true);

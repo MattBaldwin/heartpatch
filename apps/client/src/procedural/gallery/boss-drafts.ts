@@ -160,18 +160,20 @@ export const DRAFT_PARTS: Part[] = [
 
   // ── Rakelet: rake-tine teeth, leaf-pile hair, one leaf sliding off ─────
   part({
-    // The rake head is the whole lower face (owner, round 3): a wide flat
-    // bar right across it, wider than the face...
+    // Rakeling's rake bar (round 5): a straight wooden plank (`box`) that is
+    // the mouth, so no "o" mouth sits above it.
     id: 'draft-rake-bar',
     slot: 'mane',
-    shape: 'ellipsoid',
-    size: [1.05, 0.1, 0.16],
-    color: 'white',
+    shape: 'box',
+    size: [0.98, 0.06, 0.12], // [width, depth off the face, height]
+    color: 'detail',
     layout: { kind: 'single' },
     around: 0,
-    up: -18,
-    sink: 0.5,
+    up: -16,
+    tilt: 16, // levels the plank on the curving face
+    sink: 0.45,
     jitter: 0,
+    replaces: 'mouth',
   }),
   part({
     // ...long, countable tines hanging from it as the teeth, reaching well
@@ -189,16 +191,17 @@ export const DRAFT_PARTS: Part[] = [
     jitter: 0,
   }),
   part({
+    // Rakeling's short tines, hanging straight down from the plank.
     id: 'draft-rake-tines-mid',
     slot: 'fangs',
     shape: 'capsule',
-    size: [0.055, 0.46, 0.055],
-    color: 'white',
-    layout: { kind: 'ring', count: 7, spread: 44 },
+    size: [0.06, 0.26, 0.06],
+    color: 'detail',
+    layout: { kind: 'ring', count: 5, spread: 40 },
     around: 0,
     up: -19,
-    tilt: -62,
-    sink: 0.08,
+    tilt: -90,
+    sink: 0.1,
     jitter: 0,
   }),
   part({
@@ -215,17 +218,48 @@ export const DRAFT_PARTS: Part[] = [
     jitter: 0,
   }),
   part({
-    // Pileup's little comb of baby tines.
+    // Pileup's little comb of baby tines under its baby plank.
     id: 'draft-rake-tines-small',
     slot: 'fangs',
     shape: 'capsule',
-    size: [0.05, 0.1, 0.05],
-    color: 'white',
+    size: [0.05, 0.12, 0.05],
+    color: 'detail',
     layout: { kind: 'ring', count: 5, spread: 26 },
     around: 0,
-    up: -13,
-    tilt: -84,
+    up: -15,
+    tilt: -88,
+    sink: 0.3,
+    jitter: 0,
+  }),
+  part({
+    // Pileup's baby rake plank: its mouth (round 5, one part swapped for the "o").
+    id: 'draft-rake-bar-small',
+    slot: 'mane',
+    shape: 'box',
+    size: [0.6, 0.05, 0.09],
+    color: 'detail',
+    layout: { kind: 'single' },
+    around: 0,
+    up: -12,
+    tilt: 12,
     sink: 0.45,
+    jitter: 0,
+    replaces: 'mouth',
+  }),
+  part({
+    // Rakeling's shorter handle, standing behind its head from the plank's
+    // height and centre, on the same diagonal as the boss's.
+    id: 'draft-rake-handle-short',
+    slot: 'horns',
+    shape: 'capsule',
+    size: [0.08, 1.2, 0.08],
+    color: 'detail',
+    layout: { kind: 'single' },
+    around: 0,
+    up: -16,
+    tilt: 6,
+    splay: 50, // TUNE: diagonal, like the boss's
+    anchor: 'behind',
     jitter: 0,
   }),
   part({
@@ -247,64 +281,66 @@ export const DRAFT_PARTS: Part[] = [
   // and the handle rooted at the bar's centre, running up through the head
   // and out behind it. No mouth oval, no nose.
   part({
+    // Round 5 (kit extension): a straight, shallow wooden plank (`box`), a bit
+    // wider than the face at mouth height. It IS the mouth (`replaces`), so
+    // there's no "o" above it.
     id: 'draft-rake-tool-bar',
     slot: 'mane',
-    shape: 'ellipsoid',
-    size: [1.2, 0.08, 0.2], // [width, depth off the face, height]
+    shape: 'box',
+    size: [1.3, 0.08, 0.15], // [width, depth off the face, height]
     color: 'detail',
     layout: { kind: 'single' },
     around: 0,
-    // Centred on the mouth line and tall enough to cover the silly face
-    // kit's required `open-mouth` (that "o" read as a nose) whatever its
-    // placement wobble: the bar is the mouth.
-    up: -3,
-    sink: 0.5,
+    up: -18,
+    tilt: 18, // levels the plank on the curving face
+    sink: 0.45,
     jitter: 0,
+    replaces: 'mouth',
   }),
   part({
-    // Each tine is longer than the head is tall, with clear gaps between.
+    // Short, evenly spaced tines hanging straight down from the plank, much
+    // shorter than the head is tall: the long handle does the "rake" talking.
     id: 'draft-rake-tool-tines',
     slot: 'fangs',
     shape: 'capsule',
-    size: [0.085, 1.05, 0.085],
+    size: [0.075, 0.4, 0.075],
     color: 'detail',
-    layout: { kind: 'ring', count: 6, spread: 52 },
+    layout: { kind: 'ring', count: 7, spread: 44 },
     around: 0,
-    up: -5,
-    // Leaning forward off the face, like a rake held out, not bars on him.
-    tilt: -72, // TUNE
+    up: -21,
+    tilt: -90, // TUNE
     sink: 0.1,
     jitter: 0,
   }),
   part({
-    // Rises from the middle of the back of the head, leaning back, in line
-    // with the bar's centre: from the front it stands straight up behind
-    // the leaf pile. (A stick grown from the bar itself has to run up
-    // through the face: that try read as "a pole through his head".)
+    // The long handle stands just behind the head (`anchor: 'behind'`), its
+    // foot at the plank's height and centre, rising well above the leaf pile
+    // and leaning back a little.
     id: 'draft-rake-tool-handle',
     slot: 'horns',
     shape: 'capsule',
-    size: [0.09, 1.5, 0.09],
+    size: [0.12, 1.5, 0.12],
     color: 'detail',
     layout: { kind: 'single' },
-    around: 180,
-    up: 35,
-    tilt: 30, // TUNE: at the back, positive tips it up towards vertical
-    sink: 0.35,
+    around: 0,
+    up: -18,
+    tilt: 8, // TUNE: leans back
+    splay: 50, // TUNE: carried on the diagonal, over his right shoulder
+    anchor: 'behind',
     jitter: 0,
   }),
   part({
-    // Small and tipped over on top of the leaf pile, mid-fall.
+    // A green leaf standing on top of the leaf pile (round 5: bigger, so it shows).
     id: 'draft-falling-leaf-top',
     slot: 'ears',
     shape: 'teardrop',
-    size: [0.2, 0.28, 0.05],
-    color: 'detail',
+    size: [0.3, 0.42, 0.06],
+    color: 'primary',
     layout: { kind: 'single' },
-    around: 35,
-    up: 72,
-    tilt: -70,
-    sink: 0.15,
+    around: 20,
+    up: 84,
+    tilt: 15,
+    sink: 0.2,
     jitter: 0,
   }),
   part({
@@ -318,10 +354,10 @@ export const DRAFT_PARTS: Part[] = [
     layout: { kind: 'pair' },
     around: 70,
     up: 30,
-    tilt: -84, // TUNE
-    splay: 6,
+    tilt: -90, // TUNE
+    splay: 3,
     flip: true,
-    sink: 0.15,
+    sink: 0.3,
     jitter: 0,
   }),
   part({
@@ -751,7 +787,7 @@ export const DRAFT_BOSS_LINES: readonly DraftBossLine[] = [
           parts: [
             'dot-eyes',
             'draft-soft-brows',
-            'open-mouth',
+            'draft-rake-bar-small',
             'draft-rake-tines-small',
             'draft-face-freckles',
             'draft-leaf-tuft',
@@ -777,10 +813,9 @@ export const DRAFT_BOSS_LINES: readonly DraftBossLine[] = [
           parts: [
             'dot-eyes',
             'draft-soft-brows',
-            'open-mouth',
             'draft-rake-bar',
             'draft-rake-tines-mid',
-            'draft-rake-mouth',
+            'draft-rake-handle-short',
             'draft-face-freckles',
             'draft-leaf-pile-hair',
             'draft-lanky-arms',
@@ -805,7 +840,6 @@ export const DRAFT_BOSS_LINES: readonly DraftBossLine[] = [
           parts: [
             'sharp-eyes',
             'draft-fierce-brows',
-            'open-mouth',
             'draft-rake-tool-bar',
             'draft-rake-tool-tines',
             'draft-rake-tool-handle',
