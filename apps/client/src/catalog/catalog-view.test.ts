@@ -66,6 +66,7 @@ describe('catalogPage (design doc §21: seen vs caught)', () => {
         seen: true,
         caught: true,
         secret: false,
+        boss: false,
       },
       {
         speciesId: 'puddlepuff',
@@ -75,8 +76,27 @@ describe('catalogPage (design doc §21: seen vs caught)', () => {
         seen: true,
         caught: false,
         secret: false,
+        boss: false,
       },
     ]);
+  });
+
+  it('adds a boss-line squishy only once it has been met: no ??? card, no count (#190)', () => {
+    const rakelet: Species = { ...species('rakelet', 'Rakelet', '#e07f3f', 'rare'), line: 'boss' };
+    const unmet = catalogPage(ROSTER, catalog({ speciesDefs: [rakelet] }));
+    expect(unmet.total).toBe(2);
+    expect(unmet.cards.some((c) => c.boss)).toBe(false);
+    const met = catalogPage(
+      ROSTER,
+      catalog({
+        entries: [{ speciesId: 'rakelet', firstSeenAt: SEEN_AT, firstCaughtAt: null }],
+        speciesDefs: [rakelet],
+      }),
+    );
+    expect(met.cards.at(-1)).toMatchObject({ name: 'Rakelet', boss: true, seen: true });
+    expect(met).toMatchObject({ seen: 1, total: 3 });
+    // Never in a rarity goal's denominators.
+    expect(met.tiers.find((t) => t.rarity === 'rare')).toMatchObject({ total: 1, seen: 0 });
   });
 
   it('adds a secret squishy only once it has been seen', () => {

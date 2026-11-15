@@ -78,6 +78,8 @@ export interface MapScreenOptions {
   createWs?: (options: WsClientOptions) => WsClient;
   /** Buttons for the tapped tile, drawn into the tile panel (gathering, #17). */
   tileActions?: TileActions;
+  /** Trims what the info panel says about a tile (the mini-boss's tile shows only its own card, #190). */
+  tileInfo?: (info: TileInfo, tile: PublicTile) => TileInfo;
   /** Buttons for a tapped water tile (a bridge on a river, Wild Isle #621); land never reaches it. */
   waterTileActions?: TileActions;
   /** Features that draw over the map (the night and the Hollow Man, #21). */
@@ -402,7 +404,8 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     scene3d?.select(h);
     // A Hollowed village's tile says so in its head (#306).
     const show = (info: TileInfo): void => {
-      panel.show(hollowedTileInfo(info, tile, state.view, user?.id ?? null));
+      const shown = hollowedTileInfo(info, tile, state.view, user?.id ?? null);
+      panel.show(options.tileInfo ? options.tileInfo(shown, tile) : shown);
     };
     show(
       describeTile(
