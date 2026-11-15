@@ -1,0 +1,208 @@
+/* Computer friends (#386b): values copied from the owner-approved mockup, variant A. */
+
+.cf-key {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The words, on a plum pill. */
+.cf-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px 2px 8px;
+  border-radius: 999px;
+  background: #4a2c43;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.cf-badge .cf-key {
+  width: 18px;
+  height: 18px;
+}
+
+/* A row's 20 px icon: a rounded square, never a round dot. */
+.cf-dot {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: #4a2c43;
+  color: #fff;
+}
+
+.cf-dot .cf-key {
+  width: 16px;
+  height: 16px;
+}
+
+/* Who's here and the hello card: the 44 px square in place of a kid's circle. */
+.cf-avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #4a2c43;
+  box-shadow: inset 0 -4px 0 rgb(0 0 0 / 8%);
+  color: #fff;
+}
+
+.cf-avatar .cf-key {
+  width: 28px;
+  height: 28px;
+}
+
+/* The patch settings switch row (mockup `.sw`), the Challenges card look. */
+.cf-switch {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 16px;
+  border: 2px solid #ecd3e2;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.cf-switch-line {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #4a3150;
+}
+
+.cf-switch-off {
+  opacity: 0.5;
+}
+
+.cf-note {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: #fff1d6;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.cf-note-ok {
+  background: #e6f6ea;
+  color: #2f6b3d;
+}
+
+/* The hello card (mockup 3a): the friendly-ask frame, centred over a scrim. */
+.cf-hello-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 9; /* the card band: What's new and the tutorial; nothing timed sits under it */
+  display: grid;
+  place-items: center;
+  padding: 16px max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left));
+  background: rgb(74 49 80 / 35%);
+}
+
+.cf-hello {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 420px;
+  padding: 18px 18px 20px;
+  border: 3px solid #ffd9c2;
+  border-radius: 26px;
+  background: #fffaf1;
+  box-shadow: 0 10px 32px rgb(74 49 80 / 26%);
+  color: #4a3150;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+}
+
+.cf-hello-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  text-align: center;
+}
+
+.cf-hello-homes {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.cf-hello-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.cf-hello-line {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+/* `display: grid` would beat the hidden attribute and block every tap under it. */
+.cf-hello-scrim[hidden],
+.cf-toast[hidden] {
+  display: none;
+}
+
+/* The goodbye toast (mockup 3c): the friendly-battle toast's cream. */
+.cf-toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 58px);
+  left: 50%;
+  z-index: 21; /* the friendly toast's */
+  pointer-events: none; /* never blocks a tap under it */
+  box-sizing: border-box;
+  width: min(420px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgb(255 250 240 / 97%);
+  box-shadow: 0 6px 18px rgb(107 75 110 / 18%);
+  color: #4a3150;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+/* Who's here: the mates' group label. */
+.cf-section {
+  margin: 4px 0 -2px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #6b4b6e;
+}
+
+/* Who's here: a mate's name, badge and status fill the row (no "Battle me?" until #386e). */
+.friendly-row-computer .friendly-row-text {
+  flex: 1 1 auto;
+}
+
+/* Under the name in a column (Who's here), the pill keeps its own width. */
+.friendly-row-text .cf-badge {
+  align-self: flex-start;
+}

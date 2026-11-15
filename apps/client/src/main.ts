@@ -47,6 +47,7 @@ import { createCareSheet } from './care/care-sheet.js';
 import { createJobs, openTeamPicker } from './squishies/jobs/index.js';
 import { workMoods } from './squishies/jobs/jobs-view.js';
 import { createChatScreen } from './chat/chat-screen.js';
+import { createComputerMatesNotes } from './computer-mates/computer-mates-notes.js';
 import { createFriendlyScreen } from './friendly/friendly-screen.js';
 import { createCloseUpScreen, type CloseUpFrom } from './close-up/close-up-screen.js';
 import { onPanelFocus } from './building/panel-focus.js';
@@ -1389,6 +1390,15 @@ const waterBuild = createTileBuild({
     stage?.camera.panTo(hexToWorld(tile, HEX_SIZE), stillPans.matches, 0.34, BUILD_ZOOM);
   },
 });
+// Computer friends (#386b): a hello card when mates move in, and a toast
+// when one waves goodbye to make room for a real friend (a map layer: it
+// compares each newer view's roster with the last). The hello waits behind
+// the tutorial, a battle or another card, like What's new does.
+const computerMatesNotes = createComputerMatesNotes({
+  root: document.body,
+  // mapCovered() counts the hello itself; a second batch waits for it to close.
+  busy: () => mapCovered() || whatsNewOpen || pushOfferOpen,
+});
 const maps = createMapScreen({
   root: document.body,
   // Every view read (open, resync) also says whether a House gift waits (#731c).
@@ -1485,6 +1495,7 @@ const maps = createMapScreen({
     if (mapId !== null && signedIn && glade === null) trays.offerHint(signedIn.id);
   },
   layers: [
+    computerMatesNotes.layer,
     hollowLayer,
     darkLand,
     jobs.gatherers,
@@ -1872,7 +1883,11 @@ const friendly = createFriendlyScreen({
   entryRoot: trays.slot('top-right'),
   members: (mapId) =>
     maps.view?.map.id === mapId
-      ? maps.view.members.map((m) => ({ userId: m.user.id, username: m.user.username }))
+      ? maps.view.members.map((m) => ({
+          userId: m.user.id,
+          username: m.user.username,
+          ...(m.computer ? { computer: true } : {}),
+        }))
       : [],
   openBattle: (battle) => {
     battles.open(battle);
@@ -2174,6 +2189,7 @@ const mapCovered = (): boolean =>
   lorebook.isOpen ||
   milestones.debug.showing !== null ||
   nextUp.isOpen ||
+  computerMatesNotes.isOpen ||
   hollowReportOpen();
 const whatsNew = createWhatsNew({
   root: document.body,
@@ -2191,7 +2207,8 @@ const whatsNew = createWhatsNew({
 // off the map and behind anything else at the top or over the map (a card, a
 // sheet, the "What landed" banner, Sprout's hint, another toast); the land
 // chip steps aside for it (patch-line.css).
-const TOP_NOTES = '.land-toast, .tray-say, .friendly-toast, .wardrobe-toast, .sprout-tip';
+const TOP_NOTES =
+  '.land-toast, .tray-say, .friendly-toast, .wardrobe-toast, .sprout-tip, .cf-toast';
 const patchLineBusy = (): boolean =>
   hudMapId === null ||
   // The lobby (its list, or Settings over a patch) owns the screen (#726).
@@ -2426,6 +2443,7 @@ if (import.meta.env.DEV) {
     land: () => land.debug,
     chat: () => chat.debug,
     friendly: () => friendly.debug,
+    computerMates: () => computerMatesNotes.debug,
     raids: () => raidReport.debug,
     home: () => home.debug,
     explore: () => explore.debug,

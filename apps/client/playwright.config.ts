@@ -65,6 +65,7 @@ const E2E_GROUPS = [
     'battle-ui',
     'capture',
     'care-layout',
+    'computer-friends',
     'hollowed-cellar',
     'house',
     'lobby',

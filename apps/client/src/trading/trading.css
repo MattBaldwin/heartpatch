@@ -29,6 +29,13 @@
   background: rgb(255 228 240 / 95%);
 }
 
+/* A Computer friend's home (#386b, mockup 2c): the name, then the plum badge beside it. */
+.home-flag-computer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .post-flag[hidden] {
   display: none;
 }
