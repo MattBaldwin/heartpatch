@@ -4,6 +4,7 @@ import { evolvingMeterEl } from '../care/evolving-meter.js';
 import { buttonClass, hpClose } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import { dressResult, type BefriendCheer } from './befriend-cheer.js';
+import { WIDE_MIN } from './battle-config.js';
 import { ELEMENT_GLYPH, FEELING_GLYPH } from '../ui/glyphs.js';
 import type { SafeRegion } from './camera-director.js';
 import { charmButton, noCharmsLine } from './heart-charm.js';
@@ -317,7 +318,9 @@ function evolvingMeter(
   const meter = evolvingMeterEl('battle-evolving');
   const full = evolvingBar(gain.after);
   const bar =
-    compact && full ? { ...full, label: full.ready ? `${compact.name} ✨` : compact.name } : full;
+    compact && full
+      ? { ...full, label: full.ready ? `${compact.name} ✨ ready!` : compact.name }
+      : full;
   meter.update(bar, {
     gainedFrom: gain.before / 100,
     sub: compact
@@ -1052,7 +1055,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         const top = Math.min(0.3, close > 0 ? (close + 8) / h : 0.12);
         // On iPad the card is narrower than the arena, so the friends either
         // side stand near its top corners: a little more room keeps their feet clear.
-        const margin = window.innerWidth >= 600 ? CARD_MARGIN_WIDE : 8;
+        const margin = window.innerWidth >= WIDE_MIN ? CARD_MARGIN_WIDE : 8;
         safe = { top, bottom: Math.max(top + 0.2, card > 0 ? (card - margin) / h : 0.5) };
         return safe;
       }

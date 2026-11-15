@@ -10,7 +10,7 @@ import {
 } from '@heartpatch/shared';
 import { itemName } from '../inventory/bag-view.js';
 import { localDateIn } from '../map/map-dressing.js';
-import { coinsText, REWARD_TEXT } from './result-card.js';
+import { coinsText, REWARD_TEXT, xpLines } from './result-card.js';
 import type { ShownState } from './battle-playback.js';
 import { energyPercent, otherSide, type BattleContent } from './battle-view.js';
 
@@ -365,11 +365,6 @@ export function wonLine(
   return parts.length > 0 ? BOSS_TEXT.bundle(listed(parts)) : null;
 }
 
-/**
- * The boss card's one XP line for the whole team (mockup frame 3), or null
- * when nobody earned: "Pip, Puff and Fizz each earned 12 XP!", or each
- * one's own amount when they differ. The server's awards, as sent.
- */
 /** The fighters who earned XP, in the server's order: a benched teammate's cheer (#732) is not one. */
 function teamEarned<A extends { readonly xp: number; readonly bench?: boolean }>(
   awards: readonly A[],
@@ -377,6 +372,11 @@ function teamEarned<A extends { readonly xp: number; readonly bench?: boolean }>
   return awards.filter((award) => award.xp > 0 && award.bench !== true);
 }
 
+/**
+ * The boss card's one XP line for the whole team (mockup frame 3), or null
+ * when nobody earned: "Pip, Puff and Fizz each earned 12 XP!", or each
+ * one's own amount when they differ. The server's awards, as sent.
+ */
 export function teamXpLine(
   awards: readonly { readonly squishyId: string; readonly xp: number; readonly bench?: boolean }[],
   nameOf: (squishyId: string) => string,
@@ -421,6 +421,51 @@ export function teamEvolvingRow(
       : null,
   );
   return row.some(Boolean) ? row : [];
+}
+
+/** The boss card's XP list (#190): the team's one line, then each benched teammate's cheer. */
+export interface BossXp {
+  readonly xp: string[];
+  /** Which lines are a bench cheer (#732), by index. */
+  readonly bench: boolean[];
+  /**
+   * Each line's own evolving meter (#205), by index: the team's line has
+   * none (its meters are `evolvingRow`), a benched cheer keeps its own.
+   */
+  readonly evolving: ({ before: number; after: number } | null)[];
+  /** The team's meters, side by side under its line (`teamEvolvingRow`). */
+  readonly evolvingRow: (TeamEvolving | null)[];
+}
+
+/**
+ * The boss card's XP lines and meters from the server's awards. Empty lines
+ * when nobody earned (the card says "No XP this time." itself).
+ */
+export function bossXp(
+  awards: readonly {
+    readonly squishyId: string;
+    readonly xp: number;
+    readonly bench?: boolean;
+    readonly evolvingBefore?: number | null;
+    readonly evolvingAfter?: number | null;
+  }[],
+  nameOf: (squishyId: string) => string,
+): BossXp {
+  const team = teamXpLine(awards, nameOf);
+  const cheers = xpLines(awards, nameOf);
+  const out: BossXp = {
+    xp: team !== null ? [team] : [],
+    bench: team !== null ? [false] : [],
+    evolving: team !== null ? [null] : [],
+    evolvingRow: teamEvolvingRow(awards, nameOf),
+  };
+  cheers.lines.forEach((line, i) => {
+    if (!cheers.bench[i]) return;
+    out.xp.push(line);
+    out.bench.push(true);
+    out.evolving.push(cheers.evolving[i] ?? null);
+  });
+  return out;
 }
 
 export interface BossResultCard {

@@ -1,6 +1,7 @@
 import { findAvoidedWords, GAME_DATA, type PlayerBattle } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { shownFrom } from './battle-playback.js';
+import { REWARD_TEXT } from './result-card.js';
 import { BattleContent } from './battle-view.js';
 import {
   BOSS_TEXT,
@@ -9,6 +10,7 @@ import {
   bossPlates,
   bossResult,
   bundleText,
+  bossXp,
   teamEvolvingRow,
   teamXpLine,
   wonLine,
@@ -334,6 +336,40 @@ describe('a mini-boss fight on screen (#190)', () => {
       ]);
       // No meters at all: no row.
       expect(teamEvolvingRow([award('a', 12, false), award('b', 9, false)], nameOf)).toEqual([]);
+    });
+
+    it('keeps a benched teammate’s own evolving meter under its cheer (#205)', () => {
+      const names: Record<string, string> = { a: 'Pip', b: 'Puff', d: 'Moss' };
+      const nameOf = (id: string) => names[id] ?? '?';
+      const card = bossXp(
+        [
+          { squishyId: 'a', xp: 12, evolvingBefore: 20, evolvingAfter: 35 },
+          // A fighter with no meter (none sent) keeps its empty cell.
+          { squishyId: 'b', xp: 12, evolvingBefore: null, evolvingAfter: null },
+          { squishyId: 'd', xp: 4, bench: true, evolvingBefore: 50, evolvingAfter: 58 },
+        ],
+        nameOf,
+      );
+      expect(card.xp).toEqual([
+        'Pip and Puff each earned 12 XP!',
+        REWARD_TEXT.cheeredXp('Moss', 4),
+      ]);
+      expect(card.bench).toEqual([false, true]);
+      // The team's line has its meters in the row; the cheer keeps its own.
+      expect(card.evolving).toEqual([null, { before: 50, after: 58 }]);
+      expect(card.evolvingRow).toEqual([{ name: 'Pip', before: 20, after: 35 }, null]);
+    });
+
+    it('a benched cheer alone still shows its meter, with no team line', () => {
+      const card = bossXp(
+        [{ squishyId: 'd', xp: 4, bench: true, evolvingBefore: 50, evolvingAfter: 58 }],
+        () => 'Moss',
+      );
+      expect(card.xp).toEqual([REWARD_TEXT.cheeredXp('Moss', 4)]);
+      expect(card.bench).toEqual([true]);
+      expect(card.evolving).toEqual([{ before: 50, after: 58 }]);
+      expect(card.evolvingRow).toEqual([]);
+      expect(bossXp([], () => '?').xp).toEqual([]);
     });
 
     it('a win by scoot or without a bundle has no bundle line', () => {

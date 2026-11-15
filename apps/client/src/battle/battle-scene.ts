@@ -5,6 +5,7 @@ import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Viewport } from '@babylonjs/core/Maths/math.viewport';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
@@ -284,7 +285,14 @@ export class BattleScene {
   #salt = 1;
   #drawCalls = 0;
   /** The last shot written (position, target, fov, lens shift), to tell when the camera moved. */
-  readonly #lastShot = new Float64Array(8).fill(Number.NaN);
+  readonly #lastShot = new Float64Array(11).fill(Number.NaN);
+  /** `screenSpot`'s scratch: no vector or viewport per call. */
+  readonly #spotAt = new Vector3();
+  readonly #spotMid = new Vector3();
+  readonly #spotTop = new Vector3();
+  readonly #spotViewport = new Viewport(0, 0, 0, 0);
+  #box: DOMRect | null = null;
+  #boxFrame = -1;
   #cameraMoved = false;
   /** Told after a render whose camera moved (a HUD that lines things up under the fighters, #190). */
   readonly #cameraWatchers = new Set<() => void>();
@@ -858,28 +866,56 @@ export class BattleScene {
     side: BattleSideId,
     slot?: number,
     atHome = false,
+    out?: { x: number; y: number; r: number },
   ): { x: number; y: number; r: number } | null {
     const rig = this.#rigAt(side, slot);
     const fighter = rig.out;
     const camera = this.#scene.activeCamera;
     const canvas = this.#scene.getEngine().getRenderingCanvas();
     if (!fighter || !camera || !canvas) return null;
-    const box = canvas.getBoundingClientRect();
+    const box = this.#canvasBox(canvas);
     if (box.width <= 0 || box.height <= 0) return null;
-    const viewport = camera.viewport.toGlobal(box.width, box.height);
+    const viewport = camera.viewport.toGlobalToRef(box.width, box.height, this.#spotViewport);
     const transform = camera.getTransformationMatrix();
     // `atHome`: where it stands, not where a dash has taken it (a plate under it, #190).
     const pose = atHome ? REST : rig.pose;
     const c = this.#centre(rig, pose, fighter);
     const half = (fighter.height * pose.scale) / 2;
-    const mid = Vector3.Project(new Vector3(c.x, c.y, c.z), Matrix.Identity(), transform, viewport);
-    const top = Vector3.Project(
-      new Vector3(c.x, c.y + half, c.z),
-      Matrix.Identity(),
+    // Scratch vectors: the plates ask every frame the camera moves.
+    const at = this.#spotAt.set(c.x, c.y, c.z);
+    const mid = Vector3.ProjectToRef(
+      at,
+      Matrix.IdentityReadOnly,
       transform,
       viewport,
+      this.#spotMid,
     );
-    return { x: box.left + mid.x, y: box.top + mid.y, r: Math.max(24, Math.abs(mid.y - top.y)) };
+    at.y += half;
+    const top = Vector3.ProjectToRef(
+      at,
+      Matrix.IdentityReadOnly,
+      transform,
+      viewport,
+      this.#spotTop,
+    );
+    const spot = out ?? { x: 0, y: 0, r: 0 };
+    spot.x = box.left + mid.x;
+    spot.y = box.top + mid.y;
+    spot.r = Math.max(24, Math.abs(mid.y - top.y));
+    return spot;
+  }
+
+  /**
+   * The canvas's page box, read once a frame: several plates asked for in the
+   * same frame share one layout read.
+   */
+  #canvasBox(canvas: HTMLCanvasElement): DOMRect {
+    const frame = this.#scene.getEngine().frameId;
+    if (!this.#box || this.#boxFrame !== frame) {
+      this.#box = canvas.getBoundingClientRect();
+      this.#boxFrame = frame;
+    }
+    return this.#box;
   }
 
   /**
@@ -903,6 +939,9 @@ export class BattleScene {
     moved = this.#keep(5, shot.target.z) || moved;
     moved = this.#keep(6, shot.fov) || moved;
     moved = this.#keep(7, shot.shift) || moved;
+    moved = this.#keep(8, shot.up.x) || moved;
+    moved = this.#keep(9, shot.up.y) || moved;
+    moved = this.#keep(10, shot.up.z) || moved;
     if (moved) this.#cameraMoved = true;
   }
 
