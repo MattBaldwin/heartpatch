@@ -205,16 +205,17 @@ export const DRAFT_PARTS: Part[] = [
     jitter: 0,
   }),
   part({
-    // Rakeling's short, pointed tines, hanging straight down from the plank.
+    // Rakeling's short tines (round 7: blunt dowels that bend forward near
+    // the tip, like the boss's), hanging down from the plank.
     id: 'draft-rake-tines-mid',
     slot: 'fangs',
-    shape: 'cone', // round 6: pointed, like the boss's
-    size: [0.06, 0.26, 0.06],
+    shape: 'bent',
+    size: [0.065, 0.28, 0.11], // thickness covers the forward kick
     color: 'detail',
     layout: { kind: 'ring', count: 5, spread: 40 },
     around: 0,
     up: -19,
-    tilt: -90,
+    tilt: -88,
     sink: 0.1,
     jitter: 0,
   }),
@@ -235,8 +236,8 @@ export const DRAFT_PARTS: Part[] = [
     // Pileup's three baby tines under its baby plank.
     id: 'draft-rake-tines-small',
     slot: 'fangs',
-    shape: 'cone', // round 6: three pointed baby tines, not a comb's row
-    size: [0.06, 0.15, 0.06],
+    shape: 'bent', // round 7: three blunt, bent baby tines, not buck teeth
+    size: [0.06, 0.17, 0.1],
     color: 'detail',
     layout: { kind: 'ring', count: 3, spread: 28 },
     around: 0,
@@ -325,17 +326,18 @@ export const DRAFT_PARTS: Part[] = [
     jitter: 0,
   }),
   part({
-    // Round 6: five widely spaced tines (not a comb's even row), each leaning
-    // forward towards its tip like a real rake's.
+    // Five widely spaced tines (not a comb's even row). Round 7: blunt,
+    // round-ended dowels that hang down and bend forward near the tip like a
+    // real rake's, so nothing pointed reads as fangs.
     id: 'draft-rake-tool-tines',
     slot: 'fangs',
-    shape: 'cone', // pointed tips, not a comb's blunt teeth
-    size: [0.09, 0.42, 0.09],
+    shape: 'bent',
+    size: [0.1, 0.44, 0.17], // thickness covers the forward kick
     color: 'detail',
     layout: { kind: 'ring', count: 5, spread: 50 },
     around: 0,
     up: -22,
-    tilt: -62, // TUNE: 28° forward of straight down
+    tilt: -80, // TUNE: nearly straight down; the bend does the rest
     sink: 0.1,
     jitter: 0,
   }),

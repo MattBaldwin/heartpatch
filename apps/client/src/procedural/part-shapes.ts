@@ -25,7 +25,7 @@ function pointed(k: number): Profile {
   ];
 }
 
-const PROFILES: Readonly<Record<Exclude<PartShape, 'arc' | 'box'>, Profile>> = {
+const PROFILES: Readonly<Record<Exclude<PartShape, 'arc' | 'box' | 'bent'>, Profile>> = {
   ellipsoid: (t) => [0.5 * Math.sin(Math.PI * t), -0.5 * Math.cos(Math.PI * t)],
   // A soft rounded cylinder: a squarish superellipse revolved.
   capsule: (t) => [
@@ -148,6 +148,66 @@ function box(rings: number, segments: number): MeshArrays {
   return { positions, normals, indices: gridIndices(rings, segments) };
 }
 
+// TUNE: the bent dowel's centreline, in lengths of the whole stick.
+const BENT_STRAIGHT = 0.62; // straight from the root
+const BENT_RADIUS = 0.22; // the bend's curve
+const BENT_ANGLE = (45 * Math.PI) / 180; // how far the tip turns forward
+const BENT_TIP = 0.16; // straight again after the bend
+const BENT_TUBE = 0.11; // the dowel's radius
+
+/**
+ * A round-ended dowel growing along +y that bends towards +z (the front)
+ * near its tip: a rake tine. The bend stays in the yz plane, so x is the
+ * same sideways direction all along. Analytic normals.
+ */
+function bent(rings: number, segments: number): MeshArrays {
+  const arcLen = BENT_RADIUS * BENT_ANGLE;
+  const total = BENT_STRAIGHT + arcLen + BENT_TIP;
+  // The centreline point and unit tangent at distance `s` along it.
+  const along = (s: number): { c: Vec3; t: Vec3 } => {
+    if (s <= BENT_STRAIGHT) return { c: [0, s, 0], t: [0, 1, 0] };
+    const a = Math.min(s - BENT_STRAIGHT, arcLen) / BENT_RADIUS;
+    const c: Vec3 = [0, BENT_STRAIGHT + BENT_RADIUS * Math.sin(a), BENT_RADIUS * (1 - Math.cos(a))];
+    const t: Vec3 = [0, Math.cos(a), Math.sin(a)];
+    const rest = s - BENT_STRAIGHT - arcLen;
+    return rest > 0 ? { c: [0, c[1] + t[1] * rest, c[2] + t[2] * rest], t } : { c, t };
+  };
+  const capRings = Math.max(2, Math.round(rings / 3));
+  const bodyRings = rings * 2;
+  const count = capRings * 2 + bodyRings;
+  const positions: number[] = [];
+  const normals: number[] = [];
+  for (let i = 0; i <= count; i++) {
+    let s: number;
+    let beta: number; // 0 on the dowel, ±π/2 at the tips of the round ends
+    if (i < capRings) {
+      s = 0;
+      beta = -(Math.PI / 2) * (1 - i / capRings);
+    } else if (i > capRings + bodyRings) {
+      s = total;
+      beta = (Math.PI / 2) * ((i - capRings - bodyRings) / capRings);
+    } else {
+      s = (total * (i - capRings)) / bodyRings;
+      beta = 0;
+    }
+    const { c, t } = along(s);
+    // Perpendicular to the dowel in the yz plane: [0, -t.z, t.y].
+    const across: Vec3 = [0, -t[2], t[1]];
+    for (let k = 0; k <= segments; k++) {
+      const phi = (2 * Math.PI * k) / segments;
+      const ring: Vec3 = [Math.sin(phi), -Math.cos(phi) * across[1], -Math.cos(phi) * across[2]];
+      const n = normalize([
+        Math.sin(beta) * t[0] + Math.cos(beta) * ring[0],
+        Math.sin(beta) * t[1] + Math.cos(beta) * ring[1],
+        Math.sin(beta) * t[2] + Math.cos(beta) * ring[2],
+      ]);
+      positions.push(c[0] + BENT_TUBE * n[0], c[1] + BENT_TUBE * n[1], c[2] + BENT_TUBE * n[2]);
+      normals.push(...n);
+    }
+  }
+  return { positions, normals, indices: gridIndices(count, segments) };
+}
+
 function gridIndices(rings: number, segments: number): number[] {
   const indices: number[] = [];
   const row = segments + 1;
@@ -228,6 +288,8 @@ export function partArrays(shape: PartShape, lod: LodSettings): MeshArrays {
       ? arc(lod.partRings, lod.partSegments)
       : shape === 'box'
         ? box(lod.partRings, lod.partSegments)
-        : lathe(PROFILES[shape], lod.partRings, lod.partSegments);
+        : shape === 'bent'
+          ? bent(lod.partRings, lod.partSegments)
+          : lathe(PROFILES[shape], lod.partRings, lod.partSegments);
   return orientTriangles(fitUnitBox(mesh));
 }

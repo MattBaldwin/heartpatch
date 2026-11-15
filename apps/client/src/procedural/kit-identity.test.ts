@@ -90,6 +90,35 @@ describe('box shape', () => {
   });
 });
 
+describe('bent shape', () => {
+  it('fills the unit box, stays straight at the root and kicks forward (+z) at the tip', () => {
+    const p = partArrays('bent', LOD.high).positions;
+    const zAt = (keep: (y: number) => boolean) => {
+      let sum = 0;
+      let n = 0;
+      for (let i = 0; i < p.length; i += 3) {
+        if (keep(p[i + 1] ?? 0)) {
+          sum += p[i + 2] ?? 0;
+          n++;
+        }
+      }
+      return sum / n;
+    };
+    const extent = (k: number) => {
+      const v = p.filter((_, i) => i % 3 === k);
+      return Math.max(...v) - Math.min(...v);
+    };
+    expect(extent(0)).toBeCloseTo(1, 9);
+    expect(extent(1)).toBeCloseTo(1, 9);
+    expect(extent(2)).toBeCloseTo(1, 9);
+    const root = zAt((y) => y < -0.2);
+    const mid = zAt((y) => y > -0.1 && y < 0.1);
+    const tip = zAt((y) => y > 0.42);
+    expect(mid - root).toBeCloseTo(0, 2); // the root two-thirds are straight
+    expect(tip - root).toBeGreaterThan(0.3); // the tip turns towards the front
+  });
+});
+
 describe("anchor: 'behind'", () => {
   const orb = BODIES.find((b) => b.id === 'orb');
   if (!orb) throw new Error('no orb body');

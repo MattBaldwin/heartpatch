@@ -64,9 +64,20 @@ export const SURFACE_SLOTS: readonly PartSlot[] = ['eyes', 'brows', 'mouth', 'ch
  * upwards unless the part sets `flip`. `box` is a flat, softly rounded block
  * whose sides line up with the part's width, length and thickness, so a
  * shallow `size` makes a straight bar or plank that doesn't bulge in the
- * middle (#234 kit extension; new shapes go at the end).
+ * middle (#234 kit extension; new shapes go at the end). `bent` is a
+ * round-ended dowel, straight for most of its length, that bends towards the
+ * front near its tip (a rake's tines). Its thickness covers the dowel plus
+ * how far the tip kicks forward, so about 1.7 times its width keeps it round.
  */
-export const PartShapeSchema = z.enum(['ellipsoid', 'capsule', 'cone', 'teardrop', 'arc', 'box']);
+export const PartShapeSchema = z.enum([
+  'ellipsoid',
+  'capsule',
+  'cone',
+  'teardrop',
+  'arc',
+  'box',
+  'bent',
+]);
 export type PartShape = z.infer<typeof PartShapeSchema>;
 
 /**

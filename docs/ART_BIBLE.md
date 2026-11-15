@@ -149,6 +149,7 @@ Shared data shapes this chapter adds (all additive; no id is renamed or removed,
 
 **Addendum (#234 kit extension, owner decision 2026-11-15; coordinator-approved, additive and optional).** Rakelet needed three things the kit couldn't do, so the visual schema gains three opt-in options. Every existing species renders byte-identically (`kit-identity.test.ts` pins the hashes).
 - **`shape: 'box'`**: a flat, softly rounded block whose sides line up with the part's width, length and thickness. A shallow `size` makes a straight plank that doesn't bulge like a bean or a bill.
+- **`shape: 'bent'`** (round 7, approved by the coordinator): a round-ended dowel, straight for about two-thirds of its length, that bends towards the front near its tip. Rake tines read as a tool, not fangs. Its thickness covers the forward kick, so about 1.7 times its width keeps it round.
 - **`anchor: 'behind'`** (sticking-out `single` or `pair` parts only): the part stands just clear of its host's back at the height and sideways spot of `around`/`up`, and grows straight up. It leans back by `tilt` and sideways by `splay` (a single leans towards the viewer's right, or left if negative). A handle in line with a bar on the face can rise behind the head instead of hiding inside it. Unset means `surface`, today's behaviour.
 - **`replaces: 'mouth'`**: the part stands in for the mouth. A feeling face kit group made only of mouth parts (Silly's `open-mouth`) counts as met, and the species must not also list a mouth part. `ART_RULES.feelingFaces` itself is unchanged.
 
