@@ -594,6 +594,7 @@ const MESSAGES = {
   notLive: 'Cheers are for battles with a friend!',
   unknownCheer: "We don't know that cheer.",
   busy: 'Someone is already in a battle. Try again in a bit!',
+  mateNeverAsks: 'Computer friends wait for you to ask them!',
   notYourself: "You can't battle yourself, silly!",
   friendlyTutorial: 'Friendly battles happen on a patch with friends!',
   friendlyOff: 'Friendly battles are switched off on this patch.',
@@ -1018,6 +1019,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
    */
   const abandoned = async (tx: Executor, row: BattleRow, at: Date): Promise<boolean> => {
     if (row.status !== 'active') return false;
+    // A computer mate's challenge (#386e): side `a` is the AI, which never
+    // leaves and can't forfeit. A kid defending it live who walks away is
+    // covered by the live deadlines instead (`settleLive`): their defense
+    // style plays each turn, as for any defender, so the battle ends with an
+    // honest result and the kid's defence pay follows the usual rules.
+    if (row.state.sides.a.controller.type === 'ai') return false;
     // A mini-boss fight left alone (#190 plan §12) counts the same way.
     const boss = options.minibosses;
     if (row.kind === 'miniboss' && boss) {
@@ -1061,9 +1068,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
    * (#386e: a computer mate's tile challenge with no defender seated), the
    * way a wild battle's AI side answers: each step is a `turn` with no
    * choices, so the engine picks for both and `replayBattle` still holds.
-   * Waits while a "Defend now?" prompt is still in time (false); one past
-   * its time expires here first. Lock order: the battle (held), the prompt
-   * (9c), then `finish`'s; the prompt's event goes last, with `maps`.
+   * Waits while a "Defend now?" prompt is still pending (false): one past
+   * its time is expired first by `settleDefense` in its own transaction
+   * (`resolved` runs it before this), so this never holds the prompt (9c)
+   * while `finish` takes the tile and its defenders (6). The prompt is read
+   * without a lock: every write to it takes this battle's lock first, which
+   * is held here. Lock order: the battle (held), then `finish`'s.
    */
   const playOut = async (
     repo: BattlesTxRepo,
@@ -1071,11 +1081,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     row: BattleRow,
     at: Date,
   ): Promise<boolean> => {
-    const prompts = createChallengesRepo(tx);
-    const prompt = mayAwaitDefender(row) ? await prompts.defenseFor(row, { lock: true }) : null;
-    if (prompt?.status === 'pending' && at.getTime() < prompt.expiresAt.getTime()) return false;
-    const expired = prompt?.status === 'pending' ? prompt : null;
-    if (expired) await prompts.settle(expired.id, { status: 'expired', at });
+    const prompt = mayAwaitDefender(row) ? await createChallengesRepo(tx).defenseFor(row) : null;
+    if (prompt?.status === 'pending') return false;
     let state = row.state;
     const actions = [...row.actions];
     for (
@@ -1089,7 +1096,6 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     }
     if (state.phase.type !== 'over') throw new Error(`playOut: ${row.id} did not end`);
     await finish(repo, tx, row, actions, state, at);
-    if (expired) await repo.appendEvent(defenseAnswered(expired, row.id, 'expired', null));
     return true;
   };
 
@@ -1403,12 +1409,15 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     await liveBattles.end(row.id);
     // A computer patch-mate on either side (#386e) earns nothing that
     // matters: no XP, bench, coins, catalog, finds or befriending. Side `a`
-    // is one in its own tile challenge, side `b` in a kid's friendly.
+    // is one in its own tile challenge, side `b` in a kid's friendly or
+    // defending its own tile against a kid's attack.
+    const defense = tile.defense ?? null;
+    const sideBPlayer = defense?.userId ?? friendUserId;
     const computers = await createComputerMatesRepo(tx).computerIds(
-      friendUserId === null ? [row.playerUserId] : [row.playerUserId, friendUserId],
+      sideBPlayer === null ? [row.playerUserId] : [row.playerUserId, sideBPlayer],
     );
     const aComputer = computers.has(row.playerUserId);
-    const bComputer = friendUserId !== null && computers.has(friendUserId);
+    const bComputer = sideBPlayer !== null && computers.has(sideBPlayer);
     // A friendly battle (#728, owner decision 2026-11-14) pays both sides
     // one opponent's worth of the engine's XP at `friendlyPercent`
     // (`friendlyBattleXp`), before care × habitat and the falloff.
@@ -1420,8 +1429,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // earn the engine's side-`b` XP. Gentle's share never applies to them
     // (it is the challenger's), and guardians standing in earn nothing.
     // A friendly's side `b` is the friend's own team, win or lose.
-    const defense = tile.defense ?? null;
-    const sideBUserId = defense?.userId ?? (bComputer ? null : friendUserId);
+    const sideBUserId = bComputer ? null : sideBPlayer;
     const theirs = new Set(defense?.ownSquishyIds ?? []);
     const sideBAwards = result.xp
       .filter(
@@ -1626,21 +1634,32 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           : { userId: friendUserId, loserUserId: row.playerUserId };
     const pairCapped =
       friendlyWinner !== null &&
-      ((await repo.friendlyWinsAgainstToday(
+      (await repo.friendlyWinsAgainstToday(
         row.mapId,
         friendlyWinner.userId,
         friendlyWinner.loserUserId,
         at,
-      )) >= CHALLENGE_RULES.paidWinsPerPairPerDay ||
-        // Over a computer mate (#386e, owner decision 5): also at most
-        // `paidWinsPerDayVsComputers` wins over all of them together. The
-        // result card's pair-cap line still says it (386f may word it apart).
-        (bComputer &&
-          friendlyWinner.userId === row.playerUserId &&
-          (await repo.friendlyWinsAgainstComputersToday(row.mapId, row.playerUserId, at)) >=
-            CHALLENGE_RULES.paidWinsPerDayVsComputers));
+      )) >= CHALLENGE_RULES.paidWinsPerPairPerDay;
+    // Over a computer mate (#386e, owner decision 5): also at most
+    // `paidWinsPerDayVsComputers` wins over all of them together, said apart
+    // as `'computer-cap'`. Concurrency: a kid is in one battle at a time (the
+    // battle seat) and this runs under the battle's lock before `repo.finish`,
+    // so two of the kid's friendlies can't both count the same last paid win
+    // (the same pattern as the pair cap).
+    const computerCapped =
+      !pairCapped &&
+      bComputer &&
+      friendlyWinner?.userId === row.playerUserId &&
+      (await repo.friendlyWinsAgainstComputersToday(row.mapId, row.playerUserId, at)) >=
+        CHALLENGE_RULES.paidWinsPerDayVsComputers;
     /** Why a winning side got no win coins, or null. */
-    const winUnpaid: UnpaidReason | null = scooted ? 'scooted' : pairCapped ? 'pair-cap' : null;
+    const winUnpaid: UnpaidReason | null = scooted
+      ? 'scooted'
+      : pairCapped
+        ? 'pair-cap'
+        : computerCapped
+          ? 'computer-cap'
+          : null;
     // A held defence (#728) pays the Keeper under the same `battle` caps,
     // keyed `sideBRefId` so it can't collide with the challenger's credit.
     // Never for a scooted challenger, nor for land the guardians held alone
@@ -2346,10 +2365,13 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           const at = now();
           // A computer patch-mate (#386e) is always here: the AI plays its
           // side in its persona's stance, so its picks are instant (side `b`
-          // owes no live pick, `sidesToAct`). It never asks, so it's never `a`.
+          // owes no live pick, `sidesToAct`).
           const mate = await computerController(tx, mapId, bUserId);
+          // Invariant: a mate never sends a friendly ask (plan §1 D/E), so it's
+          // never side `a`. Fail closed if that ever changes: `finish` pays a
+          // computer side `a` nothing only for its tile challenges.
           if ((await createComputerMatesRepo(tx).computerIds([aUserId])).size > 0) {
-            throw new AppError('CONFLICT', MESSAGES.busy);
+            throw new AppError('CONFLICT', MESSAGES.mateNeverAsks);
           }
           const setup: BattleSetup = {
             seed: newSeed(),

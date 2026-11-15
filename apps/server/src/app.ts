@@ -621,7 +621,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             territory,
             battles,
             ...publish,
-            ...(wsHub ? { openMaps: wsHub.openMaps } : {}),
+            // A mate challenges only a kid with the patch open right now (#823 ruling).
+            ...(wsHub ? { openMaps: wsHub.openMaps, isOnline: wsHub.isOnline } : {}),
             log: app.log,
           });
           onKeeperSeen = (mapId) => {

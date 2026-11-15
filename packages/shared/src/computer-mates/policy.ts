@@ -70,6 +70,14 @@ export interface MateChallengeView {
   readonly busy: boolean;
   /** Kids still inside their new-player shield. */
   readonly shielded: readonly string[];
+  /**
+   * Kids with the patch open right now (`isOnline`, coordinator ruling on
+   * #823): a mate challenges only a kid who can see it happen, never one
+   * who is away or asleep, even on a patch kept warm by another kid.
+   */
+  readonly online: readonly string[];
+  /** Kids' tiles fenced all round (#203): fences hold computer friends off. */
+  readonly fenced: readonly Hex[];
 }
 
 /** A kid's open offer or gift to the mate, valued by `TRADE_VALUES` (the server knows every species). */
@@ -284,7 +292,8 @@ export function mayChallenge(view: MateView, rules: ComputerMateRules): boolean 
  * The kid's tile a mate challenges next, or null (plan §1 D): a border tile
  * next to the mate's land, never a home ring or never-fade ring tile (more
  * than `kidHomeBuffer` and `keepRadius` from the kid's Heart Seed), never a
- * contested tile, never a shielded kid's, and only from a kid who holds at
+ * contested tile, never a fenced tile, never a shielded kid's, only from a
+ * kid who has the patch open right now, and only from a kid who holds at
  * least `minKidTiles` outside home. `attackTargetProblem` with the patch's
  * PvP mode has the last word, as for a kid. Nearest the mate's home first.
  */
@@ -294,14 +303,17 @@ export function challengeTarget(view: MateView, rules: ComputerMateRules): Hex |
   const home = homeOf(view);
   const contested = new Set(view.contested.map(hexKey));
   const shielded = new Set(c.shielded);
+  const online = new Set(c.online);
+  const fenced = new Set(c.fenced.map(hexKey));
   const buffer = Math.max(rules.kidHomeBuffer, TERRITORY_RULES.tending.keepRadius);
   const options = view.kids.flatMap((kid) => {
-    if (shielded.has(kid.userId)) return [];
+    if (shielded.has(kid.userId) || !online.has(kid.userId)) return [];
     const land = view.tiles.filter((t) => t.ownerUserId === kid.userId && t.homeSlot === null);
     if (land.length < rules.minKidTiles) return [];
     return land.filter(
       (t) =>
         !contested.has(hexKey(t)) &&
+        !fenced.has(hexKey(t)) &&
         hexDistance(t, kid.heartSeed) > buffer &&
         attackTargetProblem(t, view.tiles, view.userId, c.pvpMode) === null,
     );

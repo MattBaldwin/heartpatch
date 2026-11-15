@@ -10,6 +10,7 @@ import {
   hexKey,
   hexNeighbors,
   LIVE_BATTLE_RULES,
+  TERRITORY_RULES,
   MapResponseSchema,
   SquishyResponseSchema,
   type PlayerBattle,
@@ -33,7 +34,7 @@ import { createBattlesService } from '../battles/service.js';
 import { heartSeedOf } from '../maps/depart.js';
 import { createTerritoryRepo, type TerritoryTileRow } from '../territory/repo.js';
 import { createTerritoryService, createTileBattlePort } from '../territory/service.js';
-import { createComputerMateSteps } from './intents.js';
+import { computerChallenge, createComputerMateSteps } from './intents.js';
 import { createComputerMatesRepo } from './repo.js';
 
 const url = inject('testDatabaseUrl');
@@ -83,6 +84,13 @@ describe.skipIf(!url)('computer patch-mates battle (#386e, needs DATABASE_URL)',
   let app: FastifyInstance | undefined;
   let clock = new Date(START);
   let counter = 0;
+  /**
+   * Whether the mates see the kid online (their step's `isOnline`): a mate
+   * challenges only a kid who is (#823 ruling). Kept apart from the
+   * battles' `online` so a test can have the kid "here" for the mates
+   * without a "Defend now?" prompt.
+   */
+  let seesKid = true;
 
   beforeAll(() => {
     client = createDbClient(url!, { max: 10 });
@@ -93,6 +101,7 @@ describe.skipIf(!url)('computer patch-mates battle (#386e, needs DATABASE_URL)',
     await app?.close();
     app = undefined;
     clock = new Date(START);
+    seesKid = true;
   });
 
   /** A kid alone on their patch with computer friends on: three mates. */
@@ -236,8 +245,9 @@ describe.skipIf(!url)('computer patch-mates battle (#386e, needs DATABASE_URL)',
       secrets,
       territory,
       battles,
+      isOnline: (_mapId, userId) => seesKid || online(userId),
     });
-    return { battles, steps };
+    return { battles, steps, territory };
   }
 
   /** Runs one step of `mate` right now. */
@@ -369,8 +379,8 @@ describe.skipIf(!url)('computer patch-mates battle (#386e, needs DATABASE_URL)',
         expect(rewards.coins!.patch).toBeGreaterThan(0);
         expect(ledger.patch).toEqual([[kid.id, rewards.coins!.patch]]);
       } else {
-        // Three wins over all the mates together, then XP only.
-        expect(rewards.unpaid).toBe('pair-cap');
+        // Three wins over all the mates together, then XP only, said as the computer cap.
+        expect(rewards.unpaid).toBe('computer-cap');
         expect(rewards.coins).toEqual({ patch: 0, heart: 0 });
         expect(ledger).toEqual({ patch: [], heart: [] });
       }
@@ -511,6 +521,87 @@ describe.skipIf(!url)('computer patch-mates battle (#386e, needs DATABASE_URL)',
     }
   }, 60_000);
 
+  it('a live defence the kid walks away from plays out on the deadlines and the mate steps on', async () => {
+    const { kid, mapId, mate, target } = await challengeSetup({ guard: true });
+    const { steps, battles } = services(WEAK, (userId) => userId === kid.id);
+    expect(await mateStep(steps, mapId, mate)).toMatchObject({
+      intent: 'challenge',
+      applied: true,
+    });
+    const [battle] = await mateBattles(mate);
+    const prompt = await db.query.challenges.findFirst({
+      where: (t, { and, eq }) => and(eq(t.battleId, battle!.id), eq(t.kind, 'defense')),
+    });
+    const answered = await battles.answerDefense(kid, prompt!.id, 'yes');
+    expect(answered.battle?.status).toBe('active');
+
+    // The kid closes the app: nothing touches the battle for well past the
+    // abandon time. Side `a` is the AI, which can't forfeit, so the live
+    // deadlines cover the kid's picks instead, and the mate's next step
+    // settles them without throwing.
+    clock = new Date(clock.getTime() + (TERRITORY_RULES.abandonMinutes + 60) * MINUTE_MS);
+    await mateStep(steps, mapId, mate);
+    const row = await battleRowOf(battle!.id);
+    expect(row.status).toBe('finished');
+    const result = await resultOf(battle!.id);
+    expect(result.winner).toBe('b');
+    expect(result.reason).not.toBe('forfeit');
+    const tile = await db.query.tiles.findFirst({ where: (t, { eq }) => eq(t.id, target.id) });
+    expect(tile?.ownerUserId).toBe(kid.id);
+    // The kid's live defence is paid under the usual rules; the mate earns nothing.
+    const rewards = await rewardsOf(battle!.id);
+    expect(rewards.b?.userId).toBe(kid.id);
+    expect(rewards.b?.unpaid ?? null).toBeNull();
+    expect(rewards.b!.coins!.patch).toBeGreaterThan(0);
+    expect(await mateCredits(mate)).toEqual(noCredits);
+    // And the kid can still read it.
+    expect((await battles.get(kid, battle!.id)).status).toBe('finished');
+  }, 60_000);
+
+  it('a mate holding its own tile against a kid earns no XP and no coins', async () => {
+    const { kid, cookies, mapId, mates } = await soloPatch();
+    await setJoinedAt(mapId, kid.id, new Date(clock.getTime() - 3 * DAY_MS));
+    const [mate] = mates as [string];
+    await setJoinedAt(mapId, mate, new Date(clock.getTime() - 3 * DAY_MS));
+    const territoryRepo = createTerritoryRepo(db);
+    const tiles = await territoryRepo.listTiles(mapId);
+    const byKey = new Map(tiles.map((t) => [hexKey(t), t]));
+    const kidHome = tiles.filter((t) => t.ownerUserId === kid.id && t.homeSlot !== null);
+    // A claimable tile touching the kid's home ring becomes the mate's.
+    const target = kidHome
+      .flatMap((h) => hexNeighbors(h).map((n) => byKey.get(hexKey(n))))
+      .find((t): t is TerritoryTileRow => t !== undefined && claimable(t));
+    expect(target).toBeDefined();
+    await territoryRepo.setOwner(target!.id, mate);
+    const mateTeam = await db.query.squishies.findMany({
+      where: (t, { eq }) => eq(t.ownerUserId, mate),
+    });
+    const guard = mateTeam[0]!;
+    await db.execute(`update squishies set level = 40 where id = '${uuid(guard.id)}'`);
+    await territoryRepo.replaceDefenders(mapId, target!.id, [guard.id], clock);
+    const before = (await db.query.squishies.findFirst({
+      where: (t, { eq }) => eq(t.id, guard.id),
+    }))!;
+    await grant(cookies, mapId, 1);
+
+    const { battles, territory } = services(WEAK);
+    const started = await territory.attack(kid, mapId, { q: target!.q, r: target!.r });
+    let mine = started.battle;
+    for (let i = 0; i < 2 * BATTLE_RULES.maxTurns && mine.status === 'active'; i++) {
+      mine = await battles.act(kid, mine.id, { action: nextAction(mine), turn: mine.view.turn });
+    }
+    expect(mine.status).toBe('finished');
+    expect((await resultOf(mine.id)).winner).toBe('b');
+    const rewards = await rewardsOf(mine.id);
+    expect(rewards.b).toBeNull();
+    expect(await ledgerOf(sideBRefId(mine.id))).toEqual({ patch: [], heart: [] });
+    expect(await mateCredits(mate)).toEqual(noCredits);
+    const after = (await db.query.squishies.findFirst({
+      where: (t, { eq }) => eq(t.id, guard.id),
+    }))!;
+    expect(after.xp).toBe(before.xp);
+  }, 60_000);
+
   it('the contested-tile guard holds: a mate never challenges a tile already under attack', async () => {
     const { kid, mapId, mates, mate, target, tiles } = await challengeSetup({ guard: true });
     const { steps, battles } = services(WEAK, (userId) => userId === kid.id);
@@ -580,6 +671,14 @@ describe.skipIf(!url)('computer patch-mates battle (#386e, needs DATABASE_URL)',
       expect(await mateBattles(mate)).toHaveLength(before + 1);
     }
 
+    it('the kid is away (only a kid online right now, #823 ruling)', async () => {
+      const setup = await challengeSetup({ guard: true });
+      seesKid = false;
+      await refusedThenAllowed(setup, () => {
+        seesKid = true;
+      });
+    });
+
     it('PvP Off', async () => {
       const setup = await challengeSetup({ guard: true });
       await db.execute(`update maps set pvp_mode = 'off' where id = '${uuid(setup.mapId)}'`);
@@ -635,6 +734,18 @@ describe.skipIf(!url)('computer patch-mates battle (#386e, needs DATABASE_URL)',
       }
       // Both held, so the loss cap never bit; T's cooldown has passed again.
       clock = new Date(clock.getTime() + 4 * HOUR_MS + 5 * MINUTE_MS);
+      // Past the policy, straight to territory: the server's own recheck
+      // (`challengeCheck`, under the tile and challenge locks) refuses it.
+      const { territory } = services(WEAK);
+      await expect(
+        territory.attackAsComputer(
+          { id: mate, username: '' },
+          mapId,
+          { q: setup.target.q, r: setup.target.r },
+          computerChallenge(COMPUTER_MATES.personas[0]!, WEAK.rules, () => true),
+        ),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(await mateBattles(mate)).toHaveLength(cap);
       await refusedThenAllowed(setup, () => {
         clock = new Date(clock.getTime() + 7 * DAY_MS);
       });

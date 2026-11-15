@@ -81,6 +81,8 @@ export function coinLine(input: {
     case 'scooted':
       return role === 'defender' ? REWARD_TEXT.heldScooted(opponent) : REWARD_TEXT.friendlyGaveUp;
     case 'pair-cap':
+    // The combined cap over computer mates (#386e) shares its line until 386f words it apart.
+    case 'computer-cap':
       return role === 'friendly' ? REWARD_TEXT.friendlyPairCap(opponent) : null;
     case 'guardians':
       return null;

@@ -361,6 +361,8 @@ describe('computer mates policy', () => {
       localHour: 12,
       busy: false,
       shielded: [],
+      online: [KID],
+      fenced: [],
     };
     const challengeView = (
       tiles: MateViewTile[],
@@ -414,6 +416,26 @@ describe('computer mates policy', () => {
         rules.minKidTiles,
       );
       expect(challengeTarget(challengeView(few), rules)).toBeNull();
+    });
+
+    it('challenges only a kid who has the patch open right now, never one away (#823 ruling)', () => {
+      const tiles = kidLand();
+      expect(challengeTarget(challengeView(tiles), rules)).not.toBeNull();
+      // Warm because another kid looked, but this kid is away: never.
+      const away = challengeView(tiles, { online: ['another-kid'] });
+      expect(challengeTarget(away, rules)).toBeNull();
+      expect(intents(away).some((i) => i?.kind === 'challenge')).toBe(false);
+      expect(challengeTarget(challengeView(tiles, { online: [] }), rules)).toBeNull();
+    });
+
+    it('never challenges a fenced tile: fences hold computer friends off (#823 ruling)', () => {
+      const tiles = kidLand();
+      const first = challengeTarget(challengeView(tiles), rules)!;
+      const next = challengeTarget(challengeView(tiles, { fenced: [first] }), rules);
+      expect(next).not.toEqual(first);
+      // Every border tile fenced: nothing to challenge.
+      const border = tiles.filter((t) => t.ownerUserId === KID && t.homeSlot === null);
+      expect(challengeTarget(challengeView(tiles, { fenced: border }), rules)).toBeNull();
     });
 
     it('never challenges a tile someone is already battling for', () => {

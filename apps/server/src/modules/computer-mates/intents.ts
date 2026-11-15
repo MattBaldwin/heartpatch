@@ -5,6 +5,7 @@ import {
   fuelSpace,
   HOME_BASE_RULES,
   hexDistance,
+  isTileFenced,
   LIVE_BATTLE_RULES,
   Rng,
   stancePolicy,
@@ -36,7 +37,12 @@ import { BUILDING_DATA, toPublicBuilding } from '../buildings/hearthfire.js';
 import { createBuildingsRepo } from '../buildings/repo.js';
 import { heartSeedOf } from '../maps/depart.js';
 import { createMapsRepo } from '../maps/repo.js';
-import { createTendingRepo, createTerritoryRepo } from '../territory/repo.js';
+import {
+  createTendingRepo,
+  createTerritoryRepo,
+  type TerritoryTileRow,
+} from '../territory/repo.js';
+import { createFencesRepo } from '../fences/repo.js';
 import type { ComputerChallenge, TerritoryService } from '../territory/service.js';
 import { createTradesRepo } from '../trades/repo.js';
 import { createTradesService } from '../trades/service.js';
@@ -50,6 +56,12 @@ const FIRE_ID = 'hearthfire';
 /** A fire stands in its tile's middle (#204). */
 const FIRE_SPOT = 0;
 const WEEK_MS = 7 * 24 * 60 * MINUTE_MS;
+// Kid-readable messages (style guide §6). A refused mate challenge is never
+// shown to a kid (the step just does something else); it's here so every
+// refusal reads the same way.
+const MESSAGES = {
+  noChallenge: 'A computer friend can’t challenge that tile right now.',
+};
 
 /**
  * What a mate's trade and gift choices read (#386d): the kids' open offers
@@ -146,6 +158,12 @@ export interface ComputerMateStepsOptions {
   battles?: Pick<BattlesService, 'settleComputer'>;
   /** The "Defend now?" window (#29-C): a challenge's next step comes right after it. */
   defensePromptSeconds?: number;
+  /**
+   * Is this kid's app open on this patch right now (`wsHub.isOnline`)? A
+   * mate challenges only a kid who is (#823 ruling). Without one, nobody
+   * is, so mates never challenge.
+   */
+  isOnline?: (mapId: string, userId: string) => boolean;
 }
 
 export interface ComputerMateSteps {
@@ -173,6 +191,7 @@ export function createComputerMateSteps(options: ComputerMateStepsOptions): Comp
   const secrets = options.secrets ?? COMPUTER_MATES;
   const { rules } = secrets;
   const throttle = options.seenThrottleMs ?? 3 * MINUTE_MS;
+  const isOnline = options.isOnline ?? (() => false);
   const lastSeen = new Map<string, number>();
 
   const seen = async (mapId: string) => {
@@ -215,7 +234,9 @@ export function createComputerMateSteps(options: ComputerMateStepsOptions): Comp
 
   const act = async (userId: string, step: number): Promise<MateStepResult | null> => {
     const at = now();
-    const out = await mateTransaction(db, (tx) => stepWithin(tx, userId, step, at, secrets));
+    const out = await mateTransaction(db, (tx) =>
+      stepWithin(tx, userId, step, at, secrets, isOnline),
+    );
     if (!out) return null;
     void options.publish?.(out.mapId);
     // Its battle (#386e), each in its own transactions after the step's:
@@ -242,10 +263,7 @@ export function createComputerMateSteps(options: ComputerMateStepsOptions): Comp
   ): Promise<boolean> => {
     const territory = options.territory;
     if (!territory) return false;
-    const computer: ComputerChallenge = {
-      controller: { type: 'ai', policy: stancePolicy(target.persona.stance) },
-      check: (tx, input) => challengeCheck(tx, input, rules),
-    };
+    const computer = computerChallenge(target.persona, rules, isOnline);
     try {
       const started = await territory.attackAsComputer(
         // Only its id is read (its seat, member row and side a).
@@ -279,6 +297,7 @@ async function stepWithin(
   step: number,
   at: Date,
   secrets: ComputerMatesSecrets,
+  isOnline: (mapId: string, userId: string) => boolean,
 ): Promise<{
   mapId: string;
   result: MateStepResult;
@@ -357,6 +376,8 @@ async function stepWithin(
             localHour: Math.floor(mapLocalTime(at, map.timeZone).minute / 60),
             busy: (await createBattlesRepo(tx).findActive(mapId, userId)) !== null,
             shielded: await shieldedKids(tx, mapId, [...homes.keys()], at),
+            online: [...homes.keys()].filter((kid) => isOnline(mapId, kid)),
+            fenced: await fencedKidTiles(tx, mapId, tiles, homes),
           },
           trading: await tradingView(tx, {
             mapId,
@@ -585,23 +606,70 @@ async function shieldedKids(
  * Seed, and only from a kid holding `minKidTiles` outside home. The raid
  * rules (shield, loss cap, tries, cooldown, PvP Off) are `prepare`'s own.
  */
+/** What a mate's challenge adds to a kid's (#386e): its persona's AI and the mates' own rules. */
+export function computerChallenge(
+  persona: Pick<ComputerPersonaTuning, 'stance'>,
+  rules: ComputerMatesSecrets['rules'],
+  isOnline: (mapId: string, userId: string) => boolean,
+): ComputerChallenge {
+  return {
+    controller: { type: 'ai', policy: stancePolicy(persona.stance) },
+    check: (tx, input) => challengeCheck(tx, input, rules, isOnline),
+  };
+}
+
+/** Kids' tiles fenced all round (#203): a mate never challenges one (#823 ruling). */
+async function fencedKidTiles(
+  tx: Executor,
+  mapId: string,
+  tiles: readonly TerritoryTileRow[],
+  kids: ReadonlyMap<string, unknown>,
+): Promise<{ q: number; r: number }[]> {
+  const segments = (await createFencesRepo(tx).listOnMap(mapId)).filter((f) =>
+    kids.has(f.ownerUserId),
+  );
+  if (segments.length === 0) return [];
+  const tileIds = new Set(segments.map((f) => f.tileId));
+  return tiles
+    .filter((t) => tileIds.has(t.id) && t.ownerUserId !== null && kids.has(t.ownerUserId))
+    .filter((t) =>
+      isTileFenced(
+        t,
+        tiles.filter((o) => o.ownerUserId === t.ownerUserId),
+        segments,
+        tiles,
+      ),
+    )
+    .map((t) => ({ q: t.q, r: t.r }));
+}
+
 async function challengeCheck(
   tx: Executor,
   input: Parameters<ComputerChallenge['check']>[1],
   rules: ComputerMatesSecrets['rules'],
+  isOnline: (mapId: string, userId: string) => boolean,
 ): Promise<void> {
   const { map, at, tile, tiles } = input;
   const mates = createComputerMatesRepo(tx);
   await mates.lockChallenges(map.id);
   const refuse = (): never => {
-    throw new AppError('CONFLICT', 'A computer friend can’t challenge that tile right now.');
+    throw new AppError('CONFLICT', MESSAGES.noChallenge);
   };
   const hour = Math.floor(mapLocalTime(at, map.timeZone).minute / 60);
   if (inQuietHours(hour, rules)) refuse();
   const thisWeek = await mates.challengesSince(map.id, new Date(at.getTime() - WEEK_MS));
   if (challengesLeft({ pvpMode: map.pvpMode, thisWeek }, rules) <= 0) refuse();
-  const kidId = tile.ownerUserId;
-  if (kidId === null || (await mates.computerIds([kidId])).size > 0) refuse();
+  const kidId = tile.ownerUserId ?? refuse();
+  if ((await mates.computerIds([kidId])).size > 0) refuse();
+  // Only a kid with the patch open right now, and never a fenced tile (#823 rulings).
+  if (!isOnline(map.id, kidId)) refuse();
+  if (
+    (await fencedKidTiles(tx, map.id, tiles, new Map<string, true>([[kidId, true]]))).some(
+      (t) => t.q === tile.q && t.r === tile.r,
+    )
+  ) {
+    refuse();
+  }
   if ((await mates.openAttackTileIds(map.id)).has(tile.id)) refuse();
   const land = tiles.filter((t) => t.ownerUserId === kidId);
   if (land.filter((t) => t.homeSlot === null).length < rules.minKidTiles) refuse();
