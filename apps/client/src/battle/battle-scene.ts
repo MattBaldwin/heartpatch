@@ -875,7 +875,10 @@ export class BattleScene {
     if (!fighter || !camera || !canvas) return null;
     const box = this.#canvasBox(canvas);
     if (box.width <= 0 || box.height <= 0) return null;
-    const viewport = camera.viewport.toGlobalToRef(box.width, box.height, this.#spotViewport);
+    // `toGlobalToRef` fills the ref but returns the camera's own 0..1 viewport:
+    // project into the ref.
+    camera.viewport.toGlobalToRef(box.width, box.height, this.#spotViewport);
+    const viewport = this.#spotViewport;
     const transform = camera.getTransformationMatrix();
     // `atHome`: where it stands, not where a dash has taken it (a plate under it, #190).
     const pose = atHome ? REST : rig.pose;
@@ -907,7 +910,8 @@ export class BattleScene {
 
   /**
    * The canvas's page box, read once a frame: several plates asked for in the
-   * same frame share one layout read.
+   * same frame share one layout read. The engine's `frameId` moves on every
+   * render-loop frame, drawn or not, so the box is never more than a frame old.
    */
   #canvasBox(canvas: HTMLCanvasElement): DOMRect {
     const frame = this.#scene.getEngine().frameId;

@@ -105,6 +105,35 @@ describe('BattleScene', () => {
     expect(scene.getMeshByName('arena-hills')).not.toBeNull();
   });
 
+  it('puts screenSpot on the fighter in page pixels, not in the camera’s 0..1 viewport (#190)', () => {
+    const { scene, battle } = build();
+    battle.sendOut('a', 'puddlepuff', 'mine-1');
+    battle.sendOut('b', 'emberbun', 'wild-1');
+    const box = { left: 10, top: 20, width: 390, height: 844 };
+    vi.spyOn(engine, 'getRenderingCanvas').mockReturnValue({
+      getBoundingClientRect: () => box,
+    } as unknown as HTMLCanvasElement);
+    scene.render();
+    const spots = (['a', 'b'] as const).map((side) => battle.screenSpot(side));
+    for (const spot of spots) {
+      // Inside the canvas, well clear of its top-left corner.
+      expect(spot).not.toBeNull();
+      expect(spot!.x).toBeGreaterThan(box.left + 20);
+      expect(spot!.x).toBeLessThan(box.left + box.width - 20);
+      expect(spot!.y).toBeGreaterThan(box.top + 20);
+      expect(spot!.y).toBeLessThan(box.top + box.height);
+    }
+    // The two sides stand apart on screen.
+    expect(
+      Math.abs(spots[0]!.x - spots[1]!.x) + Math.abs(spots[0]!.y - spots[1]!.y),
+    ).toBeGreaterThan(20);
+    // `out` is filled and handed back, with the same answer.
+    const out = { x: 0, y: 0, r: 0 };
+    expect(battle.screenSpot('a', undefined, false, out)).toBe(out);
+    expect(out).toEqual(spots[0]);
+    vi.restoreAllMocks();
+  });
+
   it('lays each fighter a contact shadow that faces up, not mirrored, so culling keeps it (#462)', () => {
     for (const tier of ['high', 'low'] as const) {
       const { scene, battle } = build('forest', false, tier);

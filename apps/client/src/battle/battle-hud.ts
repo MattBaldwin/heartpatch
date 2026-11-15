@@ -332,6 +332,42 @@ function evolvingMeter(
   return meter.root;
 }
 
+/**
+ * Where a team's meter row goes in the XP list (#205): before the first
+ * benched cheer, or last when there is none.
+ */
+export function evolvingRowAt(lines: number, bench: readonly boolean[] | undefined): number {
+  for (let i = 0; i < lines; i++) if (bench?.[i] === true) return i;
+  return lines;
+}
+
+/**
+ * The result card's XP list: each line with its own meter, and a team's
+ * named meter row (#205) right under the team's lines, before any benched
+ * teammate's cheer (#732), so the meters sit under the names they belong to.
+ */
+function xpItems(info: ResultInfo): HTMLElement[] {
+  const items = info.xp.map((line, i) => {
+    const gain = info.evolving?.[i];
+    const attrs: Record<string, string> = info.bench?.[i] ? { class: 'battle-xp-bench' } : {};
+    return gain ? el('li', attrs, line, evolvingMeter(gain, null)) : el('li', attrs, line);
+  });
+  if (info.evolvingRow?.some(Boolean)) {
+    const row = el(
+      'li',
+      { class: 'battle-evolving-row' },
+      // A squishy with no meter keeps an empty cell, so the rest stay in order.
+      ...info.evolvingRow.map((gain) =>
+        gain
+          ? evolvingMeter(gain, gain)
+          : el('div', { class: 'battle-evolving-blank', 'aria-hidden': 'true' }),
+      ),
+    );
+    items.splice(evolvingRowAt(info.xp.length, info.bench), 0, row);
+  }
+  return items;
+}
+
 /** Room above a boss fight's result card on iPad, so the friends' feet clear its corners (#190). */
 const CARD_MARGIN_WIDE = 28; // TUNE:
 
@@ -967,31 +1003,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       result.replaceChildren(
         el('h1', { class: 'auth-title', id: 'battle-result-title' }, info.title),
         el('p', { class: 'auth-subtitle' }, info.subtitle),
-        el(
-          'ul',
-          { class: 'battle-xp', 'data-testid': 'battle-xp' },
-          ...info.xp.map((line, i) => {
-            const gain = info.evolving?.[i];
-            const attrs: Record<string, string> = info.bench?.[i]
-              ? { class: 'battle-xp-bench' }
-              : {};
-            return gain ? el('li', attrs, line, evolvingMeter(gain, null)) : el('li', attrs, line);
-          }),
-          ...(info.evolvingRow?.some(Boolean)
-            ? [
-                el(
-                  'li',
-                  { class: 'battle-evolving-row' },
-                  // A squishy with no meter keeps an empty cell, so the rest stay in order.
-                  ...info.evolvingRow.map((gain) =>
-                    gain
-                      ? evolvingMeter(gain, gain)
-                      : el('div', { class: 'battle-evolving-blank', 'aria-hidden': 'true' }),
-                  ),
-                ),
-              ]
-            : []),
-        ),
+        el('ul', { class: 'battle-xp', 'data-testid': 'battle-xp' }, ...xpItems(info)),
         ...(info.nudge
           ? [el('p', { class: 'battle-hint', 'data-testid': 'battle-nudge' }, info.nudge)]
           : []),

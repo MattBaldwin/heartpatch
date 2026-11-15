@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createSheetHold, sheetHold, watchLayout, type LayoutWatchEnv } from './battle-hud.js';
+import {
+  createSheetHold,
+  evolvingRowAt,
+  sheetHold,
+  watchLayout,
+  type LayoutWatchEnv,
+} from './battle-hud.js';
 
 /** A window and `ResizeObserver` stand-in that records what was hooked up. */
 function fakeEnv() {
@@ -97,5 +103,17 @@ describe('createSheetHold (the hold across a battle, #656)', () => {
     expect(hold.next('hidden', 120)).toBe(120);
     hold.release();
     expect(hold.next('waiting', 0)).toBeNull();
+  });
+});
+
+describe('evolvingRowAt', () => {
+  it('puts a team’s meter row under its line, before a benched cheer (#205)', () => {
+    // Team line, then Moss's cheer: the row goes between them.
+    expect(evolvingRowAt(2, [false, true])).toBe(1);
+    // No cheers: last.
+    expect(evolvingRowAt(1, [false])).toBe(1);
+    expect(evolvingRowAt(1, undefined)).toBe(1);
+    // Only a cheer: first.
+    expect(evolvingRowAt(1, [true])).toBe(0);
   });
 });
