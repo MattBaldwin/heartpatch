@@ -1141,7 +1141,9 @@ export const DRAFT_BOSS_LINES: readonly DraftBossLine[] = [
   },
 ];
 
-const rakeletA = DRAFT_BOSS_LINES[0].forms[2];
+const rakeletLine = DRAFT_BOSS_LINES.find((line) => line.key === 'rakelet');
+if (!rakeletLine) throw new Error('no Rakelet line');
+const rakeletA = rakeletLine.forms[2];
 
 /**
  * Round 8: alternative boss forms the owner picks between. Rakelet A (the
