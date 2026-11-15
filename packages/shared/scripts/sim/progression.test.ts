@@ -283,7 +283,10 @@ describe('friendlies and defences (#728)', () => {
       else if (r.winner === 'b') won[1 - r.sideA]! += 1;
     }
     expect(kids.map((k) => k.team[0]!.winsToday)).toEqual(won);
-    expect(won[0]! + won[1]!).toBeLessThanOrEqual(3);
+    // One slot per decided friendly, never one for each side.
+    const decided = [first, second, nextDay].filter((r) => r.winner !== null).length;
+    expect(won[0]! + won[1]!).toBe(decided);
+    expect(decided).toBeGreaterThan(0);
 
     // A hold counts as the guards' win and pays them.
     const guard = kidOf(0);
