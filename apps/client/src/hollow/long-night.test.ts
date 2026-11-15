@@ -10,6 +10,7 @@ import {
   latestResult,
   LONG_NIGHT_TEXT,
   localDate,
+  nextCheckMinutes,
   noticeChip,
   noticeChipText,
   reportLines,
@@ -346,5 +347,30 @@ describe('the Long Night words (#727)', () => {
       typeof v === 'function' ? (v as (a: never) => string)('Maya' as never) : v,
     );
     expect(findAvoidedWords(words.join(' '))).toEqual([]);
+  });
+});
+
+describe('nextCheckMinutes: ask again at the strike', () => {
+  const status = (now: string, tonight: boolean | null) => ({
+    now,
+    night: { isNight: true, changesInMinutes: 600 },
+    tonight: {
+      night: '2026-11-07',
+      stage: 'bold' as const,
+      nightfallAt: '2026-11-08T02:00:00.000Z',
+      strikeAt: '2026-11-08T02:30:00.000Z',
+    },
+    longNight:
+      tonight === null ? undefined : { weekday: 6 as const, tonight, nextAt: null, gap: null },
+  });
+
+  it('opened at 7:29 on a Long Night: asks again a beat after 7:30', () => {
+    expect(nextCheckMinutes(status('2026-11-08T02:29:00.000Z', true))).toBeCloseTo(1 + 1 / 60, 6);
+  });
+
+  it('after the strike, on an ordinary night or switched off: when night changes', () => {
+    expect(nextCheckMinutes(status('2026-11-08T02:30:00.000Z', true))).toBe(600);
+    expect(nextCheckMinutes(status('2026-11-08T02:29:00.000Z', false))).toBe(600);
+    expect(nextCheckMinutes(status('2026-11-08T02:29:00.000Z', null))).toBe(600);
   });
 });

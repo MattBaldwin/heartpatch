@@ -7,6 +7,7 @@ import { TERRITORY_RULES } from '../../src/data/territory.js';
 import type { GrowthRules } from '../../src/schemas/data/care.js';
 import type { BattleAiPolicy } from '../../src/schemas/data/battle.js';
 import type { SpawnRules } from '../../src/schemas/data/spawn-rules.js';
+import type { Tier } from './progression-firsts.js';
 
 /**
  * Progression model settings (`pnpm sim:progression`). Like the battle sim,
@@ -24,12 +25,24 @@ export interface KidProfile {
   readonly befriendsPerDay: number;
 }
 
+/** The sim kid's befriend choice (`ProgressionRules.befriendPolicy`). */
+export type BefriendPolicy = 'stronger' | 'collector';
+
 /** The rules the model plays by: the shipped data, or a baseline to compare against. */
 export interface ProgressionRules {
   readonly label: string;
   readonly growth: GrowthRules;
   readonly spawn: SpawnRules;
   readonly attemptsPerDay: number;
+  /**
+   * How the sim kid picks a new friend after a won wild battle (#732 D3);
+   * none means `'stronger'`. `'stronger'`: the friend replaces the weakest
+   * team member when it's stronger. `'collector'`: it replaces the least-rare
+   * team member when it's rarer, otherwise the weakest when it's stronger.
+   * Never the Partner. A sim choice, not a game rule: the game lets a kid put
+   * anyone on the team.
+   */
+  readonly befriendPolicy?: BefriendPolicy;
   /**
    * Training Grounds (owner decision 2026-10-06), or none: each night the
    * first `slots` team members (the Partner first) train and get `xpPerDay`
@@ -56,8 +69,9 @@ export interface ProgressionRules {
    * earn the engine's XP (the winner's 1.5×, the loser's 1×), one opponent's
    * worth with `oneOpponent`, then × `xpPercent` % (`friendlyBattleXp`, as
    * the battles service pays it), care × habitat, under the daily falloff,
-   * and every friendly counts toward `fullWinsPerDay` win or lose (the #728
-   * rule). Played first, so their XP comes before the falloff thins anything.
+   * and a friendly counts toward `fullWinsPerDay` only for the side that won
+   * (#728, owner decision 2026-11-15). Played first, so their XP comes
+   * before the falloff thins anything.
    */
   readonly friendlies?: {
     readonly perDay: Readonly<Record<string, number>>;
@@ -220,6 +234,43 @@ export const WITH_FRIENDLIES_RULES: ProgressionRules = {
  * Partner level on `day` by at most `maxLevels` (first map size).
  */
 export const FRIENDLY_GATE: FriendlyGate = { kid: 'engaged', day: 14, maxLevels: 1 }; // the issue's criterion 2
+
+/**
+ * The shipped data with the collector befriend choice (#732 D3): a kid who
+ * puts a rarer friend on the team even when it's weaker, so "the first day a
+ * casual kid evolves a befriended rare" measures the game, not the sim kid's
+ * taste (the #732 options page).
+ */
+export const COLLECTOR_RULES: ProgressionRules = {
+  ...CURRENT_RULES,
+  label: 'now (collector)',
+  befriendPolicy: 'collector',
+};
+
+/** `WITH_FRIENDLIES_RULES` with the collector befriend choice (#732 D3). */
+export const WITH_FRIENDLIES_COLLECTOR_RULES: ProgressionRules = {
+  ...WITH_FRIENDLIES_RULES,
+  label: 'now + friendlies (collector)',
+  befriendPolicy: 'collector',
+};
+
+/**
+ * #732's per-tier gate: under `rules`, the `kid`'s first evolution of a
+ * befriended squishy of each listed rarity line comes by that day (first
+ * map size).
+ */
+export interface TierGate {
+  readonly kid: string;
+  readonly rules: ProgressionRules;
+  readonly byDay: Readonly<Partial<Record<Tier, number>>>;
+}
+
+// TUNE: the issue's targets, rare ≤ day 10 and epic ≤ day 20, for a casual collector.
+export const TIER_GATE: TierGate = {
+  kid: 'casual',
+  rules: COLLECTOR_RULES,
+  byDay: { rare: 10, epic: 20 },
+};
 
 export interface FriendlyGate {
   readonly kid: string;

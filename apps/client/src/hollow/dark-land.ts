@@ -59,10 +59,15 @@ export function heartSeedOf(view: MapView, userId: string | null): Hex | null {
 
 const TERRAIN_NAMES = new Map(GAME_DATA.terrains.map((t) => [t.id, t.name]));
 
+/** A tile's terrain as the narrator says it, anyone's: "meadow" (else "land"). */
+export function terrainName(tile: Pick<PublicTile, 'terrain'> | undefined): string {
+  const name = tile ? TERRAIN_NAMES.get(tile.terrain) : undefined;
+  return name ? name.toLowerCase() : 'land';
+}
+
 /** A tile of mine as the narrator says it: "your meadow". */
 export function placeOf(tile: Pick<PublicTile, 'terrain'> | undefined): string {
-  const name = tile ? TERRAIN_NAMES.get(tile.terrain) : undefined;
-  return name ? `your ${name.toLowerCase()}` : 'your land';
+  return `your ${terrainName(tile)}`;
 }
 
 /**

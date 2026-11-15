@@ -520,6 +520,8 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 
 .battle-xp li {
   padding: var(--hp-pad-y) var(--hp-pad-x);
+  /* Even lines, so a reward like "💛 3." never sits alone on the last one (#728). */
+  text-wrap: balance;
 }
 
 /* ── The entry buttons (in the Adventure tray) ─────────────────────── */

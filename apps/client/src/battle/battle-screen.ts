@@ -72,6 +72,7 @@ import { keeperReaction } from './keeper-reaction.js';
 import { cheerFor } from './befriend-cheer.js';
 import { revealPlan, showRareReveal, wildOf, type RareReveal } from './rare-reveal.js';
 import { FENCE_RESULTS, fenceResult, resultLine } from './result-line.js';
+import { coinLine, xpLines } from './result-card.js';
 import { keepGoing, KEEP_GOING_TEXT, type KeepGoingApi } from './keep-going.js';
 import { mapApi } from '../map/map-api.js';
 import { territoryApi } from '../territory/territory-api.js';
@@ -733,6 +734,50 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     }
   };
 
+  /** A squishy's name on my side's plate, or "Your squishy". */
+  const squishyName = (
+    names: BattleContent,
+    side: PlayerBattle['view']['sides']['a'],
+    squishyId: string,
+  ): string => {
+    const squishy = side.squishies.find((s) => s.id === squishyId);
+    return squishy ? plateName(names, squishy, nicknames) : 'Your squishy';
+  };
+
+  /**
+   * A live defender's or a friendly's card lines (#728): each squishy's XP
+   * (or "No XP this time."), the falloff note, then what the battle paid.
+   */
+  const rewardCard = (
+    names: BattleContent,
+    b: PlayerBattle,
+    role: 'defender' | 'friendly',
+  ): { xp: string[]; evolving: ({ before: number; after: number } | null)[] } => {
+    const result = b.view.phase.type === 'over' ? b.view.phase.result : null;
+    const mine = b.view.sides[b.mySide];
+    const { lines, evolving } = xpLines(b.rewards?.xp ?? [], (id) => squishyName(names, mine, id));
+    if (lines.length === 0) lines.push(MESSAGES.noXp);
+    const fullXpAt = b.rewards?.fullXpResetAt;
+    const fullXpLeft = fullXpAt ? Date.parse(fullXpAt) - gameNow() : 0;
+    if (fullXpLeft > 0) lines.push(MESSAGES.fullXpNote(formatWait(fullXpLeft)));
+    const coins = coinLine({
+      role,
+      rewards: b.rewards,
+      outcome:
+        b.status === 'no-contest' || !result
+          ? 'none'
+          : result.winner === 'draw'
+            ? 'draw'
+            : result.winner === b.mySide
+              ? 'won'
+              : 'lost',
+      scooted: result?.reason === 'forfeit',
+      opponent: opponentName(b),
+    });
+    if (coins) lines.push(coins);
+    return { xp: lines, evolving };
+  };
+
   const showResult = (b: PlayerBattle): void => {
     const names = content;
     if (!names) return;
@@ -791,7 +836,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     }
     if (isLiveDefender(b)) {
       // Defending my land live (#29-C): held or lost, never "This land is
-      // yours!", and no XP (the server only gives the challenger's side any).
+      // yours!". A hold pays my squishies XP and me coins (#728); the server
+      // sends side `b` its own rewards in side `a`'s shape.
       const outcome = !result
         ? { title: MESSAGES.resultNoContest, subtitle: MESSAGES.noContestSub }
         : result.winner === 'draw'
@@ -803,11 +849,12 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
               }
             : { title: MESSAGES.replayLost, subtitle: MESSAGES.replayLostSub };
       hud.setCaption(null);
-      hud.showResult({ ...outcome, xp: [MESSAGES.noXp], done: MESSAGES.done });
+      hud.showResult({ ...outcome, ...rewardCard(names, b, 'defender'), done: MESSAGES.done });
       return;
     }
     if (b.kind === 'friendly') {
-      // A friendly battle (#29): just for fun, so no XP lines and no losses.
+      // A friendly battle (#29): nobody loses anything, and both sides
+      // earn a little XP, the winner a few coins too (#728).
       const name = opponentName(b);
       const won = result?.winner === b.mySide;
       const title =
@@ -826,7 +873,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       hud.showResult({
         title,
         subtitle: LIVE_TEXT.friendlySub,
-        xp: [LIVE_TEXT.friendlyNote],
+        ...rewardCard(names, b, 'friendly'),
         done: MESSAGES.done,
       });
       return;
@@ -835,18 +882,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     // What the server granted (Gentle's share, care and habitat included);
     // a battle from before rewards were stored has only the engine's base XP.
     const awards = b.rewards?.xp ?? (result?.xp ?? []).filter((award) => award.side === b.mySide);
-    const earned = awards.filter((award) => award.xp > 0);
-    const xp = earned.map((award) => {
-      const squishy = mine.squishies.find((s) => s.id === award.squishyId);
-      const name = squishy ? plateName(names, squishy, nicknames) : 'Your squishy';
-      return `${name} earned ${String(award.xp)} XP!`;
-    });
-    // Each one's evolving meter, before and after (#205), from the server.
-    const evolving = earned.map((award) =>
-      'evolvingBefore' in award && award.evolvingBefore !== null && award.evolvingAfter !== null
-        ? { before: award.evolvingBefore, after: award.evolvingAfter }
-        : null,
-    );
+    const { lines: xp, evolving } = xpLines(awards, (id) => squishyName(names, mine, id));
     const glade = options.isGlade?.(b.mapId) ?? false;
     const friends = newFriends(b).map((id) => names.speciesName(id));
     const joined = friends.length > 0;
@@ -896,6 +932,15 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const fullXpAt = b.rewards?.fullXpResetAt;
     const fullXpLeft = fullXpAt ? Date.parse(fullXpAt) - gameNow() : 0;
     if (fullXpLeft > 0) lines.push(MESSAGES.fullXpNote(formatWait(fullXpLeft)));
+    // The coins a win paid (#728), only when it paid any.
+    const coins = coinLine({
+      role: 'challenger',
+      rewards: b.rewards,
+      outcome: result?.winner === b.mySide ? 'won' : 'lost',
+      scooted: result?.reason === 'forfeit',
+      opponent: '',
+    });
+    if (coins) lines.push(coins);
     // A rare friend, or a first of its kind: the card celebrates (#391). (Replays left above.)
     const cheer = cheerFor(b, names.species);
     // Won a wild battle without befriending it: say how (owner decision 2026-10-04).

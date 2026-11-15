@@ -4,6 +4,7 @@ import { GUARDIAN_RULES } from '../../src/data/server/guardian-rules.js';
 import {
   CURRENT_RULES,
   FRIENDLY_GATE,
+  TIER_GATE,
   WITH_FRIENDLIES_RULES,
   type FriendlyGate,
   type ProgressionConfig,
@@ -16,6 +17,10 @@ import {
   firstsOf,
   formatFirst,
   formatFirstsGate,
+  formatTierGate,
+  TIERS,
+  tierFirstsOf,
+  tierGate,
   type FirstsFacts,
 } from './progression-firsts.js';
 import {
@@ -157,7 +162,7 @@ function renderFriendlies(runs: readonly ProgressionRun[], config: ProgressionCo
   return [
     '## Friendlies and defences (#728)',
     '',
-    `\`${WITH_FRIENDLIES_RULES.label}\`: the map's two kids play ${config.kids.map((k) => `${String(friendlies.perDay[k.id] ?? 0)} (${k.id})`).join(' / ')} friendlies a day against each other on top of their battles, both sides paid ${friendlies.oneOpponent ? "one opponent's worth of the engine's XP" : "the engine's XP"} at ${String(friendlies.xpPercent)} % (the shipped \`GROWTH_RULES\` knobs, as the battles service pays it), every friendly counting toward the falloff win or lose; their tile tries also weigh each other's land outside the home ring${defences ? ` from day ${String(defences.shieldDays + 1)}, at most ${String(defences.lossCapPerDay)} taken from a kid a day, against the owner's first ${String(defences.maxDefenders)} squishies on watch at the Partner level + ${String(defences.guardLevel.partnerBonus)}` : ''}. Levels are kid 0 / kid 1, and the gate takes the kid that moves most. Paid as the engine sums it (every opponent tuckered out, in full) friendlies snowballed: the winner earned more and won more, so one kid raced ahead (+10 by day 14); the owner's rule (2026-11-14) pays one opponent's worth at 50 %. The other kid can end below the shipped pace: under win-or-lose counting its lost friendlies use up full-XP falloff slots on loser's XP. Defences: the other kid's tries on kid 0's land (held in brackets; a hold pays the guards XP), an upper bound: here the whole team guards every tile, where on the server a squishy watches one tile and unguarded land falls back to guardians, who earn nothing. Read only the level columns of the firsts table for this variant: its befriend firsts move later because a befriend counts only when it joins the team, and wild squishies rarely beat a team levelled by friendlies. Gate: ${formatFriendlyGate(gate)} (${String(gate.seats)}-seat map).`,
+    `\`${WITH_FRIENDLIES_RULES.label}\`: the map's two kids play ${config.kids.map((k) => `${String(friendlies.perDay[k.id] ?? 0)} (${k.id})`).join(' / ')} friendlies a day against each other on top of their battles, both sides paid ${friendlies.oneOpponent ? "one opponent's worth of the engine's XP" : "the engine's XP"} at ${String(friendlies.xpPercent)} % (the shipped \`GROWTH_RULES\` knobs, as the battles service pays it), a friendly counting toward the falloff only for the side that won (owner decision 2026-11-15); their tile tries also weigh each other's land outside the home ring${defences ? ` from day ${String(defences.shieldDays + 1)}, at most ${String(defences.lossCapPerDay)} taken from a kid a day, against the owner's first ${String(defences.maxDefenders)} squishies on watch at the Partner level + ${String(defences.guardLevel.partnerBonus)}` : ''}. Levels are kid 0 / kid 1, and the gate takes the kid that moves most. Paid as the engine sums it (every opponent tuckered out, in full) friendlies snowballed: the winner earned more and won more, so one kid raced ahead (+10 by day 14); the owner's rule (2026-11-14) pays one opponent's worth at 50 %. Defences: the other kid's tries on kid 0's land (held in brackets; a hold pays the guards XP), an upper bound: here the whole team guards every tile, where on the server a squishy watches one tile and unguarded land falls back to guardians, who earn nothing. Read only the level columns of the firsts table for this variant: its befriend firsts move later because a befriend counts only when it joins the team, and wild squishies rarely beat a team levelled by friendlies. Gate: ${formatFriendlyGate(gate)} (${String(gate.seats)}-seat map).`,
     '',
     markdownTable(
       [
@@ -358,6 +363,7 @@ export function renderProgression(
     ),
     '',
     ...(info.firsts ? renderFirsts(runs, config, info.firsts) : []),
+    ...(info.firsts ? renderTierFirsts(runs, config, info.firsts) : []),
     ...renderFriendlies(runs, config),
     "## What a Juniper's Gap win pays",
     '',
@@ -467,6 +473,50 @@ function renderFirsts(
         `Longest gap (days 1–${String(gate.windowDays)})`,
       ],
       rows,
+    ),
+    '',
+  ];
+}
+
+/** #732's per-tier gate line for these runs (the gated run's kid 0), or null when it wasn't run. */
+export function tierGateLine(
+  runs: readonly ProgressionRun[],
+  config: ProgressionConfig,
+  facts: FirstsFacts,
+): string | null {
+  const gated = runs.find(
+    (r) =>
+      r.rules === TIER_GATE.rules && r.profile.id === TIER_GATE.kid && r.seats === config.seats[0],
+  );
+  if (!gated) return null;
+  const policy = TIER_GATE.rules.befriendPolicy ?? 'stronger';
+  return formatTierGate(
+    tierGate(tierFirstsOf(lead(gated).days, facts), TIER_GATE.byDay),
+    TIER_GATE.kid,
+    policy,
+  );
+}
+
+/** #732's per-tier line: the first day a befriended squishy of each rarity line evolves. */
+function renderTierFirsts(
+  runs: readonly ProgressionRun[],
+  config: ProgressionConfig,
+  facts: FirstsFacts,
+): string[] {
+  const gate = tierGateLine(runs, config, facts);
+  return [
+    '## First evolve by rarity line (#732)',
+    '',
+    `The day a befriended squishy (any team member but the Partner, the two day-1 teammates included) of each rarity line first evolves, for kid 0; a line's rarity is its base form's. Rules marked "(collector)" put a rarer friend on the team even when it's weaker; the rest only take a stronger one. ${gate ?? `#732 per-tier gate: not run (needs \`${TIER_GATE.rules.label}\`).`}`,
+    '',
+    markdownTable(
+      ['Rules', 'Map seats', 'Kid', ...TIERS],
+      runs.map((run) => [
+        run.rules.label,
+        String(run.seats),
+        run.profile.id,
+        ...tierFirstsOf(lead(run).days, facts).map((f) => formatFirst(f.day, config.days)),
+      ]),
     ),
     '',
   ];

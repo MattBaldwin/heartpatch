@@ -14,7 +14,14 @@ import {
 import { afterEach, describe, expect, it } from 'vitest';
 import { MapScene } from '../map/map-scene.js';
 import { testPatch, testView, userId } from '../map/test-view.js';
-import { createDarkLand, darkTiles, dashedHexRing, heartSeedOf, placeOf } from './dark-land.js';
+import {
+  createDarkLand,
+  darkTiles,
+  dashedHexRing,
+  heartSeedOf,
+  placeOf,
+  terrainName,
+} from './dark-land.js';
 import { SHOW } from './hollow-config.js';
 import { HollowLayer, standOf, stepPose } from './hollow-layer.js';
 import { createNightShow, type ShowStage } from './night-show.js';
@@ -326,6 +333,9 @@ describe('my dark land', () => {
     expect(darkTiles(lit, ME).length).toBeLessThan(10);
     expect(placeOf({ terrain: 'meadow' })).toBe('your meadow');
     expect(placeOf(undefined)).toBe('your land');
+    // Anyone's tile, for the Long Night's feed: no "your".
+    expect(terrainName({ terrain: 'meadow' })).toBe('meadow');
+    expect(terrainName(undefined)).toBe('land');
   });
 
   it('draws a dashed edge as one instanced mesh, only while there is dark land', () => {

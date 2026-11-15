@@ -1,0 +1,45 @@
+/* Sprout's week-two tips (#731 item 5): the patch line's toast spot, with
+   Sprout's face (the Next-up line's) beside the words. It never takes taps. */
+
+.sprout-tip[hidden] {
+  display: none;
+}
+
+.sprout-tip {
+  position: fixed;
+  z-index: 3;
+  top: calc(env(safe-area-inset-top) + 164px);
+  left: calc(env(safe-area-inset-left) + 16px);
+  right: calc(env(safe-area-inset-right) + 16px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 8px 16px 8px 8px;
+  border-radius: 18px;
+  background: #fffafc;
+  box-shadow: 0 6px 16px rgb(74 49 80 / 22%);
+  color: #4a3150;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+.sprout-tip-face {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 60%, #9bd88a 0 60%, #6fbf5e 61%);
+}
+
+/* A tip already up hides under the lobby; battles and sheets only stop one from
+   starting (main.ts `busy`), and leaving the patch takes it down (sprout-tips.ts). */
+body:has(.lobby:not([hidden])) .sprout-tip {
+  visibility: hidden;
+}

@@ -55,6 +55,7 @@ const SPECIES: Record<string, { rarity: Rarity; stage: number }> = {
 const facts: FirstsFacts = {
   rarity: (id) => SPECIES[id]?.rarity,
   stage: (id) => SPECIES[id]?.stage ?? 1,
+  lineRarity: (id) => SPECIES[id.split('-')[0] ?? id]?.rarity,
 };
 const dayOf = (firsts: readonly First[], id: string) => firsts.find((f) => f.id === id)?.day;
 const gate = { kid: 'casual', windowDays: 30, maxGapDays: 5 };
