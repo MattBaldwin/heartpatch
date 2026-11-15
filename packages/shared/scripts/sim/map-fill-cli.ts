@@ -10,7 +10,13 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { MAP_FILL_CONFIG, MAP_FILL_RULES, MAP_FILL_SCENARIOS } from './map-fill-config.js';
-import { awayTiles, renderMapFill, summariseMapFill } from './map-fill-report.js';
+import {
+  awayTiles,
+  computerMatesGates,
+  mateRowsTable,
+  renderMapFill,
+  summariseMapFill,
+} from './map-fill-report.js';
 import { runMapFill, type MapFillRun } from './map-fill.js';
 
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -49,4 +55,9 @@ for (const run of runs) {
       `nothing to claim ${s.nothingToClaim.join('/')} days, lost by players ${String(s.lostByPlayers)}${kept}`,
   );
 }
+// Computer-mates gates (#386c, plan §9): soft, so they print and exit 0.
+const mates = computerMatesGates(runs);
+console.log('Computer mates (#386c):');
+console.log(mateRowsTable(mates.rows));
+for (const g of mates.gates) console.log(`  ${g.pass ? 'PASS' : 'FAIL'} ${g.line}`);
 console.log(`Report: ${reportPath}`);
