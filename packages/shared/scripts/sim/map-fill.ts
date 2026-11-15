@@ -220,7 +220,9 @@ export function runMapFill(
     };
   };
   const capOf = (s: number) =>
-    personaOf(seats[s]!) ? mateLandCap(viewTiles(), scenario.mapSeats, COMPUTER_MATES.rules) : null;
+    seats[s]?.computer !== undefined
+      ? mateLandCap(viewTiles(), scenario.mapSeats, COMPUTER_MATES.rules)
+      : null;
 
   const days: MapFillDay[] = [];
   /** The last day each kid played (fuelled their fires). */

@@ -23,6 +23,7 @@ import type { NewGameEvent } from '../../db/game-events.js';
 import { departWithin, heartSeedOf } from '../maps/depart.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapsTxRepo } from '../maps/repo.js';
+import { createRaidsRepo } from '../raids/repo.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { createComputerMatesRepo, type MateRow } from './repo.js';
 import { COMPUTER_MATES_OFF, computerMatesOpenFor, type ComputerMatesSwitch } from './switch.js';
@@ -166,6 +167,9 @@ async function fillWithin(
       });
     }
     await repo.upsertMember({ mapId, userId, role: 'member', homeSlot, joinedAt: at });
+    // Its guards play with the persona's stance (plan §1 E). The row was
+    // just written above, so this takes no new lock.
+    await createRaidsRepo(tx).setStance(mapId, userId, tuning.stance);
     const home = await repo.claimHomeTiles(mapId, homeSlot, userId);
     // A hand-authored map has no home slots: nobody to seat.
     if (home.length === 0) throw new AppError('CONFLICT', "This patch can't take new Keepers.");

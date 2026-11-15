@@ -19,7 +19,12 @@ import {
   type BattleState,
   type PlayerBattleAction,
 } from '@heartpatch/shared';
-import { RESCUE_GUARDIANS, type LoreEntry } from '@heartpatch/shared/server';
+import {
+  COMPUTER_MATES,
+  RESCUE_GUARDIANS,
+  type ComputerMatesSecrets,
+  type LoreEntry,
+} from '@heartpatch/shared/server';
 import { createBattlesRepo } from '../modules/battles/repo.js';
 import { createBattlesService, defaultBattleContent } from '../modules/battles/service.js';
 import { createBuildingsRepo } from '../modules/buildings/repo.js';
@@ -52,6 +57,7 @@ import { createJourneyBattlePort, createJourneysService } from '../modules/journ
 import { createLongNightRepo } from '../modules/long-night/repo.js';
 import { createLongNightService } from '../modules/long-night/service.js';
 import { createLoreConsumer } from '../modules/lore/consumer.js';
+import { createComputerMateSteps } from '../modules/computer-mates/intents.js';
 import { createComputerMatesRepo } from '../modules/computer-mates/repo.js';
 import { createComputerMatesService } from '../modules/computer-mates/service.js';
 import { createMapsRepo } from '../modules/maps/repo.js';
@@ -3270,6 +3276,120 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
         () => mapsService().approve(kid, mapId, request.id),
         (tx) => lockMapRow(tx, mapId),
       );
+    });
+    /** Steps that only claim (many a day, no guards, no fires) or only light fires. */
+    const claimOnly: ComputerMatesSecrets = {
+      rules: { ...COMPUTER_MATES.rules, fireEveryTiles: 1000 },
+      personas: COMPUTER_MATES.personas.map((p) => ({
+        ...p,
+        claimsPerDay: 60,
+        weights: { ...p.weights, claim: 1, guard: 0 },
+      })),
+    };
+    const fireFirst: ComputerMatesSecrets = {
+      ...claimOnly,
+      rules: { ...COMPUTER_MATES.rules, fireEveryTiles: 1 },
+    };
+    const stepsWith = (secrets: ComputerMatesSecrets) =>
+      createComputerMateSteps({ db, clock: () => at, secrets });
+    const mateRow = async (userId: string) =>
+      (await db.query.computerMates.findFirst({ where: (t, { eq }) => eq(t.userId, userId) }))!;
+    /** Runs the mate's next step right when it's due (no lag, so no catch-up). */
+    async function stepNow(secrets: ComputerMatesSecrets, userId: string) {
+      const row = await mateRow(userId);
+      at = new Date(row.nextActAt!.getTime());
+      return stepsWith(secrets).act(userId, row.step);
+    }
+    /** Lines the step up (the clock on its due time) and returns the command to run. */
+    async function nextStep(secrets: ComputerMatesSecrets, userId: string) {
+      const row = await mateRow(userId);
+      at = new Date(row.nextActAt!.getTime());
+      let result: Awaited<ReturnType<ReturnType<typeof stepsWith>['act']>> = null;
+      return {
+        run: async () => {
+          result = await stepsWith(secrets).act(userId, row.step);
+        },
+        result: () => result,
+      };
+    }
+    const lockMapTiles = (tx: Transaction, mapId: string, wildOnly: boolean) =>
+      tx
+        .select({ id: tiles.id })
+        .from(tiles)
+        .where(
+          wildOnly
+            ? and(eq(tiles.mapId, mapId), sql`${tiles.ownerUserId} is null`)
+            : eq(tiles.mapId, mapId),
+        )
+        .orderBy(asc(tiles.id))
+        .for('update');
+    const lockOuterOf = (tx: Transaction, mapId: string, userId: string) =>
+      tx
+        .select({ id: tiles.id })
+        .from(tiles)
+        .where(
+          and(
+            eq(tiles.mapId, mapId),
+            eq(tiles.ownerUserId, userId),
+            sql`${tiles.homeSlot} is null`,
+          ),
+        )
+        .orderBy(asc(tiles.id))
+        .for('update');
+
+    it("takes its own mate row before its users row and any tile (a mate's step, #386c step 3a then 4 and 6)", async () => {
+      // A switch fill holds every mate row (3a), then alternates users rows
+      // and home tiles; a step waits at 3a, holding nothing it would need.
+      const { mapId, ids } = await matesPatch('cmstep3a', true);
+      const step = await nextStep(claimOnly, ids[0]!);
+      await holdThen(
+        (tx) => lockMates(tx, mapId),
+        step.run,
+        async (tx) => {
+          await createMapsRepo(tx).lockUser(ids[0]!);
+          await lockMapTiles(tx, mapId, false);
+        },
+      );
+      expect(step.result()).toMatchObject({ intent: 'claim', applied: true });
+    });
+
+    it("takes a claim's tile before its squishies and `maps` (a mate's claim, #386c step 6 then 10 then 13)", async () => {
+      const { mapId, ids } = await matesPatch('cmstepclaim', true);
+      const step = await nextStep(claimOnly, ids[0]!);
+      await holdThen(
+        (tx) => lockMapTiles(tx, mapId, true),
+        step.run,
+        async (tx) => {
+          await createComputerMatesRepo(tx).lockTeam(mapId, ids[0]!);
+          await lockMapRow(tx, mapId);
+        },
+      );
+      expect(step.result()).toMatchObject({ intent: 'claim', applied: true });
+      const claimed = await db.query.gameEvents.findMany({
+        where: (e, { and, eq }) => and(eq(e.mapId, mapId), eq(e.type, 'tile.claimed')),
+      });
+      expect(claimed.length).toBe(1);
+    });
+
+    it("tends its land before its fires and squishies (a mate's tend and fire, #386c step 6 then 8 then 10)", async () => {
+      const { mapId, ids } = await matesPatch('cmstepfire', true);
+      const mate = ids[0]!;
+      for (let i = 0; i < 3; i++) {
+        expect(await stepNow(claimOnly, mate)).toMatchObject({ intent: 'claim', applied: true });
+      }
+      // One fire stands, so the step under test refuels it (8) and lights another.
+      expect(await stepNow(fireFirst, mate)).toMatchObject({ intent: 'fire', applied: true });
+      const step = await nextStep(fireFirst, mate);
+      await holdThen(
+        (tx) => lockOuterOf(tx, mapId, mate),
+        step.run,
+        async (tx) => {
+          expect((await createBuildingsRepo(tx).lockFires(mapId, mate)).length).toBe(1);
+          await createComputerMatesRepo(tx).lockTeam(mapId, mate);
+          await lockMapRow(tx, mapId);
+        },
+      );
+      expect(step.result()).toMatchObject({ intent: 'fire', applied: true, tended: 3 });
     });
   });
 });

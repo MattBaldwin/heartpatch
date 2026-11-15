@@ -1,4 +1,11 @@
-import { hexDistance, isTradingPost, isWaterTerrain, MapResponseSchema } from '@heartpatch/shared';
+import {
+  hexDistance,
+  hexKey,
+  hexNeighbors,
+  isTradingPost,
+  isWaterTerrain,
+  MapResponseSchema,
+} from '@heartpatch/shared';
 import { COMPUTER_MATES, mateLandCap, type ComputerMatesSecrets } from '@heartpatch/shared/server';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -10,9 +17,19 @@ import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { heartSeedOf } from '../maps/depart.js';
 import { createHollowRepo } from '../hollow/repo.js';
+import { createRaidsRepo } from '../raids/repo.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { createComputerMateSteps } from './intents.js';
 import { createComputerMatesRepo } from './repo.js';
+
+/** Guard-only mates: no claims, no fires, so every intent is a guard. */
+const GUARDS: ComputerMatesSecrets = {
+  rules: { ...COMPUTER_MATES.rules, fireEveryTiles: 1000 },
+  personas: COMPUTER_MATES.personas.map((p) => ({
+    ...p,
+    weights: { ...p.weights, claim: 0, guard: 1 },
+  })),
+};
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -265,4 +282,63 @@ describe.skipIf(!url)('computer patch-mates act (#386c, needs DATABASE_URL)', ()
     // The kid's own are still his to find (none yet here, but the read isn't empty by rule).
     expect(night.every((s) => s.ownerUserId === kidId)).toBe(true);
   });
+  it('guards go on border tiles facing a kid only, with the persona’s stance, up to guardedTiles', async () => {
+    const { mapId, mates, kidId } = await soloPatch();
+    await play(createComputerMateSteps({ db, clock: () => clock, secrets: BUSY }), mapId, 20, 61);
+    const territory = createTerritoryRepo(db);
+    const before = await territory.listTiles(mapId);
+    const byKey = new Map(before.map((t) => [hexKey(t), t]));
+    // The kid's land reaches one mate's: every free land tile next to its outer land.
+    const [facing] = mates.filter((m) =>
+      before.some((t) => t.ownerUserId === m && t.homeSlot === null),
+    );
+    expect(facing).toBeDefined();
+    const kidTiles = new Set<string>();
+    for (const t of before.filter((x) => x.ownerUserId === facing && x.homeSlot === null)) {
+      for (const n of hexNeighbors(t)) {
+        const tile = byKey.get(hexKey(n));
+        if (
+          tile &&
+          tile.ownerUserId === null &&
+          tile.homeSlot === null &&
+          !isTradingPost(tile) &&
+          !isWaterTerrain(tile.terrain)
+        )
+          kidTiles.add(tile.id);
+      }
+    }
+    expect(kidTiles.size).toBeGreaterThan(COMPUTER_MATES.rules.guardedTiles);
+    for (const id of kidTiles) await territory.setOwner(id, kidId);
+
+    await play(createComputerMateSteps({ db, clock: () => clock, secrets: GUARDS }), mapId, 10, 61);
+    const after = await territory.listTiles(mapId);
+    const owner = new Map(after.map((t) => [hexKey(t), t.ownerUserId]));
+    for (const mate of mates) {
+      const posts = await territory.myDefenders(mapId, mate);
+      expect(posts.length).toBeLessThanOrEqual(COMPUTER_MATES.rules.guardedTiles);
+      for (const post of posts) {
+        // Its own outer tile, touching the kid's land.
+        const tile = after.find((t) => t.q === post.q && t.r === post.r)!;
+        expect(tile.ownerUserId).toBe(mate);
+        expect(tile.homeSlot).toBeNull();
+        expect(hexNeighbors(tile).some((n) => owner.get(hexKey(n)) === kidId)).toBe(true);
+        expect(post.squishyIds.length).toBe(1);
+      }
+      const faces = after.some(
+        (t) =>
+          t.ownerUserId === mate &&
+          t.homeSlot === null &&
+          hexNeighbors(t).some((n) => owner.get(hexKey(n)) === kidId),
+      );
+      if (!faces) expect(posts).toEqual([]);
+      // Its guards play with its persona's stance.
+      const personaId = (await stepOf(mate)).personaId;
+      const persona = COMPUTER_MATES.personas.find((p) => p.id === personaId)!;
+      expect(await createRaidsRepo(db).stanceOf(mapId, mate)).toBe(persona.stance);
+    }
+    // The facing mate filled both posts.
+    expect((await territory.myDefenders(mapId, facing!)).length).toBe(
+      COMPUTER_MATES.rules.guardedTiles,
+    );
+  }, 120_000);
 });
