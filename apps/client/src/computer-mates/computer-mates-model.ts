@@ -31,9 +31,9 @@ export const COMPUTER_TEXT = {
   hereHint: "Computer friends are run by the game, so they're always here.",
   /** On the friendly card for a mate: honest, and it keeps its own pace. */
   battleLine: "They're run by the game, and they play fair. Just for fun!",
-  /** Who's here with only mates around: "nobody here" would contradict the list. */
   /** A mate's not-now: it's napping, not "sleepy squishies", and there's no timer to quote. */
   napLine: (name: string) => `${name} is having a little nap! 💤 Ask again in a bit.`,
+  /** Who's here with only mates around: "nobody here" would contradict the list. */
   noKidsHere: 'No other Keepers right now, but your Computer friends are up for a battle!',
 } as const;
 
