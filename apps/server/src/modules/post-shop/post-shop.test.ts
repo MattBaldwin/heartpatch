@@ -19,7 +19,7 @@ import {
   type DbClient,
   type Transaction,
 } from '../../db/client.js';
-import { keepers, postPurchases, sessions, users } from '../../db/schema.js';
+import { keepers, mapMembers, maps, postPurchases, sessions, users } from '../../db/schema.js';
 import { backendPid, waitUntilBlockedBy } from '../../../tests/lock-waits.js';
 import { AppError } from '../../lib/errors.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -382,6 +382,29 @@ describe.skipIf(!url)('the trading post Shop (#729, needs DATABASE_URL)', () => 
     const unknown = await buy(server, kid, at, 'golden-lure');
     expect(unknown.statusCode, unknown.body).toBe(400);
     expect(await purchases(at.mapId, kid)).toHaveLength(0);
+  });
+
+  it('a Tutorial Glade has no Shop: buying or looking is NOT_FOUND and charges nothing', async () => {
+    const server = await start();
+    const kid = await player();
+    const at = await patch(server, kid, 100);
+    const [glade] = await db
+      .insert(maps)
+      .values({ kind: 'tutorial', name: 'Tutorial Glade', timeZone: 'UTC', maxPlayers: 1 })
+      .returning({ id: maps.id });
+    await db.insert(mapMembers).values({ mapId: glade!.id, userId: kid.id, role: 'owner' });
+    const inGlade = { ...at, mapId: glade!.id };
+    const refused = await buy(server, kid, inGlade, 'heart-charm-pack');
+    expect(refused.statusCode, refused.body).toBe(404);
+    const look = await call(
+      server,
+      'GET',
+      `/maps/${glade!.id}/posts/shop?q=${String(at.post.q)}&r=${String(at.post.r)}`,
+      kid,
+    );
+    expect(look.statusCode, look.body).toBe(404);
+    expect(await purchases(glade!.id, kid)).toHaveLength(0);
+    expect(await balanceOf(at.mapId, kid)).toBe(100);
   });
 
   it('the partial unique index holds one lure at a time even past the service', async () => {

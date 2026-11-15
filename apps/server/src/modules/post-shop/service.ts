@@ -7,6 +7,7 @@ import {
   type Hex,
   type PostShop,
   type PostShopItem,
+  type PostShopItemId,
   type PublicUser,
   type ShopItemView,
   type ShopView,
@@ -65,6 +66,12 @@ export interface PostShopServiceOptions {
   shop?: PostShop;
 }
 
+/** One item's public card, plus how many patch days until a week cap opens. */
+interface ItemCard {
+  view: ShopItemView;
+  capDays: number;
+}
+
 /** One item's cap and hold against my recent purchases, at patch day `today`. */
 function itemView(
   item: PostShopItem,
@@ -72,15 +79,16 @@ function itemView(
   map: { timeZone: string },
   at: Date,
   today: string,
-): ShopItemView & { capDays: number } {
+): ItemCard {
   const since = item.cap.per === 'day' ? today : addDays(today, -(WEEK_DAYS - 1));
   const counted = rows.filter((r) => r.itemId === item.id && r.day >= since);
   const left = Math.max(0, item.cap.count - counted.length);
   const held = item.held !== undefined && rows.some((r) => r.itemId === item.id && !r.consumedAt);
   // When one more fits: tomorrow for a day cap; for a week cap, the morning
   // the oldest counted purchase is 7 patch days old.
+  const oldest = counted[0];
   const opensOn =
-    left > 0 ? null : item.cap.per === 'day' ? null : addDays(counted[0]!.day, WEEK_DAYS);
+    left > 0 || item.cap.per === 'day' || !oldest ? null : addDays(oldest.day, WEEK_DAYS);
   const nextAt =
     left > 0
       ? null
@@ -88,11 +96,13 @@ function itemView(
         ? instantOfLocalDate({ date: opensOn, minute: 0 }, map.timeZone)
         : nextLocalMidnight(at, map.timeZone);
   return {
-    id: item.id,
-    price: item.price,
-    left,
-    nextAt: nextAt?.toISOString() ?? null,
-    status: held ? 'held' : left > 0 ? 'buy' : 'capped',
+    view: {
+      id: item.id,
+      price: item.price,
+      left,
+      nextAt: nextAt?.toISOString() ?? null,
+      status: held ? 'held' : left > 0 ? 'buy' : 'capped',
+    },
     capDays: opensOn ? daysFrom(today, opensOn) : 1,
   };
 }
@@ -106,8 +116,8 @@ export function createPostShopService(options: PostShopServiceOptions): PostShop
   const { db } = options;
   const now = options.clock ?? (() => new Date());
   const shop = options.shop ?? POST_SHOP;
-  const itemOf = (id: string) =>
-    options.shop ? shop.find((i) => i.id === id) : POST_SHOP_BY_ID.get(id as PostShopItem['id']);
+  const itemOf = (id: PostShopItemId) =>
+    options.shop ? shop.find((i) => i.id === id) : POST_SHOP_BY_ID.get(id);
 
   /** The Shop at `at`, read through `exec` (inside or outside a transaction). */
   async function viewOf(
@@ -115,7 +125,7 @@ export function createPostShopService(options: PostShopServiceOptions): PostShop
     map: { id: string; timeZone: string },
     userId: string,
     at: Date,
-  ): Promise<ShopView & { cards: ReturnType<typeof itemView>[] }> {
+  ): Promise<{ view: ShopView; cards: ItemCard[] }> {
     const today = localDate(at, map.timeZone);
     const [rows, balance] = await Promise.all([
       createPostShopRepo(exec).recent(map.id, userId, addDays(today, -(WEEK_DAYS - 1))),
@@ -123,20 +133,21 @@ export function createPostShopService(options: PostShopServiceOptions): PostShop
     ]);
     const cards = shop.map((item) => itemView(item, rows, map, at, today));
     return {
-      items: cards.map(({ capDays: _capDays, ...card }) => card),
-      lureHeld: rows.some((r) => r.itemId === 'rare-lure' && !r.consumedAt),
-      balance,
+      view: {
+        items: cards.map((c) => c.view),
+        lureHeld: rows.some((r) => r.itemId === 'rare-lure' && !r.consumedAt),
+        balance,
+      },
       cards,
     };
   }
-  const publicView = ({ cards: _cards, ...view }: Awaited<ReturnType<typeof viewOf>>) => view;
 
   return {
     view: async (user, mapId, post) => {
       const { map } = await requireMember(db, user, mapId, ['multiplayer']);
       const at = now();
       await requirePostAccess(db, { mapId, userId: user.id, post, at });
-      return publicView(await viewOf(db, map, user.id, at));
+      return (await viewOf(db, map, user.id, at)).view;
     },
 
     buy: async (user, mapId, request) => {
@@ -159,9 +170,10 @@ export function createPostShopService(options: PostShopServiceOptions): PostShop
         // under it: one player's purchases on a patch take turns here, so a
         // double tap can't slip two past a cap.
         await createHeartCoinsRepo(tx).lockBalance(mapId, user.id);
-        const card = (await viewOf(tx, map, user.id, at)).cards.find((c) => c.id === item.id)!;
-        if (card.status === 'held') throw new AppError('CONFLICT', MESSAGES.holdingOne);
-        if (card.status === 'capped') {
+        const card = (await viewOf(tx, map, user.id, at)).cards.find((c) => c.view.id === item.id);
+        if (!card) throw new AppError('NOT_FOUND');
+        if (card.view.status === 'held') throw new AppError('CONFLICT', MESSAGES.holdingOne);
+        if (card.view.status === 'capped') {
           throw new AppError(
             'CONFLICT',
             item.cap.per === 'day' ? MESSAGES.cappedToday : MESSAGES.cappedWeek(card.capDays),
@@ -203,7 +215,7 @@ export function createPostShopService(options: PostShopServiceOptions): PostShop
             got: items ? { kind: 'items' as const, items } : { kind: 'lure' as const },
           },
           balance,
-          shop: publicView(await viewOf(tx, map, user.id, at)),
+          shop: (await viewOf(tx, map, user.id, at)).view,
         };
       });
       void options.publish?.(mapId);

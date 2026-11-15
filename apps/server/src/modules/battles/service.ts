@@ -1871,7 +1871,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         };
       }
       // A Rare Lure from the post's Shop (#729): a plain read here; the start
-      // uses it up under its own update (`consumeLure`, step 5d).
+      // uses it up under its own update (`consumeLure`, step 5d). Reading it
+      // outside the tx is safe: consume is keyed by `lure.id` and refuses a used one.
       const lure = map.kind === 'tutorial' ? null : await heldLure(db, mapId, user.id);
       const encounter = await options.findWildEncounter?.({
         mapId,

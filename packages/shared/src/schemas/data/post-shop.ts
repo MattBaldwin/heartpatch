@@ -15,7 +15,7 @@ export type PostShopItemId = z.infer<typeof PostShopItemIdSchema>;
 /**
  * What a purchase does.
  * - `lure`: the buyer's next wild encounter on the patch rolls one rarity tier
- *   up (`resolveWildSpawn`'s `lure`), held until a wild start uses it.
+ *   up, held until a wild start uses it.
  * - `items`: these go straight into the buyer's bag on the patch.
  */
 export const PostShopEffectSchema = z.discriminatedUnion('kind', [
