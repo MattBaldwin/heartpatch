@@ -4,6 +4,7 @@ import {
   GAME_DATA,
   JoinMapResponseSchema,
   MapResponseSchema,
+  replayBattle,
   type PlayerBattle,
   type PublicUser,
 } from '@heartpatch/shared';
@@ -22,6 +23,8 @@ import { keepers, sessions, squishies, users } from '../../db/schema.js';
 import { instantOfLocalDate, localDate } from '../../lib/time.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
+import { createBattlesRepo, setupOf } from '../battles/repo.js';
+import { defaultBattleContent } from '../battles/service.js';
 import { newSessionToken } from '../auth/secrets.js';
 
 const url = inject('testDatabaseUrl');
@@ -195,6 +198,22 @@ describe.skipIf(!url)('mini-boss visits and fights (#190b, needs DATABASE_URL)',
     expect(res.statusCode, res.body).toBe(200);
     return BattleResponseSchema.parse(res.json()).battle;
   };
+  /** Plays every fighter's first move until the fight ends. */
+  const playOut = async (server: FastifyInstance, who: Player, start: PlayerBattle) => {
+    let battle = start;
+    for (let round = 0; round < 100 && battle.status === 'active'; round++) {
+      const side = battle.view.sides.a;
+      const picks = (side.out ?? [])
+        .filter((slot) => side.squishies[slot]!.energy > 0)
+        .map((slot) => ({ slot, move: side.squishies[slot]!.moves[0]! }));
+      battle = await act(server, who, battle, { type: 'team', picks });
+    }
+    return battle;
+  };
+  const minibossBattles = async (userId: string) =>
+    db.query.battles.findMany({
+      where: (t, { and, eq: is }) => and(is(t.playerUserId, userId), is(t.kind, 'miniboss')),
+    });
   const appeared = async (mapId: string) =>
     (
       await db.query.gameEvents.findMany({
@@ -332,15 +351,9 @@ describe.skipIf(!url)('mini-boss visits and fights (#190b, needs DATABASE_URL)',
     await toVisit(mapId);
     const res = await fight(server, owner, mapId);
     expect(res.statusCode, res.body).toBe(201);
-    let battle = BattleResponseSchema.parse(res.json()).battle;
-    expect(battle.kind).toBe('miniboss');
-    for (let round = 0; round < 100 && battle.status === 'active'; round++) {
-      const side = battle.view.sides.a;
-      const picks = (side.out ?? [])
-        .filter((slot) => side.squishies[slot]!.energy > 0)
-        .map((slot) => ({ slot, move: side.squishies[slot]!.moves[0]! }));
-      battle = await act(server, owner, battle, { type: 'team', picks });
-    }
+    const started = BattleResponseSchema.parse(res.json()).battle;
+    expect(started.kind).toBe('miniboss');
+    const battle = await playOut(server, owner, started);
     expect(battle.status).toBe('finished');
     expect(battle.view.phase).toMatchObject({ type: 'over', result: { winner: 'a' } });
     expect(battle.rewards?.coins).toEqual({ patch: 5, heart: 5 });
@@ -349,5 +362,73 @@ describe.skipIf(!url)('mini-boss visits and fights (#190b, needs DATABASE_URL)',
     const again = await fight(server, owner, mapId);
     expect(again.statusCode).toBe(409);
     expect((await visit(server, friend, mapId))!.state).toBe('here');
+
+    // Rule 3: the stored setup (with its team format) and actions replay to the end.
+    const row = (await createBattlesRepo(db).findBattle(battle.id))!;
+    expect(row.state.format).toEqual({ a: 3, b: 1 });
+    expect(replayBattle(defaultBattleContent(), setupOf(row), row.actions)).toEqual(row.state);
+  });
+
+  it('gives the try back when a fight ends as a no-contest', async () => {
+    const { server } = await start();
+    const owner = await player();
+    const mapId = await patch(server, owner);
+    await grow(mapId, owner, 20);
+    await toVisit(mapId);
+    const res = await fight(server, owner, mapId);
+    expect(res.statusCode, res.body).toBe(201);
+    const battle = BattleResponseSchema.parse(res.json()).battle;
+    expect((await visit(server, owner, mapId))!.triesLeftToday).toBe(RULES.triesPerDay - 1);
+    // A deploy retuned the game mid-fight: the battle ends as a no-contest.
+    await db.execute(`update battles set content_hash = 'retuned' where id = '${battle.id}'`);
+    const ended = await call(server, 'GET', `/battles/${battle.id}`, owner);
+    expect(BattleResponseSchema.parse(ended.json()).battle.status).toBe('no-contest');
+    expect((await visit(server, owner, mapId))!.triesLeftToday).toBe(RULES.triesPerDay);
+  });
+
+  it('two taps on the last try start one fight', async () => {
+    const { server } = await start();
+    const owner = await player();
+    const mapId = await patch(server, owner);
+    await grow(mapId, owner, 20);
+    await toVisit(mapId);
+    for (let i = 0; i < RULES.triesPerDay - 1; i++) {
+      const res = await fight(server, owner, mapId);
+      expect(res.statusCode, res.body).toBe(201);
+      await act(server, owner, BattleResponseSchema.parse(res.json()).battle, { type: 'forfeit' });
+    }
+    const taps = await Promise.all([fight(server, owner, mapId), fight(server, owner, mapId)]);
+    const ids = taps.map((tap) => {
+      expect(tap.statusCode, tap.body).toBeLessThan(300);
+      return BattleResponseSchema.parse(tap.json()).battle.id;
+    });
+    // The second tap resumes the first's fight: one battle, no try left over.
+    expect(ids[0]).toBe(ids[1]);
+    expect(taps.map((tap) => tap.statusCode).sort()).toEqual([200, 201]);
+    const rows = await minibossBattles(owner.id);
+    expect(rows).toHaveLength(RULES.triesPerDay);
+    expect(rows.filter((row) => row.status === 'active')).toHaveLength(1);
+    expect((await visit(server, owner, mapId))!.triesLeftToday).toBe(0);
+  });
+
+  it('a scooted fight pays no coins and no bundle, and uses the try', async () => {
+    const { server } = await start();
+    const owner = await player();
+    const mapId = await patch(server, owner);
+    await grow(mapId, owner, 20, [20, 20]);
+    await toVisit(mapId);
+    const res = await fight(server, owner, mapId);
+    let battle = BattleResponseSchema.parse(res.json()).battle;
+    const side = battle.view.sides.a;
+    battle = await act(server, owner, battle, {
+      type: 'team',
+      picks: (side.out ?? []).map((slot) => ({ slot, move: side.squishies[slot]!.moves[0]! })),
+    });
+    expect(battle.status).toBe('active');
+    battle = await act(server, owner, battle, { type: 'forfeit' });
+    expect(battle.view.phase).toMatchObject({ type: 'over', result: { reason: 'forfeit' } });
+    expect(battle.rewards?.coins ?? { patch: 0, heart: 0 }).toEqual({ patch: 0, heart: 0 });
+    expect(battle.rewards?.bundle ?? null).toBeNull();
+    expect((await visit(server, owner, mapId))!.triesLeftToday).toBe(RULES.triesPerDay - 1);
   });
 });
