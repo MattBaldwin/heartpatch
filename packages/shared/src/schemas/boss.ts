@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PlayerBattleSchema } from './battle.js';
 import { ContentIdSchema } from './data/common.js';
 import { LocalDateSchema } from './time.js';
 
@@ -6,10 +7,10 @@ import { LocalDateSchema } from './time.js';
  * Where a Keeper stands with this week's mini-boss (#190):
  * - `here`: out there and ready for a fight;
  * - `too-big`: their Partner isn't grown enough yet ("Too big for now!");
- * - `beaten`: they won, so it's done for them until its next visit.
- * (`friend` comes with befriending, 190c.)
+ * - `beaten`: they won, so it's done for them until its next visit;
+ * - `friend`: they won and it joined them on this visit (190c).
  */
-export const BossVisitStateSchema = z.enum(['here', 'too-big', 'beaten']);
+export const BossVisitStateSchema = z.enum(['here', 'too-big', 'beaten', 'friend']);
 export type BossVisitState = z.infer<typeof BossVisitStateSchema>;
 
 /**
@@ -29,3 +30,24 @@ export type BossVisit = z.infer<typeof BossVisitSchema>;
 
 export const BossVisitResponseSchema = z.object({ boss: BossVisitSchema.nullable() });
 export type BossVisitResponse = z.infer<typeof BossVisitResponseSchema>;
+
+/**
+ * `POST /api/v1/battles/:battleId/befriend` (#190 plan §3): ask a beaten boss
+ * to be your friend. `ask` is the ask number (1, then 2), checked against the
+ * asks made so far, so a double tap can't spend charms twice.
+ */
+export const BossBefriendRequestSchema = z.strictObject({
+  ask: z.number().int().min(1).max(10),
+});
+export type BossBefriendRequest = z.infer<typeof BossBefriendRequestSchema>;
+
+/**
+ * The ask's answer, and the battle with its `boss` view after it. `squishyId`
+ * is the friend who joined (on `joined`). A repeated ask gets the stored answer.
+ */
+export const BossBefriendResponseSchema = z.object({
+  outcome: z.enum(['joined', 'not-yet']),
+  squishyId: z.uuid().nullable(),
+  battle: PlayerBattleSchema,
+});
+export type BossBefriendResponse = z.infer<typeof BossBefriendResponseSchema>;
