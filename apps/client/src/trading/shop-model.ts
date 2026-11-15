@@ -60,7 +60,6 @@ export const SHOP_TEXT = {
   notNow: 'Not right now',
   yes: 'Buy',
   no: 'Not now',
-  noUndo: 'Coins spent are spent.',
   lureReady: 'Got it! Your lure is ready ✨',
   lureReadyLine: 'Tap Find a squishy to go looking.',
   got: 'Got it! ✨',

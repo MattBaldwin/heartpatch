@@ -322,8 +322,8 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     try {
       const view = await shops.view(mapView.map.id, at());
       if (at_ === generation) {
+        // Keep shopNote: a refused buy re-reads the shop, and its words must stay up.
         shop = view;
-        shopNote = '';
       }
     } catch (err) {
       if (at_ === generation) shopNote = shop ? messageOf(err) : SHOP_TEXT.closed;

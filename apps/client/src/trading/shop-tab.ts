@@ -1,7 +1,7 @@
 import type { ShopView } from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
 import { postConfirm } from './post-confirm.js';
-import { confirmContent, receipt, SHOP_TEXT, shopCards, type ShopCard } from './shop-model.js';
+import { confirmContent, SHOP_TEXT, shopCards, type ShopCard } from './shop-model.js';
 
 // The post's Shop tab (#729; the owner-approved mockup v3): one card per
 // item with its price pill and Buy, the confirm sheet before anything is
@@ -38,6 +38,20 @@ export interface ShopTabDeps {
 
 export function shopTab(state: ShopTabState, deps: ShopTabDeps): Node[] {
   const { view, button } = { view: state.view, button: deps.button };
+  /** "Buy" says nothing alone; a screen reader hears which one (as sell-tab's steppers do). */
+  const buyButton = (card: ShopCard): HTMLButtonElement => {
+    const b = button(
+      SHOP_TEXT.buy,
+      `post-shop-buy-${card.id}`,
+      'primary',
+      () => {
+        deps.onAsk(card.id);
+      },
+      !card.canBuy || state.passOver,
+    );
+    b.setAttribute('aria-label', `${SHOP_TEXT.buy} ${card.name}`);
+    return b;
+  };
   const noteNode = state.note
     ? [
         el(
@@ -150,15 +164,7 @@ export function shopTab(state: ShopTabState, deps: ShopTabDeps): Node[] {
         'div',
         { class: 'shop-foot' },
         el('span', { class: 'shop-price' }, SHOP_TEXT.price(card.price)),
-        button(
-          SHOP_TEXT.buy,
-          `post-shop-buy-${card.id}`,
-          'primary',
-          () => {
-            deps.onAsk(card.id);
-          },
-          !card.canBuy || state.passOver,
-        ),
+        buyButton(card),
       ),
       ...(card.why
         ? [el('p', { class: 'shop-why', 'data-testid': `post-shop-why-${card.id}` }, card.why)]
@@ -166,5 +172,3 @@ export function shopTab(state: ShopTabState, deps: ShopTabDeps): Node[] {
     );
   }
 }
-
-export { receipt };

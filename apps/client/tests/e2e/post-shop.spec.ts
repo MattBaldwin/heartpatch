@@ -31,9 +31,12 @@ async function shopper(browser: Parameters<typeof newPlayer>[0], coins: number) 
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
   await waitForLiveMap(page);
   await visitPost(page);
+  // The post's hex, read from the shop's own request (the page doesn't expose it).
+  const seen = page.waitForRequest((r) => r.url().includes('/posts/shop?'));
   await page.getByTestId('post-tab-shop').tap();
+  const at = new URL((await seen).url()).searchParams;
   await expect(page.getByTestId('post-shop-list')).toBeVisible();
-  return { page, mapId, errors };
+  return { page, mapId, errors, at };
 }
 
 const card = (page: Page, id: string) =>
@@ -55,7 +58,7 @@ test('shop: six tabs fit, cards show the server prices, a lure buy goes confirm 
   await expect(page.getByTestId('post-tab-mailbox')).toContainText('Mail');
   await expect(page.getByTestId('post-shop-balance')).toHaveText('💛 130');
 
-  // 130 buys the lure (120) and the crate (60) is too dear.
+  // 130 buys the lure (120); the crate (60) and the pack are still on offer but 130 can't cover both.
   await expect(card(page, 'rare-lure')).toHaveAttribute('data-state', 'buy');
   await expect(page.getByTestId('post-shop-buy-rare-lure')).toBeEnabled();
   await expect(card(page, 'potion-crate')).toHaveAttribute('data-state', 'buy');
@@ -102,4 +105,37 @@ test('shop: a capped pack says back tomorrow and its Buy greys out', async ({ br
     'Back tomorrow! 🌙',
   );
   await expect(page.getByTestId('post-shop-buy-heart-charm-pack')).toBeDisabled();
+});
+
+test("shop: a refused purchase keeps the server's words after the card re-reads", async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const { page, mapId, at } = await shopper(browser, 500);
+  // Another device buys the day's pack first; this card is now stale.
+  const first = await page.evaluate(
+    async ({ mapId, q, r }) => {
+      const res = await fetch(`/api/v1/maps/${mapId}/posts/shop`, {
+        method: 'POST',
+        headers: {
+          'x-requested-with': 'heartpatch',
+          'content-type': 'application/json',
+          'idempotency-key': crypto.randomUUID(),
+        },
+        body: JSON.stringify({ q: Number(q), r: Number(r), itemId: 'heart-charm-pack' }),
+      });
+      return res.status;
+    },
+    { mapId, q: at.get('q'), r: at.get('r') },
+  );
+  expect(first).toBe(200);
+  await page.getByTestId('post-shop-buy-heart-charm-pack').tap();
+  await page.getByTestId('post-shop-confirm-yes').tap();
+  // The re-read redraws the card as capped, and the refusal stays up.
+  await expect(page.getByTestId('post-shop-state-heart-charm-pack')).toHaveText(
+    'Back tomorrow! 🌙',
+  );
+  await expect(page.getByTestId('post-shop-note')).toBeVisible();
+  await expect(page.getByTestId('post-shop-note')).not.toHaveText('');
+  await expect(page.getByTestId('post-shop-done')).toBeHidden();
 });
