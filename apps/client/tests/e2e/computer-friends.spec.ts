@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { hook } from './dev-hook.js';
+import { api, hook, liveMapId } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { grantSquishy, twoTraders, visitPost } from './trading.js';
 
@@ -234,6 +234,77 @@ test('the owner switches Computer friends on, and three badged mates move in (#3
     const apart = words.right <= close.x || words.bottom <= close.y;
     expect(apart, `title clear of the close button at ${String(width)}`).toBe(true);
   }
+  await page.context().close();
+});
+
+/**
+ * A mate's "yes" arrives inside the ask's own reply (#386e): the asker opens
+ * the battle, and only once. The server's reply and the battle read are stood
+ * in by stubs; the battle body is a real dev fight the player started.
+ */
+test('a mate that says yes opens the battle exactly once (#386f)', async ({ browser }) => {
+  test.setTimeout(240_000);
+  const page = await newPlayer(browser, uniqueName('cf'));
+  const state = { on: true, mapId: '' };
+  await stubComputerMates(page, state);
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Yes Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(page.getByTestId('map-hud')).toContainText('Yes Patch');
+  const hintOk = page.getByTestId('tray-hint-ok');
+  await expect(hintOk).toBeVisible({ timeout: 15_000 });
+  await hintOk.tap();
+  const hello = page.getByTestId('computer-hello');
+  await expect(hello).toBeVisible({ timeout: 15_000 });
+  await hello.getByTestId('computer-hello-ok').tap();
+
+  // A real fight to borrow the battle body from (the starter is home already).
+  const mapId = await liveMapId(page);
+  const made = await api<{ battle: { id: string } & Record<string, unknown> }>(
+    page,
+    'POST',
+    `/maps/${mapId}/dev/battles`,
+    {},
+  );
+  expect(made.status).toBeLessThan(300);
+  const battleId = made.body.battle.id;
+
+  let reads = 0;
+  await page.route(new RegExp(`/api/v1/battles/${battleId}$`), async (route) => {
+    reads += 1;
+    return route.fulfill({ json: made.body });
+  });
+  await page.route(/\/api\/v1\/maps\/[0-9a-f-]{36}\/challenges$/, async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const body = route.request().postDataJSON() as { toUserId: string };
+    const now = Date.now();
+    return route.fulfill({
+      json: {
+        challenge: {
+          id: '00000000-0000-4000-8000-000000000393',
+          kind: 'friendly',
+          status: 'accepted',
+          fromUserId: '00000000-0000-4000-8000-000000000392',
+          toUserId: body.toUserId,
+          fromTeamLevel: 1,
+          toTeamLevel: 1,
+          createdAt: new Date(now).toISOString(),
+          expiresAt: new Date(now + 60_000).toISOString(),
+          battleId,
+        },
+      },
+    });
+  });
+  await page.getByTestId('friendly-open').tap();
+  await page.getByTestId('friendly-battle-mate').first().tap();
+  await page.getByTestId('friendly-ask-send').tap();
+  await expect(page.getByTestId('battle-hud')).toBeVisible({ timeout: 60_000 });
+  await expect.poll(() => hook<{ id: string }>(page, 'battle').then((b) => b?.id)).toBe(battleId);
+  // Let any second opener (a live event, a retry) show itself before counting.
+  await page.waitForTimeout(1_500);
+  expect(reads, 'the battle is read once').toBe(1);
   await page.context().close();
 });
 

@@ -19,7 +19,6 @@ import {
   type WsEventMessage,
 } from '@heartpatch/shared';
 import { clothingIcon, clothingSlotIcon, itemIcon } from '../inventory/item-icons.js';
-import { COMPUTER_TEXT } from '../computer-mates/computer-mates-model.js';
 
 // The trading post's screen (#271; the owner-approved mockup, screens d, e
 // and f) in words and picks. Pure, so every case is unit-tested. The server
@@ -69,7 +68,6 @@ export const TRADE_TEXT = {
   giftPickFirst: 'Tap things to pick a gift',
   giftConfirmTitle: 'Send this gift? 🎁',
   /** The offer card from a Computer friend (#386f): the badge sits beside the name. */
-  mateWouldLikeToTrade: (name: string) => `${name} (${COMPUTER_TEXT.badge}) would like to trade!`,
   mateWouldLike: ' would like to trade!',
   /** Under "Send offer" for a Computer friend: a fair offer is never lost to their daily limit. */
   mateWaits: (name: string) =>
