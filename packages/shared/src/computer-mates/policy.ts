@@ -63,6 +63,8 @@ export interface MateIncomingOffer {
   readonly wantValue: number;
   /** The kid asks for items only (a mate never gives a squishy or clothing). */
   readonly wantsItemsOnly: boolean;
+  /** The item ids the kid asks for: a mate gives only what's on `mateItems`. */
+  readonly wantItemIds: readonly string[];
 }
 
 /** What a mate's trade and gift choices read (386d). Caps count across all mates unless noted. */
@@ -223,12 +225,17 @@ export function borderFacingKids(view: MateView): Hex[] {
     .map((t) => ({ q: t.q, r: t.r }));
 }
 
-/** Items anyone may trade that have a value: what a mate can make for a trade or gift. */
-const MATE_ITEMS: readonly string[] = GAME_DATA.resources
-  .filter(isTradableResource)
-  .map((r) => r.id)
-  .filter((id) => (TRADE_VALUES.items[id] ?? 0) > 0)
-  .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+const TRADABLE = new Set(GAME_DATA.resources.filter(isTradableResource).map((r) => r.id));
+
+/**
+ * What a mate can make for a trade or gift: the everyday gathered resources
+ * on `mateItems` (386d) that anyone may trade and that have a value, sorted.
+ */
+export function mateItems(rules: ComputerMateRules, values: TradeValues = TRADE_VALUES): string[] {
+  return [...new Set(rules.mateItems)]
+    .filter((id) => TRADABLE.has(id) && (values.items[id] ?? 0) > 0)
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+}
 
 /** Whether two sides are inside the fair band: the smaller is at least `minFairPercent` of the bigger. */
 export function insideFairBand(a: number, b: number, rules: ComputerMateRules): boolean {
@@ -238,9 +245,10 @@ export function insideFairBand(a: number, b: number, rules: ComputerMateRules): 
 
 /**
  * A mate's answer to a kid's offer (plan §1 D): a gift is always welcome; a
- * trade is a yes only for items (never a squishy or clothing), with the kid's
- * side worth at least `minFairPercent` of the mate's, and not lopsided the
- * kid's way either (a mate never takes a lopsided trade, plan §1 E).
+ * trade is a yes only for items on `mateItems` (never a squishy, clothing or
+ * anything rarer), worth at most `offerValue.max` from the mate, with the
+ * kid's side worth at least `minFairPercent` of the mate's, and not lopsided
+ * the kid's way either (a mate never takes a lopsided trade, plan §1 E).
  */
 export function mateSaysYes(
   offer: MateIncomingOffer,
@@ -249,6 +257,9 @@ export function mateSaysYes(
 ): boolean {
   if (offer.kind === 'gift') return true;
   if (!offer.wantsItemsOnly || offer.wantValue <= 0 || offer.giveValue <= 0) return false;
+  const shelf = new Set(mateItems(rules, values));
+  if (!offer.wantItemIds.every((id) => shelf.has(id))) return false;
+  if (offer.wantValue > rules.offerValue.max) return false;
   return (
     offer.giveValue * 100 >= offer.wantValue * rules.minFairPercent &&
     offer.giveValue < values.lopsided * offer.wantValue
@@ -259,9 +270,10 @@ const itemsValue = (lines: readonly MateItemLine[], values: TradeValues) =>
   lines.reduce((sum, l) => sum + (values.items[l.itemId] ?? 0) * l.quantity, 0);
 
 /**
- * A mate's own offer to a kid, or null: items only, asking for one stack the
- * kid has (worth about `offerValue`), giving one stack of another item,
- * always inside the fair band.
+ * A mate's own offer to a kid, or null: items on `mateItems` only, asking for
+ * one stack the kid has (worth about `offerValue`), giving one stack of
+ * another, always inside the fair band and never worth more than
+ * `offerValue.max`.
  */
 export function mateOffer(
   trading: MateTradingView,
@@ -269,18 +281,19 @@ export function mateOffer(
   rng: Rng,
   values: TradeValues = TRADE_VALUES,
 ): Extract<MateIntent, { kind: 'offer' }> | null {
-  const kids = trading.kids.filter((k) => MATE_ITEMS.some((id) => (k.bag[id] ?? 0) > 0));
+  const shelf = mateItems(rules, values);
+  const kids = trading.kids.filter((k) => shelf.some((id) => (k.bag[id] ?? 0) > 0));
   if (kids.length === 0) return null;
   const kid = rng.pick(kids);
   const target = rng.int(rules.offerValue.min, rules.offerValue.max);
-  const wantable = MATE_ITEMS.filter((id) => (kid.bag[id] ?? 0) > 0);
+  const wantable = shelf.filter((id) => (kid.bag[id] ?? 0) > 0);
   const wantId = rng.pick(wantable);
   const each = values.items[wantId] ?? 0;
   const quantity = Math.max(1, Math.min(kid.bag[wantId] ?? 0, Math.round(target / each)));
   const want = [{ itemId: wantId, quantity }];
   const wantValue = itemsValue(want, values);
   // Every other item, from a seeded start: the first that fits the band.
-  const others = MATE_ITEMS.filter((id) => id !== wantId);
+  const others = shelf.filter((id) => id !== wantId);
   const start = rng.int(0, Math.max(0, others.length - 1));
   for (let i = 0; i < others.length; i++) {
     const giveId = others[(start + i) % others.length];
@@ -288,7 +301,8 @@ export function mateOffer(
     const per = values.items[giveId] ?? 0;
     const giveQty = Math.max(1, Math.round(wantValue / per));
     const give = [{ itemId: giveId, quantity: giveQty }];
-    if (insideFairBand(itemsValue(give, values), wantValue, rules)) {
+    const giveValue = itemsValue(give, values);
+    if (giveValue <= rules.offerValue.max && insideFairBand(giveValue, wantValue, rules)) {
       return { kind: 'offer', toUserId: kid.userId, give, want, noteId: MATE_NOTES.offer };
     }
   }
@@ -302,7 +316,9 @@ export function mateGift(
   rng: Rng,
   values: TradeValues = TRADE_VALUES,
 ): Extract<MateIntent, { kind: 'gift' }> | null {
-  const items = MATE_ITEMS.filter((id) => (values.items[id] ?? 0) <= rules.giftMaxValue);
+  const items = mateItems(rules, values).filter(
+    (id) => (values.items[id] ?? 0) <= rules.giftMaxValue,
+  );
   if (trading.kids.length === 0 || items.length === 0) return null;
   const kid = rng.pick(trading.kids);
   const itemId = rng.pick(items);

@@ -23,11 +23,11 @@ import {
   type TradeShelf,
   type TradesView,
 } from '@heartpatch/shared';
-import { COMPUTER_MATES, type ComputerMateRules } from '@heartpatch/shared/server';
+import { COMPUTER_MATES, mateItems, type ComputerMateRules } from '@heartpatch/shared/server';
 import type { Executor, Transaction } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
-import type { Clock } from '../../lib/time.js';
+import { localDayStart, MINUTE_MS, type Clock } from '../../lib/time.js';
 import { consumeItems, grantItems, lockGrantRows } from '../inventory/service.js';
 import { leaveHouse } from '../house/service.js';
 import { checkpointContentment } from '../jobs/contentment.js';
@@ -82,6 +82,8 @@ const MESSAGES = {
   notOwner: 'Only the patch owner can change that.',
   gone: "That patch-mate isn't on this patch any more.",
   noPost: "We couldn't find a trading post near your home.",
+  matesTradedOut: 'Your computer friends are all traded out for now. Try again tomorrow!',
+  matesItemsOnly: 'Computer friends trade everyday goodies only.',
   problem: {
     empty: 'Pick something to give, and something to ask for!',
     'gift-wants': 'A gift is just for giving. Nothing to ask for back!',
@@ -418,19 +420,48 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
 
   /**
    * A computer patch-mate's side (#386d): no squishy or clothing to ask for
-   * (they offer items only, owner decision 6), and `shelfPerItem` of every
-   * tradable item, made when a yes needs it (they have no bag).
+   * (they offer items only, owner decision 6), and `shelfPerItem` of each
+   * everyday gathered resource on `mateItems` (never Heartdust, Glimmer, a
+   * `neverSold`, crafted or seasonal item), made when a yes needs it (they
+   * have no bag).
    */
   const computerShelf: Record<string, number> = Object.fromEntries(
-    [...TRADABLE_ITEMS]
-      .sort((a, b) => a.localeCompare(b))
-      .map((id) => [id, computerRules.shelfPerItem]),
+    mateItems(computerRules).map((id) => [id, computerRules.shelfPerItem]),
   );
   const computerSide: OfferSide = {
     squishies: [],
     items: computerShelf,
     tradableItems: TRADABLE_ITEMS,
     clothing: [],
+  };
+
+  /**
+   * Takes the patch's computer-trade lock (step 9a, before any offer row) and
+   * recounts the patch-wide caps under it (#386d): two mates stepping at once
+   * can't both take the day's last trade or the week's last gift.
+   * `offersPerWeek` is per mate, held by its own row (3a).
+   */
+  const holdComputerCaps = async (
+    tx: Transaction,
+    mapId: string,
+    mateId: string,
+    what: 'trade' | 'gift' | 'yes',
+  ) => {
+    const repo = createTradesRepo(tx);
+    await repo.lockComputerTrades(mapId);
+    const map = await createMapsRepo(tx).findMap(mapId);
+    if (!map) throw new AppError('NOT_FOUND', MESSAGES.notPatchMate);
+    const at = now();
+    const counts = await repo.computerTradeCounts(
+      mapId,
+      mateId,
+      localDayStart(at, map.timeZone),
+      new Date(at.getTime() - 7 * 24 * 60 * MINUTE_MS),
+    );
+    const full =
+      counts.completedToday >= computerRules.completedPerPatchDay ||
+      (what === 'gift' && counts.giftsThisWeek >= computerRules.giftsPerPatchWeek);
+    if (full) throw new AppError('CONFLICT', MESSAGES.matesTradedOut);
   };
 
   const refuse = (problem: OfferProblem | null) => {
@@ -641,11 +672,6 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
   const send = async (user: PublicUser, mapId: string, request: SendOfferRequest) => {
     await requireMember(db, user, mapId);
     await expireDue(mapId);
-    const noteId = request.noteId ?? null;
-    if (noteId !== null && !quickMessageById(noteId)) {
-      throw new AppError('VALIDATION_FAILED', MESSAGES.badNote);
-    }
-    if (request.toUserId === user.id) throw new AppError('VALIDATION_FAILED', MESSAGES.self);
     await run(async (tx, events) => {
       await requireMember(tx, user, mapId);
       // One send at a time per player (step 2), so the open-offer limits hold.
@@ -670,6 +696,10 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
   ): Promise<string> => {
     const user = { id: senderId };
     const noteId = request.noteId ?? null;
+    if (noteId !== null && !quickMessageById(noteId)) {
+      throw new AppError('VALIDATION_FAILED', MESSAGES.badNote);
+    }
+    if (request.toUserId === user.id) throw new AppError('VALIDATION_FAILED', MESSAGES.self);
     const at = now();
     const repo = createTradesRepo(tx);
     await requireTrading(repo, mapId);
@@ -1117,10 +1147,19 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
       });
     },
 
-    sendAsComputer: (tx, events, { mapId, mateId, request }) =>
-      sendWithin(tx, events, mateId, mapId, request, null),
+    sendAsComputer: async (tx, events, { mapId, mateId, request }) => {
+      // A mate's made items go straight in the kid's mailbox or are picked
+      // up at the kid's yes: only plain items, never a squishy or clothing.
+      if (![...request.give, ...request.want].every((l) => l.kind === 'item')) {
+        throw new AppError('VALIDATION_FAILED', MESSAGES.matesItemsOnly);
+      }
+      await holdComputerCaps(tx, mapId, mateId, request.kind === 'gift' ? 'gift' : 'trade');
+      return sendWithin(tx, events, mateId, mapId, request, null);
+    },
 
     answerAsComputer: async (tx, events, { mapId, mateId, offerId, answer, alsoLock }) => {
+      // A yes counts toward the patch day's cap; a no never waits.
+      if (answer === 'accept') await holdComputerCaps(tx, mapId, mateId, 'yes');
       const [offer] = await createTradesRepo(tx).lockOffers([offerId]); // step 9b
       if (offer?.mapId !== mapId || offer.toUserId !== mateId) {
         throw new AppError('NOT_FOUND', MESSAGES.noOffer);

@@ -8,6 +8,7 @@ import {
   claimTarget,
   insideFairBand,
   mateGift,
+  mateItems,
   mateOffer,
   mateSaysYes,
   offerToAnswer,
@@ -212,9 +213,10 @@ describe('computer mates policy', () => {
       id: 'o1',
       kind: 'trade',
       waitedMinutes: 60,
-      giveValue: 40,
-      wantValue: 40,
+      giveValue: 30,
+      wantValue: 30,
       wantsItemsOnly: true,
+      wantItemIds: ['timber'],
       ...over,
     });
     /** Trade- and gift-only mates: no claims or guards to pick instead. */
@@ -227,13 +229,13 @@ describe('computer mates policy', () => {
       lines.reduce((sum, l) => sum + (TRADE_VALUES.items[l.itemId] ?? 0) * l.quantity, 0);
 
     it('a computer mate declines an unfair offer and accepts a fair one after its delay', () => {
-      const fair = offer({ giveValue: 36, wantValue: 40 }); // 90 %
-      const unfair = offer({ giveValue: 30, wantValue: 40 }); // 75 %
+      const fair = offer({ giveValue: 27, wantValue: 30 }); // 90 %
+      const unfair = offer({ giveValue: 22, wantValue: 30 }); // 73 %
       expect(mateSaysYes(fair, rules)).toBe(true);
       expect(mateSaysYes(unfair, rules)).toBe(false);
       // Asking for a squishy or clothing, or a lopsided gift of a trade: no thanks.
       expect(mateSaysYes(offer({ wantsItemsOnly: false }), rules)).toBe(false);
-      expect(mateSaysYes(offer({ giveValue: 80, wantValue: 40 }), rules)).toBe(false);
+      expect(mateSaysYes(offer({ giveValue: 61, wantValue: 30 }), rules)).toBe(false);
       expect(mateSaysYes(offer({ kind: 'gift', wantValue: 0 }), rules)).toBe(true);
       // Not before answerMinutes.
       const early = { waitedMinutes: persona.answerMinutes - 1 };
@@ -252,6 +254,17 @@ describe('computer mates policy', () => {
       expect(nextIntent(quiet(trading({ incoming: [fair] })), persona, rules, rngAt(1))).toEqual(
         expect.objectContaining({ kind: 'answer-offer' }),
       );
+    });
+
+    it('a computer mate declines asking for anything off mateItems, or worth more than offerValue.max', () => {
+      expect(mateItems(rules)).toEqual([...rules.mateItems].sort());
+      for (const id of ['heartdust', 'glimmer', 'heart-charm', 'jack-o-lantern-hearthfire']) {
+        expect(mateItems(rules)).not.toContain(id);
+        expect(mateSaysYes(offer({ wantItemIds: ['timber', id] }), rules), id).toBe(false);
+      }
+      const max = rules.offerValue.max;
+      expect(mateSaysYes(offer({ giveValue: max, wantValue: max }), rules)).toBe(true);
+      expect(mateSaysYes(offer({ giveValue: max + 1, wantValue: max + 1 }), rules)).toBe(false);
     });
 
     it('a yes waits while completedPerPatchDay is used up; a no never waits', () => {
@@ -278,6 +291,8 @@ describe('computer mates policy', () => {
         expect(toUserId).toBe(KID);
         expect(noteId).toBe('want-to-trade');
         expect(insideFairBand(items(give), items(want), rules)).toBe(true);
+        expect(items(give)).toBeLessThanOrEqual(rules.offerValue.max);
+        for (const line of [...give, ...want]) expect(rules.mateItems).toContain(line.itemId);
         for (const w of want) {
           expect(w.quantity).toBeLessThanOrEqual(trading().kids[0]!.bag[w.itemId] ?? 0);
         }
@@ -303,6 +318,7 @@ describe('computer mates policy', () => {
         const gift = mateGift(trading(), rules, rngAt(step))!;
         expect(items(gift.give)).toBeGreaterThan(0);
         expect(items(gift.give)).toBeLessThanOrEqual(rules.giftMaxValue);
+        for (const line of gift.give) expect(rules.mateItems).toContain(line.itemId);
         expect(gift.noteId).toBe('heart');
       }
     });

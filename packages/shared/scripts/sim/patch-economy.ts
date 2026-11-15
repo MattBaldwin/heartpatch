@@ -51,7 +51,7 @@ export const PATCH_ECONOMY_LIMITS = [
   'the kid always has a homestead of the right land free (clearing, #242, is not modelled)',
   'battles, captures and care earn the same each day; nothing else spends Heart Coins',
   'matches, fences, the Factory, trades and captures between kids',
-  "solo rows (#386d) use the 4-seat map's build income, so they differ only in play coins and gifts; a solo kid: no friendly or defence wins; with computer mates: friendlies as the 4-seat row (at most `PAID_FRIENDLY_WINS_VS_COMPUTERS` a day, all mates), held defences at most the mates' weekly challenge cap, and `giftsPerPatchWeek` gifts a week of the best-selling item worth `giftMaxValue`; trades with mates are value-neutral (the fair band) and not modelled",
+  "solo rows (#386d) use the 4-seat map's build income, so they differ only in play coins and gifts; a solo kid: no friendly or defence wins; with computer mates: friendlies as the 4-seat row (at most `PAID_FRIENDLY_WINS_VS_COMPUTERS` a day, all mates), held defences at most the mates' weekly challenge cap, and `giftsPerPatchWeek` gifts a week of the best-selling `mateItems` item worth `giftMaxValue`; trades with mates are value-neutral (the fair band) and not modelled: they're bounded, since a mate gives only the everyday gathered resources on `mateItems` (never Heartdust, Glimmer, crafted, seasonal or `neverSold` items) and at most `offerValue.max` of them a trade, `completedPerPatchDay` trades a patch day",
   'the kid sells everything over what their next build needs, up to the daily cap',
   "seasons (the Pumpkin Barn) and cut-off homesteads: the maths handles both, the kids' plans use neither",
 ] as const;
@@ -235,9 +235,11 @@ export function soloKid(
   };
 }
 
-/** The mates' gift, the worst case for the gate: the gift-sized stack that sells for the most. */
+/** The mates' gift, the worst case for the gate: the gift-sized stack on `mateItems` that sells for the most. */
 export function mateGiftStack(): { itemId: string; quantity: number } {
+  const shelf = new Set(COMPUTER_MATES.rules.mateItems);
   const options = Object.entries(SELL_RULES.items).flatMap(([itemId, sale]) => {
+    if (!shelf.has(itemId)) return [];
     const value = TRADE_VALUES.items[itemId] ?? 0;
     if (value <= 0 || value > COMPUTER_MATES.rules.giftMaxValue) return [];
     const quantity = Math.floor(COMPUTER_MATES.rules.giftMaxValue / value);

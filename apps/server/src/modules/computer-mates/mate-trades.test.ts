@@ -1,6 +1,7 @@
 import {
   GAME_DATA,
   hexDistance,
+  SELL_RULES,
   STARTERS,
   TRADE_VALUES,
   type PublicUser,
@@ -211,14 +212,14 @@ describe.skipIf(!url)('computer patch-mates trade and gift (#386d, needs DATABAS
     expect((await offerRow(unfair)).status).toBe('declined');
     expect(await bag(p.mapId, p.kid.id)).toMatchObject({ timber: 40 });
 
-    // Fair (a squishy and 4 timber for 10 stone, by TRADE_VALUES): a yes.
+    // Fair (a squishy for 8 stone, by TRADE_VALUES, no more than offerValue.max): a yes.
     // The kid's squishy goes to the mate (owner decision 6), and the stone
     // the kid asked for waits in the kid's mailbox, made at the yes.
     const fair = await kidOffers(
       p,
       mate,
       [{ kind: 'squishy', squishyId: p.pets[0]! }],
-      [item('stone', 10)],
+      [item('stone', 8)],
     );
     const fairAt = at;
     expect(
@@ -230,9 +231,15 @@ describe.skipIf(!url)('computer patch-mates trade and gift (#386d, needs DATABAS
     });
     expect(moved).toMatchObject({ ownerUserId: mate, state: 'active' });
     const view = await trades().view(p.kid, p.mapId);
-    expect(view.mailbox.map((m) => m.lines)).toEqual([[item('stone', 10)]]);
+    expect(view.mailbox.map((m) => m.lines)).toEqual([[item('stone', 8)]]);
     await trades().pickup(p.kid, p.mapId, p.post);
-    expect(await bag(p.mapId, p.kid.id)).toMatchObject({ stone: 50 });
+    expect(await bag(p.mapId, p.kid.id)).toMatchObject({ stone: 48 });
+
+    // Worth more than offerValue.max from the mate (10 stone, 40): a no, even though fair.
+    const big = await kidOffers(p, mate, [item('timber', 10)], [item('stone', 10)]);
+    const bigAt = at;
+    await stepAt(ANSWER_ONLY, mate, new Date(bigAt.getTime() + wait * MINUTE_MS));
+    expect((await offerRow(big)).status).toBe('declined');
   });
 
   it('a kid can’t ask a mate for a squishy or clothing, only items from its shelf', async () => {
@@ -248,6 +255,21 @@ describe.skipIf(!url)('computer patch-mates trade and gift (#386d, needs DATABAS
     expect(shelf.squishies).toEqual([]);
     expect(shelf.clothing).toEqual([]);
     expect(shelf.items.every((i) => i.quantity === COMPUTER_MATES.rules.shelfPerItem)).toBe(true);
+    // Everyday gathered resources only (386d): never a rescue-only, neverSold or crafted item.
+    expect(shelf.items.map((i) => i.itemId)).toEqual([...COMPUTER_MATES.rules.mateItems].sort());
+    const kinds = new Map(GAME_DATA.resources.map((r) => [r.id, r.kind]));
+    for (const { itemId } of shelf.items) {
+      expect(kinds.get(itemId), itemId).toBe('gathered');
+      expect(['heartdust', 'glimmer', ...SELL_RULES.neverSold], itemId).not.toContain(itemId);
+    }
+    // Asking for something off the list: no.
+    for (const off of ['heartdust', 'glimmer', 'heart-charm', 'jack-o-lantern-hearthfire']) {
+      await expect(
+        kidOffers(p, mate, [item('timber', 1)], [item(off, 1)]),
+        off,
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+    }
+    expect(await offersOn(p.mapId)).toEqual([]);
   });
 
   it('a computer offer is always inside the fair band; a kid’s yes counts for the house', async () => {
@@ -321,7 +343,7 @@ describe.skipIf(!url)('computer patch-mates trade and gift (#386d, needs DATABAS
     const p = await soloPatch(ONE_A_DAY);
     const sent: string[] = [];
     for (const mate of p.mateIds) {
-      sent.push(await kidOffers(p, mate, [item('timber', 10)], [item('stone', 10)]));
+      sent.push(await kidOffers(p, mate, [item('timber', 8)], [item('stone', 8)]));
     }
     const start = at;
     for (const mate of p.mateIds) {
@@ -334,6 +356,48 @@ describe.skipIf(!url)('computer patch-mates trade and gift (#386d, needs DATABAS
     const tomorrow = new Date(start.getTime() + 24 * HOUR_MS);
     for (const mate of p.mateIds) await stepAt(ONE_A_DAY, mate, tomorrow);
     expect((await statuses()).filter((s) => s === 'accepted')).toHaveLength(2);
+  });
+
+  it('two mates stepping at once can’t both take the day’s last trade or the week’s last gift', async () => {
+    const ONE: ComputerMatesSecrets = {
+      ...ANSWER_ONLY,
+      rules: { ...ANSWER_ONLY.rules, completedPerPatchDay: 1, giftsPerPatchWeek: 1 },
+    };
+    /** Both mates due at `when`, then both steps at once (the job runs two at a time). */
+    const together = async (secrets: ComputerMatesSecrets, pair: string[], when: Date) => {
+      const rows = await Promise.all(pair.map(mateRow));
+      at = when;
+      for (const mate of pair) {
+        await db.execute(
+          `update computer_mates set next_act_at = '${when.toISOString()}' where user_id = '${mate}'`,
+        );
+      }
+      return Promise.all(rows.map((r) => steps(secrets).act(r.userId, r.step)));
+    };
+
+    // Yes: two fair offers waiting, room for one.
+    const p = await soloPatch(ONE);
+    const pair = p.mateIds.slice(0, 2);
+    const sent: string[] = [];
+    for (const mate of pair) {
+      sent.push(await kidOffers(p, mate, [item('timber', 8)], [item('stone', 8)]));
+    }
+    await together(ONE, pair, new Date(at.getTime() + 40 * MINUTE_MS));
+    const statuses = await Promise.all(sent.map(async (id) => (await offerRow(id)).status));
+    expect(statuses.filter((s) => s === 'accepted')).toHaveLength(1);
+    expect(statuses.filter((s) => s === 'open')).toHaveLength(1);
+
+    // Gifts: two gift-only mates, room for one gift this week.
+    const GIFT_ONE: ComputerMatesSecrets = {
+      ...ONE,
+      personas: GIFT_ONLY.personas,
+      rules: { ...ONE.rules, completedPerPatchDay: 3 },
+    };
+    const g = await soloPatch(GIFT_ONE);
+    const gpair = g.mateIds.slice(0, 2);
+    const results = await together(GIFT_ONE, gpair, new Date(at.getTime() + 40 * MINUTE_MS));
+    expect(results.map((r) => r?.intent)).toEqual(['gift', 'gift']);
+    expect((await offersOn(g.mapId)).filter((o) => o.kind === 'gift')).toHaveLength(1);
   });
 
   it('a mate picks up a kid’s gift, and it counts for the house', async () => {

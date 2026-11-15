@@ -3563,7 +3563,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
     /** A kid's fair item offer to the mate, written straight to the rows (the locks are the point). */
     async function kidOffer(mapId: string, kidId: string, mate: string) {
       await withTransaction(db, (tx) =>
-        grantItems(tx, { mapId, userId: kidId }, { timber: 10 }, 'dev-grant'),
+        grantItems(tx, { mapId, userId: kidId }, { timber: 8 }, 'dev-grant'),
       );
       const repo = createTradesRepo(db);
       const offer = await repo.insertOffer({
@@ -3575,8 +3575,9 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
         createdAt: new Date(at.getTime() - 60 * 60 * 1000),
         expiresAt: new Date(at.getTime() + 24 * 60 * 60 * 1000),
       });
-      await repo.insertLines(offer.id, 'give', [{ kind: 'item', itemId: 'timber', quantity: 10 }]);
-      await repo.insertLines(offer.id, 'want', [{ kind: 'item', itemId: 'stone', quantity: 10 }]);
+      // 32 for 32: fair, and no more than `offerValue.max` from the mate.
+      await repo.insertLines(offer.id, 'give', [{ kind: 'item', itemId: 'timber', quantity: 8 }]);
+      await repo.insertLines(offer.id, 'want', [{ kind: 'item', itemId: 'stone', quantity: 8 }]);
       return offer.id;
     }
 
@@ -3590,6 +3591,32 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
         step.run,
         async (tx) => {
           // The mate's team (step 10) and both bags (11): free until the offer is.
+          await createComputerMatesRepo(tx).lockTeam(mapId, mate);
+          await lockGrantRows(tx, mapId, [
+            { userId: kid.id, items: { timber: 1, stone: 1 } },
+            { userId: mate, items: { timber: 1, stone: 1 } },
+          ]);
+          await lockMapRow(tx, mapId);
+        },
+      );
+      expect(step.result()).toMatchObject({ intent: 'answer-offer', applied: true });
+      const offer = await db.query.tradeOffers.findFirst({
+        where: (t, { eq }) => eq(t.id, offerId),
+      });
+      expect(offer!.status).toBe('accepted');
+    });
+
+    it("takes the patch's computer-trade lock before the kid's offer (a mate's yes, #386d step 9a then 9b)", async () => {
+      const { mapId, ids, kid } = await matesPatch('cmsteplock', true);
+      const mate = ids[0]!;
+      const offerId = await kidOffer(mapId, kid.id, mate);
+      const step = await nextStep(answerOnly, mate);
+      await holdThen(
+        (tx) => createTradesRepo(tx).lockComputerTrades(mapId),
+        step.run,
+        async (tx) => {
+          // The offer (9b), the team (10), both bags (11) and `maps`: free while the step waits on 9a.
+          await createTradesRepo(tx).lockOffers([offerId]);
           await createComputerMatesRepo(tx).lockTeam(mapId, mate);
           await lockGrantRows(tx, mapId, [
             { userId: kid.id, items: { timber: 1, stone: 1 } },

@@ -183,7 +183,6 @@ export function createTradesRepo(db: Executor) {
       await db.update(maps).set({ tradingEnabled: on }).where(eq(maps.id, mapId));
     },
 
-    /** Is this player an active member of the map? */
     /** Which of these users are computer patch-mates (#386d). */
     computerIds: async (userIds: readonly string[]): Promise<Set<string>> => {
       if (userIds.length === 0) return new Set();
@@ -247,6 +246,18 @@ export function createTradesRepo(db: Executor) {
       };
     },
 
+    /**
+     * Holds one patch's computer-mate trade caps until the transaction ends
+     * (#386d, tech spec §7 step 9a): a transaction advisory lock keyed
+     * `computer-trades:<mapId>`, taken before any offer row (9b).
+     */
+    lockComputerTrades: async (mapId: string): Promise<void> => {
+      await db.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`computer-trades:${mapId}`}, 0))`,
+      );
+    },
+
+    /** Is this player an active member of the map? */
     isActiveMember: async (mapId: string, userId: string): Promise<boolean> => {
       const [row] = await db
         .select({ status: mapMembers.status })

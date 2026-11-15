@@ -90,6 +90,7 @@ async function tradingView(
       giveValue: tradeValuer.sideValue(side('give').map(valued)),
       wantValue: tradeValuer.sideValue(side('want').map(valued)),
       wantsItemsOnly: side('want').every((l) => l.kind === 'item'),
+      wantItemIds: side('want').flatMap((l) => (l.kind === 'item' ? [l.itemId] : [])),
     };
   });
   const counts = await repo.computerTradeCounts(
@@ -396,7 +397,12 @@ async function stepWithin(
   // lock below takes nothing new after the inventory rows (11).
   const trade = intent && !('q' in intent) ? intent : null;
   if (trade) {
-    const trades = createTradesService({ db: tx, clock: () => at });
+    // The step's own tuning: the caps it recounts under the patch lock.
+    const trades = createTradesService({
+      db: tx,
+      clock: () => at,
+      computerRules: secrets.rules,
+    });
     const tradeEvents: NewGameEvent[] = [];
     try {
       await mateTransaction(tx, async (sp) => {
