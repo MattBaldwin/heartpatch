@@ -134,7 +134,11 @@ describe('the #234 mini-boss drafts', () => {
       const tines = f.visual.parts
         .map((id) => registry.parts.get(id)!)
         .find((p) => p.slot === 'fangs');
-      expect([tines?.shape, tines?.color], f.id).toEqual(['bent', 'metal']);
+      // Bent rake tines; Pileup's are straight stubs (round 10).
+      expect([tines?.shape, tines?.color], f.id).toEqual([
+        f.id === 'draft-pileup' ? 'capsule' : 'bent',
+        'metal',
+      ]);
     }
   });
 });

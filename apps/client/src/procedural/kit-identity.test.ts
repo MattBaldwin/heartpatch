@@ -187,7 +187,7 @@ describe('ring splay and the metal role (#234 round 8)', () => {
     const look = draftLooks().find((l) => l.id === id);
     if (!look) throw new Error(`no look ${id}`);
     const params = squishyParams({ id, visual: look.visual }, 'kit-ring', drafts);
-    const tines = params.parts.find((p) => p.id.endsWith('-tines'));
+    const tines = params.parts.find((p) => p.id.includes('-tines'));
     if (!tines) throw new Error(`no tines on ${id}`);
     return tines;
   };
@@ -210,7 +210,8 @@ describe('ring splay and the metal role (#234 round 8)', () => {
   });
 
   it('keeps a ring without splay parallel', () => {
-    for (const p of tinesOf('draft-rakelet').placements) {
+    // Rakeling's tines set no splay (Rakelet A's lean in a little, round 10).
+    for (const p of tinesOf('draft-rakeling').placements) {
       expect([p.splay, p.side]).toEqual([0, 0]);
     }
   });
