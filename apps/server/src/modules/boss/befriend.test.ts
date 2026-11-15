@@ -11,7 +11,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
 import { BOSS_RULES, STAND_IN_BOSS, bossHarness, type BossPlayer } from '../../../tests/boss.js';
 import { EVOLUTION_STEPS } from '../care/service.js';
+import { createBattlesService } from '../battles/service.js';
 import { grantItems } from '../inventory/service.js';
+import { createBossService, createMinibossBattlePort } from './service.js';
 
 const url = inject('testDatabaseUrl');
 const errorOf = (res: { json: () => unknown }) =>
@@ -204,6 +206,75 @@ describe.skipIf(!url)('mini-boss befriending (#190c, needs DATABASE_URL)', () =>
     // A second ask after a yes finds them already friends.
     const more = await ask(kid, battle, 2);
     expect(more.statusCode).toBe(409);
+  });
+
+  it('sends a fresh yes live (publish after commit), never a replay or a "not yet"', async () => {
+    const { kid, mapId, battle } = await winner(ALWAYS);
+    // The app's boss service is private; this one shares its database and
+    // records the publishes, as the battles and territory suites do.
+    const published: string[] = [];
+    const clock = () => h.clock;
+    const service = createBossService({
+      db,
+      clock,
+      rules: ALWAYS,
+      battles: createBattlesService({ db, clock, minibosses: createMinibossBattlePort(ALWAYS) }),
+      publish: (id) => {
+        published.push(id);
+        return Promise.resolve();
+      },
+    });
+    const yes = await service.befriend(kid, battle.id, 1);
+    expect(yes.outcome).toBe('joined');
+    expect(published).toEqual([mapId]);
+    // A double tap replays the stored answer: nothing new to send.
+    const replay = await service.befriend(kid, battle.id, 1);
+    expect(replay.squishyId).toBe(yes.squishyId);
+    expect(published).toEqual([mapId]);
+
+    const other = await winner(NEVER);
+    const quiet = createBossService({
+      db,
+      clock,
+      rules: NEVER,
+      battles: createBattlesService({ db, clock, minibosses: createMinibossBattlePort(NEVER) }),
+      publish: (id) => {
+        published.push(id);
+        return Promise.resolve();
+      },
+    });
+    expect((await quiet.befriend(other.kid, other.battle.id, 1)).outcome).toBe('not-yet');
+    expect(published).toEqual([mapId]);
+  });
+
+  it('rolls the charm spend back when the new friend can’t be written', async () => {
+    const { kid, mapId, battle } = await winner(ALWAYS);
+    // Only this patch's squishy inserts fail (the database is shared).
+    const fn = `befriend_fail_${mapId.replaceAll('-', '_')}`;
+    await db.execute(
+      `create function ${fn}() returns trigger language plpgsql as $$ begin
+         if new.map_id = '${mapId}' then raise exception 'no room'; end if; return new; end $$`,
+    );
+    await db.execute(
+      `create trigger ${fn} before insert on squishies for each row execute function ${fn}()`,
+    );
+    try {
+      const res = await ask(kid, battle, 1);
+      expect(res.statusCode).toBe(500);
+    } finally {
+      await db.execute(`drop trigger ${fn} on squishies`);
+      await db.execute(`drop function ${fn}()`);
+    }
+    expect(await spent(kid)).toHaveLength(0);
+    const held = await db.query.inventories.findFirst({
+      where: (t, { and, eq }) =>
+        and(eq(t.mapId, mapId), eq(t.userId, kid.id), eq(t.itemId, 'heart-charm')),
+    });
+    expect(held?.quantity).toBe(3);
+    expect(await asksOf(kid)).toEqual([]);
+    expect((await bond(kid))?.befriendedAt ?? null).toBeNull();
+    // Nothing was spent or stored, so the same ask works once it can.
+    expect((await asked(kid, battle, 1)).outcome).toBe('joined');
   });
 
   it('only a won fight can be asked, only by its Keeper, and only for a day', async () => {

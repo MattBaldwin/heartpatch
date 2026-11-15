@@ -30,7 +30,7 @@ export interface BossServiceOptions {
   db: Executor;
   battles: BattlesService;
   clock?: Clock;
-  /** Live sync (`wsHub.publish`), called after a visit opens. Never rejects. */
+  /** Live sync (`wsHub.publish`), called after a visit opens or a boss joins. Never rejects. */
   publish?: (mapId: string) => Promise<void>;
   /** The schedule and bag; tests pass a stand-in boss (production's bag is empty). */
   rules?: BossEventRules;
@@ -244,7 +244,10 @@ export function createBossService(options: BossServiceOptions): BossService {
     },
 
     befriend: async (user, battleId, ask) => {
-      const result = await befriendBoss(db, rules, user, battleId, ask, now());
+      const { mapId, fresh, ...result } = await befriendBoss(db, rules, user, battleId, ask, now());
+      // A yes appended `squishy.captured` (and maybe `squishy.celebrated`):
+      // send it live now it's committed. A "not yet" or a replay added none.
+      if (fresh && result.outcome === 'joined') published(mapId);
       return { ...result, battle: await battles.get(user, battleId) };
     },
 

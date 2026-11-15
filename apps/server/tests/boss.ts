@@ -3,6 +3,7 @@
 import {
   BattleResponseSchema,
   GAME_DATA,
+  JoinMapResponseSchema,
   MapResponseSchema,
   type PlayerBattle,
   type PublicUser,
@@ -119,6 +120,17 @@ export function bossHarness(db: Database, url: string, prefix: string) {
       const res = await call('POST', '/maps', owner, { name: 'Boss Patch', timeZone: BOSS_ZONE });
       expect(res.statusCode, res.body).toBe(201);
       return MapResponseSchema.parse(res.json()).map.id;
+    },
+    /** `other` joins `owner`'s patch by its invite code, approved. */
+    async join(mapId: string, owner: BossPlayer, other: BossPlayer) {
+      const map = await call('GET', `/maps/${mapId}`, owner);
+      expect(map.statusCode, map.body).toBe(200);
+      const code = MapResponseSchema.parse(map.json()).map.admin?.invite?.code;
+      const join = await call('POST', '/maps/join', other, { code });
+      expect(join.statusCode, join.body).toBe(201);
+      const { request } = JoinMapResponseSchema.parse(join.json());
+      const ok = await call('POST', `/maps/${mapId}/requests/${request.id}/approve`, owner);
+      expect(ok.statusCode, ok.body).toBe(204);
     },
     /** A Partner at `partner` and two strong friends: the team. */
     async grow(mapId: string, who: PublicUser, partner: number, friends = [100, 100]) {

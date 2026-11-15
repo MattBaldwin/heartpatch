@@ -13,7 +13,8 @@ export const BOSS_RATE_LIMITS = {
     perIp: { max: 60, windowMs: MINUTE_MS }, // TUNE: guess
     perUser: { max: 20, windowMs: MINUTE_MS }, // TUNE: guess
   },
-  // "Ask it to be your friend?": two asks a win, so a handful is plenty.
+  // "Ask it to be your friend?": two asks a win, plus room for double taps
+  // and retries (a replayed ask spends nothing), as the battle start.
   befriend: {
     perIp: { max: 60, windowMs: MINUTE_MS }, // TUNE: guess
     perUser: { max: 20, windowMs: MINUTE_MS }, // TUNE: guess

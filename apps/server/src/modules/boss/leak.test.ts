@@ -116,14 +116,38 @@ describe.skipIf(!url)('mini-boss secrets stay on the server (#190c, needs DATABA
   });
 
   it('a patch-mate who never fought it is never told which boss it is', async () => {
-    await h.start(COIN_FLIP);
+    // Every ask a yes, so the patch gets `squishy.captured` too.
+    const sure: BossEventRules = {
+      ...COIN_FLIP,
+      befriend: { ...COIN_FLIP.befriend, basePercent: 100 },
+    };
+    await h.start(sure);
     const kid = await h.player();
+    const mate = await h.player();
     const mapId = await h.patch(kid);
+    await h.join(mapId, kid, mate);
     await h.grow(mapId, kid, 20);
-    await h.toVisit(mapId, COIN_FLIP);
-    const res = await h.call('GET', `/maps/${mapId}/boss`, kid);
+    // Big enough to fight (a Keeper too small for it is shown its name, plan §2).
+    await h.grow(mapId, mate, 20);
+    await h.toVisit(mapId, sure);
+    const won = await h.playOut(kid, await h.fight(kid, mapId));
+    const yes = await h.call('POST', `/battles/${won.id}/befriend`, kid, { ask: 1 });
+    expect(BossBefriendResponseSchema.parse(yes.json()).outcome).toBe('joined');
+
+    const res = await h.call('GET', `/maps/${mapId}/boss`, mate);
+    expect(res.statusCode, res.body).toBe(200);
     const body = res.json<{ boss: { species: string | null } }>();
     expect(body.boss.species).toBeNull();
     expect(leaks(body)).toEqual([]);
+
+    // The patch's live events as the mate is sent them, the new friend's included.
+    const events: GameEvent[] = await db.query.gameEvents.findMany({
+      where: (t, { eq }) => eq(t.mapId, mapId),
+    });
+    expect(events.map((e) => e.type)).toContain('squishy.captured');
+    for (const event of events) {
+      const shown = publicViewFor(PUBLIC_VIEWS, event, { userId: mate.id });
+      expect(leaks(shown), `${event.type}: ${JSON.stringify(shown)}`).toEqual([]);
+    }
   });
 });
