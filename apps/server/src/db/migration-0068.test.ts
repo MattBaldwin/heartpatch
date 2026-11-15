@@ -50,8 +50,9 @@ describe('migration 0068 (open tile attacks index)', () => {
         expect(await count(client.db)).toBe(1);
         await expect(
           client.db.transaction(async (tx) => {
-            // The test table is empty, where a sequential scan always wins;
-            // turning that off shows which index the planner picks.
+            // The test table holds a few rows at most, where a sequential
+            // scan always wins; turning that off shows which index the
+            // planner picks.
             await tx.execute(sql`set local enable_seqscan = off`);
             const [row] = await tx.execute<{ 'QUERY PLAN': [{ Plan: Plan }] }>(OPEN_ATTACKS);
             expect(indexNames(row!['QUERY PLAN'][0].Plan)).toEqual([
