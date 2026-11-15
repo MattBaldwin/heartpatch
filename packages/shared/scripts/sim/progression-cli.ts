@@ -10,12 +10,14 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import {
   BASELINE_RULES,
+  COLLECTOR_RULES,
   CURRENT_RULES,
   NO_FALLOFF_RULES,
   NO_TRAINING_RULES,
   PROGRESSION_CONFIG,
   UNCAPPED_BEFRIEND_RULES,
   WITH_EXPLORE_RULES,
+  WITH_FRIENDLIES_COLLECTOR_RULES,
   WITH_FRIENDLIES_RULES,
 } from './progression-config.js';
 import { JOURNEY_RULES } from '../../src/data/journeys.js';
@@ -25,6 +27,7 @@ import {
   journeyGateMisses,
   renderProgression,
   summarise,
+  tierGateLine,
 } from './progression-report.js';
 import {
   firstsFacts,
@@ -32,6 +35,8 @@ import {
   firstsOf,
   formatFirst,
   formatFirstsGate,
+  formatTierFirsts,
+  tierFirstsOf,
 } from './progression-firsts.js';
 import {
   journeyOdds,
@@ -58,6 +63,9 @@ for (const rules of [
   WITH_FRIENDLIES_RULES,
   NO_FALLOFF_RULES,
   UNCAPPED_BEFRIEND_RULES,
+  // #732 D3: the collector befriend choice, after the existing rows.
+  COLLECTOR_RULES,
+  WITH_FRIENDLIES_COLLECTOR_RULES,
 ]) {
   for (const seats of PROGRESSION_CONFIG.seats) {
     for (const kid of PROGRESSION_CONFIG.kids) {
@@ -120,6 +128,21 @@ for (const run of runs.filter(
     console.log(`  ${formatFirstsGate(firstsGate(firsts, gate), gate)}`);
   }
 }
+// #732: the first day a befriended squishy of each rarity line evolves, kid 0, both befriend choices.
+const tierRules = [
+  CURRENT_RULES,
+  WITH_FRIENDLIES_RULES,
+  COLLECTOR_RULES,
+  WITH_FRIENDLIES_COLLECTOR_RULES,
+];
+for (const run of runs.filter((r) => tierRules.includes(r.rules))) {
+  console.log(
+    `  first evolve by line ${run.rules.label.padEnd(28)} ${String(run.seats)} seats ${run.profile.id.padEnd(7)} ` +
+      formatTierFirsts(tierFirstsOf(run.kids[0]?.days ?? [], facts), PROGRESSION_CONFIG.days),
+  );
+}
+// TODO(#732 D1): exit non-zero on a FAIL once bench share lands; soft until then.
+console.log(`  ${tierGateLine(runs, PROGRESSION_CONFIG, facts) ?? '#732 per-tier gate: not run'}`);
 // Friendlies and defences (#728): the engaged kid's day-14 level moves by at most 1.
 const friendly = friendlyGate(runs, PROGRESSION_CONFIG);
 if (!friendly) throw new Error('the friendly gate needs the now and now + friendlies runs');
