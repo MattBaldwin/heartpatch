@@ -1051,7 +1051,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
    * button still works; the server has the final say).
    */
   const refreshCharms = async (b: PlayerBattle): Promise<number> => {
-    if (!CAPTURABLE_BATTLE_KINDS.has(b.kind) || replaying) return charms ?? 0;
+    // A mini-boss's befriend ask (#190) shows the count too.
+    if ((!CAPTURABLE_BATTLE_KINDS.has(b.kind) && b.kind !== 'miniboss') || replaying) {
+      return charms ?? 0;
+    }
     try {
       const count = await countCharms(b.mapId);
       if (battle?.id === b.id) {

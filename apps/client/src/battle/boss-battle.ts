@@ -86,6 +86,8 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
   const ui = mountBossHud();
   let battleId: string | null = null;
   let picker: PickerState | null = null;
+  /** The picker state on screen, so a refresh with nothing new leaves its buttons be. */
+  let drawn: PickerState | null = null;
   let pickerTurn = -1;
   let lastPicks: Readonly<Record<number, string>> | null = null;
   let bossMoves = 0;
@@ -93,6 +95,8 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
   let misses = 0;
   let busy = false;
   let problem: string | null = null;
+  /** The bag was counted for the ask (the card waits for it once). */
+  let counting = false;
   /** One key per ask number, so a retried ask is the same ask. */
   const keys = new Map<number, string>();
 
@@ -106,6 +110,7 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     misses = 0;
     busy = false;
     problem = null;
+    counting = false;
     keys.clear();
   };
 
@@ -133,6 +138,7 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
   const drawPicker = (b: PlayerBattle, names: BattleContent) => {
     const state = picker;
     if (!state) return;
+    drawn = state;
     const current = state.steps[state.at];
     // The camera nudges to the squishy picking (plan §10), back to all once ready.
     deps.scene()?.focusOn(current ? b.mySide : null, current?.slot ?? null);
@@ -151,6 +157,7 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
         if (!action || action.type !== 'team') return;
         lastPicks = { ...state.picks };
         ui.hidePicker();
+        drawn = null;
         deps.scene()?.focusOn(null);
         deps.submit(action);
       },
@@ -186,8 +193,10 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
         busy = false;
         asks = Math.max(asks, ask);
         if (res.outcome === 'not-yet') misses += 1;
-        void deps.refreshCharms(res.battle).then(() => {
-          if (battleId === res.battle.id) deps.replace(res.battle);
+        // The ask spent charms: count again, and show the card again only if the count moved.
+        const before = deps.charms();
+        void deps.refreshCharms(res.battle).then((count) => {
+          if (battleId === res.battle.id && count !== before) deps.replace(res.battle);
         });
         deps.replace(res.battle);
       })
@@ -217,6 +226,7 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     close: () => {
       deps.hud.setTeam(null);
       ui.hidePicker();
+      drawn = null;
       battleId = null;
     },
     plates: (b, shown, names) => {
@@ -230,17 +240,19 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     controls: (b, names, canPick) => {
       if (!canPick || b.status !== 'active' || b.view.phase.type !== 'turn') {
         ui.hidePicker();
+        drawn = null;
         return;
       }
       if (!picker || pickerTurn !== b.view.turn) {
         picker = pickerFor(b, (side, slot) => deps.nameOf(b, side, slot));
         pickerTurn = b.view.turn;
       }
-      drawPicker(b, names);
+      if (picker !== drawn) drawPicker(b, names);
     },
     playing: () => {
       bossMoves = 0;
       ui.hidePicker();
+      drawn = null;
     },
     step: (b, step, names) => {
       const extra = bossCallout(step, b.mySide, bossMoves, names.moves);
@@ -262,6 +274,13 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
         misses: Math.max(misses, state === 'not-yet' ? 1 : 0),
         charms: deps.charms(),
       });
+      if (view.kind === 'ask' && deps.charms() === null && !counting) {
+        // The ask shows the bag's count: count it, then show the card again.
+        counting = true;
+        void deps.refreshCharms(b).then(() => {
+          if (battleId === b.id) deps.replace(b);
+        });
+      }
       const panel = befriendPanel(view, {
         busy,
         onAsk: (ask) => {

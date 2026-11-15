@@ -290,11 +290,16 @@ export function hereUntil(boss: Pick<PlayerBattleBoss, 'eventWindow'>, now: numb
 
 // ── The result ──────────────────────────────────────────────────────────
 
+/** "Heart Charms" for more than one; a name already plural or uncounted ("Treats", "Heartdust") stays. */
+export function countedName(n: number, name: string): string {
+  return n === 1 || /(s|dust)$/i.test(name) ? name : `${name}s`;
+}
+
 /** "3 Heart Charms, 5 Heartdust and 3 Treats", in the bundle's order. */
 export function bundleText(bundle: ItemCounts): string {
   const parts = Object.entries(bundle)
     .filter(([, n]) => n > 0)
-    .map(([id, n]) => `${String(n)} ${itemName(id)}`);
+    .map(([id, n]) => `${String(n)} ${countedName(n, itemName(id))}`);
   if (parts.length <= 1) return parts[0] ?? '';
   return `${parts.slice(0, -1).join(', ')} and ${parts.at(-1) ?? ''}`;
 }

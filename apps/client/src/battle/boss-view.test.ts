@@ -197,6 +197,13 @@ describe('a mini-boss fight on screen (#190)', () => {
     if (area) expect(bossCallout(step('b', area.id), 'a', 0, moves)).toBe(BOSS_TEXT.everyone);
   });
 
+  it('names the bundle with plurals', () => {
+    expect(bundleText({ 'heart-charm': 3, heartdust: 5, treats: 3 })).toBe(
+      '3 Heart Charms, 5 Heartdust and 3 Treats',
+    );
+    expect(bundleText({ 'heart-charm': 1 })).toBe('1 Heart Charm');
+  });
+
   it('says how long the visit stays, and its last day', () => {
     const b = battle();
     expect(hereUntil(b.boss!, NOW)).toMatch(/^here until \w+day$/);
