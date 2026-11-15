@@ -141,6 +141,10 @@ test('the owner switches Computer friends on, and three badged mates move in (#3
   await expect(mates.getByRole('listitem')).toHaveCount(3);
   await expect(mates.getByTestId('computer-badge')).toHaveCount(3);
   await expect(mates.getByRole('button')).toHaveCount(0);
+  // Only mates here: the hint doesn't say nobody's here above a list of them.
+  await expect(
+    page.getByText('No other Keepers are here right now. Try again in a bit!'),
+  ).toBeVisible();
   await expect(page.getByText('Battles with Computer friends are coming soon!')).toBeVisible();
   await page.context().close();
 });

@@ -151,6 +151,7 @@ export function createComputerMatesNotes(options: ComputerMatesNotesOptions): Co
     arrivals = [];
     departed = [];
     newKids = [];
+    pendingMap = null;
   }
 
   function later(): void {
@@ -171,7 +172,7 @@ export function createComputerMatesNotes(options: ComputerMatesNotesOptions): Co
     const mapId = view.map.id;
     const last = roster?.mapId === mapId ? roster.members : null;
     roster = { mapId, members: next };
-    if (pendingMap !== null && pendingMap !== mapId) {
+    if (timer !== 0 && pendingMap !== null && pendingMap !== mapId) {
       // Another patch opened before the last one's hello could show: drop it,
       // and forget who it would have greeted so they're greeted there next time.
       window.clearTimeout(timer);
