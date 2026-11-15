@@ -638,6 +638,8 @@ button.post-slot {
   position: relative;
   container-type: inline-size;
   display: grid;
+  /* One track that may shrink: a wide header can't push the column past its half (#386f). */
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   border: 2px solid var(--own);
   border-radius: 18px;
@@ -670,7 +672,9 @@ button.post-slot {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
   min-height: 52px;
   padding: var(--hp-pad-y) var(--hp-pad-x);
   box-sizing: border-box;
@@ -715,6 +719,10 @@ button.post-col-head {
 
 .post-col-badge .cf-badge {
   max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .post-col-name {

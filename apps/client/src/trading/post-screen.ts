@@ -25,7 +25,11 @@ import { glimmerSwapApi, type GlimmerSwapApi } from './glimmer-swap-api.js';
 import { hoursToReset, SWAP_TEXT, swapCards, swapsLeft } from './glimmer-swap-model.js';
 import { postConfirm, postSheet } from './post-confirm.js';
 import { computerAvatar, computerBadge } from '../computer-mates/computer-badge.js';
-import { COMPUTER_TEXT, isComputer } from '../computer-mates/computer-mates-model.js';
+import {
+  COMPUTER_TEXT,
+  computerLabel,
+  isComputer,
+} from '../computer-mates/computer-mates-model.js';
 import { sellApi, type SellApi } from './sell-api.js';
 import { shopApi, type ShopApi } from './shop-api.js';
 import { buyRequest, receipt as shopReceipt, SHOP_TEXT } from './shop-model.js';
@@ -264,8 +268,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       ? computerAvatar('dot')
       : el('span', { class: `post-face ${cls}`, 'aria-hidden': 'true' }, name.slice(0, 1));
   /** The name in words for a sentence: a Computer friend gets "(Computer friend)" after it. */
-  const labelOf = (id: string, name: string) =>
-    isMate(id) ? `${name} (${COMPUTER_TEXT.badge})` : name;
+  const labelOf = (id: string, name: string) => computerLabel(name, isMate(id));
   const passOver = () => post !== null && postChip(post.passUntil, now()) === null;
 
   // ---- loading -------------------------------------------------------------

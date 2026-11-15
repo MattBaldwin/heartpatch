@@ -7,7 +7,7 @@ import type {
   WsEventMessage,
 } from '@heartpatch/shared';
 import { computerAvatar, computerBadge } from '../computer-mates/computer-badge.js';
-import { COMPUTER_TEXT } from '../computer-mates/computer-mates-model.js';
+import { COMPUTER_TEXT, computerLabel } from '../computer-mates/computer-mates-model.js';
 import { battleApi } from '../battle/battle-api.js';
 import { GameClock } from '../inventory/game-clock.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
@@ -65,7 +65,7 @@ type Mode =
   | { type: 'list' }
   | { type: 'card'; who: OnlineMember; computer?: boolean }
   | { type: 'waiting'; challenge: ChallengeView }
-  | { type: 'declined'; name: string };
+  | { type: 'declined'; name: string; computer?: boolean };
 
 /** How often "Who's here now" looks again while it's open. */
 const LIST_REFRESH_MS = 10_000; // TUNE: presence changes as phones sleep and wake
@@ -93,6 +93,8 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
   const nameOf = (userId: string): string =>
     (mapId ? options.members(mapId).find((m) => m.userId === userId)?.username : undefined) ??
     'A friend';
+  const isMateId = (userId: string): boolean =>
+    mapId ? options.members(mapId).some((m) => m.userId === userId && m.computer === true) : false;
 
   // ── Entry button ──────────────────────────────────────────────────────
   // A round corner button beside Chat, like it: the word is for VoiceOver.
@@ -383,9 +385,7 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
 
   function renderWaiting(challenge: ChallengeView): HTMLElement[] {
     const name = nameOf(challenge.toUserId);
-    const mate = mapId
-      ? options.members(mapId).some((m) => m.userId === challenge.toUserId && m.computer)
-      : false;
+    const mate = isMateId(challenge.toUserId);
     return [
       mate ? computerAvatar('avatar') : avatar(name),
       el(
@@ -394,6 +394,7 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
         FRIENDLY_TEXT.asking(name),
       ),
       el('div', { class: 'friendly-dots', 'aria-hidden': 'true' }, el('i'), el('i'), el('i')),
+      ...(mate ? [el('p', { class: 'friendly-center' }, computerBadge())] : []),
       el('p', { class: 'friendly-intro friendly-center' }, FRIENDLY_TEXT.askingSub(name)),
       el('p', { class: 'friendly-hint friendly-center' }, FRIENDLY_TEXT.waitUpTo),
       button(
@@ -406,15 +407,23 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
     ];
   }
 
-  function renderDeclined(name: string): HTMLElement[] {
+  function renderDeclined(name: string, mate: boolean): HTMLElement[] {
     return [
+      mate ? computerAvatar('avatar') : avatar(name),
       el(
         'h2',
         { class: 'friendly-title friendly-center', id: 'friendly-title' },
         FRIENDLY_TEXT.cantNow(name),
       ),
-      el('p', { class: 'friendly-intro friendly-center' }, FRIENDLY_TEXT.cantNowSub),
-      el('p', { class: 'friendly-hint friendly-center' }, FRIENDLY_TEXT.askAgainIn(name)),
+      ...(mate ? [el('p', { class: 'friendly-center' }, computerBadge())] : []),
+      el(
+        'p',
+        { class: 'friendly-intro friendly-center' },
+        mate ? COMPUTER_TEXT.napLine(name) : FRIENDLY_TEXT.cantNowSub,
+      ),
+      ...(mate
+        ? []
+        : [el('p', { class: 'friendly-hint friendly-center' }, FRIENDLY_TEXT.askAgainIn(name))]),
       button(FRIENDLY_TEXT.okay, closeSheet, { testId: 'friendly-okay' }),
     ];
   }
@@ -436,7 +445,7 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
             : mode.type === 'waiting'
               ? renderWaiting(mode.challenge)
               : mode.type === 'declined'
-                ? renderDeclined(mode.name)
+                ? renderDeclined(mode.name, mode.computer === true)
                 : [];
       const noteLine = el(
         'p',
@@ -591,7 +600,8 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
       return;
     }
     if (sent.status === 'declined') {
-      if (mode.type === 'card') mode = { type: 'declined', name: who.username };
+      if (mode.type === 'card')
+        mode = { type: 'declined', name: who.username, computer: mode.computer === true };
       render();
       return;
     }
@@ -680,8 +690,9 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
         if (ask.answer === 'yes' && ask.battleId) {
           void joinBattle(ask.battleId);
         } else {
-          mode = { type: 'declined', name: nameOf(ask.toUserId) };
-          showToast(FRIENDLY_TEXT.saidNotNow(nameOf(ask.toUserId)));
+          const mate = isMateId(ask.toUserId);
+          mode = { type: 'declined', name: nameOf(ask.toUserId), computer: mate };
+          showToast(FRIENDLY_TEXT.saidNotNow(computerLabel(nameOf(ask.toUserId), mate)));
           render();
         }
         return;

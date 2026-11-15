@@ -32,8 +32,15 @@ export const COMPUTER_TEXT = {
   /** On the friendly card for a mate: honest, and it keeps its own pace. */
   battleLine: "They're run by the game, and they play fair. Just for fun!",
   /** Who's here with only mates around: "nobody here" would contradict the list. */
+  /** A mate's not-now: it's napping, not "sleepy squishies", and there's no timer to quote. */
+  napLine: (name: string) => `${name} is having a little nap! 💤 Ask again in a bit.`,
   noKidsHere: 'No other Keepers right now, but your Computer friends are up for a battle!',
 } as const;
+
+/** A name in a sentence: a Computer friend gets "(Computer friend)" after it. */
+export function computerLabel(name: string, computer: boolean): string {
+  return computer ? `${name} (${COMPUTER_TEXT.badge})` : name;
+}
 
 /** True for a computer patch-mate's seat (`MapMember.computer`, #386a). */
 export function isComputer(member: Pick<MapMember, 'computer'>): boolean {

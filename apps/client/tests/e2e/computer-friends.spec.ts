@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { grantSquishy, twoTraders, visitPost } from './trading.js';
 
 /**
  * Computer friends (#386b): the owner's On/Off switch in patch settings, the
@@ -212,5 +213,67 @@ test('the owner switches Computer friends on, and three badged mates move in (#3
   await card.getByTestId('friendly-ask-send').tap();
   await expect(card.getByTestId('friendly-okay')).toBeVisible();
   await expect(card.getByTestId('friendly-never-mind')).toHaveCount(0);
+  // The declined screen badges the mate, names a nap (no timer), and the
+  // title keeps clear of the ✕ at 393 and 320 pt.
+  await expect(card.getByTestId('computer-avatar')).toBeVisible();
+  await expect(card.getByTestId('computer-badge')).toHaveText('Computer friend');
+  await expect(card).toContainText('is having a little nap!');
+  await expect(card).not.toContainText('minutes');
+  for (const width of [393, 320]) {
+    await page.setViewportSize({ width, height: 852 });
+    // The title's box spans the sheet (its padding holds the ✕'s room), so
+    // measure the words themselves.
+    const words = await card.locator('.friendly-title').evaluate((n) => {
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      const r = range.getBoundingClientRect();
+      return { right: r.right, top: r.top, bottom: r.bottom };
+    });
+    const close = await card.locator('.friendly-close').boundingBox();
+    if (!close) throw new Error('close missing');
+    const apart = words.right <= close.x || words.bottom <= close.y;
+    expect(apart, `title clear of the close button at ${String(width)}`).toBe(true);
+  }
   await page.context().close();
+});
+
+/**
+ * Render check (#386f): a mate's name, key avatar and pill stay inside their
+ * shelf column on a phone. The server's seat for Sam is stood in by a stub
+ * that marks Sam a mate on Lee's screen; the shelf itself is real.
+ */
+test('a mate shelf header stays inside its column at 393 and 320 pt (#386f)', async ({
+  browser,
+}) => {
+  test.setTimeout(300_000);
+  const { lee, samName, mapId } = await twoTraders(browser, 'Mate Shelf Patch');
+  await grantSquishy(lee, mapId, 'emberbun', 9);
+  await lee.route(/\/api\/v1\/maps\/[0-9a-f-]{36}\/view$/, async (route) => {
+    const response = await route.fetch();
+    const json = (await response.json()) as { members: Member[] };
+    for (const m of json.members) {
+      if (m.user.username === samName) m.computer = { personaId: 'bramble' };
+    }
+    return route.fulfill({ response, json });
+  });
+  await lee.reload();
+  await expect(lee.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
+  await visitPost(lee);
+  const post = lee.getByTestId('post');
+  const theirs = post.locator('[data-side="theirs"]');
+  await expect(theirs.getByTestId('computer-badge')).toBeVisible();
+  for (const width of [393, 320]) {
+    await lee.setViewportSize({ width, height: 852 });
+    const edges = await theirs.evaluate((col) => {
+      const head = col.querySelector<HTMLElement>('.post-col-head')!;
+      return {
+        head: head.getBoundingClientRect().right,
+        col: col.getBoundingClientRect().right,
+      };
+    });
+    expect(edges.head, `header inside its column at ${String(width)}`).toBeLessThanOrEqual(
+      edges.col + 0.5,
+    );
+  }
+  await lee.context().close();
 });
