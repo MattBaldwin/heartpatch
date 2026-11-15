@@ -47,6 +47,7 @@ import { createCareSheet } from './care/care-sheet.js';
 import { createJobs, openTeamPicker } from './squishies/jobs/index.js';
 import { workMoods } from './squishies/jobs/jobs-view.js';
 import { createChatScreen } from './chat/chat-screen.js';
+import { createComputerMatesNotes } from './computer-mates/computer-mates-notes.js';
 import { createFriendlyScreen } from './friendly/friendly-screen.js';
 import { createCloseUpScreen, type CloseUpFrom } from './close-up/close-up-screen.js';
 import { onPanelFocus } from './building/panel-focus.js';
@@ -905,8 +906,12 @@ const chat = createChatScreen({ root: document.body, entryRoot: trays.slot('top-
  * messages (#23) and friendly battles (#29). Null hides them (the Glade,
  * another screen over the map).
  */
+let socialMapId: string | null = null;
 const socialSetMap = (mapId: string | null): Promise<void> => {
   void friendly.setMap(mapId);
+  // Another patch: its hello and goodbye only (#386b). Null (a screen over the map) keeps them.
+  if (mapId !== null && mapId !== socialMapId) computerMatesNotes.reset();
+  if (mapId !== null) socialMapId = mapId;
   return chat.setMap(mapId);
 };
 /** The patch each view's Squishies button opens the roster for. */
@@ -1509,6 +1514,7 @@ const maps = createMapScreen({
     // Friendly battles (#29): asks, and a live battle's turns and cheers.
     friendly.liveEvent(event);
     battles.liveEvent(event);
+    computerMatesNotes.liveEvent(event);
     // The player's own play may have earned a milestone (#44).
     milestones.liveEvent(event);
     journeys.liveEvent(event);
@@ -1866,7 +1872,11 @@ const friendly = createFriendlyScreen({
   entryRoot: trays.slot('top-right'),
   members: (mapId) =>
     maps.view?.map.id === mapId
-      ? maps.view.members.map((m) => ({ userId: m.user.id, username: m.user.username }))
+      ? maps.view.members.map((m) => ({
+          userId: m.user.id,
+          username: m.user.username,
+          ...(m.computer ? { computer: true } : {}),
+        }))
       : [],
   openBattle: (battle) => {
     battles.open(battle);
@@ -1874,6 +1884,12 @@ const friendly = createFriendlyScreen({
   openTeam: (mapId) => {
     void openTeamPicker(mapId);
   },
+});
+// Computer friends (#386b): a hello card when mates move in, and a toast
+// when one waves goodbye to make room for a real friend.
+const computerMatesNotes = createComputerMatesNotes({
+  root: document.body,
+  nameOf: (userId) => maps.view?.members.find((m) => m.user.id === userId)?.user.username ?? null,
 });
 // Claiming starts from a tile: this row says how (territory, #15).
 trays.slot('adventure').append(
@@ -2420,6 +2436,7 @@ if (import.meta.env.DEV) {
     land: () => land.debug,
     chat: () => chat.debug,
     friendly: () => friendly.debug,
+    computerMates: () => computerMatesNotes.debug,
     raids: () => raidReport.debug,
     home: () => home.debug,
     explore: () => explore.debug,

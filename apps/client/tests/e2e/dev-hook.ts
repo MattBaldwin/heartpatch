@@ -39,6 +39,7 @@ export type HookName =
   | 'nextUp'
   | 'chat'
   | 'friendly'
+  | 'computerMates'
   | 'audio'
   | 'jobs'
   | 'homeAlerts'
