@@ -386,6 +386,12 @@ export interface MinibossBattlePort {
   ) => Promise<NewGameEvent[]>;
   /** The guaranteed bundle a won fight pays (server-only rules), granted at step 11. */
   bundle: () => ItemCounts;
+  /** No step for this long and the Keeper has left (#190 plan §12): a loss, the try used. */
+  readonly abandonAfterMs: number;
+  /** When the Keeper last started or stepped this fight, or null (then its start counts). */
+  lastActionAt: (tx: Executor, battle: BattleRow) => Promise<Date | null>;
+  /** The Keeper stepped the fight: its idle clock starts again (step 5e, after the battle). */
+  acted: (tx: Executor, battle: BattleRow, at: Date) => Promise<void>;
 }
 
 /** What a capture try costs (design doc §6): one Heart Charm. */
@@ -972,8 +978,15 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
    * on the next read or action, and counts as a loss then.
    */
   const abandoned = async (tx: Executor, row: BattleRow, at: Date): Promise<boolean> => {
+    if (row.status !== 'active') return false;
+    // A mini-boss fight left alone (#190 plan §12) counts the same way.
+    const boss = options.minibosses;
+    if (row.kind === 'miniboss' && boss) {
+      const last = (await boss.lastActionAt(tx, row)) ?? row.startedAt;
+      return at.getTime() - last.getTime() > boss.abandonAfterMs;
+    }
     const port = options.tileBattles;
-    if (!port || row.status !== 'active' || !TILE_BATTLE_KINDS.has(row.kind)) return false;
+    if (!port || !TILE_BATTLE_KINDS.has(row.kind)) return false;
     const last = await port.lastActionAt(tx, row.id);
     return last !== null && at.getTime() - last.getTime() > port.abandonAfterMs;
   };
@@ -2163,6 +2176,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         } else {
           await repo.saveProgress(row.id, { actions, state });
           if (TILE_BATTLE_KINDS.has(row.kind)) await options.tileBattles?.acted(tx, row.id, at);
+          if (row.kind === 'miniboss') await options.minibosses?.acted(tx, row, at);
           // A guardian befriended mid-battle joins now (#279), so it's the
           // player's whatever happens next. Its event is the last write.
           const friends = await welcome(repo, tx, row, befriendedIn(row.state, state), at);

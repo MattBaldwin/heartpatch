@@ -418,6 +418,38 @@ describe.skipIf(!url)('mini-boss visits and fights (#190b, needs DATABASE_URL)',
     expect((await visit(server, owner, mapId))!.triesLeftToday).toBe(0);
   });
 
+  it('ten minutes with no step is a leave: a loss, and the try is used', async () => {
+    const { server } = await start();
+    const owner = await player();
+    const mapId = await patch(server, owner);
+    await grow(mapId, owner, 20, [20, 20]);
+    await toVisit(mapId);
+    const res = await fight(server, owner, mapId);
+    let battle = BattleResponseSchema.parse(res.json()).battle;
+    const minute = 60_000;
+    const get = async () =>
+      BattleResponseSchema.parse((await call(server, 'GET', `/battles/${battle.id}`, owner)).json())
+        .battle;
+    // A step before the time is up starts the clock again.
+    clock.setTime(clock.getTime() + (RULES.idleMinutes - 1) * minute);
+    const side = battle.view.sides.a;
+    battle = await act(server, owner, battle, {
+      type: 'team',
+      picks: (side.out ?? []).map((slot) => ({ slot, move: side.squishies[slot]!.moves[0]! })),
+    });
+    expect(battle.status).toBe('active');
+    clock.setTime(clock.getTime() + (RULES.idleMinutes - 1) * minute);
+    expect((await get()).status).toBe('active');
+    clock.setTime(clock.getTime() + 2 * minute);
+    const left = await get();
+    expect(left.status).toBe('finished');
+    expect(left.view.phase).toMatchObject({
+      type: 'over',
+      result: { winner: 'b', reason: 'forfeit' },
+    });
+    expect((await visit(server, owner, mapId))!.triesLeftToday).toBe(RULES.triesPerDay - 1);
+  });
+
   it('a scooted fight pays no coins and no bundle, and uses the try', async () => {
     const { server } = await start();
     const owner = await player();

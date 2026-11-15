@@ -51,6 +51,11 @@ export function createMinibossBattlePort(
 ): MinibossBattlePort {
   return {
     bundle: () => ({ ...rules.bundle }),
+    abandonAfterMs: rules.idleMinutes * 60_000,
+    lastActionAt: (tx, battle) =>
+      createBossRepo(tx).lastActionAt(battle.mapId, battle.playerUserId, battle.startedAt),
+    acted: (tx, battle, at) =>
+      createBossRepo(tx).touch(battle.mapId, battle.playerUserId, battle.startedAt, at),
     ended: async (tx, battle, winner) => {
       if (winner === 'a') {
         await createBossRepo(tx).markWon(

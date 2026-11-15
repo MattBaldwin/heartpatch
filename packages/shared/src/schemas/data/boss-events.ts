@@ -32,6 +32,8 @@ export const BossEventRulesSchema = z.strictObject({
   minLevel: z.number().int().min(1).max(100),
   /** Fights a Keeper can start per patch-local day; a no-contest gives its try back. */
   triesPerDay: z.number().int().min(1).max(10),
+  /** No step in a fight for this long and the Keeper has left: a loss, the try used (plan §12). */
+  idleMinutes: z.number().int().min(1).max(120),
   /**
    * The visiting bag: a seeded shuffle per patch, so every boss visits
    * before one repeats. Empty: no boss ever visits (production until the

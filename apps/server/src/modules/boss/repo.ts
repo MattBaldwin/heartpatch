@@ -61,6 +61,10 @@ export interface BossRepo {
    * in gets the battle's id, once. A no-op if they already won it.
    */
   markWon: (mapId: string, userId: string, startedAt: Date, battleId: string) => Promise<void>;
+  /** The Keeper stepped a fight (#190 plan §12): its visit's idle clock starts again. */
+  touch: (mapId: string, userId: string, startedAt: Date, at: Date) => Promise<void>;
+  /** When the Keeper last started or stepped a fight in the visit `startedAt` fell in, or null. */
+  lastActionAt: (mapId: string, userId: string, startedAt: Date) => Promise<Date | null>;
   /** Has the Keeper met this species (catalog seen)? */
   hasSeen: (mapId: string, userId: string, speciesId: string) => Promise<boolean>;
 }
@@ -82,6 +86,16 @@ const withSeed = (
 ) => rows.flatMap((r) => (r.seed === null ? [] : [{ ...r, seed: r.seed }]));
 
 export function createBossRepo(db: Executor): BossRepo {
+  /** The visit a fight started in: the latest window opened by then. */
+  const visitOf = async (mapId: string, startedAt: Date) => {
+    const [visit] = await db
+      .select({ windowId: bossWindows.windowId })
+      .from(bossWindows)
+      .where(and(eq(bossWindows.mapId, mapId), lte(bossWindows.opensAt, startedAt)))
+      .orderBy(desc(bossWindows.opensAt))
+      .limit(1);
+    return visit ?? null;
+  };
   return {
     transaction: (fn) =>
       withTransaction(db, (tx) =>
@@ -196,19 +210,49 @@ export function createBossRepo(db: Executor): BossRepo {
     },
 
     insertEncounter: async (mapId, userId, windowId, at) => {
+      // A later fight in the same visit starts the idle clock again.
       await db
         .insert(bossEncounters)
-        .values({ mapId, userId, windowId, createdAt: at })
-        .onConflictDoNothing();
+        .values({ mapId, userId, windowId, createdAt: at, lastActionAt: at })
+        .onConflictDoUpdate({
+          target: [bossEncounters.mapId, bossEncounters.userId, bossEncounters.windowId],
+          set: { lastActionAt: at },
+        });
+    },
+
+    touch: async (mapId, userId, startedAt, at) => {
+      const visit = await visitOf(mapId, startedAt);
+      if (!visit) return;
+      await db
+        .update(bossEncounters)
+        .set({ lastActionAt: at })
+        .where(
+          and(
+            eq(bossEncounters.mapId, mapId),
+            eq(bossEncounters.userId, userId),
+            eq(bossEncounters.windowId, visit.windowId),
+          ),
+        );
+    },
+
+    lastActionAt: async (mapId, userId, startedAt) => {
+      const visit = await visitOf(mapId, startedAt);
+      if (!visit) return null;
+      const [row] = await db
+        .select({ lastActionAt: bossEncounters.lastActionAt })
+        .from(bossEncounters)
+        .where(
+          and(
+            eq(bossEncounters.mapId, mapId),
+            eq(bossEncounters.userId, userId),
+            eq(bossEncounters.windowId, visit.windowId),
+          ),
+        );
+      return row?.lastActionAt ?? null;
     },
 
     markWon: async (mapId, userId, startedAt, battleId) => {
-      const [visit] = await db
-        .select({ windowId: bossWindows.windowId })
-        .from(bossWindows)
-        .where(and(eq(bossWindows.mapId, mapId), lte(bossWindows.opensAt, startedAt)))
-        .orderBy(desc(bossWindows.opensAt))
-        .limit(1);
+      const visit = await visitOf(mapId, startedAt);
       if (!visit) return;
       await db
         .update(bossEncounters)

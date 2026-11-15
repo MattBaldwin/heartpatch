@@ -2448,6 +2448,10 @@ export const bossEncounters = pgTable(
     wonBattleId: uuid('won_battle_id').references(() => battles.id, { onDelete: 'set null' }),
     asks: jsonb('asks').notNull().default([]),
     createdAt: timestamptz('created_at').notNull(),
+    // When the Keeper last started or stepped a fight in this visit (#190
+    // plan §12, migration 0067): `idleMinutes` with nothing and they've left
+    // (a loss; the try is used). Null on rows from before it: the battle's start.
+    lastActionAt: timestamptz('last_action_at'),
   },
   (t) => [
     primaryKey({ columns: [t.mapId, t.userId, t.windowId] }),
