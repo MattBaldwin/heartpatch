@@ -73,7 +73,7 @@ describe.skipIf(!url)('mini-boss secrets stay on the server (#190c, needs DATABA
       const res = await h.call('GET', path, kid);
       expect(res.statusCode, res.body).toBe(200);
       sent.push(res.json());
-      return res.json() as Record<string, unknown>;
+      return res.json<Record<string, unknown>>();
     };
 
     await h.toVisit(mapId, COIN_FLIP);
@@ -100,9 +100,9 @@ describe.skipIf(!url)('mini-boss secrets stay on the server (#190c, needs DATABA
     for (const reply of sent) expect(leaks(reply), JSON.stringify(reply)).toEqual([]);
 
     // Every live event this patch got, as each member would be sent it.
-    const events = (await db.query.gameEvents.findMany({
+    const events: GameEvent[] = await db.query.gameEvents.findMany({
       where: (t, { eq }) => eq(t.mapId, mapId),
-    })) as GameEvent[];
+    });
     expect(events.map((e) => e.type)).toContain('boss.appeared');
     for (const event of events) {
       const shown = publicViewFor(PUBLIC_VIEWS, event, { userId: kid.id });
@@ -122,7 +122,7 @@ describe.skipIf(!url)('mini-boss secrets stay on the server (#190c, needs DATABA
     await h.grow(mapId, kid, 20);
     await h.toVisit(mapId, COIN_FLIP);
     const res = await h.call('GET', `/maps/${mapId}/boss`, kid);
-    const body = res.json() as { boss: { species: string | null } };
+    const body = res.json<{ boss: { species: string | null } }>();
     expect(body.boss.species).toBeNull();
     expect(leaks(body)).toEqual([]);
   });

@@ -20,8 +20,7 @@ import {
   bossJoinLevel,
   type BossEventRules,
 } from '@heartpatch/shared/server';
-import { withTransaction, type Executor } from '../../db/client.js';
-import { appendGameEvent } from '../../db/game-events.js';
+import type { Executor } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
 import { localDayStart } from '../../lib/time.js';
 import { createBattlesRepo, type BattleRow } from '../battles/repo.js';
@@ -82,12 +81,13 @@ function asksOf(encounter: BossEncounterRow | null, battleId: string): AskRecord
     .filter((a) => a.battleId === battleId);
 }
 
-/** The boss-form species a mini-boss fight was against. */
-function bossSpeciesOf(row: BattleRow): string {
+/** The boss a mini-boss fight was against (its side `b`'s one squishy). */
+function bossOf(row: BattleRow) {
   const boss = row.state.sides.b.squishies[0];
   if (!boss) throw new Error(`mini-boss battle ${row.id} has no boss`);
-  return boss.speciesId;
+  return boss;
 }
+const bossSpeciesOf = (row: BattleRow) => bossOf(row).speciesId;
 
 const won = (row: BattleRow) => row.status === 'finished' && row.result?.winner === PLAYER_SIDE;
 
@@ -120,14 +120,14 @@ export async function befriendBoss(
   const found = await createBattlesRepo(db).findBattle(battleId);
   if (!found || found.playerUserId !== user.id) throw new AppError('NOT_FOUND', MESSAGES.notFound);
   await requireMember(db, user, found.mapId);
-  return withTransaction(db, async (tx) => {
+  return createBossRepo(db).transaction(async (boss, tx) => {
     const battles = createBattlesRepo(tx);
     const row = await battles.lockBattle(battleId);
     if (!row) throw new AppError('NOT_FOUND', MESSAGES.notFound);
+    const battleRowId = row.id;
     if (row.kind !== 'miniboss') throw new AppError('CONFLICT', MESSAGES.notBoss);
     if (!won(row)) throw new AppError('CONFLICT', MESSAGES.winFirst);
     const { mapId } = row;
-    const boss = createBossRepo(tx);
     const encounter = await boss.lockWonEncounter(mapId, user.id, row.id);
     if (!encounter) throw new AppError('CONFLICT', MESSAGES.winFirst);
     const asks = asksOf(encounter, row.id);
@@ -164,7 +164,7 @@ export async function befriendBoss(
     if (roll <= chance) {
       const spawns = createSpawnsRepo(tx);
       const partner = (await spawns.partnerLevel(mapId, user.id)) ?? 1;
-      const fought = row.state.sides.b.squishies[0]!;
+      const fought = bossOf(row);
       const friend = await battles.insertSquishy({
         mapId,
         ownerUserId: user.id,
@@ -190,7 +190,7 @@ export async function befriendBoss(
       const credit = { userId: user.id, refId: row.id, source: 'capture' as const, mapId, at };
       await creditCoins(tx, { ...credit, amount: COIN_RULES.capture.wild });
       await creditHeartCoins(tx, { ...credit, amount: HEART_COIN_RULES.capture.wild });
-      await appendGameEvent(tx, {
+      await boss.appendEvent({
         mapId,
         type: 'squishy.captured',
         actorUserId: user.id,
@@ -205,7 +205,7 @@ export async function befriendBoss(
       // The patch line (#391): its name only to members who have met it.
       const rarity = SPECIES.get(baseSpecies)?.rarity;
       if (rarity && rarity !== 'secret' && rareFindTier(rarity)?.patchLine) {
-        await appendGameEvent(tx, {
+        await boss.appendEvent({
           mapId,
           type: 'squishy.celebrated',
           actorUserId: user.id,
@@ -230,7 +230,7 @@ export async function befriendBoss(
     function record(outcome: AskRecord['outcome']): AskRecord {
       return AskRecordSchema.parse({
         ask,
-        battleId: row!.id,
+        battleId: battleRowId,
         at: at.toISOString(),
         standing,
         misses: bond.misses,

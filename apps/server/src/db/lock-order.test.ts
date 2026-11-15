@@ -756,7 +756,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
     const { kid, mapId, battle, fights, bosses, finishing, lockEncounter } =
       await minibossOneMoveFromWinning('befriender');
     await fights.act(kid, battle.id, finishing);
-    const [row] = await db.select().from(battles).where(eq(battles.id, battle.id));
+    const row = await createBattlesRepo(db).findBattle(battle.id);
     const bossSpecies = row!.state.sides.b.squishies[0]!.speciesId;
     await db.insert(bossBonds).values({ mapId, userId: kid.id, speciesId: bossSpecies });
     // Hold the visit row: the ask queues there holding only the battle. Then
