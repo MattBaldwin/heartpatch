@@ -894,7 +894,9 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
           { class: 'battle-xp', 'data-testid': 'battle-xp' },
           ...info.xp.map((line, i) => {
             const gain = info.evolving?.[i];
-            const attrs = info.bench?.[i] ? { class: 'battle-xp-bench' } : {};
+            const attrs: Record<string, string> = info.bench?.[i]
+              ? { class: 'battle-xp-bench' }
+              : {};
             if (!gain) return el('li', attrs, line);
             const meter = evolvingMeterEl('battle-evolving');
             const bar = evolvingBar(gain.after);
