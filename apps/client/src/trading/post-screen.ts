@@ -1062,7 +1062,6 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       'span',
       { class: 'post-who' },
       el('span', { class: 'post-col-name post-fit' }, name),
-      ...(side === 'theirs' && owner !== null && isMate(owner) ? [computerBadge()] : []),
       el(
         'span',
         { class: 'post-col-sub' },
@@ -1073,6 +1072,11 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       side === 'theirs' && owner !== null && isMate(owner)
         ? computerAvatar('avatar')
         : el('span', { class: 'post-face', 'aria-hidden': 'true' }, name.slice(0, 1));
+    // A mate's pill gets its own row under the header, so it never squeezes the name or the ▾.
+    const badgeRow =
+      side === 'theirs' && owner !== null && isMate(owner)
+        ? [el('span', { class: 'post-col-badge' }, computerBadge())]
+        : [];
     let header: HTMLElement;
     if (side === 'theirs' && mates().length > 1) {
       header = el(
@@ -1089,13 +1093,14 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         face,
         who,
         el('span', { class: 'post-col-chev', 'aria-hidden': 'true' }, '▾'),
+        ...badgeRow,
       );
       header.addEventListener('click', () => {
         menu = menu === 'mates' ? null : 'mates';
         render();
       });
     } else {
-      header = el('div', { class: 'post-col-head' }, face, who);
+      header = el('div', { class: 'post-col-head' }, face, who, ...badgeRow);
     }
     const filter = picker(
       `${side}-filter`,

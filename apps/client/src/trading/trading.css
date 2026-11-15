@@ -702,6 +702,21 @@ button.post-col-head {
   min-width: 0;
 }
 
+/* A mate's pill sits on its own row under the header, so it never pushes the column wider (#386f). */
+.post-col-head {
+  flex-wrap: wrap;
+}
+
+.post-col-badge {
+  display: flex;
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+.post-col-badge .cf-badge {
+  max-width: 100%;
+}
+
 .post-col-name {
   font-size: 16px;
   font-weight: 900;
