@@ -30,6 +30,8 @@ export const NIGHTFALL_RETRY_LIMIT = 5; // TUNE: guess
 export const NIGHTFALL_RETRY_DELAY_SECONDS = 30; // TUNE: guess, doubles each time
 
 /** How often the push sweep (#726c) looks for nudges due (cron). */
+// TUNE: a visit opens within five minutes of its time (reads open it on the spot).
+export const MINIBOSS_SWEEP_CRON = '*/5 * * * *';
 export const PUSH_SWEEP_CRON = '* * * * *'; // TUNE: every minute, so a dusk window is never missed while up
 
 /** Send-log rows (`push_sends`) the retention job deletes per statement, and statements per run. */

@@ -13,6 +13,7 @@ import { relayoutHomes } from './modules/buildings/layout.js';
 import { relayoutTileUses } from './modules/buildings/tile-uses.js';
 import { placeMissingTradingPosts } from './modules/maps/trading-posts.js';
 import { placeMissingCommunities } from './modules/communities/backfill.js';
+import type { BossService } from './modules/boss/service.js';
 import type { HollowService } from './modules/hollow/service.js';
 import type { PushService } from './modules/push/service.js';
 import { createRaidsConsumer } from './modules/raids/consumer.js';
@@ -25,6 +26,7 @@ const db = createDbClient(config.DATABASE_URL);
 const clock = createClock(config);
 let hollowService: HollowService | undefined;
 let pushService: { service: PushService; enabled: boolean } | undefined;
+let bossService: BossService | undefined;
 const app = await buildApp({
   config,
   readinessChecks: [dbReadinessCheck(db)],
@@ -36,11 +38,16 @@ const app = await buildApp({
   onPush: (service, enabled) => {
     pushService = { service, enabled };
   },
+  onBoss: (service) => {
+    bossService = service;
+  },
 });
 if (!hollowService) throw new Error('the Hollow Man needs the database');
 const hollow = hollowService;
 if (!pushService) throw new Error('push nudges need the database');
 const push = pushService;
+if (!bossService) throw new Error('mini-bosses need the database');
+const minibosses = bossService;
 // Land that misses you (owner decision 2026-10-06): long-untended land goes
 // wild at nightfall, after the Hollow Man. Its own transaction, safe to rerun.
 const land = createLandTending({
@@ -88,6 +95,8 @@ const jobs = await startJobs({
   // Push nudges (#726c): dusk and gatherers, every minute. Does nothing
   // while `HP_PUSH` is off (the queue still exists).
   push: { enabled: push.enabled, sweep: () => push.service.sweep() },
+  // Mini-boss visits (#190): opened on time every 5 minutes; nothing while the bag is empty.
+  miniboss: { sweep: () => minibosses.sweep() },
   logger: app.log,
   ...(app.wsHub ? { publish: app.wsHub.publish } : {}),
 });

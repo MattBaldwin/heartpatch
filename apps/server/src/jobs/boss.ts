@@ -15,6 +15,7 @@ import { startNightfall, type NightfallRunner } from './nightfall.js';
 import { ensureQueue } from './queues.js';
 import { createJobsRepo, pgBossOnTransaction } from './repo.js';
 import type { PushSweepResult } from '../modules/push/sweep.js';
+import { startMinibossSweep, type MinibossSweepRunner } from './miniboss.js';
 import { startPushSweep, type PushSweepRunner } from './push.js';
 import { startRetention } from './retention.js';
 import { startWeather, type WeatherRunner } from './weather.js';
@@ -46,6 +47,8 @@ export interface JobsOptions {
   weather?: WeatherRunner;
   /** Push nudges' sweep (#726c, `jobs/push.ts`); none without it. */
   push?: PushSweepRunner;
+  /** Mini-boss visits' sweep (#190, `jobs/miniboss.ts`); none without it. */
+  miniboss?: MinibossSweepRunner;
 }
 
 export interface Jobs {
@@ -57,6 +60,8 @@ export interface Jobs {
   weatherScan: () => Promise<number>;
   /** Sends the push nudges due now (also every minute, and at start). Null without `push` or while it's off. */
   pushSweep: () => Promise<PushSweepResult | null>;
+  /** Opens the mini-boss visits due now (also every 5 minutes, and at start). 0 without `miniboss`. */
+  minibossSweep: () => Promise<number>;
   /** Stops taking jobs, waits for running ones, and stops enqueuing wake-ups. */
   stop: () => Promise<void>;
 }
@@ -191,11 +196,16 @@ export async function startJobs(options: JobsOptions): Promise<Jobs> {
     ? await startPushSweep(boss, options.push, logger, options.schedule ?? true)
     : null;
 
+  const miniboss = options.miniboss
+    ? await startMinibossSweep(boss, options.miniboss, logger, options.schedule ?? true)
+    : null;
+
   return {
     catchUp,
     nightfallSweep: () => nightfall?.sweep() ?? Promise.resolve(0),
     weatherScan: () => weather?.scan() ?? Promise.resolve(0),
     pushSweep: () => push?.sweep() ?? Promise.resolve(null),
+    minibossSweep: () => miniboss?.sweep() ?? Promise.resolve(0),
     stop: async () => {
       setEventWakeup(null);
       await boss.stop({ graceful: true, timeout: JOBS_STOP_TIMEOUT_MS });

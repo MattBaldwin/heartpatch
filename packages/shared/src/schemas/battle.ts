@@ -631,6 +631,17 @@ export const PlayerBattleActionSchema = z.discriminatedUnion('type', [
    * from before #403 send it; new ones sip with `move`'s `item`.
    */
   z.strictObject({ type: z.literal('item'), item: ContentIdSchema }),
+  /**
+   * A team battle's round (#190, a mini-boss): one pick per squishy still
+   * standing, and at most one free sip (costs one from the bag), as the
+   * engine's `team` choice. Only in a team battle; every other battle
+   * refuses it, and a team battle refuses every other turn action.
+   */
+  z.strictObject({
+    type: z.literal('team'),
+    picks: z.array(TeamPickSchema).min(1).max(3),
+    item: z.strictObject({ item: ContentIdSchema, slot: SlotSchema }).optional(),
+  }),
 ]);
 export type PlayerBattleAction = z.infer<typeof PlayerBattleActionSchema>;
 

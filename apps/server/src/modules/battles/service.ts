@@ -40,6 +40,7 @@ import {
   type LiveBattleView,
   type BattleContent,
   type BattleKind,
+  type BattleFormat,
   type BattleSetup,
   type BattleSideId,
   type BattleSideSetup,
@@ -350,6 +351,40 @@ export type PrepareEncounterBattle = (
   started: (tx: Executor, battle: BattleRow) => Promise<NewGameEvent[]>;
 }>;
 
+/**
+ * A mini-boss fight (#190), built by the boss module in the start
+ * transaction: it checks the visit and the Keeper's tries under its own rows
+ * and throws `AppError` to refuse (then nothing is used up). Runs only when
+ * there's no battle going to resume. Like a wild encounter it uses no
+ * attack attempt and starts no tile cooldown.
+ */
+export type PrepareMinibossBattle = (
+  tx: Executor,
+  context: { map: MapRow; at: Date },
+) => Promise<{
+  /** The boss, alone on side `b` (`boss: true`, its grown-up form). */
+  boss: BattleSquishySetup;
+  /** The visit's tile: the arena is drawn as its terrain. */
+  tile: Hex;
+  /** After the battle row, in the same transaction: the visit's own row. Events go after `battle.started`. */
+  started: (tx: Executor, battle: BattleRow) => Promise<NewGameEvent[]>;
+}>;
+
+/**
+ * The boss module's side of a mini-boss fight's end (#190). Called inside
+ * the battles service's finish, right after the battle's lock and before the
+ * squishies' (tech spec §7 step 5e), so a win ends the visit for that Keeper
+ * in the same transaction as its rewards (CLAUDE.md rule 7).
+ */
+export interface MinibossBattlePort {
+  ended: (
+    tx: Executor,
+    battle: BattleRow,
+    winner: BattleSideId | 'draw',
+    at: Date,
+  ) => Promise<NewGameEvent[]>;
+}
+
 /** What a capture try costs (design doc §6): one Heart Charm. */
 export const HEART_CHARM = 'heart-charm';
 
@@ -390,6 +425,15 @@ export interface BattlesService {
     user: PublicUser,
     mapId: string,
     prepare: PrepareJourneyBattle,
+  ) => Promise<StartResult>;
+  /**
+   * Starts a mini-boss fight (#190): the player's whole team out at once
+   * against the boss (`format`), or resumes the battle going.
+   */
+  startMiniboss: (
+    user: PublicUser,
+    mapId: string,
+    prepare: PrepareMinibossBattle,
   ) => Promise<StartResult>;
   /**
    * Applies one player action; the AI side answers inside the same step. In
@@ -454,6 +498,8 @@ export interface BattlesServiceOptions {
   tileBattles?: TileBattlePort;
   /** Journeys' visit passes (#270, `modules/journeys`). */
   journeys?: JourneyBattlePort;
+  /** Mini-boss visits (#190, `modules/boss`). */
+  minibosses?: MinibossBattlePort;
   /**
    * Is this player's app open on this map right now (`wsHub.isOnline`)? A
    * live battle gives a side that isn't one away-grace before the AI picks
@@ -475,6 +521,14 @@ interface Opponent {
   /** Who of the team fights, when not all of them (`TileOpponent.team`). */
   team?: TeamSquishyRow[];
   turnLimit?: number;
+}
+
+/** A team battle's format for a team of `size` (#190): 1 to 3 out against one boss. */
+function teamFormat(size: number): BattleFormat {
+  if (size !== 1 && size !== 2 && size !== 3) {
+    throw new Error(`teamFormat: a team of ${size} can't face a mini-boss`);
+  }
+  return { a: size, b: 1 };
 }
 
 // Kid-readable messages (style guide §6).
@@ -658,6 +712,7 @@ function defenseAnswered(
 /** The potion a player's action sips (#214): alone, or along with a move (a free sip, #403). */
 function sipOfAction(action: PlayerBattleAction): string | undefined {
   if (action.type === 'item' || action.type === 'move') return action.item;
+  if (action.type === 'team') return action.item?.item;
   return undefined;
 }
 
@@ -1044,6 +1099,18 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
             [PLAYER_SIDE]: sureCapture ? { type: 'capture', sure: true } : { type: 'capture' },
           },
         };
+      case 'team':
+        // A mini-boss round (#190): the engine checks every pick and target.
+        return {
+          type: 'turn',
+          choices: {
+            [PLAYER_SIDE]: {
+              type: 'team',
+              picks: action.picks,
+              ...(action.item && { item: action.item }),
+            },
+          },
+        };
     }
   };
 
@@ -1216,6 +1283,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     const journeyEvents =
       row.kind === 'journey' && options.journeys
         ? await options.journeys.ended(tx, { ...row, state }, result.winner, at)
+        : [];
+    // A mini-boss fight (#190): its visit row right after the battle's lock
+    // (step 5e); a win ends the visit for this Keeper.
+    const minibossEvents =
+      row.kind === 'miniboss' && options.minibosses
+        ? await options.minibosses.ended(tx, { ...row, state }, result.winner, at)
         : [];
     // A live battle's turn state goes (#29): side `b` is free to battle again.
     // A friendly's side-`b` player is read first (#728): they're paid too.
@@ -1527,7 +1600,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         rival: tile.drop.fromRival === true,
         at,
       });
-    } else if (row.kind === 'wild' && result.winner === PLAYER_SIDE) {
+    } else if ((row.kind === 'wild' || row.kind === 'miniboss') && result.winner === PLAYER_SIDE) {
       await rollFoundDrop(tx, {
         source: 'battle',
         refId: row.id,
@@ -1571,6 +1644,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     for (const event of tile.events) await repo.appendEvent(event);
     for (const event of landEvents) await repo.appendEvent(event);
     for (const event of journeyEvents) await repo.appendEvent(event);
+    for (const event of minibossEvents) await repo.appendEvent(event);
   };
 
   /**
@@ -1617,6 +1691,10 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       case 'replace':
         action = { type: 'replace', side, slot: intent.slot };
         break;
+      case 'team':
+        // A live battle is always one-on-one (#190): a team battle never
+        // plays live, so it never reaches `coverChoice` (#809 follow-up 6).
+        throw new AppError('CONFLICT', MESSAGES.badChoice);
       case 'item':
       case 'move':
       case 'swap': {
@@ -1766,6 +1844,10 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           // Steady moves are gentle (#587) only where a Heart Charm works:
           // never with a rival's guards or land.
           ...(CAPTURABLE_BATTLE_KINDS.has(opponent.kind) && { gentle: true as const }),
+          // A mini-boss (#190): the whole team out at once against one boss.
+          // Only here is `boss: true` ever set, always with a format (#809
+          // follow-up 1: a boss is never fought one-on-one).
+          ...(opponent.kind === 'miniboss' && { format: teamFormat(fielded.length) }),
         };
         const state = startBattle(content, setup);
         const arena = await arenaFor(repo, {
@@ -1925,6 +2007,21 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         },
         prepare.soloTeam,
       ),
+
+    startMiniboss: (user, mapId, prepare) =>
+      startWith(user, mapId, async (tx, map, at) => {
+        const { boss, tile, started } = await prepare(tx, { map, at });
+        return {
+          kind: 'miniboss',
+          side: {
+            controller: { type: 'ai', policy: 'guardian' },
+            squishies: [{ ...boss, boss: true }],
+          },
+          spawn: null,
+          tile,
+          started,
+        };
+      }),
 
     startJourney: (user, mapId, prepare) =>
       startWith(user, mapId, async (tx, map, at) => {
