@@ -122,14 +122,36 @@ async function openMap(page: Page, patch: string) {
   return { id, tiles };
 }
 
-function pickTile(tiles: ViewTile[]) {
-  // A free meadow near the middle of the patch (so it's on screen at the opening zoom).
-  const free = tiles.filter((t) => t.ownerUserId === null && t.terrain === 'meadow');
-  free.sort((a, b) => Math.hypot(a.q + a.r / 2, a.r) - Math.hypot(b.q + b.r / 2, b.r));
-  return free[2] ?? free[0] ?? tiles[0]!;
+function candidates(tiles: ViewTile[]) {
+  // Free meadows 2-3 steps from my land (the camera opens on it).
+  const mine = tiles.filter((t) => t.ownerUserId !== null);
+  const d = (a: ViewTile, b: ViewTile) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
+  const near = (t: ViewTile) => Math.min(...mine.map((m) => d(t, m)));
+  return tiles
+    .filter((t) => t.ownerUserId === null && t.terrain === 'meadow' && near(t) >= 2 && near(t) <= 3)
+    .sort((a, b) => near(a) - near(b));
+}
+const goodSpot = (m: BossMarker | null, w: number, h: number) =>
+  !!m && m.x > 90 && m.x < w - 90 && m.y > h * 0.3 && m.y < h * 0.62;
+
+/** Tries tiles until the marker lands in a sensible spot on screen (each try is a live arrival). */
+async function placeBoss(page: Page, state: BossState, tiles: ViewTile[], inject: (id: string, d: Record<string, unknown>) => void, id: string) {
+  const vp = page.viewportSize()!;
+  for (const t of candidates(tiles).slice(0, 14)) {
+    state.tile = { q: t.q, r: t.r };
+    state.mode = 'unknown';
+    inject(id, { window: '2026-11-09', q: t.q, r: t.r, endsAt: state.endsAt });
+    await page.waitForTimeout(2500);
+    const m = await hook<BossMarker>(page, 'boss');
+    console.log('try', t.q, t.r, JSON.stringify(m));
+    if (goodSpot(m, vp.width, vp.height)) return t;
+  }
+  throw new Error('no good tile');
 }
 
-const shot = (page: Page, name: string) => page.screenshot({ path: `${OUT}/${name}.png` });
+// The dev-only stats badge and server chip aren't in a real build: hidden from captures.
+const HIDE_DEV = '.dev-stats-stack, .dev-status { display: none !important; }';
+const shot = (page: Page, name: string) => page.screenshot({ path: `${OUT}/${name}.png`, style: HIDE_DEV });
 const settle = (page: Page, ms = 1500) => page.waitForTimeout(ms);
 
 test.afterEach(async ({ browser }) => {
@@ -146,10 +168,11 @@ test('190f iphone frames', async ({ browser }) => {
   await mockBoss(page, state);
   const { id, tiles } = await openMap(page, 'Stomp Patch');
   console.log('quality', JSON.stringify(await hook(page, 'quality')));
-  const tile = pickTile(tiles);
-  state.tile = { q: tile.q, r: tile.r };
   await closeTrays(page);
-  await settle(page, 3000);
+  await settle(page, 2000);
+  const tile = await placeBoss(page, state, tiles, inject, id);
+  await expect(page.getByText(/stomping around/)).toBeHidden({ timeout: 10_000 });
+  await settle(page, 1000);
 
   // 3a: unknown boss arrives live.
   state.mode = 'unknown';
@@ -208,7 +231,7 @@ test('190f iphone frames', async ({ browser }) => {
   await page.getByTestId('catalog-close-top').tap();
 
   // 6: milestones (real server data), from the lobby's wardrobe shortcut.
-  await page.goto('/?tier=high');
+  await page.getByRole('button', { name: 'My patches' }).tap();
   const lobby = page.getByTestId('lobby');
   await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible({ timeout: 30_000 });
   await lobby.getByTestId('wardrobe-open').tap();
@@ -227,23 +250,18 @@ test('190f iphone frames', async ({ browser }) => {
 test('190f ipad frame', async ({ browser }) => {
   test.skip(test.info().project.name !== 'ipad-chromium');
   test.setTimeout(300_000);
-  const { page } = await player(browser, { width: 820, height: 1180 });
+  const { page, inject } = await player(browser, { width: 820, height: 1180 });
   const state: BossState = { mode: 'none', endsAt: new Date(Date.now() + 2 * 86_400_000).toISOString() };
   await mockBoss(page, state);
   // Pick the tile once the map id is known: the mock answers null until then, then a refresh.
-  const { tiles } = await openMap(page, 'Stomp Patch');
-  const tile = pickTile(tiles);
-  state.tile = { q: tile.q, r: tile.r };
-  state.mode = 'named';
+  const { id, tiles } = await openMap(page, 'Stomp Patch');
   await closeTrays(page);
-  // Re-open the map so the store asks again.
-  await page.reload();
-  const lobby = page.getByTestId('lobby');
-  await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible({ timeout: 30_000 }).catch(() => undefined);
-  if (await lobby.isVisible()) await visitPatch(lobby);
-  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
-  const hint = page.getByTestId('tray-hint-ok');
-  if (await hint.isVisible().catch(() => false)) await hint.tap();
+  await settle(page, 2000);
+  const tile = await placeBoss(page, state, tiles, inject, id);
+  await expect(page.getByText(/stomping around/)).toBeHidden({ timeout: 10_000 });
+  state.mode = 'named';
+  inject(id, { window: '2026-11-09', q: tile.q, r: tile.r, endsAt: state.endsAt });
+  await expect(page.getByText('A giant Rakelet is stomping about!')).toBeHidden({ timeout: 15_000 });
   await expect.poll(async () => (await hook<BossMarker>(page, 'boss'))?.name, { timeout: 30_000 }).toBe('Rakelet');
   console.log('quality', JSON.stringify(await hook(page, 'quality')));
   console.log('marker', JSON.stringify(await hook(page, 'boss')));

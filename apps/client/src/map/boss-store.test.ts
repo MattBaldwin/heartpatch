@@ -75,7 +75,9 @@ describe('createBossStore', () => {
     store.liveEvent(appeared('other'));
     expect(fetchBoss).toHaveBeenCalledTimes(1);
     store.liveEvent(appeared('m1'));
-    await vi.waitFor(() => { expect(onAppeared).toHaveBeenCalledTimes(1); });
+    await vi.waitFor(() => {
+      expect(onAppeared).toHaveBeenCalledTimes(1);
+    });
     expect(onAppeared.mock.calls[0]?.[1]).toBe('m1');
   });
 
