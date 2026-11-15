@@ -1,6 +1,7 @@
 import {
   BattleResponseSchema,
   BossVisitResponseSchema,
+  CatalogResponseSchema,
   GAME_DATA,
   JoinMapResponseSchema,
   MapResponseSchema,
@@ -339,6 +340,60 @@ describe.skipIf(!url)('mini-boss visits and fights (#190b, needs DATABASE_URL)',
     if (clock < pinned!.endsAt && localDate(clock, ZONE) !== localDate(pinned!.opensAt, ZONE)) {
       expect((await visit(server, owner, mapId))!.triesLeftToday).toBe(RULES.triesPerDay);
     }
+  });
+
+  it('marks the boss seen when the fight starts: once, never caught, nothing else (#190g)', async () => {
+    const { server } = await start();
+    const owner = await player();
+    const little = await player();
+    const mapId = await patch(server, owner, [little]);
+    await grow(mapId, owner, 20);
+    await grow(mapId, little, RULES.minPlayerLevel - 1);
+    await toVisit(mapId);
+    const seenRows = (who: Player) =>
+      db.query.speciesSeen.findMany({
+        where: (t, { and, eq: is }) => and(is(t.mapId, mapId), is(t.userId, who.id)),
+      });
+    const catalog = async (who: Player) => {
+      const res = await call(server, 'GET', `/maps/${mapId}/catalog`, who);
+      expect(res.statusCode, res.body).toBe(200);
+      return CatalogResponseSchema.parse(res.json()).catalog;
+    };
+
+    // Before the start: not met, so its name stays hidden.
+    expect(await seenRows(owner)).toEqual([]);
+    expect(await visit(server, owner, mapId)).toMatchObject({ species: null, state: 'here' });
+
+    const first = await fight(server, owner, mapId);
+    expect(first.statusCode, first.body).toBe(201);
+    const [started] = await minibossBattles(owner.id);
+    // One row for the boss's species and nothing else (the team's own species
+    // isn't "met" by owning it), seen but never caught.
+    const rows = await seenRows(owner);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      speciesId: BOSS.id,
+      firstSeenAt: started!.startedAt,
+      firstCaughtAt: null,
+    });
+    expect((await catalog(owner)).entries).toEqual([
+      { speciesId: BOSS.id, firstSeenAt: started!.startedAt.toISOString(), firstCaughtAt: null },
+    ]);
+    expect(await visit(server, owner, mapId)).toMatchObject({ species: BOSS.id });
+
+    // A second fight in the visit keeps the one row, and its first-seen time.
+    const battle = BattleResponseSchema.parse(first.json()).battle;
+    await act(server, owner, battle, { type: 'forfeit' });
+    clock.setTime(clock.getTime() + 5 * 60_000);
+    const again = await fight(server, owner, mapId);
+    expect(again.statusCode, again.body).toBe(201);
+    expect(await minibossBattles(owner.id)).toHaveLength(2);
+    expect(await seenRows(owner)).toEqual(rows);
+
+    // A Keeper too small to start is shown the name, display-only: no row.
+    expect((await fight(server, little, mapId)).statusCode).toBe(409);
+    expect(await seenRows(little)).toEqual([]);
+    expect((await catalog(little)).entries).toEqual([]);
   });
 
   it('a win pays the mini-boss coins and ends the visit for that Keeper only', async () => {
