@@ -906,12 +906,8 @@ const chat = createChatScreen({ root: document.body, entryRoot: trays.slot('top-
  * messages (#23) and friendly battles (#29). Null hides them (the Glade,
  * another screen over the map).
  */
-let socialMapId: string | null = null;
 const socialSetMap = (mapId: string | null): Promise<void> => {
   void friendly.setMap(mapId);
-  // Another patch: its hello and goodbye only (#386b). Null (a screen over the map) keeps them.
-  if (mapId !== null && mapId !== socialMapId) computerMatesNotes.reset();
-  if (mapId !== null) socialMapId = mapId;
   return chat.setMap(mapId);
 };
 /** The patch each view's Squishies button opens the roster for. */
@@ -1388,6 +1384,10 @@ const waterBuild = createTileBuild({
     stage?.camera.panTo(hexToWorld(tile, HEX_SIZE), stillPans.matches, 0.34, BUILD_ZOOM);
   },
 });
+// Computer friends (#386b): a hello card when mates move in, and a toast
+// when one waves goodbye to make room for a real friend (a map layer: it
+// compares each newer view's roster with the last).
+const computerMatesNotes = createComputerMatesNotes({ root: document.body });
 const maps = createMapScreen({
   root: document.body,
   // Every view read (open, resync) also says whether a House gift waits (#731c).
@@ -1484,6 +1484,7 @@ const maps = createMapScreen({
     if (mapId !== null && signedIn && glade === null) trays.offerHint(signedIn.id);
   },
   layers: [
+    computerMatesNotes.layer,
     hollowLayer,
     darkLand,
     jobs.gatherers,
@@ -1514,7 +1515,6 @@ const maps = createMapScreen({
     // Friendly battles (#29): asks, and a live battle's turns and cheers.
     friendly.liveEvent(event);
     battles.liveEvent(event);
-    computerMatesNotes.liveEvent(event);
     // The player's own play may have earned a milestone (#44).
     milestones.liveEvent(event);
     journeys.liveEvent(event);
@@ -1884,12 +1884,6 @@ const friendly = createFriendlyScreen({
   openTeam: (mapId) => {
     void openTeamPicker(mapId);
   },
-});
-// Computer friends (#386b): a hello card when mates move in, and a toast
-// when one waves goodbye to make room for a real friend.
-const computerMatesNotes = createComputerMatesNotes({
-  root: document.body,
-  nameOf: (userId) => maps.view?.members.find((m) => m.user.id === userId)?.user.username ?? null,
 });
 // Claiming starts from a tile: this row says how (territory, #15).
 trays.slot('adventure').append(

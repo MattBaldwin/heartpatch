@@ -114,3 +114,35 @@ export function goodbyeLine(mate: string, friend: string | null): string {
     ? `${mate} (${COMPUTER_TEXT.badge}) waved goodbye so ${friend} could move in 👋`
     : `${mate} (${COMPUTER_TEXT.badge}) waved goodbye to make room for a new friend 👋`;
 }
+
+/** A member as the roster compare sees them. */
+export interface RosterEntry {
+  readonly name: string;
+  readonly computer: boolean;
+}
+
+/**
+ * What changed between two views' members (#386b): mates to say hello to
+ * (any not yet in `greeted`, which this adds them to), and, when the same
+ * patch was on screen before (`last`), mates who left and real kids who
+ * moved in. A mate leaving as a kid arrives is the goodbye.
+ */
+export function rosterDelta(
+  last: ReadonlyMap<string, RosterEntry> | null,
+  next: ReadonlyMap<string, RosterEntry>,
+  greeted: Set<string>,
+): { arrivals: string[]; departed: string[]; newKids: string[] } {
+  const arrivals: string[] = [];
+  const departed: string[] = [];
+  const newKids: string[] = [];
+  for (const [id, m] of next) {
+    if (m.computer && !greeted.has(id)) {
+      greeted.add(id);
+      arrivals.push(m.name);
+    } else if (!m.computer && last && !last.has(id)) {
+      newKids.push(m.name);
+    }
+  }
+  for (const [id, m] of last ?? []) if (m.computer && !next.has(id)) departed.push(m.name);
+  return { arrivals, departed, newKids };
+}

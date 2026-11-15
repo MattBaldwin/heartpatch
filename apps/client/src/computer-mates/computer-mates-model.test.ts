@@ -9,6 +9,8 @@ import {
   isComputer,
   livesHereLine,
   nameList,
+  rosterDelta,
+  type RosterEntry,
   switchView,
 } from './computer-mates-model.js';
 
@@ -146,5 +148,54 @@ describe('the legend badge', () => {
   it('marks a mate’s land row for the badge, and never a real kid’s', () => {
     const entries = legendEntries([owner, member(2, 1), mate(3, 2, 'Bramble')], null);
     expect(entries.map((e) => e.computer)).toEqual([false, false, true]);
+  });
+});
+
+describe('rosterDelta', () => {
+  const roster = (...rows: [string, string, boolean][]) =>
+    new Map<string, RosterEntry>(rows.map(([id, name, computer]) => [id, { name, computer }]));
+  const mia: [string, string, boolean] = ['u1', 'Mia', false];
+
+  it('says hello to every mate once, even ones there when the patch opened', () => {
+    const greeted = new Set<string>();
+    const opened = roster(mia, ['m1', 'Bramble', true], ['m2', 'Marigold', true]);
+    expect(rosterDelta(null, opened, greeted)).toEqual({
+      arrivals: ['Bramble', 'Marigold'],
+      departed: [],
+      newKids: [],
+    });
+    // The next view: nothing new, so no second hello.
+    expect(rosterDelta(opened, opened, greeted).arrivals).toEqual([]);
+    const more = roster(
+      mia,
+      ['m1', 'Bramble', true],
+      ['m2', 'Marigold', true],
+      ['m3', 'Pocket', true],
+    );
+    expect(rosterDelta(opened, more, greeted).arrivals).toEqual(['Pocket']);
+  });
+
+  it('pairs a mate leaving with a real kid arriving: the goodbye', () => {
+    const greeted = new Set(['m1', 'm2']);
+    const before = roster(mia, ['m1', 'Bramble', true], ['m2', 'Pocket', true]);
+    const after = roster(mia, ['m1', 'Bramble', true], ['u2', 'Lee', false]);
+    expect(rosterDelta(before, after, greeted)).toEqual({
+      arrivals: [],
+      departed: ['Pocket'],
+      newKids: ['Lee'],
+    });
+  });
+
+  it('tells no goodbye when the owner switches mates off (no kid arrives)', () => {
+    const greeted = new Set(['m1']);
+    const before = roster(mia, ['m1', 'Bramble', true]);
+    const delta = rosterDelta(before, roster(mia), greeted);
+    expect(delta.departed).toEqual(['Bramble']);
+    expect(delta.newKids).toEqual([]);
+  });
+
+  it('never counts a real kid as a mate, or the first view as anyone arriving', () => {
+    const delta = rosterDelta(null, roster(mia, ['u2', 'Lee', false]), new Set());
+    expect(delta).toEqual({ arrivals: [], departed: [], newKids: [] });
   });
 });

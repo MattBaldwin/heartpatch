@@ -8,7 +8,7 @@ import { newPlayer, uniqueName, visitPatch } from './players.js';
  * when mates move in. The server half (who moves in, 386a/386c) is stood in
  * by route stubs, so this spec runs whether or not the e2e server opens
  * `HP_COMPUTER_MATES`: the switch route, the detail's `computerMates` and the
- * mates' seats are stubbed, and the arrivals are injected into the live feed.
+ * mates' seats are stubbed.
  */
 
 interface Member {
@@ -55,61 +55,21 @@ async function stubComputerMates(page: Page, state: { on: boolean; mapId: string
     if (state.on) json.map.members = withMates(json.map.members);
     return route.fulfill({ response, json });
   });
+  // A new patch's first screen is the create reply's detail.
+  await page.route(/\/api\/v1\/maps$/, async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const response = await route.fetch();
+    const json = (await response.json()) as { map: { id: string } & Record<string, unknown> };
+    state.mapId = json.map.id;
+    json.map['computerMates'] = { enabled: state.on, changeAt: null };
+    return route.fulfill({ response, json });
+  });
   await page.route(/\/api\/v1\/maps\/[0-9a-f-]{36}\/view$/, async (route) => {
     const response = await route.fetch();
     const json = (await response.json()) as { members: Member[] };
     if (state.on) json.members = withMates(json.members);
     return route.fulfill({ response, json });
   });
-}
-
-/** Passes the live socket through, and can add events after the server's latest. */
-async function liveFeed(page: Page) {
-  let seq = 0;
-  let mapId = '';
-  let send: ((text: string) => void) | null = null;
-  await page.routeWebSocket(/\/ws/, (ws) => {
-    const server = ws.connectToServer();
-    send = (text) => {
-      ws.send(text);
-    };
-    server.onMessage((message) => {
-      try {
-        const parsed = JSON.parse(String(message)) as { seq?: number; mapId?: string };
-        if (typeof parsed.seq === 'number') seq = Math.max(seq, parsed.seq);
-        if (typeof parsed.mapId === 'string') mapId = parsed.mapId;
-      } catch {
-        // Not JSON: pass it on as it is.
-      }
-      ws.send(message);
-    });
-    ws.onMessage((message) => {
-      server.send(message);
-    });
-  });
-  return {
-    joined: (map: string) => {
-      MATES.forEach((username, i) => {
-        seq += 1;
-        send?.(
-          JSON.stringify({
-            v: 1,
-            type: 'member.joined',
-            mapId: mapId || map,
-            seq,
-            at: new Date().toISOString(),
-            data: {
-              userId: mateId(i),
-              username,
-              homeSlot: i + 1,
-              heartSeed: { q: 0, r: 0 },
-              computer: true,
-            },
-          }),
-        );
-      });
-    },
-  };
 }
 
 test('the owner switches Computer friends on, and three badged mates move in (#386b)', async ({
@@ -120,7 +80,6 @@ test('the owner switches Computer friends on, and three badged mates move in (#3
   const page = await newPlayer(browser, owner);
   const state = { on: false, mapId: '' };
   await stubComputerMates(page, state);
-  const feed = await liveFeed(page);
   const lobby = page.getByTestId('lobby');
 
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
@@ -157,9 +116,8 @@ test('the owner switches Computer friends on, and three badged mates move in (#3
   await expect(kid.locator('.slot-icon')).toHaveCount(1);
   await expect(kid.getByTestId('computer-badge')).toHaveCount(0);
 
-  // On the patch: the mates move in over the live feed, and one card says hello.
+  // On the patch: one card says hello to the mates who moved in.
   await visitPatch(lobby);
-  feed.joined(state.mapId);
   const hello = page.getByTestId('computer-hello');
   await expect(hello).toBeVisible({ timeout: 15_000 });
   await expect(hello.getByRole('heading')).toHaveText(
