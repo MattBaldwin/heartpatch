@@ -1,5 +1,8 @@
 import {
+  BattleIdParamsSchema,
   BattleResponseSchema,
+  BossBefriendRequestSchema,
+  BossBefriendResponseSchema,
   BossVisitResponseSchema,
   MapIdParamsSchema,
 } from '@heartpatch/shared';
@@ -54,6 +57,23 @@ export const bossRoutes =
         const result = await service.start(requireUser(request), request.params.mapId);
         return reply.code(result.created ? 201 : 200).send({ battle: result.battle });
       },
+    );
+
+    // Ask a beaten boss to be your friend (#190 plan §3): the ask number
+    // alone; the server spends the charms and rolls. Never the odds.
+    app.post(
+      '/battles/:battleId/befriend',
+      {
+        schema: {
+          params: BattleIdParamsSchema,
+          body: BossBefriendRequestSchema,
+          response: { 200: BossBefriendResponseSchema },
+        },
+        preHandler: [requireAuth, rateLimit('befriend'), idempotency.preHandler],
+        onSend: idempotency.onSend,
+      },
+      async (request) =>
+        service.befriend(requireUser(request), request.params.battleId, request.body.ask),
     );
 
     done();

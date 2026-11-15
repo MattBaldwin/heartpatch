@@ -13,6 +13,33 @@ export const BossBagEntrySchema = z.strictObject({
 export type BossBagEntry = z.infer<typeof BossBagEntrySchema>;
 
 /**
+ * Asking a beaten boss to be your friend (#190 plan §3). Secret but for
+ * `charmsPerAsk` and `asksPerWin`, which the result screen shows: the odds,
+ * the warmth and the sure ask never reach a client (CLAUDE.md rule 6).
+ */
+export const BossBefriendRulesSchema = z.strictObject({
+  /** Heart Charms one ask spends ("Give it 3 Heart Charms?"). */
+  charmsPerAsk: z.number().int().min(1).max(10),
+  /** Asks after one win; then it stomps off until its next visit. */
+  asksPerWin: z.number().int().min(1).max(5),
+  /** The asks stay open this long after the win, even once the visit ends (plan §12). */
+  askHours: z.number().int().min(1).max(72),
+  /** The chance (%) of a yes before anything else… */
+  basePercent: z.number().int().min(0).max(100),
+  /** …plus this per squishy of yours still standing at the win… */
+  perStandingPercent: z.number().int().min(0).max(100),
+  /** …plus this per earlier "not yet" from this boss kind (warmth, kept across visits). */
+  perMissPercent: z.number().int().min(0).max(100),
+  /** After this many "not yet"s, the next ask always works. */
+  sureAfterMisses: z.number().int().min(1).max(20),
+  /** A yes joins as the line's base form at this share (%) of the Keeper's Partner level… */
+  joinLevelPercent: z.number().int().min(1).max(100),
+  /** …at least this level (and below its first evolution, `befriendedLevel`). */
+  minJoinLevel: z.number().int().min(1).max(100),
+});
+export type BossBefriendRules = z.infer<typeof BossBefriendRulesSchema>;
+
+/**
  * When, where and who a mini-boss visits (#190 plan §2). Server-only
  * (CLAUDE.md rule 6): the schedule, the bag, the next boss and the unlock
  * levels never reach a client. Exported only from `@heartpatch/shared/server`.
@@ -46,6 +73,8 @@ export const BossEventRulesSchema = z.strictObject({
    * loss pays none.
    */
   bundle: z.record(ContentIdSchema, z.number().int().min(1).max(99)),
+  /** Befriending after a win (190c). */
+  befriend: BossBefriendRulesSchema,
 });
 export type BossEventRules = z.infer<typeof BossEventRulesSchema>;
 

@@ -17,4 +17,16 @@ export const BOSS_EVENTS: BossEventRules = {
   bag: [],
   // TUNE: a win's sure bundle; 3 Heart Charms is one befriend ask (190c).
   bundle: { 'heart-charm': 3, heartdust: 5, treats: 3 },
+  // Owner decision 2026-11-15 (#190 open questions 3 and 4).
+  befriend: {
+    charmsPerAsk: 3, // TUNE: one ask
+    asksPerWin: 2, // TUNE: then it stomps off until next visit
+    askHours: 24, // TUNE: plan §12, asks stay open a day after the win
+    basePercent: 20, // TUNE
+    perStandingPercent: 5, // TUNE: per squishy of yours still standing
+    perMissPercent: 15, // TUNE: warmth per earlier "not yet" from this boss kind
+    sureAfterMisses: 4, // TUNE: so the 5th ask always works
+    joinLevelPercent: 50, // TUNE: half the Partner's level…
+    minJoinLevel: 5, // TUNE: …at least 5
+  },
 };

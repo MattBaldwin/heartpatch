@@ -136,7 +136,7 @@ describe('headline numbers (a short run, so data changes show up here)', () => {
         expect((exploring.level[day] ?? 0) - (now.level[day] ?? 0)).toBeLessThanOrEqual(1);
       }
     }
-  }, 30_000); // four 30-day runs, as above: past 5 s with the CPUs oversubscribed
+  }, 30_000); // four 30-day runs, like the case above: the default 5 s starves on CI's CPUs (#784)
 
   it('keeps befriended squishies below their evolution with the shipped cap', () => {
     const capped = runProgression(data, SMALL, CURRENT_RULES, engaged!, 4);
