@@ -722,6 +722,7 @@ export function luresAffordable(
   const item = config.whatPays.shop.find((i) => i.id === gate.item);
   if (!item) throw new Error(`no shop item "${gate.item}"`);
   const [seats] = config.seats;
+  if (seats === undefined) throw new Error('no map size in `seats`');
   const weekDays = config.whatPays.weekDays;
   return config.kids.flatMap((kid) => {
     const perWeek = gate.perWeek[kid.id];
