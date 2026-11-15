@@ -191,7 +191,9 @@ export function checkServerGameData(input: unknown, gameData: GameData): string[
     const secretSpecies = new Set(data.secretSpecies.map((s) => s.id));
     const species = new Set([...publicSpecies, ...secretSpecies]);
     const bossLine = new Set(
-      [...gameData.species, ...data.secretSpecies].filter((s) => s.line === 'boss').map((s) => s.id),
+      [...gameData.species, ...data.secretSpecies]
+        .filter((s) => s.line === 'boss')
+        .map((s) => s.id),
     );
     const moves = new Set([...gameData.moves, ...data.secretMoves].map((m) => m.id));
     const seasons = new Set(gameData.seasons.map((s) => s.id));

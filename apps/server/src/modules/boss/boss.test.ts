@@ -450,6 +450,42 @@ describe.skipIf(!url)('mini-boss visits and fights (#190b, needs DATABASE_URL)',
     expect((await visit(server, owner, mapId))!.triesLeftToday).toBe(RULES.triesPerDay - 1);
   });
 
+  it('on the visit’s last day, says enough for today without promising tomorrow', async () => {
+    const { server } = await start();
+    const owner = await player();
+    const mapId = await patch(server, owner);
+    await grow(mapId, owner, 20);
+    const { opensAt } = await toVisit(mapId);
+    // Two patch days on: the visit's last morning (it closes at the opening hour).
+    clock.setTime(opensAt.getTime() + (RULES.windowHours - 6) * 3_600_000);
+    for (let i = 0; i < RULES.triesPerDay; i++) {
+      const res = await fight(server, owner, mapId);
+      expect(res.statusCode, res.body).toBe(201);
+      await act(server, owner, BattleResponseSchema.parse(res.json()).battle, { type: 'forfeit' });
+    }
+    const none = await fight(server, owner, mapId);
+    expect(none.statusCode).toBe(409);
+    expect(errorOf(none)).toBe('Phew, that’s enough stomping for today!');
+  });
+
+  it('resumes a fight going after the visit has closed', async () => {
+    const { server } = await start();
+    const owner = await player();
+    const mapId = await patch(server, owner);
+    await grow(mapId, owner, 20, [20, 20]);
+    const { opensAt } = await toVisit(mapId);
+    const endsAt = opensAt.getTime() + RULES.windowHours * 3_600_000;
+    clock.setTime(endsAt - 5 * 60_000);
+    const res = await fight(server, owner, mapId);
+    expect(res.statusCode, res.body).toBe(201);
+    const battle = BattleResponseSchema.parse(res.json()).battle;
+    clock.setTime(endsAt + 60_000);
+    expect(await visit(server, owner, mapId)).toBeNull();
+    const again = await fight(server, owner, mapId);
+    expect(again.statusCode, again.body).toBe(200);
+    expect(BattleResponseSchema.parse(again.json()).battle.id).toBe(battle.id);
+  });
+
   it('a scooted fight pays no coins and no bundle, and uses the try', async () => {
     const { server } = await start();
     const owner = await player();

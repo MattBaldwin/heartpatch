@@ -21,6 +21,8 @@ const MESSAGES = {
   tooBig: 'Too big for now! Grow your team and come back.',
   beaten: 'You already beat this big squishy! It’ll stomp back another week.',
   noTries: 'Phew, that’s enough stomping for today. Try again tomorrow!',
+  // The visit's last patch day: it won't be here tomorrow.
+  noTriesLastDay: 'Phew, that’s enough stomping for today!',
 } as const;
 
 export interface BossServiceOptions {
@@ -46,9 +48,7 @@ export interface BossService {
 }
 
 /** The boss module's side of a fight's end (#190): a win ends the visit for its Keeper. */
-export function createMinibossBattlePort(
-  rules: BossEventRules = BOSS_EVENTS,
-): MinibossBattlePort {
+export function createMinibossBattlePort(rules: BossEventRules = BOSS_EVENTS): MinibossBattlePort {
   return {
     bundle: () => ({ ...rules.bundle }),
     abandonAfterMs: rules.idleMinutes * 60_000,
@@ -86,12 +86,17 @@ export function createBossService(options: BossServiceOptions): BossService {
    * once. Lazy (rule 4): the sweep opens visits on time, and a read opens one
    * the sweep hasn't reached yet. Null while none is out.
    */
-  const openVisit = async (map: BossMapRow, at: Date): Promise<BossWindowRow | null> => {
+  const openVisit = async (
+    map: BossMapRow,
+    at: Date,
+    { onlyNew = false } = {},
+  ): Promise<BossWindowRow | null> => {
     if (rules.bag.length === 0) return null;
     const repo = createBossRepo(db);
     const week = bossWeekOf(localDate(at, map.timeZone));
     const pinned = await repo.findWindow(map.id, week);
-    if (pinned) return pinned.opensAt <= at && at < pinned.endsAt ? pinned : null;
+    // The sweep counts only visits it opens; one already pinned isn't news.
+    if (pinned) return !onlyNew && pinned.opensAt <= at && at < pinned.endsAt ? pinned : null;
     const plan = bossVisitFor(map.seed, week, map.longNightWeekday, rules);
     if (!plan) return null;
     const opensAt = instantOfLocalDate(
@@ -129,6 +134,7 @@ export function createBossService(options: BossServiceOptions): BossService {
       return row;
     });
     if (opened) published(map.id);
+    if (onlyNew) return opened;
     return opened ?? (await repo.findWindow(map.id, week));
   };
 
@@ -178,6 +184,10 @@ export function createBossService(options: BossServiceOptions): BossService {
     },
 
     start: async (user, mapId) => {
+      // A fight going resumes first, as every start does: a Keeper mid-fight
+      // when the visit closes still gets their battle back, not "gone".
+      const going = await battles.current(user, mapId);
+      if (going?.status === 'active') return { battle: going, created: false };
       const found = await visitFor(user, mapId, now());
       if (!found) throw new AppError('NOT_FOUND', MESSAGES.gone);
       const { map, window } = found;
@@ -193,7 +203,11 @@ export function createBossService(options: BossServiceOptions): BossService {
         const encounter = await repo.findEncounter(mapId, user.id, window.windowId);
         if (encounter?.wonBattleId != null) throw new AppError('CONFLICT', MESSAGES.beaten);
         if ((await triesLeft(tx, map, user.id, at)) === 0) {
-          throw new AppError('CONFLICT', MESSAGES.noTries);
+          // Tomorrow's patch-local start (+30 h from today's lands in it on a DST day too).
+          const today = localDayStart(at, map.timeZone);
+          const tomorrow = localDayStart(new Date(today.getTime() + 30 * 3_600_000), map.timeZone);
+          const lastDay = window.endsAt <= tomorrow;
+          throw new AppError('CONFLICT', lastDay ? MESSAGES.noTriesLastDay : MESSAGES.noTries);
         }
         return {
           boss: {
@@ -222,10 +236,7 @@ export function createBossService(options: BossServiceOptions): BossService {
       let opened = 0;
       for (const map of await createBossRepo(db).listMaps()) {
         if (only && !only.includes(map.id)) continue;
-        const week = bossWeekOf(localDate(at, map.timeZone));
-        const before = await createBossRepo(db).findWindow(map.id, week);
-        if (before) continue;
-        if (await openVisit(map, at)) opened += 1;
+        if (await openVisit(map, at, { onlyNew: true })) opened += 1;
       }
       return opened;
     },

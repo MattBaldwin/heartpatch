@@ -532,12 +532,13 @@ interface Opponent {
   turnLimit?: number;
 }
 
-/** A team battle's format for a team of `size` (#190): 1 to 3 out against one boss. */
+/**
+ * A team battle's format for a team of `size` (#190): 1 to 3 out against one
+ * boss. Clamped, so a `teamSize` tuned past 3 sends the first three rather
+ * than failing every start (`fielded` is never empty: a start needs a team).
+ */
 function teamFormat(size: number): BattleFormat {
-  if (size !== 1 && size !== 2 && size !== 3) {
-    throw new Error(`teamFormat: a team of ${size} can't face a mini-boss`);
-  }
-  return { a: size, b: 1 };
+  return { a: Math.min(3, Math.max(1, size)) as 1 | 2 | 3, b: 1 };
 }
 
 // Kid-readable messages (style guide §6).
@@ -1305,7 +1306,9 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         ? await options.journeys.ended(tx, { ...row, state }, result.winner, at)
         : [];
     // A mini-boss fight (#190): its visit row right after the battle's lock
-    // (step 5e); a win ends the visit for this Keeper.
+    // (step 5e); a win ends the visit for this Keeper. It runs before the
+    // `live_battles` row below (5c) only because a team battle never has one
+    // (it never goes live), so no transaction takes both.
     const minibossEvents =
       row.kind === 'miniboss' && options.minibosses
         ? await options.minibosses.ended(tx, { ...row, state }, result.winner, at)

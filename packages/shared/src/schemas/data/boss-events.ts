@@ -72,7 +72,8 @@ export function checkBossEventRules(
       }
     }
   }
-  if (Object.keys(parsed.data.bundle).length === 0) problems.push('boss rules: the bundle is empty');
+  if (Object.keys(parsed.data.bundle).length === 0)
+    problems.push('boss rules: the bundle is empty');
   for (const item of Object.keys(parsed.data.bundle)) {
     if (knownItems && !knownItems.has(item)) problems.push(`boss bundle: unknown item "${item}"`);
   }
