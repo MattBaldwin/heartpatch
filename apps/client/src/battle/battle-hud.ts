@@ -961,9 +961,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
             const attrs: Record<string, string> = info.bench?.[i]
               ? { class: 'battle-xp-bench' }
               : {};
-            return gain
-              ? el('li', attrs, line, evolvingMeter(gain, false))
-              : el('li', attrs, line);
+            return gain ? el('li', attrs, line, evolvingMeter(gain, false)) : el('li', attrs, line);
           }),
           ...(info.evolvingRow?.some(Boolean)
             ? [
