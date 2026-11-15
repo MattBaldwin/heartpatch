@@ -77,6 +77,7 @@ import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { createTendingRepo } from '../territory/repo.js';
 import { rewildTiles } from '../territory/rewild.js';
 import { createTrickOrTreatRepo } from '../trick-or-treat/repo.js';
+import { createComputerMatesRepo } from '../computer-mates/repo.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
 import { weatherNotes } from '../weather/service.js';
 import {
@@ -555,6 +556,11 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         : [];
     await repo.setOutcomes(nightRowId, stored);
     // The Long Night's row, beside the night's own (#727).
+    // Real Keepers only (#386): a computer patch-mate never joins the siege,
+    // so it can't break the patch's hold, wear the night crown or get a Gap.
+    const computers = longNight
+      ? await createComputerMatesRepo(tx).computerIds(longNightKeepers.map((k) => k.userId))
+      : new Set<string>();
     const resolved = longNight
       ? await resolveLongNight(tx, {
           map,
@@ -562,7 +568,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
           at,
           seed,
           percent: nightPercent,
-          keepers: longNightKeepers,
+          keepers: longNightKeepers.filter((k) => !computers.has(k.userId)),
           fires: buildings.filter((b) => b.kind === 'hearthfire'),
           hollowRules: rules,
         })

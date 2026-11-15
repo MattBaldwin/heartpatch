@@ -11,6 +11,7 @@ import type { Transaction } from '../../db/client.js';
 import type { GameEvent } from '../../db/game-events.js';
 import type { EventConsumer } from '../../jobs/consumers.js';
 import { localDate, onGameClock, type Clock } from '../../lib/time.js';
+import { createComputerMatesRepo } from '../computer-mates/repo.js';
 import { milestonesCount } from './counts.js';
 import { createMilestonesRepo } from './repo.js';
 import {
@@ -88,9 +89,14 @@ export function createMilestonesConsumer(options: MilestonesConsumerOptions = {}
 
       const seasons = activeSeasons(SEASONS, localDate(happened, map.timeZone)).map((s) => s.id);
       // By player, then track: every milestone transaction locks rows in this order.
-      const credits = milestoneCredits(tracks, event, seasons).sort(
-        (a, b) => compare(a.userId, b.userId) || compare(a.trackId, b.trackId),
+      const credited = milestoneCredits(tracks, event, seasons);
+      // Computer patch-mates (#386) earn no milestones, titles or crowns.
+      const computers = await createComputerMatesRepo(tx).computerIds(
+        credited.map((c) => c.userId),
       );
+      const credits = credited
+        .filter((c) => !computers.has(c.userId))
+        .sort((a, b) => compare(a.userId, b.userId) || compare(a.trackId, b.trackId));
       // Progress rows first (the lock order), then the tiers they reached.
       const reached: TierGrant[] = [];
       for (const credit of credits) {

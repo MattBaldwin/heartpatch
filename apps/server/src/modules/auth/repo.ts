@@ -2,6 +2,7 @@ import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import type { Executor } from '../../db/client.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import { recoveryCodes, sessions, users } from '../../db/schema.js';
+import { playerUser } from '../computer-mates/repo.js';
 
 export interface AccountUser {
   id: string;
@@ -129,9 +130,11 @@ export function createAuthRepo(db: Executor): AuthRepo {
       const [user] = await db
         .select({ id: users.id, username: users.username, passwordHash: users.passwordHash })
         .from(users)
-        .where(eq(sql`lower(${users.username})`, username.toLowerCase()))
+        // Real Keepers only (#386): a computer mate's name takes the same
+        // path as an unknown one (login, recover, operator reset).
+        .where(and(eq(sql`lower(${users.username})`, username.toLowerCase()), playerUser))
         .limit(1);
-      return user ?? null;
+      return user?.passwordHash ? { ...user, passwordHash: user.passwordHash } : null;
     },
 
     findPasswordHash: async (userId) => {
@@ -155,7 +158,8 @@ export function createAuthRepo(db: Executor): AuthRepo {
         })
         .from(sessions)
         .innerJoin(users, eq(users.id, sessions.userId))
-        .where(and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, now)))
+        // A computer mate never holds a session (#386); belt and braces.
+        .where(and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, now), playerUser))
         .limit(1);
       return row ?? null;
     },

@@ -88,6 +88,11 @@ const LATER_COLUMNS: readonly (readonly [table: string, column: string, type: st
   ['tiles', 'isle', 'smallint'],
   // The Long Night (#727, migration 0062): a patch's weekday.
   ['maps', 'long_night_weekday', 'smallint default 6'],
+  // Computer patch-mates (#386, migration 0064): a user's kind and the switch.
+  ['users', 'kind', "text default 'player' not null"],
+  ['maps', 'computer_mates', 'boolean default false not null'],
+  ['maps', 'computer_mates_changed_at', 'timestamptz'],
+  ['maps', 'keepers_seen_at', 'timestamptz'],
   // Resource buildings (#601, migration 0054): every `buildings` read names
   // them, the pack-up's too, so they go only after it (`PACK_READS`).
   ['buildings', 'produced_since', 'timestamptz'],
@@ -106,6 +111,11 @@ const LATER_COLUMNS: readonly (readonly [table: string, column: string, type: st
  */
 const LATER_TABLES: readonly (readonly [table: string, columns: string])[] = [
   ['tile_roads', 'tile_id uuid primary key, map_id uuid, owner_user_id uuid, level smallint'],
+  // Computer patch-mates (#386, migration 0064): a patch's member list joins it.
+  [
+    'computer_mates',
+    "user_id uuid primary key, map_id uuid, persona_id text, seed text, step integer default 0 not null, next_act_at timestamptz, state jsonb default '{}' not null, created_at timestamptz default now() not null",
+  ],
 ];
 /** Tables of `LATER_COLUMNS` the pack-up reads: their columns are dropped after it. */
 const PACK_READS: ReadonlySet<string> = new Set(['buildings']);

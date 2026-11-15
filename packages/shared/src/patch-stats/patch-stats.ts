@@ -97,7 +97,8 @@ export function patchStats(view: MapView, counts: ReadonlyMap<string, MemberCoun
       crowns: [],
     };
   });
-  const holders = crownHolders(keepers);
+  // Computer patch-mates (#386) are listed but never wear a crown.
+  const holders = crownHolders(keepers.filter((_, i) => view.members[i]?.computer === undefined));
   return {
     totals: {
       claimed: view.tiles.filter((t) => t.ownerUserId !== null).length,

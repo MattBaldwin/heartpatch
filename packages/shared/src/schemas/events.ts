@@ -52,6 +52,8 @@ const MapSettingsSchema = z.strictObject({
   friendlyChallenges: z.boolean().optional(),
   /** The owner's Long Night weekday (#727, null: Off), when it's what changed (or on any newer update). */
   longNightWeekday: LongNightWeekdaySchema.nullable().optional(),
+  /** The owner's computer patch-mates switch (#386), when it's what changed. */
+  computerMates: z.boolean().optional(),
 });
 /**
  * One Keeper's Long Night (#727), as `long_nights.outcomes` stores it and
@@ -104,6 +106,10 @@ const DepartedSchema = z.strictObject({
   userId: z.uuid(),
   /** Tiles that went back to neutral (their home base and any land they held). */
   releasedTiles: z.number().int().min(0),
+  /** A computer patch-mate (#386) left. */
+  computer: z.literal(true).optional(),
+  /** It left to make room for this real Keeper joining (#386). */
+  madeRoomFor: z.uuid().optional(),
 });
 const DepartedPublicSchema = z.object(DepartedSchema.shape);
 const TutorialAdvancedSchema = z.strictObject({
@@ -236,12 +242,16 @@ export const GAME_EVENTS = {
       username: z.string(),
       homeSlot: z.number().int().min(0),
       heartSeed: HexSchema,
+      /** A computer patch-mate (#386) moved in. */
+      computer: z.literal(true).optional(),
     }),
     public: z.object({
       userId: z.uuid(),
       username: z.string(),
       homeSlot: z.number().int().min(0),
       heartSeed: HexSchema,
+      /** A computer patch-mate (#386) moved in. */
+      computer: z.literal(true).optional(),
     }),
   },
   /** A member named their home (#306 PR 0): its flag on the map shows it. */

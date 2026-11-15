@@ -21,6 +21,16 @@ export { GUARDIAN_RULES } from './guardian-rules.js';
 export * from '../../hollow/rescue-guardians.js';
 export { RESCUE_GUARDIANS } from './rescue-guardians.js';
 export * from '../../schemas/data/long-night-secrets.js';
+export {
+  ComputerMateRulesSchema,
+  ComputerMatesSecretsSchema,
+  ComputerPersonaTuningSchema,
+  checkComputerMatesSecrets,
+  type ComputerMateRules,
+  type ComputerMatesSecrets,
+  type ComputerPersonaTuning,
+} from '../../schemas/data/computer-mates.js';
+export { COMPUTER_MATES } from './computer-mates.js';
 export { LONG_NIGHT_SECRETS } from './long-night.js';
 export * from '../../long-night/gap.js';
 export * from '../../schemas/data/clothing-drops.js';

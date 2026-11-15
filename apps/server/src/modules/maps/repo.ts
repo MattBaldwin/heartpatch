@@ -15,6 +15,7 @@ import { withTransaction, type Executor, type Transaction } from '../../db/clien
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import {
   buildings,
+  computerMates,
   fenceSegments,
   gatherJobs,
   inviteCodes,
@@ -134,6 +135,8 @@ export interface MemberRow {
   title: string | null;
   /** Their home's name (#306); null until named. */
   homeName: string | null;
+  /** A computer patch-mate (#386): its persona. Absent for a real kid. */
+  computer?: { personaId: string };
 }
 
 /** A home tile for topping up its ring's nodes (`listHomeRingTiles`). */
@@ -470,7 +473,7 @@ export function createMapsRepo(db: Executor): MapsRepo {
   return queries(db);
 }
 
-function createMapsTxRepo(tx: Transaction): MapsTxRepo {
+export function createMapsTxRepo(tx: Transaction): MapsTxRepo {
   return { ...queries(tx), appendEvent: (event) => appendGameEvent(tx, event) };
 }
 
@@ -974,18 +977,28 @@ function queries(db: Executor): MapsRepo {
           titleId: keepers.titleId,
           // What the Keeper wears (#43): the worn outfit row, if they ever dressed.
           wearing: outfits.wearing,
+          // A computer patch-mate's persona (#386); null for a real kid.
+          personaId: computerMates.personaId,
         })
         .from(mapMembers)
         .innerJoin(users, eq(users.id, mapMembers.userId))
+        .leftJoin(
+          computerMates,
+          and(
+            eq(computerMates.userId, mapMembers.userId),
+            eq(computerMates.mapId, mapMembers.mapId),
+          ),
+        )
         .leftJoin(keepers, eq(keepers.userId, mapMembers.userId))
         .leftJoin(outfits, and(eq(outfits.userId, mapMembers.userId), eq(outfits.preset, WORN)))
         .where(activeMember(mapId))
         // 'owner' is the enum's first value, so it sorts first.
         .orderBy(asc(mapMembers.role), asc(mapMembers.joinedAt), asc(users.id));
-      return rows.map(({ wearing, titleId, ...row }) => ({
+      return rows.map(({ wearing, titleId, personaId, ...row }) => ({
         ...row,
         keeper: row.keeper ? { ...keeperFromRow(row.keeper), wearing: wornOf(wearing) } : null,
         title: titleName(titleId),
+        ...(personaId !== null ? { computer: { personaId } } : {}),
       }));
     },
 

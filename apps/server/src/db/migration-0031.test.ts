@@ -7,7 +7,7 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDbClient, type DbClient } from './client.js';
 import { migrationsFolder, runMigrations } from './migrator.js';
-import { battles, users } from './schema.js';
+import { battles } from './schema.js';
 
 const url = inject('testDatabaseUrl');
 
@@ -77,12 +77,14 @@ describe.skipIf(!url)('migration 0031 on an existing patch (#204, needs DATABASE
     // later migration that adds a column to these tables needs raw SQL here,
     // as tile_attacks already does.
     const now = new Date().toISOString();
+    // Raw SQL: `users` gained a column after 0031 (#386).
     const user = async (username: string) =>
       (
-        await db
-          .insert(users)
-          .values({ username, passwordHash: 'x', birthYear: 2013 })
-          .returning({ id: users.id })
+        (await db.execute(sql`
+          insert into users (id, username, password_hash, birth_year)
+          values (gen_random_uuid(), ${username}, 'x', 2013) returning id`)) as unknown as {
+          id: string;
+        }[]
       )[0]!.id;
     const [maple, pip] = [await user('m0031_maple'), await user('m0031_pip')];
     // Raw SQL: `maps` gained a column after 0031 (#277).
