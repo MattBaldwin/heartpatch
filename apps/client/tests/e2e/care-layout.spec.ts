@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { api, hook, liveMapId } from './dev-hook.js';
+import { api, liveMapId } from './dev-hook.js';
 import { expectClear, settled, still } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';

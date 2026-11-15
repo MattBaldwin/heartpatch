@@ -23,7 +23,6 @@ interface InventoryDebug {
 }
 
 const bagState = (page: Page) => hook<InventoryDebug>(page, 'inventory');
-const mapState = (page: Page) => hook<{ id: string }>(page, 'map');
 const slowExpect = expect.configure({ timeout: 30_000 });
 
 test('builds a Factory on a homestead, runs batches from it, the book and the bag, and welcomes you back', async ({
