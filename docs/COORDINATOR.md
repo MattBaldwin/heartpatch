@@ -193,6 +193,14 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
+- **Update (supervisor 40, 2026-11-14 ~22:00 UTC): this supersedes the OWNER QUESTION and #797 lines in the block below.**
+  - The owner merged **#797 (728b)** himself (`6fe4bf6`, merge commit of `c118829`).
+  - The owner approved #794, and supervisor 40 merged it as `1bddfb2`.
+  - **Next for supervisor 41:**
+    1. **728c** (client: friendly result card, Challenge report, `changes/` entry; captures, Opus render-check and owner approval). Urgent: main auto-deploys, and the friendly card still says "Friendly battles give no XP" (`live-turn.ts:41`).
+    2. **#732 B** lane (unblocked now that #794 is merged).
+    3. Ask the **friendly-falloff owner question** below, after measuring the "friendlies don't use a falloff slot" option in the sim.
+    4. Watch #784: check whether `hollowed-restore` and `recipe-book` are red on main after `6fe4bf6`.
 - **State (supervisor 40 handoff, 2026-11-14 ~14:40 UTC): read this first; the supervisor 39 block below is history.** Main is `74a842d` (#796). Supervisor 40 (`session_01RAEPnFmN4Fa5pTVfPPDfs3`, Opus, **depth 7, the last allowed**) stopped at about 275k context and ~$15. **The owner starts supervisor 41 from a fresh session (§8.5)**, so the lineage restarts at depth 1. No migrations since 0063.
   - **Merged under supervisor 40:**
     - #795 (docs, `7543212`).
