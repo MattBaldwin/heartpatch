@@ -62,11 +62,15 @@ export function buildGalleryScene(
   const slots = options.count + (options.keeper ? 1 : 0);
   const columns = options.row ? slots : Math.max(1, Math.ceil(Math.sqrt(slots)));
   const rows = Math.ceil(slots / columns);
+  // In a row line-up the Keeper stands in the middle, squishies either side
+  // (#234 compare); in the grid it takes the last tile.
+  const keeperSlot = options.row ? Math.floor(slots / 2) : options.count;
   for (let i = 0; i < options.count; i++) {
     const look = options.looks[i % options.looks.length];
     if (!look) break;
-    const col = i % columns;
-    const row = Math.floor(i / columns);
+    const tile = options.keeper && i >= keeperSlot ? i + 1 : i;
+    const col = tile % columns;
+    const row = Math.floor(tile / columns);
     const handle = field.add(
       look,
       `gallery-${i}`,
@@ -85,7 +89,7 @@ export function buildGalleryScene(
 
   let keepers: KeeperField | null = null;
   if (options.keeper) {
-    const i = options.count;
+    const i = keeperSlot;
     keepers = new KeeperField(scene, { data: KEEPER_DATA, lod: options.lod });
     keepers.add(options.keeper, {
       x: ((i % columns) - (columns - 1) / 2) * spacing,
