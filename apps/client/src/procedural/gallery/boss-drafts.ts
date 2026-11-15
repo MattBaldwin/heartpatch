@@ -201,15 +201,16 @@ export const DRAFT_PARTS: Part[] = [
     // Pileup's four baby tines.
     id: 'draft-rake-tines-small',
     slot: 'fangs',
-    shape: 'bent',
-    // Round 9: rooted in the bar, longer and straighter, with a small
-    // forward tip (thin thickness squashes the kick), so not claws.
-    size: [0.065, 0.42, 0.085],
+    // Round 10: thick, straight, parallel stubs rooted in the bar (the
+    // round-9 thin bent tines read as claws or drips).
+    shape: 'capsule',
+    size: [0.1, 0.38, 0.1],
     color: 'metal',
-    layout: { kind: 'ring', count: 4, spread: 36 },
+    layout: { kind: 'ring', count: 4, spread: 34 },
     around: 0,
     up: -8, // TUNE: behind the bar, so each tine grows out of its underside
     tilt: -64, // TUNE: down and a little forward, clear of the face
+    splay: -26, // TUNE: cancels the face's curve so the stubs hang parallel
     sink: 0.1,
     jitter: 0,
   }),
@@ -231,7 +232,7 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-bar',
     slot: 'mane',
     shape: 'box',
-    size: [1.25, 0.1, 0.15], // deep enough that the face can't poke through it
+    size: [1.12, 0.1, 0.15], // deep enough that the face can't poke through it; short overhang (round 10)
     color: 'detail',
     layout: { kind: 'single' },
     around: 0,
@@ -274,7 +275,7 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tool-bar',
     slot: 'mane',
     shape: 'box',
-    size: [1.42, 0.12, 0.2], // TUNE: overhangs both cheeks, trimmed (round 9) so the 3/4 isn't a beak
+    size: [1.3, 0.16, 0.22], // TUNE: overhangs both cheeks; trimmed (rounds 9-10) so the 3/4 doesn't jut
     color: 'detail',
     layout: { kind: 'single' },
     around: 0,
@@ -289,12 +290,15 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tool-tines',
     slot: 'fangs',
     shape: 'bent',
-    size: [0.065, 0.62, 0.11], // stiffer dowels, long enough to balance the bar
+    // Round 10: fewer, thicker, shorter tines with wide gaps, so a rake
+    // rather than a comb; thickness ~1.8x width deepens the forward hook.
+    size: [0.085, 0.54, 0.15],
     color: 'metal',
-    layout: { kind: 'ring', count: 10, spread: 50 }, // TUNE: even spacing across the bar
+    layout: { kind: 'ring', count: 8, spread: 50 }, // TUNE: even spacing across the bar
     around: 0,
     up: -14, // TUNE: behind the bar, so each tine grows out of its underside
     tilt: -62, // TUNE: down and a little forward, clear of the face; the bend does the rest
+    splay: -12, // TUNE: leans the outer tines back in against the face's curve, so all stay parallel
     sink: 0.1,
     jitter: 0,
   }),
