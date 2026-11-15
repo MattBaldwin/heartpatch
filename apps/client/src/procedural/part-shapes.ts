@@ -148,28 +148,39 @@ function box(rings: number, segments: number): MeshArrays {
   return { positions, normals, indices: gridIndices(rings, segments) };
 }
 
-// TUNE: the bent dowel's centreline, in lengths of the whole stick.
-// Round 11b (#234, v13): a leaf-rake tine. Long and straight, then a gentle,
-// wide forward arc at the tip with no return curl, tapering to half its
-// root thickness at the tip.
-// v14: the arc stops at 30° and the last ~13% runs straight on as a short
-// forward foot, so the tip never flicks up into a J.
-const BENT_STRAIGHT = 0.55; // straight from the root
-const BENT_RADIUS = 0.5; // the tip's curve
-const BENT_ANGLE = (30 * Math.PI) / 180; // how far the tip turns forward
-const BENT_TIP = 0.12; // the forward foot: straight again after the bend
-const BENT_TUBE = 0.08; // the dowel's radius at the root
-const BENT_TAPER = 0.5; // the tip's radius, as a fraction of the root's
+// TUNE: the bent tine's centreline, in lengths of the whole stick.
+// Round 11b (#234, v13): a leaf-rake tine, long and straight with a forward
+// arc at the tip. v14: a 30° arc then a short straight foot (no J flick).
+// v15: a big forward hook. The last ~30% curls 65° towards the viewer and
+// ends in a straight, flat chisel toe. With the shaft's ~20° lean the toe
+// still points a little down (kit test), so head-on each tine ends in a
+// visible toe and the tip never turns up into a J. The
+// section is a flat steel strip (wider than it is thick), not a round dowel.
+const BENT_STRAIGHT = 0.62; // straight from the root
+const BENT_RADIUS = 0.16; // the hook's curve
+const BENT_ANGLE = (65 * Math.PI) / 180; // how far the tip turns forward
+const BENT_TIP = 0.08; // the toe: straight again after the bend
+const BENT_TUBE = 0.08; // the strip's half-size at the root
+const BENT_WIDE = 1.5; // the strip's half-width, in BENT_TUBEs (sideways)
+const BENT_THIN = 0.85; // the strip's half-thickness, in BENT_TUBEs (the bend's plane)
+const BENT_TAPER = 0.85; // the tip's size, as a fraction of the root's
+const BENT_CHISEL = 0.35; // the toe's end cap, squashed along the strip: a flat chisel end
 
 /**
- * How far the `bent` tine's tip turns (degrees) and the share of its length
- * that runs straight on after the turn (the forward foot).
+ * How far the `bent` tine's tip turns (degrees), the share of its length
+ * that curls (the hook, toe included) and the share that runs straight on
+ * after the turn (the toe).
  */
-export function bentTip(): { turn: number; foot: number } {
-  return { turn: (BENT_ANGLE * 180) / Math.PI, foot: BENT_TIP / bentEnd().total };
+export function bentTip(): { turn: number; hook: number; foot: number } {
+  const { total } = bentEnd();
+  return {
+    turn: (BENT_ANGLE * 180) / Math.PI,
+    hook: (total - BENT_STRAIGHT) / total,
+    foot: BENT_TIP / total,
+  };
 }
 
-/** The `bent` dowel's centreline end point `[y, z]` and its whole length. */
+/** The `bent` strip's centreline end point `[y, z]` and its whole length. */
 function bentEnd(): { y: number; z: number; total: number } {
   const arcLen = BENT_RADIUS * BENT_ANGLE;
   const y = BENT_STRAIGHT + BENT_RADIUS * Math.sin(BENT_ANGLE) + Math.cos(BENT_ANGLE) * BENT_TIP;
@@ -178,23 +189,31 @@ function bentEnd(): { y: number; z: number; total: number } {
 }
 
 /**
- * The `bent` dowel's own `[width, length, thickness]` before it is fitted
- * to the unit box. A part sized in these proportions keeps the dowel round
- * and the tip a circular arc, whatever its overall scale. The bend never
- * passes 90°, so the centreline's far end is its highest and most forward
- * point; the root's round end adds its radius below, the tip's above.
+ * The `bent` strip's own `[width, length, thickness]` before it is fitted
+ * to the unit box: the extent of the unfitted mesh. A part sized in these
+ * proportions keeps the strip's section and the hook's curve true, whatever
+ * its overall scale.
  */
 export function bentProportions(): Vec3 {
-  const { y, z } = bentEnd();
-  const tip = BENT_TUBE * BENT_TAPER;
-  return [2 * BENT_TUBE, y + BENT_TUBE + tip, z + BENT_TUBE + tip];
+  const { positions } = bent(12, 16);
+  const lo = [Infinity, Infinity, Infinity];
+  const hi = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < positions.length; i++) {
+    const k = i % 3;
+    const v = positions[i] ?? 0;
+    lo[k] = Math.min(lo[k]!, v);
+    hi[k] = Math.max(hi[k]!, v);
+  }
+  return [hi[0]! - lo[0]!, hi[1]! - lo[1]!, hi[2]! - lo[2]!];
 }
 
 /**
- * A round-ended dowel growing along +y that bends towards +z (the front)
- * near its tip and narrows towards it: a leaf-rake tine. The bend stays in
- * the yz plane, so x is the same sideways direction all along. Analytic
- * normals (the taper's slight slope is ignored, as on `fang`).
+ * A flat steel strip growing along +y that hooks towards +z (the front)
+ * near its tip and narrows a little towards it: a leaf-rake tine. The bend
+ * stays in the yz plane, so x (the strip's width) is the same sideways
+ * direction all along. Round ends: the root's a half-ellipsoid, the toe's
+ * squashed flat into a chisel. Normals are the ellipse's (the taper's slight
+ * slope is ignored, as on `fang`).
  */
 function bent(rings: number, segments: number): MeshArrays {
   const arcLen = BENT_RADIUS * BENT_ANGLE;
@@ -216,30 +235,43 @@ function bent(rings: number, segments: number): MeshArrays {
   const normals: number[] = [];
   for (let i = 0; i <= count; i++) {
     let s: number;
-    let beta: number; // 0 on the dowel, ±π/2 at the tips of the round ends
+    let beta: number; // 0 on the strip, ±π/2 at the tips of the round ends
+    let cap = 1; // the end cap's reach along the strip, in section radii
     if (i < capRings) {
       s = 0;
       beta = -(Math.PI / 2) * (1 - i / capRings);
+      cap = BENT_THIN;
     } else if (i > capRings + bodyRings) {
       s = total;
       beta = (Math.PI / 2) * ((i - capRings - bodyRings) / capRings);
+      cap = BENT_CHISEL;
     } else {
       s = (total * (i - capRings)) / bodyRings;
       beta = 0;
     }
     const { c, t } = along(s);
     const r = radius(s);
-    // Perpendicular to the dowel in the yz plane: [0, -t.z, t.y].
+    // Perpendicular to the strip in the yz plane: [0, -t.z, t.y].
     const across: Vec3 = [0, -t[2], t[1]];
     for (let k = 0; k <= segments; k++) {
       const phi = (2 * Math.PI * k) / segments;
-      const ring: Vec3 = [Math.sin(phi), -Math.cos(phi) * across[1], -Math.cos(phi) * across[2]];
+      // A point on the unit section circle, then stretched into the strip's
+      // ellipse (and the cap's reach along the strip).
+      const sx = Math.sin(phi);
+      const sa = -Math.cos(phi);
+      const sb = Math.sin(beta);
+      const cb = Math.cos(beta);
+      const off: Vec3 = [
+        cb * sx * BENT_WIDE,
+        sb * cap * t[1] + cb * sa * BENT_THIN * across[1],
+        sb * cap * t[2] + cb * sa * BENT_THIN * across[2],
+      ];
       const n = normalize([
-        Math.sin(beta) * t[0] + Math.cos(beta) * ring[0],
-        Math.sin(beta) * t[1] + Math.cos(beta) * ring[1],
-        Math.sin(beta) * t[2] + Math.cos(beta) * ring[2],
+        (cb * sx) / BENT_WIDE,
+        (sb * t[1]) / cap + (cb * sa * across[1]) / BENT_THIN,
+        (sb * t[2]) / cap + (cb * sa * across[2]) / BENT_THIN,
       ]);
-      positions.push(c[0] + r * n[0], c[1] + r * n[1], c[2] + r * n[2]);
+      positions.push(c[0] + r * off[0], c[1] + r * off[1], c[2] + r * off[2]);
       normals.push(...n);
     }
   }

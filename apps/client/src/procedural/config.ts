@@ -15,7 +15,7 @@ export const FIXED_COLORS = {
   ink: ART_RULES.defaultInk,
   white: '#ffffff',
   blush: '#ff9db5', // TUNE
-  metal: '#7d8794', // TUNE: rake-tine grey (#234), darker than the honey wood
+  metal: '#6c7682', // TUNE: rake-tine steel (#234), darker than the honey wood; v15 a little darker
 } as const;
 
 /** Per-squishy variation, seeded from the instance id. */

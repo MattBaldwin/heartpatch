@@ -191,8 +191,15 @@ export const DRAFT_PARTS: Part[] = [
   // v14: shorter tines (~28%) ending at the chin line; a 30° arc then a short
   // straight forward foot (no J); the fan opens to ~18° with the outer tines
   // ~18% longer, and each fanned tine's curl turns outwards with it so the
-  // curve shows head-on; metal rivets half set into the face over each root;
+  // curve shows head-on [dropped in v15]; metal rivets half set into the face over each root;
   // a wider dark mouth shading the roots; the bar stays plain wood.
+  // v15: no sideways curl. Every tine is the same flat steel strip, the same
+  // length, evenly spaced, and hooks the same way: 65° towards the viewer
+  // over its last ~30%, ending in a flat chisel toe in front of the lower
+  // lip. The shafts lean ~20° (was 42) so the toe never turns up; the ~18°
+  // fan stays in the straight shafts. No dark collar under the rivets yet:
+  // no stage has a free sticking-out head slot for one (flagged to the
+  // coordinator).
   part({
     // Pileup's baby crossbar: its mouth, a little wider than its face.
     id: 'draft-rake-bar-small',
@@ -213,12 +220,12 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tines-small',
     slot: 'fangs',
     shape: 'bent',
-    size: [0.045, 0.29, 0.07], // bentProportions() scaled, so the dowel stays round
+    size: [0.0574, 0.22, 0.0635], // bentProportions() scaled, so the strip and its hook stay true (v15)
     color: 'metal',
-    layout: { kind: 'ring', count: 3, spread: 68, grow: 0.22 }, // TUNE: outer tines ~18% longer (v14)
+    layout: { kind: 'ring', count: 3, spread: 68 }, // v15: all tines the same length and shape, evenly spaced
     around: 0,
     up: -11.45, // TUNE: the bar's front face, mid-height (kit test), on its rivet
-    tilt: 42, // TUNE: ~42 degrees towards the viewer reads as ~27 in the 3/4 view (yaw 35)
+    tilt: 20, // TUNE: v15 ~20° lean so the 65° hook's toe still points a little down (no J)
     splay: 22, // TUNE: the outer tines fan out ~18° (v14: 6 was invisible head-on)
     sink: 0, // the root's round end sits on the face, under its rivet
     jitter: 0,
@@ -274,12 +281,12 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tines-mid',
     slot: 'fangs',
     shape: 'bent',
-    size: [0.052, 0.33, 0.08], // bentProportions() scaled, so the dowel stays round
+    size: [0.0653, 0.25, 0.0722], // bentProportions() scaled, so the strip and its hook stay true (v15)
     color: 'metal',
-    layout: { kind: 'ring', count: 4, spread: 86, grow: 0.22 }, // TUNE: outer tines ~18% longer (v14)
+    layout: { kind: 'ring', count: 4, spread: 86 }, // v15: all tines the same length and shape, evenly spaced
     around: 0,
     up: -15.55, // TUNE: the bar's front face, mid-height (kit test), on its rivet
-    tilt: 42, // TUNE: ~42 degrees towards the viewer reads as ~27 in the 3/4 view (yaw 35)
+    tilt: 20, // TUNE: v15 ~20° lean so the 65° hook's toe still points a little down (no J)
     splay: 22, // TUNE: the outer tines fan out ~18° (v14: 6 was invisible head-on)
     sink: 0, // the root's round end sits on the face, under its rivet
     jitter: 0,
@@ -335,12 +342,12 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tool-tines',
     slot: 'fangs',
     shape: 'bent',
-    size: [0.061, 0.39, 0.094], // bentProportions() scaled, so the dowel stays round
+    size: [0.0773, 0.296, 0.0855], // bentProportions() scaled, so the strip and its hook stay true (v15)
     color: 'metal',
-    layout: { kind: 'ring', count: 5, spread: 105, grow: 0.22 }, // TUNE: outer tines ~18% longer (v14)
+    layout: { kind: 'ring', count: 5, spread: 105 }, // v15: all tines the same length and shape, evenly spaced
     around: 0,
     up: -16.85, // TUNE: the bar's front face, mid-height (kit test), on its rivet
-    tilt: 42, // TUNE: ~42 degrees towards the viewer reads as ~27 in the 3/4 view (yaw 35)
+    tilt: 20, // TUNE: v15 ~20° lean so the 65° hook's toe still points a little down (no J)
     splay: 22, // TUNE: the outer tines fan out ~18° (v14: 6 was invisible head-on)
     sink: 0, // the root's round end sits on the face, under its rivet
     jitter: 0,

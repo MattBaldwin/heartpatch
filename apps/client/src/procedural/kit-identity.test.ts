@@ -194,9 +194,16 @@ describe('ring splay and the metal role (#234 round 8)', () => {
     sink: 0.1,
     jitter: 0,
   };
+  // Ring `grow` (v14's longer outer tines, dropped in v15) stays tested on a copy.
+  const growPart = {
+    ...fanPart,
+    id: 'test-grow-tines',
+    layout: { kind: 'ring' as const, count: 5, spread: 105, grow: 0.22 },
+    splay: 22,
+  };
   const drafts = visualRegistry({
     bodies: [...GAME_DATA.bodies, ...DRAFT_BODIES],
-    parts: [...GAME_DATA.parts, ...DRAFT_PARTS, fanPart],
+    parts: [...GAME_DATA.parts, ...DRAFT_PARTS, fanPart, growPart],
   });
   const lookOf = (id: string) => {
     const look = draftLooks().find((l) => l.id === id);
@@ -247,7 +254,12 @@ describe('ring splay and the metal role (#234 round 8)', () => {
   });
 
   it('makes outer copies of a ring with grow bigger, symmetrically (#234 round 11b)', () => {
-    const tines = tinesOf('draft-rakelet').placements;
+    const rakelet = lookOf('draft-rakelet').visual;
+    const visual = {
+      ...rakelet,
+      parts: rakelet.parts.map((id) => (id === 'draft-rake-tool-tines' ? growPart.id : id)),
+    };
+    const tines = tinesOf('test-grow', visual).placements;
     expect(tines).toHaveLength(5);
     const length = tines.map((p) => p.size[1]);
     expect(length[0]).toBeCloseTo(length[4] ?? NaN);
@@ -256,9 +268,19 @@ describe('ring splay and the metal role (#234 round 8)', () => {
     expect(length[1] ?? 0).toBeGreaterThan(length[2] ?? 0);
     // grow 0.22: the outermost (offset 4/5) is 1 + 0.22 * 0.8 times the middle.
     expect((length[0] ?? 0) / (length[2] ?? 1)).toBeCloseTo(1.176, 6);
-    // Each copy scales whole, so the dowel stays round.
+    // Each copy scales whole, so the strip keeps its section.
     for (const p of tines)
       expect(p.size[0] / p.size[1]).toBeCloseTo(tines[2]!.size[0] / tines[2]!.size[1], 9);
+  });
+
+  it('gives every stage matching tines: the same size, evenly fanned (v15)', () => {
+    for (const id of ['draft-pileup', 'draft-rakeling', 'draft-rakelet']) {
+      const tines = tinesOf(id).placements;
+      for (const p of tines) expect(p.size, id).toEqual(tines[0]!.size);
+      // Mirrored fan, the middle (or middle pair) least splayed.
+      const n = tines.length;
+      for (let i = 0; i < n; i++) expect(tines[i]!.splay, id).toBeCloseTo(tines[n - 1 - i]!.splay);
+    }
   });
 
   it('colours metal parts the fixed metal grey', () => {
@@ -284,19 +306,53 @@ describe('ring splay and the metal role (#234 round 8)', () => {
 });
 
 describe('bent tine proportions (#234 round 11b)', () => {
-  it('ends in a gentle forward arc, not a hook', () => {
-    const [width, length, thickness] = bentProportions();
-    // The tip's forward reach (thickness less the dowel) is under the dowel's
-    // own thickness: a leaf-rake tip, not a return curl.
-    expect(thickness - width).toBeGreaterThan(0);
-    expect((thickness - width) / width).toBeLessThan(1);
-    expect(length / width).toBeGreaterThan(6);
+  it('ends in a big forward hook: the toe juts well in front of the shaft (v15)', () => {
+    const mesh = partArrays('bent', LOD.high);
+    const [, length, thickness] = bentProportions();
+    // The shaft's own front-to-back thickness, low down near the root.
+    let zMin = Infinity;
+    let zMax = -Infinity;
+    for (let i = 0; i < mesh.positions.length; i += 3) {
+      const y = mesh.positions[i + 1] ?? 0;
+      if (y > -0.2 || y < -0.3) continue;
+      zMin = Math.min(zMin, (mesh.positions[i + 2] ?? 0) * thickness);
+      zMax = Math.max(zMax, (mesh.positions[i + 2] ?? 0) * thickness);
+    }
+    // v14's 30° arc jutted ~8% of its length past the shaft; the hook over 10%.
+    expect((thickness - (zMax - zMin)) / length).toBeGreaterThan(0.1);
   });
 
-  it('stops the arc at 30 degrees and runs straight on for the last tenth, so the tip never flicks up (v14)', () => {
-    const { turn, foot } = bentTip();
-    expect(turn).toBeLessThanOrEqual(30);
-    expect(foot).toBeGreaterThanOrEqual(0.1);
+  it('hooks 60-75 degrees over its last quarter-plus and ends in a straight toe (v15; v14 capped it at 30)', () => {
+    const { turn, hook, foot } = bentTip();
+    expect(turn).toBeGreaterThanOrEqual(60);
+    expect(turn).toBeLessThanOrEqual(75);
+    expect(hook).toBeGreaterThanOrEqual(0.25);
+    expect(hook).toBeLessThanOrEqual(0.3);
+    expect(foot).toBeGreaterThan(0.04);
+  });
+
+  it("never turns the toe up: each stage's lean plus the hook stays under 90 degrees (no J)", () => {
+    const { turn } = bentTip();
+    for (const part of DRAFT_PARTS.filter((p) => p.shape === 'bent' && p.anchor === 'front'))
+      expect((part.tilt ?? 0) + turn, part.id).toBeLessThan(88);
+  });
+
+  it('is a flat strip, wider than it is thick', () => {
+    const mesh = partArrays('bent', LOD.high);
+    const [w, , t] = bentProportions();
+    // Just under the hook (unit-box y < 0), the strip's sideways half-width
+    // against its front-to-back half-thickness, in unfitted units.
+    let x = 0;
+    let zMin = Infinity;
+    let zMax = -Infinity;
+    for (let i = 0; i < mesh.positions.length; i += 3) {
+      const y = mesh.positions[i + 1] ?? 0;
+      if (y > -0.2 || y < -0.3) continue;
+      x = Math.max(x, Math.abs(mesh.positions[i] ?? 0) * w);
+      zMin = Math.min(zMin, (mesh.positions[i + 2] ?? 0) * t);
+      zMax = Math.max(zMax, (mesh.positions[i + 2] ?? 0) * t);
+    }
+    expect(x / ((zMax - zMin) / 2)).toBeGreaterThan(1.3);
   });
 
   it('tapers towards the tip', () => {
@@ -310,11 +366,11 @@ describe('bent tine proportions (#234 round 11b)', () => {
       if (y < -0.3) root = Math.max(root, x);
       if (y > 0.3) tip = Math.max(tip, x);
     }
-    expect(tip / root).toBeLessThan(0.8);
-    expect(tip / root).toBeGreaterThan(0.4);
+    expect(tip / root).toBeLessThan(0.9); // v15: a big toe, so only a light taper
+    expect(tip / root).toBeGreaterThan(0.6);
   });
 
-  it("sizes Rakelet's tines in the dowel's own proportions, so they stay round", () => {
+  it("sizes Rakelet's tines in the strip's own proportions, so the hook stays true", () => {
     const [w, l, t] = bentProportions();
     for (const part of DRAFT_PARTS.filter((p) => p.shape === 'bent' && p.anchor === 'front')) {
       const k = part.size[1] / l;
@@ -372,7 +428,7 @@ describe("anchor: 'front' (#234 round 11)", () => {
     expect(at(0, 90).every(Number.isFinite)).toBe(true);
   });
 
-  it("turns a fanned copy's curl outwards with its fan, as a rotation, mirrored left and right (v14)", () => {
+  it('curls every copy the same way, towards the viewer, so the hooks share one parallel arc (v15)', () => {
     const copy = (side: -1 | 0 | 1) =>
       partMatrix(
         orb,
@@ -382,18 +438,31 @@ describe("anchor: 'front' (#234 round 11)", () => {
           around: 0,
           up: (-20 * Math.PI) / 180,
           size: [0.05, 0.4, 0.05],
-          tilt: (42 * Math.PI) / 180,
+          tilt: (20 * Math.PI) / 180,
           splay: side === 0 ? 0 : (15 * Math.PI) / 180,
           side,
         },
       );
-    const zOf = (m: readonly number[]) => [m[8]! / 0.05, m[9]! / 0.05, m[10]! / 0.05];
-    const [l, mid, r] = [copy(-1), copy(0), copy(1)].map(zOf);
-    expect(mid![0]).toBeCloseTo(0); // the middle tine curls straight forward
-    expect(r![0]).toBeGreaterThan(0.3); // outwards, to the right
-    expect(l![0]).toBeCloseTo(-r![0]!);
-    expect(l![1]).toBeCloseTo(r![1]!);
-    expect(l![2]).toBeCloseTo(r![2]!);
+    const unit = (m: readonly number[], k: number) => {
+      const v = [m[k * 4]!, m[k * 4 + 1]!, m[k * 4 + 2]!];
+      const n = Math.hypot(v[0]!, v[1]!, v[2]!);
+      return v.map((c) => c / n);
+    };
+    for (const side of [-1, 1] as const) {
+      const m = copy(side);
+      const y = unit(m, 1);
+      const z = unit(m, 2);
+      // The curl direction (local z) has no sideways part beyond what the
+      // shaft's own fan forces on it: it lies in the plane of the shaft and
+      // the camera's forward axis, never turned out like a tusk.
+      // The curl direction (local z) is the camera's forward axis flattened
+      // against the shaft: the same for every copy, never turned out sideways.
+      const f = [0, 0, -1];
+      const dot = f[0]! * y[0]! + f[1]! * y[1]! + f[2]! * y[2]!;
+      const flat = [f[0]! - dot * y[0]!, f[1]! - dot * y[1]!, f[2]! - dot * y[2]!];
+      const fl = Math.hypot(flat[0]!, flat[1]!, flat[2]!);
+      for (let k = 0; k < 3; k++) expect(z[k]!, `side ${side}`).toBeCloseTo(flat[k]! / fl, 6);
+    }
     // Still a rotation (right-handed), so no copy turns inside out.
     const m = copy(1);
     const det =
