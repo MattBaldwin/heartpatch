@@ -27,7 +27,8 @@ export interface BossPicker extends TileActions {
 /**
  * `other`'s actions everywhere except the boss's tile, where the boss card is
  * the one state: "Let's go!" or its own refusal, never also "Too far away!"
- * from the land rules (the boss stands on neutral land the Keeper may not touch).
+ * from the land rules. The server doesn't forbid claiming the tile, so this is
+ * a product call (one state per tile): claiming it waits until the visit ends.
  */
 export function exceptBossTile(
   picker: Pick<BossPicker, 'claims'>,
