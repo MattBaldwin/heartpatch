@@ -1,7 +1,7 @@
 import { GAME_DATA, type PublicUser } from '@heartpatch/shared';
 import { seasonsOn } from '../map/map-dressing.js';
 import { deviceTimeZone, el, messageOf } from '../ui/dom.js';
-import { rarityChip, rarityName } from '../ui/rarity/rarity.js';
+import { rarityChip, rarityClass, rarityName } from '../ui/rarity/rarity.js';
 import { catalogApi } from './catalog-api.js';
 import { catalogPage, tierText, type CatalogPage } from './catalog-view.js';
 import { hpClose } from '../ui/button/button.js';
@@ -102,7 +102,7 @@ export function createCatalogScreen(options: CatalogScreenOptions): CatalogScree
         el(
           'li',
           {
-            class: `catalog-tier${tier.done ? ' catalog-tier-done' : ''}${tier.current ? ' catalog-tier-current' : ''}`,
+            class: `catalog-tier ${rarityClass(tier.rarity)}${tier.done ? ' catalog-tier-done' : ''}${tier.current ? ' catalog-tier-current' : ''}`,
             'data-testid': 'catalog-tier',
             'data-rarity': tier.rarity,
           },

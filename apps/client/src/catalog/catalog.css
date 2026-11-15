@@ -98,13 +98,13 @@
 }
 
 .catalog-tier-done {
-  opacity: 0.75;
+  font-weight: 700;
 }
 
 .catalog-tier-check {
   font-size: 18px;
   font-weight: 800;
-  color: #b0467a;
+  color: var(--rarity, #b0467a);
 }
 
 .catalog-loading {
