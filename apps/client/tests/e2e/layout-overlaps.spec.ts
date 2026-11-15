@@ -1,7 +1,7 @@
 import { MAP_NAME_MAX_LENGTH } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { selectTile } from './claim-land.js';
-import { api, hook } from './dev-hook.js';
+import { api, liveMapId } from './dev-hook.js';
 import { expectClear, settled } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
@@ -38,11 +38,11 @@ const LANDSCAPE_PHONES = [
 
 /** My tiles (a fresh patch owns only mine). */
 async function myTiles(page: Page): Promise<{ q: number; r: number }[]> {
-  const map = await hook<{ id: string }>(page, 'map');
+  const mapId = await liveMapId(page);
   const view = await api<{ tiles: { q: number; r: number; ownerUserId: string | null }[] }>(
     page,
     'GET',
-    `/maps/${map!.id}/view`,
+    `/maps/${mapId}/view`,
   );
   return view.body.tiles.filter((t) => t.ownerUserId !== null);
 }
