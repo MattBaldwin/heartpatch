@@ -42,7 +42,9 @@ describe('mini-boss visits (#190)', () => {
     expect(out).toHaveLength(6);
     const firstWeek = out.slice(0, 3).map((d) => Number(d.slice(-2)));
     expect(firstWeek).toEqual([firstWeek[0], firstWeek[0]! + 1, firstWeek[0]! + 2]);
-    expect(dates.every((d) => visitOn('seed-1', d, BOSS_EVENTS) === null)).toBe(true);
+    expect(dates.every((d) => visitOn('seed-1', d, { ...BOSS_EVENTS, bag: [] }) === null)).toBe(
+      true,
+    );
     expect(standInBag(model.standIns)).toHaveLength(model.standIns);
   });
 

@@ -2,9 +2,13 @@ import { createBattleContent, type BattleContent } from '../../src/battle/conten
 import { autoplayBattle } from '../../src/battle/engine.js';
 import { BATTLE_RULES } from '../../src/data/battle.js';
 import { GAME_DATA } from '../../src/data/index.js';
+import { serverBattleData } from '../../src/data/server/battle-data.js';
+import { BOSS_EVENTS } from '../../src/data/server/boss-events.js';
+import { SERVER_GAME_DATA } from '../../src/data/server/index.js';
 import { deriveSeed, Rng } from '../../src/rng/index.js';
 import type { BattleSetup, BattleSquishySetup } from '../../src/schemas/battle.js';
-import type { Species } from '../../src/schemas/data/species.js';
+import type { BossBagEntry } from '../../src/schemas/data/boss-events.js';
+import { hiddenUntilSeen, type Species } from '../../src/schemas/data/species.js';
 import type { BossSimConfig, BossTeamShape } from './boss-config.js';
 
 /*
@@ -31,9 +35,12 @@ export interface BossGate {
   readonly pass: boolean;
 }
 
-/** Public data, the shipped battle rules (with `team` and `boss`). */
+/**
+ * The data a server battle uses (public plus secret species and moves, so
+ * the real bosses can fight), with the shipped battle rules (`team`, `boss`).
+ */
 export function bossContent(): BattleContent {
-  return createBattleContent(GAME_DATA, BATTLE_RULES);
+  return createBattleContent(serverBattleData(GAME_DATA, SERVER_GAME_DATA), BATTLE_RULES);
 }
 
 const byId = (a: Species, b: Species) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
@@ -54,6 +61,23 @@ export function standInBosses(content: BattleContent, count: number): Species[] 
   return picked;
 }
 
+/**
+ * The bosses to fight: the visiting bag's boss forms (#234) when it holds
+ * any, else `count` stand-ins.
+ */
+export function simBosses(
+  content: BattleContent,
+  count: number,
+  bag: readonly BossBagEntry[] = BOSS_EVENTS.bag,
+): Species[] {
+  if (bag.length === 0) return standInBosses(content, count);
+  return bag.map((entry) => {
+    const boss = content.species.get(entry.speciesId);
+    if (!boss) throw new Error(`the boss bag's "${entry.speciesId}" is not a species`);
+    return boss;
+  });
+}
+
 /** The form a base form has grown into by `level`. */
 function formAt(content: BattleContent, baseId: string, level: number): string {
   let id = baseId;
@@ -72,7 +96,8 @@ const into = (content: BattleContent, attacker: Species, defender: Species) =>
 function pool(content: BattleContent, boss: Species, mix: BossTeamShape['mix']): Species[] {
   const all = [...content.species.values()];
   const into_ = grownInto(all);
-  const base = all.filter((s) => !into_.has(s.id) && s.rarity !== 'secret').sort(byId);
+  // A Keeper's team: public base forms (never a secret or a boss line).
+  const base = all.filter((s) => !into_.has(s.id) && !hiddenUntilSeen(s)).sort(byId);
   if (mix === 'good') return base.filter((s) => into(content, s, boss) > 1);
   if (mix === 'bad') return base.filter((s) => into(content, boss, s) > 1);
   return base;
@@ -113,10 +138,15 @@ const median = (values: number[]) => {
   return sorted[Math.floor(sorted.length / 2)] ?? 0;
 };
 
-export function runBossSim(config: BossSimConfig, content = bossContent()): BossCell[] {
+export function runBossSim(
+  config: BossSimConfig,
+  content = bossContent(),
+  bag: readonly BossBagEntry[] = BOSS_EVENTS.bag,
+): BossCell[] {
   const cells: BossCell[] = [];
+  const bosses = simBosses(content, config.bosses, bag);
   for (const shape of config.shapes) {
-    for (const boss of standInBosses(content, config.bosses)) {
+    for (const boss of bosses) {
       for (const bonus of config.levelBonuses) {
         let wins = 0;
         const rounds: number[] = [];
@@ -190,11 +220,16 @@ export function renderBossSim(
   cells: readonly BossCell[],
   gates: readonly BossGate[],
   config: BossSimConfig,
+  bag: readonly BossBagEntry[] = BOSS_EVENTS.bag,
 ): string {
+  const who =
+    bag.length > 0
+      ? "the visiting bag's bosses (`BOSS_EVENTS.bag`)"
+      : 'stand-in bosses (grown-ups flagged `boss`)';
   const lines = [
     '# Mini-boss team battles (`pnpm sim:boss`, #190)',
     '',
-    `${String(config.games)} seeded games per cell; Partner and boss at level ${String(config.level)}; stand-in bosses (grown-ups flagged \`boss\`). Soft gate: it reports and never fails the build.`,
+    `${String(config.games)} seeded games per cell; Partner and boss at level ${String(config.level)}; ${who}. Soft gate: it reports and never fails the build.`,
     '',
     '| Team | Boss | Levels over | Win % | Median rounds |',
     '| --- | --- | ---: | ---: | ---: |',

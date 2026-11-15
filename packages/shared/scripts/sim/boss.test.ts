@@ -6,8 +6,11 @@ import {
   bossSetup,
   renderBossSim,
   runBossSim,
+  simBosses,
   standInBosses,
 } from './boss.js';
+import { BOSS_EVENTS } from '../../src/data/server/boss-events.js';
+import { hiddenUntilSeen } from '../../src/schemas/data/species.js';
 
 const content = bossContent();
 const small = { ...BOSS_SIM_CONFIG, games: 4, bosses: 2 };
@@ -35,18 +38,47 @@ describe('pnpm sim:boss (#190)', () => {
     expect(bossSetup(content, small, shape!, boss!, 5, 1).seed).not.toBe(setup.seed);
   });
 
+  it("fights the visiting bag's bosses (#234), or stand-ins when the bag is empty", () => {
+    const bosses = simBosses(content, small.bosses);
+    expect(bosses.map((b) => b.id)).toEqual(BOSS_EVENTS.bag.map((e) => e.speciesId));
+    expect(bosses.every((b) => b.line === 'boss')).toBe(true);
+    expect(simBosses(content, 2, []).map((b) => b.id)).toEqual(
+      standInBosses(content, 2).map((b) => b.id),
+    );
+  });
+
+  it('never puts a secret or boss-line squishy on the team', () => {
+    const [shape] = BOSS_SIM_CONFIG.shapes;
+    for (const boss of simBosses(content, 1)) {
+      for (let game = 0; game < 20; game++) {
+        for (const member of bossSetup(content, small, shape!, boss, 0, game).sides.a.squishies) {
+          const species = 'speciesId' in member ? content.species.get(member.speciesId) : undefined;
+          expect(species && hiddenUntilSeen(species)).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('plays the real bag', () => {
+    const cells = runBossSim({ ...small, games: 2 }, content);
+    expect(new Set(cells.map((c) => c.boss))).toEqual(
+      new Set(BOSS_EVENTS.bag.map((e) => e.speciesId)),
+    );
+    expect(renderBossSim(cells, bossGates(cells, small), small)).toContain('visiting bag');
+  });
+
   it('plays every cell, reads the gates and renders a report', () => {
-    const cells = runBossSim(small, content);
+    const cells = runBossSim(small, content, []);
     expect(cells).toHaveLength(small.shapes.length * 2 * small.levelBonuses.length);
     for (const cell of cells) {
       expect(cell.winPercent).toBeGreaterThanOrEqual(0);
       expect(cell.winPercent).toBeLessThanOrEqual(100);
       expect(cell.medianRounds).toBeGreaterThan(0);
     }
-    expect(runBossSim(small, content)).toEqual(cells);
+    expect(runBossSim(small, content, [])).toEqual(cells);
     const gates = bossGates(cells, small);
     expect(gates).toHaveLength(5);
-    const report = renderBossSim(cells, gates, small);
+    const report = renderBossSim(cells, gates, small, []);
     expect(report).toContain('| team of 3 |');
     expect(report).toMatch(/PASS|FAIL/);
   });

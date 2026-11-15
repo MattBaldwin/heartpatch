@@ -1,9 +1,10 @@
 /**
  * Mini-boss team battle settings (`pnpm sim:boss`, #190). Like the other
  * sims, the model only reads game data and reports; it never changes a
- * table. Until the boss content lands (234b), the bosses are stand-ins:
- * existing grown-ups flagged `boss`, so the gates test the team rules
- * (`rules.team`, `rules.boss`), not a boss's own moves.
+ * table. The bosses are the visiting bag's boss forms (`BOSS_EVENTS.bag`,
+ * #234). With an empty bag they fall back to stand-ins: existing grown-ups
+ * flagged `boss`, so the gates test the team rules (`rules.team`,
+ * `rules.boss`), not a boss's own moves.
  */
 export interface BossTeamShape {
   readonly key: string;
@@ -22,7 +23,7 @@ export interface BossSimConfig {
   readonly seed: string;
   /** The Partner's level, and the boss's. */
   readonly level: number;
-  /** Stand-in bosses: this many grown-ups of different elements, by id order. */
+  /** With an empty bag, stand-in bosses: this many grown-ups of different elements, by id order. */
   readonly bosses: number;
   /** The team's level over the boss's, per cell. */
   readonly levelBonuses: readonly number[];

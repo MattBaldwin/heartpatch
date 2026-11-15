@@ -196,65 +196,93 @@ export const PartLayoutSchema = z.discriminatedUnion('kind', [
 ]);
 export type PartLayout = z.infer<typeof PartLayoutSchema>;
 
-export const PartSchema = z.strictObject({
-  id: ContentIdSchema,
-  slot: PartSlotSchema,
-  shape: PartShapeSchema,
-  /**
-   * `[width, length, thickness]` relative to body height. Surface parts lie
-   * flat (length runs up the body); sticking-out parts grow `length` outwards.
-   */
-  size: z.tuple([proportion, proportion, proportion]),
-  color: PaletteRoleSchema,
-  layout: PartLayoutSchema,
-  /** Degrees around the body from the front: 0 is the face, 180 the back. */
-  around: degrees(0, 180),
-  /** Degrees up the body: -90 is the bottom, 0 the middle, 90 the top. */
-  up: degrees(-90, 90),
-  /** Sticking-out parts lean towards the top (positive) or bottom; surface parts ignore it. */
-  tilt: degrees(-90, 90).optional(),
-  /**
-   * Paired parts lean outwards, away from the middle (sticking-out parts),
-   * or turn outwards like eyebrows (surface parts). On a `ring` (#234 kit
-   * extension) the copies fan out: each leans sideways, away from `around`,
-   * in proportion to how far round it sits, the outermost by nearly `splay`
-   * (a leaf rake's tines). Unset leaves a ring's copies parallel, as before.
-   */
-  splay: degrees(-90, 90).optional(),
-  /** How far the part sinks into the body: 0 sits on it, 1 is fully sunk. */
-  sink: z.number().min(0).max(1).optional(),
-  /** Flips an `arc` upside down (a frown-shaped happy eye). */
-  flip: z.boolean().optional(),
-  /** Adds a glossy white glint (eyes). */
-  highlight: z.boolean().optional(),
-  /** Per-squishy size variance as a fraction. */
-  jitter: z.number().min(0).max(0.3),
-  /**
-   * Opt-in (#234 round 11). `front` lines a sticking-out part up in front of
-   * its host's face instead of on the curved surface, like the tines along a
-   * rake head: each copy starts at the height and sideways spot of
-   * `around`/`up`, `standoff` in front of the face's centre line at that
-   * height (so every copy roots on one straight line, the front of a bar),
-   * and grows straight down, leaning forward towards the viewer by `tilt`
-   * (and sideways by `splay` on a ring). Unset is `surface`, today's
-   * behaviour.
-   */
-  anchor: z.enum(['surface', 'front']).optional(),
-  /**
-   * Opt-in with `anchor: 'front'` (#234 round 11): how far in front of the
-   * face's centre line the part roots, relative to host height.
-   */
-  standoff: z.number().min(0).max(0.5).optional(),
-  /**
-   * Opt-in (#234 kit extension): this part stands in for the species' mouth,
-   * so a feeling face kit's mouth requirement (`ART_RULES.feelingFaces`) is
-   * met by it and no mouth part is drawn (a rake bar that is the mouth).
-   * The client also keys two looks on it: a mouth stand-in holds still (no
-   * per-squishy placement wobble, so the rings rooted on it stay put) and is
-   * drawn plain, without the rarity's vinyl finish, like the rest of the face.
-   */
-  replaces: z.enum(['mouth']).optional(),
-});
+/**
+ * A second mesh a part carries in its own colour (#234 234b, appended).
+ * `bent-toe` is a wide, flat chisel toe at the tip of a `bent` strip (a
+ * leaf-rake tine ending in a lighter steel), so it only fits `bent` parts.
+ */
+export const PartAccentMeshSchema = z.enum(['bent-toe']);
+export type PartAccentMesh = z.infer<typeof PartAccentMeshSchema>;
+
+/** Which part shape each accent mesh is built on. */
+const ACCENT_SHAPE: Record<PartAccentMesh, PartShape> = { 'bent-toe': 'bent' };
+
+export const PartSchema = z
+  .strictObject({
+    id: ContentIdSchema,
+    slot: PartSlotSchema,
+    shape: PartShapeSchema,
+    /**
+     * `[width, length, thickness]` relative to body height. Surface parts lie
+     * flat (length runs up the body); sticking-out parts grow `length` outwards.
+     */
+    size: z.tuple([proportion, proportion, proportion]),
+    color: PaletteRoleSchema,
+    layout: PartLayoutSchema,
+    /** Degrees around the body from the front: 0 is the face, 180 the back. */
+    around: degrees(0, 180),
+    /** Degrees up the body: -90 is the bottom, 0 the middle, 90 the top. */
+    up: degrees(-90, 90),
+    /** Sticking-out parts lean towards the top (positive) or bottom; surface parts ignore it. */
+    tilt: degrees(-90, 90).optional(),
+    /**
+     * Paired parts lean outwards, away from the middle (sticking-out parts),
+     * or turn outwards like eyebrows (surface parts). On a `ring` (#234 kit
+     * extension) the copies fan out: each leans sideways, away from `around`,
+     * in proportion to how far round it sits, the outermost by nearly `splay`
+     * (a leaf rake's tines). Unset leaves a ring's copies parallel, as before.
+     */
+    splay: degrees(-90, 90).optional(),
+    /** How far the part sinks into the body: 0 sits on it, 1 is fully sunk. */
+    sink: z.number().min(0).max(1).optional(),
+    /** Flips an `arc` upside down (a frown-shaped happy eye). */
+    flip: z.boolean().optional(),
+    /** Adds a glossy white glint (eyes). */
+    highlight: z.boolean().optional(),
+    /** Per-squishy size variance as a fraction. */
+    jitter: z.number().min(0).max(0.3),
+    /**
+     * Opt-in (#234 round 11). `front` lines a sticking-out part up in front of
+     * its host's face instead of on the curved surface, like the tines along a
+     * rake head: each copy starts at the height and sideways spot of
+     * `around`/`up`, `standoff` in front of the face's centre line at that
+     * height (so every copy roots on one straight line, the front of a bar),
+     * and grows straight down, leaning forward towards the viewer by `tilt`
+     * (and sideways by `splay` on a ring). Unset is `surface`, today's
+     * behaviour.
+     */
+    anchor: z.enum(['surface', 'front']).optional(),
+    /**
+     * Opt-in with `anchor: 'front'` (#234 round 11): how far in front of the
+     * face's centre line the part roots, relative to host height.
+     */
+    standoff: z.number().min(0).max(0.5).optional(),
+    /**
+     * Opt-in (#234 kit extension): this part stands in for the species' mouth,
+     * so a feeling face kit's mouth requirement (`ART_RULES.feelingFaces`) is
+     * met by it and no mouth part is drawn (a rake bar that is the mouth).
+     * The client also keys two looks on it: a mouth stand-in holds still (no
+     * per-squishy placement wobble, so the rings rooted on it stay put) and is
+     * drawn plain, without the rarity's vinyl finish, like the rest of the face.
+     */
+    replaces: z.enum(['mouth']).optional(),
+    /**
+     * Opt-in (#234 234b): a two-tone part. The accent mesh is drawn on the
+     * same part in its own fixed colour (a lighter steel toe on a rake tine).
+     * Its own hex colour, like `ink`, so a palette never recolours it.
+     */
+    accent: z
+      .strictObject({
+        mesh: PartAccentMeshSchema,
+        // The same rule as the species `HexColorSchema` (species.ts imports this file).
+        color: z.string().regex(/^#[0-9a-f]{6}$/, 'Expected a colour like "#ffaa00"'),
+      })
+      .optional(),
+  })
+  .refine((p) => !p.accent || p.shape === ACCENT_SHAPE[p.accent.mesh], {
+    message: 'this accent mesh only fits its own part shape ("bent-toe" needs "bent")',
+    path: ['accent', 'mesh'],
+  });
 export type Part = z.infer<typeof PartSchema>;
 
 /** The registry a species visual is checked against. */

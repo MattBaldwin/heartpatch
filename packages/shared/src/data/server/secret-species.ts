@@ -1,6 +1,7 @@
 import type { Move } from '../../schemas/data/moves.js';
 import type { SecretEvolution } from '../../schemas/data/server-game-data.js';
 import type { Species } from '../../schemas/data/species.js';
+import { BOSS_EVOLUTIONS, BOSS_MOVES, BOSS_SPECIES } from './boss-species.js';
 
 /*
  * Secret squishies, the moves only they know, and evolutions into secret
@@ -34,6 +35,8 @@ export const SECRET_MOVES: Move[] = [
     accuracy: 100,
     effects: [{ type: 'stat', target: 'self', stat: 'speed', stages: 1, chance: 30 }], // TUNE:
   },
+  // The mini-boss lines' signature moves (#234).
+  ...BOSS_MOVES,
 ];
 
 export const SECRET_SPECIES: Species[] = [
@@ -156,6 +159,8 @@ export const SECRET_SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['light'], feelings: ['joy', 'cozy'] },
   },
+  // The four mini-boss lines (#190, #234), `line: 'boss'`.
+  ...BOSS_SPECIES,
 ];
 
 export const SECRET_EVOLUTIONS: SecretEvolution[] = [
@@ -180,4 +185,6 @@ export const SECRET_EVOLUTIONS: SecretEvolution[] = [
       },
     },
   },
+  // The mini-boss lines grow up (#234).
+  ...BOSS_EVOLUTIONS,
 ];

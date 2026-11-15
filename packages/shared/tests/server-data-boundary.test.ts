@@ -124,6 +124,21 @@ describe('server-only data split (tech spec §2)', () => {
     expect(secretMentions(importGraph(resolve(srcDir, 'index.ts')))).toEqual([]);
   });
 
+  // #234 plan risk 1: the boss kit is public and ships to the client, and the
+  // bundle check bans every secret species and move id AND name as a
+  // substring (source maps carry comments), so its source names no boss.
+  it('never names a secret squishy or move in the public boss kit', () => {
+    const kit = resolve(srcDir, 'data/boss-parts.ts');
+    expect(importGraph(resolve(srcDir, 'index.ts')).has(kit)).toBe(true);
+    const source = readFileSync(kit, 'utf8');
+    const words = [
+      ...server.SERVER_GAME_DATA.secretSpecies,
+      ...server.SERVER_GAME_DATA.secretMoves,
+    ].flatMap((r) => [r.id, r.name]);
+    expect(words).toContain('Rakelet');
+    expect(words.filter((word) => source.includes(word))).toEqual([]);
+  });
+
   it('never puts a secret species, move or evolution in the public data export', () => {
     const exported = JSON.stringify(root);
     expect(secretIds.filter((id) => exported.includes(id))).toEqual([]);
