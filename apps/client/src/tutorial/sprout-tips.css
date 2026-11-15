@@ -38,7 +38,8 @@
   background: radial-gradient(circle at 50% 60%, #9bd88a 0 60%, #6fbf5e 61%);
 }
 
-/* Off the map, with the lobby over it, or under a battle (z-index) it stays out of the way. */
+/* A tip already up hides under the lobby; battles and sheets only stop one from
+   starting (main.ts `busy`), and leaving the patch takes it down (sprout-tips.ts). */
 body:has(.lobby:not([hidden])) .sprout-tip {
   visibility: hidden;
 }
