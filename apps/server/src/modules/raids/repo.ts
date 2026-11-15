@@ -169,7 +169,9 @@ function queries(db: Executor): RaidsRepo {
           q: tiles.q,
           r: tiles.r,
           attackerUserId: tileAttacks.attackerUserId,
-          // A left join: a missing `users` row must never cost the defender their report.
+          // `users.kind` never changes, so reading it here (not at the battle's
+          // start) is safe. A left join: a missing `users` row must never cost
+          // the defender their report.
           attackerComputer: sql<boolean>`coalesce(${users.kind} = 'computer', false)`,
           defenderUserId: tileAttacks.defenderUserId,
           outcome: tileAttacks.outcome,

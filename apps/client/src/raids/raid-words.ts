@@ -49,9 +49,9 @@ const FENCE_NAMES = new Map(
  */
 export function raidByComputer(
   raid: Pick<Raid, 'attackerUserId'> & Partial<Pick<Raid, 'attackerComputer'>>,
-  isMember?: (userId: string) => boolean,
+  isComputer?: (userId: string) => boolean,
 ): boolean {
-  return raid.attackerComputer ?? isMember?.(raid.attackerUserId) === true;
+  return raid.attackerComputer ?? isComputer?.(raid.attackerUserId) === true;
 }
 
 /** One line per raid: who came by and how it went, kind either way. */
