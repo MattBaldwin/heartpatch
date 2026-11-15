@@ -20,6 +20,8 @@ export const REWARD_TEXT = {
   friendlyWon: (coins: string) => `+${coins} for the\u00a0win!`,
   friendlyLost: 'Good game! Everyone learned something.',
   friendlyPairCap: (name: string) => `You've won your coins from ${name} today. XP still counts!`,
+  /** The combined daily cap over Computer friends (#386e); pair-cap wins when both apply. */
+  friendlyComputerCap: () => `You've won your coins from Computer friends today. XP still counts!`,
   friendlyGaveUp: 'No coins for a give-up. XP still counts!',
 } as const;
 
@@ -105,10 +107,10 @@ export function coinLine(input: {
   switch (rewards.unpaid) {
     case 'scooted':
       return role === 'defender' ? REWARD_TEXT.heldScooted(opponent) : REWARD_TEXT.friendlyGaveUp;
-    // The combined cap over computer mates (#386e) shares the pair-cap line until 386f words it apart.
     case 'pair-cap':
-    case 'computer-cap':
       return role === 'friendly' ? REWARD_TEXT.friendlyPairCap(opponent) : null;
+    case 'computer-cap':
+      return role === 'friendly' ? REWARD_TEXT.friendlyComputerCap() : null;
     case 'guardians':
       return null;
     case null:

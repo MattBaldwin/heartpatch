@@ -31,6 +31,8 @@ export interface RaidReportOptions {
   /** Plays a raid's replay in the battle screen. */
   watch: (replay: RaidReplay) => void;
   api?: RaidsApi;
+  /** True for a Computer friend's user id (#386f), so its challenge is badged. */
+  isComputer?: (userId: string) => boolean;
   /**
    * The sheet opened or closed (by the player or on its own), so other
    * morning news (the Hollow Man's report, #21) can wait its turn.
@@ -242,7 +244,11 @@ export function createRaidReport(options: RaidReportOptions): RaidReportScreen {
                     ...(raid.seenAt === null
                       ? [el('span', { class: 'raid-new' }, RAID_TEXT.fresh)]
                       : []),
-                    el('p', { class: 'raid-line' }, raidLine(raid)),
+                    el(
+                      'p',
+                      { class: 'raid-line' },
+                      raidLine(raid, options.isComputer?.(raid.attackerUserId) === true),
+                    ),
                     ...(raid.lostFire
                       ? [
                           el('p', { class: 'raid-line' }, raidFireLine(raid) ?? ''),

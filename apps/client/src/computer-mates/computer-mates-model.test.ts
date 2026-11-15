@@ -4,6 +4,7 @@ import { legendEntries } from '../map/map-legend.js';
 import { member } from '../map/test-view.js';
 import {
   COMPUTER_TEXT,
+  computerLabel,
   goodbyeLine,
   helloTitle,
   isComputer,
@@ -205,5 +206,15 @@ describe('rosterDelta', () => {
   it('never counts a real kid as a mate, or the first view as anyone arriving', () => {
     const delta = rosterDelta(null, roster(mia, ['u2', 'Lee', false]), new Set());
     expect(delta).toEqual({ arrivals: [], departed: [], newKids: [] });
+  });
+});
+
+describe('computerLabel and napLine', () => {
+  it('badges only a Computer friend, and a nap line quotes no timer', () => {
+    expect(computerLabel('Bramble', true)).toBe('Bramble (Computer friend)');
+    expect(computerLabel('Sam', false)).toBe('Sam');
+    expect(COMPUTER_TEXT.napLine('Bramble')).toBe(
+      'Bramble is having a little nap! 💤 Ask again in a bit.',
+    );
   });
 });
