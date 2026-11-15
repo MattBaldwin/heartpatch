@@ -102,7 +102,41 @@ describe('firstsOf (#736)', () => {
       'epic-evolved': 8,
       'grown-up': 8,
       'map-full': 8,
+      // No boss rules in these days (#190): not modelled, not "never".
+      'first-boss-met': 'not modelled',
+      'first-boss-beaten': 'not modelled',
+      'first-boss-friend': 'not modelled',
     });
+  });
+
+  it('dates the mini-boss firsts under boss rules (#190)', () => {
+    const boss = (over: Partial<NonNullable<DayRecord['boss']>> = {}) => ({
+      out: false,
+      canFight: false,
+      tries: 0,
+      won: false,
+      asks: 0,
+      friend: null,
+      charms: 0,
+      charmsIn: 0,
+      charmsWild: 0,
+      charmsBoss: 0,
+      charmsShort: 0,
+      ...over,
+    });
+    const days = [
+      day(1, { boss: boss() }),
+      day(2, { boss: boss({ out: true }) }),
+      day(3, { boss: boss({ out: true, canFight: true, tries: 3 }) }),
+      day(4, { boss: boss({ out: true, canFight: true, tries: 1, won: true, asks: 2 }) }),
+      day(5, { boss: boss({ out: true, canFight: true, tries: 1, won: true, friend: 'x' }) }),
+    ];
+    const at = (id: string) => firstsOf(days, facts).find((f) => f.id === id)?.day;
+    expect(at('first-boss-met')).toBe(2);
+    expect(at('first-boss-beaten')).toBe(4);
+    expect(at('first-boss-friend')).toBe(5);
+    const early = firstsOf(days.slice(0, 4), facts);
+    expect(early.find((f) => f.id === 'first-boss-friend')?.day).toBeNull();
   });
 
   it('gives null for a first that never happens', () => {
