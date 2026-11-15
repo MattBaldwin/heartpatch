@@ -121,6 +121,8 @@ describe('showNudge', () => {
       const f = targets(badge);
       await expect(showNudge(null, f.t)).resolves.toBeDefined();
       expect(f.shown).toHaveLength(1);
+      // The badge was tried where there is one, and its failure swallowed.
+      expect(f.badges).toEqual(badge === 'fails' ? [1] : []);
     }
   });
 });
