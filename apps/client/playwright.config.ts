@@ -83,6 +83,7 @@ const E2E_GROUPS = [
     'trade-split',
     'tray-layout',
     'wild-picker',
+    'boss-marker',
   ],
   // ~24.4 iPhone, ~24.2 iPad. A first attempt of trick-or-treat that times out adds a few more.
   [

@@ -1,7 +1,7 @@
 /* The mini-boss on the map (#190, 190f): a wobbling giant on a gold glow, from the approved mockups. */
 .boss-marker {
   position: fixed;
-  z-index: 5;
+  z-index: 1; /* with the other map overlays (flags, tile marks): under every panel and sheet */
   top: 0;
   left: 0;
   display: flex;

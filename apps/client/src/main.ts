@@ -1363,10 +1363,24 @@ const bossPicker = createBossPicker({
   store: bossStore,
   fight: async (mapId) => {
     const battle = await mapApi.fightBoss(mapId);
-    if (maps.view?.map.id === mapId) battles.open(battle);
+    // As every open after an await: not over the lobby, the catalog, care or a close-up.
+    if (
+      maps.view?.map.id === mapId &&
+      !lobby.isOpen &&
+      !catalog.isOpen &&
+      !care.isOpen &&
+      !closeUp.isOpen
+    )
+      battles.open(battle);
   },
 });
-bossStore.onChange(() => bossPicker.redraw());
+bossStore.onChange(() => {
+  bossPicker.redraw();
+});
+// Back from the background (a new day, a new visit): ask again.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) void bossStore.refresh();
+});
 const wildPicker = createWildPicker({ meet: (mapId, tile) => battles.meetWild(mapId, tile) });
 // One Build sheet for my land (#371): fires, lanterns, Training Grounds and
 // fences, built the same way from the tile's panel.

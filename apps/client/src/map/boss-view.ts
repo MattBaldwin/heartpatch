@@ -22,7 +22,6 @@ export const BOSS_TEXT = {
   cardTitle: 'A BIG squishy!',
   cardAsk: 'Bring your whole team?',
   go: "Let's go!",
-  notNow: 'Not now',
   tooBig: 'Too big for now! Grow your team and come back.',
   beaten: 'You beat it! See you next time!',
   friend: "It's your friend now! 💗",
@@ -59,8 +58,9 @@ export interface BossUntil {
 
 /**
  * When it leaves, in the device's own days. `endsAt` is the instant the visit
- * ends (the start of the next day, patch-local), so the last day it's here is
- * the one a moment before. Unreadable or past gives null: nothing is shown.
+ * ends (the server's open time plus two days), so the last day it's here is
+ * the one a moment before. Days are the device's own; the server's "last day"
+ * uses the patch's zone, and they agree when the two share one. Unreadable or past gives null: nothing is shown.
  */
 export function bossUntil(endsAt: string, now: Date, locale = 'en-US'): BossUntil | null {
   const end = Date.parse(endsAt);

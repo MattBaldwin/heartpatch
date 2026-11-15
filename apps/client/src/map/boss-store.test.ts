@@ -81,6 +81,25 @@ describe('createBossStore', () => {
     expect(onAppeared.mock.calls[0]?.[1]).toBe('m1');
   });
 
+  it('drops a slow reply for a map that is no longer on screen', async () => {
+    let finishA: (v: BossVisit) => void = () => undefined;
+    const store = createBossStore({
+      fetchBoss: (id) =>
+        id === 'a'
+          ? new Promise<BossVisit>((resolve) => {
+              finishA = resolve;
+            })
+          : Promise.resolve(visit({ triesLeftToday: 1 })),
+      fetchNames: () => Promise.resolve(new Map<string, string>()),
+    });
+    const slow = store.setMap('a');
+    await store.setMap('b');
+    finishA(visit({ triesLeftToday: 3 }));
+    await slow;
+    expect(store.mapId).toBe('b');
+    expect(store.visit?.triesLeftToday).toBe(1);
+  });
+
   it('wakes its listeners when the visit ends', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-11-15T23:59:00Z'));

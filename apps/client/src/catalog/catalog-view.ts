@@ -86,7 +86,7 @@ export function catalogPage(
     // (#190: never a "???" card or a count before; `hiddenUntilSeen`).
     ...catalog.speciesDefs
       .filter((s) => !publicIds.has(s.id) && entries.has(s.id))
-      .map((s) => card(s, true)),
+      .map((s) => card(s, s.rarity === 'secret')),
   ];
   const seen = cards.filter((c) => c.seen).length;
   const caught = cards.filter((c) => c.caught).length;

@@ -29,6 +29,11 @@ describe('bossUntil', () => {
       lastDay: true,
     });
   });
+  it('reads a server-shaped end (opens Friday 16:00, ends Sunday 16:00)', () => {
+    const end = '2026-11-15T16:00:00';
+    expect(bossUntil(end, new Date('2026-11-13T17:00:00'))?.text).toBe('here until Sunday');
+    expect(bossUntil(end, new Date('2026-11-15T09:00:00'))?.text).toBe('last day!');
+  });
   it('is nothing once the time is up or unreadable', () => {
     expect(bossUntil('2026-11-16T00:00:00', noon('2026-11-16'))).toBeNull();
     expect(bossUntil('nope', noon('2026-11-14'))).toBeNull();
