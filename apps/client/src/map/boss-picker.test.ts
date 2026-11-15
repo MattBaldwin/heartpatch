@@ -18,7 +18,10 @@ const pickerOf = (v: BossVisit | null) =>
   createBossPicker({ store: storeOf(v), fight: vi.fn(), now: () => NOW });
 
 /** Just enough of an element for the wrapper, which only empties or hands it on. */
-const fakeBox = () => ({ replaceChildren: vi.fn() }) as unknown as HTMLElement;
+const fakeBox = () => {
+  const replaceChildren = vi.fn();
+  return { box: { replaceChildren } as unknown as HTMLElement, replaceChildren };
+};
 const view = undefined as never;
 
 describe('boss picker claims', () => {
@@ -39,34 +42,39 @@ describe('boss picker claims', () => {
 });
 
 describe('exceptBossTile', () => {
-  const landRules = (): TileActions => ({ show: vi.fn(), hide: vi.fn() });
+  const landRules = () => {
+    const show = vi.fn();
+    const hide = vi.fn();
+    const actions: TileActions = { show, hide };
+    return { actions, show, hide };
+  };
 
   it('keeps the land rules ("Too far away!") off the boss tile: one state, never both', () => {
     const other = landRules();
-    const box = fakeBox();
-    exceptBossTile(pickerOf(visit), other).show(box, { q: 1, r: -2 } as never, view);
+    const { box, replaceChildren } = fakeBox();
+    exceptBossTile(pickerOf(visit), other.actions).show(box, { q: 1, r: -2 } as never, view);
     expect(other.show).not.toHaveBeenCalled();
     expect(other.hide).toHaveBeenCalled();
-    expect(box.replaceChildren).toHaveBeenCalledWith();
+    expect(replaceChildren).toHaveBeenCalledWith();
   });
 
   it('leaves every other tile to the land rules', () => {
     const other = landRules();
-    const box = fakeBox();
-    exceptBossTile(pickerOf(visit), other).show(box, { q: 0, r: 0 } as never, view);
+    const { box } = fakeBox();
+    exceptBossTile(pickerOf(visit), other.actions).show(box, { q: 0, r: 0 } as never, view);
     expect(other.show).toHaveBeenCalledWith(box, { q: 0, r: 0 }, view);
   });
 
   it('is the land rules everywhere when no boss is out', () => {
     const other = landRules();
-    const box = fakeBox();
-    exceptBossTile(pickerOf(null), other).show(box, { q: 1, r: -2 } as never, view);
+    const { box } = fakeBox();
+    exceptBossTile(pickerOf(null), other.actions).show(box, { q: 1, r: -2 } as never, view);
     expect(other.show).toHaveBeenCalled();
   });
 
   it('passes hide on', () => {
     const other = landRules();
-    exceptBossTile(pickerOf(visit), other).hide();
+    exceptBossTile(pickerOf(visit), other.actions).hide();
     expect(other.hide).toHaveBeenCalled();
   });
 });
