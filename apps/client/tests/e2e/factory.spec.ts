@@ -1,6 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { api, hook } from './dev-hook.js';
+import { api, hook, liveMapId } from './dev-hook.js';
 import { selectTile } from './claim-land.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
@@ -23,7 +23,6 @@ interface InventoryDebug {
 }
 
 const bagState = (page: Page) => hook<InventoryDebug>(page, 'inventory');
-const mapState = (page: Page) => hook<{ id: string }>(page, 'map');
 const slowExpect = expect.configure({ timeout: 30_000 });
 
 test('builds a Factory on a homestead, runs batches from it, the book and the bag, and welcomes you back', async ({
@@ -50,7 +49,7 @@ test('builds a Factory on a homestead, runs batches from it, the book and the ba
   await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  expect((await mapState(page))!.id).toBe(mapId);
+  expect(await liveMapId(page)).toBe(mapId);
 
   // Build it on the homestead from the Build sheet: its card says what it does.
   await selectTile(page, made.body);

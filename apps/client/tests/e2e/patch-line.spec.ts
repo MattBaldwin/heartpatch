@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { api, hook, waitForLiveMap } from './dev-hook.js';
+import { api, hook, liveMapId, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
@@ -100,7 +100,7 @@ test('a patch-mate’s Legendary friend tells the patch, by name only to who has
   await hintOk.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => undefined);
   if (await hintOk.isVisible()) await hintOk.tap();
 
-  const mapId = (await hook<{ id: string }>(owner, 'map'))!.id;
+  const mapId = await liveMapId(owner);
   await api(owner, 'POST', `/maps/${mapId}/dev/squishies`, { level: 40 });
   await api(owner, 'POST', `/maps/${mapId}/dev/items`, { items: { 'heart-charm': 400 } });
 
