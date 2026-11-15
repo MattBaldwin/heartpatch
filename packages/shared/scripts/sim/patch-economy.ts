@@ -443,7 +443,7 @@ export function runKid(input: RunInput): PatchEconomyRun {
       // at a time until a wild start uses it), before waking anything: a
       // purchase that leaves a building asleep shows as a paused morning.
       const buy = input.buy;
-      if (buy && shop === 0 && day >= buy.fromDay && balance >= buy.price) {
+      if (buy && playing && shop === 0 && day >= buy.fromDay && balance >= buy.price) {
         const recent = days
           .slice(Math.max(0, days.length - (buy.weekDays - 1)))
           .filter((d) => d.shop > 0).length;
@@ -762,7 +762,9 @@ export function formatLuresAffordable(r: LuresAffordable, config: PatchEconomyCo
     `${item} ×${String(r.perWeek)} a week (${String(config.seats[0])} seats ${r.kid}, from day ${String(fromDay)}): ` +
     `bought ${String(r.bought)} of ${String(r.wanted)}, ${String(r.spent)} 💛; lowest balance ${String(r.lowest)} 💛, ` +
     `${String(r.balance)} 💛 on day ${String(config.days)}; paused mornings ${String(r.paused)}. Gate: every one bought, no paused morning: ` +
-    (r.pass ? 'PASS' : "FAIL (lever: the Lure's `price` or `cap` in `POST_SHOP`)")
+    (r.pass
+      ? 'PASS'
+      : "FAIL (lever: the Lure's `price` or `cap` in `POST_SHOP`, or `luresAffordable.perWeek`)")
   );
 }
 

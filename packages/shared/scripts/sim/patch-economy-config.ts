@@ -177,9 +177,9 @@ export const PATCH_ECONOMY_CONFIG: PatchEconomyConfig = {
   },
   luresAffordable: {
     item: RARE_LURE.id,
-    fromDay: 10, // #729 plan §8
+    fromDay: 10, // TUNE: #729 plan §8
     // The casual kid at the Lure's weekly cap; the engaged kid, paying for
-    // every hut and the Warehouse, one a week (TUNE: #729 plan §8).
-    perWeek: { casual: RARE_LURE.cap.count, engaged: 1 },
+    // every hut and the Warehouse, one a week.
+    perWeek: { casual: RARE_LURE.cap.count, engaged: 1 }, // TUNE: #729 plan §8
   },
 };
