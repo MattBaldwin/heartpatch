@@ -78,6 +78,17 @@ export const ComputerMateRulesSchema = z.strictObject({
   giftsPerPatchWeek: count,
   giftMaxValue: count,
   minFairPercent: percent,
+  /** What a mate's own trade offer asks for, by `TRADE_VALUES` (386d). */
+  offerValue: z.strictObject({ min: z.number().int().min(1), max: z.number().int().min(1) }),
+  /** How many of each tradable item a kid may ask a mate for in one offer (386d). */
+  shelfPerItem: z.number().int().min(1),
+  /**
+   * The everyday gathered resources a mate may give, in a trade or a gift
+   * (386d, coordinator ruling on PR #819): its whole shelf. Checked against the
+   * item data by `computer-personas.test.ts` (gathered and tradable, never
+   * Heartdust, Glimmer or a `neverSold` item).
+   */
+  mateItems: z.array(z.string().min(1)).min(1),
   challengesPerPatchWeek: z.strictObject({ on: count, gentle: count, off: count }),
   quietHours: z.strictObject({
     from: z.number().int().min(0).max(23),
@@ -113,6 +124,7 @@ export const ComputerMatesSecretsSchema = z
   })
   .refine((d) => d.rules.stepMinutes.min <= d.rules.stepMinutes.max, 'stepMinutes min > max')
   .refine((d) => d.rules.teamSize.min <= d.rules.teamSize.max, 'teamSize min > max')
+  .refine((d) => d.rules.offerValue.min <= d.rules.offerValue.max, 'offerValue min > max')
   .refine(
     (d) => new Set(d.personas.map((p) => p.id)).size === d.personas.length,
     'persona tuning repeats',

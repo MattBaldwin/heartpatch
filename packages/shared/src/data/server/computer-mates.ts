@@ -18,8 +18,14 @@ export const COMPUTER_MATES: ComputerMatesSecrets = {
     guardedTiles: 2, // TUNE
     completedPerPatchDay: 3, // TUNE
     giftsPerPatchWeek: 2, // TUNE
-    giftMaxValue: 6, // TUNE: about one gather cycle of a common resource
+    giftMaxValue: 20, // TUNE: about one gather lot of a common resource (5 Timber)
     minFairPercent: 85, // TUNE
+    offerValue: { min: 12, max: 32 }, // TUNE: 386d, a few stacks of everyday goodies
+    shelfPerItem: 10, // TUNE: 386d, made at the answer (mates have no bag)
+    // TUNE: 386d, everyday gathered resources only: `kind: 'gathered'` and
+    // tradable, minus Heartdust (rescue-only) and Glimmer (its own 10:1 swap).
+    // Never `neverSold`, crafted, seasonal, potions or charms.
+    mateItems: ['emberwood', 'fish', 'greens', 'ice', 'salt', 'stone', 'timber', 'treats', 'water'],
     challengesPerPatchWeek: { on: 4, gentle: 2, off: 0 }, // TUNE: owner decision 2
     quietHours: { from: 21, to: 7 }, // TUNE: patch time
     teamSize: { min: 3, max: 4 }, // TUNE

@@ -356,7 +356,7 @@ describe.skipIf(!url)('computer patch-mates (#386a, needs DATABASE_URL)', () => 
     const trades = createTradesRepo(db);
     const at = new Date(clock.getTime() - HOUR_MS);
     const expiresAt = new Date(clock.getTime() + DAY_MS);
-    // An open offer from the mate: its 2 timber wait in escrow (out of its bag).
+    // An open offer from the mate: its 2 timber were made at send (#386d).
     const open = await trades.insertOffer({
       mapId: map.id,
       kind: 'trade',
@@ -385,11 +385,10 @@ describe.skipIf(!url)('computer patch-mates (#386a, needs DATABASE_URL)', () => 
     expect((await setSwitch(server, owner, map.id, false)).statusCode).toBe(200);
     const offerStatus = async (id: string) =>
       (await db.query.tradeOffers.findFirst({ where: (t, { eq }) => eq(t.id, id) }))!.status;
-    // The open offer went home: called off as "left", the timber back in the mate's bag.
+    // The open offer went home: called off as "left". A mate's made timber
+    // lands in no bag (#386d): its bag is as it was.
     expect(await offerStatus(open.id)).toBe('cancelled');
-    expect((await trades.bagOf(map.id, mate!.userId))['timber'] ?? 0).toBe(
-      (mateBag['timber'] ?? 0) + 2,
-    );
+    expect(await trades.bagOf(map.id, mate!.userId)).toEqual(mateBag);
     const cancelled = (await eventsOf(map.id)).filter((e) => e.type === 'trade.cancelled');
     expect(cancelled.map((e) => e.payload)).toEqual([
       expect.objectContaining({ offerId: open.id, reason: 'left' }),

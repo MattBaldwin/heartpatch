@@ -59,7 +59,7 @@ import { createHouseRepo } from '../modules/house/repo.js';
 import { createHouseService } from '../modules/house/service.js';
 import { createHollowRepo } from '../modules/hollow/repo.js';
 import { createHollowService } from '../modules/hollow/service.js';
-import { grantItems } from '../modules/inventory/service.js';
+import { grantItems, lockGrantRows } from '../modules/inventory/service.js';
 import { createInventoryRepo } from '../modules/inventory/repo.js';
 import { createJourneyBattlePort, createJourneysService } from '../modules/journeys/service.js';
 import { createLongNightRepo } from '../modules/long-night/repo.js';
@@ -76,6 +76,7 @@ import { createStartersService } from '../modules/starters/service.js';
 import { createTerritoryService, createTileBattlePort } from '../modules/territory/service.js';
 import { createRoadsRepo } from '../modules/roads/repo.js';
 import { createTendingRepo } from '../modules/territory/repo.js';
+import { createTradesRepo } from '../modules/trades/repo.js';
 import { createTradesService } from '../modules/trades/service.js';
 import { createTutorialConsumer } from '../modules/tutorial/consumer.js';
 import { createTutorialRepo } from '../modules/tutorial/repo.js';
@@ -3483,7 +3484,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
       personas: COMPUTER_MATES.personas.map((p) => ({
         ...p,
         claimsPerDay: 60,
-        weights: { ...p.weights, claim: 1, guard: 0 },
+        weights: { ...p.weights, claim: 1, guard: 0, trade: 0, gift: 0 },
       })),
     };
     const fireFirst: ComputerMatesSecrets = {
@@ -3668,6 +3669,107 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
         },
       );
       expect(step.result()).toMatchObject({ intent: 'fire', applied: true, tended: 3 });
+    });
+
+    /** Mates that only answer (#386d): no claims, guards, fires, offers or gifts. */
+    const answerOnly: ComputerMatesSecrets = {
+      rules: { ...COMPUTER_MATES.rules, fireEveryTiles: 1000 },
+      personas: COMPUTER_MATES.personas.map((p) => ({
+        ...p,
+        answerMinutes: 0,
+        weights: { claim: 0, trade: 0, gift: 0, guard: 0, challenge: 0 },
+      })),
+    };
+    /** A kid's fair item offer to the mate, written straight to the rows (the locks are the point). */
+    async function kidOffer(mapId: string, kidId: string, mate: string) {
+      await withTransaction(db, (tx) =>
+        grantItems(tx, { mapId, userId: kidId }, { timber: 8 }, 'dev-grant'),
+      );
+      const repo = createTradesRepo(db);
+      const offer = await repo.insertOffer({
+        mapId,
+        kind: 'trade',
+        fromUserId: kidId,
+        toUserId: mate,
+        noteId: null,
+        createdAt: new Date(at.getTime() - 60 * 60 * 1000),
+        expiresAt: new Date(at.getTime() + 24 * 60 * 60 * 1000),
+      });
+      // 32 for 32: fair, and no more than `offerValue.max` from the mate.
+      await repo.insertLines(offer.id, 'give', [{ kind: 'item', itemId: 'timber', quantity: 8 }]);
+      await repo.insertLines(offer.id, 'want', [{ kind: 'item', itemId: 'stone', quantity: 8 }]);
+      return offer.id;
+    }
+
+    it("takes a kid's offer before its squishies and the inventory rows (a mate's yes, #386d step 9b then 10 then 11)", async () => {
+      const { mapId, ids, kid } = await matesPatch('cmstepyes', true);
+      const mate = ids[0]!;
+      const offerId = await kidOffer(mapId, kid.id, mate);
+      const step = await nextStep(answerOnly, mate);
+      await holdThen(
+        (tx) => createTradesRepo(tx).lockOffers([offerId]),
+        step.run,
+        async (tx) => {
+          // The mate's team (step 10) and both bags (11): free until the offer is.
+          await createComputerMatesRepo(tx).lockTeam(mapId, mate);
+          await lockGrantRows(tx, mapId, [
+            { userId: kid.id, items: { timber: 1, stone: 1 } },
+            { userId: mate, items: { timber: 1, stone: 1 } },
+          ]);
+          await lockMapRow(tx, mapId);
+        },
+      );
+      expect(step.result()).toMatchObject({ intent: 'answer-offer', applied: true });
+      const offer = await db.query.tradeOffers.findFirst({
+        where: (t, { eq }) => eq(t.id, offerId),
+      });
+      expect(offer!.status).toBe('accepted');
+    });
+
+    it("takes the patch's computer-trade lock before the kid's offer (a mate's yes, #386d step 9a then 9b)", async () => {
+      const { mapId, ids, kid } = await matesPatch('cmsteplock', true);
+      const mate = ids[0]!;
+      const offerId = await kidOffer(mapId, kid.id, mate);
+      const step = await nextStep(answerOnly, mate);
+      await holdThen(
+        (tx) => createTradesRepo(tx).lockComputerTrades(mapId),
+        step.run,
+        async (tx) => {
+          // The offer (9b), the team (10), both bags (11) and `maps`: free while the step waits on 9a.
+          await createTradesRepo(tx).lockOffers([offerId]);
+          await createComputerMatesRepo(tx).lockTeam(mapId, mate);
+          await lockGrantRows(tx, mapId, [
+            { userId: kid.id, items: { timber: 1, stone: 1 } },
+            { userId: mate, items: { timber: 1, stone: 1 } },
+          ]);
+          await lockMapRow(tx, mapId);
+        },
+      );
+      expect(step.result()).toMatchObject({ intent: 'answer-offer', applied: true });
+      const offer = await db.query.tradeOffers.findFirst({
+        where: (t, { eq }) => eq(t.id, offerId),
+      });
+      expect(offer!.status).toBe('accepted');
+    });
+
+    it("lets a kid's call-off win over a mate's yes on the same offer; the step still tends (#386d, step 9b)", async () => {
+      const { mapId, ids, kid } = await matesPatch('cmstepcross', true);
+      const mate = ids[0]!;
+      const offerId = await kidOffer(mapId, kid.id, mate);
+      const step = await nextStep(answerOnly, mate);
+      await holdThen(
+        (tx) => createTradesRepo(tx).lockOffers([offerId]),
+        step.run,
+        // The kid's cancel, committed while the mate waits on the offer.
+        (tx) => createTradesRepo(tx).setStatus([offerId], 'cancelled', at),
+      );
+      // The mate's yes found it answered: its savepoint undid only the trade.
+      expect(step.result()).toMatchObject({ intent: 'answer-offer', applied: false });
+      const offer = await db.query.tradeOffers.findFirst({
+        where: (t, { eq }) => eq(t.id, offerId),
+      });
+      expect(offer!.status).toBe('cancelled');
+      expect((await mateRow(mate)).step).toBeGreaterThan(0);
     });
   });
 });
