@@ -4,7 +4,7 @@ import { checkSpeciesArt } from './art-rules.js';
 import type { SpeciesVisual } from './species.js';
 import { checkSpeciesVisual, PartSchema, visualRegistry, type Part } from './visuals.js';
 
-// #234 kit extension: the `box` shape, `anchor: 'behind'` and `replaces: 'mouth'`.
+// #234 kit extension: the `box` and `bent` shapes, `anchor: 'front'` and `replaces: 'mouth'`.
 
 const bar: Part = {
   id: 'test-rake-bar',
@@ -18,21 +18,7 @@ const bar: Part = {
   jitter: 0,
   replaces: 'mouth',
 };
-const handle: Part = {
-  id: 'test-rake-handle',
-  slot: 'horns',
-  shape: 'capsule',
-  size: [0.08, 1.4, 0.08],
-  color: 'detail',
-  layout: { kind: 'single' },
-  around: 0,
-  up: -5,
-  tilt: 10,
-  jitter: 0,
-  anchor: 'behind',
-};
-
-const registry = visualRegistry({ bodies: BODIES, parts: [...PARTS, bar, handle] });
+const registry = visualRegistry({ bodies: BODIES, parts: [...PARTS, bar] });
 
 function visualProblems(parts: string[]): string[] {
   const out: string[] = [];
@@ -64,7 +50,6 @@ function artProblems(parts: string[]): string[] {
 describe('kit extension schema', () => {
   it('parses the new optional fields and the box shape', () => {
     expect(PartSchema.parse(bar)).toEqual(bar);
-    expect(PartSchema.parse(handle)).toEqual(handle);
   });
 
   it('leaves existing parts unchanged (the fields are optional)', () => {
@@ -76,36 +61,17 @@ describe('kit extension schema', () => {
   });
 
   it('refuses unknown anchors and replacements', () => {
-    expect(PartSchema.safeParse({ ...handle, anchor: 'inside' }).success).toBe(false);
+    expect(PartSchema.safeParse({ ...bar, anchor: 'inside' }).success).toBe(false);
+    // `behind` (a rake handle, dropped with the handle in #234) is gone again.
+    expect(PartSchema.safeParse({ ...bar, anchor: 'behind' }).success).toBe(false);
     expect(PartSchema.safeParse({ ...bar, replaces: 'eyes' }).success).toBe(false);
     expect(PartSchema.safeParse({ ...bar, shape: 'cube' }).success).toBe(false);
   });
 });
 
 describe('kit extension checks', () => {
-  it('accepts a behind-anchored handle and a mouth-replacing bar', () => {
-    expect(visualProblems(['dot-eyes', 'test-rake-bar', 'test-rake-handle'])).toEqual([]);
-  });
-
-  it('only lets sticking-out single or pair parts stand behind', () => {
-    const onFace = { ...handle, id: 'test-behind-mouth', slot: 'mouth' as const };
-    const ring = {
-      ...handle,
-      id: 'test-behind-ring',
-      layout: { kind: 'ring' as const, count: 3, spread: 20 },
-    };
-    const reg = visualRegistry({ bodies: BODIES, parts: [...PARTS, onFace, ring] });
-    const out: string[] = [];
-    checkSpeciesVisual(
-      { body: 'blob', parts: ['dot-eyes', 'test-behind-mouth', 'test-behind-ring'] },
-      reg,
-      ['v'],
-      (path, message) => out.push(`${path.join('.')}: ${message}`),
-    );
-    expect(out).toEqual([
-      expect.stringContaining('"test-behind-mouth" can\'t stand behind'),
-      expect.stringContaining('"test-behind-ring" can\'t stand behind'),
-    ]);
+  it('accepts a mouth-replacing bar', () => {
+    expect(visualProblems(['dot-eyes', 'test-rake-bar'])).toEqual([]);
   });
 
   it('reports a mouth part next to a mouth replacement', () => {
@@ -181,25 +147,14 @@ describe('front anchor and standoff', () => {
   });
 });
 
-describe('ring grow (#234 round 11b)', () => {
+describe('ring layout', () => {
   const ring = { ...bar, id: 'test-ring', slot: 'fangs' as const, shape: 'capsule' as const };
-  it('parses an optional grow on a ring, and keeps it in range', () => {
-    const grown = { ...ring, layout: { kind: 'ring', count: 5, spread: 60, grow: 0.12 } };
-    expect(PartSchema.safeParse(grown).success).toBe(true);
+  it('takes no grow: the dropped #234 round 11b option is refused, not ignored', () => {
     expect(
       PartSchema.safeParse({ ...ring, layout: { kind: 'ring', count: 5, spread: 60 } }).success,
     ).toBe(true);
-    for (const grow of [-0.1, 0.6]) {
-      expect(
-        PartSchema.safeParse({ ...ring, layout: { kind: 'ring', count: 5, spread: 60, grow } })
-          .success,
-      ).toBe(false);
-    }
-  });
-
-  it('only rings take grow', () => {
     expect(
-      PartSchema.safeParse({ ...ring, layout: { kind: 'row', count: 3, to: 20, grow: 0.1 } })
+      PartSchema.safeParse({ ...ring, layout: { kind: 'ring', count: 5, spread: 60, grow: 0.12 } })
         .success,
     ).toBe(false);
   });

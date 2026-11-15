@@ -64,10 +64,12 @@ export const SURFACE_SLOTS: readonly PartSlot[] = ['eyes', 'brows', 'mouth', 'ch
  * upwards unless the part sets `flip`. `box` is a flat, softly rounded block
  * whose sides line up with the part's width, length and thickness, so a
  * shallow `size` makes a straight bar or plank that doesn't bulge in the
- * middle (#234 kit extension; new shapes go at the end). `bent` is a
- * round-ended dowel, straight for most of its length, that bends towards the
- * front near its tip (a rake's tines). Its thickness covers the dowel plus
- * how far the tip kicks forward, so about 1.7 times its width keeps it round.
+ * middle (#234 kit extension; new shapes go at the end). `bent` is a flat,
+ * slightly tapering strip (a leaf-rake tine), its wide side to the front,
+ * straight for its top 40% and then curving evenly towards the front by 65°
+ * over the rest. Its thickness covers the strip plus how far the tip curves
+ * forward, so size it in the client's `bentProportions()` to keep the
+ * strip's section and curve true.
  */
 export const PartShapeSchema = z.enum([
   'ellipsoid',
@@ -168,13 +170,6 @@ export const PartLayoutSchema = z.discriminatedUnion('kind', [
     kind: z.literal('ring'),
     count: z.number().int().min(2).max(16),
     spread: degrees(0, 180),
-    /**
-     * Opt-in (#234 round 11b): the outer copies are bigger, in proportion to
-     * how far round they sit, the outermost by nearly `grow` (0.1 is 10%
-     * bigger), so a leaf rake's tines read as a fan. Unset keeps every copy
-     * the same size, as before.
-     */
-    grow: z.number().min(0).max(0.5).optional(),
   }),
   /** `count` copies up the body at `around`, from `up` to `to` (a spine of spikes or fins). */
   z.strictObject({
@@ -235,23 +230,16 @@ export const PartSchema = z.strictObject({
   /** Per-squishy size variance as a fraction. */
   jitter: z.number().min(0).max(0.3),
   /**
-   * Opt-in (#234 kit extension). `behind` stands a sticking-out `single` or
-   * `pair` part just behind its host instead of on the surface: it starts at
-   * the height (and sideways spot) of `around`/`up`, clear of the host's back,
-   * and grows straight up, leaning back by `tilt` and sideways by `splay`
-   * (outwards for a pair; towards the viewer's right for a single, negative
-   * for the left). So a rake handle in line with a bar on the face rises behind the
-   * head without being hidden inside it. Unset is `surface`, today's
-   * behaviour.
-   *
-   * `front` (#234 round 11) lines a sticking-out part up in front of its
-   * host's face instead of on the curved surface, like the tines along a
+   * Opt-in (#234 round 11). `front` lines a sticking-out part up in front of
+   * its host's face instead of on the curved surface, like the tines along a
    * rake head: each copy starts at the height and sideways spot of
    * `around`/`up`, `standoff` in front of the face's centre line at that
    * height (so every copy roots on one straight line, the front of a bar),
-   * and grows straight down, leaning forward towards the viewer by `tilt`.
+   * and grows straight down, leaning forward towards the viewer by `tilt`
+   * (and sideways by `splay` on a ring). Unset is `surface`, today's
+   * behaviour.
    */
-  anchor: z.enum(['surface', 'behind', 'front']).optional(),
+  anchor: z.enum(['surface', 'front']).optional(),
   /**
    * Opt-in with `anchor: 'front'` (#234 round 11): how far in front of the
    * face's centre line the part roots, relative to host height.
@@ -261,6 +249,9 @@ export const PartSchema = z.strictObject({
    * Opt-in (#234 kit extension): this part stands in for the species' mouth,
    * so a feeling face kit's mouth requirement (`ART_RULES.feelingFaces`) is
    * met by it and no mouth part is drawn (a rake bar that is the mouth).
+   * The client also keys two looks on it: a mouth stand-in holds still (no
+   * per-squishy placement wobble, so the rings rooted on it stay put) and is
+   * drawn plain, without the rarity's vinyl finish, like the rest of the face.
    */
   replaces: z.enum(['mouth']).optional(),
 });
@@ -318,17 +309,6 @@ export function checkSpeciesVisual(
       report(at, `parts "${other}" and "${id}" both use the ${part.slot} slot`);
     }
     slots.set(part.slot, id);
-    if (
-      part.anchor === 'behind' &&
-      (SURFACE_SLOTS.includes(part.slot) ||
-        part.slot === 'legs' ||
-        (part.layout.kind !== 'single' && part.layout.kind !== 'pair'))
-    ) {
-      report(
-        at,
-        `part "${id}" can't stand behind its host: only sticking-out single or pair parts can`,
-      );
-    }
     if (part.anchor === 'front' && (SURFACE_SLOTS.includes(part.slot) || part.slot === 'legs')) {
       report(at, `part "${id}" can't stand in front of its host: only sticking-out parts can`);
     }

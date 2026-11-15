@@ -76,7 +76,7 @@ function arc(rings: number, segments: number): MeshArrays {
   const radius = 1;
   const tube = 0.32;
   const bend = 0.3; // TUNE
-  const capRings = Math.max(3, Math.round(rings / 3)); // v16: 3 at low detail, so a flat end's normals stay true
+  const capRings = Math.max(2, Math.round(rings / 3));
   const bodyRings = rings * 2;
   const positions: number[] = [];
   const normals: number[] = [];
@@ -121,8 +121,8 @@ function arc(rings: number, segments: number): MeshArrays {
   return { positions, normals, indices: gridIndices(total, segments) };
 }
 
-/** How square a `box` is: towards 0 is sharp, 1 is an ellipsoid. TUNE */
-const BOX_ROUNDNESS = 0.22;
+/** How square a `box` is: towards 0 is sharp, 1 is an ellipsoid. */
+const BOX_ROUNDNESS = 0.22; // TUNE:
 
 /**
  * A softly rounded block (a superellipsoid), its flat sides facing ±x, ±y
@@ -174,6 +174,9 @@ const TOE_LENGTH = 0.13; // along the strip, in lengths of the whole stick
 const TOE_FLARE = 1.8; // its full width, as a multiple of the shaft's width there
 const TOE_THICK = 2.4; // its full thickness, as a multiple of the shaft's: head-on its flat end is a broad oval, not a sliver
 const TOE_CAP = 0.4; // its flat end: the cap's reach in toe half-thicknesses
+const TOE_FLARE_SHARE = 0.45; // how much of the toe's length it takes to flare out
+const TOE_START_WIDE = 1.05; // its width where it starts, as a multiple of the shaft's (just over it)
+const TOE_START_THICK = 1.1; // its thickness where it starts, as a multiple of the shaft's
 
 /**
  * How far the `bent` tine's tip turns (degrees), the share of its length
@@ -249,15 +252,23 @@ function bentToeMesh(rings: number, segments: number): MeshArrays {
   const from = BENT_LENGTH - TOE_LENGTH;
   // 0 where the toe starts (just over the shaft), 1 once it has flared (smoothstep).
   const grown = (s: number): number => {
-    const k = Math.min(1, Math.max(0, (s - from) / (TOE_LENGTH * 0.45)));
+    const k = Math.min(1, Math.max(0, (s - from) / (TOE_LENGTH * TOE_FLARE_SHARE)));
     return k * k * (3 - 2 * k);
   };
   return strip(
     {
       from,
       to: BENT_LENGTH,
-      wide: (s) => BENT_TUBE * BENT_WIDE * bentTaper(from) * (1.05 + (TOE_FLARE - 1.05) * grown(s)),
-      thin: (s) => BENT_TUBE * BENT_THIN * bentTaper(from) * (1.1 + (TOE_THICK - 1.1) * grown(s)),
+      wide: (s) =>
+        BENT_TUBE *
+        BENT_WIDE *
+        bentTaper(from) *
+        (TOE_START_WIDE + (TOE_FLARE - TOE_START_WIDE) * grown(s)),
+      thin: (s) =>
+        BENT_TUBE *
+        BENT_THIN *
+        bentTaper(from) *
+        (TOE_START_THICK + (TOE_THICK - TOE_START_THICK) * grown(s)),
       startCap: 1,
       endCap: TOE_CAP,
     },
@@ -280,7 +291,7 @@ interface StripSpec {
 
 /** An elliptical tube along the `bent` centreline, with ellipsoidal end caps. */
 function strip(spec: StripSpec, rings: number, segments: number): MeshArrays {
-  const capRings = Math.max(3, Math.round(rings / 3)); // v16: 3 at low detail, so a flat end's normals stay true
+  const capRings = Math.max(3, Math.round(rings / 3)); // 3 even at low detail, so the chisel end's normals stay true
   const bodyRings = rings * 2;
   const count = capRings * 2 + bodyRings;
   const positions: number[] = [];

@@ -9,10 +9,15 @@ import type { KitPart } from '../params.js';
  * bodies, parts and lines into `packages/shared/src/data` once the owner signs
  * off on the renders.
  *
- * The body style needs no contract change (plan §8): hair sits in `crown`
- * and `mane`, a moustache or rake-tine teeth in `fangs`, a cap brim, goggles
- * or earrings in `horns`, and a cardigan's buttons in `pattern`. Every new
- * part uses the existing five primitives and the shared squishy material.
+ * Hair sits in `crown` and `mane`, a moustache or rake tines in `fangs`, a
+ * cap brim, goggles or rivets in `horns`, and a cardigan's buttons in
+ * `pattern`. Mommentum, Papa Brrr and Rickeyride use only the original five
+ * primitives. Rakelet's rake uses the #234 kit extension (ART_BIBLE §1.9):
+ * `box` and `bent` shapes, the `metal` colour, ring `splay`, `anchor:
+ * 'front'` with `standoff`, `replaces: 'mouth'`, and the client-only
+ * two-tone `accent` (a `KitPart` field the shared `Part` schema doesn't
+ * carry yet; lane 234b adds it). Every part here is used by some form
+ * (`boss-drafts.test.ts`).
  */
 
 /** `?drafts` in the gallery shows these looks; every id starts with this. */
@@ -136,18 +141,6 @@ export const DRAFT_PARTS: KitPart[] = [
     sink: 0.3,
     jitter: 0,
   }),
-  part({
-    id: 'draft-wide-grin',
-    slot: 'mouth',
-    shape: 'arc',
-    size: [0.3, 0.09, 0.055],
-    color: 'ink',
-    layout: { kind: 'single' },
-    around: 0,
-    up: -2,
-    sink: 0.3,
-    jitter: 0,
-  }),
 
   part({
     // Freckles across the nose: on the head, not the torso. Round 11b: tiny
@@ -165,21 +158,6 @@ export const DRAFT_PARTS: KitPart[] = [
   }),
 
   // ── Rakelet: rake-tine teeth, leaf-pile hair, one leaf sliding off ─────
-  part({
-    // ...long, countable tines hanging from it as the teeth, reaching well
-    // below the chin and leaning a little forward of the mouth...
-    id: 'draft-rake-tines',
-    slot: 'fangs',
-    shape: 'capsule',
-    size: [0.055, 0.6, 0.055],
-    color: 'white',
-    layout: { kind: 'ring', count: 8, spread: 48 },
-    around: 0,
-    up: -19,
-    tilt: -62,
-    sink: 0.08,
-    jitter: 0,
-  }),
   // Round 8 (owner decision): "Rakelet should never have a handle. His
   // mouth is the rake." Every stage's mouth is a rake head on its own: a
   // wooden crossbar (`box`, `replaces: 'mouth'`) wider than the face, and a
@@ -457,20 +435,6 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0.12,
   }),
   part({
-    // The one leaf always falling off.
-    id: 'draft-falling-leaf',
-    slot: 'horns',
-    shape: 'teardrop',
-    size: [0.22, 0.3, 0.06],
-    color: 'detail',
-    layout: { kind: 'single' },
-    around: 84,
-    up: 36,
-    tilt: -72,
-    sink: 0.1,
-    jitter: 0,
-  }),
-  part({
     // Long, lanky arms dangling almost to the ground, angled out so they
     // clear the torso instead of sinking into it at the hips.
     id: 'draft-lanky-arms',
@@ -483,22 +447,6 @@ export const DRAFT_PARTS: KitPart[] = [
     up: 30,
     tilt: -84,
     splay: 9,
-    sink: 0.15,
-    jitter: 0,
-  }),
-  part({
-    // The long forearm from the same shoulder, thinner and splayed a little
-    // further out: the arm tapers and bends at the elbow (boss form).
-    id: 'draft-lanky-forearms',
-    slot: 'back',
-    shape: 'capsule',
-    size: [0.12, 1.35, 0.12],
-    color: 'primary',
-    layout: { kind: 'pair' },
-    around: 86,
-    up: 30,
-    tilt: -85,
-    splay: 11,
     sink: 0.15,
     jitter: 0,
   }),

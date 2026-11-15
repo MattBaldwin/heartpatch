@@ -9,13 +9,13 @@ import {
 import { describe, expect, it } from 'vitest';
 import { FIXED_COLORS, LOD } from './config.js';
 import { DRAFT_BODIES, DRAFT_PARTS, draftLooks } from './gallery/boss-drafts.js';
-import { squishyParams, type PartPlacement } from './params.js';
+import { squishyParams } from './params.js';
 import { bentProportions, bentTip, partArrays } from './part-shapes.js';
 import { partMatrix } from './placement.js';
 
 /**
  * Byte-identity guard for the procedural kit (#234 kit extension): adding
- * new opt-in options (the `box` shape, `anchor: 'behind'`, `replaces`) must
+ * new opt-in options (the `box` shape, `replaces`) must
  * not move a single vertex or matrix of any shipped species. The hashes were
  * taken on the code before the extension; if one changes, an existing
  * species renders differently.
@@ -61,15 +61,18 @@ describe('kit extension byte identity', () => {
     expect(PartShapeSchema.options.slice(0, ORIGINAL_SHAPES.length)).toEqual(ORIGINAL_SHAPES);
   });
 
-  it('builds the original part shapes byte-identically', () => {
-    const got = Object.fromEntries(
-      ORIGINAL_SHAPES.map((shape) => {
-        const m = partArrays(shape, LOD.high);
-        return [shape, hash([...m.positions, ...m.normals, ...m.indices])];
-      }),
-    );
-    expect(got).toEqual(GOLDEN_SHAPES);
-  });
+  it.each(['low', 'high', 'hero'] as const)(
+    'builds the original part shapes byte-identically at %s detail',
+    (lod) => {
+      const got = Object.fromEntries(
+        ORIGINAL_SHAPES.map((shape) => {
+          const m = partArrays(shape, LOD[lod]);
+          return [shape, hash([...m.positions, ...m.normals, ...m.indices])];
+        }),
+      );
+      expect(got).toEqual(GOLDEN_SHAPES[lod]);
+    },
+  );
 
   it('places every shipped species part byte-identically', () => {
     expect(hash(rosterMatrices())).toBe(GOLDEN_ROSTER);
@@ -124,61 +127,29 @@ describe('bent shape', () => {
   });
 });
 
-describe("anchor: 'behind'", () => {
-  const orb = BODIES.find((b) => b.id === 'orb');
-  if (!orb) throw new Error('no orb body');
-  const scale: [number, number, number] = [1, 1, 1];
-  const placement: PartPlacement = {
-    around: 0,
-    up: (-10 * Math.PI) / 180,
-    size: [0.08, 1.4, 0.08],
-    tilt: 0,
-    splay: 0,
-    side: 0,
-  };
-  const part = { surface: false, sink: 0, lift: 0, flip: false, anchor: 'behind' as const };
-  type Rows = [number[], number[], number[], number[]];
-  const rows = (m: readonly number[]): Rows => [
-    m.slice(0, 3),
-    m.slice(4, 7),
-    m.slice(8, 11),
-    m.slice(12, 15),
-  ];
-
-  it('stands clear of the back at the anchor height and grows straight up', () => {
-    const [, y, , centre] = rows(partMatrix(orb, scale, part, placement));
-    const back = (orb.depth / 2) * scale[2];
-    const bottom = (centre[1] ?? 0) - (y[1] ?? 0) / 2;
-    expect(y[0]).toBeCloseTo(0);
-    expect(y[2]).toBeCloseTo(0);
-    expect(centre[2]).toBeGreaterThan(back);
-    // Its foot is at the face spot's height, in line with a bar on the mouth.
-    const face = rows(
-      partMatrix(orb, scale, { ...part, anchor: undefined, surface: true }, placement),
-    )[3];
-    expect(bottom).toBeCloseTo(face[1] ?? NaN, 1);
-  });
-
-  it('leans back with positive tilt', () => {
-    const [, y] = rows(partMatrix(orb, scale, part, { ...placement, tilt: Math.PI / 12 }));
-    expect(y[2]).toBeGreaterThan(0);
-    expect(y[1]).toBeGreaterThan(0);
-  });
-
-  it('changes nothing when unset', () => {
-    const plain = { surface: false, sink: 0, lift: 0, flip: false };
-    expect(partMatrix(orb, scale, plain, placement)).toEqual(
-      partMatrix(orb, scale, { ...plain, anchor: undefined }, placement),
-    );
-  });
-});
-
-const GOLDEN_SHAPES: Record<string, string> = {
-  ellipsoid: 'f71d034af6a69a4a',
-  capsule: 'b5debf2de3153011',
-  cone: 'b68ffb78f73145e1',
-  teardrop: 'eac6d8c7c9b19a23',
-  arc: '98b102a9a5f19af0',
+// Taken from origin/main's part-shapes.ts (before the kit extension) at each detail level.
+const GOLDEN_SHAPES: Record<'low' | 'high' | 'hero', Record<string, string>> = {
+  low: {
+    ellipsoid: '48180fb1eeaa4afa',
+    capsule: '5a126ce9c7126f75',
+    cone: '55857b7438f449bc',
+    teardrop: '5ea6bf1eb41fe5d6',
+    arc: '8c43809456cf97c0',
+  },
+  high: {
+    ellipsoid: 'f71d034af6a69a4a',
+    capsule: 'b5debf2de3153011',
+    cone: 'b68ffb78f73145e1',
+    teardrop: 'eac6d8c7c9b19a23',
+    arc: '98b102a9a5f19af0',
+  },
+  hero: {
+    ellipsoid: '4606ea917dc80cbf',
+    capsule: 'b03832654766d236',
+    cone: '6a72af0cc743aeee',
+    teardrop: '251046e5a6c8b471',
+    arc: 'ead50646549b00ab',
+  },
 };
 const GOLDEN_ROSTER = 'df66e5c157262849';
 
@@ -198,16 +169,9 @@ describe('ring splay and the metal role (#234 round 8)', () => {
     sink: 0.1,
     jitter: 0,
   };
-  // Ring `grow` (v14's longer outer tines, dropped in v15) stays tested on a copy.
-  const growPart = {
-    ...fanPart,
-    id: 'test-grow-tines',
-    layout: { kind: 'ring' as const, count: 5, spread: 105, grow: 0.22 },
-    splay: 22,
-  };
   const drafts = visualRegistry({
     bodies: [...GAME_DATA.bodies, ...DRAFT_BODIES],
-    parts: [...GAME_DATA.parts, ...DRAFT_PARTS, fanPart, growPart],
+    parts: [...GAME_DATA.parts, ...DRAFT_PARTS, fanPart],
   });
   const lookOf = (id: string) => {
     const look = draftLooks().find((l) => l.id === id);
@@ -243,7 +207,7 @@ describe('ring splay and the metal role (#234 round 8)', () => {
     expect(fan[0]?.splay).toBeLessThan((40 * Math.PI) / 180);
   });
 
-  it('keeps a ring without splay or grow parallel and the same size', () => {
+  it('keeps a ring without splay parallel and the same size', () => {
     // Rakeling's rivets set neither.
     const rivets = squishyParams(
       { id: 'draft-rakeling', visual: lookOf('draft-rakeling').visual },
@@ -255,26 +219,6 @@ describe('ring splay and the metal role (#234 round 8)', () => {
       expect([p.splay, p.side]).toEqual([0, 0]);
       expect(p.size).toEqual(rivets?.placements[0]?.size);
     }
-  });
-
-  it('makes outer copies of a ring with grow bigger, symmetrically (#234 round 11b)', () => {
-    const rakelet = lookOf('draft-rakelet').visual;
-    const visual = {
-      ...rakelet,
-      parts: rakelet.parts.map((id) => (id === 'draft-rake-tool-tines' ? growPart.id : id)),
-    };
-    const tines = tinesOf('test-grow', visual).placements;
-    expect(tines).toHaveLength(5);
-    const length = tines.map((p) => p.size[1]);
-    expect(length[0]).toBeCloseTo(length[4] ?? NaN);
-    expect(length[1]).toBeCloseTo(length[3] ?? NaN);
-    expect(length[0] ?? 0).toBeGreaterThan(length[1] ?? 0);
-    expect(length[1] ?? 0).toBeGreaterThan(length[2] ?? 0);
-    // grow 0.22: the outermost (offset 4/5) is 1 + 0.22 * 0.8 times the middle.
-    expect((length[0] ?? 0) / (length[2] ?? 1)).toBeCloseTo(1.176, 6);
-    // Each copy scales whole, so the strip keeps its section.
-    for (const p of tines)
-      expect(p.size[0] / p.size[1]).toBeCloseTo(tines[2]!.size[0] / tines[2]!.size[1], 9);
   });
 
   it('gives every stage matching tines: the same size, evenly fanned (v15)', () => {

@@ -1,7 +1,7 @@
 import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Vector3, type Matrix } from '@babylonjs/core/Maths/math.vector';
-import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { Scene } from '@babylonjs/core/scene';
 import {
@@ -846,10 +846,15 @@ describe('SquishyField rare finds glow (#391)', () => {
     };
     f.add(one, 'p', { x: 0, z: 0 });
     f.flush();
-    const accent = scene.meshes.find((m) => m.name.startsWith('squishy-accent:bent-toe')) as Mesh;
-    expect(accent).toBeDefined();
+    const meshNamed = (prefix: string): Mesh => {
+      const found = scene.meshes.find((m) => m.name.startsWith(prefix));
+      expect(found, prefix).toBeInstanceOf(Mesh);
+      if (!(found instanceof Mesh)) throw new Error(`no mesh ${prefix}`);
+      return found;
+    };
+    const accent = meshNamed('squishy-accent:bent-toe');
     expect(accent.thinInstanceCount).toBe(3);
-    const shaft = scene.meshes.find((m) => m.name.startsWith('squishy-part:bent')) as Mesh;
+    const shaft = meshNamed('squishy-part:bent');
     expect(shaft.thinInstanceCount).toBe(3);
     // The same placement matrices: the toe rides on its tine.
     expect(

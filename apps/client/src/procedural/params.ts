@@ -99,10 +99,10 @@ export interface PartParams {
   readonly lift: number;
   readonly flip: boolean;
   /**
-   * Set only for a part that stands behind its host (`anchor: 'behind'`) or
-   * in a straight line in front of its face (`'front'`); unset grows from the surface.
+   * Set only for a part that stands in a straight line in front of its
+   * host's face (`anchor: 'front'`); unset grows from the surface.
    */
-  readonly anchor?: 'behind' | 'front';
+  readonly anchor?: 'front';
   /** With `anchor: 'front'`: how far in front of the face's centre line it roots, world units. */
   readonly standoff?: number;
   /** Set only on `metal` parts and mouth stand-ins (#234): plain, without the rarity's vinyl finish. */
@@ -259,10 +259,7 @@ function placementsFor(part: Part, height: number, rng: Rng): PartPlacement[] {
         layout.kind === 'ring' && layout.spread > 0 ? (a - part.around) / layout.spread : 0;
       const fan = splay * offset;
       const side = fan === 0 ? 0 : fan > 0 ? 1 : -1;
-      // A ring with `grow` makes its outer copies bigger (#234 round 11b).
-      const k = layout.kind === 'ring' && layout.grow ? 1 + layout.grow * Math.abs(offset) : 1;
-      const copySize: Vec3 = k === 1 ? size : [size[0] * k, size[1] * k, size[2] * k];
-      out.push({ around: a * DEG, up: u * DEG, size: copySize, tilt, splay: Math.abs(fan), side });
+      out.push({ around: a * DEG, up: u * DEG, size, tilt, splay: Math.abs(fan), side });
     }
     return out;
   }
@@ -443,7 +440,7 @@ export function squishyParams(
       sink: part.sink ?? 0,
       lift: 0,
       flip: part.flip ?? false,
-      ...(part.anchor === 'behind' || part.anchor === 'front' ? { anchor: part.anchor } : {}),
+      ...(part.anchor === 'front' ? { anchor: part.anchor } : {}),
       ...(part.anchor === 'front' ? { standoff: (part.standoff ?? 0) * hostHeight } : {}),
       // Metal (rake tines, rivets) and a part that stands in for the mouth (the
       // rake bar) skip the rarity's vinyl finish, like the rest of the face (#234 v14).

@@ -90,6 +90,11 @@ describe('the #234 mini-boss drafts', () => {
     expect(forms.filter((f) => names.has(f.name.toLowerCase())).map((f) => f.name)).toEqual([]);
   });
 
+  it('uses every draft part in some form: no dead parts', () => {
+    const used = new Set(forms.flatMap((f) => f.visual.parts));
+    expect(DRAFT_PARTS.map((p) => p.id).filter((id) => !used.has(id))).toEqual([]);
+  });
+
   it('shows every form in the gallery', () => {
     expect(draftLooks().map((l) => l.id)).toEqual(forms.map((f) => f.id));
   });
