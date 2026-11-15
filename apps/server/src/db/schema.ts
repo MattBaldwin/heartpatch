@@ -1323,6 +1323,11 @@ export const tileAttacks = pgTable(
     }),
     // Attempts today, cooldowns, losses today.
     index('tile_attacks_map_id_attacker_idx').on(t.mapId, t.attackerUserId, t.startedAt),
+    // A map's attacks still running (computer mates' claim guard, every
+    // step), without walking the map's whole season of finished ones.
+    index('tile_attacks_map_id_open_idx')
+      .on(t.mapId)
+      .where(sql`${t.endedAt} is null`),
     index('tile_attacks_tile_id_idx').on(t.tileId, t.cooldownUntil),
     index('tile_attacks_map_id_defender_idx')
       .on(t.mapId, t.defenderUserId, t.endedAt)

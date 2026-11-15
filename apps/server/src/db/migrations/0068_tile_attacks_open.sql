@@ -1,0 +1,1 @@
+CREATE INDEX "tile_attacks_map_id_open_idx" ON "tile_attacks" USING btree ("map_id") WHERE "tile_attacks"."ended_at" is null;
