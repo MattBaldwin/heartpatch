@@ -196,15 +196,11 @@ function bentEnd(): { y: number; z: number; total: number } {
  */
 export function bentProportions(): Vec3 {
   const { positions } = bent(12, 16);
-  const lo = [Infinity, Infinity, Infinity];
-  const hi = [-Infinity, -Infinity, -Infinity];
-  for (let i = 0; i < positions.length; i++) {
-    const k = i % 3;
-    const v = positions[i] ?? 0;
-    lo[k] = Math.min(lo[k]!, v);
-    hi[k] = Math.max(hi[k]!, v);
-  }
-  return [hi[0]! - lo[0]!, hi[1]! - lo[1]!, hi[2]! - lo[2]!];
+  const extent = (k: number): number => {
+    const axis = positions.filter((_, i) => i % 3 === k);
+    return Math.max(...axis) - Math.min(...axis);
+  };
+  return [extent(0), extent(1), extent(2)];
 }
 
 /**
