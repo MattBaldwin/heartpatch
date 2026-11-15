@@ -1515,6 +1515,37 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   .battle-hud-team .battle-result:has(.boss-befriend) > .auth-subtitle {
     display: none;
   }
+
+  .battle-hud-team .battle-result .boss-befriend {
+    gap: 4px;
+  }
+
+  /* The charm pill and "Asks left" share one row ("this win" steps aside). */
+  .battle-hud-team .battle-result .boss-befriend-row {
+    gap: 4px 6px;
+  }
+
+  .battle-hud-team .battle-result .boss-charm-pill {
+    padding: 2px 10px;
+    font-size: 14px;
+  }
+
+  .battle-hud-team .battle-result .boss-asks-win {
+    display: none;
+  }
+
+  /* Not enough charms: "You need 3 💗" and "Make Heart Charms 🏠" share one
+     row, so both show under the boss without scrolling. */
+  .battle-hud-team .battle-result .boss-befriend-row:has(> .hp-button) {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .battle-hud-team .battle-result .boss-befriend-row > .hp-button {
+    min-height: var(--hp-button-h-small);
+    padding-inline: 10px;
+    font-size: 15px;
+  }
 }
 
 /* Each friend's plate under its body (the arena's row, `placeFriends`). */

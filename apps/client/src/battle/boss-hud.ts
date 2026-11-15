@@ -459,7 +459,14 @@ export function befriendPanel(
       children.push(
         row(
           ...(view.charmsLine ? [el('p', { class: 'boss-charm-pill' }, view.charmsLine)] : []),
-          el('p', { class: 'battle-hint boss-asks-left' }, `${BOSS_TEXT.asksLeft} `, dots),
+          el(
+            'p',
+            { class: 'battle-hint boss-asks-left' },
+            BOSS_TEXT.asksLeft,
+            el('span', { class: 'boss-asks-win' }, BOSS_TEXT.asksLeftWin),
+            ' ',
+            dots,
+          ),
         ),
       );
       const ask = el(

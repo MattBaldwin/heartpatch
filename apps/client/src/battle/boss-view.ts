@@ -61,7 +61,9 @@ export const BOSS_TEXT = {
   // The befriend moment (plan §3, the #820 ruling, mockup frame 3).
   ask: (name: string) => `Ask ${name} to be your friend? 💗💗💗`,
   charmsHave: (n: number) => `💗 You have ${String(n)} Heart ${n === 1 ? 'Charm' : 'Charms'}`,
-  asksLeft: 'Asks left this win',
+  asksLeft: 'Asks left',
+  /** After "Asks left"; a phone leaves it off so the row stays one line. */
+  asksLeftWin: ' this win',
   asksLeftLabel: (n: number) =>
     `You can ask ${String(n)} more ${n === 1 ? 'time' : 'times'} this win.`,
   give: (n: number) => `Give ${String(n)} Heart Charms 💗`,
