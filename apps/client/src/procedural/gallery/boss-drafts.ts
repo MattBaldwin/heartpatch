@@ -212,7 +212,7 @@ export const DRAFT_PARTS: Part[] = [
     color: 'metal',
     layout: { kind: 'ring', count: 3, spread: 68, grow: 0.12 }, // TUNE: gaps ~2.5x a tine's thickness; outer tines longer
     around: 0,
-    up: -12, // TUNE: the bar's middle, on its rivet
+    up: -11, // TUNE: the bar's middle, on its rivet
     tilt: 42, // TUNE: ~42 degrees towards the viewer reads as ~27 in the 3/4 view (yaw 35)
     splay: 6, // TUNE: a gentle fan, not claws
     sink: 0.04,
@@ -229,7 +229,7 @@ export const DRAFT_PARTS: Part[] = [
     color: 'ink',
     layout: { kind: 'ring', count: 3, spread: 68 },
     around: 0,
-    up: -12, // the bar's middle, on each tine's root
+    up: -11, // the bar's middle, on each tine's root
     tilt: 90, // straight out towards the viewer
     sink: 0.4,
     jitter: 0,
