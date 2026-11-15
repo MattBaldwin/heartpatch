@@ -9,8 +9,9 @@ import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 const url = inject('testDatabaseUrl');
 
 /**
- * Words that would give away the odds, the warmth or the schedule (CLAUDE.md
- * rule 6): none may appear as a key in anything a client is sent. (A finished
+ * Words that would give away the odds, the misses or the schedule (CLAUDE.md
+ * rule 6): none may appear as a key in anything a client is sent. Warmth goes
+ * out only as `PlayerBattle.boss.warmth`, a coarse 0–4 step (#190 ruling). (A finished
  * battle's `seed` is public by design, tech spec §8; the ask's roll also
  * takes the server-only patch seed, so it can't be predicted from it.)
  */
@@ -18,7 +19,6 @@ const SECRET_KEYS = [
   'chance',
   'roll',
   'misses',
-  'warmth',
   'standing',
   'basePercent',
   'perStandingPercent',
@@ -38,6 +38,17 @@ function keysOf(value: unknown, into = new Set<string>()): Set<string> {
     for (const [key, inner] of Object.entries(value)) {
       into.add(key);
       keysOf(inner, into);
+    }
+  }
+  return into;
+}
+/** Every `warmth` value anywhere in a JSON value. */
+function warmthsIn(value: unknown, into: unknown[] = []): unknown[] {
+  if (Array.isArray(value)) for (const item of value) warmthsIn(item, into);
+  else if (value && typeof value === 'object') {
+    for (const [key, inner] of Object.entries(value)) {
+      if (key === 'warmth') into.push(inner);
+      else warmthsIn(inner, into);
     }
   }
   return into;
@@ -98,6 +109,13 @@ describe.skipIf(!url)('mini-boss secrets stay on the server (#190c, needs DATABA
     sent.push(await get(`/battles/${won.id}`));
 
     for (const reply of sent) expect(leaks(reply), JSON.stringify(reply)).toEqual([]);
+    // Warmth is a heart step, never a percentage: whole, 0 to 4, wherever it shows.
+    const warmths = sent.flatMap((reply) => warmthsIn(reply));
+    expect(warmths.length).toBeGreaterThan(0);
+    for (const w of warmths)
+      expect(typeof w === 'number' && Number.isInteger(w) && w >= 0 && w <= 4, String(w)).toBe(
+        true,
+      );
 
     // Every live event this patch got, as each member would be sent it.
     const events: GameEvent[] = await db.query.gameEvents.findMany({

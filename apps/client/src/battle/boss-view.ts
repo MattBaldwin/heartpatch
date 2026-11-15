@@ -1,5 +1,6 @@
 import {
   BATTLE_RULES,
+  BOSS_WARMTH_STEPS,
   type BattleSideId,
   type ItemCounts,
   type Move,
@@ -8,6 +9,7 @@ import {
   type PlayerBattleBoss,
 } from '@heartpatch/shared';
 import { itemName } from '../inventory/bag-view.js';
+import { localDateIn } from '../map/map-dressing.js';
 import type { ShownState } from './battle-playback.js';
 import { energyPercent, otherSide, type BattleContent } from './battle-view.js';
 
@@ -21,6 +23,10 @@ export const BOSS_TEXT = {
   start: (name: string) => `A BIG ${name} wants to play!`,
   stompsTwice: '👣 Stomps twice',
   stompAgain: 'Stomp again!',
+  round: (n: number) => `Round ${String(n)}`,
+  order: 'Order',
+  /** `names`: the movers, in order, joined ("Pip, Rakelet, Bun"). */
+  orderLabel: (names: string) => `Who goes when: ${names}.`,
   everyone: 'Everyone!',
   /** A move that hits every foe (`targets: 'all-foes'`). */
   areaTag: '🌀 Hits all',
@@ -52,6 +58,8 @@ export const BOSS_TEXT = {
   ask: (name: string) => `Ask ${name} to be your friend? 💗💗💗`,
   charmsHave: (n: number) => `💗 You have ${String(n)} Heart ${n === 1 ? 'Charm' : 'Charms'}`,
   asksLeft: 'Asks left this win',
+  asksLeftLabel: (n: number) =>
+    `You can ask ${String(n)} more ${n === 1 ? 'time' : 'times'} this win.`,
   give: (n: number) => `Give ${String(n)} Heart Charms 💗`,
   askAgain: (n: number) => `Ask again (${String(n)} 💗)`,
   needCharms: (n: number) => `You need ${String(n)} 💗`,
@@ -68,8 +76,12 @@ export const BOSS_TEXT = {
   asking: 'Asking…',
 } as const;
 
-/** How many warmth hearts the "not yet" row shows: the fifth ask always works (plan §3). */
-export const WARMTH_HEARTS = 5;
+/**
+ * How many warmth hearts the "not yet" row shows: one per server warmth step
+ * (`PlayerBattle.boss.warmth`, 0–`BOSS_WARMTH_STEPS`), plus the last heart,
+ * which is the ask that always works (plan §3).
+ */
+export const WARMTH_HEARTS = BOSS_WARMTH_STEPS + 1; // TUNE: follows the shared step count
 
 /** A team battle (#190): side `a` has a team out at once against one boss. */
 export function isTeamBattle(b: Pick<PlayerBattle, 'view'>): boolean {
@@ -261,31 +273,50 @@ export function bossCallout(
 
 // ── The visit's chips ───────────────────────────────────────────────────
 
-const DAY = 24 * 60 * 60 * 1000;
-const WEEKDAYS = [
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-] as const;
-
-/** True when the visit ends within a day of `now` (its last day). */
-export function lastDayOf(boss: Pick<PlayerBattleBoss, 'eventWindow'>, now: number): boolean {
-  return Date.parse(boss.eventWindow.endsAt) - now <= DAY;
-}
+/** A minute before the end, so a visit ending at midnight belongs to the day it covers. */
+const lastMinute = (boss: Pick<PlayerBattleBoss, 'eventWindow'>) =>
+  Date.parse(boss.eventWindow.endsAt) - 60_000;
 
 /**
- * "here until Sunday" (the day the visit's last full day is, on this device's
- * calendar: it ends at that day's end or the next morning), or "last day!".
+ * The visit's last day (#190): it ends on today's calendar day, in the
+ * patch's `timeZone` when known, else this device's. A visit opening at 16:00
+ * for 48 h spans three days and only the third is its last (a "less than a
+ * day left" rule would say so from 16:00 on the second). Shared with the map
+ * marker (190f) so the plate and the map agree.
  */
-export function hereUntil(boss: Pick<PlayerBattleBoss, 'eventWindow'>, now: number): string {
-  if (lastDayOf(boss, now)) return BOSS_TEXT.lastDay;
-  // A minute before the end, so a window ending at midnight names the day it covers.
-  const end = new Date(Date.parse(boss.eventWindow.endsAt) - 60_000);
-  return BOSS_TEXT.hereUntil(WEEKDAYS[end.getDay()] ?? 'soon');
+export function lastDayOf(
+  boss: Pick<PlayerBattleBoss, 'eventWindow'>,
+  now: number,
+  timeZone: string | null = null,
+): boolean {
+  const end = lastMinute(boss);
+  if (now >= end) return true;
+  const zone = timeZone ?? '';
+  return localDateIn(zone, new Date(end)) === localDateIn(zone, new Date(now));
+}
+
+/** The weekday of `ms` in `timeZone` ("Sunday"), the device's own zone if that one is unknown. */
+function weekdayIn(ms: number, timeZone: string | null): string {
+  const format = (zone: string | null) =>
+    new Intl.DateTimeFormat('en-US', {
+      weekday: 'long',
+      ...(zone ? { timeZone: zone } : {}),
+    }).format(new Date(ms));
+  try {
+    return format(timeZone);
+  } catch {
+    return format(null);
+  }
+}
+
+/** "here until Sunday" (the visit's last day, on the patch's calendar), or "last day!". */
+export function hereUntil(
+  boss: Pick<PlayerBattleBoss, 'eventWindow'>,
+  now: number,
+  timeZone: string | null = null,
+): string {
+  if (lastDayOf(boss, now, timeZone)) return BOSS_TEXT.lastDay;
+  return BOSS_TEXT.hereUntil(weekdayIn(lastMinute(boss), timeZone));
 }
 
 // ── The result ──────────────────────────────────────────────────────────
@@ -309,16 +340,21 @@ export interface BossResultCard {
   readonly subtitle: string;
   /** Extra lines under the XP: the bundle, the coins, the tries chip, the fine print. */
   readonly lines: readonly string[];
-  readonly outcome: 'won' | 'lost' | 'out' | 'last-day' | 'scooted';
+  readonly outcome: 'won' | 'lost' | 'out' | 'last-day';
 }
 
 /**
  * The boss fight's card (mockup frames 3 and 5). A win names the bundle the
  * server put in the bag (never a client sum; the coins line is the usual one); a loss says how many tries
  * are left today, or that it stomped off (on its last day: "See you next
- * time!", never "Back tomorrow!"). A scoot keeps the usual words.
+ * time!", never "Back tomorrow!"). A scoot is null: the screen's usual card.
  */
-export function bossResult(b: PlayerBattle, bossName: string, now: number): BossResultCard | null {
+export function bossResult(
+  b: PlayerBattle,
+  bossName: string,
+  now: number,
+  timeZone: string | null = null,
+): BossResultCard | null {
   const result = b.view.phase.type === 'over' ? b.view.phase.result : null;
   if (!result || b.status !== 'finished') return null;
   const boss = b.boss;
@@ -333,9 +369,7 @@ export function bossResult(b: PlayerBattle, bossName: string, now: number): Boss
       outcome: 'won',
     };
   }
-  if (result.reason === 'forfeit') {
-    return { title: 'You scooted home.', subtitle: '', lines: [], outcome: 'scooted' };
-  }
+  if (result.reason === 'forfeit') return null;
   const tries = boss?.triesLeftToday ?? 0;
   if (tries > 0) {
     return {
@@ -345,7 +379,7 @@ export function bossResult(b: PlayerBattle, bossName: string, now: number): Boss
       outcome: 'lost',
     };
   }
-  if (boss && lastDayOf(boss, now)) {
+  if (boss && lastDayOf(boss, now, timeZone)) {
     return {
       title: BOSS_TEXT.outTitle(bossName),
       subtitle: BOSS_TEXT.lastDaySub,
@@ -371,7 +405,7 @@ export type BefriendView =
       readonly headline: string;
       /** The "not yet" line over the ask again, or null on the first ask. */
       readonly notYet: string | null;
-      /** Warmth hearts lit (one per "not yet" this player has seen), out of `WARMTH_HEARTS`. */
+      /** Warmth hearts lit (the server's step, 0–`BOSS_WARMTH_STEPS`), out of `WARMTH_HEARTS`. */
       readonly warmth: number;
       readonly charmsLine: string | null;
       readonly asksLeft: number;
@@ -400,33 +434,37 @@ export type BefriendView =
   | { readonly kind: 'have-one'; readonly headline: string; readonly sub: string };
 
 /**
- * What the befriend panel shows, from the server's `boss` view and what this
- * client has seen (the server never sends a warmth number, CLAUDE.md rule 6).
- * `asksMade`: asks this win so far; `misses`: "not yet"s this player has seen
- * (the hearts); `charms`: the bag's count, null while it loads.
+ * What the befriend panel shows, from the server's `boss` view: the hearts
+ * are its coarse warmth step (never odds, CLAUDE.md rule 6), and the joined
+ * and have-one cards name the base form that joins (#820). `name` is the
+ * boss's; `asksMade`: asks this win so far; `charms`: the bag's count, null
+ * while it loads.
  */
 export function befriendView(input: {
   readonly boss: PlayerBattleBoss | undefined;
   readonly name: string;
   readonly asksMade: number;
-  readonly misses: number;
   readonly charms: number | null;
 }): BefriendView {
-  const { boss, name, asksMade, misses, charms } = input;
+  const { boss, name, asksMade, charms } = input;
   if (!boss) return { kind: 'none' };
-  const warmth = Math.min(WARMTH_HEARTS - 1, Math.max(0, misses));
+  const warmth = Math.min(BOSS_WARMTH_STEPS, Math.max(0, boss.warmth));
   switch (boss.befriend) {
     case 'none':
       return { kind: 'none' };
     case 'joined':
       return {
         kind: 'joined',
-        headline: BOSS_TEXT.joined(name),
-        sub: BOSS_TEXT.joinedSub(name),
+        headline: BOSS_TEXT.joined(boss.baseName),
+        sub: BOSS_TEXT.joinedSub(boss.baseName),
         fine: BOSS_TEXT.joinedFine,
       };
     case 'have-one':
-      return { kind: 'have-one', headline: BOSS_TEXT.haveOne(name), sub: BOSS_TEXT.haveOneSub };
+      return {
+        kind: 'have-one',
+        headline: BOSS_TEXT.haveOne(boss.baseName),
+        sub: BOSS_TEXT.haveOneSub,
+      };
     case 'offer':
     case 'not-yet': {
       const notYet = boss.befriend === 'not-yet' ? BOSS_TEXT.notYet(name) : null;

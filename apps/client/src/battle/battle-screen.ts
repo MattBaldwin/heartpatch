@@ -148,6 +148,8 @@ export interface BattleScreenOptions {
   onRareFind?: (scale: number) => void;
   /** Heart Charms in the player's bag on a map (the wild battle's button shows it). */
   charms?: (mapId: string) => Promise<number>;
+  /** A patch's time zone, when its map is loaded (a mini-boss's last day, #190). */
+  timeZone?: (mapId: string) => string | null;
   /** The player's bag on a map, item id → count (the potion picker shows it, #214). */
   items?: (mapId: string) => Promise<Readonly<Record<string, number>>>;
   /** The player's squishies' nicknames on a map, by squishy id (#141). */
@@ -214,7 +216,10 @@ export interface BattleDebug {
     readonly picking: number | null;
     readonly picks: Readonly<Record<number, string>>;
     readonly asks: number;
-    readonly misses: number;
+    /** The server's warmth step on the card (0–4). */
+    readonly warmth: number;
+    /** Heart Charm recounts since the fight finished (on arrival and after each ask). */
+    readonly recounts: number;
   } | null;
 }
 
@@ -599,9 +604,11 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       void submit(action);
     },
     now: gameNow,
+    timeZone: (b) => options.timeZone?.(b.mapId) ?? null,
     charms: () => charms,
     refreshCharms: (b) => refreshCharms(b),
     befriend: api.befriend,
+    fetch: (id) => api.get(id),
     newKey: newIdempotencyKey,
     replace: (b) => {
       if (battle?.id !== b.id) return;
@@ -1388,7 +1395,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       void refreshPotions(next);
     }
     hud.setControls(replaying ? { type: 'hidden' } : { type: 'waiting' });
-    if (isTeamBattle(next)) bossFight.playing();
+    if (isTeamBattle(next)) bossFight.playing(next, queue);
     if (queue.length === 0) settle();
     else playNext();
   };
@@ -1817,7 +1824,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
               picking: bossFight.debug.picker?.steps[bossFight.debug.picker.at]?.slot ?? null,
               picks: bossFight.debug.picker?.picks ?? {},
               asks: bossFight.debug.asks,
-              misses: bossFight.debug.misses,
+              warmth: bossFight.debug.warmth,
+              recounts: bossFight.debug.recounts,
             }
           : null,
       };

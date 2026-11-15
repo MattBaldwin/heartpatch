@@ -27,17 +27,22 @@ export const TEAM_ARENA = {
       { x: 2.25, z: -2.14 },
     ],
     3: [
-      { x: -3.3, z: -3.52 },
+      { x: -4.3, z: -3.77 },
       { x: 0.4, z: -2.6 },
-      { x: 4.1, z: -1.68 },
+      { x: 5.1, z: -1.43 },
     ],
-  } as Readonly<Record<1 | 2 | 3, readonly { x: number; z: number }[]>>, // TUNE: a close-up squishy is ~2.5 wide, so 3.8 apart, across the camera's view (yaw −14°), near the camera
+  } as Readonly<Record<1 | 2 | 3, readonly { x: number; z: number }[]>>, // TUNE: a close-up squishy is ~2.5 wide, so 4.8 apart (gaps the boss shows through), across the camera's view (yaw −14°), near the camera
   /** The boss: far back and centred on screen. */
-  boss: { x: -1.0, z: 5.2 }, // TUNE
+  boss: { x: -1.0, z: 9.5 }, // TUNE: far enough back that its feet stand above the row on screen
   /** Where the Keeper stands: this far left of, and behind, the row's left end. */
   keeperBeside: { x: 2.2, z: 1.2 }, // TUNE
   /** The boss's size against a usual fighter's (plan §10: "about 1.8×"). */
-  bossScale: 1.8, // TUNE
+  bossScale: 2.2, // TUNE: drawn bigger than 1.8× because it stands further back; reads as ~1.8× on screen
+  /**
+   * The camera's tilt for a team fight: steeper than the 1-v-1's, so the
+   * boss's row stands clearly above the friends' on screen (arena A).
+   */
+  pitch: (21 * Math.PI) / 180, // TUNE
 } as const;
 
 export const FIGHTER = {

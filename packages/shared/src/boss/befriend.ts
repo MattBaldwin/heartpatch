@@ -1,3 +1,4 @@
+import { BOSS_WARMTH_STEPS } from '../schemas/battle.js';
 import type { BossBefriendRules } from '../schemas/data/boss-events.js';
 import type { EvolutionStep } from '../care/growth.js';
 import { deriveSeed, Rng, type Seed } from '../rng/index.js';
@@ -17,6 +18,21 @@ export function bossBefriendChance(
   const chance =
     rules.basePercent + rules.perStandingPercent * standing + rules.perMissPercent * misses;
   return Math.max(0, Math.min(100, chance));
+}
+
+/**
+ * How warm a boss kind is to this Keeper, as a coarse step from 0 to
+ * `BOSS_WARMTH_STEPS` (#190 ruling on PR #827): the hearts the "not yet" card
+ * lights, carried across visits. Never the misses or the odds themselves: the
+ * misses are scaled onto the steps, the first miss lights a heart, and
+ * the top step means the next ask always works whatever `sureAfterMisses` is.
+ */
+export function bossWarmthStep(rules: BossBefriendRules, misses: number): number {
+  if (misses <= 0) return 0;
+  if (misses >= rules.sureAfterMisses) return BOSS_WARMTH_STEPS;
+  // Any miss lights a heart; the last heart waits for the sure ask.
+  const step = Math.ceil((misses / rules.sureAfterMisses) * BOSS_WARMTH_STEPS);
+  return Math.min(BOSS_WARMTH_STEPS - 1, step);
 }
 
 /**

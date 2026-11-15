@@ -580,6 +580,13 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   // measures again).
   const hold = createSheetHold();
   const holdHeight = (mode: ControlMode): void => {
+    // A team battle (#190, arena A): the friends' row and the camera sit
+    // above the sheet's full share, not its height, so a playing round
+    // shrinks the sheet to its one-line caption with nothing to chase.
+    if (team) {
+      releaseHold();
+      return;
+    }
     const held = hold.next(mode.type, sheet.getBoundingClientRect().height);
     sheet.style.minHeight = held === null ? '' : `${String(held)}px`;
   };

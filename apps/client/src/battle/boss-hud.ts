@@ -42,6 +42,13 @@ export interface BossHud {
    */
   placeFriends: (xs: ReadonlyMap<number, number>) => void;
   setChips: (chips: { tries: number | null; until: string | null }) => void;
+  /** The "Round N" pill (mockup frame 1), or null to hide it. */
+  setRound: (round: number | null) => void;
+  /**
+   * The turn-order strip while a round plays (mockup frame 1): who moves, in
+   * the order the server's log has them, the one moving now outlined. Null hides it.
+   */
+  setOrder: (order: { movers: readonly OrderMover[]; current: number } | null) => void;
   /** "Stomp again!" next to the boss, or a friend's callout over its plate. */
   callout: (who: 'boss' | number, text: string) => void;
   showPicker: (
@@ -54,6 +61,12 @@ export interface BossHud {
 }
 
 const CALLOUT_MS = 1100; // TUNE: the HUD's own callout length
+
+/** One mover on the order strip: the boss, or a friend by slot. */
+export interface OrderMover {
+  readonly who: 'boss' | number;
+  readonly name: string;
+}
 
 const bar = (testId: string) => {
   const fill = el('div', { class: 'battle-energy-fill' });
@@ -93,7 +106,19 @@ export function mountBossHud(): BossHud {
     el('div', { class: 'boss-plate-row boss-plate-chips' }, tries, until),
   );
   const friendRow = el('div', { class: 'boss-friends', 'data-testid': 'boss-friends' });
-  const top = el('div', { class: 'boss-top' }, bossPlate, bossCallout, friendRow);
+  const round = el('span', { class: 'boss-round', 'data-testid': 'boss-round' });
+  round.hidden = true;
+  const orderDots = el('span', { class: 'boss-order-dots' });
+  const order = el(
+    'div',
+    { class: 'boss-order', 'data-testid': 'boss-order', role: 'img' },
+    el('span', { class: 'boss-order-label', 'aria-hidden': 'true' }, BOSS_TEXT.order),
+    orderDots,
+  );
+  order.hidden = true;
+  // The boss plate with the order strip under it, centred (mockup frame 1).
+  const head = el('div', { class: 'boss-head' }, bossPlate, order);
+  const top = el('div', { class: 'boss-top' }, round, head, bossCallout, friendRow);
   const picker = el('div', { class: 'boss-picker', 'data-testid': 'boss-picker' });
   picker.hidden = true;
 
@@ -161,7 +186,7 @@ export function mountBossHud(): BossHud {
       if (row.width <= 0) return;
       const placed = [...friendNodes].every(([slot]) => xs.has(slot));
       friendRow.classList.toggle('boss-friends-placed', placed);
-      const gap = 6;
+      const gap = 8;
       const n = Math.max(1, friendNodes.size);
       // Never wider than a third of the row less the gaps, so plates never overlap.
       const width = Math.min(114, (row.width - gap * (n - 1)) / n);
@@ -187,6 +212,31 @@ export function mountBossHud(): BossHud {
         node.node.style.width = placed ? `${String(Math.floor(width))}px` : '';
       });
     },
+    setRound: (n) => {
+      round.hidden = n === null;
+      round.textContent = n === null ? '' : BOSS_TEXT.round(n);
+    },
+    setOrder: (o) => {
+      order.hidden = o === null || o.movers.length === 0;
+      if (!o) return;
+      orderDots.replaceChildren(
+        ...o.movers.map((m, i) =>
+          el(
+            'span',
+            {
+              class: `boss-order-dot ${
+                m.who === 'boss' ? 'boss-order-boss' : `boss-order-friend-${String(m.who % 3)}`
+              }${i === o.current ? ' boss-order-now' : ''}`,
+            },
+            m.who === 'boss' ? '👣' : (m.name[0] ?? ''),
+          ),
+        ),
+      );
+      order.setAttribute(
+        'aria-label',
+        BOSS_TEXT.orderLabel(o.movers.map((m) => m.name).join(', ')),
+      );
+    },
     setChips: (chips) => {
       tries.hidden = chips.tries === null;
       tries.textContent = chips.tries === null ? '' : BOSS_TEXT.triesLeft(chips.tries);
@@ -199,7 +249,12 @@ export function mountBossHud(): BossHud {
     },
     showPicker: (state, moves, handlers) => {
       picker.hidden = false;
-      const chips = el('div', { class: 'boss-steps', 'data-testid': 'boss-steps' });
+      const chips = el('div', {
+        class: 'boss-steps',
+        'data-testid': 'boss-steps',
+        role: 'group',
+        'aria-label': BOSS_TEXT.goBackHint,
+      });
       const ready = state.at >= state.steps.length;
       state.steps.forEach((step, i) => {
         const pick = state.picks[step.slot];
@@ -288,9 +343,6 @@ export function mountBossHud(): BossHud {
             grid.append(button);
           }
           body.push(header, grid);
-          if (Object.keys(state.picks).length > 0) {
-            body.push(el('p', { class: 'battle-hint boss-hint' }, BOSS_TEXT.goBackHint));
-          }
         }
       }
       if (handlers.onSameAgain) {
@@ -321,7 +373,7 @@ export function mountBossHud(): BossHud {
   };
 }
 
-/** The warmth hearts: one lit per "not yet" seen, never a number (mockup frame 3). */
+/** The warmth hearts: the server's coarse step, lit as hearts, never a number (mockup frame 3). */
 function warmthRow(lit: number): HTMLElement {
   const row = el('div', {
     class: 'boss-warmth',
@@ -382,9 +434,15 @@ export function befriendPanel(
         );
       } else {
         children.push(el('p', { class: 'boss-befriend-title' }, view.headline));
+        // Warmer from an earlier visit's "not yet"s: the hearts carry across.
+        if (view.warmth > 0) children.push(warmthRow(view.warmth));
       }
       if (view.charmsLine) children.push(el('p', { class: 'boss-charm-pill' }, view.charmsLine));
-      const dots = el('span', { class: 'boss-dots', 'aria-label': String(view.asksLeft) });
+      const dots = el('span', {
+        class: 'boss-dots',
+        role: 'img',
+        'aria-label': BOSS_TEXT.asksLeftLabel(view.asksLeft),
+      });
       for (let i = 0; i < view.asksLeft; i++) dots.append(el('span', { class: 'boss-dot' }));
       children.push(
         el('p', { class: 'battle-hint boss-asks-left' }, `${BOSS_TEXT.asksLeft} `, dots),

@@ -390,6 +390,8 @@ export class BattleScene {
     this.#camera = new CameraDirector(
       { a: this.#rigs.a.home, b: this.#rigs.b.home },
       options.reducedMotion,
+      // A team fight (#190) looks down a little more, so the boss stands above the row.
+      team.length > 0 ? { ...BATTLE_CAMERA, pitch: TEAM_ARENA.pitch } : BATTLE_CAMERA,
     );
 
     // The stage's camera is the map camera with no input reaching it (the

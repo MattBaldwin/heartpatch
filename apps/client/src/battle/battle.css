@@ -1049,16 +1049,26 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   pointer-events: none;
 }
 
-.boss-plate {
+/* The boss plate with the order strip under it (mockup frame 1). */
+.boss-head {
   position: absolute;
   top: calc(env(safe-area-inset-top) + 112px);
   right: calc(env(safe-area-inset-right) + 12px);
   left: calc(env(safe-area-inset-left) + 12px);
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  align-items: center;
+  gap: 8px;
   max-width: 560px;
   margin: 0 auto;
+}
+
+.boss-plate {
+  display: flex;
+  box-sizing: border-box;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
   padding: 8px 12px;
   border: 2px solid rgb(255 255 255 / 80%);
   border-radius: 18px;
@@ -1147,6 +1157,12 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   animation: boss-pop 180ms ease-out;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .boss-callout-show {
+    animation: none;
+  }
+}
+
 @keyframes boss-pop {
   from {
     scale: 0.6;
@@ -1160,7 +1176,9 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 .boss-friends {
   position: absolute;
   right: calc(env(safe-area-inset-right) + 16px);
-  bottom: calc(var(--battle-sheet-h, 37vh) + 8px);
+  /* Above the sheet's full share (the picker's height), not its height now:
+     the sheet shrinks to one line while a round plays and nothing moves. */
+  bottom: calc(var(--battle-sheet-vh, 37) * 1vh + env(safe-area-inset-bottom) + 8px);
   left: calc(env(safe-area-inset-left) + 16px);
   display: flex;
   justify-content: space-around;
@@ -1172,6 +1190,7 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 .boss-friend {
   position: relative;
   display: flex;
+  box-sizing: border-box;
   flex: 0 1 114px;
   flex-direction: column;
   gap: 4px;
@@ -1199,6 +1218,86 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   opacity: 0.6;
 }
 
+/* Picker A1 fills the sheet on its own (mockup: steps, "What should Bun do?",
+   the moves): the opening line steps aside while it shows. While a round
+   plays, the caption is the sheet's one line (no "…" under it). */
+.battle-hud-team .battle-sheet:has(.boss-picker:not([hidden])) > .battle-caption,
+.battle-hud-team .battle-waiting {
+  display: none;
+}
+
+/* "Round 2", top left, level with the ✕ (mockup frame 1). */
+.boss-round {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 58px);
+  left: calc(env(safe-area-inset-left) + 12px);
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 2px solid rgb(255 255 255 / 80%);
+  border-radius: 999px;
+  background: rgb(255 250 240 / 94%);
+  box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+/* Who moves, in the round's order; the one moving now outlined. */
+.boss-order {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgb(255 250 240 / 94%);
+  box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.boss-round[hidden],
+.boss-order[hidden] {
+  display: none;
+}
+
+.boss-order-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.boss-order-dot {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.boss-order-boss {
+  background: #e8dcf0;
+}
+
+.boss-order-friend-0 {
+  background: #ffc2dc;
+}
+
+.boss-order-friend-1 {
+  background: #ffe48a;
+}
+
+.boss-order-friend-2 {
+  background: #bfe8b0;
+}
+
+.boss-order-now {
+  outline: 3px solid #b8487a;
+}
+
 .boss-picker {
   display: flex;
   flex-direction: column;
@@ -1214,7 +1313,9 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   display: flex;
   flex: 1 1 0;
   flex-direction: column;
+  justify-content: center;
   min-width: 0;
+  min-height: 44px;
   padding: 4px 8px;
   border: 0;
   border-radius: 14px;

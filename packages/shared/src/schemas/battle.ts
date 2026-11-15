@@ -551,10 +551,13 @@ export type LiveBattleView = z.infer<typeof LiveBattleViewSchema>;
 export const BossBefriendStateSchema = z.enum(['none', 'offer', 'not-yet', 'joined', 'have-one']);
 export type BossBefriendState = z.infer<typeof BossBefriendStateSchema>;
 
+/** The top `PlayerBattle.boss.warmth` step: the next ask always works (#190). */
+export const BOSS_WARMTH_STEPS = 4;
+
 /**
  * A mini-boss fight's extras (#190 plan §1), to its own Keeper only. Never
- * the odds, the warmth or the schedule (CLAUDE.md rule 6): the client counts
- * "not yet" hearts from what it's been told, not from a number here.
+ * the odds, the misses or the schedule (CLAUDE.md rule 6): warmth is a coarse
+ * 0–`BOSS_WARMTH_STEPS` step for the "not yet" hearts, nothing finer.
  */
 export const PlayerBattleBossSchema = z.object({
   /** The visit the fight was in. */
@@ -566,6 +569,10 @@ export const PlayerBattleBossSchema = z.object({
   /** Asks this win still has (0 once it joined, if they have one, or the asks closed). */
   asksLeft: z.number().int().min(0),
   befriend: BossBefriendStateSchema,
+  /** The boss line's base form's name: the friend who joins ("You already have a Puddlet!"). */
+  baseName: z.string().min(1),
+  /** How warm this boss kind is to the Keeper, 0–`BOSS_WARMTH_STEPS`, kept across visits. */
+  warmth: z.number().int().min(0).max(BOSS_WARMTH_STEPS),
 });
 export type PlayerBattleBoss = z.infer<typeof PlayerBattleBossSchema>;
 

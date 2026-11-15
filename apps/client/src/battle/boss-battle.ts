@@ -13,7 +13,7 @@ import type { BattleHud } from './battle-hud.js';
 import type { PlaybackStep, ShownState } from './battle-playback.js';
 import type { BattleScene } from './battle-scene.js';
 import { otherSide, type BattleContent } from './battle-view.js';
-import { befriendPanel, mountBossHud, type PickerMove } from './boss-hud.js';
+import { befriendPanel, mountBossHud, type OrderMover, type PickerMove } from './boss-hud.js';
 import {
   befriendView,
   bossCallout,
@@ -47,10 +47,14 @@ export interface BossBattleDeps {
   /** Sends the round (the screen's REST submit, with its retries). */
   readonly submit: (action: PlayerBattleAction) => void;
   readonly now: () => number;
+  /** The patch's time zone for the visit's days, or null for this device's. */
+  readonly timeZone: (b: PlayerBattle) => string | null;
   /** Heart Charms in the bag (null while counting), and a fresh count. */
   readonly charms: () => number | null;
   readonly refreshCharms: (b: PlayerBattle) => Promise<number>;
   readonly befriend: (battleId: string, ask: number, key: string) => Promise<BossBefriendResponse>;
+  /** The battle as the server has it now (after a 409, the ask's state moved on). */
+  readonly fetch: (battleId: string) => Promise<PlayerBattle>;
   readonly newKey: () => string;
   /** The battle after an ask: the screen takes it and shows its card again. */
   readonly replace: (b: PlayerBattle) => void;
@@ -66,8 +70,8 @@ export interface BossBattle {
   plates: (b: PlayerBattle, shown: ShownState, names: BattleContent) => void;
   /** The round's picker, while the player can pick; hidden otherwise. */
   controls: (b: PlayerBattle, names: BattleContent, canPick: boolean) => void;
-  /** A batch of log steps starts playing. */
-  playing: () => void;
+  /** A batch of log steps starts playing (its moves fill the order strip). */
+  playing: (b: PlayerBattle, steps: readonly PlaybackStep[]) => void;
   /** A step plays: its callout over the right plate, and the boss's "Stomp again!". */
   step: (b: PlayerBattle, step: PlaybackStep, names: BattleContent) => void;
   /** The card's words and its befriend panel, or null when it isn't a boss card. */
@@ -79,7 +83,10 @@ export interface BossBattle {
   readonly debug: {
     readonly picker: PickerState | null;
     readonly asks: number;
-    readonly misses: number;
+    /** The server's warmth step on the card now (0–4). */
+    readonly warmth: number;
+    /** Heart Charm recounts for the finished fight (once on arrival, once per ask). */
+    readonly recounts: number;
   };
 }
 
@@ -92,12 +99,23 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
   let pickerTurn = -1;
   let lastPicks: Readonly<Record<number, string>> | null = null;
   let bossMoves = 0;
+  /** The round playing now (its number), or null while picking. */
+  let playingRound: number | null = null;
+  /** The order strip: this round's movers from the log, and the one moving now. */
+  let movers: OrderMover[] = [];
+  let moving = -1;
   let asks = 0;
-  let misses = 0;
+  let warmth = 0;
   let busy = false;
   let problem: string | null = null;
-  /** The bag was counted for the ask (the card waits for it once). */
-  let counting = false;
+  /**
+   * The finished fight's bag was recounted: once when it arrives (the win's
+   * bundle just put Heart Charms in it), then after each ask spends some.
+   */
+  let counted = false;
+  let recounts = 0;
+  /** The battle the card was last drawn from: a late count redraws this, never an older one. */
+  let latest: PlayerBattle | null = null;
   /** Frames left to wait for the arena's first picture before the plates line up. */
   let placing = 0;
   let placeFrame = 0;
@@ -110,11 +128,16 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     pickerTurn = -1;
     lastPicks = null;
     bossMoves = 0;
+    playingRound = null;
+    movers = [];
+    moving = -1;
     asks = 0;
-    misses = 0;
+    warmth = 0;
     busy = false;
     problem = null;
-    counting = false;
+    counted = false;
+    recounts = 0;
+    latest = null;
     keys.clear();
   };
 
@@ -200,6 +223,14 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     });
   };
 
+  /** Counts the bag again, then shows the card again with the new count. */
+  const recount = (b: PlayerBattle) => {
+    recounts += 1;
+    void deps.refreshCharms(b).then(() => {
+      if (battleId === b.id && latest?.id === b.id) deps.replace(latest);
+    });
+  };
+
   const showAsk = (b: PlayerBattle, ask: number) => {
     if (busy || battleId !== b.id) return;
     busy = true;
@@ -216,13 +247,9 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
         if (battleId !== b.id) return;
         busy = false;
         asks = Math.max(asks, ask);
-        if (res.outcome === 'not-yet') misses += 1;
-        // The ask spent charms: count again, and show the card again only if the count moved.
-        const before = deps.charms();
-        void deps.refreshCharms(res.battle).then((count) => {
-          if (battleId === res.battle.id && count !== before) deps.replace(res.battle);
-        });
         deps.replace(res.battle);
+        // The ask spent charms: count the bag again.
+        recount(res.battle);
       })
       .catch((err: unknown) => {
         if (battleId !== b.id) return;
@@ -230,10 +257,20 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
         // A 409 says why in kid words (too few charms, already have one, too late).
         problem =
           err instanceof ApiRequestError ? err.message : 'Hmm, that didn’t work. Try again?';
-        void deps.refreshCharms(b).then(() => {
-          if (battleId === b.id) deps.replace(b);
-        });
         deps.replace(b);
+        recount(b);
+        if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
+          // The ask moved on without us (closed, answered, joined): show it as
+          // the server has it, so the same ask isn't offered again. The error
+          // stays up until the next ask.
+          void deps
+            .fetch(b.id)
+            .then((fresh) => {
+              if (battleId !== b.id || busy) return;
+              deps.replace(fresh);
+            })
+            .catch(() => undefined);
+        }
       });
   };
 
@@ -245,7 +282,7 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
       deps.hud.setTeam({
         top: ui.top,
         sheet: ui.picker,
-        topEdge: ui.top.querySelector('.boss-plate') ?? ui.top,
+        topEdge: ui.top.querySelector('.boss-head') ?? ui.top,
         bottomEdge: ui.top.querySelector('.boss-friends') ?? ui.top,
       });
     },
@@ -261,10 +298,12 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
       ui.setPlates(bossPlates(b, shown, names, (side, slot) => deps.nameOf(b, side, slot)));
       cancelAnimationFrame(placeFrame);
       place(b);
+      // "Round 1" while the first is picked; the round's own number while it plays.
+      ui.setRound(playingRound ?? (b.status === 'active' ? b.view.turn + 1 : null));
       const boss = b.boss;
       ui.setChips({
         tries: boss ? boss.triesLeftToday : null,
-        until: boss ? hereUntil(boss, deps.now()) : null,
+        until: boss ? hereUntil(boss, deps.now(), deps.timeZone(b)) : null,
       });
     },
     controls: (b, names, canPick) => {
@@ -273,18 +312,38 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
         drawn = null;
         return;
       }
+      // Picking again: the round that played is done.
+      if (playingRound !== null) {
+        playingRound = null;
+        ui.setOrder(null);
+        ui.setRound(b.view.turn + 1);
+      }
       if (!picker || pickerTurn !== b.view.turn) {
         picker = pickerFor(b, (side, slot) => deps.nameOf(b, side, slot));
         pickerTurn = b.view.turn;
       }
       if (picker !== drawn) drawPicker(b, names);
     },
-    playing: () => {
+    playing: (b, steps) => {
       bossMoves = 0;
       ui.hidePicker();
       drawn = null;
+      playingRound = Math.max(1, b.view.turn);
+      ui.setRound(playingRound);
+      movers = steps
+        .filter((s) => s.kind === 'move')
+        .map((s) => ({
+          who: s.side === b.mySide ? s.slot : ('boss' as const),
+          name: deps.nameOf(b, s.side, s.slot),
+        }));
+      moving = -1;
+      ui.setOrder({ movers, current: moving });
     },
     step: (b, step, names) => {
+      if (step.kind === 'move' && movers.length > 0) {
+        moving = Math.min(movers.length - 1, moving + 1);
+        ui.setOrder({ movers, current: moving });
+      }
       const extra = bossCallout(step, b.mySide, bossMoves, names.moves);
       if (step.kind === 'move' && step.side !== b.mySide) bossMoves += 1;
       if (extra) ui.callout('boss', extra);
@@ -293,23 +352,23 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     result: (b, names) => {
       const boss = b.view.sides[otherSide(b.mySide)].squishies[bossSlot(b)];
       const name = names.speciesName(boss?.speciesId ?? '');
-      const card = bossResult(b, name, deps.now());
+      const card = bossResult(b, name, deps.now(), deps.timeZone(b));
       if (!card) return null;
+      latest = b;
       const state = b.boss?.befriend;
+      warmth = b.boss?.warmth ?? 0;
       const view = befriendView({
         boss: b.boss,
         name,
         // A resumed "not yet" with asks left was the first ask (`asksPerWin` is 2).
         asksMade: state === 'offer' ? 0 : Math.max(asks, 1),
-        misses: Math.max(misses, state === 'not-yet' ? 1 : 0),
         charms: deps.charms(),
       });
-      if (view.kind === 'ask' && deps.charms() === null && !counting) {
-        // The ask shows the bag's count: count it, then show the card again.
-        counting = true;
-        void deps.refreshCharms(b).then(() => {
-          if (battleId === b.id) deps.replace(b);
-        });
+      if (!counted && view.kind === 'ask') {
+        // Counted when the fight opened, before the win's bundle landed: a kid
+        // with no charms before the fight has the bundle's 3 now.
+        counted = true;
+        recount(b);
       }
       const panel = befriendPanel(view, {
         busy,
@@ -328,7 +387,7 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
       return { ...card, extra: panel };
     },
     get debug() {
-      return { picker, asks, misses };
+      return { picker, asks, warmth, recounts };
     },
   };
 }

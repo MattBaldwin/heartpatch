@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { stubBossFight, type BossStubOptions } from './boss-stub.js';
+import { STUB_BASE_NAME, stubBossFight, type BossStubOptions } from './boss-stub.js';
 import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { realTap } from './touch.js';
@@ -23,7 +23,8 @@ interface BattleDebug {
     picking: number | null;
     picks: Record<string, string>;
     asks: number;
-    misses: number;
+    warmth: number;
+    recounts: number;
   } | null;
 }
 
@@ -70,6 +71,7 @@ test.describe('a mini-boss fight (#190)', () => {
     await expect(page.getByTestId('boss-plate')).toContainText('Lv');
     await expect(page.getByTestId('boss-tries')).toHaveText('🍀 2 tries left today');
     await expect(page.getByTestId('boss-until')).toContainText('here until');
+    await expect(page.getByTestId('boss-round')).toHaveText('Round 1');
     await expect.poll(async () => (await battleState(page))?.scene?.squishies).toBe(4);
     // The 1-v-1 pills step aside.
     await expect(page.getByTestId('battle-plate-mine')).toBeHidden();
@@ -95,6 +97,8 @@ test.describe('a mini-boss fight (#190)', () => {
     await expect(card).toContainText('You did it! 🎉');
     await expect(card).toContainText('In your bag: 3 Heart Charms');
     await expect(card.getByTestId('boss-befriend-ask')).toContainText('to be your friend? 💗💗💗');
+    // Counted again once the bundle landed: the 3 from before and the bundle's 3.
+    await expect(card.getByTestId('boss-befriend-ask')).toContainText('You have 6 Heart Charms');
     const ask = card.getByTestId('boss-ask');
     await expect(ask).toHaveText('Give 3 Heart Charms 💗');
     await expect(ask).toBeEnabled();
@@ -104,8 +108,12 @@ test.describe('a mini-boss fight (#190)', () => {
     await expect(card.getByTestId('boss-not-yet')).toContainText('likes you a little more now.');
     await expect(card.getByTestId('boss-warmth')).toHaveAttribute('data-lit', '1');
     await expect(card.getByTestId('boss-ask')).toHaveText('Ask again (3 💗)');
+    await expect(card.getByTestId('boss-befriend-ask')).toContainText('You have 3 Heart Charms');
     await realTap(card.getByTestId('boss-ask'));
-    await expect(card.getByTestId('boss-befriend-joined')).toContainText('joined your patch! 💗');
+    // The base form joins, by its own name (#820).
+    await expect(card.getByTestId('boss-befriend-joined')).toContainText(
+      `${STUB_BASE_NAME} joined your patch! 💗`,
+    );
 
     // Asks 1 then 2, each with its own key.
     expect(stub.asks.map((a) => a.body['ask'])).toEqual([1, 2]);
@@ -122,8 +130,48 @@ test.describe('a mini-boss fight (#190)', () => {
     await playRound(page);
     const card = page.getByTestId('battle-result');
     await expect(card).toBeVisible({ timeout: 60_000 });
-    await expect(card.getByTestId('boss-befriend-have-one')).toContainText('You already have a');
+    await expect(card.getByTestId('boss-befriend-have-one')).toContainText(
+      `You already have a ${STUB_BASE_NAME}! 💗`,
+    );
     await expect(card.getByTestId('boss-ask')).toHaveCount(0);
     expect(stub.asks).toHaveLength(0);
+  });
+
+  test('from no charms: the bundle is counted, then the ask spends it', async ({ browser }) => {
+    const page = await newPlayer(browser, uniqueName('stomp'));
+    const stub = await bossFight(page, { charms: 0, befriend: ['not-yet'] });
+    await playRound(page);
+    const card = page.getByTestId('battle-result');
+    await expect(card).toBeVisible({ timeout: 60_000 });
+    // Not the 0 counted when the fight opened: the win's 3 are in the bag now.
+    const ask = card.getByTestId('boss-befriend-ask');
+    await expect(ask).toContainText('You have 3 Heart Charms');
+    await expect(card.getByTestId('boss-ask')).toBeEnabled();
+    await realTap(card.getByTestId('boss-ask'));
+    // Spent: none left, so the ask again points home for more.
+    await expect(card.getByTestId('boss-warmth')).toHaveAttribute('data-lit', '1');
+    await expect(ask).toContainText('You have 0 Heart Charms');
+    await expect(card.getByTestId('boss-ask')).toHaveText('You need 3 💗');
+    await expect(card.getByTestId('boss-ask')).toBeDisabled();
+    await expect(card.getByTestId('boss-make-charms')).toBeVisible();
+    expect(stub.charms()).toBe(0);
+  });
+
+  test('a refused ask shows why, looks again, and retries with the same key', async ({
+    browser,
+  }) => {
+    const page = await newPlayer(browser, uniqueName('stomp'));
+    const stub = await bossFight(page, { conflictOn: [1], befriend: ['joined'] });
+    await playRound(page);
+    const card = page.getByTestId('battle-result');
+    await expect(card).toBeVisible({ timeout: 60_000 });
+    await realTap(card.getByTestId('boss-ask'));
+    await expect(card.getByRole('alert')).toContainText('mixed up');
+    // The battle was fetched again, so the card shows the server's state.
+    await expect.poll(() => stub.fetches()).toBeGreaterThan(0);
+    await realTap(card.getByTestId('boss-ask'));
+    await expect(card.getByTestId('boss-befriend-joined')).toBeVisible();
+    expect(stub.asks.map((a) => a.body['ask'])).toEqual([1, 1]);
+    expect(stub.asks[0]!.key).toBe(stub.asks[1]!.key);
   });
 });

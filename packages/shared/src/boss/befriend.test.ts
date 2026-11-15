@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { BOSS_EVENTS } from '../data/server/boss-events.js';
 import { BossEventRulesSchema } from '../schemas/data/boss-events.js';
-import { baseFormOf, bossBefriendChance, bossBefriendRoll, bossJoinLevel } from './befriend.js';
+import {
+  baseFormOf,
+  bossBefriendChance,
+  bossBefriendRoll,
+  bossJoinLevel,
+  bossWarmthStep,
+} from './befriend.js';
 
 const rules = BOSS_EVENTS.befriend;
 
@@ -9,6 +15,14 @@ describe('mini-boss befriending (#190 plan §3)', () => {
   it('ships valid rules with the owner-approved numbers', () => {
     expect(BossEventRulesSchema.safeParse(BOSS_EVENTS).success).toBe(true);
     expect(rules).toMatchObject({ charmsPerAsk: 3, asksPerWin: 2, sureAfterMisses: 4 });
+  });
+
+  it('shows warmth as a coarse 0–4 step, the top one only when the next ask is sure', () => {
+    expect([0, 1, 2, 3, 4, 9].map((m) => bossWarmthStep(rules, m))).toEqual([0, 1, 2, 3, 4, 4]);
+    const quick = { ...rules, sureAfterMisses: 2 };
+    expect([0, 1, 2, 5].map((m) => bossWarmthStep(quick, m))).toEqual([0, 2, 4, 4]);
+    const slow = { ...rules, sureAfterMisses: 8 };
+    expect([0, 1, 7, 8].map((m) => bossWarmthStep(slow, m))).toEqual([0, 1, 3, 4]);
   });
 
   it('starts at the base, adds per squishy standing and per earlier miss', () => {

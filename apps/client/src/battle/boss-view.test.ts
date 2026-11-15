@@ -14,6 +14,7 @@ import {
   isAreaMove,
   isTeamBattle,
   lastDayOf,
+  WARMTH_HEARTS,
   pickerFor,
   pickerReady,
   pickMove,
@@ -73,6 +74,8 @@ function battle(
       charmsPerAsk: 3,
       asksLeft: 2,
       befriend: 'none',
+      baseName: 'Puddlet',
+      warmth: 0,
     },
     ...over,
   } as unknown as PlayerBattle;
@@ -208,7 +211,45 @@ describe('a mini-boss fight on screen (#190)', () => {
     const b = battle();
     expect(hereUntil(b.boss!, NOW)).toMatch(/^here until \w+day$/);
     expect(lastDayOf(b.boss!, NOW)).toBe(false);
-    expect(hereUntil(b.boss!, Date.parse('2026-11-16T00:00:00.000Z'))).toBe(BOSS_TEXT.lastDay);
+  });
+
+  describe('the last day is the calendar day the visit ends on', () => {
+    // A visit opening at 16:00 on Saturday in New York for 48 h ends at 16:00
+    // Monday (21:00Z): Saturday, Sunday and Monday, three days of tries.
+    const zone = 'America/New_York';
+    const visit = { eventWindow: { id: '2026-11-14', endsAt: '2026-11-16T21:00:00.000Z' } };
+    const at = (iso: string) => Date.parse(iso);
+
+    it('not the day before, even under a day from the end (17:00 Sunday)', () => {
+      const sunday5pm = at('2026-11-15T22:00:00.000Z');
+      expect(lastDayOf(visit, sunday5pm, zone)).toBe(false);
+      expect(hereUntil(visit, sunday5pm, zone)).toBe('here until Monday');
+    });
+
+    it("from the patch's midnight on the day it ends, and once it has ended", () => {
+      expect(lastDayOf(visit, at('2026-11-16T04:59:00.000Z'), zone)).toBe(false);
+      expect(lastDayOf(visit, at('2026-11-16T05:00:00.000Z'), zone)).toBe(true);
+      expect(hereUntil(visit, at('2026-11-16T14:00:00.000Z'), zone)).toBe(BOSS_TEXT.lastDay);
+      expect(lastDayOf(visit, at('2026-11-16T22:00:00.000Z'), zone)).toBe(true);
+    });
+
+    it("in the patch's zone, not the device's", () => {
+      // 01:00Z Monday is still Sunday evening in New York: not the last day there.
+      expect(lastDayOf(visit, at('2026-11-16T01:00:00.000Z'), zone)).toBe(false);
+      expect(lastDayOf(visit, at('2026-11-16T01:00:00.000Z'), 'Europe/London')).toBe(true);
+    });
+
+    it('a visit ending at midnight belongs to the day before', () => {
+      const midnight = { eventWindow: { id: '2026-11-14', endsAt: '2026-11-17T05:00:00.000Z' } };
+      expect(lastDayOf(midnight, at('2026-11-16T14:00:00.000Z'), zone)).toBe(true);
+      expect(hereUntil(midnight, at('2026-11-15T22:00:00.000Z'), zone)).toBe('here until Monday');
+    });
+
+    it('a kid out of tries at 17:00 the day before is told "back tomorrow"', () => {
+      const out = { ...battle().boss!, ...visit, triesLeftToday: 0 };
+      const card = bossResult(lost({ boss: out }), 'Rakelet', at('2026-11-15T22:00:00.000Z'), zone);
+      expect(card).toMatchObject({ outcome: 'out', subtitle: 'Back tomorrow!' });
+    });
   });
 
   describe('the result card', () => {
@@ -241,13 +282,18 @@ describe('a mini-boss fight on screen (#190)', () => {
         outcome: 'out',
         subtitle: 'Back tomorrow!',
       });
-      const last = bossResult(lost({ boss: out }), 'Rakelet', Date.parse('2026-11-16T01:00:00Z'))!;
+      const last = bossResult(
+        lost({ boss: out }),
+        'Rakelet',
+        Date.parse('2026-11-16T10:00:00Z'),
+        'Europe/London',
+      )!;
       expect(last).toMatchObject({ outcome: 'last-day', subtitle: 'See you next time!' });
       expect(JSON.stringify(last)).not.toContain('tomorrow');
     });
 
-    it('a scoot keeps the usual words', () => {
-      expect(bossResult(lost({}, 'forfeit'), 'Rakelet', NOW)?.outcome).toBe('scooted');
+    it('a scoot is left to the usual card (its words live in one place)', () => {
+      expect(bossResult(lost({}, 'forfeit'), 'Rakelet', NOW)).toBeNull();
     });
 
     it('nothing while the fight is on', () => {
@@ -259,21 +305,20 @@ describe('a mini-boss fight on screen (#190)', () => {
     const boss0 = battle().boss!;
     const view = (
       over: Partial<typeof boss0>,
-      extra: { charms?: number | null; misses?: number; asksMade?: number } = {},
+      extra: { charms?: number | null; asksMade?: number } = {},
     ) =>
       befriendView({
         boss: { ...boss0, ...over },
         name: 'Rakelet',
         asksMade: extra.asksMade ?? 0,
-        misses: extra.misses ?? 0,
         charms: extra.charms === undefined ? 7 : extra.charms,
       });
 
     it('nothing to ask while it is on or after a loss', () => {
       expect(view({ befriend: 'none' }).kind).toBe('none');
-      expect(
-        befriendView({ boss: undefined, name: 'x', asksMade: 0, misses: 0, charms: 1 }).kind,
-      ).toBe('none');
+      expect(befriendView({ boss: undefined, name: 'x', asksMade: 0, charms: 1 }).kind).toBe(
+        'none',
+      );
     });
 
     it('offers the ask with three hearts, the charms and the asks left', () => {
@@ -299,8 +344,8 @@ describe('a mini-boss fight on screen (#190)', () => {
       expect(view({ befriend: 'offer' }, { charms: null })).toMatchObject({ enabled: false });
     });
 
-    it('a "not yet" lights one heart per miss, never a number, and asks again', () => {
-      const v = view({ befriend: 'not-yet', asksLeft: 1 }, { misses: 1, asksMade: 1 });
+    it('a "not yet" lights the server\'s warmth step in hearts, and asks again', () => {
+      const v = view({ befriend: 'not-yet', asksLeft: 1, warmth: 1 }, { asksMade: 1 });
       expect(v).toMatchObject({
         kind: 'ask',
         notYet: 'Not yet! Rakelet likes you a little more now.',
@@ -308,13 +353,14 @@ describe('a mini-boss fight on screen (#190)', () => {
         button: 'Ask again (3 💗)',
         ask: 2,
       });
-      expect(view({ befriend: 'not-yet', asksLeft: 1 }, { misses: 9 })).toMatchObject({
-        warmth: 4,
-      });
+      expect(view({ befriend: 'not-yet', asksLeft: 1, warmth: 9 })).toMatchObject({ warmth: 4 });
+      // Warmth carries across visits: the first ask of a later win shows it too.
+      expect(view({ befriend: 'offer', warmth: 2 })).toMatchObject({ kind: 'ask', warmth: 2 });
+      expect(WARMTH_HEARTS).toBe(5);
     });
 
     it('no asks left: it will be back next visit', () => {
-      expect(view({ befriend: 'not-yet', asksLeft: 0 }, { misses: 2 })).toEqual({
+      expect(view({ befriend: 'not-yet', asksLeft: 0, warmth: 2 })).toEqual({
         kind: 'closed',
         headline: 'Not yet! Rakelet likes you a little more now.',
         warmth: 2,
@@ -327,10 +373,11 @@ describe('a mini-boss fight on screen (#190)', () => {
       });
     });
 
-    it('joined', () => {
+    it('joined: the base form is the friend who hops over (#820)', () => {
       expect(view({ befriend: 'joined', asksLeft: 0 })).toMatchObject({
         kind: 'joined',
-        headline: 'Rakelet joined your patch! 💗',
+        headline: 'Puddlet joined your patch! 💗',
+        sub: 'A little Puddlet hopped over to you.',
       });
     });
 
@@ -338,7 +385,7 @@ describe('a mini-boss fight on screen (#190)', () => {
       const v = view({ befriend: 'have-one', asksLeft: 0 });
       expect(v).toEqual({
         kind: 'have-one',
-        headline: 'You already have a Rakelet! 💗',
+        headline: 'You already have a Puddlet! 💗',
         sub: "It's so happy to see you again.",
       });
     });

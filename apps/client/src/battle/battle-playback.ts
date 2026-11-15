@@ -222,6 +222,8 @@ export function playbackSteps(
     // A fence (#203) is a thing, not a squishy: "The Hedge".
     if (squishy.fence !== undefined) return `The ${species}`;
     if (isMine(battle, side)) return species;
+    // A mini-boss (#190) is a visitor, not a wild squishy: just its name.
+    if (squishy.boss === true) return species;
     if (battle.live)
       return options.opponent ? `${options.opponent}'s ${species}` : `Their ${species}`;
     return `Wild ${species}`;
