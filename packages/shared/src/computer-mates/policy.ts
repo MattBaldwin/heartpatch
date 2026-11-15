@@ -264,13 +264,15 @@ export function challengesLeft(
 
 /**
  * Whether a mate may challenge right now (plan §1 C, D): never in catch-up,
- * in Off, past the weekly cap, in quiet hours, or while already battling.
+ * in Off, past the weekly cap, in quiet hours, while already battling, or at
+ * its land cap (a won challenge is land, like a claim: plan §9 gate d).
  */
 export function mayChallenge(view: MateView, rules: ComputerMateRules): boolean {
   const c = view.challenge;
   return (
     c !== undefined &&
     !view.catchUp &&
+    outerLand(view).length < mateLandCap(view.tiles, view.seats, rules) &&
     !c.busy &&
     c.pvpMode !== 'off' &&
     challengesLeft(c, rules) > 0 &&
