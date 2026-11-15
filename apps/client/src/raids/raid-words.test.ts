@@ -2,6 +2,7 @@ import { findAvoidedWords, RaidOutcomeSchema, type Raid } from '@heartpatch/shar
 import { describe, expect, it } from 'vitest';
 import {
   RAID_TEXT,
+  raidByComputer,
   raidFencesLine,
   raidFireLine,
   raidLine,
@@ -205,5 +206,29 @@ describe('a Computer friend challenger (#386f)', () => {
   it('names it honestly in the words', () => {
     expect(raidLine(base, true)).toContain('Marigold (Computer friend)');
     expect(raidLine(base)).not.toContain('Computer friend');
+  });
+});
+
+describe('a departed Computer friend (#386)', () => {
+  const base = {
+    attackerUserId: '00000000-0000-4000-8000-000000000001',
+    attackerName: 'Bramble',
+    outcome: 'held' as const,
+    reason: 'ko' as never,
+    stance: 'balanced' as const,
+  };
+  const notAMember = () => false;
+  it("trusts the server's flag even after the mate has left the patch", () => {
+    const raid = { ...base, attackerComputer: true };
+    expect(raidByComputer(raid, notAMember)).toBe(true);
+    expect(raidLine(raid, raidByComputer(raid, notAMember))).toContain('Bramble (Computer friend)');
+  });
+  it('a false flag wins over the member list', () => {
+    expect(raidByComputer({ ...base, attackerComputer: false }, () => true)).toBe(false);
+  });
+  it('falls back to the member list for older raids', () => {
+    expect(raidByComputer(base, () => true)).toBe(true);
+    expect(raidByComputer(base, notAMember)).toBe(false);
+    expect(raidByComputer(base)).toBe(false);
   });
 });

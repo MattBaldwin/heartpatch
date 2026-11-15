@@ -106,6 +106,7 @@ export function createRaidsService(options: RaidsServiceOptions): RaidsService {
     battleId: row.battleId,
     attackerUserId: row.attackerUserId,
     attackerName: row.attackerName,
+    attackerComputer: row.attackerComputer,
     q: row.q,
     r: row.r,
     outcome: row.outcome,

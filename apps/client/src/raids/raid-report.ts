@@ -7,6 +7,7 @@ import { hpClose } from '../ui/button/button.js';
 import { el, messageOf } from '../ui/dom.js';
 import {
   RAID_TEXT,
+  raidByComputer,
   raidFencesLine,
   raidFireLine,
   raidLine,
@@ -31,7 +32,7 @@ export interface RaidReportOptions {
   /** Plays a raid's replay in the battle screen. */
   watch: (replay: RaidReplay) => void;
   api?: RaidsApi;
-  /** True for a Computer friend's user id (#386f), so its challenge is badged. */
+  /** True for a Computer friend still on the patch (#386f): the fallback when a raid has no `attackerComputer`. */
   isComputer?: (userId: string) => boolean;
   /**
    * The sheet opened or closed (by the player or on its own), so other
@@ -247,7 +248,7 @@ export function createRaidReport(options: RaidReportOptions): RaidReportScreen {
                     el(
                       'p',
                       { class: 'raid-line' },
-                      raidLine(raid, options.isComputer?.(raid.attackerUserId) === true),
+                      raidLine(raid, raidByComputer(raid, options.isComputer)),
                     ),
                     ...(raid.lostFire
                       ? [

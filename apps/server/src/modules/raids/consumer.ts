@@ -68,6 +68,7 @@ export function createRaidsConsumer(): EventConsumer {
         battleId: battle.id,
         tileId: challenge.tileId,
         attackerUserId: challenge.attackerUserId,
+        attackerComputer: challenge.attackerComputer,
         defenderUserId: challenge.defenderUserId,
         outcome,
         reason: ended.reason,

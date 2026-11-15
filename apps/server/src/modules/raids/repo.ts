@@ -1,5 +1,5 @@
 import type { DefenseStance, RaidOutcome } from '@heartpatch/shared';
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import {
@@ -20,6 +20,8 @@ export interface RaidRow {
   battleId: string;
   attackerUserId: string;
   attackerName: string;
+  /** The challenger was a computer patch-mate when the raid was written (#386). */
+  attackerComputer: boolean;
   defenderUserId: string;
   q: number;
   r: number;
@@ -50,6 +52,8 @@ export interface NewRaid {
   battleId: string;
   tileId: string;
   attackerUserId: string;
+  /** From the challenger's `users.kind` (#386), kept after a mate leaves. */
+  attackerComputer: boolean;
   defenderUserId: string;
   outcome: RaidOutcome;
   reason: string;
@@ -63,6 +67,8 @@ export interface ChallengeRow {
   q: number;
   r: number;
   attackerUserId: string;
+  /** The challenger is a computer patch-mate (`users.kind`, #386). */
+  attackerComputer: boolean;
   defenderUserId: string | null;
   outcome: (typeof tileAttacks.$inferSelect)['outcome'];
 }
@@ -109,6 +115,7 @@ const raidColumns = {
   battleId: raids.battleId,
   attackerUserId: raids.attackerUserId,
   attackerName: users.username,
+  attackerComputer: raids.attackerComputer,
   defenderUserId: raids.defenderUserId,
   q: tiles.q,
   r: tiles.r,
@@ -162,11 +169,16 @@ function queries(db: Executor): RaidsRepo {
           q: tiles.q,
           r: tiles.r,
           attackerUserId: tileAttacks.attackerUserId,
+          // `users.kind` never changes, so reading it here (not at the battle's
+          // start) is safe. A left join: a missing `users` row must never cost
+          // the defender their report.
+          attackerComputer: sql<boolean>`coalesce(${users.kind} = 'computer', false)`,
           defenderUserId: tileAttacks.defenderUserId,
           outcome: tileAttacks.outcome,
         })
         .from(tileAttacks)
         .innerJoin(tiles, eq(tiles.id, tileAttacks.tileId))
+        .leftJoin(users, eq(users.id, tileAttacks.attackerUserId))
         .where(eq(tileAttacks.battleId, battleId));
       return row ?? null;
     },
