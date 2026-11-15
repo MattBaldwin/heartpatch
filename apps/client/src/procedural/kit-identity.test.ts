@@ -112,10 +112,14 @@ describe('bent shape', () => {
     expect(extent(0)).toBeCloseTo(1, 9);
     expect(extent(1)).toBeCloseTo(1, 9);
     expect(extent(2)).toBeCloseTo(1, 9);
-    const root = zAt((y) => y < -0.2);
-    const mid = zAt((y) => y > -0.1 && y < 0.1);
+    const root = zAt((y) => y < -0.4);
+    const upper = zAt((y) => y > -0.3 && y < -0.2);
+    const mid = zAt((y) => y > 0.1 && y < 0.2);
     const tip = zAt((y) => y > 0.42);
-    expect(mid - root).toBeCloseTo(0, 2); // the root two-thirds are straight
+    expect(upper - root).toBeCloseTo(0, 2); // the top 40% is straight
+    // v16: one even curve, not a hook at the very end: well before the tip
+    // it is already turning forwards (v15's hook was still straight here).
+    expect(mid - root).toBeGreaterThan(0.05);
     expect(tip - root).toBeGreaterThan(0.3); // the tip turns towards the front
   });
 });
@@ -283,6 +287,28 @@ describe('ring splay and the metal role (#234 round 8)', () => {
     }
   });
 
+  it('gives each stage two-tone tines: a lighter steel toe on the same placements (v16)', () => {
+    const luma = (c: readonly number[]) => 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!;
+    for (const id of ['draft-pileup', 'draft-rakeling', 'draft-rakelet']) {
+      const tines = tinesOf(id);
+      expect(tines.accent?.mesh, id).toBe('bent-toe');
+      // #b4bdc8: clearly lighter than the shaft's steel.
+      expect(
+        tines.accent!.color.map((c) => Math.round(c * 255)),
+        id,
+      ).toEqual([180, 189, 200]);
+      expect(luma(tines.accent!.color), id).toBeGreaterThan(luma(tines.color) * 1.4);
+    }
+    // A one-mesh part stays exactly as it was: no accent key at all.
+    const params = squishyParams(
+      { id: 'draft-rakelet', visual: lookOf('draft-rakelet').visual },
+      'kit-ring',
+      drafts,
+    );
+    for (const p of params.parts.filter((p) => p.slot !== 'fangs'))
+      expect('accent' in p, p.id).toBe(false);
+  });
+
   it('colours metal parts the fixed metal grey', () => {
     const [r, g, b] = tinesOf('draft-rakelet').color;
     const hex = FIXED_COLORS.metal;
@@ -322,13 +348,13 @@ describe('bent tine proportions (#234 round 11b)', () => {
     expect((thickness - (zMax - zMin)) / length).toBeGreaterThan(0.1);
   });
 
-  it('hooks 60-75 degrees over its last quarter-plus and ends in a straight toe (v15; v14 capped it at 30)', () => {
+  it('turns 60-75 degrees in one even curve over its lower 55-65%, with no straight foot (v16)', () => {
     const { turn, hook, foot } = bentTip();
     expect(turn).toBeGreaterThanOrEqual(60);
     expect(turn).toBeLessThanOrEqual(75);
-    expect(hook).toBeGreaterThanOrEqual(0.25);
-    expect(hook).toBeLessThanOrEqual(0.3);
-    expect(foot).toBeGreaterThan(0.04);
+    expect(hook).toBeGreaterThanOrEqual(0.55);
+    expect(hook).toBeLessThanOrEqual(0.65);
+    expect(foot).toBe(0);
   });
 
   it("never turns the toe up: each stage's lean plus the hook stays under 90 degrees (no J)", () => {
@@ -370,13 +396,29 @@ describe('bent tine proportions (#234 round 11b)', () => {
     expect(tip / root).toBeGreaterThan(0.6);
   });
 
-  it("sizes Rakelet's tines in the strip's own proportions, so the hook stays true", () => {
+  it("sizes the tines in the strip's own proportions, so the curve stays true", () => {
     const [w, l, t] = bentProportions();
     for (const part of DRAFT_PARTS.filter((p) => p.shape === 'bent' && p.anchor === 'front')) {
       const k = part.size[1] / l;
-      expect(part.size[0] / k, part.id).toBeCloseTo(w, 1);
-      expect(part.size[2] / k, part.id).toBeCloseTo(t, 1);
+      // Length against depth carries the curve: exact.
+      expect(part.size[2] / k, part.id).toBeCloseTo(t, 2);
+      // Width is sideways only, so it may widen with a chunky bar (v16 Pileup) without bending the curve.
+      expect(part.size[0] / k / w, part.id).toBeGreaterThanOrEqual(0.98);
+      expect(part.size[0] / k / w, part.id).toBeLessThanOrEqual(1.3);
     }
+  });
+
+  it("widens Pileup's tines with its bar, so they're never hair-thin beside Rakelet's (v16)", () => {
+    const widthOverBar = (tines: string, bar: string) => {
+      const t = DRAFT_PARTS.find((p) => p.id === tines)!;
+      const b = DRAFT_PARTS.find((p) => p.id === bar)!;
+      return t.size[0] / b.size[2]; // the bar's size[2] is its height on the face
+    };
+    const rakelet = widthOverBar('draft-rake-tool-tines', 'draft-rake-tool-bar');
+    expect(widthOverBar('draft-rake-tines-small', 'draft-rake-bar-small')).toBeGreaterThan(
+      rakelet * 0.8,
+    );
+    expect(widthOverBar('draft-rake-tines-mid', 'draft-rake-bar')).toBeGreaterThan(rakelet * 0.8);
   });
 });
 

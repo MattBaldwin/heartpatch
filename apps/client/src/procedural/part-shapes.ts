@@ -1,7 +1,7 @@
 import type { PartShape } from '@heartpatch/shared';
 import { cross, dot, normalize, type MeshArrays } from './body-shape.js';
 import type { LodSettings } from './config.js';
-import type { Vec3 } from './params.js';
+import type { AccentMesh, Vec3 } from './params.js';
 
 /**
  * Part primitives, each filling the unit box [−0.5, 0.5]³ so a part's size
@@ -76,7 +76,7 @@ function arc(rings: number, segments: number): MeshArrays {
   const radius = 1;
   const tube = 0.32;
   const bend = 0.3; // TUNE
-  const capRings = Math.max(2, Math.round(rings / 3));
+  const capRings = Math.max(3, Math.round(rings / 3)); // v16: 3 at low detail, so a flat end's normals stay true
   const bodyRings = rings * 2;
   const positions: number[] = [];
   const normals: number[] = [];
@@ -151,48 +151,49 @@ function box(rings: number, segments: number): MeshArrays {
 // TUNE: the bent tine's centreline, in lengths of the whole stick.
 // Round 11b (#234, v13): a leaf-rake tine, long and straight with a forward
 // arc at the tip. v14: a 30° arc then a short straight foot (no J flick).
-// v15: a big forward hook. The last ~30% curls 65° towards the viewer and
-// ends in a straight, flat chisel toe. With the shaft's ~20° lean the toe
-// still points a little down (kit test), so head-on each tine ends in a
-// visible toe and the tip never turns up into a J. The
-// section is a flat steel strip (wider than it is thick), not a round dowel.
-const BENT_STRAIGHT = 0.62; // straight from the root
-const BENT_RADIUS = 0.16; // the hook's curve
-const BENT_ANGLE = (65 * Math.PI) / 180; // how far the tip turns forward
-const BENT_TIP = 0.08; // the toe: straight again after the bend
+// v15: a 65° hook over the last ~30%. v16: one smooth, even curve instead:
+// straight for the top 40%, then the same 65° turn spread evenly over the
+// lower 60%, so head-on the tine visibly foreshortens towards the viewer
+// rather than reading as a straight peg with a knob. With the shaft's ~20°
+// lean the tip still points a little down (kit test: no J). The section is
+// a flat steel strip, its wide side to the front, not a round dowel.
+const BENT_STRAIGHT = 0.4; // straight from the root
+const BENT_ANGLE = (65 * Math.PI) / 180; // how far the tip turns forward, all in one even curve
+const BENT_CURVE = 0.6; // the curve's length: the lower 60% of the tine
+const BENT_RADIUS = BENT_CURVE / BENT_ANGLE; // one constant radius: an even curve
 const BENT_TUBE = 0.08; // the strip's half-size at the root
-const BENT_WIDE = 1.5; // the strip's half-width, in BENT_TUBEs (sideways)
-const BENT_THIN = 0.85; // the strip's half-thickness, in BENT_TUBEs (the bend's plane)
+const BENT_WIDE = 1.8; // the strip's half-width, in BENT_TUBEs (sideways, faces the viewer)
+const BENT_THIN = 0.7; // the strip's half-thickness, in BENT_TUBEs (the bend's plane)
 const BENT_TAPER = 0.85; // the tip's size, as a fraction of the root's
-const BENT_CHISEL = 0.35; // the toe's end cap, squashed along the strip: a flat chisel end
+const BENT_CHISEL = 0.35; // the shaft's end cap, squashed along the strip (hidden in the toe)
+const BENT_LENGTH = BENT_STRAIGHT + BENT_CURVE;
+
+// TUNE (#234 v16): the `bent-toe` accent, a wide flat chisel toe over the
+// tine's end in a lighter steel, so head-on each tine ends in a bright toe.
+const TOE_LENGTH = 0.13; // along the strip, in lengths of the whole stick
+const TOE_FLARE = 1.8; // its full width, as a multiple of the shaft's width there
+const TOE_THICK = 2.4; // its full thickness, as a multiple of the shaft's: head-on its flat end is a broad oval, not a sliver
+const TOE_CAP = 0.4; // its flat end: the cap's reach in toe half-thicknesses
 
 /**
  * How far the `bent` tine's tip turns (degrees), the share of its length
- * that curls (the hook, toe included) and the share that runs straight on
- * after the turn (the toe).
+ * that curves (one even curve to the tip) and the share that runs straight
+ * on after the turn (none since v16).
  */
 export function bentTip(): { turn: number; hook: number; foot: number } {
-  const { total } = bentEnd();
-  return {
-    turn: (BENT_ANGLE * 180) / Math.PI,
-    hook: (total - BENT_STRAIGHT) / total,
-    foot: BENT_TIP / total,
-  };
+  return { turn: (BENT_ANGLE * 180) / Math.PI, hook: BENT_CURVE / BENT_LENGTH, foot: 0 };
 }
 
-/** The `bent` strip's centreline end point `[y, z]` and its whole length. */
-function bentEnd(): { y: number; z: number; total: number } {
-  const arcLen = BENT_RADIUS * BENT_ANGLE;
-  const y = BENT_STRAIGHT + BENT_RADIUS * Math.sin(BENT_ANGLE) + Math.cos(BENT_ANGLE) * BENT_TIP;
-  const z = BENT_RADIUS * (1 - Math.cos(BENT_ANGLE)) + Math.sin(BENT_ANGLE) * BENT_TIP;
-  return { y, z, total: BENT_STRAIGHT + arcLen + BENT_TIP };
+/** The `bent-toe` accent's width over the shaft's width where it starts, and its share of the tine. */
+export function bentToe(): { flare: number; length: number } {
+  return { flare: TOE_FLARE, length: TOE_LENGTH / BENT_LENGTH };
 }
 
 /**
  * The `bent` strip's own `[width, length, thickness]` before it is fitted
  * to the unit box: the extent of the unfitted mesh. A part sized in these
- * proportions keeps the strip's section and the hook's curve true, whatever
- * its overall scale.
+ * proportions keeps the strip's section and the curve true, whatever its
+ * overall scale.
  */
 export function bentProportions(): Vec3 {
   const { positions } = bent(12, 16);
@@ -203,28 +204,83 @@ export function bentProportions(): Vec3 {
   return [extent(0), extent(1), extent(2)];
 }
 
+/** The `bent` centreline point and unit tangent at distance `s` along it. */
+function bentAlong(s: number): { c: Vec3; t: Vec3 } {
+  if (s <= BENT_STRAIGHT) return { c: [0, s, 0], t: [0, 1, 0] };
+  const a = Math.min(s - BENT_STRAIGHT, BENT_CURVE) / BENT_RADIUS;
+  return {
+    c: [0, BENT_STRAIGHT + BENT_RADIUS * Math.sin(a), BENT_RADIUS * (1 - Math.cos(a))],
+    t: [0, Math.cos(a), Math.sin(a)],
+  };
+}
+
+/** The shaft's taper: its size at `s`, as a fraction of the root's. */
+function bentTaper(s: number): number {
+  return 1 - (1 - BENT_TAPER) * (s / BENT_LENGTH);
+}
+
 /**
- * A flat steel strip growing along +y that hooks towards +z (the front)
- * near its tip and narrows a little towards it: a leaf-rake tine. The bend
- * stays in the yz plane, so x (the strip's width) is the same sideways
- * direction all along. Round ends: the root's a half-ellipsoid, the toe's
- * squashed flat into a chisel. Normals are the ellipse's (the taper's slight
- * slope is ignored, as on `fang`).
+ * A flat steel strip growing along +y that curves evenly towards +z (the
+ * front) over its lower part and narrows a little towards the tip: a
+ * leaf-rake tine. The bend stays in the yz plane, so x (the strip's width)
+ * is the same sideways direction all along. Round root, flattened tip.
  */
 function bent(rings: number, segments: number): MeshArrays {
-  const arcLen = BENT_RADIUS * BENT_ANGLE;
-  const { total } = bentEnd();
-  // The centreline point and unit tangent at distance `s` along it.
-  const along = (s: number): { c: Vec3; t: Vec3 } => {
-    if (s <= BENT_STRAIGHT) return { c: [0, s, 0], t: [0, 1, 0] };
-    const a = Math.min(s - BENT_STRAIGHT, arcLen) / BENT_RADIUS;
-    const c: Vec3 = [0, BENT_STRAIGHT + BENT_RADIUS * Math.sin(a), BENT_RADIUS * (1 - Math.cos(a))];
-    const t: Vec3 = [0, Math.cos(a), Math.sin(a)];
-    const rest = s - BENT_STRAIGHT - arcLen;
-    return rest > 0 ? { c: [0, c[1] + t[1] * rest, c[2] + t[2] * rest], t } : { c, t };
+  return strip(
+    {
+      from: 0,
+      to: BENT_LENGTH,
+      wide: (s) => BENT_TUBE * BENT_WIDE * bentTaper(s),
+      thin: (s) => BENT_TUBE * BENT_THIN * bentTaper(s),
+      startCap: 1,
+      endCap: BENT_CHISEL,
+    },
+    rings,
+    segments,
+  );
+}
+
+/**
+ * The `bent` tine's toe (an accent mesh): a short sleeve over the tine's end
+ * that flares quickly to a wide, flat chisel, its flat end facing where the
+ * tip points (towards the viewer once the tine curves forward).
+ */
+function bentToeMesh(rings: number, segments: number): MeshArrays {
+  const from = BENT_LENGTH - TOE_LENGTH;
+  // 0 where the toe starts (just over the shaft), 1 once it has flared (smoothstep).
+  const grown = (s: number): number => {
+    const k = Math.min(1, Math.max(0, (s - from) / (TOE_LENGTH * 0.45)));
+    return k * k * (3 - 2 * k);
   };
-  const radius = (s: number): number => BENT_TUBE * (1 - (1 - BENT_TAPER) * (s / total));
-  const capRings = Math.max(2, Math.round(rings / 3));
+  return strip(
+    {
+      from,
+      to: BENT_LENGTH,
+      wide: (s) => BENT_TUBE * BENT_WIDE * bentTaper(from) * (1.05 + (TOE_FLARE - 1.05) * grown(s)),
+      thin: (s) => BENT_TUBE * BENT_THIN * bentTaper(from) * (1.1 + (TOE_THICK - 1.1) * grown(s)),
+      startCap: 1,
+      endCap: TOE_CAP,
+    },
+    rings,
+    segments,
+  );
+}
+
+interface StripSpec {
+  /** Where it starts and ends along the `bent` centreline. */
+  readonly from: number;
+  readonly to: number;
+  /** Its half-width (x) and half-thickness (in the bend's plane) at `s`. */
+  readonly wide: (s: number) => number;
+  readonly thin: (s: number) => number;
+  /** Each round end's reach along the strip, in half-thicknesses (small = flat). */
+  readonly startCap: number;
+  readonly endCap: number;
+}
+
+/** An elliptical tube along the `bent` centreline, with ellipsoidal end caps. */
+function strip(spec: StripSpec, rings: number, segments: number): MeshArrays {
+  const capRings = Math.max(3, Math.round(rings / 3)); // v16: 3 at low detail, so a flat end's normals stay true
   const bodyRings = rings * 2;
   const count = capRings * 2 + bodyRings;
   const positions: number[] = [];
@@ -232,43 +288,52 @@ function bent(rings: number, segments: number): MeshArrays {
   for (let i = 0; i <= count; i++) {
     let s: number;
     let beta: number; // 0 on the strip, ±π/2 at the tips of the round ends
-    let cap = 1; // the end cap's reach along the strip, in section radii
+    let cap = 1; // the end cap's reach along the strip, in half-thicknesses
     if (i < capRings) {
-      s = 0;
+      s = spec.from;
       beta = -(Math.PI / 2) * (1 - i / capRings);
-      cap = BENT_THIN;
+      cap = spec.startCap;
     } else if (i > capRings + bodyRings) {
-      s = total;
+      s = spec.to;
       beta = (Math.PI / 2) * ((i - capRings - bodyRings) / capRings);
-      cap = BENT_CHISEL;
+      cap = spec.endCap;
     } else {
-      s = (total * (i - capRings)) / bodyRings;
+      s = spec.from + ((spec.to - spec.from) * (i - capRings)) / bodyRings;
       beta = 0;
     }
-    const { c, t } = along(s);
-    const r = radius(s);
+    const { c, t } = bentAlong(s);
+    const w = spec.wide(s);
+    const h = spec.thin(s);
+    const reach = cap * h;
+    // How fast the section widens and thickens along the strip (on the body
+    // only): it tips the normals back along the strip where it flares.
+    const ds = 1e-4;
+    const dw = beta === 0 ? (spec.wide(s + ds) - spec.wide(s - ds)) / (2 * ds) : 0;
+    const dh = beta === 0 ? (spec.thin(s + ds) - spec.thin(s - ds)) / (2 * ds) : 0;
     // Perpendicular to the strip in the yz plane: [0, -t.z, t.y].
     const across: Vec3 = [0, -t[2], t[1]];
     for (let k = 0; k <= segments; k++) {
       const phi = (2 * Math.PI * k) / segments;
-      // A point on the unit section circle, then stretched into the strip's
+      // A point on the unit section circle, stretched into the strip's
       // ellipse (and the cap's reach along the strip).
       const sx = Math.sin(phi);
       const sa = -Math.cos(phi);
       const sb = Math.sin(beta);
       const cb = Math.cos(beta);
-      const off: Vec3 = [
-        cb * sx * BENT_WIDE,
-        sb * cap * t[1] + cb * sa * BENT_THIN * across[1],
-        sb * cap * t[2] + cb * sa * BENT_THIN * across[2],
-      ];
-      const n = normalize([
-        (cb * sx) / BENT_WIDE,
-        (sb * t[1]) / cap + (cb * sa * across[1]) / BENT_THIN,
-        (sb * t[2]) / cap + (cb * sa * across[2]) / BENT_THIN,
-      ]);
-      positions.push(c[0] + r * off[0], c[1] + r * off[1], c[2] + r * off[2]);
-      normals.push(...n);
+      positions.push(
+        c[0] + cb * sx * w,
+        c[1] + sb * reach * t[1] + cb * sa * h * across[1],
+        c[2] + sb * reach * t[2] + cb * sa * h * across[2],
+      );
+      // The section ellipse's gradient, plus the flare's slope along the strip.
+      const along = sb / reach - (sx * sx * dw) / w - (sa * sa * dh) / h;
+      normals.push(
+        ...normalize([
+          (cb * sx) / w,
+          along * t[1] + (cb * sa * across[1]) / h,
+          along * t[2] + (cb * sa * across[2]) / h,
+        ]),
+      );
     }
   }
   return { positions, normals, indices: gridIndices(count, segments) };
@@ -286,8 +351,13 @@ function gridIndices(rings: number, segments: number): number[] {
   return indices;
 }
 
-/** Scales and centres positions into [−0.5, 0.5]³, correcting normals for the stretch. */
-function fitUnitBox(mesh: MeshArrays): MeshArrays {
+/** The scale and centre that fit a mesh's bounds into [−0.5, 0.5]³. */
+interface Fit {
+  readonly scale: Vec3;
+  readonly mid: Vec3;
+}
+
+function fitOf(mesh: MeshArrays): Fit {
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
   for (let i = 0; i < mesh.positions.length; i += 3) {
@@ -297,21 +367,34 @@ function fitUnitBox(mesh: MeshArrays): MeshArrays {
       max[k] = Math.max(max[k] ?? v, v);
     }
   }
-  const scale = [0, 1, 2].map((k) => 1 / ((max[k] ?? 1) - (min[k] ?? 0)));
-  const mid = [0, 1, 2].map((k) => ((max[k] ?? 0) + (min[k] ?? 0)) / 2);
+  const axis = (k: number): [number, number] => [
+    1 / ((max[k] ?? 1) - (min[k] ?? 0)),
+    ((max[k] ?? 0) + (min[k] ?? 0)) / 2,
+  ];
+  const [x, y, z] = [axis(0), axis(1), axis(2)];
+  return { scale: [x[0], y[0], z[0]], mid: [x[1], y[1], z[1]] };
+}
+
+/** Moves a mesh by a fit, correcting normals for the stretch. */
+function applyFit(mesh: MeshArrays, { scale, mid }: Fit): MeshArrays {
   const positions = mesh.positions.map((v, i) => (v - (mid[i % 3] ?? 0)) * (scale[i % 3] ?? 1));
   const normals: number[] = [];
   for (let i = 0; i < mesh.normals.length; i += 3) {
     // Normals transform by the inverse scale.
     normals.push(
       ...normalize([
-        (mesh.normals[i] ?? 0) / (scale[0] ?? 1),
-        (mesh.normals[i + 1] ?? 0) / (scale[1] ?? 1),
-        (mesh.normals[i + 2] ?? 0) / (scale[2] ?? 1),
+        (mesh.normals[i] ?? 0) / scale[0],
+        (mesh.normals[i + 1] ?? 0) / scale[1],
+        (mesh.normals[i + 2] ?? 0) / scale[2],
       ]),
     );
   }
   return { positions, normals, indices: mesh.indices };
+}
+
+/** Scales and centres positions into [−0.5, 0.5]³, correcting normals for the stretch. */
+function fitUnitBox(mesh: MeshArrays): MeshArrays {
+  return applyFit(mesh, fitOf(mesh));
 }
 
 function vertex(values: readonly number[], i: number): Vec3 {
@@ -359,3 +442,24 @@ export function partArrays(shape: PartShape, lod: LodSettings): MeshArrays {
           : lathe(PROFILES[shape], lod.partRings, lod.partSegments);
   return orientTriangles(fitUnitBox(mesh));
 }
+
+/**
+ * Geometry for a two-tone part's second mesh (#234 v16), in its main shape's
+ * own unit-box frame, so the same placement matrix puts both in place. It
+ * may reach a little outside that box (the toe is wider than the shaft).
+ */
+export function accentArrays(mesh: AccentMesh, lod: LodSettings): MeshArrays {
+  return ACCENTS[mesh](lod);
+}
+
+/** One builder per accent mesh: a new `AccentMesh` fails to typecheck here until it has one. */
+const ACCENTS: Readonly<Record<AccentMesh, (lod: LodSettings) => MeshArrays>> = {
+  'bent-toe': (lod) =>
+    orientTriangles(
+      applyFit(
+        // A few more rings than the shaft at low detail: the flare is short and quick.
+        bentToeMesh(Math.max(lod.partRings, 10), lod.partSegments),
+        fitOf(bent(lod.partRings, lod.partSegments)),
+      ),
+    ),
+};

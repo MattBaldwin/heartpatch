@@ -47,7 +47,11 @@ describe('the #234 mini-boss drafts', () => {
 
   it('validates against the shared schemas (with the #234 kit extension)', () => {
     for (const b of DRAFT_BODIES) expect(BodySchema.safeParse(b).success, b.id).toBe(true);
-    for (const p of DRAFT_PARTS) expect(PartSchema.safeParse(p).success, p.id).toBe(true);
+    // `accent` (two-tone parts, v16) is a client art-kit field; the rest is the shared schema.
+    for (const p of DRAFT_PARTS) {
+      const shared = Object.fromEntries(Object.entries(p).filter(([key]) => key !== 'accent'));
+      expect(PartSchema.safeParse(shared).success, p.id).toBe(true);
+    }
     for (const f of forms) {
       expect(SpeciesVisualSchema.safeParse(f.visual).success, f.id).toBe(true);
     }

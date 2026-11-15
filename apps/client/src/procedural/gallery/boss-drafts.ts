@@ -1,4 +1,5 @@
-import type { Body, ElementId, FeelingId, Part, SpeciesVisual } from '@heartpatch/shared';
+import type { Body, ElementId, FeelingId, SpeciesVisual } from '@heartpatch/shared';
+import type { KitPart } from '../params.js';
 
 /**
  * DRAFT (#234, lane 234a): the four mini-boss lines, for the owner's mockup
@@ -88,9 +89,12 @@ export const DRAFT_BODIES: Body[] = [
   },
 ];
 
-const part = (p: Part): Part => p;
+const part = (p: KitPart): KitPart => p;
 
-export const DRAFT_PARTS: Part[] = [
+/** TUNE (#234 v16): the rake tines' chisel toes, a clearly lighter steel than the shaft. */
+const RAKE_TOE_STEEL = '#b4bdc8';
+
+export const DRAFT_PARTS: KitPart[] = [
   // ── Faces: brows for all four (each keeps its feeling's eye kit, §1.6) ──
   part({
     id: 'draft-soft-brows',
@@ -200,6 +204,13 @@ export const DRAFT_PARTS: Part[] = [
   // fan stays in the straight shafts. No dark collar under the rivets yet:
   // no stage has a free sticking-out head slot for one (flagged to the
   // coordinator).
+  // v16 (final round): two-tone tines. Each ends in a wide, flat chisel toe
+  // (~1.8× the shaft) in a lighter steel (an `accent` mesh on the same part),
+  // so head-on every tine ends in a bright toe in front of the lower lip. The
+  // shaft now curves evenly over its lower 60% (same 65° turn, no straight
+  // foot), so it foreshortens head-on instead of reading as a straight peg.
+  // The strip is wider and flatter (1.8 × 0.7), the rivets are low pan-heads,
+  // and Pileup's tines are widened to suit its chunky bar.
   part({
     // Pileup's baby crossbar: its mouth, a little wider than its face.
     id: 'draft-rake-bar-small',
@@ -220,8 +231,9 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tines-small',
     slot: 'fangs',
     shape: 'bent',
-    size: [0.0574, 0.22, 0.0635], // bentProportions() scaled, so the strip and its hook stay true (v15)
+    size: [0.08, 0.22, 0.0862], // v16: bentProportions() scaled (the curve stays true), widened ~1.25× to match its chunky bar
     color: 'metal',
+    accent: { mesh: 'bent-toe', color: RAKE_TOE_STEEL }, // v16: a bright chisel toe
     layout: { kind: 'ring', count: 3, spread: 68 }, // v15: all tines the same length and shape, evenly spaced
     around: 0,
     up: -11.45, // TUNE: the bar's front face, mid-height (kit test), on its rivet
@@ -237,7 +249,7 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-rivets-small',
     slot: 'horns',
     shape: 'ellipsoid',
-    size: [0.07, 0.04, 0.07],
+    size: [0.085, 0.022, 0.085], // v16: a low pan-head (55% of v15's dome), a touch wider than the widened tine
     color: 'metal',
     layout: { kind: 'ring', count: 3, spread: 68 },
     around: 0,
@@ -281,8 +293,9 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tines-mid',
     slot: 'fangs',
     shape: 'bent',
-    size: [0.0653, 0.25, 0.0722], // bentProportions() scaled, so the strip and its hook stay true (v15)
+    size: [0.0736, 0.25, 0.0979], // bentProportions() scaled, so the strip and its curve stay true (v16)
     color: 'metal',
+    accent: { mesh: 'bent-toe', color: RAKE_TOE_STEEL }, // v16: a bright chisel toe
     layout: { kind: 'ring', count: 4, spread: 86 }, // v15: all tines the same length and shape, evenly spaced
     around: 0,
     up: -15.55, // TUNE: the bar's front face, mid-height (kit test), on its rivet
@@ -298,7 +311,7 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-rivets-mid',
     slot: 'horns',
     shape: 'ellipsoid',
-    size: [0.08, 0.045, 0.08],
+    size: [0.08, 0.025, 0.08], // v16: a low pan-head, 55% of v15's dome
     color: 'metal',
     layout: { kind: 'ring', count: 4, spread: 86 },
     around: 0,
@@ -342,8 +355,9 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tool-tines',
     slot: 'fangs',
     shape: 'bent',
-    size: [0.0773, 0.296, 0.0855], // bentProportions() scaled, so the strip and its hook stay true (v15)
+    size: [0.0871, 0.296, 0.1159], // bentProportions() scaled, so the strip and its curve stay true (v16)
     color: 'metal',
+    accent: { mesh: 'bent-toe', color: RAKE_TOE_STEEL }, // v16: a bright chisel toe
     layout: { kind: 'ring', count: 5, spread: 105 }, // v15: all tines the same length and shape, evenly spaced
     around: 0,
     up: -16.85, // TUNE: the bar's front face, mid-height (kit test), on its rivet
@@ -359,7 +373,7 @@ export const DRAFT_PARTS: Part[] = [
     id: 'draft-rake-tool-rivets',
     slot: 'horns',
     shape: 'ellipsoid',
-    size: [0.095, 0.05, 0.095],
+    size: [0.095, 0.028, 0.095], // v16: a low pan-head, 55% of v15's dome
     color: 'metal',
     layout: { kind: 'ring', count: 5, spread: 105 },
     around: 0,
