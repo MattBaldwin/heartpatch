@@ -56,6 +56,8 @@ describe('notificationOf', () => {
     ['an empty title', { title: '' }],
     ['a title too long', { title: 'x'.repeat(81) }],
     ['a map id that is not a uuid', { mapId: 'my-patch' }],
+    ['a map id with a bad version digit', { mapId: '0b7c6f1e-3f4a-0c1b-9d2e-5a6b7c8d9e0f' }],
+    ['a map id with a bad variant digit', { mapId: '0b7c6f1e-3f4a-4c1b-7d2e-5a6b7c8d9e0f' }],
   ])('refuses %s', (_name, overrides) => {
     expect(notificationOf(payload(overrides))).toBeNull();
   });
@@ -129,6 +131,16 @@ describe('the worker’s hand check matches the shared schema', () => {
     payload({ title: 7 }),
     payload({ mapId: 'my-patch' }),
     payload({ mapId: MAP_ID.toUpperCase() }),
+    // A v7 id, like the server's map ids (#726e follow-up).
+    payload({ mapId: '019a7c3e-5b2d-7f10-8a4c-2d9e6f1b3c5a' }),
+    // The version and variant digits zod checks.
+    payload({ mapId: '0b7c6f1e-3f4a-0c1b-9d2e-5a6b7c8d9e0f' }),
+    payload({ mapId: '0b7c6f1e-3f4a-9c1b-9d2e-5a6b7c8d9e0f' }),
+    payload({ mapId: '0b7c6f1e-3f4a-4c1b-7d2e-5a6b7c8d9e0f' }),
+    payload({ mapId: '0b7c6f1e-3f4a-4c1b-cd2e-5a6b7c8d9e0f' }),
+    payload({ mapId: '00000000-0000-0000-0000-000000000000' }),
+    payload({ mapId: 'ffffffff-ffff-ffff-ffff-ffffffffffff' }),
+    payload({ mapId: `${MAP_ID}x` }),
     payload({ mapId: 42 }),
     null,
     [],
