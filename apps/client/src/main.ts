@@ -9,6 +9,7 @@ import { rareGlowOff, setRareGlowOff } from './procedural/rare-glow.js';
 import { isQualityTier, pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
 import { battleApi } from './battle/battle-api.js';
+import { catalogApi } from './catalog/catalog-api.js';
 import { createBattleScreen } from './battle/battle-screen.js';
 import { createDefensePrompt } from './battle/defense-prompt.js';
 import { createWildPicker } from './battle/wild-picker.js';
@@ -55,6 +56,10 @@ import { createBuildingsGuide } from './building/buildings-guide.js';
 import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen, type MapLayer } from './map/map-screen.js';
 import { mapApi } from './map/map-api.js';
+import { createBossMarker } from './map/boss-marker.js';
+import { createBossPicker } from './map/boss-picker.js';
+import { createBossStore } from './map/boss-store.js';
+import { bossPatchLine } from './map/boss-view.js';
 import { seasonsOn } from './map/map-dressing.js';
 import { createTileMarks } from './map/tile-marks.js';
 import { createKnockedMarks } from './weather/knocked-marks.js';
@@ -1337,6 +1342,31 @@ communityActions.wireGift(async (community) => {
 });
 // Login and the lobby come first, so a renderer that can't start never hides them.
 // Meet it on a tile with a rustling tuft (#209): the battle screen starts it.
+// The week's mini-boss (#190, 190f): the marker, the tile card and the patch line share one visit.
+const bossStore = createBossStore({
+  fetchBoss: (mapId) => mapApi.boss(mapId),
+  // The server sends a boss's def only to a Keeper who has met it, so the catalog is where a name comes from.
+  fetchNames: async (mapId) =>
+    new Map((await catalogApi.get(mapId)).speciesDefs.map((s) => [s.id, s.name] as const)),
+  onAppeared: (visit, mapId) => {
+    if (!visit || maps.view?.map.id !== mapId) return;
+    const terrain = maps.view.tiles.find(
+      (t) => t.q === visit.tile.q && t.r === visit.tile.r,
+    )?.terrain;
+    patchLine.say(
+      bossPatchLine(visit.species !== null ? bossStore.nameOf(visit.species) : null, terrain),
+    );
+  },
+});
+const bossMarker = createBossMarker(document.body, bossStore);
+const bossPicker = createBossPicker({
+  store: bossStore,
+  fight: async (mapId) => {
+    const battle = await mapApi.fightBoss(mapId);
+    if (maps.view?.map.id === mapId) battles.open(battle);
+  },
+});
+bossStore.onChange(() => bossPicker.redraw());
 const wildPicker = createWildPicker({ meet: (mapId, tile) => battles.meetWild(mapId, tile) });
 // One Build sheet for my land (#371): fires, lanterns, Training Grounds and
 // fences, built the same way from the tile's panel.
@@ -1426,6 +1456,8 @@ const maps = createMapScreen({
   // Meet it first (#209): the tuft the player tapped is what they came for.
   tileActions: combineTileActions(
     wildPicker.tileActions,
+    // The week's BIG squishy on its own tile (#190).
+    bossPicker,
     // Who gathers here and how they feel (#602): the map shows only the squishy, so the tap says it.
     jobs.workerLine,
     inventory.tileActions,
@@ -1486,6 +1518,7 @@ const maps = createMapScreen({
     roads.layer,
     strandedLayer,
     postFlags,
+    bossMarker,
     communityFlags,
     villageWins,
     keyHunt.layer,
@@ -1524,6 +1557,8 @@ const maps = createMapScreen({
       nextUp.refresh();
     // A patch-mate's Legendary friend (#391).
     patchLine.liveEvent(event);
+    // A mini-boss arrived (#190, 190f): the marker and the patch line.
+    bossStore.liveEvent(event);
     // My own first evolution on a patch, not the tutorial's (Sprout's tip, #731).
     if (event.type === 'squishy.evolved' && event.mapId !== glade) {
       const evolved = GAME_EVENTS['squishy.evolved'].public.safeParse(event.data);
@@ -2489,6 +2524,7 @@ if (import.meta.env.DEV) {
     defense: () => defense.debug,
     whatsNew: () => whatsNew.debug,
     patchLine: () => ({ ...patchLine.debug, busy: patchLineBusy() }),
+    boss: () => bossMarker.shown,
     push: () => ({ offer: pushOffer.debug.state, card: pushOfferCard.isOpen }),
     audio: () => audio.debug,
   };

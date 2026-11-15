@@ -12,6 +12,7 @@ export type HookName =
   | 'trays'
   | 'recipeBook'
   | 'tutorial'
+  | 'boss'
   | 'updatesHeld'
   | 'battle'
   | 'keeper'
