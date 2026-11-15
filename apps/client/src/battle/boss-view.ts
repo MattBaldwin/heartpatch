@@ -57,7 +57,7 @@ export const BOSS_TEXT = {
   bundle: (things: string) => `You won ${things}!`,
   // One XP line for the whole team (mockup frame 3): the card stays short.
   teamXpSame: (names: string, xp: number) => `${names} each earned ${String(xp)} XP!`,
-  teamXpEach: (parts: string) => `XP for ${parts}!`,
+  teamXpEach: (parts: string) => `${parts}!`,
   // The befriend moment (plan §3, the #820 ruling, mockup frame 3).
   ask: (name: string) => `Ask ${name} to be your friend? 💗💗💗`,
   charmsHave: (n: number) => `💗 You have ${String(n)} Heart ${n === 1 ? 'Charm' : 'Charms'}`,
@@ -383,7 +383,7 @@ export function teamXpLine(
     return BOSS_TEXT.teamXpSame(listed(earned.map((award) => nameOf(award.squishyId))), first.xp);
   }
   return BOSS_TEXT.teamXpEach(
-    listed(earned.map((award) => `${nameOf(award.squishyId)}\u00a0${String(award.xp)}`)),
+    listed(earned.map((award) => `${nameOf(award.squishyId)} got ${String(award.xp)}\u00a0XP`)),
   );
 }
 

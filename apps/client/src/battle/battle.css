@@ -1510,6 +1510,26 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   margin: 4px 0;
 }
 
+/* The team's evolving meters (#205), side by side under its one XP line. */
+.battle-evolving-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.battle-evolving-row .evolving {
+  gap: 2px;
+  margin-top: 0;
+}
+
+.battle-evolving-row .evolving-line {
+  font-size: 12px;
+}
+
+.battle-evolving-row .evolving-bar {
+  height: 8px;
+}
+
 /* A phone: the befriend panel says what happened, so the subtitle steps aside. */
 @media (max-width: 599px) {
   .battle-hud-team .battle-result:has(.boss-befriend) > .auth-subtitle {

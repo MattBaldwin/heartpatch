@@ -118,6 +118,11 @@ export interface ResultInfo {
    * before and after this battle. Missing or null: no meter for that line.
    */
   evolving?: readonly ({ before: number; after: number } | null)[];
+  /**
+   * A team's evolving meters (#205) side by side under its one XP line (the
+   * boss card, #190): short ones, so the card still fits under the boss.
+   */
+  evolvingRow?: readonly ({ before: number; after: number } | null)[];
   /** One extra hint line ("Weaken a wild squishy, then…"), if any. */
   nudge?: string;
   done: string;
@@ -290,6 +295,25 @@ export function createSheetHold(): {
       held = null;
     },
   };
+}
+
+/**
+ * One squishy's evolving meter on the result card (#205): the gain this battle
+ * striped in. `compact` (a team's row on the boss card) drops the line under
+ * the bar: the striped gain shows it.
+ */
+function evolvingMeter(gain: { before: number; after: number }, compact: boolean): HTMLElement {
+  const meter = evolvingMeterEl('battle-evolving');
+  const bar = evolvingBar(gain.after);
+  meter.update(bar, {
+    gainedFrom: gain.before / 100,
+    sub: compact
+      ? null
+      : gain.after > gain.before && !bar?.ready
+        ? CARE_TEXT.evolvingGain(gain.after - gain.before)
+        : undefined,
+  });
+  return meter.root;
 }
 
 export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): BattleHud {
@@ -929,18 +953,17 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
           { class: 'battle-xp', 'data-testid': 'battle-xp' },
           ...info.xp.map((line, i) => {
             const gain = info.evolving?.[i];
-            if (!gain) return el('li', {}, line);
-            const meter = evolvingMeterEl('battle-evolving');
-            const bar = evolvingBar(gain.after);
-            meter.update(bar, {
-              gainedFrom: gain.before / 100,
-              sub:
-                gain.after > gain.before && !bar?.ready
-                  ? CARE_TEXT.evolvingGain(gain.after - gain.before)
-                  : undefined,
-            });
-            return el('li', {}, line, meter.root);
+            return gain ? el('li', {}, line, evolvingMeter(gain, false)) : el('li', {}, line);
           }),
+          ...(info.evolvingRow?.some(Boolean)
+            ? [
+                el(
+                  'li',
+                  { class: 'battle-evolving-row' },
+                  ...info.evolvingRow.flatMap((gain) => (gain ? [evolvingMeter(gain, true)] : [])),
+                ),
+              ]
+            : []),
         ),
         ...(info.nudge
           ? [el('p', { class: 'battle-hint', 'data-testid': 'battle-nudge' }, info.nudge)]

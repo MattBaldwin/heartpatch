@@ -239,8 +239,9 @@ function playRound(
       xp: xp.map((x) => ({
         squishyId: x.squishyId,
         xp: x.xp,
-        evolvingBefore: null,
-        evolvingAfter: null,
+        // Each friend's evolving meter (#205) moves a little on a win.
+        evolvingBefore: won ? 20 : null,
+        evolvingAfter: won ? 35 : null,
       })),
       percent: 100,
       coins: won ? { patch: 5, heart: 5 } : null,

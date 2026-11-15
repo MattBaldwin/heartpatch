@@ -283,7 +283,7 @@ describe('a mini-boss fight on screen (#190)', () => {
         'Pip, Puff and Fizz each earned 12 XP!',
       );
       expect(teamXpLine([award('a', 12), award('b', 9), award('c', 0)], nameOf)).toBe(
-        'XP for Pip\u00a012 and Puff\u00a09!',
+        'Pip got 12\u00a0XP and Puff got 9\u00a0XP!',
       );
       expect(teamXpLine([award('a', 7)], nameOf)).toBe('Pip earned 7 XP!');
       expect(teamXpLine([award('a', 0)], nameOf)).toBeNull();

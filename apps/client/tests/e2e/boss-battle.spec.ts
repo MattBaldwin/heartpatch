@@ -96,6 +96,9 @@ test.describe('a mini-boss fight (#190)', () => {
     await expect(card).toBeVisible({ timeout: 60_000 });
     await expect(card).toContainText('You did it! 🎉');
     await expect(card).toContainText('You won 3 Heart Charms');
+    // Each friend's evolving meter (#205), in a row under the team's XP line.
+    await expect(card.getByTestId('battle-evolving')).toHaveCount(3);
+    await expect(card.getByTestId('battle-evolving').first()).toContainText('35%');
     await expect(card.getByTestId('boss-befriend-ask')).toContainText('to be your friend? 💗💗💗');
     // Counted again once the bundle landed: the 3 from before and the bundle's 3.
     await expect(card.getByTestId('boss-befriend-ask')).toContainText('You have 6 Heart Charms');

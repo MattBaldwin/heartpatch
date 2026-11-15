@@ -853,12 +853,15 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       const mine = b.view.sides[b.mySide];
       // One XP line for the whole team, and the coins ride in the card's
       // "You won …" line (mockup frame 3): the card fits under the boss.
-      const xp = teamXpLine(b.rewards?.xp ?? [], (id) => squishyName(names, mine, id));
+      const nameOf = (id: string) => squishyName(names, mine, id);
+      const xp = teamXpLine(b.rewards?.xp ?? [], nameOf);
       hud.setCaption(null);
       hud.showResult({
         title: bossCard.title,
         subtitle: bossCard.subtitle,
         xp: [xp ?? MESSAGES.noXp],
+        // Each friend's evolving meter (#205), in a row under the team's line.
+        evolvingRow: xpLines(b.rewards?.xp ?? [], nameOf).evolving,
         lines: bossCard.lines,
         extra: bossCard.extra,
         done: MESSAGES.done,
