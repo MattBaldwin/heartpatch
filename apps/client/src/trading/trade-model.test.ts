@@ -426,10 +426,8 @@ describe('meterLook (#305)', () => {
 });
 
 describe('trades with Computer friends (#386f)', () => {
-  it('words the offer card with the badge text', () => {
-    expect(TRADE_TEXT.mateWouldLikeToTrade('Marigold')).toBe(
-      'Marigold (Computer friend) would like to trade!',
-    );
+  it('words the offer card tail that follows the name and badge', () => {
+    expect(TRADE_TEXT.mateWouldLike).toBe(' would like to trade!');
   });
   it('asks "Are you sure?" only when a squishy goes', () => {
     expect(givesSquishy([{ kind: 'item' }])).toBe(false);
