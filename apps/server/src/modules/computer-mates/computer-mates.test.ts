@@ -18,6 +18,7 @@ import { newSessionToken } from '../auth/secrets.js';
 import { createAdminRepo } from '../admin/repo.js';
 import { createPushRepo } from '../push/repo.js';
 import { createTerritoryRepo } from '../territory/repo.js';
+import { createTradesRepo } from '../trades/repo.js';
 import { createComputerMatesRepo, mapIs } from './repo.js';
 
 const url = inject('testDatabaseUrl');
@@ -74,8 +75,8 @@ describe.skipIf(!url)('computer patch-mates (#386a, needs DATABASE_URL)', () => 
     return app;
   }
 
-  async function player(): Promise<Player> {
-    const username = `matekid_${String((counter += 1))}`;
+  async function player(name?: string): Promise<Player> {
+    const username = name ?? `matekid_${String((counter += 1))}`;
     const [user] = await db
       .insert(users)
       .values({ username, passwordHash: 'not-a-hash', birthYear: 2014 })
@@ -329,6 +330,99 @@ describe.skipIf(!url)('computer patch-mates (#386a, needs DATABASE_URL)', () => 
       where: (t, { eq }) => eq(t.mapId, map.id),
     });
     expect(allMates.length).toBe(3);
+  });
+
+  it('switching off sends a mate’s open offers home; a gift the kid already picked up stays', async () => {
+    const server = await start();
+    const { owner, map } = await patchWith(server, 0);
+    await setSwitch(server, owner, map.id, true);
+    const [mate] = await activeMates(map.id);
+    const trades = createTradesRepo(db);
+    const at = new Date(clock.getTime() - HOUR_MS);
+    const expiresAt = new Date(clock.getTime() + DAY_MS);
+    // An open offer from the mate: its 2 timber wait in escrow (out of its bag).
+    const open = await trades.insertOffer({
+      mapId: map.id,
+      kind: 'trade',
+      fromUserId: mate!.userId,
+      toUserId: owner.id,
+      noteId: null,
+      createdAt: at,
+      expiresAt,
+    });
+    await trades.insertLines(open.id, 'give', [{ kind: 'item', itemId: 'timber', quantity: 2 }]);
+    // A gift from the mate the kid already picked up: it's the kid's now.
+    const gift = await trades.insertOffer({
+      mapId: map.id,
+      kind: 'gift',
+      fromUserId: mate!.userId,
+      toUserId: owner.id,
+      noteId: null,
+      createdAt: at,
+      expiresAt,
+    });
+    await trades.insertLines(gift.id, 'give', [{ kind: 'item', itemId: 'stone', quantity: 1 }]);
+    await trades.setStatus([gift.id], 'accepted', at);
+    const kidBag = await trades.bagOf(map.id, owner.id);
+    const mateBag = await trades.bagOf(map.id, mate!.userId);
+
+    expect((await setSwitch(server, owner, map.id, false)).statusCode).toBe(200);
+    const offerStatus = async (id: string) =>
+      (await db.query.tradeOffers.findFirst({ where: (t, { eq }) => eq(t.id, id) }))!.status;
+    // The open offer went home: called off as "left", the timber back in the mate's bag.
+    expect(await offerStatus(open.id)).toBe('cancelled');
+    expect((await trades.bagOf(map.id, mate!.userId))['timber'] ?? 0).toBe(
+      (mateBag['timber'] ?? 0) + 2,
+    );
+    const cancelled = (await eventsOf(map.id)).filter((e) => e.type === 'trade.cancelled');
+    expect(cancelled.map((e) => e.payload)).toEqual([
+      expect.objectContaining({ offerId: open.id, reason: 'left' }),
+    ]);
+    // The picked-up gift stays the kid's.
+    expect(await offerStatus(gift.id)).toBe('accepted');
+    expect(await trades.bagOf(map.id, owner.id)).toEqual(kidBag);
+  });
+
+  it('never seats a mate with a kid’s name: a kid named Bramble gets three mates, none Bramble', async () => {
+    const server = await start();
+    // A pre-0064 kid (signup reserves the persona names now), any case.
+    const owner = await player('BRAMBLE');
+    const map = await createMap(server, owner);
+    expect((await setSwitch(server, owner, map.id, true)).statusCode).toBe(200);
+    const seated = await activeMates(map.id);
+    expect(seated.length).toBe(3);
+    expect(seated.map((m) => m.personaId)).not.toContain('bramble');
+    const names = (await getMap(server, map.id, owner)).members.map((m) => m.user.username);
+    expect(names.filter((n) => n.toLowerCase() === 'bramble')).toEqual(['BRAMBLE']);
+  });
+
+  it('the owner can’t remove a computer mate, only a real member', async () => {
+    const server = await start();
+    const { owner, map, members } = await patchWith(server, 1);
+    await setSwitch(server, owner, map.id, true);
+    const [mate] = await activeMates(map.id);
+    const rowOf = (userId: string) =>
+      db.query.computerMates.findFirst({ where: (t, { eq }) => eq(t.userId, userId) });
+    const before = await rowOf(mate!.userId);
+    expect(before!.nextActAt).not.toBeNull();
+
+    const res = await call(server, 'POST', `/maps/${map.id}/members/${mate!.userId}/remove`, owner);
+    expect(res.statusCode).toBe(403);
+    expect(errorOf(res)).toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'Computer friends come and go with the switch.',
+    });
+    expect((await activeMates(map.id)).map((m) => m.userId)).toContain(mate!.userId);
+    expect((await rowOf(mate!.userId))!.nextActAt).toEqual(before!.nextActAt);
+    expect((await eventsOf(map.id)).some((e) => e.type === 'member.removed')).toBe(false);
+
+    const real = await call(
+      server,
+      'POST',
+      `/maps/${map.id}/members/${members[0]!.id}/remove`,
+      owner,
+    );
+    expect(real.statusCode).toBe(204);
   });
 
   it('approving a friend departs the smallest computer mate in the same transaction', async () => {

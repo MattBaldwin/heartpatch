@@ -85,6 +85,16 @@ export function createComputerMatesRepo(db: Executor) {
       return row?.n ?? 0;
     },
 
+    /** Lower-cased usernames of the real Keepers holding a seat on the patch. */
+    activePlayerNames: async (mapId: string): Promise<Set<string>> => {
+      const rows = await db
+        .select({ username: users.username })
+        .from(mapMembers)
+        .innerJoin(users, eq(users.id, mapMembers.userId))
+        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.status, 'active'), playerUser));
+      return new Set(rows.map((r) => r.username.toLowerCase()));
+    },
+
     /** Which of `userIds` are computer mates (any patch). */
     computerIds: async (userIds: readonly string[]): Promise<Set<string>> => {
       if (userIds.length === 0) return new Set();

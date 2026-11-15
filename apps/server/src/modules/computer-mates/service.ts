@@ -128,11 +128,16 @@ async function fillWithin(
   const partnerLevel =
     (owner ? await createTerritoryRepo(tx).defenderFloorLevel(mapId, owner.id) : null) ?? 1;
   const known = new Map(all.map((m) => [m.personaId, m]));
+  // No mate shares a seated kid's name (rule 9): a pre-0064 kid named Bramble
+  // keeps the name, and Bramble the computer friend sits this patch out. Six
+  // personas for at most three seats, so the fill still completes.
+  const taken = await mates.activePlayerNames(mapId);
   const seated: string[] = [];
   for (const persona of COMPUTER_PERSONAS) {
     if (seated.length >= want) break;
     const existing = known.get(persona.id);
     if (existing?.active) continue;
+    if (taken.has(persona.name.toLowerCase())) continue;
     const seats = await repo.activeHomeSlots(mapId);
     const homeSlot = Array.from({ length: map.maxPlayers }, (_, i) => i).find(
       (slot) => !seats.slots.has(slot),
@@ -256,7 +261,7 @@ export async function makeRoomWithin(
       seats.count < input.maxPlayers &&
       keepers <= Math.max(fillTarget(secrets.rules, input.maxPlayers), players + 1);
     if (roomy) return left;
-    // Least land first; ties go to the one seated last (the persona order).
+    // Least land first; ties go to the earliest-created mate (`listMates` order, a stable sort).
     const [mate] = [...active].sort((a, b) => a.tiles - b.tiles);
     if (!mate) return left;
     await departMate(repo, tx, { ...input, mate, madeRoomFor: input.joinerId });

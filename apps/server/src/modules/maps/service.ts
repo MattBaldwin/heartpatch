@@ -155,6 +155,7 @@ const MESSAGES = {
     "This Keeper also plays in a patch you don't own. Ask the grown-up who runs Heartpatch to reset it.",
   noRoom: "This patch can't take new Keepers.",
   resetComputer: "Computer friends don't have passwords. They just know!",
+  removeComputer: 'Computer friends come and go with the switch.',
   notReady: (username: string) => `${username} is still getting ready. Try again soon!`,
   wildIsleClosed: "Wild Isles aren't open yet. Make a Cozy Patch for now!",
   wildIsleSeats: 'A Wild Isle is made for 6 Keepers. Try a Cozy Patch!',
@@ -737,6 +738,12 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     removeMember: async (user, mapId, memberId) => {
       await requireOwner(db, user, mapId);
       if (memberId === user.id) throw new AppError('FORBIDDEN', MESSAGES.removeSelf);
+      // A computer patch-mate (#386) leaves only through the switch, which keeps
+      // `computer_mates.next_act_at` and the `computer: true` event in step.
+      // `users.kind` never changes, so this read needs no lock.
+      if ((await createComputerMatesRepo(db).computerIds([memberId])).size > 0) {
+        throw new AppError('FORBIDDEN', MESSAGES.removeComputer);
+      }
       await depart(mapId, memberId, user, 'member.removed');
       await afterDeparture(mapId, memberId, user.id);
       published(mapId);
