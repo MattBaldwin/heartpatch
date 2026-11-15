@@ -41,6 +41,8 @@ export interface MateView {
   readonly guarded: readonly Hex[];
   /** The mate's squishies not on watch (a guard needs one). */
   readonly freeSquishies: number;
+  /** Tiles someone is battling for right now (an open `tile_attacks` row): never claimed. */
+  readonly contested: readonly Hex[];
 }
 
 export type MateIntent =
@@ -99,16 +101,18 @@ function homeOf(view: MateView): Hex | null {
 /**
  * The wild tile to claim next, or null: next to the mate's land, never a
  * home ring, post, water or grey village (`attackTargetProblem` with PvP
- * off, so only wild land), never within `kidHomeBuffer` of a kid's Heart
+ * off, so only wild land), never a tile a kid is battling for, never within `kidHomeBuffer` of a kid's Heart
  * Seed. Nearest its own home first, leaning toward the nearest kid so
  * borders meet; ties by position.
  */
 export function claimTarget(view: MateView, rules: ComputerMateRules): Hex | null {
   const home = homeOf(view);
   const seeds = view.kids.map((k) => k.heartSeed);
+  const contested = new Set(view.contested.map(hexKey));
   const options = view.tiles.filter(
     (t) =>
       t.ownerUserId === null &&
+      !contested.has(hexKey(t)) &&
       attackTargetProblem(t, view.tiles, view.userId, 'off') === null &&
       nearest(t, seeds) > rules.kidHomeBuffer,
   );

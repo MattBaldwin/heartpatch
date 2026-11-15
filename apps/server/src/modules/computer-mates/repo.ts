@@ -14,7 +14,15 @@ import {
   type SQL,
 } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
-import { computerMates, mapMembers, maps, squishies, tiles, users } from '../../db/schema.js';
+import {
+  computerMates,
+  mapMembers,
+  maps,
+  squishies,
+  tileAttacks,
+  tiles,
+  users,
+} from '../../db/schema.js';
 
 /*
  * Real Keepers only (#386). A computer patch-mate is a `users` row with
@@ -122,16 +130,6 @@ export function createComputerMatesRepo(db: Executor) {
         .innerJoin(users, eq(users.id, mapMembers.userId))
         .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.status, 'active'), playerUser));
       return row?.n ?? 0;
-    },
-
-    /** Ids of the real Keepers holding a seat on the patch. */
-    activePlayerIds: async (mapId: string): Promise<Set<string>> => {
-      const rows = await db
-        .select({ id: users.id })
-        .from(mapMembers)
-        .innerJoin(users, eq(users.id, mapMembers.userId))
-        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.status, 'active'), playerUser));
-      return new Set(rows.map((r) => r.id));
     },
 
     /** Lower-cased usernames of the real Keepers holding a seat on the patch. */
@@ -250,21 +248,18 @@ export function createComputerMatesRepo(db: Executor) {
         .orderBy(asc(computerMates.nextActAt), asc(computerMates.userId))
         .limit(limit),
 
-    /** Patches with mates due a step that nobody has opened since `warmSince`. */
-    coldDueMaps: async (at: Date, warmSince: Date): Promise<string[]> => {
+    /**
+     * Tiles on the patch someone is battling for right now (an open
+     * `tile_attacks` row): a mate never claims one (#386c). A plain read: a
+     * battle's start locks the tile before it writes the row, so read under
+     * the step's tile lock it's current.
+     */
+    openAttackTileIds: async (mapId: string): Promise<Set<string>> => {
       const rows = await db
-        .selectDistinct({ mapId: computerMates.mapId })
-        .from(computerMates)
-        .innerJoin(maps, eq(maps.id, computerMates.mapId))
-        .where(
-          and(
-            isNotNull(computerMates.nextActAt),
-            lte(computerMates.nextActAt, at),
-            eq(maps.computerMates, true),
-            or(isNull(maps.keepersSeenAt), lte(maps.keepersSeenAt, warmSince)),
-          ),
-        );
-      return rows.map((r) => r.mapId);
+        .select({ tileId: tileAttacks.tileId })
+        .from(tileAttacks)
+        .where(and(eq(tileAttacks.mapId, mapId), isNull(tileAttacks.endedAt)));
+      return new Set(rows.map((r) => r.tileId));
     },
 
     /** A real member has the patch open (`maps.keepers_seen_at`; a plain write, no lock). */

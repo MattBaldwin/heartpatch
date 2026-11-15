@@ -392,7 +392,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
               battles,
               clock,
               ...publish,
-              ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
+              ...(wsHub ? { openMaps: wsHub.openMaps } : {}),
             }),
             { hooks: authHooks, idempotency },
           ),
@@ -447,7 +447,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
               battles,
               ...publish,
               // "Defend now?" (#29-C) goes to a defender whose app is open.
-              ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
+              ...(wsHub ? { openMaps: wsHub.openMaps } : {}),
             }),
             {
               hooks: authHooks,
@@ -595,7 +595,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             db,
             clock,
             ...publish,
-            ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
+            ...(wsHub ? { openMaps: wsHub.openMaps } : {}),
           });
           onKeeperSeen = (mapId) => {
             void steps.seen(mapId).catch((err: unknown) => {

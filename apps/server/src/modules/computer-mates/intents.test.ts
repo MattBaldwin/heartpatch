@@ -156,7 +156,7 @@ describe.skipIf(!url)('computer patch-mates act (#386c, needs DATABASE_URL)', ()
     const open = createComputerMateSteps({
       db,
       clock: () => clock,
-      isOnline: (m) => m === mapId,
+      openMaps: () => [mapId],
     });
     expect((await open.due()).length).toBe(3);
   });

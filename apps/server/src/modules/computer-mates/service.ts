@@ -35,6 +35,7 @@ const MESSAGES = {
   notFound: "We couldn't find that patch.",
   ownerOnly: 'Only the patch owner can do that.',
   cooldown: 'Your computer friends are resting. Try again tomorrow!',
+  wildIsle: "Computer friends can't sail to a Wild Isle yet.",
 } as const;
 
 export interface ComputerMatesServiceOptions {
@@ -322,6 +323,11 @@ export function createComputerMatesService(
       const found = await requireMember(db, user, mapId, ['multiplayer']);
       if (found.role !== 'owner') throw new AppError('FORBIDDEN', MESSAGES.ownerOnly);
       if (!computerMatesOpenFor(toggle, user)) throw new AppError('NOT_FOUND', MESSAGES.notFound);
+      // A mate's claim skips Wild Isle supply and homesteads (PR #814
+      // deviation 3), so the switch stays shut on a Wild Isle until 386e.
+      if (enabled && (await store.patchTypeOf(mapId)) === 'wild-isle') {
+        throw new AppError('CONFLICT', MESSAGES.wildIsle);
+      }
       const at = now();
       const departed: string[] = [];
       const state = await store.transaction(async (repo, tx) => {

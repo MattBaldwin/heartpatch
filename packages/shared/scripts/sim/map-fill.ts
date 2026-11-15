@@ -217,6 +217,7 @@ export function runMapFill(
       built: mateFire.flatMap((m) => [...m.values()]),
       guarded,
       freeSquishies: Math.max(0, COMPUTER_MATES.rules.teamSize.min - guarded.length),
+      contested: [],
     };
   };
   const capOf = (s: number) =>

@@ -46,6 +46,7 @@ const view = (tiles: MateViewTile[], over: Partial<MateView> = {}): MateView => 
   built: [],
   guarded: [],
   freeSquishies: 3,
+  contested: [],
   ...over,
 });
 
@@ -68,6 +69,13 @@ describe('computer mates policy', () => {
     expect(hexDistance(target!, KID_SEED)).toBeGreaterThan(rules.kidHomeBuffer);
     // Leaning toward the kid: the westmost ring-2 tile around its home.
     expect(target!.q).toBeLessThan(MATE_SEED.q);
+  });
+
+  it('never claims a tile a kid is battling for', () => {
+    const first = claimTarget(view(patch()), rules)!;
+    const next = claimTarget(view(patch(), { contested: [first] }), rules);
+    expect(next).not.toBeNull();
+    expect(hexKey(next!)).not.toBe(hexKey(first));
   });
 
   it('never claims a post, water or grey village tile', () => {

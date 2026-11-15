@@ -1,4 +1,11 @@
-import { addFuel, deriveSeed, fuelSpace, HOME_BASE_RULES, Rng } from '@heartpatch/shared';
+import {
+  addFuel,
+  attackTargetProblem,
+  deriveSeed,
+  fuelSpace,
+  HOME_BASE_RULES,
+  Rng,
+} from '@heartpatch/shared';
 import {
   COMPUTER_MATES,
   mateTeamLevel,
@@ -18,6 +25,8 @@ import { createTendingRepo, createTerritoryRepo } from '../territory/repo.js';
 import { createComputerMatesRepo, mateTransaction, type MateState } from './repo.js';
 
 const MINUTE_MS = 60 * 1000;
+/** Patches `seen` remembers before it sweeps out stale entries. */
+const SEEN_MAX = 10_000;
 /** The fire a mate lights (#202's Hearthfire, level 1). */
 const FIRE_ID = 'hearthfire';
 /** A fire stands in its tile's middle (#204). */
@@ -39,8 +48,8 @@ export interface ComputerMateStepsOptions {
   clock?: Clock;
   secrets?: ComputerMatesSecrets;
   publish?: (mapId: string) => Promise<void>;
-  /** Whether this member has the patch open right now (the WS hub's `isOnline`). */
-  isOnline?: (mapId: string, userId: string) => boolean;
+  /** Patches someone has open right now (the WS hub's in-memory `openMaps`): no DB scan. */
+  openMaps?: () => Iterable<string>;
   /** How often `seen` writes a patch's stamp, at most (ms). */
   seenThrottleMs?: number;
 }
@@ -48,7 +57,7 @@ export interface ComputerMateStepsOptions {
 export interface ComputerMateSteps {
   /** A real member opened the patch: stamps `keepers_seen_at` (throttled in memory). */
   seen: (mapId: string) => Promise<void>;
-  /** Mates due a step on warm patches; a patch someone has open now counts as warm. */
+  /** Mates due a step on warm patches; a patch someone has open now (`openMaps`) counts as warm. */
   due: (limit?: number) => Promise<{ userId: string; step: number }[]>;
   /** One step: a retry, a duplicate or a departed mate's step does nothing (null). */
   act: (userId: string, step: number) => Promise<MateStepResult | null>;
@@ -76,6 +85,10 @@ export function createComputerMateSteps(options: ComputerMateStepsOptions): Comp
     const at = now();
     const last = lastSeen.get(mapId);
     if (last !== undefined && at.getTime() - last < throttle) return;
+    // Bounded: entries past the throttle are no use, so drop them now and then.
+    if (lastSeen.size >= SEEN_MAX) {
+      for (const [id, t] of lastSeen) if (at.getTime() - t >= throttle) lastSeen.delete(id);
+    }
     lastSeen.set(mapId, at.getTime());
     await createComputerMatesRepo(db).stampSeen(mapId, at);
   };
@@ -83,15 +96,10 @@ export function createComputerMateSteps(options: ComputerMateStepsOptions): Comp
   const due = async (limit = 200) => {
     const at = now();
     const warmSince = new Date(at.getTime() - rules.warmMinutes * MINUTE_MS);
+    // A kid who has had the patch open longer than warmMinutes still counts:
+    // the hub's open patches are stamped (throttled), so cold patches cost nothing.
+    for (const mapId of options.openMaps?.() ?? []) await seen(mapId);
     const repo = createComputerMatesRepo(db);
-    // A kid who has had the patch open longer than warmMinutes still counts.
-    const { isOnline } = options;
-    if (isOnline) {
-      for (const mapId of await repo.coldDueMaps(at, warmSince)) {
-        const open = [...(await repo.activePlayerIds(mapId))].some((id) => isOnline(mapId, id));
-        if (open) await repo.stampSeen(mapId, at);
-      }
-    }
     return repo.dueMates(at, warmSince, limit);
   };
 
@@ -162,6 +170,7 @@ async function stepWithin(
   const posts = await territory.myDefenders(mapId, userId);
   const team = await mates.teamOf(mapId, userId);
   const posted = new Set(posts.flatMap((p) => p.squishyIds));
+  const contested = await mates.openAttackTileIds(mapId);
   const view: MateView = {
     userId,
     tiles,
@@ -173,6 +182,7 @@ async function stepWithin(
     built: onMap.map((b) => ({ q: b.q, r: b.r })),
     guarded: posts.map((p) => ({ q: p.q, r: p.r })),
     freeSquishies: team.filter((s) => s.state === 'active' && !posted.has(s.id)).length,
+    contested: tiles.filter((t) => contested.has(t.id)).map((t) => ({ q: t.q, r: t.r })),
   };
   const intent = nextIntent(view, persona, rules, Rng.fromSeed(deriveSeed(row.seed, step)));
   const target =
@@ -192,7 +202,22 @@ async function stepWithin(
   let applied = false;
   if (intent && target) {
     const holder = locked.get(target.id);
-    if (intent.kind === 'claim' && holder === null) {
+    // Re-checked under the lock: still wild, nobody battling for it (a
+    // battle's start locks the tile first), and still next to the mate's land.
+    const claimable =
+      intent.kind === 'claim' &&
+      holder === null &&
+      !(await mates.openAttackTileIds(mapId)).has(target.id) &&
+      attackTargetProblem(
+        { ...target, ownerUserId: null },
+        (await territory.listTiles(mapId)).map((t) => ({
+          ...t,
+          ownerUserId: locked.get(t.id) ?? t.ownerUserId,
+        })),
+        userId,
+        'off',
+      ) === null;
+    if (claimable) {
       await territory.setOwner(target.id, userId);
       // Claiming land tends it, and it's safe on its first night (#277), as a won battle's capture.
       await tending.claim(mapId, target.id, at);

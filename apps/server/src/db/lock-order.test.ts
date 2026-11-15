@@ -10,6 +10,8 @@ import {
   COIN_RULES,
   HEART_COIN_RULES,
   hexNeighbors,
+  isTradingPost,
+  isWaterTerrain,
   normalizeInviteCode,
   HOME_BASE_RULES,
   HOUSE_DATA,
@@ -3336,6 +3338,65 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
         )
         .orderBy(asc(tiles.id))
         .for('update');
+
+    it("never claims a tile a kid is battling for, and the kid's win still takes it (a mate's step vs an open battle, #386c step 6)", async () => {
+      at = new Date();
+      const { kid, mapId, target, battle, fights, finishing } =
+        await oneMoveFromWinning('cmbattle');
+      await mates().setEnabled(kid, mapId, true);
+      const [mate] = await mateIds(mapId);
+      // The mate holds a wild tile next to the kid's target, and every other
+      // free tile is the kid's: the target is the only tile it could claim.
+      const all = await db.select().from(tiles).where(eq(tiles.mapId, mapId));
+      const byKey = new Map(all.map((t) => [hexKey(t), t]));
+      const beside = hexNeighbors(target)
+        .map((n) => byKey.get(hexKey(n)))
+        .find(
+          (t) =>
+            t &&
+            t.ownerUserId === null &&
+            t.homeSlot === null &&
+            !isTradingPost(t) &&
+            !isWaterTerrain(t.terrain),
+        );
+      expect(beside).toBeDefined();
+      await db.update(tiles).set({ ownerUserId: mate! }).where(eq(tiles.id, beside!.id));
+      await db
+        .update(tiles)
+        .set({ ownerUserId: kid.id })
+        .where(
+          and(
+            eq(tiles.mapId, mapId),
+            sql`${tiles.ownerUserId} is null`,
+            sql`${tiles.homeSlot} is null`,
+            sql`${tiles.id} <> ${target.id}`,
+          ),
+        );
+      const near = { ...claimOnly, rules: { ...claimOnly.rules, kidHomeBuffer: 0 } };
+      const step = await nextStep(near, mate!);
+      // A battle's finish holds the tile (6); the step waits there holding nothing later.
+      await holdThen(
+        (tx) =>
+          tx
+            .select({ id: tiles.id })
+            .from(tiles)
+            .where(inArray(tiles.id, [target.id, beside!.id]))
+            .orderBy(asc(tiles.id))
+            .for('update'),
+        step.run,
+        async (tx) => {
+          await createComputerMatesRepo(tx).lockTeam(mapId, mate!);
+          await lockMapRow(tx, mapId);
+        },
+      );
+      expect(step.result()).toMatchObject({ intent: null, applied: false });
+      const [stillWild] = await db.select().from(tiles).where(eq(tiles.id, target.id));
+      expect(stillWild!.ownerUserId).toBeNull();
+      // The kid's winning move still captures it.
+      await fights.act(kid, battle.id, { action: finishing.action, turn: finishing.turn });
+      const [won] = await db.select().from(tiles).where(eq(tiles.id, target.id));
+      expect(won!.ownerUserId).toBe(kid.id);
+    });
 
     it("takes its own mate row before its users row and any tile (a mate's step, #386c step 3a then 4 and 6)", async () => {
       // A switch fill holds every mate row (3a), then alternates users rows
