@@ -53,7 +53,7 @@ export const BOSS_TEXT = {
     `${name} will be here again. Your squishies can have a snack and a nap first. 🍪`,
   lastDaySub: 'See you next time!',
   lastDayFine: 'That was its last day here. Another big friend will come along soon. 🍪',
-  bundle: (things: string) => `In your bag: ${things}!`,
+  bundle: (things: string) => `You won ${things}!`,
   // The befriend moment (plan §3, the #820 ruling, mockup frame 3).
   ask: (name: string) => `Ask ${name} to be your friend? 💗💗💗`,
   charmsHave: (n: number) => `💗 You have ${String(n)} Heart ${n === 1 ? 'Charm' : 'Charms'}`,

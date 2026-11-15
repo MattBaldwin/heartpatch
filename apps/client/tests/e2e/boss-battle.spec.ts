@@ -95,7 +95,7 @@ test.describe('a mini-boss fight (#190)', () => {
     const card = page.getByTestId('battle-result');
     await expect(card).toBeVisible({ timeout: 60_000 });
     await expect(card).toContainText('You did it! 🎉');
-    await expect(card).toContainText('In your bag: 3 Heart Charms');
+    await expect(card).toContainText('You won 3 Heart Charms');
     await expect(card.getByTestId('boss-befriend-ask')).toContainText('to be your friend? 💗💗💗');
     // Counted again once the bundle landed: the 3 from before and the bundle's 3.
     await expect(card.getByTestId('boss-befriend-ask')).toContainText('You have 6 Heart Charms');

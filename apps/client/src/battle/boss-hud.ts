@@ -85,6 +85,23 @@ const setBar = (b: { track: HTMLElement; fill: HTMLElement }, percent: number, t
   b.track.setAttribute('aria-valuetext', text);
 };
 
+/** "Same again", or null when there's nothing to repeat. */
+function sameAgainButton(handlers: PickerHandlers): HTMLElement | null {
+  const onSameAgain = handlers.onSameAgain;
+  if (!onSameAgain) return null;
+  const again = el(
+    'button',
+    {
+      type: 'button',
+      class: `${buttonClass({ small: true })} battle-cream`,
+      'data-testid': 'boss-same-again',
+    },
+    BOSS_TEXT.sameAgain,
+  );
+  again.addEventListener('click', onSameAgain);
+  return again;
+}
+
 export function mountBossHud(): BossHud {
   const bossName = el('span', { class: 'boss-name', 'data-testid': 'boss-name' });
   const bossLevel = el('span', { class: 'boss-level' });
@@ -309,7 +326,9 @@ export function mountBossHud(): BossHud {
           BOSS_TEXT.changePick,
         );
         change.addEventListener('click', handlers.onChange);
-        body.push(go, el('div', { class: 'boss-picker-row' }, change));
+        // "Change a pick" and "Same again" side by side (mockup A2).
+        const same = sameAgainButton(handlers);
+        body.push(go, el('div', { class: 'boss-picker-row' }, change, ...(same ? [same] : [])));
       } else {
         const step = state.steps[state.at];
         if (step) {
@@ -345,19 +364,8 @@ export function mountBossHud(): BossHud {
           body.push(header, grid);
         }
       }
-      if (handlers.onSameAgain) {
-        const again = el(
-          'button',
-          {
-            type: 'button',
-            class: `${buttonClass({ small: true })} battle-cream`,
-            'data-testid': 'boss-same-again',
-          },
-          BOSS_TEXT.sameAgain,
-        );
-        again.addEventListener('click', handlers.onSameAgain);
-        body.push(el('div', { class: 'boss-picker-row' }, again));
-      }
+      const again = ready ? null : sameAgainButton(handlers);
+      if (again) body.push(el('div', { class: 'boss-picker-row' }, again));
       picker.replaceChildren(...body);
     },
     hidePicker: () => {

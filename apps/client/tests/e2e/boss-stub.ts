@@ -83,7 +83,9 @@ function toBoss(b: Battle, options: BossStubOptions): Battle {
   }
   delete b['firstMeeting'];
   delete b['lured'];
-  const today = new Date().toISOString().slice(0, 10);
+  // The server's game clock (e2e runs shift it by whole days), not this runner's.
+  const now = Date.parse(String(b['startedAt'])) || Date.now();
+  const today = new Date(now).toISOString().slice(0, 10);
   return {
     ...b,
     kind: 'miniboss',
@@ -96,7 +98,7 @@ function toBoss(b: Battle, options: BossStubOptions): Battle {
     boss: {
       eventWindow: {
         id: today,
-        endsAt: new Date(Date.now() + (options.endsInMs ?? 2 * DAY)).toISOString(),
+        endsAt: new Date(now + (options.endsInMs ?? 2 * DAY)).toISOString(),
       },
       triesLeftToday: options.triesLeftToday ?? 2,
       charmsPerAsk: 3,

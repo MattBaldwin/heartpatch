@@ -90,6 +90,12 @@ export interface BossBattle {
   };
 }
 
+/** True when two rounds' picks are the same moves for the same squishies. */
+function samePicks(a: Readonly<Record<number, string>>, b: Readonly<Record<number, string>>) {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((k) => a[Number(k)] === b[Number(k)]);
+}
+
 export function createBossBattle(deps: BossBattleDeps): BossBattle {
   const ui = mountBossHud();
   let battleId: string | null = null;
@@ -192,8 +198,9 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
         picker = { ...state, at: 0 };
         drawPicker(b, names);
       },
+      // On any step, Ready included (mockup A2), unless it would change nothing.
       onSameAgain:
-        again && again !== state && state.at < state.steps.length
+        again && !samePicks(again.picks, state.picks)
           ? () => {
               picker = again;
               drawPicker(b, names);
@@ -241,36 +248,42 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
       key = deps.newKey();
       keys.set(ask, key);
     }
+    // The card is drawn once per answer, after the bag is counted again (the
+    // ask spent charms): a second redraw a moment later could eat a tap.
+    // "Asking…" stays on the button until then.
+    const counted = (battle: PlayerBattle) =>
+      deps.refreshCharms(battle).then(
+        () => undefined,
+        () => undefined,
+      );
     deps
       .befriend(b.id, ask, key)
-      .then((res) => {
+      .then(async (res) => {
+        if (battleId !== b.id) return;
+        recounts += 1;
+        await counted(res.battle);
         if (battleId !== b.id) return;
         busy = false;
         asks = Math.max(asks, ask);
         deps.replace(res.battle);
-        // The ask spent charms: count the bag again.
-        recount(res.battle);
       })
-      .catch((err: unknown) => {
+      .catch(async (err: unknown) => {
         if (battleId !== b.id) return;
-        busy = false;
-        // A 409 says why in kid words (too few charms, already have one, too late).
+        // A 409 says why in kid words (too few charms, already have one, too
+        // late), and the ask moved on without us (closed, answered, joined):
+        // the card shows it as the server has it, so the same ask isn't
+        // offered again. The words stay up until the next ask.
         problem =
           err instanceof ApiRequestError ? err.message : 'Hmm, that didn’t work. Try again?';
-        deps.replace(b);
-        recount(b);
-        if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
-          // The ask moved on without us (closed, answered, joined): show it as
-          // the server has it, so the same ask isn't offered again. The error
-          // stays up until the next ask.
-          void deps
-            .fetch(b.id)
-            .then((fresh) => {
-              if (battleId !== b.id || busy) return;
-              deps.replace(fresh);
-            })
-            .catch(() => undefined);
-        }
+        const conflict = err instanceof ApiRequestError && err.code === 'CONFLICT';
+        recounts += 1;
+        const [fresh] = await Promise.all([
+          conflict ? deps.fetch(b.id).catch(() => b) : Promise.resolve(b),
+          counted(b),
+        ]);
+        if (battleId !== b.id) return;
+        busy = false;
+        deps.replace(fresh);
       });
   };
 

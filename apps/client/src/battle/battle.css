@@ -1446,8 +1446,20 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 }
 
 /* The result card sits over the fight: the team's plates step aside. */
-.battle-hud-team:has(.battle-result:not([hidden])) .boss-top {
+.battle-hud-team:has(.battle-result:not([hidden])) .boss-top,
+.battle-hud-team:has(.battle-result:not([hidden])) .battle-sheet {
   display: none;
+}
+
+/* A boss fight's card sits low (mockup frame 3): the boss stays in view
+   above it and the ✕ stays clear. A long card scrolls inside itself. */
+.battle-hud-team .battle-result {
+  top: auto;
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  box-sizing: border-box;
+  max-height: calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 300px);
+  overflow-y: auto;
+  transform: none;
 }
 
 .boss-befriend-title {
