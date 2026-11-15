@@ -61,7 +61,8 @@ function ownerOnlyView(
     | 'house.gift'
     | 'key.found'
     | 'cellar.opened'
-    | 'journey.arrived',
+    | 'journey.arrived'
+    | 'post.bought',
 ): PublicView {
   return definePublicView({
     schema: GAME_EVENTS[type].public,
@@ -170,6 +171,7 @@ export const PUBLIC_VIEWS: PublicViews = {
   'squishy.rescued': ownerOnlyView('squishy.rescued'),
   // A player's battle team is their own business (squishy jobs).
   'team.picked': ownerOnlyView('team.picked'),
+  'post.bought': ownerOnlyView('post.bought'),
   // Journeys (#270): only the player; everyone else sees `battle.*`.
   'journey.started': ownerOnlyView('journey.started'),
   'journey.ended': ownerOnlyView('journey.ended'),

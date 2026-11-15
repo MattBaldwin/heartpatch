@@ -65,6 +65,8 @@ export const ItemChangeReasonSchema = z.enum([
   'post-swap',
   /** Extras sold to the trading post for Heart Coins (#601 PR 3), ledgered against the sale. */
   'post-sell',
+  /** A pack or crate bought at the trading post's Shop (#729), ledgered against the purchase. */
+  'shop',
   /** A trick-or-treat visit's Heartdust treat (#515), ledgered against the visit. */
   'trick-or-treat',
   /** The host's thank-you Heartdust from a trick-or-treat visitor (#515), ledgered against the visit. */

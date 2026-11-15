@@ -2363,6 +2363,50 @@ export const heartCoinBalances = pgTable(
 );
 
 /**
+ * Everything bought at a trading post's Shop (#729): one row per purchase,
+ * per player per patch, inserted in the same transaction as its `shop`
+ * Heart Coin ledger row (`ref_id` is this id), so there is never a paid
+ * purchase without a row or a row without a payment. `day` is the patch's
+ * local date, for the caps; `price` is what was charged (the data may be
+ * retuned later). A Rare Lure stays held until a wild start uses it
+ * (`consumed_at`, `consumed_battle_id`), and the partial unique index makes
+ * "one held at a time" a database fact. Rows are inserted, never locked,
+ * except a lure's consume (tech spec §7 step 5d).
+ */
+export const postPurchases = pgTable(
+  'post_purchases',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    // `PostShopItemId` from shared, checked by zod on the way in.
+    itemId: text('item_id').notNull(),
+    price: integer('price').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    createdAt: timestamptz('created_at').notNull(),
+    consumedAt: timestamptz('consumed_at'),
+    consumedBattleId: uuid('consumed_battle_id').references(() => battles.id, {
+      onDelete: 'set null',
+    }),
+  },
+  (t) => [
+    foreignKey({
+      name: 'post_purchases_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }).onDelete('cascade'),
+    // The caps count one player's purchases of an item by patch day.
+    index('post_purchases_caps_idx').on(t.mapId, t.userId, t.itemId, t.day),
+    uniqueIndex('post_purchases_one_lure_held')
+      .on(t.mapId, t.userId)
+      .where(sql`${t.itemId} = 'rare-lure' and ${t.consumedAt} is null`),
+    check('post_purchases_price_positive', sql`${t.price} > 0`),
+  ],
+);
+
+/**
  * Keeper milestone progress (#44, design doc §24): one row per account and
  * track, written by the `milestones` event consumer. `progress` is in
  * hundredths of a step (`MILESTONE_UNIT`), so Gentle's half share counts half

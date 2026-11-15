@@ -16,6 +16,7 @@ import { ToolIdSchema } from './data/explore.js';
 import { HollowStageSchema, WalkKindSchema } from './hollow-stage.js';
 import { RaidOutcomeSchema } from './raids.js';
 import { TradeKindSchema, TradeLineSchema } from './trading.js';
+import { PostShopItemIdSchema } from './data/post-shop.js';
 import { ChallengeKindSchema } from './challenges.js';
 import { LocalDateSchema } from './time.js';
 import { TrickOrTreatPrizeSchema } from './trick-or-treat.js';
@@ -1650,6 +1651,26 @@ export const GAME_EVENTS = {
       items: z.record(z.string(), z.number().int().min(1)),
     }),
     public: z.object({ userId: z.uuid() }),
+  },
+  /**
+   * Something bought at a trading post's Shop (#729). Only the buyer hears it
+   * (`ownerOnlyView`), so their other device's Heart Coin pill and Shop tab
+   * catch up; nobody else sees a purchase.
+   */
+  'post.bought': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      purchaseId: z.uuid(),
+      itemId: PostShopItemIdSchema,
+      price: z.number().int().min(1),
+      balance: z.number().int().min(0),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      itemId: PostShopItemIdSchema,
+      price: z.number().int().min(1),
+      balance: z.number().int().min(0),
+    }),
   },
 } satisfies Record<string, GameEventSchemas>;
 
