@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { PATCH_ECONOMY_CONFIG as CONFIG } from './patch-economy-config.js';
 import { HEART_COIN_RULES } from '../../src/data/heart-coins.js';
+import { COMPUTER_MATES } from '../../src/data/server/computer-mates.js';
+import { TRADE_VALUES } from '../../src/data/trading.js';
 import {
   awayWindow,
   buildIncome,
@@ -14,6 +16,10 @@ import {
   renderPatchEconomy,
   runKid,
   runPatchEconomy,
+  soloGates,
+  soloKid,
+  mateGiftsOn,
+  mateGiftStack,
   upkeepPercent,
   warehouseTrip,
   warehouseTripRuns,
@@ -90,6 +96,32 @@ describe('runPatchEconomy guards (#601)', () => {
       }
     }
     expect(renderPatchEconomy(runs, CONFIG, { seconds: 0 })).toContain('| 2 | casual |');
+  });
+
+  it('a solo kid with computer mates ends day 30 within the gate of their 4-seat row (#386d)', () => {
+    const gates = soloGates(runs, CONFIG);
+    expect(gates.map((g) => g.kid)).toEqual(CONFIG.kids.map((k) => k.id));
+    for (const g of gates) {
+      expect(g.pass, `${g.kid}: ${String(g.percent)} %`).toBe(true);
+      // Mates lift a solo kid, never past the gate.
+      expect(g.mates).toBeGreaterThanOrEqual(g.solo);
+    }
+    expect(renderPatchEconomy(runs, CONFIG, { seconds: 0 })).toContain('solo + computer mates');
+  });
+
+  it('solo rows: no friendlies or defences alone; with mates, capped friendlies, defences and gifts', () => {
+    const engaged = CONFIG.kids.find((k) => k.id === 'engaged')!;
+    expect(soloKid(engaged, 'plain', 1).wins).toMatchObject({ friendly: 0, defence: 0 });
+    const week = [1, 2, 3, 4, 5, 6, 7];
+    const defences = week.reduce((a, d) => a + soloKid(engaged, 'mates', d).wins.defence, 0);
+    expect(defences).toBeLessThanOrEqual(COMPUTER_MATES.rules.challengesPerPatchWeek.on);
+    expect(week.reduce((a, d) => a + mateGiftsOn(d), 0)).toBe(
+      COMPUTER_MATES.rules.giftsPerPatchWeek,
+    );
+    const gift = mateGiftStack();
+    expect((TRADE_VALUES.items[gift.itemId] ?? 0) * gift.quantity).toBeLessThanOrEqual(
+      COMPUTER_MATES.rules.giftMaxValue,
+    );
   });
 
   it('builds a first hut in time', () => {

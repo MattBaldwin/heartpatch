@@ -27,7 +27,7 @@ const GUARDS: ComputerMatesSecrets = {
   rules: { ...COMPUTER_MATES.rules, fireEveryTiles: 1000 },
   personas: COMPUTER_MATES.personas.map((p) => ({
     ...p,
-    weights: { ...p.weights, claim: 0, guard: 1 },
+    weights: { ...p.weights, claim: 0, guard: 1, trade: 0, gift: 0 },
   })),
 };
 
@@ -55,7 +55,7 @@ const BUSY: ComputerMatesSecrets = {
   personas: COMPUTER_MATES.personas.map((p) => ({
     ...p,
     claimsPerDay: 60,
-    weights: { ...p.weights, guard: 0 },
+    weights: { ...p.weights, guard: 0, trade: 0, gift: 0 },
   })),
 };
 

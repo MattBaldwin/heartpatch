@@ -422,7 +422,9 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
    * tradable item, made when a yes needs it (they have no bag).
    */
   const computerShelf: Record<string, number> = Object.fromEntries(
-    [...TRADABLE_ITEMS].sort().map((id) => [id, computerRules.shelfPerItem]),
+    [...TRADABLE_ITEMS]
+      .sort((a, b) => a.localeCompare(b))
+      .map((id) => [id, computerRules.shelfPerItem]),
   );
   const computerSide: OfferSide = {
     squishies: [],

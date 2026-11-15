@@ -228,7 +228,7 @@ const MATE_ITEMS: readonly string[] = GAME_DATA.resources
   .filter(isTradableResource)
   .map((r) => r.id)
   .filter((id) => (TRADE_VALUES.items[id] ?? 0) > 0)
-  .sort();
+  .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 /** Whether two sides are inside the fair band: the smaller is at least `minFairPercent` of the bigger. */
 export function insideFairBand(a: number, b: number, rules: ComputerMateRules): boolean {
@@ -283,7 +283,8 @@ export function mateOffer(
   const others = MATE_ITEMS.filter((id) => id !== wantId);
   const start = rng.int(0, Math.max(0, others.length - 1));
   for (let i = 0; i < others.length; i++) {
-    const giveId = others[(start + i) % others.length]!;
+    const giveId = others[(start + i) % others.length];
+    if (giveId === undefined) continue;
     const per = values.items[giveId] ?? 0;
     const giveQty = Math.max(1, Math.round(wantValue / per));
     const give = [{ itemId: giveId, quantity: giveQty }];

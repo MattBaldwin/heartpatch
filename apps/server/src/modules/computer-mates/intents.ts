@@ -100,7 +100,7 @@ async function tradingView(
   );
   const busy = new Set(open.filter((o) => o.fromUserId === userId).map((o) => o.toUserId));
   const kids = [];
-  for (const kidId of [...kidIds].sort()) {
+  for (const kidId of [...kidIds].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))) {
     if (busy.has(kidId) || !(await repo.isActiveMember(mapId, kidId))) continue;
     kids.push({ userId: kidId, bag: await repo.bagOf(mapId, kidId) });
   }
