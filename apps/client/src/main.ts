@@ -1390,6 +1390,7 @@ const waterBuild = createTileBuild({
 // the tutorial, a battle or another card, like What's new does.
 const computerMatesNotes = createComputerMatesNotes({
   root: document.body,
+  // mapCovered() counts the hello itself; a second batch waits for it to close.
   busy: () => mapCovered() || whatsNewOpen || pushOfferOpen,
 });
 const maps = createMapScreen({
@@ -2182,6 +2183,7 @@ const mapCovered = (): boolean =>
   lorebook.isOpen ||
   milestones.debug.showing !== null ||
   nextUp.isOpen ||
+  computerMatesNotes.isOpen ||
   hollowReportOpen();
 const whatsNew = createWhatsNew({
   root: document.body,
@@ -2199,7 +2201,8 @@ const whatsNew = createWhatsNew({
 // off the map and behind anything else at the top or over the map (a card, a
 // sheet, the "What landed" banner, Sprout's hint, another toast); the land
 // chip steps aside for it (patch-line.css).
-const TOP_NOTES = '.land-toast, .tray-say, .friendly-toast, .wardrobe-toast, .sprout-tip';
+const TOP_NOTES =
+  '.land-toast, .tray-say, .friendly-toast, .wardrobe-toast, .sprout-tip, .cf-toast';
 const patchLineBusy = (): boolean =>
   hudMapId === null ||
   // The lobby (its list, or Settings over a patch) owns the screen (#726).

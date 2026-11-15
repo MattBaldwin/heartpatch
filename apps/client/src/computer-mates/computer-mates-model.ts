@@ -30,6 +30,8 @@ export const COMPUTER_TEXT = {
   here: 'Here now',
   hereHint: "Computer friends are run by the game, so they're always here.",
   battleSoon: 'Battles with Computer friends are coming soon!',
+  /** Who's here with only mates around: "nobody here" would contradict the list. */
+  noKidsHere: 'No other Keepers are here right now. Try again in a bit!',
 } as const;
 
 /** True for a computer patch-mate's seat (`MapMember.computer`, #386a). */

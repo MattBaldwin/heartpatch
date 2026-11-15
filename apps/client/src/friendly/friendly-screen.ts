@@ -248,7 +248,11 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
       el(
         'p',
         { class: 'friendly-hint' },
-        online.length === 0 ? FRIENDLY_TEXT.nobodyHere : FRIENDLY_TEXT.onlyHere,
+        online.some((o) => !mates.has(o.userId))
+          ? FRIENDLY_TEXT.onlyHere
+          : mates.size > 0
+            ? COMPUTER_TEXT.noKidsHere
+            : FRIENDLY_TEXT.nobodyHere,
       ),
     );
     nodes.push(...computerRows(members.filter((m) => m.computer)));

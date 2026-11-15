@@ -45,6 +45,8 @@ export interface ComputerMatesNotesDebug {
 }
 
 export interface ComputerMatesNotes {
+  /** The hello card is up: other cards wait for it (one card at a time, #129). */
+  readonly isOpen: boolean;
   /** A map layer: `attach` starts from the opened view, `update` compares each newer one. */
   readonly layer: Pick<MapLayer, 'attach' | 'update'>;
   readonly debug: ComputerMatesNotesDebug;
@@ -76,6 +78,8 @@ export function createComputerMatesNotes(options: ComputerMatesNotesOptions): Co
   /** The last view's members: map id, then user id → name and whether a mate. */
   let roster: { mapId: string; members: Map<string, { name: string; computer: boolean }> } | null =
     null;
+  /** The patch the waiting hello and goodbye belong to. */
+  let pendingMap: string | null = null;
   let arrivals: string[] = [];
   let departed: string[] = [];
   let newKids: string[] = [];
@@ -88,7 +92,10 @@ export function createComputerMatesNotes(options: ComputerMatesNotesOptions): Co
   toast.hidden = true;
   options.root.append(scrim, toast);
 
-  function showHello(list: readonly string[]): void {
+  function showHello(list: readonly string[], mapId: string): void {
+    // Saved as greeted only once the card shows, so a reload first still greets.
+    const seen = memory.get(mapId);
+    if (seen) remember(mapId, seen);
     const ok = hpButton(COMPUTER_TEXT.helloButton, {
       variant: 'primary',
       testId: 'computer-hello-ok',
@@ -138,7 +145,7 @@ export function createComputerMatesNotes(options: ComputerMatesNotesOptions): Co
       timer = window.setTimeout(flush, BUSY_RETRY_MS);
       return;
     }
-    if (arrivals.length > 0) showHello(arrivals);
+    if (arrivals.length > 0 && pendingMap !== null) showHello(arrivals, pendingMap);
     const mate = departed[departed.length - 1];
     if (mate !== undefined && newKids.length > 0) showToast(goodbyeLine(mate, newKids[0] ?? null));
     arrivals = [];
@@ -164,10 +171,20 @@ export function createComputerMatesNotes(options: ComputerMatesNotesOptions): Co
     const mapId = view.map.id;
     const last = roster?.mapId === mapId ? roster.members : null;
     roster = { mapId, members: next };
+    if (pendingMap !== null && pendingMap !== mapId) {
+      // Another patch opened before the last one's hello could show: drop it,
+      // and forget who it would have greeted so they're greeted there next time.
+      window.clearTimeout(timer);
+      timer = 0;
+      memory.delete(pendingMap);
+      arrivals = [];
+      departed = [];
+      newKids = [];
+    }
+    pendingMap = mapId;
     const seen = memory.get(mapId) ?? greeted(mapId);
     memory.set(mapId, seen);
     const delta = rosterDelta(last, next, seen);
-    if (delta.arrivals.length > 0) remember(mapId, seen);
     arrivals.push(...delta.arrivals);
     departed.push(...delta.departed);
     newKids.push(...delta.newKids);
@@ -180,6 +197,9 @@ export function createComputerMatesNotes(options: ComputerMatesNotesOptions): Co
         compare(view);
       },
       update: compare,
+    },
+    get isOpen() {
+      return !scrim.hidden;
     },
     get debug() {
       return {
