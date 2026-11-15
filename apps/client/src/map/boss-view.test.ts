@@ -43,7 +43,10 @@ describe('markerModel', () => {
   });
   it('keeps the stand-in until the species is met, and never asks for a name', () => {
     const asked: string[] = [];
-    const m = markerModel(visit(), now, (id) => (asked.push(id), 'Rakelet'));
+    const m = markerModel(visit(), now, (id) => {
+      asked.push(id);
+      return 'Rakelet';
+    });
     expect(m).toMatchObject({ known: false, name: BOSS_TEXT.unknownName, speciesId: null });
     expect(asked).toEqual([]);
   });

@@ -80,7 +80,7 @@ export function createBossStore(options: BossStoreOptions): BossStore {
       names = new Map();
       emit();
     }
-    let next: BossVisit | null = null;
+    let next: BossVisit | null;
     try {
       next = await options.fetchBoss(id);
     } catch {
@@ -124,7 +124,7 @@ export function createBossStore(options: BossStoreOptions): BossStore {
       if (!GAME_EVENTS['boss.appeared'].public.safeParse(event.data).success) return;
       const id = mapId;
       void load(id).then((got) => {
-        if (id !== null && mapId === id) options.onAppeared?.(got, id);
+        if (mapId === id) options.onAppeared?.(got, id);
       });
     },
     onChange: (fn) => {

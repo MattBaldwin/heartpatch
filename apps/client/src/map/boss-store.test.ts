@@ -23,8 +23,11 @@ afterEach(() => vi.useRealTimers());
 
 describe('createBossStore', () => {
   it('fetches the map on screen and clears with none', async () => {
-    const fetchBoss = vi.fn(async () => visit());
-    const store = createBossStore({ fetchBoss, fetchNames: async () => new Map() });
+    const fetchBoss = vi.fn(() => Promise.resolve(visit()));
+    const store = createBossStore({
+      fetchBoss,
+      fetchNames: () => Promise.resolve(new Map<string, string>()),
+    });
     await store.setMap('m1');
     expect(store.visit?.tile).toEqual({ q: 0, r: 1 });
     await store.setMap(null);
@@ -32,12 +35,12 @@ describe('createBossStore', () => {
   });
 
   it('only asks the catalog for names once the species is met', async () => {
-    const fetchNames = vi.fn(async () => new Map([['rakelet', 'Rakelet']]));
-    const unmet = createBossStore({ fetchBoss: async () => visit(), fetchNames });
+    const fetchNames = vi.fn(() => Promise.resolve(new Map([['rakelet', 'Rakelet']])));
+    const unmet = createBossStore({ fetchBoss: () => Promise.resolve(visit()), fetchNames });
     await unmet.setMap('m1');
     expect(fetchNames).not.toHaveBeenCalled();
     const met = createBossStore({
-      fetchBoss: async () => visit({ species: 'rakelet' }),
+      fetchBoss: () => Promise.resolve(visit({ species: 'rakelet' })),
       fetchNames,
     });
     await met.setMap('m1');
@@ -48,11 +51,11 @@ describe('createBossStore', () => {
   it('keeps what it had when a fetch fails', async () => {
     let fail = false;
     const store = createBossStore({
-      fetchBoss: async () => {
-        if (fail) throw new Error('offline');
-        return visit();
+      fetchBoss: () => {
+        if (fail) return Promise.reject(new Error('offline'));
+        return Promise.resolve(visit());
       },
-      fetchNames: async () => new Map(),
+      fetchNames: () => Promise.resolve(new Map<string, string>()),
     });
     await store.setMap('m1');
     fail = true;
@@ -62,13 +65,17 @@ describe('createBossStore', () => {
 
   it('refetches on boss.appeared for this map only, then tells the patch line', async () => {
     const onAppeared = vi.fn();
-    const fetchBoss = vi.fn(async () => visit());
-    const store = createBossStore({ fetchBoss, fetchNames: async () => new Map(), onAppeared });
+    const fetchBoss = vi.fn(() => Promise.resolve(visit()));
+    const store = createBossStore({
+      fetchBoss,
+      fetchNames: () => Promise.resolve(new Map<string, string>()),
+      onAppeared,
+    });
     await store.setMap('m1');
     store.liveEvent(appeared('other'));
     expect(fetchBoss).toHaveBeenCalledTimes(1);
     store.liveEvent(appeared('m1'));
-    await vi.waitFor(() => expect(onAppeared).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => { expect(onAppeared).toHaveBeenCalledTimes(1); });
     expect(onAppeared.mock.calls[0]?.[1]).toBe('m1');
   });
 
@@ -76,8 +83,8 @@ describe('createBossStore', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-11-15T23:59:00Z'));
     const store = createBossStore({
-      fetchBoss: async () => visit(),
-      fetchNames: async () => new Map(),
+      fetchBoss: () => Promise.resolve(visit()),
+      fetchNames: () => Promise.resolve(new Map<string, string>()),
     });
     await store.setMap('m1');
     const changed = vi.fn();

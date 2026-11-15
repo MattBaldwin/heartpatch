@@ -154,7 +154,7 @@ describe('the Big Friend track (#190)', () => {
         tier: i + 1,
         threshold: t.threshold,
         goal: t.goal,
-        reward: { coins: t.coins, clothing: null, title: t.title ?? null },
+        reward: { coins: t.coins, clothing: null, title: t.title },
         earnedAt: i === 0 ? EARNED : null,
       })),
     };
