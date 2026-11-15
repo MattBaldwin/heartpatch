@@ -160,6 +160,12 @@
   line-height: 1.35;
 }
 
+/* `display: grid` would beat the hidden attribute and block every tap under it. */
+.cf-hello-scrim[hidden],
+.cf-toast[hidden] {
+  display: none;
+}
+
 /* The goodbye toast (mockup 3c): the friendly-battle toast's cream. */
 .cf-toast {
   position: fixed;
