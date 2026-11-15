@@ -77,7 +77,7 @@ describe.skipIf(!url)('the trading post Shop (#729, needs DATABASE_URL)', () => 
   }
 
   async function player(): Promise<Player> {
-    const username = `shopper_${String((counter += 1))}`;
+    const username = `post_buyer_${String((counter += 1))}`;
     const [user] = await db
       .insert(users)
       .values({ username, passwordHash: 'not-a-hash', birthYear: 2014, timeZone: 'UTC' })
