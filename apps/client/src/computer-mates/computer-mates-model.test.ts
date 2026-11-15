@@ -54,6 +54,14 @@ describe('switchView', () => {
     expect(switchView(detail('member', undefined), NOW)).toBeNull();
   });
 
+  it('gives the owner no switch on the Tutorial Glade (#386b)', () => {
+    // The maps API answers NOT_FOUND for a tutorial map (and the switch route
+    // refuses it, computer-mates.test.ts), so a Glade detail never carries
+    // `computerMates`: there's nothing to tap, for the owner or anyone.
+    const glade = detail('owner', undefined, [owner]);
+    expect(switchView(glade, NOW)).toBeNull();
+  });
+
   it('shows the owner an Off switch they can tap, with the honest line (the default)', () => {
     const view = switchView(detail('owner', { enabled: false, changeAt: null }), NOW);
     expect(view).toMatchObject({

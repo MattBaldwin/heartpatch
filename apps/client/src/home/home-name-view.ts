@@ -197,14 +197,20 @@ export function ringTerrains(view: MapView | null, me: string | null): string[] 
     .map((t) => t.terrain);
 }
 
-/** A named home's flag: whose it is, its words and its Heart Seed tile. */
+/** A home's flag: whose it is, its words, its Heart Seed tile and whether a Computer friend lives there. */
 export interface HomeFlag {
   readonly userId: string;
   readonly label: string;
   readonly tile: PublicTile;
+  /** A computer patch-mate's home (#386b, mockup 2c): the flag wears the Computer friend badge. */
+  readonly computer: boolean;
 }
 
-/** Every named member's home flag (#306), over their Heart Seed, in member order. */
+/**
+ * Every named member's home flag (#306), over their Heart Seed, in member order. A Computer
+ * friend's home flies one too, named or not (#386b, mockup 2c): its name and the badge, so a kid
+ * can tell on the map which land is a mate's.
+ */
 export function homeFlags(view: MapView): HomeFlag[] {
   const seeds = new Map<string, PublicTile>();
   for (const h of findHomeBases(view.tiles)) {
@@ -212,9 +218,10 @@ export function homeFlags(view: MapView): HomeFlag[] {
   }
   return view.members.flatMap((m) => {
     const tile = seeds.get(m.user.id);
-    return m.homeName && tile
-      ? [{ userId: m.user.id, label: homeFlagLabel(m.homeName), tile }]
-      : [];
+    const computer = m.computer !== undefined;
+    if (!tile || (!m.homeName && !computer)) return [];
+    const label = m.homeName ? homeFlagLabel(m.homeName) : m.user.username;
+    return [{ userId: m.user.id, label, tile, computer }];
   });
 }
 

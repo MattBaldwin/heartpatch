@@ -183,7 +183,32 @@ describe('home flags and the Heart Seed title (#306)', () => {
     expect(homeFlags(view)).toEqual([]);
     const flags = homeFlags(named);
     const seed = findHomeBases(view.tiles).find((h) => h.seed.ownerUserId === userId(2))?.seed;
-    expect(flags).toEqual([{ userId: userId(2), label: '🏡 Puddle Corner', tile: seed }]);
+    expect(flags).toEqual([
+      { userId: userId(2), label: '🏡 Puddle Corner', tile: seed, computer: false },
+    ]);
+  });
+
+  it("flies a Computer friend's flag with its name and the badge, named or not (#386b)", () => {
+    const mates = {
+      ...view,
+      members: view.members.map((m, i) =>
+        i === 2 ? { ...m, computer: { personaId: 'bramble' } } : m,
+      ),
+    };
+    const seed = findHomeBases(view.tiles).find((h) => h.seed.ownerUserId === userId(3))?.seed;
+    const mate = mates.members[2];
+    if (!mate) throw new Error('no mate');
+    expect(homeFlags(mates)).toEqual([
+      { userId: userId(3), label: mate.user.username, tile: seed, computer: true },
+    ]);
+    const namedMate = {
+      ...mates,
+      members: mates.members.map((m, i) => (i === 2 ? { ...m, homeName: 'Gear Nook' } : m)),
+    };
+    expect(homeFlags(namedMate)[0]).toMatchObject({ label: '🏡 Gear Nook', computer: true });
+    // The panel title stays the home's own name: a mate with no name has none.
+    if (!seed) throw new Error('no seed');
+    expect(seedName(mates, seed)).toBeNull();
   });
 
   it('titles a named Heart Seed, and leaves the rest of its ring as it was', () => {

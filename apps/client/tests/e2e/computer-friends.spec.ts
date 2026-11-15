@@ -66,8 +66,19 @@ async function stubComputerMates(page: Page, state: { on: boolean; mapId: string
   });
   await page.route(/\/api\/v1\/maps\/[0-9a-f-]{36}\/view$/, async (route) => {
     const response = await route.fetch();
-    const json = (await response.json()) as { members: Member[] };
-    if (state.on) json.members = withMates(json.members);
+    const json = (await response.json()) as {
+      members: Member[];
+      tiles: { homeSlot: number | null; ownerUserId: string | null }[];
+    };
+    if (state.on) {
+      json.members = withMates(json.members);
+      // Each mate holds its home ring, as the server seats them, so its flag flies.
+      const slots = new Map(json.members.map((m) => [m.homeSlot, m.user.id] as const));
+      for (const t of json.tiles) {
+        const owner = t.homeSlot === null ? undefined : slots.get(t.homeSlot);
+        if (owner && t.ownerUserId === null) t.ownerUserId = owner;
+      }
+    }
     return route.fulfill({ response, json });
   });
 }
@@ -83,9 +94,9 @@ test('the owner switches Computer friends on, and three badged mates move in (#3
   const lobby = page.getByTestId('lobby');
 
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
-  await lobby.getByLabel('Patch name').fill('Mia Meadow');
+  await lobby.getByLabel('Patch name').fill("Mia's Meadow");
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
-  await expect(lobby.getByRole('heading', { name: 'Mia Meadow' })).toBeVisible();
+  await expect(lobby.getByRole('heading', { name: "Mia's Meadow" })).toBeVisible();
 
   // Off by default: the owner's switch reads Off in words, with the honest line.
   const section = lobby.getByTestId('lobby-computer');
@@ -133,6 +144,10 @@ test('the owner switches Computer friends on, and three badged mates move in (#3
   expect((await hook<{ hello: string | null }>(page, 'computerMates'))?.hello).toContain('Bramble');
   await hello.getByTestId('computer-hello-ok').tap();
   await expect(hello).toBeHidden();
+
+  // On the map, a mate's home flag wears the badge beside its name (mockup 2c).
+  const brambleFlag = page.getByTestId('home-flag').filter({ hasText: 'Bramble' });
+  await expect(brambleFlag.getByTestId('computer-badge')).toHaveText('Computer friend');
 
   // Who's here: the mates sit under their own label, always here, badged, with
   // no "Battle me?" until the server takes an ask to a mate (#386e).
