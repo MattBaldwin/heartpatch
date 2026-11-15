@@ -31,6 +31,7 @@ import { sideBRefId } from '../../lib/side-b-ref.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { createBattlesService } from '../battles/service.js';
+import { createFencesRepo } from '../fences/repo.js';
 import { heartSeedOf } from '../maps/depart.js';
 import { createTerritoryRepo, type TerritoryTileRow } from '../territory/repo.js';
 import { createTerritoryService, createTileBattlePort } from '../territory/service.js';
@@ -653,7 +654,7 @@ describe.skipIf(!url)('computer patch-mates battle (#386e, needs DATABASE_URL)',
     expect(await attacksOn(target.id)).toHaveLength(2);
   });
 
-  describe('a challenge is refused in Off, during the kid’s shield, in quiet hours, under minKidTiles, and past the weekly cap', () => {
+  describe('a challenge is refused in Off, during the kid’s shield, in quiet hours, under minKidTiles, past the weekly cap, and on a fenced tile', () => {
     /** One refused step (no new battle), then the same step allowed once `undo` lifts the rule. */
     async function refusedThenAllowed(
       setup: Awaited<ReturnType<typeof challengeSetup>>,
@@ -718,6 +719,42 @@ describe.skipIf(!url)('computer patch-mates battle (#386e, needs DATABASE_URL)',
       );
       expect(held).toHaveLength(COMPUTER_MATES.rules.minKidTiles - 1);
       await refusedThenAllowed(setup, () => territory.setOwner(spare!.id, setup.kid.id));
+    });
+
+    it('a tile the kid has fenced all round (#823 ruling: fences hold computer friends off)', async () => {
+      const setup = await challengeSetup({ guard: true });
+      const { mapId, mate, kid, target } = setup;
+      // Every edge of T, so every border edge is fenced whatever the neighbours.
+      const fences = createFencesRepo(db);
+      for (const edge of [0, 1, 2, 3, 4, 5]) {
+        await fences.insertFence({
+          mapId,
+          ownerUserId: kid.id,
+          tileId: target.id,
+          edge,
+          buildingId: 'emberwood-palisade',
+          hp: 70,
+          builtAt: clock,
+        });
+      }
+      expect(await fences.listOnTile(target.id)).toHaveLength(6);
+      // Past the policy, straight to territory: `challengeCheck`'s own fence
+      // recheck (real `fence_segments` rows, under the locks) refuses it.
+      const { territory } = services(WEAK);
+      await expect(
+        territory.attackAsComputer(
+          { id: mate, username: '' },
+          mapId,
+          { q: target.q, r: target.r },
+          computerChallenge(COMPUTER_MATES.personas[0]!, WEAK.rules, () => true),
+        ),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(await mateBattles(mate)).toEqual([]);
+      // And the step's view never picks it; with the fence gone it does.
+      await refusedThenAllowed(setup, async () => {
+        await db.execute(`delete from fence_segments where tile_id = '${uuid(target.id)}'`);
+      });
+      expect(await attacksOn(target.id)).toHaveLength(1);
     });
 
     it('past the weekly cap (Gentle: 2)', async () => {

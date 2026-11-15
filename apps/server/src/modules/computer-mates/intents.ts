@@ -60,7 +60,7 @@ const WEEK_MS = 7 * 24 * 60 * MINUTE_MS;
 // shown to a kid (the step just does something else); it's here so every
 // refusal reads the same way.
 const MESSAGES = {
-  noChallenge: 'A computer friend can’t challenge that tile right now.',
+  noChallenge: "A computer friend can't challenge that tile right now.",
 };
 
 /**
@@ -663,15 +663,13 @@ async function challengeCheck(
   if ((await mates.computerIds([kidId])).size > 0) refuse();
   // Only a kid with the patch open right now, and never a fenced tile (#823 rulings).
   if (!isOnline(map.id, kidId)) refuse();
-  if (
-    (await fencedKidTiles(tx, map.id, tiles, new Map<string, true>([[kidId, true]]))).some(
-      (t) => t.q === tile.q && t.r === tile.r,
-    )
-  ) {
-    refuse();
-  }
-  if ((await mates.openAttackTileIds(map.id)).has(tile.id)) refuse();
   const land = tiles.filter((t) => t.ownerUserId === kidId);
+  // This tile's segments only, as territory's `prepare` reads them.
+  const segments = (await createFencesRepo(tx).listOnTile(tile.id)).filter(
+    (f) => f.ownerUserId === kidId,
+  );
+  if (segments.length > 0 && isTileFenced(tile, land, segments, tiles)) refuse();
+  if ((await mates.openAttackTileIds(map.id)).has(tile.id)) refuse();
   if (land.filter((t) => t.homeSlot === null).length < rules.minKidTiles) refuse();
   const home = land.filter((t) => t.homeSlot !== null);
   if (home.length === 0) refuse();

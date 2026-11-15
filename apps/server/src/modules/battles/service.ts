@@ -1081,8 +1081,11 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
    * its time is expired first by `settleDefense` in its own transaction
    * (`resolved` runs it before this), so this never holds the prompt (9c)
    * while `finish` takes the tile and its defenders (6). The prompt is read
-   * without a lock: every write to it takes this battle's lock first, which
-   * is held here. Lock order: the battle (held), then `finish`'s.
+   * without a lock. That's safe because a prompt only ever leaves pending
+   * (expired, answered, or called off by `callOffAsksOf` when a Keeper
+   * leaves, which doesn't take the battle lock), and accepting one, the only
+   * write that seats a defender, takes this battle's lock first, which is
+   * held here. Lock order: the battle (held), then `finish`'s.
    */
   const playOut = async (
     repo: BattlesTxRepo,
