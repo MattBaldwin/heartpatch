@@ -1,0 +1,286 @@
+import { z } from 'zod';
+import {
+  CARE_RULES,
+  COIN_RULES,
+  GAME_DATA,
+  GROWTH_RULES,
+  HEART_COIN_RULES,
+  befriendedLevel,
+  deriveSeed,
+  rareFindTier,
+  type PlayerBattleBoss,
+  type PublicUser,
+  type Species,
+} from '@heartpatch/shared';
+import {
+  SERVER_GAME_DATA,
+  baseFormOf,
+  bossBefriendChance,
+  bossBefriendRoll,
+  bossJoinLevel,
+  type BossEventRules,
+} from '@heartpatch/shared/server';
+import { withTransaction, type Executor } from '../../db/client.js';
+import { appendGameEvent } from '../../db/game-events.js';
+import { AppError } from '../../lib/errors.js';
+import { localDayStart } from '../../lib/time.js';
+import { createBattlesRepo, type BattleRow } from '../battles/repo.js';
+import { HEART_CHARM } from '../battles/service.js';
+import { EVOLUTION_STEPS } from '../care/service.js';
+import { creditCoins } from '../coins/service.js';
+import { creditHeartCoins } from '../heart-coins/service.js';
+import { consumeItems } from '../inventory/service.js';
+import { requireMember } from '../maps/members.js';
+import { createSpawnsRepo } from '../spawns/repo.js';
+import { createBossRepo, type BossEncounterRow } from './repo.js';
+
+const PLAYER_SIDE = 'a';
+const HOUR_MS = 3_600_000;
+
+/** Every species, public and secret: a boss line lives in `SECRET_SPECIES` (#190). */
+const SPECIES: ReadonlyMap<string, Species> = new Map(
+  [...GAME_DATA.species, ...SERVER_GAME_DATA.secretSpecies].map((s) => [s.id, s]),
+);
+const nameOf = (speciesId: string) => SPECIES.get(speciesId)?.name ?? 'this squishy';
+
+// Kid-readable messages (style guide §6).
+const MESSAGES = {
+  notFound: 'We couldn’t find that battle.',
+  notBoss: 'Only a big squishy waits to be asked after a battle.',
+  winFirst: 'Win the battle first, then ask!',
+  mixedUp: 'Oops, that ask got mixed up. Try again!',
+  haveOne: (name: string) => `You already have a ${name}! 💗`,
+  stompedOff: (name: string) => `${name} stomped off for now. Catch it on its next visit!`,
+} as const;
+
+/**
+ * One ask, stored on the visit's `boss_encounters.asks` (#190 plan §3) so
+ * any answer can be explained and replayed. Server-only: the chance, roll
+ * and warmth never reach a client (CLAUDE.md rule 6).
+ */
+const AskRecordSchema = z.object({
+  ask: z.number().int().min(1),
+  battleId: z.uuid(),
+  at: z.iso.datetime(),
+  /** The player's squishies still standing at the win. */
+  standing: z.number().int().min(0),
+  /** "Not yet"s from this boss kind before this ask (warmth). */
+  misses: z.number().int().min(0),
+  chance: z.number().int().min(0).max(100),
+  roll: z.number().int().min(1).max(100),
+  outcome: z.enum(['joined', 'not-yet']),
+  squishyId: z.uuid().nullable(),
+});
+type AskRecord = z.infer<typeof AskRecordSchema>;
+
+/** This win's asks so far, oldest first. */
+function asksOf(encounter: BossEncounterRow | null, battleId: string): AskRecord[] {
+  if (!encounter) return [];
+  return z
+    .array(AskRecordSchema)
+    .parse(encounter.asks)
+    .filter((a) => a.battleId === battleId);
+}
+
+/** The boss-form species a mini-boss fight was against. */
+function bossSpeciesOf(row: BattleRow): string {
+  const boss = row.state.sides.b.squishies[0];
+  if (!boss) throw new Error(`mini-boss battle ${row.id} has no boss`);
+  return boss.speciesId;
+}
+
+const won = (row: BattleRow) => row.status === 'finished' && row.result?.winner === PLAYER_SIDE;
+
+/** The asks close a while after the win, even once the visit has ended (plan §12). */
+const asksOpen = (row: BattleRow, rules: BossEventRules, at: Date) =>
+  row.endedAt !== null && at.getTime() < row.endedAt.getTime() + rules.befriend.askHours * HOUR_MS;
+
+export interface BefriendResult {
+  outcome: AskRecord['outcome'];
+  squishyId: string | null;
+}
+
+/**
+ * Asks a beaten boss to be your friend (#190 plan §3): one transaction in
+ * tech spec §7 order. The battle (step 5), then the visit's row and the bond
+ * with this boss kind (5e), then the charms (11, `boss-befriend`; too few and
+ * nothing is written), then the roll. A yes inserts the base form (no
+ * squishy lock), marks it caught (`species_seen`, 11), pays `capture` coins
+ * (12) and appends `squishy.captured` and `squishy.celebrated` (`maps`, 13);
+ * a "not yet" warms the bond up. An ask already made returns its stored answer.
+ */
+export async function befriendBoss(
+  db: Executor,
+  rules: BossEventRules,
+  user: PublicUser,
+  battleId: string,
+  ask: number,
+  at: Date,
+): Promise<BefriendResult> {
+  const found = await createBattlesRepo(db).findBattle(battleId);
+  if (!found || found.playerUserId !== user.id) throw new AppError('NOT_FOUND', MESSAGES.notFound);
+  await requireMember(db, user, found.mapId);
+  return withTransaction(db, async (tx) => {
+    const battles = createBattlesRepo(tx);
+    const row = await battles.lockBattle(battleId);
+    if (!row) throw new AppError('NOT_FOUND', MESSAGES.notFound);
+    if (row.kind !== 'miniboss') throw new AppError('CONFLICT', MESSAGES.notBoss);
+    if (!won(row)) throw new AppError('CONFLICT', MESSAGES.winFirst);
+    const { mapId } = row;
+    const boss = createBossRepo(tx);
+    const encounter = await boss.lockWonEncounter(mapId, user.id, row.id);
+    if (!encounter) throw new AppError('CONFLICT', MESSAGES.winFirst);
+    const asks = asksOf(encounter, row.id);
+    // A double tap: the ask was made, so its answer stands (nothing more spent).
+    const made = asks.find((a) => a.ask === ask);
+    if (made) return { outcome: made.outcome, squishyId: made.squishyId };
+
+    const bossSpecies = bossSpeciesOf(row);
+    const baseSpecies = baseFormOf(bossSpecies, EVOLUTION_STEPS);
+    const bond = await boss.lockBond(mapId, user.id, bossSpecies);
+    if (bond.befriendedAt !== null) {
+      throw new AppError('CONFLICT', MESSAGES.haveOne(nameOf(baseSpecies)));
+    }
+    if (asks.length >= rules.befriend.asksPerWin || !asksOpen(row, rules, at)) {
+      throw new AppError('CONFLICT', MESSAGES.stompedOff(nameOf(bossSpecies)));
+    }
+    if (ask !== asks.length + 1) throw new AppError('CONFLICT', MESSAGES.mixedUp);
+
+    await consumeItems(
+      tx,
+      { mapId, userId: user.id },
+      { [HEART_CHARM]: rules.befriend.charmsPerAsk },
+      'boss-befriend',
+      row.id,
+      at,
+    );
+
+    const standing = row.state.sides.a.squishies.filter((s) => s.energy > 0).length;
+    const chance = bossBefriendChance(rules.befriend, standing, bond.misses);
+    // The patch's seed is server-only; the battle's is sent once the fight ends.
+    const patchSeed = (await boss.findMap(mapId))?.seed ?? deriveSeed('hand-authored-map', mapId);
+    const roll = bossBefriendRoll(row.seed, patchSeed, ask);
+    let squishyId: string | null = null;
+    if (roll <= chance) {
+      const spawns = createSpawnsRepo(tx);
+      const partner = (await spawns.partnerLevel(mapId, user.id)) ?? 1;
+      const fought = row.state.sides.b.squishies[0]!;
+      const friend = await battles.insertSquishy({
+        mapId,
+        ownerUserId: user.id,
+        speciesId: baseSpecies,
+        element: SPECIES.get(baseSpecies)?.element ?? fought.element,
+        feeling: fought.feeling,
+        level: befriendedLevel(
+          baseSpecies,
+          bossJoinLevel(rules.befriend, partner),
+          EVOLUTION_STEPS,
+          GROWTH_RULES,
+        ),
+        contentment: CARE_RULES.startContentment,
+        at,
+      });
+      squishyId = friend.id;
+      await spawns.markCaught(mapId, user.id, baseSpecies, at);
+      await boss.befriended(mapId, user.id, bossSpecies, friend.id, at);
+      await boss.setAsks(mapId, user.id, encounter.windowId, [
+        ...(encounter.asks as unknown[]),
+        record('joined'),
+      ]);
+      const credit = { userId: user.id, refId: row.id, source: 'capture' as const, mapId, at };
+      await creditCoins(tx, { ...credit, amount: COIN_RULES.capture.wild });
+      await creditHeartCoins(tx, { ...credit, amount: HEART_COIN_RULES.capture.wild });
+      await appendGameEvent(tx, {
+        mapId,
+        type: 'squishy.captured',
+        actorUserId: user.id,
+        payload: {
+          battleId: row.id,
+          userId: user.id,
+          squishyId: friend.id,
+          speciesId: friend.speciesId,
+          level: friend.level,
+        },
+      });
+      // The patch line (#391): its name only to members who have met it.
+      const rarity = SPECIES.get(baseSpecies)?.rarity;
+      if (rarity && rarity !== 'secret' && rareFindTier(rarity)?.patchLine) {
+        await appendGameEvent(tx, {
+          mapId,
+          type: 'squishy.celebrated',
+          actorUserId: user.id,
+          payload: {
+            battleId: row.id,
+            userId: user.id,
+            speciesId: baseSpecies,
+            rarity,
+            metBy: await spawns.seenBy(mapId, baseSpecies),
+          },
+        });
+      }
+    } else {
+      await boss.addMiss(mapId, user.id, bossSpecies);
+      await boss.setAsks(mapId, user.id, encounter.windowId, [
+        ...(encounter.asks as unknown[]),
+        record('not-yet'),
+      ]);
+    }
+    return { outcome: squishyId ? 'joined' : 'not-yet', squishyId };
+
+    function record(outcome: AskRecord['outcome']): AskRecord {
+      return AskRecordSchema.parse({
+        ask,
+        battleId: row!.id,
+        at: at.toISOString(),
+        standing,
+        misses: bond.misses,
+        chance,
+        roll,
+        outcome,
+        squishyId,
+      });
+    }
+  });
+}
+
+/**
+ * A mini-boss fight's extras for its Keeper (`PlayerBattle.boss`, #190 plan
+ * §1), or undefined for any other battle. Reads only; never odds or warmth.
+ */
+export async function bossBattleView(
+  db: Executor,
+  rules: BossEventRules,
+  row: BattleRow,
+  at: Date,
+): Promise<PlayerBattleBoss | undefined> {
+  if (row.kind !== 'miniboss') return undefined;
+  const repo = createBossRepo(db);
+  const window = await repo.visitOf(row.mapId, row.startedAt);
+  if (!window) return undefined;
+  const map = await repo.findMap(row.mapId);
+  const out = at < window.opensAt || at >= window.endsAt;
+  const used =
+    map && !out
+      ? await repo.triesSince(row.mapId, row.playerUserId, localDayStart(at, map.timeZone))
+      : rules.triesPerDay;
+  const base = {
+    eventWindow: { id: window.windowId, endsAt: window.endsAt.toISOString() },
+    triesLeftToday: Math.max(0, rules.triesPerDay - used),
+    charmsPerAsk: rules.befriend.charmsPerAsk,
+  };
+  if (!won(row)) return { ...base, asksLeft: 0, befriend: 'none' };
+  const asks = asksOf(await repo.findWonEncounter(row.mapId, row.playerUserId, row.id), row.id);
+  if (asks.some((a) => a.outcome === 'joined')) return { ...base, asksLeft: 0, befriend: 'joined' };
+  const bond = await repo.findBond(row.mapId, row.playerUserId, bossSpeciesOf(row));
+  if (bond?.befriendedAt) return { ...base, asksLeft: 0, befriend: 'have-one' };
+  const asksLeft = asksOpen(row, rules, at)
+    ? Math.max(0, rules.befriend.asksPerWin - asks.length)
+    : 0;
+  return { ...base, asksLeft, befriend: asks.length === 0 ? 'offer' : 'not-yet' };
+}
+
+/** Has this Keeper's win on this visit been answered with a yes (`BossVisit.state` `friend`)? */
+export function joinedOn(encounter: BossEncounterRow | null): boolean {
+  if (!encounter?.wonBattleId) return false;
+  return asksOf(encounter, encounter.wonBattleId).some((a) => a.outcome === 'joined');
+}

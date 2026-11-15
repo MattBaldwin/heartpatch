@@ -5,6 +5,7 @@ import { withTransaction, type Executor } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import {
   battles,
+  bossBonds,
   bossEncounters,
   bossWindows,
   mapMembers,
@@ -21,6 +22,8 @@ const GAP_TERRAIN = 'junipers-gap';
 const NOT_GROUND = ['trading-post', GAP_TERRAIN];
 
 export type BossWindowRow = typeof bossWindows.$inferSelect;
+export type BossEncounterRow = typeof bossEncounters.$inferSelect;
+export type BossBondRow = typeof bossBonds.$inferSelect;
 
 /** A patch as the boss schedule reads it: its seed is server-only. */
 export interface BossMapRow {
@@ -67,6 +70,38 @@ export interface BossRepo {
   lastActionAt: (mapId: string, userId: string, startedAt: Date) => Promise<Date | null>;
   /** Has the Keeper met this species (catalog seen)? */
   hasSeen: (mapId: string, userId: string, speciesId: string) => Promise<boolean>;
+  /** The visit a fight started in (the latest window opened by then), or null. */
+  visitOf: (mapId: string, startedAt: Date) => Promise<BossWindowRow | null>;
+  /** The Keeper's row for the visit this battle won, or null (befriend reads it unlocked for the view). */
+  findWonEncounter: (
+    mapId: string,
+    userId: string,
+    battleId: string,
+  ) => Promise<BossEncounterRow | null>;
+  /** The same row `FOR UPDATE` (tech spec §7 step 5e, after the battle): one ask at a time. */
+  lockWonEncounter: (
+    mapId: string,
+    userId: string,
+    battleId: string,
+  ) => Promise<BossEncounterRow | null>;
+  /** The befriend asks after a win (server-only record: chance, roll, warmth). */
+  setAsks: (mapId: string, userId: string, windowId: string, asks: unknown[]) => Promise<void>;
+  findBond: (mapId: string, userId: string, speciesId: string) => Promise<BossBondRow | null>;
+  /**
+   * The Keeper's bond with this boss kind, made at 0 misses if new, and
+   * locked (step 5e, after the visit row).
+   */
+  lockBond: (mapId: string, userId: string, speciesId: string) => Promise<BossBondRow>;
+  /** A "not yet": one more miss (warmth) on the bond. */
+  addMiss: (mapId: string, userId: string, speciesId: string) => Promise<void>;
+  /** A yes: the bond holds the friend, and stays "friends" even if it's traded or let go. */
+  befriended: (
+    mapId: string,
+    userId: string,
+    speciesId: string,
+    squishyId: string,
+    at: Date,
+  ) => Promise<void>;
 }
 
 export interface BossTxRepo extends BossRepo {
@@ -89,13 +124,31 @@ export function createBossRepo(db: Executor): BossRepo {
   /** The visit a fight started in: the latest window opened by then. */
   const visitOf = async (mapId: string, startedAt: Date) => {
     const [visit] = await db
-      .select({ windowId: bossWindows.windowId })
+      .select()
       .from(bossWindows)
       .where(and(eq(bossWindows.mapId, mapId), lte(bossWindows.opensAt, startedAt)))
       .orderBy(desc(bossWindows.opensAt))
       .limit(1);
     return visit ?? null;
   };
+  // By the primary key's prefix, then the battle (no index on `won_battle_id`).
+  const wonEncounter = (mapId: string, userId: string, battleId: string) =>
+    db
+      .select()
+      .from(bossEncounters)
+      .where(
+        and(
+          eq(bossEncounters.mapId, mapId),
+          eq(bossEncounters.userId, userId),
+          eq(bossEncounters.wonBattleId, battleId),
+        ),
+      );
+  const bondKey = (mapId: string, userId: string, speciesId: string) =>
+    and(
+      eq(bossBonds.mapId, mapId),
+      eq(bossBonds.userId, userId),
+      eq(bossBonds.speciesId, speciesId),
+    );
   return {
     transaction: (fn) =>
       withTransaction(db, (tx) =>
@@ -265,6 +318,60 @@ export function createBossRepo(db: Executor): BossRepo {
             isNull(bossEncounters.wonBattleId),
           ),
         );
+    },
+
+    visitOf,
+
+    findWonEncounter: async (mapId, userId, battleId) =>
+      (await wonEncounter(mapId, userId, battleId))[0] ?? null,
+
+    lockWonEncounter: async (mapId, userId, battleId) =>
+      (await wonEncounter(mapId, userId, battleId).for('update'))[0] ?? null,
+
+    setAsks: async (mapId, userId, windowId, asks) => {
+      await db
+        .update(bossEncounters)
+        .set({ asks })
+        .where(
+          and(
+            eq(bossEncounters.mapId, mapId),
+            eq(bossEncounters.userId, userId),
+            eq(bossEncounters.windowId, windowId),
+          ),
+        );
+    },
+
+    findBond: async (mapId, userId, speciesId) => {
+      const [row] = await db
+        .select()
+        .from(bossBonds)
+        .where(bondKey(mapId, userId, speciesId));
+      return row ?? null;
+    },
+
+    lockBond: async (mapId, userId, speciesId) => {
+      await db.insert(bossBonds).values({ mapId, userId, speciesId }).onConflictDoNothing();
+      const [row] = await db
+        .select()
+        .from(bossBonds)
+        .where(bondKey(mapId, userId, speciesId))
+        .for('update');
+      if (!row) throw new Error('lockBond: the bond row is missing after its insert');
+      return row;
+    },
+
+    addMiss: async (mapId, userId, speciesId) => {
+      await db
+        .update(bossBonds)
+        .set({ misses: sql`${bossBonds.misses} + 1` })
+        .where(bondKey(mapId, userId, speciesId));
+    },
+
+    befriended: async (mapId, userId, speciesId, squishyId, at) => {
+      await db
+        .update(bossBonds)
+        .set({ squishyId, befriendedAt: at })
+        .where(bondKey(mapId, userId, speciesId));
     },
 
     hasSeen: async (mapId, userId, speciesId) => {

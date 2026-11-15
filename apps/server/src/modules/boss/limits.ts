@@ -13,6 +13,11 @@ export const BOSS_RATE_LIMITS = {
     perIp: { max: 60, windowMs: MINUTE_MS }, // TUNE: guess
     perUser: { max: 20, windowMs: MINUTE_MS }, // TUNE: guess
   },
+  // "Ask it to be your friend?": two asks a win, so a handful is plenty.
+  befriend: {
+    perIp: { max: 60, windowMs: MINUTE_MS }, // TUNE: guess
+    perUser: { max: 20, windowMs: MINUTE_MS }, // TUNE: guess
+  },
 } as const satisfies RateLimitTable;
 
 export type BossAction = keyof typeof BOSS_RATE_LIMITS;

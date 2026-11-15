@@ -6,6 +6,7 @@ import { BattleStatSchema, MoveSchema } from './data/moves.js';
 import { SpeciesSchema } from './data/species.js';
 import { ElementIdSchema, FeelingIdSchema } from './data/elements.js';
 import { ItemCountsSchema } from './inventory.js';
+import { LocalDateSchema } from './time.js';
 
 /**
  * Battle inputs (design doc §6): the setup a battle starts from and the
@@ -539,6 +540,35 @@ export const LiveBattleViewSchema = z.object({
 });
 export type LiveBattleView = z.infer<typeof LiveBattleViewSchema>;
 
+/**
+ * Where a won mini-boss fight's befriending stands for its Keeper (#190 plan §3):
+ * - `none`: nothing to ask (the fight is going, or it wasn't won);
+ * - `offer`: "Ask it to be your friend?", no ask yet;
+ * - `not-yet`: the last ask was a "not yet" (`asksLeft` says if another can follow);
+ * - `joined`: an ask from this win said yes;
+ * - `have-one`: they already have one of this boss, so there's no ask.
+ */
+export const BossBefriendStateSchema = z.enum(['none', 'offer', 'not-yet', 'joined', 'have-one']);
+export type BossBefriendState = z.infer<typeof BossBefriendStateSchema>;
+
+/**
+ * A mini-boss fight's extras (#190 plan §1), to its own Keeper only. Never
+ * the odds, the warmth or the schedule (CLAUDE.md rule 6): the client counts
+ * "not yet" hearts from what it's been told, not from a number here.
+ */
+export const PlayerBattleBossSchema = z.object({
+  /** The visit the fight was in. */
+  eventWindow: z.object({ id: LocalDateSchema, endsAt: z.iso.datetime() }),
+  /** Fights left today on this visit. */
+  triesLeftToday: z.number().int().min(0),
+  /** Heart Charms one ask spends. */
+  charmsPerAsk: z.number().int().min(1),
+  /** Asks this win still has (0 once it joined, if they have one, or the asks closed). */
+  asksLeft: z.number().int().min(0),
+  befriend: BossBefriendStateSchema,
+});
+export type PlayerBattleBoss = z.infer<typeof PlayerBattleBossSchema>;
+
 export const PlayerBattleSchema = z.object({
   id: z.uuid(),
   mapId: z.uuid(),
@@ -596,6 +626,8 @@ export const PlayerBattleSchema = z.object({
    * answers. Giving up meanwhile counts as leaving (the land holds).
    */
   defensePrompt: z.object({ expiresAt: z.iso.datetime(), now: z.iso.datetime() }).optional(),
+  /** A mini-boss fight (#190), to its own Keeper. Absent on every other battle. */
+  boss: PlayerBattleBossSchema.optional(),
 });
 export type PlayerBattle = z.infer<typeof PlayerBattleSchema>;
 

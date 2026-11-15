@@ -13,6 +13,7 @@ import { instantOfLocalDate, localDate, localDayStart, type Clock } from '../../
 import type { BattlesService, MinibossBattlePort, StartResult } from '../battles/service.js';
 import { requireMember } from '../maps/members.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
+import { befriendBoss, bossBattleView, joinedOn, type BefriendResult } from './befriend.js';
 import { createBossRepo, type BossMapRow, type BossWindowRow } from './repo.js';
 
 // Kid-readable messages (style guide §6).
@@ -45,6 +46,12 @@ export interface BossService {
    * opened. Tests narrow it to their own patches (the database is shared).
    */
   sweep: (only?: readonly string[]) => Promise<number>;
+  /** Asks a beaten boss to be a friend (`POST /battles/:battleId/befriend`, #190 plan §3). */
+  befriend: (
+    user: PublicUser,
+    battleId: string,
+    ask: number,
+  ) => Promise<BefriendResult & { battle: Awaited<ReturnType<BattlesService['get']>> }>;
 }
 
 /** The boss module's side of a fight's end (#190): a win ends the visit for its Keeper. */
@@ -52,6 +59,7 @@ export function createMinibossBattlePort(rules: BossEventRules = BOSS_EVENTS): M
   return {
     bundle: () => ({ ...rules.bundle }),
     abandonAfterMs: rules.idleMinutes * 60_000,
+    view: (tx, battle, at) => bossBattleView(tx, rules, battle, at),
     lastActionAt: (tx, battle) =>
       createBossRepo(tx).lastActionAt(battle.mapId, battle.playerUserId, battle.startedAt),
     acted: (tx, battle, at) =>
@@ -165,15 +173,19 @@ export function createBossService(options: BossServiceOptions): BossService {
       const repo = createBossRepo(db);
       const partner = (await createSpawnsRepo(db).partnerLevel(mapId, user.id)) ?? 0;
       const encounter = await repo.findEncounter(mapId, user.id, window.windowId);
-      const state =
-        encounter?.wonBattleId != null
+      const state = joinedOn(encounter)
+        ? 'friend'
+        : encounter?.wonBattleId != null
           ? 'beaten'
           : partner < rules.minPlayerLevel
             ? 'too-big'
             : 'here';
       // A Keeper too small to fight still sees it (#190 plan §2): its name
       // shows for them as for a Keeper who has met it.
-      const met = state === 'too-big' || (await repo.hasSeen(mapId, user.id, window.speciesId));
+      const met =
+        state === 'too-big' ||
+        state === 'friend' ||
+        (await repo.hasSeen(mapId, user.id, window.speciesId));
       return {
         window: { id: window.windowId, endsAt: window.endsAt.toISOString() },
         tile: { q: window.q, r: window.r },
@@ -217,6 +229,7 @@ export function createBossService(options: BossServiceOptions): BossService {
           },
           tile: { q: window.q, r: window.r },
           // The Keeper's row for this visit (step 5e), right after the battle.
+          // (The start then marks the boss seen, so the marker names it.)
           started: async (inner, battle) => {
             await createBossRepo(inner).insertEncounter(
               mapId,
@@ -228,6 +241,11 @@ export function createBossService(options: BossServiceOptions): BossService {
           },
         };
       });
+    },
+
+    befriend: async (user, battleId, ask) => {
+      const result = await befriendBoss(db, rules, user, battleId, ask, now());
+      return { ...result, battle: await battles.get(user, battleId) };
     },
 
     sweep: async (only) => {
