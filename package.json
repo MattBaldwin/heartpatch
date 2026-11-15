@@ -23,6 +23,7 @@
     "sim:long-night": "pnpm --filter @heartpatch/shared sim:long-night",
     "sim:patch-economy": "pnpm --filter @heartpatch/shared sim:patch-economy",
     "sim:wild-isle": "pnpm --filter @heartpatch/shared sim:wild-isle",
+    "sim:boss": "pnpm --filter @heartpatch/shared sim:boss",
     "lint": "NODE_OPTIONS=--max-old-space-size=6144 eslint . --max-warnings 0 && node scripts/check-filenames.mjs && node scripts/check-procedural-rules.mjs",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",

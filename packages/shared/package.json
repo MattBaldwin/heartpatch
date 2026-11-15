@@ -33,7 +33,8 @@
     "sim:hollowed": "tsx scripts/sim/hollowed-cli.ts",
     "sim:long-night": "tsx scripts/sim/long-night-cli.ts",
     "sim:patch-economy": "tsx scripts/sim/patch-economy-cli.ts",
-    "sim:wild-isle": "tsx scripts/sim/wild-isle-cli.ts"
+    "sim:wild-isle": "tsx scripts/sim/wild-isle-cli.ts",
+    "sim:boss": "tsx scripts/sim/boss-cli.ts"
   },
   "dependencies": {
     "zod": "^4.6.5"
