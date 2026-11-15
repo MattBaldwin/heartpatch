@@ -65,7 +65,8 @@ import { createJourneyBattlePort, createJourneysService } from '../modules/journ
 import { createLongNightRepo } from '../modules/long-night/repo.js';
 import { createLongNightService } from '../modules/long-night/service.js';
 import { createLoreConsumer } from '../modules/lore/consumer.js';
-import { createComputerMateSteps } from '../modules/computer-mates/intents.js';
+import { computerChallenge, createComputerMateSteps } from '../modules/computer-mates/intents.js';
+import { createChallengesService } from '../modules/challenges/service.js';
 import { createComputerMatesRepo } from '../modules/computer-mates/repo.js';
 import { createComputerMatesService } from '../modules/computer-mates/service.js';
 import { createMapsRepo } from '../modules/maps/repo.js';
@@ -75,7 +76,7 @@ import { createMapsService } from '../modules/maps/service.js';
 import { createStartersService } from '../modules/starters/service.js';
 import { createTerritoryService, createTileBattlePort } from '../modules/territory/service.js';
 import { createRoadsRepo } from '../modules/roads/repo.js';
-import { createTendingRepo } from '../modules/territory/repo.js';
+import { createTendingRepo, createTerritoryRepo } from '../modules/territory/repo.js';
 import { createTradesRepo } from '../modules/trades/repo.js';
 import { createTradesService } from '../modules/trades/service.js';
 import { createTutorialConsumer } from '../modules/tutorial/consumer.js';
@@ -126,6 +127,7 @@ import {
   battles,
   bossBonds,
   bossEncounters,
+  challenges,
 } from './schema.js';
 import { bigMove } from '../../tests/big-move.js';
 
@@ -3798,6 +3800,181 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
       });
       expect(offer!.status).toBe('cancelled');
       expect((await mateRow(mate)).step).toBeGreaterThan(0);
+    });
+
+    /**
+     * A mate's challenge setup (#386e), driven straight through
+     * `attackAsComputer`: the patch's clock at noon (quiet hours never
+     * apply), the kid past their shield and holding every other free tile,
+     * and T a free tile beside a mate's home ring, outside the kid's
+     * buffer, now the kid's.
+     */
+    async function mateChallengeSetup(prefix: string, kidOnline: boolean) {
+      const { kid, mapId, ids } = await matesPatch(prefix, true);
+      const offset = 12 - at.getUTCHours();
+      const timeZone =
+        offset === 0 ? 'UTC' : `Etc/GMT${offset > 0 ? '-' : '+'}${String(Math.abs(offset))}`;
+      await db.update(maps).set({ timeZone }).where(eq(maps.id, mapId));
+      await db
+        .update(mapMembers)
+        .set({ joinedAt: new Date(at.getTime() - 3 * 24 * 60 * 60 * 1000) })
+        .where(eq(mapMembers.mapId, mapId));
+      const all = await db.select().from(tiles).where(eq(tiles.mapId, mapId));
+      const byKey = new Map(all.map((t) => [hexKey(t), t]));
+      const kidSeed = all.filter((t) => t.ownerUserId === kid.id && t.homeSlot !== null);
+      const free = (t: (typeof all)[number] | undefined): t is (typeof all)[number] =>
+        t !== undefined &&
+        t.ownerUserId === null &&
+        t.homeSlot === null &&
+        t.communityId === null &&
+        !isTradingPost(t) &&
+        !isWaterTerrain(t.terrain);
+      const far = (t: (typeof all)[number]) =>
+        kidSeed.every((h) => hexDistance(h, t) > COMPUTER_MATES.rules.kidHomeBuffer + 3);
+      let found: { mate: string; target: (typeof all)[number] } | null = null;
+      for (const mate of ids) {
+        const target = all
+          .filter((t) => t.ownerUserId === mate && t.homeSlot !== null)
+          .flatMap((h) => hexNeighbors(h).map((n) => byKey.get(hexKey(n))))
+          .find((t) => free(t) && far(t));
+        if (target) {
+          found = { mate, target };
+          break;
+        }
+      }
+      expect(found).not.toBeNull();
+      const { mate, target } = found!;
+      await db
+        .update(tiles)
+        .set({ ownerUserId: kid.id })
+        .where(
+          and(
+            eq(tiles.mapId, mapId),
+            sql`${tiles.ownerUserId} is null`,
+            sql`${tiles.homeSlot} is null`,
+          ),
+        );
+      // The kid's squishy on watch on T, so an online kid is asked "Defend now?".
+      const [guard] = await db
+        .insert(squishies)
+        .values({
+          mapId,
+          ownerUserId: kid.id,
+          speciesId: STARTERS.speciesIds[0]!,
+          element: 'fire',
+          feeling: 'cozy',
+        })
+        .returning({ id: squishies.id });
+      await createTerritoryRepo(db).replaceDefenders(mapId, target.id, [guard!.id], at);
+      const isOnline = (_mapId: string, userId: string) => kidOnline && userId === kid.id;
+      const fights = createBattlesService({
+        db,
+        clock: () => at,
+        isOnline,
+        tileBattles: createTileBattlePort(),
+      });
+      const land = createTerritoryService({ db, clock: () => at, battles: fights, isOnline });
+      const persona = COMPUTER_MATES.personas[0]!;
+      const challenge = () =>
+        land.attackAsComputer(
+          { id: mate, username: '' },
+          mapId,
+          { q: target.q, r: target.r },
+          computerChallenge(persona, COMPUTER_MATES.rules, isOnline),
+        );
+      return { kid, mapId, mate, target, fights, challenge };
+    }
+
+    it("takes the tile before the patch's computer-challenge lock (a mate's challenge vs a kid's attack holding the tile, #386e step 0, 2, 6 then 6c)", async () => {
+      const { mapId, mate, target, challenge } = await mateChallengeSetup('cmchal', true);
+      let started: Awaited<ReturnType<typeof challenge>> | undefined;
+      await holdThen(
+        // A kid's attack on T holds the tile (6) while the mate's challenge
+        // waits there, holding only its seat (0) and the kid's member row (2).
+        (tx) =>
+          tx.select({ id: tiles.id }).from(tiles).where(eq(tiles.id, target.id)).for('update'),
+        async () => {
+          started = await challenge();
+        },
+        async (tx) => {
+          // The challenge lock (6c) and `maps`: free while it waits on the tile.
+          await createComputerMatesRepo(tx).lockChallenges(mapId);
+          await lockMapRow(tx, mapId);
+        },
+      );
+      expect(started?.created).toBe(true);
+      const [attack] = await db.select().from(tileAttacks).where(eq(tileAttacks.tileId, target.id));
+      expect(attack?.attackerUserId).toBe(mate);
+    });
+
+    it("plays an all-AI challenge out without holding its expired prompt (playOut, #386e step 5 then finish's attempt row and tile; the prompt 9c in its own transaction first)", async () => {
+      const { mapId, mate, fights, challenge } = await mateChallengeSetup('cmplay', true);
+      const started = await challenge();
+      expect(started.created).toBe(true);
+      const battleId = started.battle.id;
+      const [prompt] = await db
+        .select()
+        .from(challenges)
+        .where(and(eq(challenges.battleId, battleId), eq(challenges.kind, 'defense')));
+      expect(prompt?.status).toBe('pending');
+      at = new Date(prompt!.expiresAt.getTime() + 1000);
+      await holdThen(
+        // `finish` ends the attempt row (and takes T on a win) under the
+        // battle lock (5), win or lose; the hold stands in for either.
+        (tx) =>
+          tx
+            .select({ id: tileAttacks.id })
+            .from(tileAttacks)
+            .where(eq(tileAttacks.battleId, battleId))
+            .for('update'),
+        () => fights.settleComputer(mapId, mate),
+        async (tx) => {
+          // The prompt (9c), expired in its own transaction, is free.
+          await tx
+            .select({ id: challenges.id })
+            .from(challenges)
+            .where(eq(challenges.id, prompt!.id))
+            .for('update');
+          await lockMapRow(tx, mapId);
+        },
+      );
+      const [ended] = await db.select().from(battles).where(eq(battles.id, battleId));
+      expect(ended?.status).toBe('finished');
+      const [expired] = await db.select().from(challenges).where(eq(challenges.id, prompt!.id));
+      expect(expired?.status).toBe('expired');
+    });
+
+    it("takes both seats before both member rows and the ask (a kid's friendly with a mate, startFriendly unchanged, #386e step 0 then 2 then 9c)", async () => {
+      const { kid, mapId, ids } = await matesPatch('cmfriendly', true);
+      const mate = ids[0]!;
+      await db.insert(squishies).values({
+        mapId,
+        ownerUserId: kid.id,
+        speciesId: STARTERS.speciesIds[0]!,
+        element: 'fire',
+        feeling: 'cozy',
+      });
+      const fights = createBattlesService({ db, clock: () => at });
+      const asks = createChallengesService({ db, battles: fights, clock: () => at });
+      let sent: Awaited<ReturnType<typeof asks.send>> | undefined;
+      await holdThen(
+        // The mate's seat (0): the ask is written, then the start waits here.
+        (tx) => createBattlesRepo(tx).lockBattleSeats(mapId, [mate]),
+        async () => {
+          sent = await asks.send(kid, mapId, { toUserId: mate });
+        },
+        async (tx) => {
+          // Both member rows (2) and the ask (9c): free while it waits on the seats.
+          for (const id of [kid.id, mate].sort()) await createMapsRepo(tx).lockMember(mapId, id);
+          await tx
+            .select({ id: challenges.id })
+            .from(challenges)
+            .where(and(eq(challenges.mapId, mapId), eq(challenges.fromUserId, kid.id)))
+            .for('update');
+          await lockMapRow(tx, mapId);
+        },
+      );
+      expect(sent).toMatchObject({ status: 'accepted', toUserId: mate });
     });
   });
 });

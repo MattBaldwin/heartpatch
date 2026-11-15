@@ -157,12 +157,25 @@ describe('computer mates in the map-fill model (#386c)', () => {
     runMapFill(scenario('solo-away-3-computers'), FADING_GENTLE, days),
   ];
   const { rows, gates } = computerMatesGates(runs);
-  const gate = (g: 'a' | 'c' | 'd') => gates.filter((x) => x.gate === g);
+  const gate = (g: 'a' | 'b' | 'c' | 'd') => gates.filter((x) => x.gate === g);
 
   it('a solo kid with 3 mates keeps their home ring and at least 90 % of a 4-kid patch kid’s land (a)', () => {
     expect(gate('a')).toHaveLength(1);
     expect(gate('a').every((g) => g.pass)).toBe(true);
     expect(rows.find((r) => r.scenario === 'solo-casual-3-computers')?.homeRingLost).toBe(0);
+  });
+
+  it('a kid loses at most the weekly challenge cap to mates, though every challenge wins (b)', () => {
+    expect(gate('b')).toHaveLength(2);
+    expect(gate('b').every((g) => g.pass)).toBe(true);
+    const solo = runs[1]!;
+    const challenges = solo.days.reduce(
+      (t, d) => t + d.mateChallenges.reduce((u, n) => u + n, 0),
+      0,
+    );
+    expect(challenges).toBeGreaterThan(0);
+    // Never in the kid's first two days (the 48 h shield).
+    expect(solo.days.slice(0, 2).every((d) => d.mateChallenges.every((n) => n === 0))).toBe(true);
   });
 
   it('mates never hold more than their landCapPercent share (c)', () => {

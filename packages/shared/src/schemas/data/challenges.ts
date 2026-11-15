@@ -24,5 +24,11 @@ export const ChallengeRulesSchema = z.strictObject({
    * (#728); each direction counts on its own. Past it, XP still flows.
    */
   paidWinsPerPairPerDay: positiveInt,
+  /**
+   * Friendly wins over computer patch-mates that pay coins a patch day, all
+   * of them together (#386e, owner decision 5): three mates are worth one
+   * sibling. Counted on top of the per-pair cap. Past it, XP still flows.
+   */
+  paidWinsPerDayVsComputers: positiveInt,
 });
 export type ChallengeRules = z.infer<typeof ChallengeRulesSchema>;

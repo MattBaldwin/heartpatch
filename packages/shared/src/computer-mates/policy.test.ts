@@ -5,7 +5,11 @@ import { deriveSeed, Rng } from '../rng/index.js';
 import { TRADING_POST_TERRAIN } from '../territory/reach.js';
 import { TRADE_VALUES } from '../data/trading.js';
 import {
+  challengeTarget,
   claimTarget,
+  inQuietHours,
+  mayChallenge,
+  type MateChallengeView,
   insideFairBand,
   mateGift,
   mateItems,
@@ -337,6 +341,116 @@ describe('computer mates policy', () => {
         ).toBe(null);
         expect(nextIntent(quiet(trading({ kids: [] })), trader, rules, rngAt(step))).toBe(null);
       }
+    });
+  });
+
+  describe("challenges on a kid's tile (386e)", () => {
+    const challenger = {
+      ...persona,
+      weights: { claim: 0, trade: 0, gift: 0, guard: 0, challenge: 1 },
+    };
+    /** The kid holds everything 2–6 from their seed on the mate's side (q >= 2). */
+    const kidLand = () =>
+      patch((t) => {
+        const d = hexDistance(t, KID_SEED);
+        return d >= 2 && d <= 6 && t.q >= 2 ? { ownerUserId: KID } : {};
+      });
+    const open: MateChallengeView = {
+      pvpMode: 'gentle',
+      thisWeek: 0,
+      localHour: 12,
+      busy: false,
+      shielded: [],
+      online: [KID],
+      fenced: [],
+    };
+    const challengeView = (
+      tiles: MateViewTile[],
+      c: Partial<MateChallengeView> = {},
+      over: Partial<MateView> = {},
+    ) => view(tiles, { challenge: { ...open, ...c }, ...over });
+    const intents = (v: MateView) =>
+      Array.from({ length: 20 }, (_, step) => nextIntent(v, challenger, rules, rngAt(step)));
+
+    it("challenges a kid's border tile next to its land, outside the home buffer and never-fade ring", () => {
+      const v = challengeView(kidLand());
+      for (const intent of intents(v)) {
+        expect(intent?.kind).toBe('challenge');
+        if (intent?.kind !== 'challenge') continue;
+        const tile = v.tiles.find((t) => t.q === intent.q && t.r === intent.r)!;
+        expect(tile.ownerUserId).toBe(KID);
+        expect(tile.homeSlot).toBeNull();
+        expect(hexDistance(tile, KID_SEED)).toBeGreaterThan(Math.max(rules.kidHomeBuffer, 2));
+        expect(hexDistance(tile, MATE_SEED)).toBe(2);
+      }
+    });
+
+    it('catch-up never challenges', () => {
+      const v = challengeView(kidLand(), {}, { catchUp: true });
+      expect(mayChallenge(v, rules)).toBe(false);
+      expect(intents(v).some((i) => i?.kind === 'challenge')).toBe(false);
+    });
+
+    it('is refused in Off, in quiet hours, while busy, past the weekly cap, for a shielded kid, at the land cap and under minKidTiles', () => {
+      const tiles = kidLand();
+      const refused: MateView[] = [
+        challengeView(tiles, { pvpMode: 'off' }),
+        challengeView(tiles, { localHour: rules.quietHours.from }),
+        challengeView(tiles, { localHour: 2 }),
+        challengeView(tiles, { busy: true }),
+        challengeView(tiles, { thisWeek: rules.challengesPerPatchWeek.gentle }),
+        challengeView(tiles, { pvpMode: 'on', thisWeek: rules.challengesPerPatchWeek.on }),
+        challengeView(tiles, { shielded: [KID] }),
+        // At its land cap (a share of 0 here): a won challenge would pass it.
+        challengeView(tiles, {}, { seats: 10_000 }),
+        view(tiles),
+      ];
+      for (const v of refused) {
+        expect(intents(v).some((i) => i?.kind === 'challenge')).toBe(false);
+      }
+      // Fewer than minKidTiles outside home: never.
+      const few = patch((t) =>
+        hexDistance(t, MATE_SEED) === 2 && t.q === 6 ? { ownerUserId: KID } : {},
+      );
+      expect(few.filter((t) => t.ownerUserId === KID && t.homeSlot === null).length).toBeLessThan(
+        rules.minKidTiles,
+      );
+      expect(challengeTarget(challengeView(few), rules)).toBeNull();
+    });
+
+    it('challenges only a kid who has the patch open right now, never one away (#823 ruling)', () => {
+      const tiles = kidLand();
+      expect(challengeTarget(challengeView(tiles), rules)).not.toBeNull();
+      // Warm because another kid looked, but this kid is away: never.
+      const away = challengeView(tiles, { online: ['another-kid'] });
+      expect(challengeTarget(away, rules)).toBeNull();
+      expect(intents(away).some((i) => i?.kind === 'challenge')).toBe(false);
+      expect(challengeTarget(challengeView(tiles, { online: [] }), rules)).toBeNull();
+    });
+
+    it('never challenges a fenced tile: fences hold computer friends off (#823 ruling)', () => {
+      const tiles = kidLand();
+      const first = challengeTarget(challengeView(tiles), rules)!;
+      const next = challengeTarget(challengeView(tiles, { fenced: [first] }), rules);
+      expect(next).not.toEqual(first);
+      // Every border tile fenced: nothing to challenge.
+      const border = tiles.filter((t) => t.ownerUserId === KID && t.homeSlot === null);
+      expect(challengeTarget(challengeView(tiles, { fenced: border }), rules)).toBeNull();
+    });
+
+    it('never challenges a tile someone is already battling for', () => {
+      const tiles = kidLand();
+      const first = challengeTarget(challengeView(tiles), rules)!;
+      const next = challengeTarget(challengeView(tiles, {}, { contested: [first] }), rules);
+      expect(next).not.toEqual(first);
+    });
+
+    it('quiet hours wrap past midnight', () => {
+      const quiet = { quietHours: { from: 21, to: 7 } };
+      expect([21, 23, 0, 6].every((h) => inQuietHours(h, quiet))).toBe(true);
+      expect([7, 12, 20].some((h) => inQuietHours(h, quiet))).toBe(false);
+      expect(inQuietHours(3, { quietHours: { from: 1, to: 5 } })).toBe(true);
+      expect(inQuietHours(3, { quietHours: { from: 4, to: 4 } })).toBe(false);
     });
   });
 });

@@ -456,9 +456,11 @@ const RewardCoinsSchema = z.object({
  * scooted home (coins never pay for a scoot, owner decision 2026-11-14), a
  * friendly's paid wins over that patch-mate today are used up
  * (`paidWinsPerPairPerDay`), or the land's guardians held it alone (nobody
- * on watch, nobody played it live; side `b` only).
+ * on watch, nobody played it live; side `b` only), or a kid's friendly win
+ * over a computer patch-mate when their paid wins over all computer mates
+ * today are used up (`paidWinsPerDayVsComputers`, #386e: `'computer-cap'`).
  */
-export const UnpaidReasonSchema = z.enum(['scooted', 'pair-cap', 'guardians']);
+export const UnpaidReasonSchema = z.enum(['scooted', 'pair-cap', 'guardians', 'computer-cap']);
 export type UnpaidReason = z.infer<typeof UnpaidReasonSchema>;
 
 export const BattleRewardsSchema = z.object({
@@ -479,7 +481,8 @@ export const BattleRewardsSchema = z.object({
   /**
    * Set when side `a` won but got no win coins (#728): it was a scoot
    * (`'scooted'`), or a friendly past `paidWinsPerPairPerDay` over that
-   * patch-mate today (`'pair-cap'`). Null otherwise and for older battles.
+   * patch-mate today (`'pair-cap'`), or over all computer patch-mates
+   * together (`'computer-cap'`, #386e). Null otherwise and for older battles.
    */
   unpaid: UnpaidReasonSchema.nullable().default(null),
   /**

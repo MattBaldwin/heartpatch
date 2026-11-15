@@ -331,6 +331,47 @@ export function createComputerMatesRepo(db: Executor) {
         .orderBy(asc(squishies.id))
         .for('update'),
 
+    /**
+     * The patch's computer-challenge lock (#386e): a transaction advisory
+     * lock keyed `computer-challenges:<mapId>`, taken by a mate's challenge
+     * right after its tile lock (step 6), so the weekly cap is recounted
+     * with no other mate's challenge in between. Kids never take it.
+     */
+    lockChallenges: async (mapId: string): Promise<void> => {
+      await db.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`computer-challenges:${mapId}`}, 0))`,
+      );
+    },
+
+    /** Challenges computer mates started on the patch since `since` (#386e, every attempt counts). */
+    challengesSince: async (mapId: string, since: Date): Promise<number> => {
+      const [row] = await db
+        .select({ n: count() })
+        .from(tileAttacks)
+        .innerJoin(users, eq(users.id, tileAttacks.attackerUserId))
+        .where(
+          and(
+            eq(tileAttacks.mapId, mapId),
+            eq(users.kind, 'computer'),
+            gt(tileAttacks.startedAt, since),
+          ),
+        );
+      return row?.n ?? 0;
+    },
+
+    /**
+     * Brings a mate's next step forward to `at` at the latest (#386e: right
+     * after a "Defend now?" window). Never puts a departed mate back on.
+     */
+    wakeBy: async (userId: string, at: Date): Promise<void> => {
+      await db
+        .update(computerMates)
+        .set({
+          nextActAt: sql`least(${computerMates.nextActAt}, ${at.toISOString()}::timestamptz)`,
+        })
+        .where(and(eq(computerMates.userId, userId), isNotNull(computerMates.nextActAt)));
+    },
+
     /** On the patch (`at`) or off it (null). */
     setNextActAt: async (userId: string, at: Date | null): Promise<void> => {
       await db.update(computerMates).set({ nextActAt: at }).where(eq(computerMates.userId, userId));
