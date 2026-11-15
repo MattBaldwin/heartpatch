@@ -6,6 +6,7 @@ import { SPAWN_RULES } from '../data/server/spawn-rules.js';
 import { deriveSeed } from '../rng/index.js';
 import type { SpawnRules } from '../schemas/data/spawn-rules.js';
 import type { SpawnTable } from '../schemas/data/spawn-tables.js';
+import type { Species } from '../schemas/data/species.js';
 import { resolveWildSpawn, timeOfDayOf, type SpawnData } from './resolve.js';
 import { spawnWindowAt } from './window.js';
 
@@ -233,5 +234,138 @@ describe('timeOfDayOf', () => {
     expect(
       [0, 4, 8, 12, 16, 20].map((hour) => timeOfDayOf(window('2026-10-02', hour), RULES)),
     ).toEqual(['night', 'day', 'day', 'day', 'dusk', 'night']);
+  });
+});
+
+describe('resolveWildSpawn with a Rare Lure (#729)', () => {
+  const base = FIXTURE_SPECIES.find((s) => s.id === 'fixture-puddlepuff')!;
+  const secret = FIXTURE_SECRET_SPECIES[0]!;
+  /** A species of `rarity` (and an optional season), cut from a fixture. */
+  const kind = (id: string, rarity: Species['rarity'], season?: string): Species => ({
+    ...base,
+    id,
+    rarity,
+    ...(season ? { season } : {}),
+  });
+  const SPECIES = [
+    kind('c1', 'common'),
+    kind('c2', 'common'),
+    kind('u1', 'uncommon'),
+    kind('r1', 'rare'),
+    kind('e1', 'epic'),
+    kind('l1', 'legendary'),
+    kind('halloween-u', 'uncommon', 'halloween'),
+    secret,
+  ];
+  const table = (
+    id: string,
+    terrain: string,
+    species: string[],
+    over: Partial<SpawnTable> = {},
+  ) => ({
+    id,
+    terrains: [terrain],
+    entries: species.map((s) => ({ species: s, weight: 1 })),
+    ...over,
+  });
+  const LURE_TABLES: SpawnTable[] = [
+    table('meadow', 'meadow', ['c1', 'c2', 'u1']),
+    // Mountains have no uncommon: a lure climbs common → rare.
+    table('mountain', 'mountain', ['c1', 'r1']),
+    // A meadow-like tile whose best is uncommon: nothing rarer for an uncommon roll.
+    table('coast', 'coast', ['c1', 'u1']),
+    // Juniper's Gap: rare, epic, legendary and a secret.
+    table('gap', 'junipers-gap', ['r1', 'e1', 'l1', secret.id]),
+    table('only-secret', 'secret-glen', ['c1', secret.id]),
+    table('halloween', 'pumpkin', ['c1', 'halloween-u']),
+  ];
+  const lureData = data({ tables: LURE_TABLES, species: new Map(SPECIES.map((s) => [s.id, s])) });
+  const rarity = (id: string) => SPECIES.find((s) => s.id === id)!.rarity;
+  /** Plain and lured rolls on `tiles` tiles of `terrain`. */
+  const pairs = (terrain: string, date = '2026-10-02', tiles = 120, partnerLevel = 10) =>
+    Array.from({ length: tiles }, (_, q) => {
+      const input = {
+        seed: deriveSeed('map-seed', 'spawn', q, 0, window(date).id),
+        terrain,
+        window: window(date),
+        partnerLevel,
+      };
+      return {
+        plain: resolveWildSpawn(input, lureData),
+        lured: resolveWildSpawn({ ...input, lure: true }, lureData),
+      };
+    });
+
+  it('a lure moves a common roll to an uncommon entry of the same tables', () => {
+    const commons = pairs('meadow').filter(
+      (p) => p.plain && rarity(p.plain.speciesId) === 'common',
+    );
+    expect(commons.length).toBeGreaterThan(5);
+    for (const { lured } of commons) expect(lured).toMatchObject({ speciesId: 'u1', lured: true });
+  });
+
+  it('a lure never returns a secret species, in the Gap included', () => {
+    const gap = pairs('junipers-gap', '2026-10-02', 300);
+    expect(gap.some((p) => p.plain?.speciesId === secret.id)).toBe(true);
+    for (const { plain, lured } of gap) {
+      if (!plain) continue;
+      const from = rarity(plain.speciesId);
+      // rare → epic, epic → legendary; legendary and a secret roll stay plain.
+      const want = { rare: 'e1', epic: 'l1' }[from as 'rare' | 'epic'];
+      if (want) expect(lured).toEqual({ ...plain, speciesId: want, lured: true });
+      else expect(lured).toEqual(plain);
+      if (plain.speciesId !== secret.id) expect(lured!.speciesId).not.toBe(secret.id);
+    }
+    for (const { plain, lured } of pairs('secret-glen')) {
+      if (plain) expect(lured!.speciesId === secret.id).toBe(plain.speciesId === secret.id);
+    }
+  });
+
+  it('a lure climbs past a missing tier (mountains: common → rare)', () => {
+    const commons = pairs('mountain').filter((p) => p.plain?.speciesId === 'c1');
+    expect(commons.length).toBeGreaterThan(5);
+    for (const { lured } of commons) expect(lured).toMatchObject({ speciesId: 'r1', lured: true });
+  });
+
+  it('a lure with nothing rarer returns the plain roll and no lured flag', () => {
+    const uncommons = pairs('coast').filter((p) => p.plain?.speciesId === 'u1');
+    expect(uncommons.length).toBeGreaterThan(5);
+    for (const { plain, lured } of uncommons) expect(lured).toEqual(plain);
+  });
+
+  it('the lured species is stable for the same seed, and the level is the plain roll’s', () => {
+    const a = pairs('meadow');
+    const b = pairs('meadow');
+    expect(a).toEqual(b);
+    for (const { plain, lured } of a) if (plain) expect(lured!.level).toBe(plain.level);
+  });
+
+  it('a lure never makes a squishy appear where chance said no', () => {
+    const sparse = data({
+      tables: LURE_TABLES,
+      species: lureData.species,
+      rules: { ...RULES, chance: 35 },
+    });
+    let empty = 0;
+    for (let q = 0; q < 120; q += 1) {
+      const input = {
+        seed: deriveSeed('map-seed', 'spawn', q, 0, window('2026-10-02').id),
+        terrain: 'meadow',
+        window: window('2026-10-02'),
+      };
+      const plain = resolveWildSpawn(input, sparse);
+      if (plain === null) empty += 1;
+      expect(resolveWildSpawn({ ...input, lure: true }, sparse) === null).toBe(plain === null);
+    }
+    expect(empty).toBeGreaterThan(10);
+  });
+
+  it('seasonal tables are in the lure’s pool only in season', () => {
+    const commons = pairs('pumpkin', '2026-10-20').filter((p) => p.plain?.speciesId === 'c1');
+    expect(commons.length).toBeGreaterThan(5);
+    for (const { lured } of commons) {
+      expect(lured).toMatchObject({ speciesId: 'halloween-u', lured: true });
+    }
+    for (const { plain, lured } of pairs('pumpkin', '2026-12-20')) expect(lured).toEqual(plain);
   });
 });

@@ -32,6 +32,13 @@ export const RaidSchema = z.object({
   attackerUserId: z.uuid(),
   /** The challenger's username (every member of the map sees it already). */
   attackerName: z.string(),
+  /**
+   * The challenger is a Computer friend (#386): from its `users.kind` when the
+   * raid was written, so it stays true after the mate leaves the patch.
+   * Optional only so older fixtures and servers parse (then the client falls
+   * back to `MapMember.computer`).
+   */
+  attackerComputer: z.boolean().optional(),
   q: HexSchema.shape.q,
   r: HexSchema.shape.r,
   outcome: RaidOutcomeSchema,

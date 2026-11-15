@@ -36,7 +36,7 @@ const DAILY_CAPS: Partial<Record<HeartCoinSource, number>> = HEART_COIN_RULES.da
 /** One credit: who, where, how much, and the source event it's for. */
 export interface HeartCoinCredit {
   /** `battle`, `capture`, `care`, `sell` (#601 PR 3) or `dev-grant`. */
-  source: Exclude<HeartCoinSource, 'upkeep'>;
+  source: Exclude<HeartCoinSource, 'upkeep' | 'shop'>;
   /** The battle, care action or sale it's for: each pays once, ever. */
   refId: string;
   mapId: string;
@@ -54,10 +54,10 @@ export interface HeartCoinCreditResult {
   balance: number | null;
 }
 
-/** One spend: building upkeep for now (#601 PR 6). */
+/** One spend: building upkeep (#601 PR 6), or a Shop purchase (#729). */
 export interface HeartCoinSpend {
-  source: Extract<HeartCoinSource, 'upkeep'>;
-  /** The building's morning it's for: each is charged once, ever. */
+  source: Extract<HeartCoinSource, 'upkeep' | 'shop'>;
+  /** The building's morning or the purchase it's for: each is charged once, ever. */
   refId: string;
   mapId: string;
   userId: string;

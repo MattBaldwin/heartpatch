@@ -6,6 +6,8 @@ import type {
   PublicUser,
   WsEventMessage,
 } from '@heartpatch/shared';
+import { computerAvatar, computerBadge } from '../computer-mates/computer-badge.js';
+import { COMPUTER_TEXT, computerLabel } from '../computer-mates/computer-mates-model.js';
 import { battleApi } from '../battle/battle-api.js';
 import { GameClock } from '../inventory/game-clock.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
@@ -30,7 +32,7 @@ export interface FriendlyScreenOptions {
   api?: FriendlyApi;
   battles?: Pick<typeof battleApi, 'get'>;
   /** The patch's members (names for the sheet, and who's away). */
-  members: (mapId: string) => readonly { userId: string; username: string }[];
+  members: (mapId: string) => readonly { userId: string; username: string; computer?: boolean }[];
   /** Opens a battle that just started (the battle screen). */
   openBattle: (battle: PlayerBattle) => void;
   /** Opens the team picker for the map ("Change" on the card). */
@@ -61,9 +63,9 @@ export interface FriendlyScreen {
 type Mode =
   | { type: 'closed' }
   | { type: 'list' }
-  | { type: 'card'; who: OnlineMember }
+  | { type: 'card'; who: OnlineMember; computer?: boolean }
   | { type: 'waiting'; challenge: ChallengeView }
-  | { type: 'declined'; name: string };
+  | { type: 'declined'; name: string; computer?: boolean };
 
 /** How often "Who's here now" looks again while it's open. */
 const LIST_REFRESH_MS = 10_000; // TUNE: presence changes as phones sleep and wake
@@ -91,6 +93,8 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
   const nameOf = (userId: string): string =>
     (mapId ? options.members(mapId).find((m) => m.userId === userId)?.username : undefined) ??
     'A friend';
+  const isMateId = (userId: string): boolean =>
+    mapId ? options.members(mapId).some((m) => m.userId === userId && m.computer === true) : false;
 
   // ── Entry button ──────────────────────────────────────────────────────
   // A round corner button beside Chat, like it: the word is for VoiceOver.
@@ -189,7 +193,10 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
     nodes.push(el('p', { class: 'friendly-intro' }, FRIENDLY_TEXT.intro));
     const list = el('ul', { class: 'friendly-list', 'data-testid': 'friendly-list' });
     const online = view?.online ?? [];
+    const members = mapId ? options.members(mapId) : [];
+    const mates = new Set(members.filter((m) => m.computer).map((m) => m.userId));
     for (const who of online) {
+      if (mates.has(who.userId)) continue;
       list.append(
         el(
           'li',
@@ -220,7 +227,9 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
       );
     }
     const here = new Set(online.map((o) => o.userId));
-    for (const member of mapId ? options.members(mapId) : []) {
+    // Computer friends (#386b) get their own group below, always here.
+    for (const member of members) if (member.computer) here.add(member.userId);
+    for (const member of members) {
       if (member.userId === user?.id || here.has(member.userId)) continue;
       list.append(
         el(
@@ -241,13 +250,76 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
       el(
         'p',
         { class: 'friendly-hint' },
-        online.length === 0 ? FRIENDLY_TEXT.nobodyHere : FRIENDLY_TEXT.onlyHere,
+        online.some((o) => !mates.has(o.userId))
+          ? FRIENDLY_TEXT.onlyHere
+          : mates.size > 0
+            ? COMPUTER_TEXT.noKidsHere
+            : FRIENDLY_TEXT.nobodyHere,
       ),
     );
+    nodes.push(...computerRows(members.filter((m) => m.computer)));
     return nodes;
   }
 
-  function renderCard(who: OnlineMember): HTMLElement[] {
+  /**
+   * Computer friends (#386b, mockup 4a): always here, badged on every row,
+   * under their own label. "Battle me?" is real since #386e: the server
+   * answers for a mate at once, so the tap goes to the same card and ask as
+   * a kid's (the card says it's a Computer friend).
+   */
+  function computerRows(mates: readonly { userId: string; username: string }[]): HTMLElement[] {
+    if (mates.length === 0) return [];
+    const list = el('ul', { class: 'friendly-list', 'data-testid': 'friendly-computer-list' });
+    for (const mate of mates) {
+      const seen = view?.online.find((o) => o.userId === mate.userId);
+      list.append(
+        el(
+          'li',
+          { class: 'friendly-row friendly-row-computer', 'data-user': mate.userId },
+          computerAvatar('avatar'),
+          el(
+            'span',
+            { class: 'friendly-row-text' },
+            el('span', { class: 'friendly-name' }, mate.username),
+            computerBadge(),
+            el(
+              'span',
+              { class: 'friendly-status' },
+              seen?.inBattle ? FRIENDLY_TEXT.inBattle : COMPUTER_TEXT.here,
+            ),
+          ),
+          // The server lists a mate with its real team level and busy state.
+          seen?.inBattle
+            ? button(FRIENDLY_TEXT.busy, () => undefined, { soft: true, disabled: true })
+            : button(
+                FRIENDLY_TEXT.battleMe,
+                () => {
+                  mode = {
+                    type: 'card',
+                    who: seen ?? {
+                      userId: mate.userId,
+                      username: mate.username,
+                      teamLevel: view?.myTeamLevel ?? 0,
+                      inBattle: false,
+                    },
+                    computer: true,
+                  };
+                  note = '';
+                  render();
+                },
+                { testId: 'friendly-battle-mate' },
+              ),
+        ),
+      );
+    }
+    return [
+      el('p', { class: 'cf-section' }, COMPUTER_TEXT.heading),
+      list,
+      el('p', { class: 'friendly-hint' }, COMPUTER_TEXT.hereHint),
+    ];
+  }
+
+  function renderCard(who: OnlineMember, computer = false): HTMLElement[] {
     const mine = view?.myTeamLevel ?? 0;
     const gap = gapLine(mine, who.teamLevel, who.username);
     const id = mapId;
@@ -257,13 +329,23 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
         { class: 'friendly-pair', 'aria-hidden': 'true' },
         avatar(user?.username ?? FRIENDLY_TEXT.you),
         el('span', { class: 'friendly-and' }, FRIENDLY_TEXT.and),
-        avatar(who.username),
+        computer ? computerAvatar('avatar') : avatar(who.username),
       ),
       el(
         'h2',
         { class: 'friendly-title friendly-center', id: 'friendly-title' },
         FRIENDLY_TEXT.cardTitle(who.username),
       ),
+      ...(computer
+        ? [
+            el(
+              'p',
+              { class: 'friendly-center', 'data-testid': 'friendly-mate-line' },
+              computerBadge(),
+            ),
+            el('p', { class: 'friendly-hint friendly-center' }, COMPUTER_TEXT.battleLine),
+          ]
+        : []),
       ...(gap ? [el('p', { class: 'friendly-gap', 'data-testid': 'friendly-gap' }, gap)] : []),
       el(
         'div',
@@ -303,14 +385,16 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
 
   function renderWaiting(challenge: ChallengeView): HTMLElement[] {
     const name = nameOf(challenge.toUserId);
+    const mate = isMateId(challenge.toUserId);
     return [
-      avatar(name),
+      mate ? computerAvatar('avatar') : avatar(name),
       el(
         'h2',
         { class: 'friendly-title friendly-center', id: 'friendly-title' },
         FRIENDLY_TEXT.asking(name),
       ),
       el('div', { class: 'friendly-dots', 'aria-hidden': 'true' }, el('i'), el('i'), el('i')),
+      ...(mate ? [el('p', { class: 'friendly-center' }, computerBadge())] : []),
       el('p', { class: 'friendly-intro friendly-center' }, FRIENDLY_TEXT.askingSub(name)),
       el('p', { class: 'friendly-hint friendly-center' }, FRIENDLY_TEXT.waitUpTo),
       button(
@@ -323,15 +407,23 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
     ];
   }
 
-  function renderDeclined(name: string): HTMLElement[] {
+  function renderDeclined(name: string, mate: boolean): HTMLElement[] {
     return [
+      mate ? computerAvatar('avatar') : avatar(name),
       el(
         'h2',
         { class: 'friendly-title friendly-center', id: 'friendly-title' },
         FRIENDLY_TEXT.cantNow(name),
       ),
-      el('p', { class: 'friendly-intro friendly-center' }, FRIENDLY_TEXT.cantNowSub),
-      el('p', { class: 'friendly-hint friendly-center' }, FRIENDLY_TEXT.askAgainIn(name)),
+      ...(mate ? [el('p', { class: 'friendly-center' }, computerBadge())] : []),
+      el(
+        'p',
+        { class: 'friendly-intro friendly-center' },
+        mate ? COMPUTER_TEXT.napLine(name) : FRIENDLY_TEXT.cantNowSub,
+      ),
+      ...(mate
+        ? []
+        : [el('p', { class: 'friendly-hint friendly-center' }, FRIENDLY_TEXT.askAgainIn(name))]),
       button(FRIENDLY_TEXT.okay, closeSheet, { testId: 'friendly-okay' }),
     ];
   }
@@ -349,11 +441,11 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
         mode.type === 'list'
           ? renderList()
           : mode.type === 'card'
-            ? renderCard(mode.who)
+            ? renderCard(mode.who, mode.computer)
             : mode.type === 'waiting'
               ? renderWaiting(mode.challenge)
               : mode.type === 'declined'
-                ? renderDeclined(mode.name)
+                ? renderDeclined(mode.name, mode.computer === true)
                 : [];
       const noteLine = el(
         'p',
@@ -500,6 +592,20 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
       if (mode.type === 'card') render();
       return;
     }
+    // A Computer friend answers inside the same request (#386e): the reply is
+    // already a yes with a battle, or a not now. A live event may have got
+    // there first, so only act while the card is still up.
+    if (sent.status === 'accepted' && sent.battleId) {
+      void joinBattle(sent.battleId);
+      return;
+    }
+    if (sent.status === 'declined') {
+      if (mode.type === 'card')
+        mode = { type: 'declined', name: who.username, computer: mode.computer === true };
+      render();
+      return;
+    }
+    if (mode.type !== 'card') return;
     mode = { type: 'waiting', challenge: sent };
     armExpiry();
     render();
@@ -534,7 +640,11 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
   }
 
   /** The asker's side of a "Battle!": open the battle that just started. */
+  const joined = new Set<string>();
   async function joinBattle(battleId: string): Promise<void> {
+    // The live event and a mate's instant reply can both say so: open it once.
+    if (joined.has(battleId)) return;
+    joined.add(battleId);
     const at = ticket;
     try {
       const battle = await battles.get(battleId);
@@ -580,8 +690,9 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
         if (ask.answer === 'yes' && ask.battleId) {
           void joinBattle(ask.battleId);
         } else {
-          mode = { type: 'declined', name: nameOf(ask.toUserId) };
-          showToast(FRIENDLY_TEXT.saidNotNow(nameOf(ask.toUserId)));
+          const mate = isMateId(ask.toUserId);
+          mode = { type: 'declined', name: nameOf(ask.toUserId), computer: mate };
+          showToast(FRIENDLY_TEXT.saidNotNow(computerLabel(nameOf(ask.toUserId), mate)));
           render();
         }
         return;

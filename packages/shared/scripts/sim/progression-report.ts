@@ -1,12 +1,17 @@
 import { addXp, grantedXp, xpForLevel } from '../../src/care/growth.js';
+import { renderBoss } from './progression-boss-report.js';
 import { BATTLE_RULES } from '../../src/data/battle.js';
 import { GUARDIAN_RULES } from '../../src/data/server/guardian-rules.js';
 import {
   CURRENT_RULES,
   FRIENDLY_GATE,
+  SOLO_GATE,
+  SOLO_MATES_RULES,
+  SOLO_RULES,
   TIER_GATE,
   WITH_FRIENDLIES_RULES,
   type FriendlyGate,
+  type SoloGate,
   type ProgressionConfig,
   type ProgressionRules,
 } from './progression-config.js';
@@ -56,10 +61,10 @@ export interface RunSummary {
 const first = (days: readonly DayRecord[], test: (d: DayRecord) => boolean) =>
   days.find(test) ?? null;
 
-/** Kid 0 of a run; both kids of a run play the same way. */
+/** Kid 0 of a run; both kids of a run play the same way (a solo run has one). */
 const lead = (run: ProgressionRun): KidRun => {
   const kid = run.kids[0];
-  if (!kid) throw new Error('a run has two kids');
+  if (!kid) throw new Error('a run has a kid');
   return kid;
 };
 
@@ -147,6 +152,119 @@ export function formatFriendlyGate(result: FriendlyGateResult): string {
     `on day ${String(result.day)} (${sign}${String(result.delta)}, at most +${String(result.maxLevels)}): ` +
     (result.passes ? 'PASS' : 'FAIL')
   );
+}
+
+/** One kind's row of #386e's gate: Partner levels on each gate day. */
+export interface SoloGateRow {
+  readonly kid: string;
+  readonly days: readonly {
+    readonly day: number;
+    /** `SOLO_RULES`, alone (no gate: the "before"). */
+    readonly solo: number;
+    /** `SOLO_MATES_RULES`, alone with computer mates (gated). */
+    readonly mates: number;
+    /** `WITH_FRIENDLIES_RULES` on the first map size, kid 0 / kid 1. */
+    readonly paired: readonly number[];
+    /** The pair's mean, what the percentages compare against. */
+    readonly pairedMean: number;
+    /** Solo and solo-with-mates vs `pairedMean` (%, one decimal). */
+    readonly soloPercent: number;
+    readonly matesPercent: number;
+    readonly passes: boolean;
+  }[];
+  readonly passes: boolean;
+}
+
+const percentOf = (level: number, base: number) => Math.round(((level - base) * 1000) / base) / 10;
+
+/**
+ * `SOLO_GATE` over `runs` (#386e, plan §9): for each kind, the solo kid with
+ * computer mates within `maxPercent` % of the 4-seat friendlies pair's mean
+ * Partner level on each gate day. Null when a run is missing.
+ */
+export function soloGate(
+  runs: readonly ProgressionRun[],
+  config: ProgressionConfig,
+  gate: SoloGate = SOLO_GATE,
+): SoloGateRow[] | null {
+  const seats = config.seats[0] ?? 0;
+  const rows: SoloGateRow[] = [];
+  for (const { id } of config.kids) {
+    const find = (rules: ProgressionRules) =>
+      runs.find((r) => r.rules === rules && r.seats === seats && r.profile.id === id);
+    const [solo, mates, paired] = [SOLO_RULES, SOLO_MATES_RULES, WITH_FRIENDLIES_RULES].map(find);
+    if (!solo || !mates || !paired) return null;
+    const levelOf = (kid: KidRun | undefined, day: number) => kid?.days[day - 1]?.partnerLevel ?? 0;
+    const days = gate.days.map((day) => {
+      const pair = paired.kids.map((k) => levelOf(k, day));
+      const pairedMean = pair.reduce((n, l) => n + l, 0) / Math.max(1, pair.length);
+      const matesLevel = levelOf(mates.kids[0], day);
+      const matesPercent = percentOf(matesLevel, pairedMean);
+      return {
+        day,
+        solo: levelOf(solo.kids[0], day),
+        mates: matesLevel,
+        paired: pair,
+        pairedMean,
+        soloPercent: percentOf(levelOf(solo.kids[0], day), pairedMean),
+        matesPercent,
+        passes: Math.abs(matesPercent) <= gate.maxPercent,
+      };
+    });
+    rows.push({ kid: id, days, passes: days.every((d) => d.passes) });
+  }
+  return rows;
+}
+
+const signed = (n: number) => `${n >= 0 ? '+' : ''}${String(n)}`;
+
+export function formatSoloGate(rows: readonly SoloGateRow[], gate: SoloGate = SOLO_GATE): string {
+  const cells = rows.flatMap((row) =>
+    row.days.map(
+      (d) =>
+        `${row.kid} day ${String(d.day)} Lv ${String(d.mates)} vs ${String(d.pairedMean)} (${signed(d.matesPercent)} %)`,
+    ),
+  );
+  return (
+    `solo gate (#386e): solo + computer mates within ±${String(gate.maxPercent)} % of the friendlies pair: ` +
+    `${cells.join(', ')}: ${rows.every((r) => r.passes) ? 'PASS' : 'FAIL'}`
+  );
+}
+
+/** The solo and computer-mates table (#386e) and its gate. */
+function renderSolo(runs: readonly ProgressionRun[], config: ProgressionConfig): string[] {
+  const rows = soloGate(runs, config);
+  const mates = SOLO_MATES_RULES.computerMates;
+  if (!rows || !mates) return [];
+  return [
+    '## Solo and computer mates (#386e)',
+    '',
+    `\`${SOLO_RULES.label}\`: one kid alone on a ${String(config.seats[0])}-seat map, no friendlies, defences or rival. \`${SOLO_MATES_RULES.label}\`: the same kid plus computer patch-mates: \`${WITH_FRIENDLIES_RULES.label}\`' friendlies a day against a mate (paid the same, a friendly counting toward the falloff only when the kid won; the coins cap on wins against computers doesn't touch XP), and ${String(mates.challengesPerWeek)} mate challenges a week on the kid's land outside the shield, held by the kid's guards at the watch floor. A mate fields the kid's team at the Partner level ${signed(mates.levelOffset)}. Each kind's levels are compared with the 4-seat \`${WITH_FRIENDLIES_RULES.label}\` pair's mean (kid 0 / kid 1 in brackets). Gate: ${formatSoloGate(rows)}.`,
+    '',
+    markdownTable(
+      [
+        'Kid',
+        'Day',
+        'solo',
+        'solo + mates',
+        'pair (kid 0 / 1)',
+        'solo vs pair',
+        'solo + mates vs pair',
+      ],
+      rows.flatMap((row) =>
+        row.days.map((d) => [
+          row.kid,
+          String(d.day),
+          String(d.solo),
+          String(d.mates),
+          `${String(d.pairedMean)} (${d.paired.join(' / ')})`,
+          `${signed(d.soloPercent)} %`,
+          `${signed(d.matesPercent)} %${d.passes ? '' : ' (FAIL)'}`,
+        ]),
+      ),
+    ),
+    '',
+  ];
 }
 
 /** Sums a kid's day records up to and including `day`. */
@@ -365,6 +483,8 @@ export function renderProgression(
     ...(info.firsts ? renderFirsts(runs, config, info.firsts) : []),
     ...(info.firsts ? renderTierFirsts(runs, config, info.firsts) : []),
     ...renderFriendlies(runs, config),
+    ...renderSolo(runs, config),
+    ...(info.firsts ? renderBoss(runs, config, info.firsts) : []),
     "## What a Juniper's Gap win pays",
     '',
     'An average Gap team (three guardians at the middle of their levels), at the day the Gap is ready.',
@@ -422,6 +542,8 @@ export function renderProgression(
   for (const rules of ruleSets) {
     for (const seats of config.seats) {
       const these = runs.filter((r) => r.rules === rules && r.seats === seats);
+      // The solo rows (#386e) run on the first map size only.
+      if (these.length === 0) continue;
       const neutral = these[0]?.neutral ?? 0;
       lines.push(
         '',

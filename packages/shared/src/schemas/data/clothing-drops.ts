@@ -32,6 +32,11 @@ export const ClothingDropTableSchema = z.strictObject({
    * (a `rival-tile` battle), so challenging a rival pays off (#261).
    */
   rivalChance: z.number().int().min(0).max(100).optional(),
+  /**
+   * Won battles only: the chance after a mini-boss win (#190), the top
+   * rarity step's (today the rescue table's 20 %).
+   */
+  bossChance: z.number().int().min(0).max(100).optional(),
   entries: z.array(ClothingDropEntrySchema).min(1),
 });
 export type ClothingDropTable = z.infer<typeof ClothingDropTableSchema>;
@@ -61,6 +66,9 @@ export function checkClothingDrops(
       if (sources.has(table.source)) report(['drops', i, 'source'], 'one table per source');
       if (table.rivalChance !== undefined && table.source !== 'capture') {
         report(['drops', i, 'rivalChance'], 'only captures take land from a rival');
+      }
+      if (table.bossChance !== undefined && table.source !== 'battle') {
+        report(['drops', i, 'bossChance'], 'only a won battle beats a mini-boss');
       }
       sources.add(table.source);
       const seen = new Set<string>();

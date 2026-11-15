@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { api, hook } from './dev-hook.js';
+import { api, liveMapId } from './dev-hook.js';
 import { expectClear, settled, still } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
@@ -49,7 +49,7 @@ test('the Keeper chip never covers the care sheet, and the sheet scrolls as one 
   await slowExpect(page.locator('.battle-entry-note')).toContainText('joined you');
   // Every food in the bag (option C, 2026-10-30): the food row above Feed is
   // the tallest the card gets, so every size is measured with it.
-  const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
+  const mapId = await liveMapId(page);
   const granted = await api(page, 'POST', `/maps/${mapId}/dev/items`, {
     items: { treats: 5, pies: 2, 'frosty-treats': 2 },
   });

@@ -7,6 +7,7 @@ import { hpClose } from '../ui/button/button.js';
 import { el, messageOf } from '../ui/dom.js';
 import {
   RAID_TEXT,
+  raidByComputer,
   raidFencesLine,
   raidFireLine,
   raidLine,
@@ -31,6 +32,8 @@ export interface RaidReportOptions {
   /** Plays a raid's replay in the battle screen. */
   watch: (replay: RaidReplay) => void;
   api?: RaidsApi;
+  /** True for a Computer friend still on the patch (#386f): the fallback when a raid has no `attackerComputer`. */
+  isComputer?: (userId: string) => boolean;
   /**
    * The sheet opened or closed (by the player or on its own), so other
    * morning news (the Hollow Man's report, #21) can wait its turn.
@@ -242,7 +245,11 @@ export function createRaidReport(options: RaidReportOptions): RaidReportScreen {
                     ...(raid.seenAt === null
                       ? [el('span', { class: 'raid-new' }, RAID_TEXT.fresh)]
                       : []),
-                    el('p', { class: 'raid-line' }, raidLine(raid)),
+                    el(
+                      'p',
+                      { class: 'raid-line' },
+                      raidLine(raid, raidByComputer(raid, options.isComputer)),
+                    ),
                     ...(raid.lostFire
                       ? [
                           el('p', { class: 'raid-line' }, raidFireLine(raid) ?? ''),

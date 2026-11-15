@@ -1,3 +1,10 @@
+import { computerAvatar, computerBadge } from '../../computer-mates/computer-badge.js';
+import { computerMatesApi } from '../../computer-mates/computer-mates-api.js';
+import {
+  COMPUTER_TEXT,
+  isComputer,
+  switchView,
+} from '../../computer-mates/computer-mates-model.js';
 import { friendlyApi } from '../../friendly/friendly-api.js';
 import { dayName, LONG_NIGHT_TEXT, WEEKDAY_SHORT } from '../../hollow/long-night.js';
 import { FRIENDLY_TEXT } from '../../friendly/friendly-model.js';
@@ -37,6 +44,7 @@ import { closeListTo, LOBBY_PEEK_TEXT, lobbyChrome, type LobbyMode } from './lob
 import { lobbyApi } from './lobby-api.js';
 import { joinedSince, listKey, WAITING_POLL_MS } from './lobby-poll.js';
 import { isWildIsle, PATCH_TYPE_CHOICES, WILD_ISLE_CHIP, wildIsleOffered } from './patch-types.js';
+import '../../audio/audio.css';
 import '../auth/auth.css';
 import './lobby.css';
 
@@ -951,6 +959,11 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       ),
     );
 
+    // Computer friends (#386b): the owner's On/Off switch, like push settings.
+    // Left out while the server's switch is closed here (no `computerMates`).
+    const computer = computerSection(map, status);
+    if (computer) sections.push(computer);
+
     if (!isOwner) {
       sections.push(
         el(
@@ -989,26 +1002,83 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     afterShow?.();
   }
 
+  function computerSection(map: MapDetail, status: HTMLElement): HTMLElement | null {
+    const view = switchView(map, now());
+    if (!view) return null;
+    const toggle = el(
+      'button',
+      {
+        type: 'button',
+        class: `${buttonClass({ variant: 'secondary', small: true })} audio-toggle`,
+        'aria-label': COMPUTER_TEXT.heading,
+        'aria-pressed': String(view.on),
+        'data-testid': 'lobby-computer-toggle',
+        ...(view.tappable ? {} : { disabled: '' }),
+      },
+      view.on ? COMPUTER_TEXT.on : COMPUTER_TEXT.off,
+    );
+    if (view.tappable) {
+      toggle.addEventListener('click', () => {
+        act(status, toggle, async () => {
+          const next = await computerMatesApi.set(map.id, !view.on);
+          await showMap(map.id, COMPUTER_TEXT.switched(next.enabled));
+        });
+      });
+    }
+    return el(
+      'div',
+      { class: 'lobby-section', 'data-testid': 'lobby-computer' },
+      el('h2', { class: 'lobby-heading' }, COMPUTER_TEXT.heading),
+      ...(view.ownerPicks ? [el('p', { class: 'auth-hint' }, COMPUTER_TEXT.ownerPicks)] : []),
+      el(
+        'div',
+        { class: `cf-switch${view.tappable ? '' : ' cf-switch-off'}` },
+        el('span', { class: 'cf-switch-line' }, view.line),
+        toggle,
+      ),
+      ...(view.livesHere
+        ? [
+            el(
+              'p',
+              { class: 'cf-note cf-note-ok', 'data-testid': 'lobby-computer-note' },
+              view.livesHere,
+            ),
+          ]
+        : []),
+      ...(view.cooldown
+        ? [el('p', { class: 'cf-note', 'data-testid': 'lobby-computer-note' }, view.cooldown)]
+        : []),
+      ...(view.hint ? [el('p', { class: 'auth-hint' }, view.hint)] : []),
+    );
+  }
+
   function memberRow(map: MapDetail, member: MapMember): HTMLElement {
     const isMe = member.user.id === user?.id;
     const name = `${member.user.username}${isMe ? ' (you)' : ''}`;
+    const mate = isComputer(member);
     const row = el(
       'li',
-      { class: 'lobby-member' },
+      { class: 'lobby-member', ...(mate ? { 'data-computer': 'true' } : {}) },
       el(
         'span',
         { class: 'lobby-member-name' },
-        // Their colour and icon on the map (#318).
-        ...(member.homeSlot !== null ? [slotIcon(member.homeSlot)] : []),
+        // A computer friend's plum square and words (#386b); a kid's colour and icon on the map (#318).
+        ...(mate
+          ? [computerAvatar('dot')]
+          : member.homeSlot !== null
+            ? [slotIcon(member.homeSlot)]
+            : []),
         name,
         ...(member.role === 'owner' ? [el('span', { class: 'lobby-badge' }, 'Owner')] : []),
+        ...(mate ? [computerBadge()] : []),
       ),
       // Their milestone title (#44), the profile card's line.
       ...(member.title
         ? [el('span', { class: 'lobby-member-title', 'data-testid': 'member-title' }, member.title)]
         : []),
     );
-    if (map.role === 'owner' && !isMe) {
+    // A computer friend has no password, and the switch sends them home (#386b).
+    if (map.role === 'owner' && !isMe && !mate) {
       const who = member.user.username;
       const reset = button(
         'Reset password',

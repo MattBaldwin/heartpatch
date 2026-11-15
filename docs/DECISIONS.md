@@ -2261,3 +2261,78 @@ _Owner decisions and coordinator calls from 2026-10-25 ~14:10 UTC on. Supervisor
 **Owner decisions**
 - **#728 friendly XP = option 1** (owner, 2026-11-14; https://github.com/MattBaldwin/heartpatch/issues/728#issuecomment-6877762813): a friendly pays one opponent's worth of XP (the engine's `xpAwards` amount ÷ the number of opponents KO'd (at least 1), floored; with no KOs, the engine's `minimum` as is) scaled by `GROWTH_RULES.battleXpFalloff.friendlyPercent` = 50. Both knobs are data in `care.ts` `GROWTH_RULES` (`friendlyPercent` and a friendly one-opponent switch, on); the sim reads the same data. Why: the engine pays XP summed over every opponent KO'd, so a friendly that KOs a whole team paid about 4× a wild battle and snowballed between two friends. 728d's engaged day-14 levels: 39 / 40 vs `now` 40 (gate ≤ +1); the approved rule gave 36 / 51. The scooted rule is unchanged. Shipped in #797.
 - **#794 approved** (owner, 2026-11-14): the Cozy Harvest track and Leaf Pile Costume, from the captures at https://claude.ai/artifact/WnQkNdWUk2Pn5QKZkEDb9V (back reads bubbly rather than leafy; Rowan's 3/4 view has a side leaf over the far eye; noted to the owner). Merged as `1bddfb2`.
+
+## Supervisor 41 (2026-11-15)
+
+Merged: #817, #814, #818, #819, #821, #824, #820, #826, #823, #825, #816, #822, #815, #828. Entries marked "pending merge" come from the verdict comments on #827, #829, #810 and #830, which are still open.
+
+**Mini-boss (#190)**
+- **Boss species live in `SECRET_SPECIES` with `line: 'boss'`** (#818, coordinator ruling, round 2). `checkGameData` refuses `line: 'boss'` in the public `SPECIES` table, so a boss never ships in the client bundle; `hiddenUntilSeen` adds its def only once a Keeper has met it. 234b fills the bag this way.
+- **Additive contracts granted for 190b** (#818): `BattleRewardsSchema.bundle` (nullable, default null), `ItemChangeReason` `'boss'` (`resource_ledger.reason` is `text`, so no `ALTER TYPE`), server-only `BossEventRulesSchema.bundle`, `bossChance` on the server-only clothing drop table and `boss` on `FoundDropEvent`, `SpeciesSchema.line?: 'boss'` with `hiddenUntilSeen`, and the Big Friend milestone track. `BossEventRules.idleMinutes` (10) is a new server-only rule.
+- **Mini-boss rules as shipped** (#818, #820, #828; all `// TUNE:` data in `BOSS_EVENTS`):
+  - **Window:** a visit lasts 48 h from 16:00 patch-local (it spans three patch-local days). `boss.appeared.window` is the patch-local Monday of the visit's week. 3 tries a patch day, counted from `battles` (a no-contest gives its try back).
+  - **Bundle:** on the first weekly win, 3 Heart Charms, 5 Heartdust and 3 Treats, plus 5 coins and 5 Heart Coins, plus a 20% clothing roll. A scooted fight pays none of it.
+  - **Befriend:** 3 charms an ask, 2 asks a win, asks open for 24 h. Odds are 20% + 5% per squishy standing + 15% per earlier miss, and the ask after 4 misses always works. A yes joins the **base form** of the boss's line at `max(5, floor(partner × 50%))`. It pays capture coins.
+  - **Big Friend track** (`big-friend`): tiers 1 / 4 / 10, titles Big Hugger / Big Friend / Giant Heart, 25 / 50 / 100 coins.
+  - **Last day** is `endsAt` on today's calendar day in the patch's zone (`lastDayOf`, shared by 190e and 190f). The client's `bossUntil` uses the device zone: documented, fine for Phase 1.
+- **`PlayerBattle.boss` is additive** (#820, #827): `baseName`, coarse `warmth` 0–4 (`BOSS_WARMTH_STEPS`: 0 for no misses, 4 only when the next ask always works, so one step per miss with the shipped `sureAfterMisses: 4`), `eventWindow`, `triesLeftToday`, `charmsPerAsk`, `asksLeft` and `befriend` (`none | offer | not-yet | joined | have-one`). No odds number is ever sent (`boss/leak.test.ts`).
+- **A befriend's roll seed includes the server-only map seed** (#820), because `PlayerBattle.seed` is public after a fight. A repeated ask number returns its stored answer with 200. A fresh yes is published live after commit. Lock order: battle (5) → visit row → bond (5e) → charms (11) → `species_seen` (11) → coins (12) → `maps` (13).
+- **A duplicate boss ask is refused** (#820): "You already have a [base name]! 💗", with no charms spent and no treat. One friend per Keeper per boss kind, even if the friend was traded or let go. The mockup's "team treat" for a duplicate is **not** granted; owner decision pending (see below).
+- **Boss species sit outside the Catalog tiers** (#828, coordinator ruling): a met boss adds no "· N seen" to any tier row, and the #802 per-tier goals and denominators are unchanged. The boss tile shows only the boss card, and claiming that tile waits until the visit ends (a hard rule would be a later server sub-issue). The tries chip lives on the tile card, not the map marker (owner accepted).
+- **Team fights have their own camera** (#827, pending merge): `TEAM_ARENA.pitch` 21°, `bossScale` × the team's mean height so the boss reads about 1.8× on screen. The 1-v-1 camera is unchanged.
+- **190d sims** (#821): firsts land on day 5 for both kids. The levers if the owner wants a later first boss are `BOSS_EVENTS.minPartnerLevel` / `minPlayerLevel`. The charm gate's margin rests on guesses (3 crafted a day casual, 2 charms per wild befriend). Boss tries are on top of `battlesPerDay`, as friendlies are.
+
+**Computer mates (#386)**
+- **Mates trade an everyday gathered-resources allowlist only** (#819): a server-only list in `data/server/computer-mates.ts` (gathered items minus Heartdust and Glimmer; never `neverSold`, crafted, seasonal, potions or charms), worth at most `offerValue.max` a trade. Kids may ask for up to `shelfPerItem` of each, never a squishy or clothing. `giftMaxValue` is about one gather lot of a common resource (20). Round 1 found the unfiltered shelf was an unlimited rare-item shop.
+- **A squishy traded to a computer friend is gone for good** (#819, owner decision 6). The mate's team-level step overwrites its level and it leaves with the mate's `users` row. 386f's "Are you sure?" matters here. Mate trade and gift items are made at send or at its yes and never leave or land in a mate's bag.
+- **Mate offers are bounded weekly** (#819) by `offersPerWeek` (2 per mate), not by `completedPerPatchDay`. A departed mate's waiting gift stays in the kid's mailbox and expires after `offerDays` (3); its open offers go home. Patch caps count from `trade_offers` under the `computer-trades:<mapId>` advisory lock (§7 step 9a), so re-enabling the switch can't reset them. A mate's trade runs in a savepoint inside its step.
+- **Mates stay dark until 386b (#815) and 386f land** (#819): `HP_COMPUTER_MATES` stays off. Today an offer card shows a plain name with no badge.
+- **Mates challenge only a kid who is online right now** (#823), never one who is away or asleep, even on a patch kept warm by another kid. Checked in the policy and re-checked under the locks.
+- **Fences hold computer friends off** (#823): a mate never challenges a kid's tile that is fenced all round.
+- **`UnpaidReason` `'computer-cap'`** (#823, additive, coordinator-approved): a kid's friendly win over a mate past `paidWinsPerDayVsComputers` (3 a patch day, all mates together). `'pair-cap'` wins when both apply. `OnlineMemberSchema` may carry `computer: true`.
+- **Mates earn nothing in any battle** (#823): no XP, coins, finds, catalog entries or captures, on either side, including defending their own tiles. A live defence against a mate never counts as left. An all-AI battle is played out by any read, the mate's next step, or the kid's "not now", never the abandon path. The `computer-challenges:<mapId>` lock (§7 step 6c) is taken only by a mate's challenge, after its tile lock.
+- **Mate steps are inert unless the step number matches the locked row** (#814). Upkeep runs every step, catch-up included; fire and guard intents never run in catch-up. A mate's fire is a free level-1 Hearthfire in the tile's middle, fuelled for `maxFuelNights`. Mates act only on days a kid plays.
+- **`tile.claimed` is an additive public game event** (#814, #829): internal `{ userId, q, r, terrain, computer: true }`, public `{ userId, q, r }`. 386f is its first consumer (the recolour).
+- **Computer friends client** (#815): the hello comes from the roster (one per mate per device), not `member.joined`, because a burst's later events are dropped during resync. The badge sits beside the name (lobby rows and the home flag). "Computer friends" is capitalised as the feature's name everywhere. Mates get no "Battle me?" until 386e wired friendlies. The changes `area` is `other` (the plugin accepts only battles, land, home, squishies, account or other).
+- **Mates client** (#829, pending merge): mate rows reuse the kid ask flow and card. The `computer-cap` line reads "You've won your coins from Computer friends today", about the kid's wins.
+- **`Raid.attackerComputer?` approved as an additive server follow-up** (#829): set from the attacker's `users.kind` at raid creation, so a departed mate's raid keeps its badge. Until it lands, the raid badge shows only while the mate is a member.
+- **#825:** a partial index on open tile attacks backs the mates' claim guard.
+
+**Post shop (#729)**
+- **Post shop prices** (#817, `POST_SHOP`, `// TUNE:`): Rare Lure 120 💛 (1 held, 2 per rolling 7 patch days), Heart Charm pack 40 💛 (5 charms, 1 a patch day), Potion crate 60 💛 (1 a patch day). The Lure picks from the same matched entries one tier up the ladder, never a secret.
+- **`lured` is set only on the `startWild` response** (#817, #822). Using the lure up is recorded on `post_purchases.consumed_battle_id`, not on the core `battles` table. A resumed or `GET` battle has no `lured`.
+- **`post_purchases` is keyed to the member row** (#817) with an `ON DELETE cascade` foreign key, so purchases and a held lure survive leave and rejoin.
+- **No `ShopView` schema change in the client lane** (#822, coordinator ruling). The strict status enum means an unknown status fails the whole read ("The shop is closed right now"), the safe outcome. The "Not right now" card stays as defence-in-depth.
+- **729d** (#824): `luresAffordable.perWeek.engaged = 1` (`// TUNE:`), casual read from the Lure's `cap.count`. The Post shop is in the what-pays sim as a hard gate.
+
+**Bench share (#732 D)**
+- **The bench line is one pattern for every battle kind** (#816): "Mochi cheered from the side and earned 6 XP!", after the fighters' lines, never showing the percent, in the card's softer ink.
+
+**Chores and CI**
+- **`works.test.ts` weather-knock flake** (#830, pending merge): the test stored no weather plan, so settle generated one seeded from the random map seed, and in the Halloween season a storm front can knock the salt pans (~1.3% of runs). The fix stores a clear plan (`clearSkies`) and is tests only. Weather and knocks run only on Wild Isle maps.
+- **#826:** the progression sim test gets a timeout and the potions snapshot race is fixed.
+
+**Follow-ups**
+- Lint runs per package.
+- **Device frame-time capture is deferred to before 234b enables bosses** (#827, coordinator ruling). The CI numbers there are a relative comparison only (software GL).
+- The `species_seen` write at boss battle start is a 190c/190f follow-up. A too-small Keeper is shown the boss's species display-only until then (#818).
+- Rivet collars on Rakelet need two-tone parts (kit follow-up, #810).
+- 386f non-blocking follow-ups (#829): drop the unused `mateWouldLikeToTrade`; the dormant `friendly-screen.ts` fallback `OnlineMember`; clear `joined` on a failed `battles.get`; treat `expired`/`cancelled` asks like `declined`; add an accepted-reply e2e; reword the changes entry to "Computer friends claim land, light fires, trade and battle too."
+- 190e/190f client should check `battle.kind` before treating a `POST …/boss/battle` reply as the boss fight (it resumes any active battle).
+
+**Owner decisions (2026-11-15)**
+- **D2 bench line client: SHIP-OK** (#816).
+- **Post shop client: SHIP-OK** (#822).
+- **Computer friends client: SHIP-OK** (#815).
+- **Mini-boss map and catalog: SHIP-OK** (#828).
+- **Boss bundle: KEEP** 3 Heart Charms / 5 Heartdust / 3 Treats (#818).
+- **Big Friend titles: KEEP** Big Hugger / Big Friend / Giant Heart (#818).
+- **Rakelet art** (#810): "Rakelet should never have a handle. His mouth is the rake." One structural round was chosen: 5 sparse tines on the bar's front face, angled down and out, big hooks, rivets.
+- **Mommentum** is the spelling (not Momentum), and no items stick out of her sides. The mom and dad bosses are approved as great.
+
+**Pending owner decisions**
+- Whether the duplicate boss ask's "team treat" is a real grant, and what it is (#820).
+- A check of the mate allowlist and of the online-only and fences vetoes (#819, #823).
+- Rakelet v15 (#810), after 9 render-check rounds.
+
+**Pending merge** (decisions above come from verdicts on open PRs): #827 (190e arena client), #829 (386f mates client), #810 (234a boss art), #830 (chore: deflake).

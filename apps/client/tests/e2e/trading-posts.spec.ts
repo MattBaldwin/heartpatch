@@ -2,7 +2,7 @@ import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { tapCanvas } from './claim-land.js';
 import { SCREENS } from './layout.js';
-import { api, hook, waitForLiveMap } from './dev-hook.js';
+import { api, hook, liveMapId, waitForLiveMap } from './dev-hook.js';
 import { traysState } from './trays.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import {
@@ -166,7 +166,7 @@ test('sets off on a journey to a post, wins, and the post opens for a visit (#27
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
   await newPatch(page);
-  const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
+  const mapId = await liveMapId(page);
   // A strong grown-up friend (no evolving party after the battle), so the
   // journey is a sure win and the team is strong.
   const granted = await api(page, 'POST', `/maps/${mapId}/dev/squishies`, {

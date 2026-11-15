@@ -10,6 +10,9 @@ import {
   COIN_RULES,
   HEART_COIN_RULES,
   hexNeighbors,
+  isTradingPost,
+  isWaterTerrain,
+  normalizeInviteCode,
   HOME_BASE_RULES,
   HOUSE_DATA,
   NAMING_RULES,
@@ -18,7 +21,18 @@ import {
   type BattleState,
   type PlayerBattleAction,
 } from '@heartpatch/shared';
-import { RESCUE_GUARDIANS, type LoreEntry } from '@heartpatch/shared/server';
+import {
+  BOSS_EVENTS,
+  bossVisitFor,
+  bossWeekOf,
+  COMPUTER_MATES,
+  RESCUE_GUARDIANS,
+  type BossEventRules,
+  type ComputerMatesSecrets,
+  type LoreEntry,
+} from '@heartpatch/shared/server';
+import { createBossService, createMinibossBattlePort } from '../modules/boss/service.js';
+import { instantOfLocalDate, localDate } from '../lib/time.js';
 import { createBattlesRepo } from '../modules/battles/repo.js';
 import { createBattlesService, defaultBattleContent } from '../modules/battles/service.js';
 import { createBuildingsRepo } from '../modules/buildings/repo.js';
@@ -45,12 +59,16 @@ import { createHouseRepo } from '../modules/house/repo.js';
 import { createHouseService } from '../modules/house/service.js';
 import { createHollowRepo } from '../modules/hollow/repo.js';
 import { createHollowService } from '../modules/hollow/service.js';
-import { grantItems } from '../modules/inventory/service.js';
+import { grantItems, lockGrantRows } from '../modules/inventory/service.js';
 import { createInventoryRepo } from '../modules/inventory/repo.js';
 import { createJourneyBattlePort, createJourneysService } from '../modules/journeys/service.js';
 import { createLongNightRepo } from '../modules/long-night/repo.js';
 import { createLongNightService } from '../modules/long-night/service.js';
 import { createLoreConsumer } from '../modules/lore/consumer.js';
+import { computerChallenge, createComputerMateSteps } from '../modules/computer-mates/intents.js';
+import { createChallengesService } from '../modules/challenges/service.js';
+import { createComputerMatesRepo } from '../modules/computer-mates/repo.js';
+import { createComputerMatesService } from '../modules/computer-mates/service.js';
 import { createMapsRepo } from '../modules/maps/repo.js';
 import { createMilestonesConsumer } from '../modules/milestones/consumer.js';
 import { createMilestonesService, milestoneRewardId } from '../modules/milestones/service.js';
@@ -58,7 +76,8 @@ import { createMapsService } from '../modules/maps/service.js';
 import { createStartersService } from '../modules/starters/service.js';
 import { createTerritoryService, createTileBattlePort } from '../modules/territory/service.js';
 import { createRoadsRepo } from '../modules/roads/repo.js';
-import { createTendingRepo } from '../modules/territory/repo.js';
+import { createTendingRepo, createTerritoryRepo } from '../modules/territory/repo.js';
+import { createTradesRepo } from '../modules/trades/repo.js';
 import { createTradesService } from '../modules/trades/service.js';
 import { createTutorialConsumer } from '../modules/tutorial/consumer.js';
 import { createTutorialRepo } from '../modules/tutorial/repo.js';
@@ -102,8 +121,13 @@ import {
   squishies,
   tileDefenders,
   tileClears,
+  tileAttacks,
   tiles,
   users,
+  battles,
+  bossBonds,
+  bossEncounters,
+  challenges,
 } from './schema.js';
 import { bigMove } from '../../tests/big-move.js';
 
@@ -617,6 +641,145 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
     const [row] = await db.select().from(journeys).where(eq(journeys.battleId, battle.id));
     expect(row).toMatchObject({ outcome: 'won' });
     expect(row!.visitUntil).not.toBeNull();
+  });
+
+  /** A mini-boss visit (#190) on a fresh patch, and the kid's fight one move from winning. */
+  async function minibossOneMoveFromWinning(prefix: string) {
+    const kid = await player(prefix);
+    const map = await createMapsService({
+      db,
+      tutorialRequired: false,
+      keeperRequired: false,
+    }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
+    const mapId = map.id;
+    const team = await db
+      .insert(squishies)
+      .values(
+        [20, 100, 100].map((level) => ({
+          mapId,
+          ownerUserId: kid.id,
+          speciesId: STARTERS.speciesIds[0]!,
+          element: 'fire' as const,
+          feeling: 'cozy' as const,
+          level,
+        })),
+      )
+      .returning({ id: squishies.id });
+    await db
+      .update(mapMembers)
+      .set({ starterSquishyId: team[0]!.id })
+      .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, kid.id)));
+    const boss = GAME_DATA.species.find((s) => s.id !== STARTERS.speciesIds[0])!;
+    const rules: BossEventRules = {
+      ...BOSS_EVENTS,
+      bag: [{ speciesId: boss.id, terrains: [GAME_DATA.terrains[0]!.id] }],
+    };
+    const [row] = await db.select().from(maps).where(eq(maps.id, mapId));
+    const clock = new Date('2026-11-16T12:00:00Z');
+    const week = bossWeekOf(localDate(clock, 'UTC'));
+    const plan = bossVisitFor(row!.seed!, week, row!.longNightWeekday ?? null, rules)!;
+    const opensAt = instantOfLocalDate(
+      { date: plan.opensOn, minute: rules.opensAtHour * 60 },
+      'UTC',
+    );
+    clock.setTime(opensAt.getTime() + 60_000);
+    const content = defaultBattleContent();
+    const fights = createBattlesService({
+      db,
+      content,
+      clock: () => clock,
+      minibosses: createMinibossBattlePort(rules),
+    });
+    const bosses = createBossService({ db, battles: fights, rules, clock: () => clock });
+    const { battle } = await bosses.start(kid, mapId);
+    let finishing: { action: PlayerBattleAction; turn: number } | null = null;
+    for (let i = 0; i < content.rules.maxTurns + 5 && !finishing; i++) {
+      const { state } = (await createBattlesRepo(db).findBattle(battle.id))!;
+      const side = state.sides.a;
+      const picks = (side.out ?? [])
+        .filter((slot) => side.squishies[slot]!.energy > 0)
+        .map((slot) => ({ slot, move: side.squishies[slot]!.moves[0]! }));
+      const action: PlayerBattleAction = { type: 'team', picks };
+      const next = applyBattleAction(content, state, {
+        type: 'turn',
+        choices: { a: { type: 'team', picks } },
+      });
+      if (next.phase.type === 'over') {
+        expect(next.phase.result.winner).toBe('a');
+        finishing = { action, turn: state.turn };
+      } else {
+        await fights.act(kid, battle.id, { action, turn: state.turn });
+      }
+    }
+    if (!finishing) throw new Error('the mini-boss fight never got one move from winning');
+    const lockEncounter = (tx: Transaction) =>
+      tx
+        .select({ windowId: bossEncounters.windowId })
+        .from(bossEncounters)
+        .where(and(eq(bossEncounters.mapId, mapId), eq(bossEncounters.userId, kid.id)))
+        .for('update');
+    return { kid, mapId, team, battle, fights, bosses, finishing, lockEncounter };
+  }
+
+  it("takes a mini-boss win's visit row after the battle and before the squishies (battles `finish`, #190 step 5e)", async () => {
+    const { kid, team, battle, fights, finishing, lockEncounter } =
+      await minibossOneMoveFromWinning('stomper');
+    // Hold the Keeper's visit row, let the winning move queue there holding
+    // the battle, then take a fighter as nightfall would: the finish must not
+    // hold the squishy yet (a deadlock, 40P01, or the lock timeout otherwise).
+    await holdThen(
+      lockEncounter,
+      () => fights.act(kid, battle.id, finishing),
+      (tx) => lockSquishy(tx, team[1]!.id),
+    );
+    const [row] = await db.select().from(bossEncounters).where(eq(bossEncounters.userId, kid.id));
+    expect(row!.wonBattleId).toBe(battle.id);
+  });
+
+  it("takes a mini-boss start's visit row after the battle and before `maps` (#190 step 5e)", async () => {
+    const { kid, mapId, battle, fights, bosses, lockEncounter } =
+      await minibossOneMoveFromWinning('restomper');
+    const { state } = (await createBattlesRepo(db).findBattle(battle.id))!;
+    await fights.act(kid, battle.id, { action: { type: 'forfeit' }, turn: state.turn });
+    // A second fight upserts the visit row right after inserting its battle:
+    // held here, the start waits on it without holding `maps` yet.
+    await holdThen(
+      lockEncounter,
+      () => bosses.start(kid, mapId),
+      (tx) => lockMapRow(tx, mapId),
+    );
+    const fightsNow = await db
+      .select({ id: battles.id })
+      .from(battles)
+      .where(and(eq(battles.playerUserId, kid.id), eq(battles.status, 'active')));
+    expect(fightsNow).toHaveLength(1);
+  });
+
+  it("takes a befriend's visit row, then the bond, before the charms (#190c step 5e)", async () => {
+    const { kid, mapId, battle, fights, bosses, finishing, lockEncounter } =
+      await minibossOneMoveFromWinning('befriender');
+    await fights.act(kid, battle.id, finishing);
+    const row = await createBattlesRepo(db).findBattle(battle.id);
+    const bossSpecies = row!.state.sides.b.squishies[0]!.speciesId;
+    await db.insert(bossBonds).values({ mapId, userId: kid.id, speciesId: bossSpecies });
+    // Hold the visit row: the ask queues there holding only the battle. Then
+    // take its bond and the charms, as later steps: it must hold neither yet.
+    await holdThen(
+      lockEncounter,
+      () => bosses.befriend(kid, battle.id, 1),
+      async (tx) => {
+        await tx
+          .select({ misses: bossBonds.misses })
+          .from(bossBonds)
+          .where(and(eq(bossBonds.mapId, mapId), eq(bossBonds.userId, kid.id)))
+          .for('update');
+        await createInventoryRepo(tx).lockItems({ mapId, userId: kid.id }, ['heart-charm']);
+      },
+    );
+    const ledger = await db.query.resourceLedger.findMany({
+      where: (t, { and: all, eq: is }) => all(is(t.userId, kid.id), is(t.reason, 'boss-befriend')),
+    });
+    expect(ledger).toHaveLength(1);
   });
 
   it("rolls a capture's found clothing after the battle's squishy locks (battles `finish`, #84)", async () => {
@@ -2156,7 +2319,13 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
    * turn that ends it (checked against the stored state: the engine is
    * deterministic). `kidSquishyFirst` picks which squishy id sorts lower.
    */
-  async function friendlyOnePickFromOver(prefix: string, { kidSquishyFirst = true } = {}) {
+  async function friendlyOnePickFromOver(
+    prefix: string,
+    {
+      kidSquishyFirst = true,
+      kidBench,
+    }: { kidSquishyFirst?: boolean; kidBench?: 'lowest' | 'highest' } = {},
+  ) {
     const kid = await player(`${prefix}a`);
     const friend = await player(`${prefix}b`);
     const map = await createMapsService({
@@ -2172,6 +2341,25 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
       .where(eq(maps.id, mapId));
     const [low, high] = [randomUUID(), randomUUID()].sort();
     const [heroId, friendSquishyId] = kidSquishyFirst ? [low!, high!] : [high!, low!];
+    // A benched teammate (#732): on the kid's team (the strongest resting
+    // ones), never out, as the level-40 lead wins alone. Its id sits below or
+    // above both fighters', so the finish's one lock set must order it.
+    const benchId = kidBench
+      ? kidBench === 'lowest'
+        ? `00000000${randomUUID().slice(8)}`
+        : `ffffffff${randomUUID().slice(8)}`
+      : null;
+    if (benchId) {
+      await db.insert(squishies).values({
+        id: benchId,
+        mapId,
+        ownerUserId: kid.id,
+        speciesId: STARTERS.speciesIds[2] ?? STARTERS.speciesIds[0]!,
+        element: 'fire',
+        feeling: 'cozy',
+        level: 5,
+      });
+    }
     await db.insert(squishies).values([
       {
         id: heroId,
@@ -2213,7 +2401,17 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
       };
       if (next.phase.type === 'over') {
         expect(next.phase.result.winner).toBe('a');
-        return { kid, friend, mapId, heroId, friendSquishyId, battleId, fights, finishing };
+        return {
+          kid,
+          friend,
+          mapId,
+          heroId,
+          friendSquishyId,
+          benchId,
+          battleId,
+          fights,
+          finishing,
+        };
       }
       await fights.act(friend, battleId, finishing);
     }
@@ -2245,6 +2443,48 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
       ]);
     },
   );
+
+  it.each(['lowest', 'highest'] as const)(
+    "locks a benched squishy in the fighters' one id-ordered set, bench id %s (battles `finish`, #732 step 10)",
+    async (kidBench) => {
+      const { heroId, friendSquishyId, benchId, battleId, fights, friend, finishing } =
+        await friendlyOnePickFromOver(`bench${kidBench}`, { kidBench });
+      const before = await squishyRow(benchId!);
+      const [first, ...rest] = [heroId, friendSquishyId, benchId!].sort();
+      await holdThen(
+        (tx) => lockSquishy(tx, first!),
+        () => fights.act(friend, battleId, finishing),
+        async (tx) => {
+          for (const id of rest) await lockSquishy(tx, id);
+        },
+      );
+      const done = (await createBattlesRepo(db).findBattle(battleId))!;
+      expect(done.status).toBe('finished');
+      // The bench grew under its lock, marked on the kid's rewards.
+      expect(done.rewards?.xp).toContainEqual(
+        expect.objectContaining({ squishyId: benchId, bench: true }),
+      );
+      expect(await squishyRow(benchId!)).not.toEqual(before);
+    },
+  );
+
+  it('waits on care holding a benched squishy, then takes the balance, with no deadlock (battles `finish`, care `care`, #732 step 10 then 12)', async () => {
+    const { kid, benchId, battleId, fights, friend, finishing } = await friendlyOnePickFromOver(
+      'benchcare',
+      { kidBench: 'highest' },
+    );
+    // Care holds the benched squishy; the finish queues on it; care then
+    // takes the kid's balance as paying care coins would (step 10 then 12).
+    await holdThen(
+      (tx) => lockSquishy(tx, benchId!),
+      () => fights.act(friend, battleId, finishing),
+      (tx) => lockCoins(tx, kid.id),
+    );
+    expect((await createBattlesRepo(db).findBattle(battleId))!.status).toBe('finished');
+    expect(await coinRows(kid.id)).toEqual([
+      { source: 'battle', amount: COIN_RULES.battleWin.friendly },
+    ]);
+  });
 
   it("takes the winner's balance only after both players' squishies (battles `finish`, #728b step 10 then 12)", async () => {
     const { kid, friendSquishyId, battleId, fights, friend, finishing } =
@@ -3176,5 +3416,565 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
     expect(
       await db.select().from(houseResidents).where(eq(houseResidents.squishyId, ids[0]!)),
     ).toEqual([]);
+  });
+
+  describe('computer patch-mates (#386a)', () => {
+    const toggle = { mode: 'on' as const, testers: [] as string[] };
+    let at = new Date();
+    const mates = () => createComputerMatesService({ db, computerMates: toggle, clock: () => at });
+    const mapsService = () =>
+      createMapsService({ db, tutorialRequired: false, keeperRequired: false, clock: () => at });
+    const lockMates = (tx: Transaction, mapId: string) =>
+      createComputerMatesRepo(tx).lockMates(mapId);
+    const lockTilesOf = (tx: Transaction, mapId: string, userIds: string[]) =>
+      tx
+        .select({ id: tiles.id })
+        .from(tiles)
+        .where(and(eq(tiles.mapId, mapId), inArray(tiles.ownerUserId, userIds)))
+        .orderBy(asc(tiles.id))
+        .for('no key update');
+    const mateIds = async (mapId: string) =>
+      (await createComputerMatesRepo(db).listMates(mapId)).map((m) => m.userId);
+
+    /** A solo patch whose mates were made once and have since left (so their rows exist). */
+    async function matesPatch(prefix: string, on: boolean) {
+      at = new Date();
+      const kid = await player(prefix);
+      const map = await mapsService().create(kid, { name: 'Lock Mates', timeZone: 'UTC' });
+      await mates().setEnabled(kid, map.id, true);
+      if (!on) {
+        await mates().setEnabled(kid, map.id, false);
+        at = new Date(at.getTime() + 25 * 60 * 60 * 1000);
+      }
+      return { kid, mapId: map.id, ids: await mateIds(map.id) };
+    }
+
+    it('takes the seats lock before the mate rows (switch on, step 3 then 3a)', async () => {
+      const { kid, mapId } = await matesPatch('cmseats', false);
+      await holdThen(
+        (tx) => createMapsRepo(tx).lockSeats(mapId),
+        () => mates().setEnabled(kid, mapId, true),
+        (tx) => lockMates(tx, mapId),
+      );
+      expect(
+        (await createComputerMatesRepo(db).listMates(mapId)).filter((m) => m.active).length,
+      ).toBe(3);
+    });
+
+    it("takes the mate rows before a mate's users row (switch on, step 3a then 4)", async () => {
+      const { kid, mapId, ids } = await matesPatch('cmusers', false);
+      await holdThen(
+        (tx) => lockMates(tx, mapId),
+        () => mates().setEnabled(kid, mapId, true),
+        (tx) => createMapsRepo(tx).lockUser(ids[0]!),
+      );
+    });
+
+    it("departs every mate's tiles before `maps` (switch off, step 6 then 13)", async () => {
+      const { kid, mapId, ids } = await matesPatch('cmoff', true);
+      await holdThen(
+        (tx) => lockTilesOf(tx, mapId, ids),
+        () => mates().setEnabled(kid, mapId, false),
+        (tx) => lockMapRow(tx, mapId),
+      );
+      expect((await createComputerMatesRepo(db).listMates(mapId)).some((m) => m.active)).toBe(
+        false,
+      );
+    });
+
+    it('takes the mate rows before the joiner (approve, step 3a then 4)', async () => {
+      const { kid, mapId } = await matesPatch('cmapprove', true);
+      const friend = await player('cmfriend');
+      const invite = await mapsService().regenerateInvite(kid, mapId);
+      const { request } = await mapsService().join(friend, normalizeInviteCode(invite.code));
+      await holdThen(
+        (tx) => lockMates(tx, mapId),
+        () => mapsService().approve(kid, mapId, request.id),
+        (tx) => createMapsRepo(tx).lockUser(friend.id),
+      );
+      expect(
+        (await createComputerMatesRepo(db).listMates(mapId)).filter((m) => m.active).length,
+      ).toBe(2);
+    });
+
+    it("frees the leaving mate's tiles before `maps` (approve, step 6 then 13)", async () => {
+      const { kid, mapId, ids } = await matesPatch('cmroom', true);
+      const friend = await player('cmroomfriend');
+      const invite = await mapsService().regenerateInvite(kid, mapId);
+      const { request } = await mapsService().join(friend, normalizeInviteCode(invite.code));
+      await holdThen(
+        (tx) => lockTilesOf(tx, mapId, ids),
+        () => mapsService().approve(kid, mapId, request.id),
+        (tx) => lockMapRow(tx, mapId),
+      );
+    });
+    /** Steps that only claim (many a day, no guards, no fires) or only light fires. */
+    const claimOnly: ComputerMatesSecrets = {
+      rules: { ...COMPUTER_MATES.rules, fireEveryTiles: 1000 },
+      personas: COMPUTER_MATES.personas.map((p) => ({
+        ...p,
+        claimsPerDay: 60,
+        weights: { ...p.weights, claim: 1, guard: 0, trade: 0, gift: 0 },
+      })),
+    };
+    const fireFirst: ComputerMatesSecrets = {
+      ...claimOnly,
+      rules: { ...COMPUTER_MATES.rules, fireEveryTiles: 1 },
+    };
+    const stepsWith = (secrets: ComputerMatesSecrets) =>
+      createComputerMateSteps({ db, clock: () => at, secrets });
+    const mateRow = async (userId: string) =>
+      (await db.query.computerMates.findFirst({ where: (t, { eq }) => eq(t.userId, userId) }))!;
+    /** Runs the mate's next step right when it's due (no lag, so no catch-up). */
+    async function stepNow(secrets: ComputerMatesSecrets, userId: string) {
+      const row = await mateRow(userId);
+      at = new Date(row.nextActAt!.getTime());
+      return stepsWith(secrets).act(userId, row.step);
+    }
+    /** Lines the step up (the clock on its due time) and returns the command to run. */
+    async function nextStep(secrets: ComputerMatesSecrets, userId: string) {
+      const row = await mateRow(userId);
+      at = new Date(row.nextActAt!.getTime());
+      let result: Awaited<ReturnType<ReturnType<typeof stepsWith>['act']>> = null;
+      return {
+        run: async () => {
+          result = await stepsWith(secrets).act(userId, row.step);
+        },
+        result: () => result,
+      };
+    }
+    const lockMapTiles = (tx: Transaction, mapId: string, wildOnly: boolean) =>
+      tx
+        .select({ id: tiles.id })
+        .from(tiles)
+        .where(
+          wildOnly
+            ? and(eq(tiles.mapId, mapId), sql`${tiles.ownerUserId} is null`)
+            : eq(tiles.mapId, mapId),
+        )
+        .orderBy(asc(tiles.id))
+        .for('update');
+    const lockOuterOf = (tx: Transaction, mapId: string, userId: string) =>
+      tx
+        .select({ id: tiles.id })
+        .from(tiles)
+        .where(
+          and(
+            eq(tiles.mapId, mapId),
+            eq(tiles.ownerUserId, userId),
+            sql`${tiles.homeSlot} is null`,
+          ),
+        )
+        .orderBy(asc(tiles.id))
+        .for('update');
+
+    it("never claims a tile a kid is battling for, and the kid's win still takes it (a mate's step vs an open battle, #386c step 6)", async () => {
+      at = new Date();
+      const { kid, mapId, target, battle, fights, finishing } =
+        await oneMoveFromWinning('cmbattle');
+      await mates().setEnabled(kid, mapId, true);
+      const [mate] = await mateIds(mapId);
+      // The mate holds a wild tile next to the kid's target, and every other
+      // free tile is the kid's: the target is the only tile it could claim.
+      const all = await db.select().from(tiles).where(eq(tiles.mapId, mapId));
+      const byKey = new Map(all.map((t) => [hexKey(t), t]));
+      const beside = hexNeighbors(target)
+        .map((n) => byKey.get(hexKey(n)))
+        .find(
+          (t) =>
+            t &&
+            t.ownerUserId === null &&
+            t.homeSlot === null &&
+            !isTradingPost(t) &&
+            !isWaterTerrain(t.terrain),
+        );
+      expect(beside).toBeDefined();
+      await db.update(tiles).set({ ownerUserId: mate! }).where(eq(tiles.id, beside!.id));
+      await db
+        .update(tiles)
+        .set({ ownerUserId: kid.id })
+        .where(
+          and(
+            eq(tiles.mapId, mapId),
+            sql`${tiles.ownerUserId} is null`,
+            sql`${tiles.homeSlot} is null`,
+            sql`${tiles.id} <> ${target.id}`,
+          ),
+        );
+      const near = { ...claimOnly, rules: { ...claimOnly.rules, kidHomeBuffer: 0 } };
+      // Hide the battle from the step's view, so the policy picks the target
+      // and only the re-check under the tile lock can stop the claim.
+      const openAttack = and(
+        eq(tileAttacks.tileId, target.id),
+        sql`${tileAttacks.endedAt} is null`,
+      );
+      const hidden = await db
+        .update(tileAttacks)
+        .set({ endedAt: at })
+        .where(openAttack)
+        .returning({ id: tileAttacks.id });
+      expect(hidden).toHaveLength(1);
+      const step = await nextStep(near, mate!);
+      // A battle's start holds the tile (6) and writes its attack row in the
+      // same tx; the step waits there holding nothing later.
+      await holdThen(
+        (tx) =>
+          tx
+            .select({ id: tiles.id })
+            .from(tiles)
+            .where(inArray(tiles.id, [target.id, beside!.id]))
+            .orderBy(asc(tiles.id))
+            .for('update'),
+        step.run,
+        async (tx) => {
+          await tx
+            .update(tileAttacks)
+            .set({ endedAt: null })
+            .where(eq(tileAttacks.id, hidden[0]!.id));
+          await createComputerMatesRepo(tx).lockTeam(mapId, mate!);
+          await lockMapRow(tx, mapId);
+        },
+      );
+      // The policy chose the claim (the target is the only tile it could
+      // take); the re-check under the lock refused it.
+      expect(step.result()).toMatchObject({ intent: 'claim', applied: false });
+      const [stillWild] = await db.select().from(tiles).where(eq(tiles.id, target.id));
+      expect(stillWild!.ownerUserId).toBeNull();
+      // The kid's winning move still captures it.
+      await fights.act(kid, battle.id, { action: finishing.action, turn: finishing.turn });
+      const [won] = await db.select().from(tiles).where(eq(tiles.id, target.id));
+      expect(won!.ownerUserId).toBe(kid.id);
+    });
+
+    it("takes its own mate row before its users row and any tile (a mate's step, #386c step 3a then 4 and 6)", async () => {
+      // A switch fill holds every mate row (3a), then alternates users rows
+      // and home tiles; a step waits at 3a, holding nothing it would need.
+      const { mapId, ids } = await matesPatch('cmstep3a', true);
+      const step = await nextStep(claimOnly, ids[0]!);
+      await holdThen(
+        (tx) => lockMates(tx, mapId),
+        step.run,
+        async (tx) => {
+          await createMapsRepo(tx).lockUser(ids[0]!);
+          await lockMapTiles(tx, mapId, false);
+        },
+      );
+      expect(step.result()).toMatchObject({ intent: 'claim', applied: true });
+    });
+
+    it("takes a claim's tile before its squishies and `maps` (a mate's claim, #386c step 6 then 10 then 13)", async () => {
+      const { mapId, ids } = await matesPatch('cmstepclaim', true);
+      const step = await nextStep(claimOnly, ids[0]!);
+      await holdThen(
+        (tx) => lockMapTiles(tx, mapId, true),
+        step.run,
+        async (tx) => {
+          await createComputerMatesRepo(tx).lockTeam(mapId, ids[0]!);
+          await lockMapRow(tx, mapId);
+        },
+      );
+      expect(step.result()).toMatchObject({ intent: 'claim', applied: true });
+      const claimed = await db.query.gameEvents.findMany({
+        where: (e, { and, eq }) => and(eq(e.mapId, mapId), eq(e.type, 'tile.claimed')),
+      });
+      expect(claimed.length).toBe(1);
+    });
+
+    it("tends its land before its fires and squishies (a mate's tend and fire, #386c step 6 then 8 then 10)", async () => {
+      const { mapId, ids } = await matesPatch('cmstepfire', true);
+      const mate = ids[0]!;
+      for (let i = 0; i < 3; i++) {
+        expect(await stepNow(claimOnly, mate)).toMatchObject({ intent: 'claim', applied: true });
+      }
+      // One fire stands, so the step under test refuels it (8) and lights another.
+      expect(await stepNow(fireFirst, mate)).toMatchObject({ intent: 'fire', applied: true });
+      const step = await nextStep(fireFirst, mate);
+      await holdThen(
+        (tx) => lockOuterOf(tx, mapId, mate),
+        step.run,
+        async (tx) => {
+          expect((await createBuildingsRepo(tx).lockFires(mapId, mate)).length).toBe(1);
+          await createComputerMatesRepo(tx).lockTeam(mapId, mate);
+          await lockMapRow(tx, mapId);
+        },
+      );
+      expect(step.result()).toMatchObject({ intent: 'fire', applied: true, tended: 3 });
+    });
+
+    /** Mates that only answer (#386d): no claims, guards, fires, offers or gifts. */
+    const answerOnly: ComputerMatesSecrets = {
+      rules: { ...COMPUTER_MATES.rules, fireEveryTiles: 1000 },
+      personas: COMPUTER_MATES.personas.map((p) => ({
+        ...p,
+        answerMinutes: 0,
+        weights: { claim: 0, trade: 0, gift: 0, guard: 0, challenge: 0 },
+      })),
+    };
+    /** A kid's fair item offer to the mate, written straight to the rows (the locks are the point). */
+    async function kidOffer(mapId: string, kidId: string, mate: string) {
+      await withTransaction(db, (tx) =>
+        grantItems(tx, { mapId, userId: kidId }, { timber: 8 }, 'dev-grant'),
+      );
+      const repo = createTradesRepo(db);
+      const offer = await repo.insertOffer({
+        mapId,
+        kind: 'trade',
+        fromUserId: kidId,
+        toUserId: mate,
+        noteId: null,
+        createdAt: new Date(at.getTime() - 60 * 60 * 1000),
+        expiresAt: new Date(at.getTime() + 24 * 60 * 60 * 1000),
+      });
+      // 32 for 32: fair, and no more than `offerValue.max` from the mate.
+      await repo.insertLines(offer.id, 'give', [{ kind: 'item', itemId: 'timber', quantity: 8 }]);
+      await repo.insertLines(offer.id, 'want', [{ kind: 'item', itemId: 'stone', quantity: 8 }]);
+      return offer.id;
+    }
+
+    it("takes a kid's offer before its squishies and the inventory rows (a mate's yes, #386d step 9b then 10 then 11)", async () => {
+      const { mapId, ids, kid } = await matesPatch('cmstepyes', true);
+      const mate = ids[0]!;
+      const offerId = await kidOffer(mapId, kid.id, mate);
+      const step = await nextStep(answerOnly, mate);
+      await holdThen(
+        (tx) => createTradesRepo(tx).lockOffers([offerId]),
+        step.run,
+        async (tx) => {
+          // The mate's team (step 10) and both bags (11): free until the offer is.
+          await createComputerMatesRepo(tx).lockTeam(mapId, mate);
+          await lockGrantRows(tx, mapId, [
+            { userId: kid.id, items: { timber: 1, stone: 1 } },
+            { userId: mate, items: { timber: 1, stone: 1 } },
+          ]);
+          await lockMapRow(tx, mapId);
+        },
+      );
+      expect(step.result()).toMatchObject({ intent: 'answer-offer', applied: true });
+      const offer = await db.query.tradeOffers.findFirst({
+        where: (t, { eq }) => eq(t.id, offerId),
+      });
+      expect(offer!.status).toBe('accepted');
+    });
+
+    it("takes the patch's computer-trade lock before the kid's offer (a mate's yes, #386d step 9a then 9b)", async () => {
+      const { mapId, ids, kid } = await matesPatch('cmsteplock', true);
+      const mate = ids[0]!;
+      const offerId = await kidOffer(mapId, kid.id, mate);
+      const step = await nextStep(answerOnly, mate);
+      await holdThen(
+        (tx) => createTradesRepo(tx).lockComputerTrades(mapId),
+        step.run,
+        async (tx) => {
+          // The offer (9b), the team (10), both bags (11) and `maps`: free while the step waits on 9a.
+          await createTradesRepo(tx).lockOffers([offerId]);
+          await createComputerMatesRepo(tx).lockTeam(mapId, mate);
+          await lockGrantRows(tx, mapId, [
+            { userId: kid.id, items: { timber: 1, stone: 1 } },
+            { userId: mate, items: { timber: 1, stone: 1 } },
+          ]);
+          await lockMapRow(tx, mapId);
+        },
+      );
+      expect(step.result()).toMatchObject({ intent: 'answer-offer', applied: true });
+      const offer = await db.query.tradeOffers.findFirst({
+        where: (t, { eq }) => eq(t.id, offerId),
+      });
+      expect(offer!.status).toBe('accepted');
+    });
+
+    it("lets a kid's call-off win over a mate's yes on the same offer; the step still tends (#386d, step 9b)", async () => {
+      const { mapId, ids, kid } = await matesPatch('cmstepcross', true);
+      const mate = ids[0]!;
+      const offerId = await kidOffer(mapId, kid.id, mate);
+      const step = await nextStep(answerOnly, mate);
+      await holdThen(
+        (tx) => createTradesRepo(tx).lockOffers([offerId]),
+        step.run,
+        // The kid's cancel, committed while the mate waits on the offer.
+        (tx) => createTradesRepo(tx).setStatus([offerId], 'cancelled', at),
+      );
+      // The mate's yes found it answered: its savepoint undid only the trade.
+      expect(step.result()).toMatchObject({ intent: 'answer-offer', applied: false });
+      const offer = await db.query.tradeOffers.findFirst({
+        where: (t, { eq }) => eq(t.id, offerId),
+      });
+      expect(offer!.status).toBe('cancelled');
+      expect((await mateRow(mate)).step).toBeGreaterThan(0);
+    });
+
+    /**
+     * A mate's challenge setup (#386e), driven straight through
+     * `attackAsComputer`: the patch's clock at noon (quiet hours never
+     * apply), the kid past their shield and holding every other free tile,
+     * and T a free tile beside a mate's home ring, outside the kid's
+     * buffer, now the kid's.
+     */
+    async function mateChallengeSetup(prefix: string, kidOnline: boolean) {
+      const { kid, mapId, ids } = await matesPatch(prefix, true);
+      const offset = 12 - at.getUTCHours();
+      const timeZone =
+        offset === 0 ? 'UTC' : `Etc/GMT${offset > 0 ? '-' : '+'}${String(Math.abs(offset))}`;
+      await db.update(maps).set({ timeZone }).where(eq(maps.id, mapId));
+      await db
+        .update(mapMembers)
+        .set({ joinedAt: new Date(at.getTime() - 3 * 24 * 60 * 60 * 1000) })
+        .where(eq(mapMembers.mapId, mapId));
+      const all = await db.select().from(tiles).where(eq(tiles.mapId, mapId));
+      const byKey = new Map(all.map((t) => [hexKey(t), t]));
+      const kidSeed = all.filter((t) => t.ownerUserId === kid.id && t.homeSlot !== null);
+      const free = (t: (typeof all)[number] | undefined): t is (typeof all)[number] =>
+        t !== undefined &&
+        t.ownerUserId === null &&
+        t.homeSlot === null &&
+        t.communityId === null &&
+        !isTradingPost(t) &&
+        !isWaterTerrain(t.terrain);
+      const far = (t: (typeof all)[number]) =>
+        kidSeed.every((h) => hexDistance(h, t) > COMPUTER_MATES.rules.kidHomeBuffer + 3);
+      let found: { mate: string; target: (typeof all)[number] } | null = null;
+      for (const mate of ids) {
+        const target = all
+          .filter((t) => t.ownerUserId === mate && t.homeSlot !== null)
+          .flatMap((h) => hexNeighbors(h).map((n) => byKey.get(hexKey(n))))
+          .find((t) => free(t) && far(t));
+        if (target) {
+          found = { mate, target };
+          break;
+        }
+      }
+      expect(found).not.toBeNull();
+      const { mate, target } = found!;
+      await db
+        .update(tiles)
+        .set({ ownerUserId: kid.id })
+        .where(
+          and(
+            eq(tiles.mapId, mapId),
+            sql`${tiles.ownerUserId} is null`,
+            sql`${tiles.homeSlot} is null`,
+          ),
+        );
+      // The kid's squishy on watch on T, so an online kid is asked "Defend now?".
+      const [guard] = await db
+        .insert(squishies)
+        .values({
+          mapId,
+          ownerUserId: kid.id,
+          speciesId: STARTERS.speciesIds[0]!,
+          element: 'fire',
+          feeling: 'cozy',
+        })
+        .returning({ id: squishies.id });
+      await createTerritoryRepo(db).replaceDefenders(mapId, target.id, [guard!.id], at);
+      const isOnline = (_mapId: string, userId: string) => kidOnline && userId === kid.id;
+      const fights = createBattlesService({
+        db,
+        clock: () => at,
+        isOnline,
+        tileBattles: createTileBattlePort(),
+      });
+      const land = createTerritoryService({ db, clock: () => at, battles: fights, isOnline });
+      const persona = COMPUTER_MATES.personas[0]!;
+      const challenge = () =>
+        land.attackAsComputer(
+          { id: mate, username: '' },
+          mapId,
+          { q: target.q, r: target.r },
+          computerChallenge(persona, COMPUTER_MATES.rules, isOnline),
+        );
+      return { kid, mapId, mate, target, fights, challenge };
+    }
+
+    it("takes the tile before the patch's computer-challenge lock (a mate's challenge vs a kid's attack holding the tile, #386e step 0, 2, 6 then 6c)", async () => {
+      const { mapId, mate, target, challenge } = await mateChallengeSetup('cmchal', true);
+      let started: Awaited<ReturnType<typeof challenge>> | undefined;
+      await holdThen(
+        // A kid's attack on T holds the tile (6) while the mate's challenge
+        // waits there, holding only its seat (0) and the kid's member row (2).
+        (tx) =>
+          tx.select({ id: tiles.id }).from(tiles).where(eq(tiles.id, target.id)).for('update'),
+        async () => {
+          started = await challenge();
+        },
+        async (tx) => {
+          // The challenge lock (6c) and `maps`: free while it waits on the tile.
+          await createComputerMatesRepo(tx).lockChallenges(mapId);
+          await lockMapRow(tx, mapId);
+        },
+      );
+      expect(started?.created).toBe(true);
+      const [attack] = await db.select().from(tileAttacks).where(eq(tileAttacks.tileId, target.id));
+      expect(attack?.attackerUserId).toBe(mate);
+    });
+
+    it("plays an all-AI challenge out without holding its expired prompt (playOut, #386e step 5 then finish's attempt row and tile; the prompt 9c in its own transaction first)", async () => {
+      const { mapId, mate, fights, challenge } = await mateChallengeSetup('cmplay', true);
+      const started = await challenge();
+      expect(started.created).toBe(true);
+      const battleId = started.battle.id;
+      const [prompt] = await db
+        .select()
+        .from(challenges)
+        .where(and(eq(challenges.battleId, battleId), eq(challenges.kind, 'defense')));
+      expect(prompt?.status).toBe('pending');
+      at = new Date(prompt!.expiresAt.getTime() + 1000);
+      await holdThen(
+        // `finish` ends the attempt row (and takes T on a win) under the
+        // battle lock (5), win or lose; the hold stands in for either.
+        (tx) =>
+          tx
+            .select({ id: tileAttacks.id })
+            .from(tileAttacks)
+            .where(eq(tileAttacks.battleId, battleId))
+            .for('update'),
+        () => fights.settleComputer(mapId, mate),
+        async (tx) => {
+          // The prompt (9c), expired in its own transaction, is free.
+          await tx
+            .select({ id: challenges.id })
+            .from(challenges)
+            .where(eq(challenges.id, prompt!.id))
+            .for('update');
+          await lockMapRow(tx, mapId);
+        },
+      );
+      const [ended] = await db.select().from(battles).where(eq(battles.id, battleId));
+      expect(ended?.status).toBe('finished');
+      const [expired] = await db.select().from(challenges).where(eq(challenges.id, prompt!.id));
+      expect(expired?.status).toBe('expired');
+    });
+
+    it("takes both seats before both member rows and the ask (a kid's friendly with a mate, startFriendly unchanged, #386e step 0 then 2 then 9c)", async () => {
+      const { kid, mapId, ids } = await matesPatch('cmfriendly', true);
+      const mate = ids[0]!;
+      await db.insert(squishies).values({
+        mapId,
+        ownerUserId: kid.id,
+        speciesId: STARTERS.speciesIds[0]!,
+        element: 'fire',
+        feeling: 'cozy',
+      });
+      const fights = createBattlesService({ db, clock: () => at });
+      const asks = createChallengesService({ db, battles: fights, clock: () => at });
+      let sent: Awaited<ReturnType<typeof asks.send>> | undefined;
+      await holdThen(
+        // The mate's seat (0): the ask is written, then the start waits here.
+        (tx) => createBattlesRepo(tx).lockBattleSeats(mapId, [mate]),
+        async () => {
+          sent = await asks.send(kid, mapId, { toUserId: mate });
+        },
+        async (tx) => {
+          // Both member rows (2) and the ask (9c): free while it waits on the seats.
+          for (const id of [kid.id, mate].sort()) await createMapsRepo(tx).lockMember(mapId, id);
+          await tx
+            .select({ id: challenges.id })
+            .from(challenges)
+            .where(and(eq(challenges.mapId, mapId), eq(challenges.fromUserId, kid.id)))
+            .for('update');
+          await lockMapRow(tx, mapId);
+        },
+      );
+      expect(sent).toMatchObject({ status: 'accepted', toUserId: mate });
+    });
   });
 });

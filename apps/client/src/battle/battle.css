@@ -524,6 +524,11 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   text-wrap: balance;
 }
 
+/* A benched teammate's cheer line (#732): the card's softer ink, same size. */
+.battle-xp li.battle-xp-bench {
+  color: #6b4b6e;
+}
+
 /* ── The entry buttons (in the Adventure tray) ─────────────────────── */
 
 .battle-entry-box {
@@ -551,6 +556,50 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 
 .battle-entry-note:empty {
   display: none;
+}
+
+/* A Rare Lure is held (#729): a gold ring and lilac halo that breathe. The
+   tray draws the button's picture on ::before, so the glow is the button's
+   own shadow and the sparkle sits on ::after. */
+.tray-section > .battle-entry-box > .battle-entry.battle-entry-lure {
+  box-shadow:
+    0 4px 0 #7a2d55,
+    0 0 0 3px #ffe08a,
+    0 0 14px 4px rgb(168 130 255 / 70%);
+  animation: battle-lure-pulse 2.4s ease-in-out infinite;
+}
+
+.tray-section > .battle-entry-box > .battle-entry.battle-entry-lure::after {
+  content: '✨';
+  position: absolute;
+  right: 14px;
+  top: -10px;
+  font-size: 20px;
+  filter: drop-shadow(0 0 4px #fff);
+  pointer-events: none;
+}
+
+@keyframes battle-lure-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 4px 0 #7a2d55,
+      0 0 0 3px #ffe08a,
+      0 0 6px 1px rgb(168 130 255 / 30%);
+  }
+
+  50% {
+    box-shadow:
+      0 4px 0 #7a2d55,
+      0 0 0 3px #ffe08a,
+      0 0 16px 5px rgb(168 130 255 / 80%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tray-section > .battle-entry-box > .battle-entry.battle-entry-lure {
+    animation: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1033,4 +1082,551 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   .battle-sheet .battle-row {
     flex-wrap: nowrap;
   }
+}
+
+/* ── A mini-boss fight (#190, owner-approved arena A and picker A1) ───────── */
+
+.battle-hud-team .battle-plate {
+  display: none;
+}
+
+.battle-hud-team .battle-top {
+  justify-content: flex-end;
+}
+
+.boss-top {
+  pointer-events: none;
+}
+
+/* The boss plate with the order strip under it (mockup frame 1). */
+.boss-head {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 112px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  left: calc(env(safe-area-inset-left) + 12px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.boss-plate {
+  display: flex;
+  box-sizing: border-box;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 2px solid rgb(255 255 255 / 80%);
+  border-radius: 18px;
+  background: rgb(255 250 240 / 94%);
+  box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
+}
+
+.boss-plate-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.boss-plate-chips:empty,
+.boss-plate-chips:not(:has(:not([hidden]))) {
+  display: none;
+}
+
+.boss-name {
+  overflow: hidden;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boss-level {
+  font-size: 13px;
+  font-weight: 800;
+  opacity: 0.75;
+}
+
+.boss-plate .battle-energy {
+  height: 14px;
+}
+
+.boss-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.boss-chip-gold {
+  margin-left: auto;
+  background: #ffe9a8;
+  color: #6b4a06;
+}
+
+.boss-chip-try {
+  background: #d9ecff;
+  color: #1f4f7a;
+}
+
+.boss-chip-until {
+  background: #ffe1d3;
+  color: #8a3a12;
+}
+
+.boss-callout {
+  position: absolute;
+  top: 34%;
+  left: calc(env(safe-area-inset-left) + 6px);
+  z-index: 2;
+  padding: 6px 10px;
+  border: 3px solid #2d1b33;
+  border-radius: 10px;
+  background: #ffe34d;
+  color: #2d1b33;
+  font-weight: 900;
+  transform: rotate(-6deg);
+}
+
+.boss-callout-small {
+  top: -30px;
+  left: 50%;
+  font-size: 13px;
+  transform: translateX(-50%) rotate(-6deg);
+  white-space: nowrap;
+}
+
+.boss-callout-show {
+  animation: boss-pop 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boss-callout-show {
+    animation: none;
+  }
+}
+
+@keyframes boss-pop {
+  from {
+    scale: 0.6;
+  }
+
+  to {
+    scale: 1;
+  }
+}
+
+.boss-friends {
+  position: absolute;
+  right: calc(env(safe-area-inset-right) + 16px);
+  /* Above the sheet's full share (the picker's height), not its height now:
+     the sheet shrinks to one line while a round plays and nothing moves. */
+  bottom: calc(var(--battle-sheet-vh, 37) * 1vh + env(safe-area-inset-bottom) + 8px);
+  left: calc(env(safe-area-inset-left) + 16px);
+  display: flex;
+  justify-content: space-around;
+  gap: 8px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.boss-friend {
+  position: relative;
+  display: flex;
+  box-sizing: border-box;
+  flex: 0 1 114px;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 2px solid rgb(255 255 255 / 80%);
+  border-radius: 14px;
+  background: rgb(255 250 240 / 94%);
+  box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
+}
+
+/* Each plate wears its turn-order dot's colour (pink, yellow, green), so the
+   strip's initials point at the right friend. */
+.boss-friend-tint-0 {
+  background: rgb(255 226 238 / 96%);
+  border-color: #ffc2dc;
+}
+
+.boss-friend-tint-1 {
+  background: rgb(255 244 200 / 96%);
+  border-color: #ffe48a;
+}
+
+.boss-friend-tint-2 {
+  background: rgb(226 245 219 / 96%);
+  border-color: #bfe8b0;
+}
+
+.boss-friend-name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boss-friend .battle-energy {
+  height: 10px;
+}
+
+.boss-friend-down {
+  opacity: 0.6;
+}
+
+/* Picker A1 fills the sheet on its own (mockup: steps, "What should Bun do?",
+   the moves): the opening line steps aside while it shows. While a round
+   plays, the caption is the sheet's one line (no "…" under it). */
+.battle-hud-team .battle-sheet:has(.boss-picker:not([hidden])) > .battle-caption,
+.battle-hud-team .battle-waiting {
+  display: none;
+}
+
+/* "Round 2", top left, level with the ✕ (mockup frame 1). */
+.boss-round {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 58px);
+  left: calc(env(safe-area-inset-left) + 12px);
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 2px solid rgb(255 255 255 / 80%);
+  border-radius: 999px;
+  background: rgb(255 250 240 / 94%);
+  box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+/* Who moves, in the round's order; the one moving now outlined. */
+.boss-order {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgb(255 250 240 / 94%);
+  box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.boss-round[hidden],
+.boss-order[hidden] {
+  display: none;
+}
+
+.boss-order-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.boss-order-dot {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.boss-order-boss {
+  background: #e8dcf0;
+}
+
+.boss-order-friend-0 {
+  background: #ffc2dc;
+}
+
+.boss-order-friend-1 {
+  background: #ffe48a;
+}
+
+.boss-order-friend-2 {
+  background: #bfe8b0;
+}
+
+.boss-order-now {
+  outline: 3px solid #b8487a;
+}
+
+.boss-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.boss-steps {
+  display: flex;
+  gap: 6px;
+}
+
+.boss-step {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  min-height: 44px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 14px;
+  background: #fff3e4;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.boss-step-current {
+  outline: 3px solid #b8487a;
+  background: #fff;
+}
+
+.boss-step-name {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.boss-step-status {
+  overflow: hidden;
+  font-size: 11px;
+  opacity: 0.8;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boss-moves {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.hp-button.boss-move {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 56px;
+}
+
+.boss-move-picked {
+  outline: 3px solid #b8487a;
+}
+
+.boss-move-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.boss-tag {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 70%);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.boss-tag-area {
+  background: #ffe9a8;
+  color: #6b4a06;
+}
+
+.boss-picker-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.boss-befriend {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+  text-align: center;
+}
+
+.boss-befriend-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 900;
+  text-wrap: balance;
+}
+
+/* Two things side by side in the ask panel (hearts and "A little warmer",
+   the charm pill and the asks left, the ask and "Make Heart Charms"). */
+.boss-befriend-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 10px;
+}
+
+.boss-befriend-row > p {
+  margin: 0;
+}
+
+.boss-befriend-joined {
+  padding: 10px;
+  border: 4px solid #ffc94d;
+  border-radius: 22px;
+}
+
+.boss-charm-pill {
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: inset 0 0 0 2px #f2a4bb;
+  font-weight: 800;
+}
+
+.boss-warmth {
+  display: flex;
+  gap: 4px;
+  font-size: 22px;
+}
+
+.boss-heart:not(.boss-heart-lit) {
+  filter: grayscale(1);
+  opacity: 0.35;
+}
+
+.boss-warmer {
+  margin: 0;
+  color: #b8487a;
+  font-weight: 800;
+}
+
+.boss-dots {
+  display: inline-flex;
+  gap: 4px;
+  vertical-align: middle;
+}
+
+.boss-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #b8487a;
+}
+
+/* The result card sits over the fight: the team's plates step aside. */
+.battle-hud-team:has(.battle-result:not([hidden])) .boss-top,
+.battle-hud-team:has(.battle-result:not([hidden])) .battle-sheet {
+  display: none;
+}
+
+/* A boss fight's card sits low (mockup frame 3): the boss stays in view
+   above it and the ✕ stays clear. A long card scrolls inside itself. */
+.battle-hud-team .battle-result {
+  top: auto;
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  box-sizing: border-box;
+  max-height: calc(100% - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 300px);
+  overflow-y: auto;
+  gap: 6px;
+  padding: 16px;
+  transform: none;
+}
+
+/* Short enough to fit in the lower half without scrolling (mockup frame 3):
+   one XP line, one "You won …" line, the ask panel's rows paired. */
+.battle-hud-team .battle-result .auth-title {
+  font-size: 24px;
+}
+
+.battle-hud-team .battle-result .battle-xp li {
+  padding-block: 2px;
+}
+
+.battle-hud-team .battle-result .boss-befriend {
+  margin: 4px 0;
+}
+
+/* The team's evolving meters (#205), side by side under its one XP line. */
+.battle-evolving-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.battle-evolving-row .evolving {
+  gap: 2px;
+  margin-top: 0;
+}
+
+.battle-evolving-row .evolving-line {
+  gap: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.battle-evolving-row .evolving-bar {
+  height: 6px;
+}
+
+/* A phone: the befriend panel says what happened, so the subtitle steps aside. */
+@media (max-width: 599px) {
+  .battle-hud-team .battle-result:has(.boss-befriend) > .auth-subtitle {
+    display: none;
+  }
+
+  .battle-hud-team .battle-result .boss-befriend {
+    gap: 4px;
+  }
+
+  /* The charm pill and "Asks left" share one row ("this win" steps aside). */
+  .battle-hud-team .battle-result .boss-befriend-row {
+    gap: 4px 6px;
+  }
+
+  .battle-hud-team .battle-result .boss-charm-pill {
+    padding: 2px 10px;
+    font-size: 14px;
+  }
+
+  .battle-hud-team .battle-result .boss-asks-win {
+    display: none;
+  }
+
+  /* Not enough charms: "You need 3 💗" and "Make Heart Charms 🏠" share one
+     row, so both show under the boss without scrolling. */
+  .battle-hud-team .battle-result .boss-befriend-row:has(> .hp-button) {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .battle-hud-team .battle-result .boss-befriend-row > .hp-button {
+    min-height: var(--hp-button-h-small);
+    padding-inline: 10px;
+    font-size: 15px;
+  }
+}
+
+/* Each friend's plate under its body (the arena's row, `placeFriends`). */
+.boss-friends-placed {
+  display: block;
+  height: 44px;
+}
+
+.boss-friends-placed > .boss-friend {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
 }

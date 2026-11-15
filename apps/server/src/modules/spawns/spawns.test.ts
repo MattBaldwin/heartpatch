@@ -478,7 +478,7 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
         code: 'NOT_FOUND',
         message: expect.stringMatching(/No wild squishies around/) as unknown,
       });
-      expect(await spawns.wildHints(kid, mapId)).toEqual({ tiles: [] });
+      expect(await spawns.wildHints(kid, mapId)).toEqual({ tiles: [], lureHeld: false });
     });
 
     it('spawns Halloween tables only in the Halloween window, following HP_DEV_NOW', async () => {
@@ -615,7 +615,7 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       expect(res.statusCode).toBe(200);
       const { wild } = WildHintsResponseSchema.parse(res.json());
       expect(Object.keys(res.json<object>())).toEqual(['wild']);
-      expect(Object.keys(wild)).toEqual(['tiles']);
+      expect(Object.keys(wild)).toEqual(['tiles', 'lureHeld']); // #729: lureHeld is a boolean, never what a lure does
       expect(res.body).not.toContain(SECRET_WILD);
       // Only tiles in reach: their land and the tiles next to it.
       const tiles = await tilesOf(mapId);

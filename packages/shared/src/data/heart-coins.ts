@@ -9,7 +9,15 @@ import type { HeartCoinRules } from '../schemas/data/heart-coins.js';
 export const HEART_COIN_RULES: HeartCoinRules = {
   // TUNE: as Patch Coins; a journey (#270) is a gate, not a farm; a
   // friendly win (#728) pays a little, capped per pair a day.
-  battleWin: { wild: 2, tile: 3, 'rival-tile': 3, rescue: 0, journey: 0, friendly: 2 },
+  battleWin: {
+    wild: 2,
+    tile: 3,
+    'rival-tile': 3,
+    rescue: 0,
+    journey: 0,
+    friendly: 2,
+    miniboss: 5, // TUNE: a mini-boss win (#190), at most once a week
+  },
   // TUNE: a held defence (#728) pays the Keeper what taking that land would.
   defenseWin: { 'rival-tile': 3 },
   // TUNE: a new friend or a new tile is worth more than a win.

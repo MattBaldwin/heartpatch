@@ -6,7 +6,7 @@ import {
   type TradeLine,
   type TradeStatus,
 } from '@heartpatch/shared';
-import { and, asc, desc, eq, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
@@ -23,6 +23,7 @@ import {
   tradeLedger,
   tradeLines,
   tradeOffers,
+  users,
 } from '../../db/schema.js';
 import { squishyAtWork } from '../jobs/repo.js';
 import { squishyOnWatch } from '../territory/repo.js';
@@ -180,6 +181,80 @@ export function createTradesRepo(db: Executor) {
 
     setTrading: async (mapId: string, on: boolean): Promise<void> => {
       await db.update(maps).set({ tradingEnabled: on }).where(eq(maps.id, mapId));
+    },
+
+    /** Which of these users are computer patch-mates (#386d). */
+    computerIds: async (userIds: readonly string[]): Promise<Set<string>> => {
+      if (userIds.length === 0) return new Set();
+      const rows = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(inArray(users.id, [...new Set(userIds)]), eq(users.kind, 'computer')));
+      return new Set(rows.map((r) => r.id));
+    },
+
+    /**
+     * The counts computer patch-mates' caps read (#386d), on one patch: trades
+     * and gifts with a mate on either side accepted since `dayStart`, gifts
+     * mates sent since `weekStart`, and offers `mateId` sent since `weekStart`.
+     */
+    computerTradeCounts: async (
+      mapId: string,
+      mateId: string,
+      dayStart: Date,
+      weekStart: Date,
+    ): Promise<{ completedToday: number; giftsThisWeek: number; offersThisWeek: number }> => {
+      const computer = sql`(select ${users.kind} from ${users} where ${users.id} = ${tradeOffers.fromUserId}) = 'computer'`;
+      const computerTo = sql`(select ${users.kind} from ${users} where ${users.id} = ${tradeOffers.toUserId}) = 'computer'`;
+      const [done] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(tradeOffers)
+        .where(
+          and(
+            eq(tradeOffers.mapId, mapId),
+            eq(tradeOffers.status, 'accepted'),
+            gte(tradeOffers.answeredAt, dayStart),
+            or(computer, computerTo),
+          ),
+        );
+      const [gifts] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(tradeOffers)
+        .where(
+          and(
+            eq(tradeOffers.mapId, mapId),
+            eq(tradeOffers.kind, 'gift'),
+            gte(tradeOffers.createdAt, weekStart),
+            computer,
+          ),
+        );
+      const [offers] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(tradeOffers)
+        .where(
+          and(
+            eq(tradeOffers.mapId, mapId),
+            eq(tradeOffers.kind, 'trade'),
+            eq(tradeOffers.fromUserId, mateId),
+            gte(tradeOffers.createdAt, weekStart),
+          ),
+        );
+      return {
+        completedToday: done?.n ?? 0,
+        giftsThisWeek: gifts?.n ?? 0,
+        offersThisWeek: offers?.n ?? 0,
+      };
+    },
+
+    /**
+     * Holds one patch's computer-mate trade caps until the transaction ends
+     * (#386d, tech spec §7 step 9a): a transaction advisory lock keyed
+     * `computer-trades:<mapId>`, taken before any offer row (9b).
+     */
+    lockComputerTrades: async (mapId: string): Promise<void> => {
+      await db.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`computer-trades:${mapId}`}, 0))`,
+      );
     },
 
     /** Is this player an active member of the map? */
@@ -580,7 +655,7 @@ export function createTradesRepo(db: Executor) {
       return rows.map(toMailbox);
     },
 
-    pickedUp: async (ids: readonly string[], at: Date, postTileId: string) => {
+    pickedUp: async (ids: readonly string[], at: Date, postTileId: string | null) => {
       if (ids.length === 0) return;
       await db
         .update(mailbox)

@@ -123,6 +123,17 @@ describe('patchStats (#573)', () => {
     expect(of(C)?.crowns).toEqual([]);
   });
 
+  it('never crowns a computer patch-mate (#386); the next Keeper wears it', () => {
+    const withMate = members.map((m) =>
+      m.user.id === B ? { ...m, computer: { personaId: 'bramble' } } : m,
+    );
+    const mated = patchStats(view(tiles, withMate), counts);
+    const mateRow = mated.keepers.find((k) => k.user.id === B);
+    expect(mateRow?.crowns).toEqual([]);
+    expect(mateRow?.tiles).toBe(3);
+    expect(mated.keepers.find((k) => k.user.id === A)?.crowns).toContain('land');
+  });
+
   it('crowns nobody on a fresh patch', () => {
     const fresh = patchStats(view([tile(0, 0)], members), new Map());
     expect(fresh.keepers.every((k) => k.crowns.length === 0)).toBe(true);

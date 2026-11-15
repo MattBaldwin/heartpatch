@@ -164,8 +164,24 @@ export const MapMemberSchema = z.object({
   title: DisplayNameSchema.nullable(),
   /** Their home's name (#306 PR 0), shown on its map flag; null until named. */
   homeName: z.string().nullable().optional(),
+  /**
+   * Set for a computer patch-mate (#386): which persona, for the Computer
+   * friend badge. Absent for a real kid.
+   */
+  computer: z.object({ personaId: z.string() }).optional(),
 });
 export type MapMember = z.infer<typeof MapMemberSchema>;
+
+/** `POST /maps/:mapId/computer-mates` (#386): the owner's switch. */
+export const SetComputerMatesRequestSchema = z.object({ enabled: z.boolean() });
+export type SetComputerMatesRequest = z.infer<typeof SetComputerMatesRequestSchema>;
+
+/** The switch as the owner sees it; `changeAt` is when it may next turn on (null: now). */
+export const ComputerMatesStateSchema = z.object({
+  enabled: z.boolean(),
+  changeAt: z.iso.datetime().nullable(),
+});
+export type ComputerMatesState = z.infer<typeof ComputerMatesStateSchema>;
 
 /** `POST /maps/:mapId/home/name` (#306 PR 0): name my home. Replies with the `HomeResponse`. */
 export const HomeNameRequestSchema = z.object({ name: HomeNameSchema });
@@ -229,6 +245,11 @@ export const MapDetailSchema = z.object({
   tradingEnabled: z.boolean().optional(),
   /** Friendly battles are on (#29, the owner's switch). Optional so older servers' details parse. */
   friendlyChallenges: z.boolean().optional(),
+  /**
+   * The computer patch-mates switch (#386). Left out while `HP_COMPUTER_MATES`
+   * is off for this patch, and by older servers.
+   */
+  computerMates: ComputerMatesStateSchema.optional(),
   /** Cozy Patch or Wild Isle (#621). Optional so older servers' details parse (read as cozy). */
   patchType: PatchTypeSchema.optional(),
   /**

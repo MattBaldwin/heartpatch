@@ -19,15 +19,16 @@ import {
   type WsEventMessage,
 } from '@heartpatch/shared';
 import { clothingIcon, clothingSlotIcon, itemIcon } from '../inventory/item-icons.js';
+import { COMPUTER_TEXT } from '../computer-mates/computer-mates-model.js';
 
 // The trading post's screen (#271; the owner-approved mockup, screens d, e
 // and f) in words and picks. Pure, so every case is unit-tested. The server
 // checks everything again (CLAUDE.md rule 1): this only shapes the request
 // and says what's waiting. Copy follows docs/STYLE_GUIDE.md.
 
-export type PostTab = 'trade' | 'gift' | 'mailbox' | 'swap' | 'sell';
+export type PostTab = 'trade' | 'gift' | 'mailbox' | 'swap' | 'sell' | 'shop';
 /** The Glimmer swap (#523) comes last: the post's own counter, not a patch-mate. */
-export const POST_TABS: readonly PostTab[] = ['trade', 'gift', 'mailbox', 'swap', 'sell'];
+export const POST_TABS: readonly PostTab[] = ['trade', 'gift', 'mailbox', 'swap', 'sell', 'shop'];
 
 const SPECIES = new Map(GAME_DATA.species.map((s) => [s.id, s]));
 const RESOURCES = new Map(GAME_DATA.resources.map((r) => [r.id, r]));
@@ -39,9 +40,10 @@ export const TRADE_TEXT = {
   tabs: {
     trade: '🔁 Trade',
     gift: '🎁 Gift',
-    mailbox: '📬 Mailbox',
+    mailbox: '📬 Mail',
     swap: '💎 Swap',
     sell: '🏷️ Sell',
+    shop: '🛍️ Shop',
   } satisfies Record<PostTab, string>,
   connected: '🔗 Connected',
   open: (ms: number) => `⏳ Open ${String(Math.max(1, Math.ceil(ms / 60_000)))} min`,
@@ -66,6 +68,15 @@ export const TRADE_TEXT = {
     `${String(things)} ${things === 1 ? 'thing' : 'things'} for ${name}\u00a0🎁`,
   giftPickFirst: 'Tap things to pick a gift',
   giftConfirmTitle: 'Send this gift? 🎁',
+  /** The offer card from a Computer friend (#386f): the badge sits beside the name. */
+  mateWouldLikeToTrade: (name: string) => `${name} (${COMPUTER_TEXT.badge}) would like to trade!`,
+  mateWouldLike: ' would like to trade!',
+  /** Under "Send offer" for a Computer friend: a fair offer is never lost to their daily limit. */
+  mateWaits: (name: string) =>
+    `${name} only trades a few times a day. A fair offer waits safely at the post until they can!`,
+  mateSureTitle: 'Are you sure? 🤔',
+  mateSureNote: (name: string) =>
+    `A squishy that goes to ${name} stays with ${name} for good. You can't take it back.`,
   giftConfirmTo: (name: string) => `To ${name}`,
   giftConfirmNote: (name: string) =>
     `${name} picks it up at the post. You can take it back until\u00a0then.`,
@@ -332,13 +343,14 @@ export const waiting = (view: TradesView): MailboxEntry[] =>
 
 /** The tabs' little number badges. */
 export function tabBadges(view: TradesView | null, me: string): Record<PostTab, number> {
-  if (!view) return { trade: 0, gift: 0, mailbox: 0, swap: 0, sell: 0 };
+  if (!view) return { trade: 0, gift: 0, mailbox: 0, swap: 0, sell: 0, shop: 0 };
   return {
     trade: offersToMe(view, me).length,
     gift: 0,
     mailbox: waiting(view).length,
     swap: 0,
     sell: 0,
+    shop: 0,
   };
 }
 
@@ -513,4 +525,9 @@ export function meterLook(
     marker: tip === 'none' ? null : Math.min(96, Math.max(4, 50 - 50 * lean)),
     fairHalf: 50 * band,
   };
+}
+
+/** True when a pick holds a squishy (one that goes to a Computer friend is gone for good, #386f). */
+export function givesSquishy(lines: readonly Pick<TradeLine, 'kind'>[]): boolean {
+  return lines.some((l) => l.kind === 'squishy');
 }

@@ -4,7 +4,8 @@ import { CreateTorus } from '@babylonjs/core/Meshes/Builders/torusBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import { hexKey, hexToWorld, type HexKey, type MapView, type PublicTile } from '@heartpatch/shared';
-import { homeFlags } from '../home/home-name-view.js';
+import { computerBadge } from '../computer-mates/computer-badge.js';
+import { homeFlags, type HomeFlag } from '../home/home-name-view.js';
 import { HEX_SIZE } from '../map/map-config.js';
 import { findHomeBases } from '../map/map-layout.js';
 import { DOME, TILE_RADIUS, tileScreenRectOf, topOf } from '../map/map-scene.js';
@@ -61,6 +62,15 @@ interface Flag {
   size: { width: number; height: number } | null;
   /** Where it showed after the last placing (null: hidden), a cover for the flags after it. */
   box: Rect | null;
+}
+
+/**
+ * A home flag's words, plus the Computer friend badge beside the name on a mate's home (#386b,
+ * mockup 2c), so the map never tells mates apart by colour alone.
+ */
+function fillHomeFlag(node: HTMLElement, home: HomeFlag): void {
+  node.replaceChildren(home.label, ...(home.computer ? [computerBadge()] : []));
+  node.classList.toggle('home-flag-computer', home.computer);
 }
 
 /** Room left between two flags (#306), so pills never touch. TUNE. */
@@ -272,19 +282,21 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
       const flag = homes.get(id);
       if (flag) {
         flag.tile = home.tile;
-        if (flag.label !== home.label) {
-          flag.node.textContent = home.label;
+        const computer = flag.node.classList.contains('home-flag-computer');
+        if (flag.label !== home.label || computer !== home.computer) {
+          fillHomeFlag(flag.node, home);
           flag.size = null;
           flag.label = home.label;
           changed = true;
         }
         continue;
       }
-      const node = el(
-        'div',
-        { class: 'post-flag home-flag', 'aria-hidden': 'true', 'data-testid': 'home-flag' },
-        home.label,
-      );
+      const node = el('div', {
+        class: 'post-flag home-flag',
+        'aria-hidden': 'true',
+        'data-testid': 'home-flag',
+      });
+      fillHomeFlag(node, home);
       node.hidden = true;
       root.append(node);
       homes.set(id, {

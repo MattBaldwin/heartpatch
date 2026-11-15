@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { PATCH_ECONOMY_CONFIG as CONFIG } from './patch-economy-config.js';
+import { PATCH_ECONOMY_CONFIG as CONFIG, shopWeek } from './patch-economy-config.js';
 import { HEART_COIN_RULES } from '../../src/data/heart-coins.js';
+import { POST_SHOP } from '../../src/data/post-shop.js';
+import { COMPUTER_MATES } from '../../src/data/server/computer-mates.js';
+import { TRADE_VALUES } from '../../src/data/trading.js';
 import {
   awayWindow,
   buildIncome,
   buildPlan,
+  formatLuresAffordable,
   formatWhatPays,
   levelDays,
+  lureSlots,
+  luresAffordable,
   pausedWhilePlaying,
   FRIENDLY_WIN_UNTIL_728B,
   PAID_FRIENDLY_WINS_PER_PAIR,
@@ -14,6 +20,10 @@ import {
   renderPatchEconomy,
   runKid,
   runPatchEconomy,
+  soloGates,
+  soloKid,
+  mateGiftsOn,
+  mateGiftStack,
   upkeepPercent,
   warehouseTrip,
   warehouseTripRuns,
@@ -90,6 +100,32 @@ describe('runPatchEconomy guards (#601)', () => {
       }
     }
     expect(renderPatchEconomy(runs, CONFIG, { seconds: 0 })).toContain('| 2 | casual |');
+  });
+
+  it('a solo kid with computer mates ends day 30 within the gate of their 4-seat row (#386d)', () => {
+    const gates = soloGates(runs, CONFIG);
+    expect(gates.map((g) => g.kid)).toEqual(CONFIG.kids.map((k) => k.id));
+    for (const g of gates) {
+      expect(g.pass, `${g.kid}: ${String(g.percent)} %`).toBe(true);
+      // Mates lift a solo kid, never past the gate.
+      expect(g.mates).toBeGreaterThanOrEqual(g.solo);
+    }
+    expect(renderPatchEconomy(runs, CONFIG, { seconds: 0 })).toContain('solo + computer mates');
+  });
+
+  it('solo rows: no friendlies or defences alone; with mates, capped friendlies, defences and gifts', () => {
+    const engaged = CONFIG.kids.find((k) => k.id === 'engaged')!;
+    expect(soloKid(engaged, 'plain', 1).wins).toMatchObject({ friendly: 0, defence: 0 });
+    const week = [1, 2, 3, 4, 5, 6, 7];
+    const defences = week.reduce((a, d) => a + soloKid(engaged, 'mates', d).wins.defence, 0);
+    expect(defences).toBeLessThanOrEqual(COMPUTER_MATES.rules.challengesPerPatchWeek.on);
+    expect(week.reduce((a, d) => a + mateGiftsOn(d), 0)).toBe(
+      COMPUTER_MATES.rules.giftsPerPatchWeek,
+    );
+    const gift = mateGiftStack();
+    expect((TRADE_VALUES.items[gift.itemId] ?? 0) * gift.quantity).toBeLessThanOrEqual(
+      COMPUTER_MATES.rules.giftMaxValue,
+    );
   });
 
   it('builds a first hut in time', () => {
@@ -203,10 +239,32 @@ describe('what pays today (#736)', () => {
     expect(result.upkeep).toBe(week.reduce((a, d) => a + d.upkeep, 0));
   });
 
-  it('fails (softly) while upkeep is the only thing Heart Coins buy', () => {
+  it('reads the Post shop at its caps: a day cap is 7 a week, a week cap its count (#729)', () => {
+    expect(CONFIG.whatPays.weekDays).toBe(7);
+    expect(CONFIG.whatPays.shop).toEqual(shopWeek(POST_SHOP, 7));
+    for (const item of POST_SHOP) {
+      const row = CONFIG.whatPays.shop.find((r) => r.id === item.id);
+      expect(row?.price).toBe(item.price);
+      expect(row?.perWeek).toBe(item.cap.per === 'day' ? item.cap.count * 7 : item.cap.count);
+    }
+  });
+
+  it("is a hard gate: the casual kid can spend half a week's earnings at the shop (#729)", () => {
     const result = whatPays(run, CONFIG);
+    expect(result.buyable).toBe(
+      POST_SHOP.reduce((a, i) => a + i.price * (i.cap.per === 'day' ? 7 : 1) * i.cap.count, 0),
+    );
+    expect(result.pass).toBe(true);
+    const line = formatWhatPays(result, run, CONFIG);
+    expect(line).toContain(': PASS');
+    expect(line).not.toContain('soft');
+  });
+
+  it('names the data lever when it fails', () => {
+    const empty = shop([]);
+    const result = whatPays(run, empty);
     expect(result).toMatchObject({ buyable: 0, canSpend: 0, percent: 0, pass: false });
-    expect(formatWhatPays(result, run, CONFIG)).toContain('soft until #729');
+    expect(formatWhatPays(result, run, empty)).toContain('FAIL (lever: Post shop prices and caps');
   });
 
   it('passes once the week offers enough to buy, up to the balance', () => {
@@ -222,5 +280,64 @@ describe('what pays today (#736)', () => {
     expect(rich.pass).toBe(rich.percent >= CONFIG.whatPays.minSpendPercent);
     const cheap = whatPays(run, shop([{ id: 'pack', price: 1, perWeek: 1 }]));
     expect(cheap).toMatchObject({ buyable: 1, canSpend: 1, pass: false });
+  });
+});
+
+describe('lures affordable (#729 plan §8)', () => {
+  const income = buildIncome(CONFIG, PROGRESSION_CONFIG);
+  const lures = luresAffordable(CONFIG, income);
+
+  it('counts rolling-week slots, one a day', () => {
+    // Days 10–30 at 2 in any 7: 10, 11, 17, 18, 24, 25.
+    expect(lureSlots(10, 30, 2, 7)).toBe(6);
+    expect(lureSlots(10, 30, 1, 7)).toBe(3);
+    expect(lureSlots(1, 7, 7, 7)).toBe(7);
+  });
+
+  it('the casual kid buys two a week and the engaged kid one, with no paused morning', () => {
+    expect(lures.map((l) => [l.result.kid, l.result.perWeek])).toEqual([
+      ['casual', 2],
+      ['engaged', 1],
+    ]);
+    for (const { result } of lures) {
+      expect(result.bought).toBe(result.wanted);
+      expect(result.paused).toBe(0);
+      expect(result.pass).toBe(true);
+      expect(formatLuresAffordable(result, CONFIG)).toContain(': PASS');
+    }
+  });
+
+  it('spends the Lure price from the balance and nothing before day 10', () => {
+    const lure = POST_SHOP.find((i) => i.id === 'rare-lure')!;
+    const plain = runPatchEconomy(CONFIG, PROGRESSION_CONFIG, income);
+    for (const { result, run } of lures) {
+      const base = plain.find(
+        (r) => r.kid === result.kid && r.seats === CONFIG.seats[0] && r.away.length === 0,
+      )!;
+      expect(result.spent).toBe(result.bought * lure.price);
+      expect(run.days.filter((d) => d.day < 10).every((d) => d.shop === 0)).toBe(true);
+      expect(run.days.every((d) => d.shop === 0 || d.shop === lure.price)).toBe(true);
+      // Nothing else changes, so day 30 is the plain run less what the Lures cost.
+      expect(result.balance).toBe(base.days.at(-1)!.balance - result.spent);
+    }
+  });
+
+  it('reports both lines under "what pays today"', () => {
+    const md = renderPatchEconomy([], CONFIG, { seconds: 0, lures: lures.map((l) => l.result) });
+    expect(md).toContain('rare-lure ×2 a week (4 seats casual, from day 10)');
+    expect(md).toContain('rare-lure ×1 a week (4 seats engaged, from day 10)');
+  });
+
+  it('fails, naming the lever, when the Lure costs more than the kid can keep up with', () => {
+    const pricey = {
+      ...CONFIG,
+      whatPays: {
+        ...CONFIG.whatPays,
+        shop: CONFIG.whatPays.shop.map((i) => (i.id === 'rare-lure' ? { ...i, price: 1000 } : i)),
+      },
+    };
+    const casual = luresAffordable(pricey, income).find((l) => l.result.kid === 'casual')!;
+    expect(casual.result.pass).toBe(false);
+    expect(formatLuresAffordable(casual.result, pricey)).toContain('FAIL (lever:');
   });
 });

@@ -11,10 +11,12 @@ import {
   CONSUMER_RETRY_LIMIT,
   JOBS_STOP_TIMEOUT_MS,
 } from './limits.js';
+import { startComputerMates, type ComputerMatesRunner } from './computer-mates.js';
 import { startNightfall, type NightfallRunner } from './nightfall.js';
 import { ensureQueue } from './queues.js';
 import { createJobsRepo, pgBossOnTransaction } from './repo.js';
 import type { PushSweepResult } from '../modules/push/sweep.js';
+import { startMinibossSweep, type MinibossSweepRunner } from './miniboss.js';
 import { startPushSweep, type PushSweepRunner } from './push.js';
 import { startRetention } from './retention.js';
 import { startWeather, type WeatherRunner } from './weather.js';
@@ -46,6 +48,10 @@ export interface JobsOptions {
   weather?: WeatherRunner;
   /** Push nudges' sweep (#726c, `jobs/push.ts`); none without it. */
   push?: PushSweepRunner;
+  /** Mini-boss visits' sweep (#190, `jobs/miniboss.ts`); none without it. */
+  miniboss?: MinibossSweepRunner;
+  /** Computer patch-mates' steps (#386c, `jobs/computer-mates.ts`); none without it. */
+  computerMates?: ComputerMatesRunner;
 }
 
 export interface Jobs {
@@ -57,6 +63,10 @@ export interface Jobs {
   weatherScan: () => Promise<number>;
   /** Sends the push nudges due now (also every minute, and at start). Null without `push` or while it's off. */
   pushSweep: () => Promise<PushSweepResult | null>;
+  /** Opens the mini-boss visits due now (also every 5 minutes, and at start). 0 without `miniboss`. */
+  minibossSweep: () => Promise<number>;
+  /** Enqueues every due computer mate's step now (also every 2 minutes). 0 without `computerMates`. */
+  computerMatesSweep: () => Promise<number>;
   /** Stops taking jobs, waits for running ones, and stops enqueuing wake-ups. */
   stop: () => Promise<void>;
 }
@@ -191,11 +201,20 @@ export async function startJobs(options: JobsOptions): Promise<Jobs> {
     ? await startPushSweep(boss, options.push, logger, options.schedule ?? true)
     : null;
 
+  const miniboss = options.miniboss
+    ? await startMinibossSweep(boss, options.miniboss, logger, options.schedule ?? true)
+    : null;
+  const computerMates = options.computerMates
+    ? await startComputerMates(boss, options.computerMates, logger, options.schedule ?? true)
+    : null;
+
   return {
     catchUp,
+    computerMatesSweep: () => computerMates?.sweep() ?? Promise.resolve(0),
     nightfallSweep: () => nightfall?.sweep() ?? Promise.resolve(0),
     weatherScan: () => weather?.scan() ?? Promise.resolve(0),
     pushSweep: () => push?.sweep() ?? Promise.resolve(null),
+    minibossSweep: () => miniboss?.sweep() ?? Promise.resolve(0),
     stop: async () => {
       setEventWakeup(null);
       await boss.stop({ graceful: true, timeout: JOBS_STOP_TIMEOUT_MS });

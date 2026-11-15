@@ -143,8 +143,14 @@ describe('BattleRewardsSchema (#201)', () => {
       fullXpResetAt: null,
       coins: null,
       unpaid: null,
+      bundle: null,
       b: null,
     });
+  });
+
+  it('reads a mini-boss bundle (#190), null when left out', () => {
+    const parsed = BattleRewardsSchema.parse({ xp: [], percent: 100, bundle: { treats: 3 } });
+    expect(parsed.bundle).toEqual({ treats: 3 });
   });
 
   it('reads side b rewards (#728), with no unpaid reason by default', () => {
@@ -165,5 +171,16 @@ describe('BattleRewardsSchema (#201)', () => {
     expect(() =>
       BattleRewardsSchema.parse({ xp: [], percent: 100, b: { ...parsed.b, unpaid: 'sulked' } }),
     ).toThrow();
+  });
+
+  it('marks a bench award (#732), and reads rows stored before it without the marker', () => {
+    const squishyId = '00000000-0000-4000-8000-000000000002';
+    const row = { squishyId, xp: 11, evolvingBefore: null, evolvingAfter: null };
+    const parsed = BattleRewardsSchema.parse({
+      xp: [row, { ...row, bench: true }],
+      percent: 100,
+    });
+    expect(parsed.xp[0]).not.toHaveProperty('bench');
+    expect(parsed.xp[1]?.bench).toBe(true);
   });
 });

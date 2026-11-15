@@ -80,7 +80,10 @@ test('crafts a Brave Brew, drinks it in a wild battle, and shows the chip', asyn
   const state = await settled(page);
   await expect(page.getByTestId('battle-item')).toHaveText('🧪 1');
   await expect(page.getByTestId('battle-item')).toHaveAccessibleName('Use item, 1 in your bag');
-  expect(state.potions?.['brave-brew']).toBe(1);
+  // Poll, don't read the settled snapshot: the bag count can land after it (#784).
+  await expect
+    .poll(async () => (await battleState(page))?.potions?.['brave-brew'], { timeout: 30_000 })
+    .toBe(1);
   await expect(page.getByTestId('battle-chip-attack-mine')).toBeHidden();
 
   // The picker: Brave Brew ready, the others dimmed with a reason.

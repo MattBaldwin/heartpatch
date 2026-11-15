@@ -68,6 +68,8 @@ export interface WsHub {
    * process started, which callers read as "long ago". In-process only.
    */
   lastOfflineAt: (mapId: string, userId: string) => Date | null;
+  /** Patches with at least one socket subscribed right now (#386c's warm patches). In-process. */
+  openMaps: () => string[];
   /** Stops the heartbeat, closes every socket and waits for in-flight reads. */
   close: () => Promise<void>;
 }
@@ -464,6 +466,8 @@ export function createWsHub(options: WsHubOptions): WsHub {
     publish: (mapId) => (channels.has(mapId) ? pump(mapId) : Promise.resolve()),
 
     isOnline: hasSubscription,
+
+    openMaps: () => [...channels.keys()],
 
     lastOfflineAt: (mapId, userId) => {
       const at = offlineAt.get(userId)?.get(mapId);

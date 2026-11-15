@@ -9,6 +9,7 @@ import { rareGlowOff, setRareGlowOff } from './procedural/rare-glow.js';
 import { isQualityTier, pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
 import { battleApi } from './battle/battle-api.js';
+import { catalogApi } from './catalog/catalog-api.js';
 import { createBattleScreen } from './battle/battle-screen.js';
 import { createDefensePrompt } from './battle/defense-prompt.js';
 import { createWildPicker } from './battle/wild-picker.js';
@@ -47,6 +48,8 @@ import { createCareSheet } from './care/care-sheet.js';
 import { createJobs, openTeamPicker } from './squishies/jobs/index.js';
 import { workMoods } from './squishies/jobs/jobs-view.js';
 import { createChatScreen } from './chat/chat-screen.js';
+import { createComputerMatesNotes } from './computer-mates/computer-mates-notes.js';
+import { isComputer } from './computer-mates/computer-mates-model.js';
 import { createFriendlyScreen } from './friendly/friendly-screen.js';
 import { createCloseUpScreen, type CloseUpFrom } from './close-up/close-up-screen.js';
 import { onPanelFocus } from './building/panel-focus.js';
@@ -55,6 +58,10 @@ import { createBuildingsGuide } from './building/buildings-guide.js';
 import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen, type MapLayer } from './map/map-screen.js';
 import { mapApi } from './map/map-api.js';
+import { createBossMarker } from './map/boss-marker.js';
+import { bossTileInfo, createBossPicker, exceptBossTile } from './map/boss-picker.js';
+import { createBossStore } from './map/boss-store.js';
+import { bossPatchLine } from './map/boss-view.js';
 import { seasonsOn } from './map/map-dressing.js';
 import { createTileMarks } from './map/tile-marks.js';
 import { createKnockedMarks } from './weather/knocked-marks.js';
@@ -588,6 +595,8 @@ let pushOfferOpen = false;
 const raidReport = createRaidReport({
   root: document.body,
   entryRoot: trays.slot('adventure'),
+  isComputer: (userId) =>
+    maps.view?.members.some((m) => m.user.id === userId && isComputer(m)) ?? false,
   watch: (replay) => {
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) {
       battles.watch(replay.start, replay.end);
@@ -688,6 +697,12 @@ const postScreen = createPostScreen({
   onSold: () => {
     void inventory.refresh();
     void heartCoins.refresh();
+  },
+  // A Shop buy (#729) spends 💛, may fill the bag, and may hold a lure: Find a squishy glows.
+  onBought: (shop) => {
+    void inventory.refresh();
+    void heartCoins.refresh();
+    battles.setLureHeld(shop.lureHeld);
   },
 });
 const journeys = createJourneyScreen({
@@ -1337,6 +1352,45 @@ communityActions.wireGift(async (community) => {
 });
 // Login and the lobby come first, so a renderer that can't start never hides them.
 // Meet it on a tile with a rustling tuft (#209): the battle screen starts it.
+// The week's mini-boss (#190, 190f): the marker, the tile card and the patch line share one visit.
+const bossStore = createBossStore({
+  fetchBoss: (mapId) => mapApi.boss(mapId),
+  // The server sends a boss's def only to a Keeper who has met it, so the catalog is where a name comes from.
+  fetchNames: async (mapId) =>
+    new Map((await catalogApi.get(mapId)).speciesDefs.map((s) => [s.id, s.name] as const)),
+  onAppeared: (visit, mapId) => {
+    if (!visit || maps.view?.map.id !== mapId) return;
+    const terrain = maps.view.tiles.find(
+      (t) => t.q === visit.tile.q && t.r === visit.tile.r,
+    )?.terrain;
+    patchLine.say(
+      bossPatchLine(visit.species !== null ? bossStore.nameOf(visit.species) : null, terrain),
+    );
+  },
+});
+const bossMarker = createBossMarker(document.body, bossStore);
+const bossPicker = createBossPicker({
+  store: bossStore,
+  fight: async (mapId) => {
+    const battle = await mapApi.fightBoss(mapId);
+    // As every open after an await: not over the lobby, the catalog, care or a close-up.
+    if (
+      maps.view?.map.id === mapId &&
+      !lobby.isOpen &&
+      !catalog.isOpen &&
+      !care.isOpen &&
+      !closeUp.isOpen
+    )
+      battles.open(battle);
+  },
+});
+bossStore.onChange(() => {
+  bossPicker.redraw();
+});
+// Back from the background (a new day, a new visit): ask again.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) void bossStore.refresh();
+});
 const wildPicker = createWildPicker({ meet: (mapId, tile) => battles.meetWild(mapId, tile) });
 // One Build sheet for my land (#371): fires, lanterns, Training Grounds and
 // fences, built the same way from the tile's panel.
@@ -1383,6 +1437,15 @@ const waterBuild = createTileBuild({
     stage?.camera.panTo(hexToWorld(tile, HEX_SIZE), stillPans.matches, 0.34, BUILD_ZOOM);
   },
 });
+// Computer friends (#386b): a hello card when mates move in, and a toast
+// when one waves goodbye to make room for a real friend (a map layer: it
+// compares each newer view's roster with the last). The hello waits behind
+// the tutorial, a battle or another card, like What's new does.
+const computerMatesNotes = createComputerMatesNotes({
+  root: document.body,
+  // mapCovered() counts the hello itself; a second batch waits for it to close.
+  busy: () => mapCovered() || whatsNewOpen || pushOfferOpen,
+});
 const maps = createMapScreen({
   root: document.body,
   // Every view read (open, resync) also says whether a House gift waits (#731c).
@@ -1423,9 +1486,12 @@ const maps = createMapScreen({
     lobby.showMessage(message);
   },
   waterTileActions: waterBuild.tileActions,
+  tileInfo: (info, tile) => bossTileInfo(bossPicker, info, tile),
   // Meet it first (#209): the tuft the player tapped is what they came for.
   tileActions: combineTileActions(
     wildPicker.tileActions,
+    // The week's BIG squishy on its own tile (#190).
+    bossPicker,
     // Who gathers here and how they feel (#602): the map shows only the squishy, so the tap says it.
     jobs.workerLine,
     inventory.tileActions,
@@ -1440,7 +1506,7 @@ const maps = createMapScreen({
     land.tileActions,
     fences.tileActions,
     roads.tileActions,
-    territory.tileActions,
+    exceptBossTile(bossPicker, territory.tileActions),
     jobs.tileActions,
     journeys.tileActions,
     // On a patch-mate's home in the Halloween season (#515).
@@ -1479,6 +1545,7 @@ const maps = createMapScreen({
     if (mapId !== null && signedIn && glade === null) trays.offerHint(signedIn.id);
   },
   layers: [
+    computerMatesNotes.layer,
     hollowLayer,
     darkLand,
     jobs.gatherers,
@@ -1486,6 +1553,7 @@ const maps = createMapScreen({
     roads.layer,
     strandedLayer,
     postFlags,
+    bossMarker,
     communityFlags,
     villageWins,
     keyHunt.layer,
@@ -1524,6 +1592,8 @@ const maps = createMapScreen({
       nextUp.refresh();
     // A patch-mate's Legendary friend (#391).
     patchLine.liveEvent(event);
+    // A mini-boss arrived (#190, 190f): the marker and the patch line.
+    bossStore.liveEvent(event);
     // My own first evolution on a patch, not the tutorial's (Sprout's tip, #731).
     if (event.type === 'squishy.evolved' && event.mapId !== glade) {
       const evolved = GAME_EVENTS['squishy.evolved'].public.safeParse(event.data);
@@ -1660,6 +1730,8 @@ const lorebook = createLorebook({
 const defense = createDefensePrompt({
   root: document.body,
   nameOf: (userId) => maps.view?.members.find((m) => m.user.id === userId)?.user.username ?? null,
+  isComputer: (userId) =>
+    maps.view?.members.some((m) => m.user.id === userId && isComputer(m)) ?? false,
   openBattle: (battle) => {
     // The server has seated them already: whatever is open steps aside.
     catalog.close();
@@ -1758,6 +1830,7 @@ const battles = createBattleScreen({
   root: document.body,
   // The full-XP reset is the server's time (#583).
   now: () => inventory.gameNow(),
+  timeZone: (mapId) => (maps.view?.map.id === mapId ? maps.view.map.timeZone : null),
   memberName,
   isGlade: (mapId) => mapId === glade,
   journey: {
@@ -1866,7 +1939,11 @@ const friendly = createFriendlyScreen({
   entryRoot: trays.slot('top-right'),
   members: (mapId) =>
     maps.view?.map.id === mapId
-      ? maps.view.members.map((m) => ({ userId: m.user.id, username: m.user.username }))
+      ? maps.view.members.map((m) => ({
+          userId: m.user.id,
+          username: m.user.username,
+          ...(m.computer ? { computer: true } : {}),
+        }))
       : [],
   openBattle: (battle) => {
     battles.open(battle);
@@ -2168,6 +2245,7 @@ const mapCovered = (): boolean =>
   lorebook.isOpen ||
   milestones.debug.showing !== null ||
   nextUp.isOpen ||
+  computerMatesNotes.isOpen ||
   hollowReportOpen();
 const whatsNew = createWhatsNew({
   root: document.body,
@@ -2185,7 +2263,8 @@ const whatsNew = createWhatsNew({
 // off the map and behind anything else at the top or over the map (a card, a
 // sheet, the "What landed" banner, Sprout's hint, another toast); the land
 // chip steps aside for it (patch-line.css).
-const TOP_NOTES = '.land-toast, .tray-say, .friendly-toast, .wardrobe-toast, .sprout-tip';
+const TOP_NOTES =
+  '.land-toast, .tray-say, .friendly-toast, .wardrobe-toast, .sprout-tip, .cf-toast';
 const patchLineBusy = (): boolean =>
   hudMapId === null ||
   // The lobby (its list, or Settings over a patch) owns the screen (#726).
@@ -2420,6 +2499,7 @@ if (import.meta.env.DEV) {
     land: () => land.debug,
     chat: () => chat.debug,
     friendly: () => friendly.debug,
+    computerMates: () => computerMatesNotes.debug,
     raids: () => raidReport.debug,
     home: () => home.debug,
     explore: () => explore.debug,
@@ -2489,6 +2569,7 @@ if (import.meta.env.DEV) {
     defense: () => defense.debug,
     whatsNew: () => whatsNew.debug,
     patchLine: () => ({ ...patchLine.debug, busy: patchLineBusy() }),
+    boss: () => bossMarker.shown,
     push: () => ({ offer: pushOffer.debug.state, card: pushOfferCard.isOpen }),
     audio: () => audio.debug,
   };

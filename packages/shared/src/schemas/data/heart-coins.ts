@@ -17,6 +17,8 @@ const cap = z.number().int().min(1).max(10_000);
  * - `care`: a full-value care action (`ref_id` the `care_log` row).
  * - `sell`: extras sold at a trading post (#601 PR 3; `ref_id` the sale).
  * - `upkeep`: a building's morning upkeep (negative; #601 PR 6).
+ * - `shop`: something bought at a trading post's Shop (negative; #729;
+ *   `ref_id` the `post_purchases` row). Spends have no earning cap.
  * - `dev-grant`: dev and test builds only.
  */
 export const HeartCoinSourceSchema = z.enum([
@@ -25,6 +27,7 @@ export const HeartCoinSourceSchema = z.enum([
   'care',
   'sell',
   'upkeep',
+  'shop',
   'dev-grant',
 ]);
 export type HeartCoinSource = z.infer<typeof HeartCoinSourceSchema>;
@@ -42,6 +45,7 @@ export const HeartCoinRulesSchema = z.strictObject({
     rescue: coins,
     journey: coins,
     friendly: coins,
+    miniboss: coins,
   }),
   /**
    * Heart Coins for the Keeper whose land held (#728), as `CoinRules.defenseWin`,

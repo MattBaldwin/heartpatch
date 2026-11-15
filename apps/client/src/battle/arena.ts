@@ -100,6 +100,26 @@ function matrixOf(p: Placement, sy = p.scale, sz = p.scale, sx = p.scale): Matri
   return placeAt(p.x, p.y, p.z, new Vector3(sx, sy, sz), turn);
 }
 
+/**
+ * Darkens each puff's underside in its vertex colours (the clouds are unlit):
+ * full colour facing up, `CLOUD_UNDERSIDE` facing down, so a cloud reads as
+ * a soft vinyl shape and not a flat blob.
+ */
+const CLOUD_UNDERSIDE = 0.72; // TUNE
+function underShaded(mesh: Mesh): Mesh {
+  const normals = mesh.getVerticesData(VertexBuffer.NormalKind);
+  const colors = mesh.getVerticesData(VertexBuffer.ColorKind);
+  if (!normals || !colors) return mesh;
+  const shaded = Float32Array.from(colors);
+  for (let i = 0; i * 4 < shaded.length; i++) {
+    const up = (normals[i * 3 + 1] ?? 0) * 0.5 + 0.5;
+    const k = CLOUD_UNDERSIDE + (1 - CLOUD_UNDERSIDE) * up;
+    for (let c = 0; c < 3; c++) shaded[i * 4 + c] = (shaded[i * 4 + c] ?? 0) * k;
+  }
+  mesh.setVerticesData(VertexBuffer.ColorKind, shaded);
+  return mesh;
+}
+
 /** A flat disc with interior vertices, each painted by `shade(x, z, d)` (d: 0 middle, 1 rim). */
 function mottledDisc(
   scene: Scene,
@@ -247,7 +267,7 @@ export function buildArena(scene: Scene, options: ArenaOptions): Arena {
             const p = CreateSphere('c', { diameter: 2.2 * s, segments: 8 }, scene);
             p.position.set(x * 2.2, y * 2.2, z * 2.2);
             p.scaling.set(1, 0.72, 0.9);
-            return painted(p, mood.sky.cloudColor);
+            return underShaded(painted(p, mood.sky.cloudColor));
           }),
         ),
       );

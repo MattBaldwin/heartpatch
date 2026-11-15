@@ -1,5 +1,6 @@
 import { GAME_DATA, type DefenseStance, type Raid } from '@heartpatch/shared';
 import { coinsText } from '../battle/result-card.js';
+import { COMPUTER_TEXT } from '../computer-mates/computer-mates-model.js';
 
 // Player-facing words for the challenge report (#16; style guide §2, §6, §9):
 // calm and reassuring, never shaming. A challenge is "Someone challenged your
@@ -41,12 +42,26 @@ const FENCE_NAMES = new Map(
   GAME_DATA.buildings.filter((b) => b.kind === 'fence').map((b) => [b.id, b.name]),
 );
 
+/**
+ * Whether a challenge came from a Computer friend (#386): the server's
+ * `attackerComputer`, written with the raid so it holds after the mate leaves
+ * the patch. Older servers leave it out, so fall back to today's member list.
+ */
+export function raidByComputer(
+  raid: Pick<Raid, 'attackerUserId'> & Partial<Pick<Raid, 'attackerComputer'>>,
+  isComputer?: (userId: string) => boolean,
+): boolean {
+  return raid.attackerComputer ?? isComputer?.(raid.attackerUserId) === true;
+}
+
 /** One line per raid: who came by and how it went, kind either way. */
 export function raidLine(
   raid: Pick<Raid, 'attackerName' | 'outcome' | 'reason' | 'stance'> &
     Partial<Pick<Raid, 'fence' | 'live' | 'earned'>>,
+  /** The challenger is a Computer friend (#386f): said honestly in the words. */
+  computer = false,
 ): string {
-  const who = raid.attackerName;
+  const who = computer ? `${raid.attackerName} (${COMPUTER_TEXT.badge})` : raid.attackerName;
   // I said "Defend now?" yes and played it myself (#29-C).
   if (raid.live) return liveRaidLine(who, raid);
   // A fence battle (#203): the fence held, or it was broken (the guard's still there).

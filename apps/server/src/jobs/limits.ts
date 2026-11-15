@@ -29,6 +29,9 @@ export const NIGHTFALL_CONCURRENCY = 2; // TUNE: guess; fits pg-boss's and the a
 export const NIGHTFALL_RETRY_LIMIT = 5; // TUNE: guess
 export const NIGHTFALL_RETRY_DELAY_SECONDS = 30; // TUNE: guess, doubles each time
 
+/** How often the mini-boss sweep (#190) opens visits that are due (cron). */
+// TUNE: a visit opens within five minutes of its time (reads open it on the spot).
+export const MINIBOSS_SWEEP_CRON = '*/5 * * * *';
 /** How often the push sweep (#726c) looks for nudges due (cron). */
 export const PUSH_SWEEP_CRON = '* * * * *'; // TUNE: every minute, so a dusk window is never missed while up
 
@@ -61,3 +64,12 @@ export const WEATHER_RETRY_DELAY_SECONDS = 60; // TUNE: guess, doubles each time
 
 /** When old weather plans are deleted (cron, UTC). */
 export const WEATHER_RETENTION_CRON = '23 4 * * *'; // TUNE: daily, a quiet hour
+
+/** Computer patch-mates' sweep (#386c, `jobs/computer-mates.ts`): every 2 minutes. */
+export const COMPUTER_MATES_SWEEP_CRON = '*/2 * * * *'; // TUNE: plan §5
+/** Steps run at once on one instance. */
+export const COMPUTER_MATES_CONCURRENCY = 2; // TUNE: guess
+/** Most steps one sweep enqueues. */
+export const COMPUTER_MATES_SWEEP_LIMIT = 200; // TUNE: guess
+export const COMPUTER_MATES_RETRY_LIMIT = 3; // TUNE: guess; a step is idempotent per step number
+export const COMPUTER_MATES_RETRY_DELAY_SECONDS = 30; // TUNE: guess, doubles each time

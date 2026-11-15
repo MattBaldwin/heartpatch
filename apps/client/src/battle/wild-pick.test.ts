@@ -69,3 +69,18 @@ describe('tilesToMark', () => {
     expect(tilesToMark(tiles, true)).toEqual([]);
   });
 });
+
+describe('the Rare Lure (#729)', () => {
+  it('a held lure replaces the count under Find a squishy', async () => {
+    const { entryNote } = await import('./wild-pick.js');
+    expect(entryNote(6, true, true)).toBe('Something rare is near… ✨');
+    expect(entryNote(6, true, false)).toBe('6 nearby! Or tap a rustle to pick.');
+  });
+
+  it('a start says the lure worked, or is still waiting, and a resume says nothing', async () => {
+    const { lureLine } = await import('./wild-pick.js');
+    expect(lureLine(true)).toBe('Your lure worked! ✨');
+    expect(lureLine(false)).toBe('Your lure is still waiting ✨');
+    expect(lureLine(undefined)).toBeNull();
+  });
+});

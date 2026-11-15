@@ -1,4 +1,5 @@
 import { BUILDINGS } from '../../src/data/buildings.js';
+import { CHALLENGE_RULES } from '../../src/data/challenges.js';
 import { EXPLORE_RULES } from '../../src/data/explore.js';
 import { HEART_COIN_RULES } from '../../src/data/heart-coins.js';
 import { HOLLOW_RULES } from '../../src/data/hollow.js';
@@ -6,7 +7,8 @@ import { GAME_DATA } from '../../src/data/index.js';
 import { JOB_RULES } from '../../src/data/jobs.js';
 import { RESOURCE_BUILDING_RULES } from '../../src/data/resource-buildings.js';
 import { RESOURCES } from '../../src/data/resources.js';
-import { GLIMMER_SWAP, SELL_RULES } from '../../src/data/trading.js';
+import { COMPUTER_MATES } from '../../src/data/server/computer-mates.js';
+import { GLIMMER_SWAP, SELL_RULES, TRADE_VALUES } from '../../src/data/trading.js';
 import { hexKey, type HexKey } from '../../src/hex/index.js';
 import {
   planResume,
@@ -48,8 +50,9 @@ export const PATCH_ECONOMY_LIMITS = [
   "build income before the first hut is the fuel model's (#277), the share not kept for fires",
   'the Glimmer swap is used for exactly the Glimmer the next build step is short of, up to its daily cap',
   'the kid always has a homestead of the right land free (clearing, #242, is not modelled)',
-  'battles, captures and care earn the same each day; nothing else spends Heart Coins',
+  'battles, captures and care earn the same each day; nothing but upkeep spends Heart Coins, except the Lure rows (#729), which buy the Rare Lure after selling and don\'t model what it finds (no spawns here); "what pays today" prices the Post shop at its caps without buying it',
   'matches, fences, the Factory, trades and captures between kids',
+  "solo rows (#386d) use the 4-seat map's build income, so they differ only in play coins and gifts; a solo kid: no friendly or defence wins; with computer mates: friendlies as the 4-seat row (at most `PAID_FRIENDLY_WINS_VS_COMPUTERS` a day, all mates), held defences at most the mates' weekly challenge cap, and `giftsPerPatchWeek` gifts a week of the best-selling `mateItems` item worth `giftMaxValue`; trades with mates are value-neutral (the fair band) and not modelled: they're bounded, since a mate gives only the everyday gathered resources on `mateItems` (never Heartdust, Glimmer, crafted, seasonal or `neverSold` items) and at most `offerValue.max` of them a trade, `completedPerPatchDay` trades a patch day",
   'the kid sells everything over what their next build needs, up to the daily cap',
   "seasons (the Pumpkin Barn) and cut-off homesteads: the maths handles both, the kids' plans use neither",
 ] as const;
@@ -169,6 +172,8 @@ export interface DayRecord {
   readonly played: number;
   readonly sold: number;
   readonly upkeep: number;
+  /** Heart Coins spent at the Post shop that day (`RunInput.buy`). */
+  readonly shop: number;
   /** Buildings paused at a morning that day. */
   readonly pausedMornings: number;
   /** Paused at the end of the day. */
@@ -180,7 +185,10 @@ export interface DayRecord {
 }
 
 export interface PatchEconomyRun {
+  /** Kids on the patch (1 for the solo rows, #386d). */
   readonly seats: number;
+  /** A solo row (#386d): `plain` alone, `mates` with computer patch-mates. */
+  readonly solo?: 'plain' | 'mates';
   readonly kid: string;
   /** Days with no session (empty: plays every day). */
   readonly away: readonly number[];
@@ -203,6 +211,56 @@ export interface PatchEconomyRun {
 export const FRIENDLY_WIN_UNTIL_728B = 2; // TUNE: owner decision 2026-11-14 (#728)
 /** Paid friendly wins over one patch-mate a day (728b's `paidWinsPerPairPerDay`). */
 export const PAID_FRIENDLY_WINS_PER_PAIR = 3; // TUNE: owner decision 2026-11-14 (#728)
+
+/**
+ * Paid friendly wins over computer mates a day, all mates together (plan
+ * §1 F): the data's `paidWinsPerDayVsComputers` (386e), so the sim and the
+ * server can't drift.
+ */
+export const PAID_FRIENDLY_WINS_VS_COMPUTERS = CHALLENGE_RULES.paidWinsPerDayVsComputers;
+
+/** The kid's play on day `day` of a solo row (#386d): who they can battle. */
+export function soloKid(
+  kid: PatchEconomyKid,
+  solo: 'plain' | 'mates',
+  day: number,
+): PatchEconomyKid {
+  if (solo === 'plain') return { ...kid, wins: { ...kid.wins, friendly: 0, defence: 0 } };
+  // Held defences against mates: at most their weekly challenge cap, spread evenly.
+  const perWeek = Math.min(kid.wins.defence * 7, COMPUTER_MATES.rules.challengesPerPatchWeek.on);
+  const defence = Math.floor((day * perWeek) / 7) - Math.floor(((day - 1) * perWeek) / 7);
+  return {
+    ...kid,
+    wins: {
+      ...kid.wins,
+      friendly: Math.min(kid.wins.friendly, PAID_FRIENDLY_WINS_VS_COMPUTERS),
+      defence,
+    },
+  };
+}
+
+/** The mates' gift, the worst case for the gate: the gift-sized stack on `mateItems` that sells for the most. */
+export function mateGiftStack(): { itemId: string; quantity: number } {
+  const shelf = new Set(COMPUTER_MATES.rules.mateItems);
+  const options = Object.entries(SELL_RULES.items).flatMap(([itemId, sale]) => {
+    if (!shelf.has(itemId)) return [];
+    const value = TRADE_VALUES.items[itemId] ?? 0;
+    if (value <= 0 || value > COMPUTER_MATES.rules.giftMaxValue) return [];
+    const quantity = Math.floor(COMPUTER_MATES.rules.giftMaxValue / value);
+    return [{ itemId, quantity, coins: (quantity * sale.coins) / sale.lot }];
+  });
+  const [best] = options.sort(
+    (a, b) => b.coins - a.coins || (a.itemId < b.itemId ? -1 : a.itemId > b.itemId ? 1 : 0),
+  );
+  if (!best) throw new Error('no gift-sized item sells');
+  return { itemId: best.itemId, quantity: best.quantity };
+}
+
+/** Gifts the mates send on day `day` (#386d): `giftsPerPatchWeek` a week, spread evenly. */
+export function mateGiftsOn(day: number): number {
+  const perWeek = COMPUTER_MATES.rules.giftsPerPatchWeek;
+  return Math.floor((day * perWeek) / 7) - Math.floor(((day - 1) * perWeek) / 7);
+}
 
 /** The kid's daily play earnings, each source under its cap. */
 export function playCoins(kid: PatchEconomyKid): number {
@@ -231,6 +289,19 @@ interface RunInput {
   readonly away: readonly number[];
   readonly days: number;
   readonly useWarehouse: boolean;
+  /** A solo row (#386d). */
+  readonly solo?: 'plain' | 'mates';
+  /**
+   * #729: from `fromDay`, buy a `price` item at the post after selling,
+   * whenever the balance covers it and fewer than `perWeek` were bought in
+   * the last `weekDays` days (rolling, today included).
+   */
+  readonly buy?: {
+    readonly fromDay: number;
+    readonly price: number;
+    readonly perWeek: number;
+    readonly weekDays: number;
+  };
 }
 
 /** One kid on one map for `days` days. */
@@ -292,6 +363,7 @@ export function runKid(input: RunInput): PatchEconomyRun {
     let played = 0;
     let sold = 0;
     let swappedToday = 0;
+    let shop = 0;
     let output = 0;
 
     // The morning: each building placed before it owes one, in charge order.
@@ -328,7 +400,11 @@ export function runKid(input: RunInput): PatchEconomyRun {
       output += settle(atMs);
       if (i === 0) {
         add(bag, input.income[day - 1] ?? {});
-        played = playCoins(kid);
+        if (input.solo === 'mates') {
+          const gift = mateGiftStack();
+          add(bag, { [gift.itemId]: gift.quantity * mateGiftsOn(day) });
+        }
+        played = playCoins(input.solo ? soloKid(kid, input.solo, day) : kid);
         balance += played;
       }
 
@@ -363,6 +439,20 @@ export function runKid(input: RunInput): PatchEconomyRun {
         bag[resource] = (bag[resource] ?? 0) - lots * item.lot;
         sold += lots * item.coins;
         balance += lots * item.coins;
+      }
+
+      // Buy at the Post shop (#729), at most one a day (a Lure is held one
+      // at a time until a wild start uses it), before waking anything: a
+      // purchase that leaves a building asleep shows as a paused morning.
+      const buy = input.buy;
+      if (buy && playing && shop === 0 && day >= buy.fromDay && balance >= buy.price) {
+        const recent = days
+          .slice(Math.max(0, days.length - (buy.weekDays - 1)))
+          .filter((d) => d.shop > 0).length;
+        if (recent < buy.perWeek) {
+          balance -= buy.price;
+          shop = buy.price;
+        }
       }
 
       // Wake paused buildings the balance covers, in charge order.
@@ -431,6 +521,7 @@ export function runKid(input: RunInput): PatchEconomyRun {
       played,
       sold,
       upkeep,
+      shop,
       pausedMornings,
       pausedNow: placed.filter((p) => p.pausedAtMs !== null).length,
       buildings: placed.map((p) => `${p.data.id} ${String(p.level)}`),
@@ -439,6 +530,7 @@ export function runKid(input: RunInput): PatchEconomyRun {
   }
   return {
     seats: input.seats,
+    ...(input.solo ? { solo: input.solo } : {}),
     kid: kid.id,
     away: input.away,
     warehouse: input.useWarehouse,
@@ -491,8 +583,8 @@ export function buildIncome(
 export function runPatchEconomy(
   config: PatchEconomyConfig,
   progression: ProgressionConfig,
+  income: Map<string, Counts[]> = buildIncome(config, progression),
 ): PatchEconomyRun[] {
-  const income = buildIncome(config, progression);
   const runs: PatchEconomyRun[] = [];
   for (const seats of config.seats) {
     for (const kid of config.kids) {
@@ -506,6 +598,14 @@ export function runPatchEconomy(
         runs.push(runKid({ ...base, away, useWarehouse: false }));
       }
     }
+  }
+  // Solo rows (#386d): one kid on the 4-seat map, alone and with computer mates.
+  const [full] = config.seats;
+  for (const kid of config.kids) {
+    const daily = income.get(`${String(full)}/${kid.id}`) ?? [];
+    const base = { kid, seats: 1, income: daily, days: config.days, away: [], useWarehouse: true };
+    runs.push(runKid({ ...base, solo: 'plain' }));
+    runs.push(runKid({ ...base, solo: 'mates' }));
   }
   return runs;
 }
@@ -556,19 +656,117 @@ export function whatPays(run: PatchEconomyRun, config: PatchEconomyConfig): What
   };
 }
 
-/** The "what pays today" line, always marked soft (#729). */
+/**
+ * The "what pays today" line. A hard gate since the Post shop shipped
+ * (#729): a FAIL names the data lever.
+ */
 export function formatWhatPays(
   result: WhatPays,
   run: PatchEconomyRun,
   config: PatchEconomyConfig,
 ): string {
-  // TODO(#729): make this a hard gate (fail the script and CI) once #729 merges.
   const { day, balance, earned, upkeep, buyable, canSpend, percent, pass } = result;
   return (
     `what pays today (${String(run.seats)} seats ${run.kid}): ${String(balance)} 💛 on day ${String(day)}; ` +
     `buyable besides upkeep in days ${String(day - config.whatPays.weekDays + 1)}–${String(day)}: ${String(buyable)} 💛; ` +
     `earned ${String(earned)} 💛, upkeep ${String(upkeep)} 💛; can spend ${String(canSpend)} 💛 (${String(percent)} % of earned). ` +
-    `Gate (soft until #729; does not fail the run): spend at least ${String(config.whatPays.minSpendPercent)} % of earnings on something other than upkeep: ${pass ? 'PASS' : 'FAIL'}`
+    `Gate: spend at least ${String(config.whatPays.minSpendPercent)} % of earnings on something other than upkeep: ` +
+    (pass
+      ? 'PASS'
+      : 'FAIL (lever: Post shop prices and caps in `POST_SHOP`, or sell and upkeep amounts in data)')
+  );
+}
+
+/** #729 plan §8: one kid buying the Lure each week from `fromDay`. */
+export interface LuresAffordable {
+  readonly kid: string;
+  readonly perWeek: number;
+  /** Lures the kid could have bought, at `perWeek` in any rolling week, and did. */
+  readonly wanted: number;
+  readonly bought: number;
+  readonly spent: number;
+  /** Mornings a building paused while the kid played, from `fromDay`. */
+  readonly paused: number;
+  /** The lowest end-of-day balance from `fromDay`, and day 30's. */
+  readonly lowest: number;
+  readonly balance: number;
+  readonly pass: boolean;
+}
+
+/**
+ * How many a kid buys at `perWeek` in any rolling `weekDays` days, one a
+ * day, from `fromDay` to `days`, if the balance always covers it.
+ */
+export function lureSlots(
+  fromDay: number,
+  days: number,
+  perWeek: number,
+  weekDays: number,
+): number {
+  const bought: number[] = [];
+  for (let day = fromDay; day <= days; day++) {
+    if (bought.filter((d) => d > day - weekDays).length < perWeek) bought.push(day);
+  }
+  return bought.length;
+}
+
+/**
+ * #729 plan §8 gate: each `luresAffordable` kid on the first map size,
+ * playing daily with every hut and the Warehouse, buys the Lure at its
+ * `perWeek` from `fromDay`; every one is bought and no building pauses a
+ * morning while they play.
+ */
+export function luresAffordable(
+  config: PatchEconomyConfig,
+  income: Map<string, Counts[]>,
+): { result: LuresAffordable; run: PatchEconomyRun }[] {
+  const gate = config.luresAffordable;
+  const item = config.whatPays.shop.find((i) => i.id === gate.item);
+  if (!item) throw new Error(`no shop item "${gate.item}"`);
+  const [seats] = config.seats;
+  if (seats === undefined) throw new Error('no map size in `seats`');
+  const weekDays = config.whatPays.weekDays;
+  return config.kids.flatMap((kid) => {
+    const perWeek = gate.perWeek[kid.id];
+    if (perWeek === undefined) return [];
+    const run = runKid({
+      kid,
+      seats,
+      income: income.get(`${String(seats)}/${kid.id}`) ?? [],
+      days: config.days,
+      away: [],
+      useWarehouse: true,
+      buy: { fromDay: gate.fromDay, price: item.price, perWeek, weekDays },
+    });
+    const from = run.days.filter((d) => d.day >= gate.fromDay);
+    const bought = from.filter((d) => d.shop > 0).length;
+    const wanted = lureSlots(gate.fromDay, config.days, perWeek, weekDays);
+    const paused = pausedWhilePlaying(run, gate.fromDay);
+    const result: LuresAffordable = {
+      kid: kid.id,
+      perWeek,
+      wanted,
+      bought,
+      spent: from.reduce((a, d) => a + d.shop, 0),
+      paused,
+      lowest: Math.min(...from.map((d) => d.balance)),
+      balance: run.days.at(-1)?.balance ?? 0,
+      pass: bought === wanted && paused === 0,
+    };
+    return [{ result, run }];
+  });
+}
+
+/** The Lure line under "what pays today". */
+export function formatLuresAffordable(r: LuresAffordable, config: PatchEconomyConfig): string {
+  const { fromDay, item } = config.luresAffordable;
+  return (
+    `${item} ×${String(r.perWeek)} a week (${String(config.seats[0])} seats ${r.kid}, from day ${String(fromDay)}): ` +
+    `bought ${String(r.bought)} of ${String(r.wanted)}, ${String(r.spent)} 💛; lowest balance ${String(r.lowest)} 💛, ` +
+    `${String(r.balance)} 💛 on day ${String(config.days)}; paused mornings ${String(r.paused)}. Gate: every one bought, no paused morning: ` +
+    (r.pass
+      ? 'PASS'
+      : "FAIL (lever: the Lure's `price` or `cap` in `POST_SHOP`, or `luresAffordable.perWeek`)")
   );
 }
 
@@ -626,6 +824,40 @@ export function warehouseTrip(
 }
 
 /** A run's away window: its away days and the first day back. */
+/** The solo gate (#386d, plan §9): one kid's day-30 Heart Coins, solo and with mates, against their 4-seat row. */
+export interface SoloGate {
+  readonly kid: string;
+  readonly full: number;
+  readonly solo: number;
+  readonly mates: number;
+  /** `mates` against `full`, as a whole percent (100 = the same). */
+  readonly percent: number;
+  readonly pass: boolean;
+}
+
+export function soloGates(
+  runs: readonly PatchEconomyRun[],
+  config: PatchEconomyConfig,
+): SoloGate[] {
+  const day = (r: PatchEconomyRun | undefined) => r?.days[config.days - 1]?.balance ?? 0;
+  return config.kids.map((kid) => {
+    const daily = (pick: (r: PatchEconomyRun) => boolean) =>
+      runs.find((r) => r.kid === kid.id && r.away.length === 0 && r.warehouse && pick(r));
+    const full = day(daily((r) => r.solo === undefined && r.seats === config.seats[0]));
+    const solo = day(daily((r) => r.solo === 'plain'));
+    const mates = day(daily((r) => r.solo === 'mates'));
+    const percent = full === 0 ? 0 : Math.round((mates * 100) / full);
+    return {
+      kid: kid.id,
+      full,
+      solo,
+      mates,
+      percent,
+      pass: Math.abs(percent - 100) <= config.soloGatePercent,
+    };
+  });
+}
+
 export function awayWindow(run: PatchEconomyRun): DayRecord[] {
   const first = run.away[0];
   const last = run.away.at(-1);
@@ -637,12 +869,12 @@ export function awayWindow(run: PatchEconomyRun): DayRecord[] {
 export function renderPatchEconomy(
   runs: readonly PatchEconomyRun[],
   config: PatchEconomyConfig,
-  meta: { seconds: number },
+  meta: { seconds: number; lures?: readonly LuresAffordable[] },
 ): string {
   const levels = levelDays();
   const warehouse = warehouseData();
   const label = (r: PatchEconomyRun) =>
-    `${r.kid}${r.away.length > 0 ? ` (away ${String(r.away[0])}–${String(r.away.at(-1))})` : ''}${r.warehouse ? '' : ', no Warehouse'}`;
+    `${r.kid}${r.solo === 'plain' ? ', solo' : r.solo === 'mates' ? ', solo + computer mates' : ''}${r.away.length > 0 ? ` (away ${String(r.away[0])}–${String(r.away.at(-1))})` : ''}${r.warehouse ? '' : ', no Warehouse'}`;
   const day = (d: number | null) => (d === null ? '-' : String(d));
   const daily = runs.filter((r) => r.away.length === 0);
   const at = (r: PatchEconomyRun, d: number) => r.days[d - 1];
@@ -677,6 +909,17 @@ export function renderPatchEconomy(
       const last = at(r, config.days);
       return `| ${String(r.seats)} | ${label(r)} | ${day(r.firstHutDay)} | ${day(r.allHutsDay)} | ${r.levelDays.slice(1).map(day).join(' / ')} | ${day(r.warehouseDay)} | ${String(upkeepPercent(r, r.allHutsDay ?? config.days + 1))} | ${String(pausedWhilePlaying(r))} | ${config.reportDays.map((d) => String(at(r, d)?.balance ?? '-')).join(' | ')} | ${(last?.buildings ?? []).join(', ')} |`;
     }),
+    '',
+    '## Solo patches (#386d)',
+    '',
+    `Gate: a solo kid with computer mates ends day ${String(config.days)} within ±${String(config.soloGatePercent)} % of the same kid's ${String(config.seats[0])}-seat Heart Coins.`,
+    '',
+    `| Kid | ${String(config.seats[0])} seats 💛 | Solo 💛 | Solo + computer mates 💛 | Mates vs ${String(config.seats[0])} seats | Gate |`,
+    '|---|---|---|---|---|---|',
+    ...soloGates(runs, config).map(
+      (g) =>
+        `| ${g.kid} | ${String(g.full)} | ${String(g.solo)} | ${String(g.mates)} | ${String(g.percent)} % | ${g.pass ? 'pass' : 'FAIL'} |`,
+    ),
     '',
     '## Away',
     '',
@@ -717,6 +960,7 @@ export function renderPatchEconomy(
     ...daily
       .filter((r) => r.kid === config.whatPays.kid && r.warehouse)
       .map((r) => `- ${formatWhatPays(whatPays(r, config), r, config)}`),
+    ...(meta.lures ?? []).map((r) => `- ${formatLuresAffordable(r, config)}`),
     '',
     '## Not modelled',
     '',

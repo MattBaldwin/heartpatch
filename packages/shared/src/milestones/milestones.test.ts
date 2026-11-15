@@ -29,7 +29,7 @@ describe('milestone data', () => {
     expect(MILESTONE_RULES.minMembers).toBe(2);
   });
 
-  it('has the Phase 1 tracks, plus The First Patch, the far Hollow (#306 6b) and the found sets (#306 PR 5)', () => {
+  it('has the Phase 1 tracks, plus The First Patch, the far Hollow (#306 6b), the found sets (#306 PR 5) and Big Friend (#190)', () => {
     expect(MILESTONE_TRACKS.map((t) => t.id)).toEqual([
       'first-patch',
       'territory',
@@ -38,6 +38,7 @@ describe('milestone data', () => {
       'caretaker',
       'defender',
       'rescuer',
+      'big-friend',
       'seeker',
       'halloween',
       'cozy-harvest',

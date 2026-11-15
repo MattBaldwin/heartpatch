@@ -765,6 +765,34 @@ describe.skipIf(!url)('wardrobe (needs DATABASE_URL)', () => {
       expect(await roll('00000000-0000-7000-8000-0000000000d2', true)).toBe('big-bow');
     });
 
+    it('rolls the boss chance after a mini-boss win, as a battle find (#190)', async () => {
+      await start();
+      const kid = await player();
+      const mapId = await newMap(app!, kid);
+      const bossOnly: ClothingDropTable[] = [
+        {
+          source: 'battle',
+          chance: 0,
+          bossChance: 100,
+          entries: [{ item: 'big-bow', weight: 1 }],
+        },
+      ];
+      const roll = (refId: string, boss: boolean) =>
+        withTransaction(db, (tx) =>
+          rollFoundDrop(
+            tx,
+            { source: 'battle', refId, userId: kid.id, mapId, tileId: null, boss, at: clock },
+            { tables: bossOnly },
+          ),
+        );
+      expect(await roll('00000000-0000-7000-8000-0000000000e1', false)).toBeNull();
+      expect(await roll('00000000-0000-7000-8000-0000000000e2', true)).toBe('big-bow');
+      const found = await db.query.gameEvents.findFirst({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.type, 'clothing.found')),
+      });
+      expect(found?.payload).toMatchObject({ source: 'battle' });
+    });
+
     it('grants at most one piece per gather, however often it is rolled', async () => {
       await start();
       const kid = await player();

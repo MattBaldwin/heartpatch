@@ -5,6 +5,8 @@ import {
   type SellBasketResponse,
   type SellLine,
   type SellView,
+  type PostShopItemId,
+  type ShopView,
   type TradeTip,
   type PublicUser,
   type TradeLine,
@@ -22,7 +24,12 @@ import { el, messageOf } from '../ui/dom.js';
 import { glimmerSwapApi, type GlimmerSwapApi } from './glimmer-swap-api.js';
 import { hoursToReset, SWAP_TEXT, swapCards, swapsLeft } from './glimmer-swap-model.js';
 import { postConfirm, postSheet } from './post-confirm.js';
+import { computerAvatar, computerBadge } from '../computer-mates/computer-badge.js';
+import { computerLabel, isComputer } from '../computer-mates/computer-mates-model.js';
 import { sellApi, type SellApi } from './sell-api.js';
+import { shopApi, type ShopApi } from './shop-api.js';
+import { buyRequest, receipt as shopReceipt, SHOP_TEXT } from './shop-model.js';
+import { shopTab } from './shop-tab.js';
 import {
   basketLines,
   clampBasket,
@@ -53,6 +60,7 @@ import {
   setItemQuantity,
   SHELF_FILTERS,
   SHELF_SORTS,
+  givesSquishy,
   shelfLines,
   stepItem,
   tabBadges,
@@ -85,8 +93,11 @@ export interface PostScreenOptions {
   api?: TradeApi;
   swapApi?: GlimmerSwapApi;
   sellApi?: SellApi;
+  shopApi?: ShopApi;
   /** A sale went through (#601 PR 4): the 💛 pill and the bag read again. */
   onSold?: () => void;
+  /** A purchase went through (#729): the 💛 pill and the bag read again, and the Find a squishy glow. */
+  onBought?: (shop: ShopView) => void;
   /**
    * The game clock in ms, the server's (main passes the bag's, `gameNow`): the
    * visit pass it counts down is server time (#561). Tests pass a fake.
@@ -148,6 +159,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   const api = options.api ?? tradeApi;
   const swapApi = options.swapApi ?? glimmerSwapApi;
   const sells = options.sellApi ?? sellApi;
+  const shops = options.shopApi ?? shopApi;
   const now = options.now ?? (() => Date.now());
 
   let user: PublicUser | null = null;
@@ -169,6 +181,11 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   let sellNote = '';
   /** The cap meter as last drawn, so it slides to the next. */
   let sellMeter: MeterParts | null = null;
+  /** What the post sells me (#729), loaded when the Shop tab opens. */
+  let shop: ShopView | null = null;
+  let shopConfirm: PostShopItemId | null = null;
+  let shopDone: { title: string; line: string } | null = null;
+  let shopNote = '';
   /** The last sale, for the tab's "Yay!" card. */
   let sold: SellBasketResponse['sold'] | null = null;
   /** The next draw brings the "Yay!" card into view (once, right after a sale). */
@@ -188,6 +205,8 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   let working = false;
   /** The "Send this gift?" sheet is up (#655). */
   let giftConfirm = false;
+  /** The "Are you sure?" before a squishy goes to a Computer friend (#386f). */
+  let tradeConfirm = false;
   /** The Gift tab's "Who's it for?" sheet is up. */
   let matePicker = false;
   let note = '';
@@ -237,6 +256,15 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   const slotOf = (id: string) => mapView?.members.find((m) => m.user.id === id)?.homeSlot ?? null;
   const nameOf = (id: string) =>
     mapView?.members.find((m) => m.user.id === id)?.user.username ?? TRADE_TEXT.someone;
+  const isMate = (id: string | null) =>
+    id !== null && mapView?.members.some((m) => m.user.id === id && isComputer(m)) === true;
+  /** A face for a patch-mate: the plum key square for a Computer friend, never a kid's letter. */
+  const faceOf = (id: string, name: string, cls: string): HTMLElement =>
+    isMate(id)
+      ? computerAvatar('dot')
+      : el('span', { class: `post-face ${cls}`, 'aria-hidden': 'true' }, name.slice(0, 1));
+  /** The name in words for a sentence: a Computer friend gets "(Computer friend)" after it. */
+  const labelOf = (id: string, name: string) => computerLabel(name, isMate(id));
   const passOver = () => post !== null && postChip(post.passUntil, now()) === null;
 
   // ---- loading -------------------------------------------------------------
@@ -298,6 +326,56 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         swapPick = null;
         render();
       }
+    }
+  }
+
+  /** Reads the Shop tab again; an old server without it says the shop is closed. */
+  async function loadShop(): Promise<void> {
+    const at_ = generation;
+    if (!mapView) return;
+    try {
+      const view = await shops.view(mapView.map.id, at());
+      if (at_ === generation) {
+        // Keep shopNote: a refused buy re-reads the shop, and its words must stay up.
+        shop = view;
+      }
+    } catch (err) {
+      if (at_ === generation) shopNote = shop ? messageOf(err) : SHOP_TEXT.closed;
+    }
+    if (at_ === generation) render();
+  }
+
+  /** One purchase: the server prices, caps and applies it; a retry with the same key never buys twice. */
+  async function buyCommand(id: PostShopItemId): Promise<void> {
+    if (working || !post) return;
+    const gen = generation;
+    const stillHere = () => gen === generation;
+    const request = buyRequest(id, at());
+    working = true;
+    shopNote = '';
+    render();
+    try {
+      const res = await sendCommand(sendDeps, (key) => shops.buy(mapId(), request, key), stillHere);
+      if (res) {
+        // The money is spent and the server holds the item, even if I left the post.
+        options.onBought?.(res.shop);
+        if (stillHere()) {
+          shop = res.shop;
+          shopDone = shopReceipt(res);
+          shopConfirm = null;
+        }
+      }
+    } catch (err) {
+      if (stillHere()) {
+        // The server's own words (a cap from another device, not enough 💛),
+        // then read what it sees now.
+        shopNote = messageOf(err);
+        shopConfirm = null;
+        void loadShop();
+      }
+    } finally {
+      working = false;
+      if (stillHere()) render();
     }
   }
 
@@ -381,6 +459,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     working = true;
     note = '';
     giftConfirm = false;
+    tradeConfirm = false;
     render();
     try {
       const view = await sendCommand(sendDeps, send, stillHere);
@@ -555,16 +634,19 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
                 'data-testid': 'post-mate',
                 'data-user': u.id,
               },
-              ...(slotNo !== null
-                ? [slotIcon(slotNo)]
-                : [
-                    el(
-                      'span',
-                      { class: 'post-face', 'aria-hidden': 'true' },
-                      u.username.slice(0, 1),
-                    ),
-                  ]),
+              ...(isMate(u.id)
+                ? [computerAvatar('dot')]
+                : slotNo !== null
+                  ? [slotIcon(slotNo)]
+                  : [
+                      el(
+                        'span',
+                        { class: 'post-face', 'aria-hidden': 'true' },
+                        u.username.slice(0, 1),
+                      ),
+                    ]),
               el('span', { class: 'post-mate-row-name' }, u.username),
+              ...(isMate(u.id) ? [computerBadge()] : []),
               ...(on ? [el('span', { 'aria-hidden': 'true' }, '✓')] : []),
             );
             b.addEventListener('click', () => {
@@ -619,11 +701,20 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       el(
         'div',
         { class: 'post-row' },
-        el('span', { class: 'post-face theirs', 'aria-hidden': 'true' }, from.slice(0, 1)),
+        faceOf(offer.fromUserId, from, 'theirs'),
         el(
           'div',
           {},
-          el('b', {}, TRADE_TEXT.wantsToTrade(from)),
+          isMate(offer.fromUserId)
+            ? el(
+                'b',
+                { 'data-testid': 'post-offer-mate' },
+                from,
+                ' ',
+                computerBadge(),
+                TRADE_TEXT.mateWouldLike,
+              )
+            : el('b', {}, TRADE_TEXT.wantsToTrade(from)),
           ...(said ? [el('div', { class: 'post-small' }, `“${said}”`)] : []),
         ),
       ),
@@ -633,6 +724,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         offer.give,
         meterLook(offer.want, offer.give, from, 'receiver'),
         from,
+        offer.fromUserId,
         'full',
       ),
       el(
@@ -678,6 +770,12 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       'primary',
       () => {
         if (to === null) return;
+        // A squishy that goes to a Computer friend stays with it for good: ask first (#386f).
+        if (isMate(to) && givesSquishy(give)) {
+          tradeConfirm = true;
+          render();
+          return;
+        }
         const request = offerRequest(at(), 'trade', to, give, want, noteId);
         void command((key) => api.send(mapId(), request, key), TRADE_TEXT.sent(name));
       },
@@ -688,7 +786,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         ? ''
         : problem && (give.length > 0 || want.length > 0)
           ? problem
-          : TRADE_TEXT.waitsSafely(name);
+          : isMate(to)
+            ? TRADE_TEXT.mateWaits(name)
+            : TRADE_TEXT.waitsSafely(name);
     // Stuck to the sheet's bottom, so "Send" (and what I picked) is on screen
     // while picking (style guide §3); the hint scrolls, to keep the bar short.
     return [
@@ -714,7 +814,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     const picked = pickedViews(give, my === null ? undefined : shelves.get(my));
     const problem = sendProblem('gift', give, []);
     const chipWords = [
-      el('span', { class: 'post-face theirs small', 'aria-hidden': 'true' }, name.slice(0, 1)),
+      to !== null && isMate(to)
+        ? computerAvatar('dot')
+        : el('span', { class: 'post-face theirs small', 'aria-hidden': 'true' }, name.slice(0, 1)),
       el('span', { class: 'post-to-name' }, TRADE_TEXT.toChip(name)),
     ];
     const toChip = el(
@@ -775,6 +877,40 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     ];
   }
 
+  /** "Are you sure?" before a squishy goes to a Computer friend in a trade (#386f). */
+  function tradeConfirmSheet(): HTMLElement | null {
+    const to = mate;
+    const my = me();
+    if (to === null || my === null) return null;
+    const name = nameOf(to);
+    const picked = pickedViews(give, shelves.get(my));
+    return postConfirm({
+      title: TRADE_TEXT.mateSureTitle,
+      testId: 'post-trade-confirm',
+      lines: [
+        { icon: '💌', text: TRADE_TEXT.giftConfirmTo(labelOf(to, name)) },
+        ...picked.map((l) => {
+          const look = lineLook(l);
+          return { icon: look.icon || '🧸', text: look.name };
+        }),
+      ],
+      note: TRADE_TEXT.mateSureNote(name),
+      yes: TRADE_TEXT.sendYes,
+      no: TRADE_TEXT.notNow,
+      button,
+      onYes: () => {
+        const request = offerRequest(at(), 'trade', to, give, want, noteId);
+        void command((key) => api.send(mapId(), request, key), TRADE_TEXT.sent(name));
+      },
+      onNo: () => {
+        tradeConfirm = false;
+        render();
+        body.querySelector<HTMLElement>('[data-testid="post-send"]')?.focus();
+      },
+      yesDisabled: passOver(),
+    });
+  }
+
   /** "Send this gift? 🎁": exactly what goes, to whom, before it leaves. */
   function giftConfirmSheet(): HTMLElement | null {
     const to = mate;
@@ -782,17 +918,18 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     if (to === null || my === null) return null;
     const name = nameOf(to);
     const picked = pickedViews(give, shelves.get(my));
+    const forever = isMate(to) && givesSquishy(give);
     return postConfirm({
-      title: TRADE_TEXT.giftConfirmTitle,
+      title: forever ? TRADE_TEXT.mateSureTitle : TRADE_TEXT.giftConfirmTitle,
       testId: 'post-gift-confirm',
       lines: [
-        { icon: '💌', text: TRADE_TEXT.giftConfirmTo(name) },
+        { icon: '💌', text: TRADE_TEXT.giftConfirmTo(labelOf(to, name)) },
         ...picked.map((l) => {
           const look = lineLook(l);
           return { icon: look.icon || '🧸', text: look.name };
         }),
       ],
-      note: TRADE_TEXT.giftConfirmNote(name),
+      note: forever ? TRADE_TEXT.mateSureNote(name) : TRADE_TEXT.giftConfirmNote(name),
       yes: TRADE_TEXT.sendYes,
       no: TRADE_TEXT.notNow,
       button,
@@ -930,7 +1067,15 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         side === 'mine' ? TRADE_TEXT.yourThings : TRADE_TEXT.theirThings,
       ),
     );
-    const face = el('span', { class: 'post-face', 'aria-hidden': 'true' }, name.slice(0, 1));
+    const face =
+      side === 'theirs' && owner !== null && isMate(owner)
+        ? computerAvatar('avatar')
+        : el('span', { class: 'post-face', 'aria-hidden': 'true' }, name.slice(0, 1));
+    // A mate's pill gets its own row under the header, so it never squeezes the name or the ▾.
+    const badgeRow =
+      side === 'theirs' && owner !== null && isMate(owner)
+        ? [el('span', { class: 'post-col-badge' }, computerBadge())]
+        : [];
     let header: HTMLElement;
     if (side === 'theirs' && mates().length > 1) {
       header = el(
@@ -942,18 +1087,19 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           'data-testid': 'post-mate-switch',
           'aria-haspopup': 'true',
           'aria-expanded': menu === 'mates' ? 'true' : 'false',
-          'aria-label': `${name}. ${TRADE_TEXT.otherMate}`,
+          'aria-label': `${owner !== null ? labelOf(owner, name) : name}. ${TRADE_TEXT.otherMate}`,
         },
         face,
         who,
         el('span', { class: 'post-col-chev', 'aria-hidden': 'true' }, '▾'),
+        ...badgeRow,
       );
       header.addEventListener('click', () => {
         menu = menu === 'mates' ? null : 'mates';
         render();
       });
     } else {
-      header = el('div', { class: 'post-col-head' }, face, who);
+      header = el('div', { class: 'post-col-head' }, face, who, ...badgeRow);
     }
     const filter = picker(
       `${side}-filter`,
@@ -1138,6 +1284,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     getLines: readonly TradeLineView[],
     look: MeterLook,
     mateName: string,
+    mateId: string | null,
     draw: 'mini' | 'full',
     onTile?: (side: Side, line: TradeLineView) => void,
   ): HTMLElement {
@@ -1176,12 +1323,12 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         el('span', { class: 'post-swap-arrow', 'aria-hidden': 'true' }, '⇄'),
         half('theirs', getLines, look.getHearts),
       ),
-      meter(look, mateName),
+      meter(look, mateName, mateId),
     );
   }
 
   /** The fairness meter: a track with a gold middle and a heart that slides toward who gets more. */
-  function meter(look: MeterLook, mateName: string): HTMLElement {
+  function meter(look: MeterLook, mateName: string, mateId: string | null): HTMLElement {
     const tone =
       look.tip === 'none'
         ? 'none'
@@ -1257,11 +1404,13 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         { class: 'post-meter-row' },
         el('span', { class: 'post-face mine small', 'aria-hidden': 'true' }, myName.slice(0, 1)),
         track,
-        el(
-          'span',
-          { class: 'post-face theirs small', 'aria-hidden': 'true' },
-          mateName.slice(0, 1),
-        ),
+        mateId !== null && isMate(mateId)
+          ? computerAvatar('dot')
+          : el(
+              'span',
+              { class: 'post-face theirs small', 'aria-hidden': 'true' },
+              mateName.slice(0, 1),
+            ),
       ),
       say,
     );
@@ -1307,6 +1456,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       return [...offers, make, ...offersFromMe(view, my, 'trade').map(outgoing)];
     }
     const picked = myMeter();
+    const sheet = tradeConfirm ? tradeConfirmSheet() : null;
     return [
       ...offers,
       // The note first, in one row, so it shows whole before any scroll (owner, #305).
@@ -1324,11 +1474,13 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           picked.get,
           picked.look,
           mate === null ? '' : nameOf(mate),
+          mate,
           'mini',
           onTile,
         ),
       ]),
       ...offersFromMe(view, my, 'trade').map(outgoing),
+      ...(sheet ? [sheet] : []),
     ];
   }
 
@@ -1603,7 +1755,11 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           sellConfirm = null;
           sellNote = '';
           sold = null;
+          shopConfirm = null;
+          shopDone = null;
+          shopNote = '';
           if (t === 'swap') void loadSwap();
+          if (t === 'shop') void loadShop();
           if (t === 'sell') void loadSell();
           give = [];
           want = [];
@@ -1611,6 +1767,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           note = '';
           menu = null;
           giftConfirm = false;
+          tradeConfirm = false;
           matePicker = false;
           render();
         });
@@ -1622,7 +1779,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       ? TRADE_TEXT.closed
       : // The Glimmer swap and selling work with trading off: nobody else is
         // involved (#523, #601).
-        trades?.tradingEnabled === false && tab !== 'swap' && tab !== 'sell'
+        trades?.tradingEnabled === false && tab !== 'swap' && tab !== 'sell' && tab !== 'shop'
         ? TRADE_TEXT.tradingOff
         : '';
     // The Swap tab shows its own note in its bar, where the kid is looking.
@@ -1631,6 +1788,38 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
 
     if (!trades) {
       body.replaceChildren(el('p', { class: 'post-tiny' }, '…'));
+      return;
+    }
+    if (tab === 'shop') {
+      body.replaceChildren(
+        ...shopTab(
+          {
+            view: shop,
+            confirming: shopConfirm,
+            receipt: shopDone,
+            note: shopNote,
+            passOver: passOver(),
+            nowMs: now(),
+          },
+          {
+            button,
+            onAsk: (id) => {
+              shopConfirm = id;
+              shopDone = null;
+              shopNote = '';
+              render();
+              body.querySelector<HTMLElement>('[data-testid="post-shop-confirm-yes"]')?.focus();
+            },
+            onCancel: () => {
+              shopConfirm = null;
+              render();
+            },
+            onBuy: (id) => {
+              void buyCommand(id);
+            },
+          },
+        ),
+      );
       return;
     }
     if (tab === 'sell') {
@@ -1691,6 +1880,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     body.replaceChildren(...parts);
     fitNames(body);
     // A sheet that's up keeps the keyboard on itself, even after a redraw.
+    if (tab === 'trade' && tradeConfirm && !body.contains(document.activeElement)) {
+      body.querySelector<HTMLElement>('[data-testid="post-trade-confirm-yes"]')?.focus();
+    }
     if (tab === 'gift' && !body.contains(document.activeElement)) {
       const first = giftConfirm
         ? body.querySelector<HTMLElement>('[data-testid="post-gift-confirm-yes"]')
@@ -1742,7 +1934,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     if (on && ticker === undefined) {
       // Not while a confirm sheet is up: a redraw would take its focus.
       ticker = window.setInterval(() => {
-        if (sellConfirm === null && !giftConfirm && !matePicker) render();
+        if (sellConfirm === null && !giftConfirm && !tradeConfirm && !matePicker) render();
       }, 15_000);
     } else if (!on && ticker !== undefined) {
       window.clearInterval(ticker);
@@ -1763,6 +1955,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     sorts = { mine: 'name', theirs: 'name' };
     menu = null;
     giftConfirm = false;
+    tradeConfirm = false;
     matePicker = false;
     composing = false;
     swap = null;
@@ -1773,6 +1966,10 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     sellNote = '';
     sellMeter = null;
     sold = null;
+    shop = null;
+    shopConfirm = null;
+    shopDone = null;
+    shopNote = '';
   }
 
   function close(): void {

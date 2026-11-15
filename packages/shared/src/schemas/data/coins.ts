@@ -39,6 +39,7 @@ export const CoinRulesSchema = z.strictObject({
     rescue: coins,
     journey: coins,
     friendly: coins,
+    miniboss: coins,
   }),
   /**
    * Coins for the Keeper whose land held (#728): a won defence of a rival's

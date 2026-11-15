@@ -31,12 +31,22 @@ export * from './schemas/data/journeys.js';
 export * from './schemas/data/live-battles.js';
 export * from './schemas/data/challenges.js';
 export * from './schemas/data/trading.js';
+export * from './schemas/data/post-shop.js';
 export * from './schemas/data/fences.js';
 export * from './schemas/data/home-base.js';
 export * from './schemas/data/naming.js';
 export * from './schemas/data/memory-puzzles.js';
 export * from './schemas/data/hollow.js';
 export * from './schemas/data/long-night.js';
+export {
+  ComputerPersonaIdSchema,
+  ComputerPersonaSchema,
+  ComputerPersonasSchema,
+  checkComputerPersonas,
+  isComputerPersonaName,
+  type ComputerPersona,
+  type ComputerPersonaId,
+} from './schemas/data/computer-mates.js';
 export * from './schemas/data/push.js';
 export * from './schemas/data/care.js';
 export * from './schemas/data/clothing.js';
@@ -85,6 +95,7 @@ export * from './data/journeys.js';
 export * from './data/live-battles.js';
 export * from './data/challenges.js';
 export * from './data/trading.js';
+export * from './data/post-shop.js';
 export * from './trading/index.js';
 export * from './data/fences.js';
 export * from './territory/index.js';
@@ -94,6 +105,7 @@ export * from './data/home-base.js';
 export * from './data/naming.js';
 export * from './data/hollow.js';
 export * from './data/long-night.js';
+export * from './data/computer-personas.js';
 export * from './data/push.js';
 export * from './hollow/index.js';
 export * from './long-night/index.js';
@@ -177,6 +189,8 @@ export * from './schemas/hollow.js';
 export * from './schemas/hollow-stage.js';
 export * from './schemas/journeys.js';
 export * from './schemas/trading.js';
+export * from './schemas/post-shop.js';
+export * from './schemas/boss.js';
 export * from './schemas/raids.js';
 export * from './schemas/quick-messages.js';
 export * from './schemas/challenges.js';

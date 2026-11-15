@@ -293,6 +293,46 @@ export const MILESTONE_TRACKS: MilestoneTrack[] = [
     ],
   },
   {
+    // Mini-boss wins (#190 plan §7): one per won fight, whichever boss.
+    // Visible before the first visit as a teaser; it names no boss.
+    id: 'big-friend',
+    name: 'Big Friend',
+    secret: false,
+    progress: {
+      from: 'events',
+      sources: [
+        {
+          eventType: 'battle.ended',
+          where: [
+            { op: 'equals', field: 'kind', value: 'miniboss' },
+            { op: 'equals', field: 'winner', value: 'a' },
+          ],
+          player: 'userId',
+        },
+      ],
+    },
+    tiers: [
+      {
+        threshold: 1,
+        goal: 'Beat a BIG squishy.',
+        title: { id: 'big-hugger', name: 'Big Hugger' },
+        coins: 25, // TUNE
+      },
+      {
+        threshold: 4,
+        goal: 'Beat 4 BIG squishies.',
+        title: { id: 'big-friend', name: 'Big Friend' },
+        coins: 50, // TUNE
+      },
+      {
+        threshold: 10,
+        goal: 'Beat 10 BIG squishies.',
+        title: { id: 'giant-heart', name: 'Giant Heart' },
+        coins: 100, // TUNE
+      },
+    ],
+  },
+  {
     // Search spots explored on your own land (#199; owner decision 2026-10-07:
     // "Seeker", so the Territory track keeps "Explorer"). One per search.
     id: 'seeker',

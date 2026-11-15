@@ -19,7 +19,15 @@ export type StartWildBattleRequest = z.infer<typeof StartWildBattleRequestSchema
  * they haven't befriended, for the current spawn window only. No species, no
  * future windows (CLAUDE.md rule 6).
  */
-export const WildHintsSchema = z.object({ tiles: z.array(HexSchema) });
+export const WildHintsSchema = z.object({
+  tiles: z.array(HexSchema),
+  /**
+   * A Rare Lure from the post's Shop (#729) is waiting for my next wild find
+   * on this patch (the Find a squishy glow). Nothing about what it does to
+   * the roll is sent (CLAUDE.md rule 6). Absent on older servers.
+   */
+  lureHeld: z.boolean().optional(),
+});
 export type WildHints = z.infer<typeof WildHintsSchema>;
 export const WildHintsResponseSchema = z.object({ wild: WildHintsSchema });
 export type WildHintsResponse = z.infer<typeof WildHintsResponseSchema>;

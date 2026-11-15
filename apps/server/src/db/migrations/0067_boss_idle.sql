@@ -1,0 +1,1 @@
+ALTER TABLE "boss_encounters" ADD COLUMN "last_action_at" timestamp with time zone;

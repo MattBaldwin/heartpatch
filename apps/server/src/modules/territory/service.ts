@@ -63,6 +63,7 @@ import {
   type TileBattleDefense,
   type TileBattleEnd,
   type TileBattlePort,
+  type TileOpponent,
 } from '../battles/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { checkpointContentment, guardWatchesOf } from '../jobs/contentment.js';
@@ -112,6 +113,37 @@ export interface TerritoryService {
   visit: LandTendingService['visit'];
   /** Dev only: ages my land, then tonight's land goes wild. */
   devAgeLand: LandTendingService['devAge'];
+  /**
+   * A computer patch-mate challenges a kid's tile (#386e, plan §6): the same
+   * start and every raid rule a kid's `attack` has, plus the mates' own
+   * (`ComputerChallenge.check`, after the tile lock). The AI plays its side.
+   */
+  attackAsComputer: (
+    mate: PublicUser,
+    mapId: string,
+    request: AttackTileRequest,
+    computer: ComputerChallenge,
+  ) => Promise<StartResult>;
+}
+
+/** What a computer mate's challenge adds to a kid's (#386e). */
+export interface ComputerChallenge {
+  /** The AI that plays the mate's side (its persona's stance). */
+  controller: NonNullable<TileOpponent['attacker']>;
+  /**
+   * The mates' own rules (weekly cap, quiet hours, a kid's home buffer and
+   * `minKidTiles`, a contested tile), checked after the tile lock (step 6):
+   * throws `AppError` to refuse, and nothing is used up.
+   */
+  check: (
+    tx: Executor,
+    input: {
+      map: MapRow;
+      at: Date;
+      tile: TerritoryTileRow;
+      tiles: readonly TerritoryTileRow[];
+    },
+  ) => Promise<void>;
 }
 
 export interface TerritoryServiceOptions {
@@ -400,7 +432,11 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
 
   /** Raid rules, checked in the battle's start transaction (see `PrepareTileBattle`). */
   const prepare =
-    (user: PublicUser, target: AttackTileRequest): PrepareTileBattle =>
+    (
+      user: PublicUser,
+      target: AttackTileRequest,
+      computer?: ComputerChallenge,
+    ): PrepareTileBattle =>
     async (tx, { map, at, team }) => {
       const repo = createTerritoryRepo(tx);
       const seen = await repo.findTile(map.id, target.q, target.r);
@@ -434,6 +470,8 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
       );
       if (problem === 'too-far' && supply) throw new AppError('FORBIDDEN', MESSAGES.pastRoads);
       if (problem) throw new AppError(PROBLEMS[problem].code, PROBLEMS[problem].message);
+      // A computer mate's own rules (#386e), under the tile lock.
+      await computer?.check(tx, { map, at, tile, tiles });
 
       // Fences (#203): the defender's segments on this tile, and whether it's
       // fenced (every edge facing land they don't hold has one).
@@ -569,6 +607,7 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
         tile: { q: tile.q, r: tile.r },
         ...(fighters && { team: fighters }),
         ...(fencePart && { turnLimit: fenceRules.battleTurns }),
+        ...(computer && { attacker: computer.controller }),
         started: async (startTx, battle) => {
           const attack = await createTerritoryRepo(startTx).insertAttack({
             mapId: map.id,
@@ -659,6 +698,9 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
   return {
     attack: (user, mapId, request) =>
       options.battles.startTile(user, mapId, prepare(user, request)),
+
+    attackAsComputer: (mate, mapId, request, computer) =>
+      options.battles.startTile(mate, mapId, prepare(mate, request, computer)),
 
     status: async (user, mapId) => status(db, user, (await requireMember(db, user, mapId)).map),
 

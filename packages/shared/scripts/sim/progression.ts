@@ -4,6 +4,7 @@ import {
   addXp,
   battleXpPercent,
   befriendedLevel,
+  benchXp,
   friendlyBattleXp,
   evolutionAt,
   grantedXp,
@@ -19,7 +20,7 @@ import { SPAWN_TABLES } from '../../src/data/server/spawn-tables.js';
 import { hexKey, hexNeighbors, type HexKey } from '../../src/hex/index.js';
 import { generateMap, type MapTile } from '../../src/mapgen/index.js';
 import { deriveSeed } from '../../src/rng/index.js';
-import type { BattleSideSetup } from '../../src/schemas/battle.js';
+import type { BattleSetup, BattleSideSetup } from '../../src/schemas/battle.js';
 import type { Species } from '../../src/schemas/data/species.js';
 import { resolveWildSpawn, type SpawnData } from '../../src/spawns/resolve.js';
 import { spawnWindowAt, type SpawnWindow } from '../../src/spawns/window.js';
@@ -29,6 +30,16 @@ import { isTradingPost } from '../../src/territory/reach.js';
 import { atWatchLevel, watchFloor } from '../../src/territory/watch-level.js';
 import type { JourneyRules } from '../../src/schemas/data/journeys.js';
 import { RaritySchema, type Rarity } from '../../src/schemas/data/common.js';
+import {
+  askPercent,
+  askRoll,
+  baseFormOf,
+  bossLevel,
+  joinLevel,
+  standInBag,
+  visitOn,
+  type BossDay,
+} from './progression-boss.js';
 import type {
   BefriendPolicy,
   KidProfile,
@@ -61,6 +72,10 @@ import type {
  * each other's land too, where the owner's team stands guard and a hold pays
  * the guards XP.
  *
+ * Solo and computer mates (#386e): with `rules.solo` the kid is alone on the
+ * map, and with `rules.computerMates` the friendlies are against a computer
+ * mate and the mates challenge the kid's land a few times a week.
+ *
  * Not modelled (see `MODEL_LIMITS`): care and habitat changes, gathering, the
  * Hollow Man, the capture roll itself (a win stands in for a befriend), and
  * (without `rules.defences`) challenging the other kid.
@@ -74,6 +89,8 @@ export const MODEL_LIMITS = [
   'exploring: the kid always has the tools, and finds are not counted',
   'no challenges between the two kids, except under rules with defences (#728)',
   'defences: the whole team stands guard on every tile (an upper bound on defence XP)',
+  "computer mates (#386e): they claim no land, a lost defence costs no tile, and a mate fields the kid's own team at the Partner level + the offset",
+  'mini-bosses (#190): stand-in bosses, no Long Night weekday, boss coins and the found roll not counted; Heart Charms are counted only under rules with bosses',
 ] as const;
 
 /** One evolution on a kid's team; `partner` marks the Partner's own (#732 D3). */
@@ -139,6 +156,8 @@ export interface DayRecord {
   /** XP the Partner got from holds today, and tiles the other kid took today (#728). */
   readonly defenceXp: number;
   readonly tilesLost: number;
+  /** Mini-boss visits and the kid's Heart Charms (#190); only under rules with `boss`. */
+  readonly boss?: BossDay;
 }
 
 export interface KidRun {
@@ -237,6 +256,7 @@ function duel(
   a: BattleSideSetup,
   b: BattleSideSetup,
   seed: string,
+  format?: BattleSetup['format'],
 ): {
   winner: 'a' | 'b' | null;
   a: Map<string, number>;
@@ -244,7 +264,11 @@ function duel(
   /** Opponents each side tuckered out. */
   out: { a: number; b: number };
 } {
-  const { state } = autoplayBattle(data.content, { seed, sides: { a, b } });
+  const { state } = autoplayBattle(data.content, {
+    seed,
+    ...(format ? { format } : {}),
+    sides: { a, b },
+  });
   if (state.phase.type !== 'over') throw new Error('autoplay always finishes');
   const { result } = state.phase;
   const xpOf = (side: 'a' | 'b') =>
@@ -262,6 +286,36 @@ function duel(
   return { winner, a: xpOf('a'), b: xpOf('b'), out: { a: outOf('b'), b: outOf('a') } };
 }
 
+/** Computer mates' squishy ids carry this (#386e). */
+const MATE = 'mate:';
+
+/**
+ * A computer mate's team (#386e): the kid's own team, every member at
+ * max(1, the kid's Partner level + `levelOffset`), on the kid's policy.
+ */
+export function mateTeam(
+  kid: Kid,
+  config: ProgressionConfig,
+  levelOffset: number,
+): BattleSideSetup {
+  const level = Math.max(1, (kid.team[0]?.level ?? 1) + levelOffset);
+  return {
+    controller: { type: 'ai', policy: config.kidPolicy },
+    squishies: kid.team.map((m) => ({ id: `${MATE}${m.id}`, speciesId: m.speciesId, level })),
+  };
+}
+
+/**
+ * How many times the computer mates challenge a solo kid's land on `day`
+ * (#386e): `perWeek` spread evenly over each 7 days, none in the new-player
+ * shield (days 1–`shieldDays`), so at most `perWeek` a week.
+ */
+export function mateChallenges(day: number, perWeek: number, shieldDays: number): number {
+  if (day <= shieldDays || perWeek <= 0) return 0;
+  const d = (day - 1) % 7;
+  return Math.floor(((d + 1) * perWeek) / 7) - Math.floor((d * perWeek) / 7);
+}
+
 /** Plays one battle; returns whether the kid won and the base XP each member earned. */
 function play(
   data: ModelData,
@@ -275,7 +329,10 @@ function play(
 }
 
 /**
- * Grants battle XP to the members who joined, through the real growth rules.
+ * Grants battle XP to the members who joined, through the real growth rules,
+ * and the bench's share (#732, `benchXp`) to the members of the setup
+ * (`setup`, the whole team by default) who never came out: the same
+ * falloff, slot and care as a fighter, as the battles service pays it.
  * `counts`: the battle counts toward the falloff (a win, by default).
  */
 export function grant(
@@ -284,11 +341,15 @@ export function grant(
   rules: ProgressionRules,
   xp: ReadonlyMap<string, number>,
   won: boolean,
-  { counts = won }: { counts?: boolean } = {},
+  { counts = won, setup = kid.team }: { counts?: boolean; setup?: readonly Member[] } = {},
 ): number {
+  const bench = benchXp(
+    [...xp.values()].map((v) => ({ xp: v })),
+    { benchXpPercent: rules.benchXpPercent ?? 0 },
+  );
   let partnerXp = 0;
-  for (const member of kid.team) {
-    const engine = xp.get(member.id);
+  for (const member of setup) {
+    const engine = xp.get(member.id) ?? (bench > 0 ? bench : undefined);
     if (engine === undefined) continue;
     // The daily falloff, as the battles service applies it: on the base XP,
     // from the wins before this battle.
@@ -418,6 +479,54 @@ function estimateRivalOdds(
   return Math.floor((wins * 100) / config.estimateGames);
 }
 
+/** The battles service's friendly share (`friendlyBattleXp`), from the variant's knobs. */
+function friendlyShare(rules: ProgressionRules) {
+  return {
+    battleXpFalloff: {
+      fullWinsPerDay: 1,
+      afterPercent: 100,
+      friendlyPercent: rules.friendlies?.xpPercent ?? 100,
+      friendlyOneOpponent: rules.friendlies?.oneOpponent ?? false,
+    },
+  };
+}
+
+/**
+ * Friendly `f` of `day` between a solo kid and a computer mate (#386e), paid
+ * to the kid as a friendly between two kids (`playFriendly`): the kid is side
+ * a on even `day + f`, and the friendly counts toward the falloff only when
+ * the kid won. The mate earns nothing. Returns the kid's side, the side that
+ * won and the kid's Partner XP.
+ */
+export function playMateFriendly(
+  data: ModelData,
+  kid: Kid,
+  config: ProgressionConfig,
+  rules: ProgressionRules,
+  levelOffset: number,
+  day: number,
+  f: number,
+): { kidSide: 'a' | 'b'; winner: 'a' | 'b' | null; partnerXp: number } {
+  const kidSide = (day + f) % 2 === 0 ? 'a' : 'b';
+  const seed = deriveSeed(config.rootSeed, 'mate-friendly', kid.profile.id, day, f);
+  const mate = mateTeam(kid, config, levelOffset);
+  const result =
+    kidSide === 'a'
+      ? duel(data, teamSide(kid, config), mate, seed)
+      : duel(data, mate, sideB(kid.team, config), seed);
+  const share = friendlyShare(rules);
+  const out = result.out[kidSide];
+  const xp = new Map(
+    [...result[kidSide]].map(([id, v]) => [id, friendlyBattleXp(v, out, share)] as const),
+  );
+  const won = result.winner === kidSide;
+  return {
+    kidSide,
+    winner: result.winner,
+    partnerXp: grant(data, kid, rules, xp, won, { counts: won }),
+  };
+}
+
 /**
  * Friendly `f` of `day` between the map's two kids (#728). Side a alternates
  * by day and by battle, so a kid with one a day isn't always side a. Both
@@ -440,15 +549,7 @@ export function playFriendly(
   if (!kidA || !kidB) throw new Error('a friendly needs two kids');
   const seed = deriveSeed(config.rootSeed, 'friendly', kidA.profile.id, day, f);
   const result = duel(data, teamSide(kidA, config), sideB(kidB.team, config), seed);
-  // The battles service's friendly share (`friendlyBattleXp`), from the variant's knobs.
-  const share = {
-    battleXpFalloff: {
-      fullWinsPerDay: 1,
-      afterPercent: 100,
-      friendlyPercent: rules.friendlies?.xpPercent ?? 100,
-      friendlyOneOpponent: rules.friendlies?.oneOpponent ?? false,
-    },
-  };
+  const share = friendlyShare(rules);
   for (const side of ['a', 'b'] as const) {
     for (const [id, xp] of result[side]) {
       result[side].set(id, friendlyBattleXp(xp, result.out[side], share));
@@ -467,14 +568,19 @@ export function playFriendly(
   return { sideA: a, winner: result.winner, partnerXp };
 }
 
-/** A hold (728a): the guards earn side b's XP, and it counts as their win. */
+/**
+ * A hold (728a): the guards earn side b's XP, and it counts as their win.
+ * The guards on watch that never came out are the bench (#732); members
+ * past `maxDefenders` weren't in the setup and earn nothing.
+ */
 export function payHold(
   data: ModelData,
   defender: Kid,
   rules: ProgressionRules,
   xp: ReadonlyMap<string, number>,
 ): number {
-  return grant(data, defender, rules, xp, true);
+  const setup = defender.team.slice(0, rules.defences?.maxDefenders ?? defender.team.length);
+  return grant(data, defender, rules, xp, true, { setup });
 }
 
 /**
@@ -496,7 +602,7 @@ export function rivalTargets(
   return tiles.filter((t) => owner.get(hexKey(t)) === rival && t.homeSlot === null);
 }
 
-/** Runs two kids of one kind on one map for `config.days` days. */
+/** Runs two kids of one kind (one with `rules.solo`) on one map for `config.days` days. */
 export function runProgression(
   data: ModelData,
   config: ProgressionConfig,
@@ -506,7 +612,8 @@ export function runProgression(
 ): ProgressionRun {
   const map = generateMap(GAME_DATA, { seed: config.mapSeed, playerCount: seats });
   const tiles = map.tiles;
-  const kids: Kid[] = [0, 1].map((slot) => ({
+  const seated = rules.solo ? 1 : 2;
+  const kids: Kid[] = Array.from({ length: seated }, (_, slot) => ({
     profile,
     slot,
     team: [
@@ -521,7 +628,7 @@ export function runProgression(
   // Owner by tile: a kid's slot, or null. Empty seats' home rings can never be taken.
   const owner = new Map<HexKey, number | null>();
   for (const t of tiles)
-    owner.set(hexKey(t), t.homeSlot !== null && t.homeSlot < 2 ? t.homeSlot : null);
+    owner.set(hexKey(t), t.homeSlot !== null && t.homeSlot < seated ? t.homeSlot : null);
   // Trading posts (#269) are never claimed.
   const neutralTiles = tiles.filter((t) => t.homeSlot === null && !isTradingPost(t));
   const neutralLeft = () => neutralTiles.filter((t) => owner.get(hexKey(t)) === null);
@@ -539,6 +646,18 @@ export function runProgression(
     return n;
   };
   const searched = kids.map(() => 0);
+  // Mini-boss visits (#190): the stand-in bag, each kid's charms, warmth and friends.
+  const bossModel = rules.boss;
+  const bossEvents = bossModel && {
+    ...bossModel.events,
+    bag: standInBag(bossModel.standIns),
+  };
+  const charms = kids.map(() => bossModel?.charms.start ?? 0);
+  const misses = kids.map(() => new Map<string, number>());
+  const bossFriends = kids.map(() => new Set<string>());
+  const beatenWeeks = kids.map(() => new Set<string>());
+  /** Per visit (window id): whether the patch was ready when it opened. */
+  const visitReady = new Map<string, boolean>();
   for (let day = 1; day <= config.days; day++) {
     const date = dateOf(config, day);
     const guardianWindow = spawnWindowAt({ date, hour: 12 }, GUARDIAN_RULES.windowHours);
@@ -586,7 +705,16 @@ export function runProgression(
     const lost = kids.map(() => 0);
     const holdXp = kids.map(() => 0);
 
+    const mates = rules.computerMates;
     for (let f = 0; f < friendlies; f++) {
+      if (rules.solo) {
+        // A solo kid's friendlies are against a computer mate (#386e).
+        const [kid] = kids;
+        if (!kid || !mates) throw new Error('a solo kid plays friendlies only with computer mates');
+        const played = playMateFriendly(data, kid, config, rules, mates.levelOffset, day, f);
+        partnerXp[0] = (partnerXp[0] ?? 0) + played.partnerXp;
+        continue;
+      }
       playFriendly(data, kids, config, rules, day, f).partnerXp.forEach((xp, k) => {
         partnerXp[k] = (partnerXp[k] ?? 0) + xp;
       });
@@ -672,6 +800,128 @@ export function runProgression(
       });
     }
 
+    // The computer mates' challenges on a solo kid's land (#386e): the kid's
+    // guards at the watch floor, as against a rival; a hold pays them.
+    if (rules.solo && mates && defences) {
+      const [kid] = kids;
+      const count = mateChallenges(day, mates.challengesPerWeek, defences.shieldDays);
+      for (let c = 0; kid && c < count; c++) {
+        const floor = watchFloor(kid.team[0]?.level ?? null, defences.guardLevel);
+        const guards = sideB(kid.team, config, defences.maxDefenders, floor);
+        const seed = deriveSeed(config.rootSeed, 'mate-challenge', profile.id, day, c);
+        const result = duel(data, mateTeam(kid, config, mates.levelOffset), guards, seed);
+        defended[0] = (defended[0] ?? 0) + 1;
+        if (result.winner === 'b') {
+          held[0] = (held[0] ?? 0) + 1;
+          const gained = payHold(data, kid, rules, result.b);
+          partnerXp[0] = (partnerXp[0] ?? 0) + gained;
+          holdXp[0] = (holdXp[0] ?? 0) + gained;
+        }
+      }
+    }
+
+    // Mini-boss visit (#190): after tile tries, before wild battles; on top of `battlesPerDay`.
+    const bossDays: (Omit<BossDay, 'charms' | 'charmsWild' | 'charmsShort'> | null)[] = kids.map(
+      () => null,
+    );
+    if (bossModel && bossEvents) {
+      const visit = visitOn(config.mapSeed, date, bossEvents);
+      if (visit && !visitReady.has(visit.week)) {
+        // No visits until some member's Partner is grown enough (read when it opens).
+        const ready = kids.some((kid) => (kid.team[0]?.level ?? 0) >= bossEvents.minPartnerLevel);
+        visitReady.set(visit.week, ready);
+      }
+      const out = visit !== null && visitReady.get(visit.week) === true;
+      kids.forEach((kid, k) => {
+        const income = bossModel.charms.perDay[profile.id] ?? 0;
+        charms[k] = (charms[k] ?? 0) + income;
+        const partnerLevel = kid.team[0]?.level ?? 0;
+        const canFight = out && partnerLevel >= bossEvents.minPlayerLevel;
+        let tries = 0;
+        let won = false;
+        let asks = 0;
+        let friend: string | null = null;
+        let bundle = 0;
+        let spent = 0;
+        const beaten = visit !== null && beatenWeeks[k]?.has(visit.week) === true;
+        if (visit && canFight && !beaten) {
+          const allowed = Math.min(bossModel.triesPerDay[profile.id] ?? 0, bossEvents.triesPerDay);
+          const fighters = kid.team.slice(0, 3);
+          const level = bossLevel(partnerLevel, bossEvents, rules.growth.maxLevel);
+          while (tries < allowed && !won) {
+            const seed = deriveSeed(config.rootSeed, 'boss', profile.id, k, day, tries);
+            tries += 1;
+            const result = duel(
+              data,
+              {
+                controller: { type: 'ai', policy: config.kidPolicy },
+                squishies: fighters.map((m) => ({
+                  id: m.id,
+                  speciesId: m.speciesId,
+                  level: m.level,
+                })),
+              },
+              {
+                controller: { type: 'ai', policy: 'guardian' },
+                squishies: [{ id: 'boss', speciesId: visit.speciesId, level, boss: true }],
+              },
+              seed,
+              { a: fighters.length as 1 | 2 | 3, b: 1 },
+            );
+            won = result.winner === 'a';
+            // Engine XP for every fighter, one win in the falloff (plan §6).
+            partnerXp[k] =
+              (partnerXp[k] ?? 0) + grant(data, kid, rules, result.a, won, { setup: fighters });
+            if (!won) continue;
+            beatenWeeks[k]?.add(visit.week);
+            for (const [item, n] of Object.entries(bossEvents.bundle)) {
+              if (item === 'heart-charm') bundle += n;
+            }
+            charms[k] = (charms[k] ?? 0) + bundle;
+            const standing = fighters.length - result.out.b;
+            const befriend_ = bossModel.befriend;
+            if (bossFriends[k]?.has(visit.speciesId)) continue;
+            for (let ask = 1; ask <= befriend_.asksPerWin; ask++) {
+              if ((charms[k] ?? 0) < befriend_.charmsPerAsk) break;
+              charms[k] = (charms[k] ?? 0) - befriend_.charmsPerAsk;
+              spent += befriend_.charmsPerAsk;
+              asks += 1;
+              const kidMisses = misses[k];
+              const missed = kidMisses?.get(visit.speciesId) ?? 0;
+              const percent = askPercent(standing, missed, befriend_);
+              if (askRoll(deriveSeed(seed, 'ask', ask), percent)) {
+                friend = visit.speciesId;
+                bossFriends[k]?.add(visit.speciesId);
+                const base = baseFormOf(visit.speciesId, data.species);
+                befriend(
+                  data,
+                  kid,
+                  {
+                    id: `boss-friend-${visit.speciesId}`,
+                    speciesId: base,
+                    level: joinLevel(base, partnerLevel, data.species, befriend_),
+                  },
+                  rules.befriendPolicy,
+                );
+                break;
+              }
+              kidMisses?.set(visit.speciesId, missed + 1);
+            }
+          }
+        }
+        bossDays[k] = {
+          out,
+          canFight,
+          tries,
+          won,
+          asks,
+          friend,
+          charmsIn: income + bundle,
+          charmsBoss: spent,
+        };
+      });
+    }
+
     // Wild battles with the rest of the day's battles.
     kids.forEach((kid, k) => {
       const spawnData: SpawnData = {
@@ -684,6 +934,9 @@ export function runProgression(
       const land = tiles.filter((t) => owner.get(hexKey(t)) === k);
       const wild = profile.battlesPerDay - (tileBattles[k] ?? 0);
       const befriended: string[] = [];
+      let charmsWild = 0;
+      let charmsShort = 0;
+      let wildAsks = 0;
       for (let i = 0; i < wild; i++) {
         const hour = cycle(WILD_HOURS, i);
         const window = spawnWindowAt({ date, hour }, rules.spawn.windowHours);
@@ -706,6 +959,15 @@ export function runProgression(
         const { won, xp } = play(data, kid, config, opponent, seed);
         partnerXp[k] = (partnerXp[k] ?? 0) + grant(data, kid, rules, xp, won);
         if (won && befriended.length < profile.befriendsPerDay) {
+          if (bossModel && wildAsks < profile.befriendsPerDay) {
+            // The day's first befriends cost charms, joining the team or not.
+            wildAsks += 1;
+            const want = bossModel.charms.perWildFriend;
+            const paid = Math.min(want, charms[k] ?? 0);
+            charms[k] = (charms[k] ?? 0) - paid;
+            charmsWild += paid;
+            charmsShort += want - paid;
+          }
           const level = befriendedLevel(
             spawn.speciesId,
             spawn.level,
@@ -747,6 +1009,9 @@ export function runProgression(
         defencesHeld: held[k] ?? 0,
         defenceXp: holdXp[k] ?? 0,
         tilesLost: lost[k] ?? 0,
+        ...(bossDays[k]
+          ? { boss: { ...bossDays[k], charms: charms[k] ?? 0, charmsWild, charmsShort } }
+          : {}),
       });
     });
   }

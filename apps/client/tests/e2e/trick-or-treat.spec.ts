@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { selectTile } from './claim-land.js';
-import { api, hook } from './dev-hook.js';
+import { api, hook, liveMapId } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
@@ -142,7 +142,7 @@ test('a Keeper trick-or-treats at a patch-mate’s home, once a day, and the hos
   await hintOk.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => undefined);
   if (await hintOk.isVisible()) await hintOk.tap();
 
-  const mapId = (await hook<{ id: string }>(host, 'map'))!.id;
+  const mapId = await liveMapId(host);
   const hostId = (await api<ViewBody>(host, 'GET', `/maps/${mapId}/view`)).body.members.find(
     (m) => m.user.username === hostName,
   )!.user.id;

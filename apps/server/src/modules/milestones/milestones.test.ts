@@ -237,6 +237,26 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
     actorUserId: who.id,
     payload: { userId: who.id, squishyId: randomUUID(), battleId: randomUUID(), heartdust: 1 },
   });
+  const ended = (
+    mapId: string,
+    who: Player,
+    kind: 'miniboss' | 'wild',
+    winner: 'a' | 'b',
+  ): NewGameEvent => ({
+    mapId,
+    type: 'battle.ended',
+    actorUserId: who.id,
+    payload: {
+      battleId: randomUUID(),
+      kind,
+      userId: who.id,
+      playerSide: 'a',
+      winner,
+      reason: winner === 'a' ? 'tuckered-out' : 'forfeit',
+      turns: 3,
+      xp: [],
+    },
+  });
   const found = (mapId: string, who: Player, itemId: string): NewGameEvent => ({
     mapId,
     type: 'clothing.found',
@@ -357,6 +377,7 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
       'cozy-harvest': 0, // Thanksgiving only (#34); this runs in the Halloween window
       'lantern-keeper': 0, // the far Hollow's attic (#306 6b)
       'set-rekindled': 0, // found in the Hollows (#306 PR 5)
+      'big-friend': 0, // mini-boss wins (#190), below
     });
     expect(earned(view, 'territory')).toEqual([1]);
     expect(earned(view, 'collector')).toEqual([1]);
@@ -371,6 +392,23 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
       ['hollow-rescuer', 'proud-keeper', 'squishy-pal', 'trailblazer', 'watchful'].sort(),
     );
     expect(view.news).toHaveLength(5);
+  });
+
+  it('counts mini-boss wins only for Big Friend (#190), shown as a teaser before any', async () => {
+    const server = await start();
+    const kid = await player();
+    const pal = await player();
+    const mapId = await patch([kid, pal]);
+    const before = trackOf(await milestones(server, kid), 'big-friend');
+    expect(before).toMatchObject({ hidden: false, progress: 0 });
+    await append(ended(mapId, kid, 'miniboss', 'a'));
+    await append(ended(mapId, kid, 'miniboss', 'b')); // a loss
+    await append(ended(mapId, kid, 'wild', 'a')); // not a boss
+    await run(mapId);
+    const view = await milestones(server, kid);
+    expect(trackOf(view, 'big-friend')?.progress).toBe(1);
+    expect(earned(view, 'big-friend')).toEqual([1]);
+    expect(view.titles.map((t) => t.id)).toContain('big-hugger');
   });
 
   // #443: one squishy evolves up to three times (baby → kid → teen → grown-up),

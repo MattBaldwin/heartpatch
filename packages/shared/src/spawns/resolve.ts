@@ -1,5 +1,5 @@
 import { activeSeasons } from '../data/season-windows.js';
-import { Rng, type Seed } from '../rng/index.js';
+import { deriveSeed, Rng, type Seed } from '../rng/index.js';
 import type { Rarity } from '../schemas/data/common.js';
 import type { Season } from '../schemas/data/seasons.js';
 import type { SpawnRules, TimeOfDay } from '../schemas/data/spawn-rules.js';
@@ -18,6 +18,8 @@ import { spawnWindowMidpoint, type SpawnWindow } from './window.js';
 export interface WildSpawn {
   readonly speciesId: string;
   readonly level: number;
+  /** A Rare Lure made it rarer than the plain roll (#729). Absent otherwise. */
+  readonly lured?: true;
 }
 
 export interface SpawnInput {
@@ -30,6 +32,11 @@ export interface SpawnInput {
    * `partnerOffset`, the wild squishy's level follows it.
    */
   readonly partnerLevel?: number | null;
+  /**
+   * The player holds a Rare Lure (#729): the squishy found is one rarity tier
+   * up from the plain roll, from the same tables (`lureSpecies`).
+   */
+  readonly lure?: boolean;
 }
 
 export interface SpawnData {
@@ -79,16 +86,49 @@ export function resolveWildSpawn(input: SpawnInput, data: SpawnData): WildSpawn 
   if (entries.length === 0) return null;
 
   const { species } = rng.weighted(entries);
-  return {
-    speciesId: species,
-    level: wildLevel(
-      rng,
-      input.partnerLevel ?? null,
-      data.species.get(species)?.rarity,
-      data.rules,
-      data.maxLevel,
-    ),
-  };
+  const level = wildLevel(
+    rng,
+    input.partnerLevel ?? null,
+    data.species.get(species)?.rarity,
+    data.rules,
+    data.maxLevel,
+  );
+  const lured = input.lure ? lureSpecies(input.seed, species, entries, data) : null;
+  return lured ? { speciesId: lured, level, lured: true } : { speciesId: species, level };
+}
+
+/** The rarity ladder a Rare Lure climbs (#729). `secret` is never on it. */
+const LURE_LADDER: readonly Rarity[] = [
+  'common',
+  'uncommon',
+  'rare',
+  'epic',
+  'legendary',
+  'mythic',
+];
+
+/**
+ * A Rare Lure's squishy (#729 plan §1a), or null when nothing rarer lives
+ * here: from the same matched entries as the plain roll (so season and time
+ * of day still decide), the next tier up that has anyone, climbing past a
+ * missing tier. Never a secret, and a secret plain roll is left alone. Picked
+ * by weight on its own stream, so the plain roll's level and every other
+ * tile's roll are untouched, and a retried start finds the same squishy.
+ */
+function lureSpecies(
+  seed: Seed,
+  plain: string,
+  entries: readonly { species: string; weight: number }[],
+  data: SpawnData,
+): string | null {
+  const rarityOf = (id: string) => data.species.get(id)?.rarity;
+  const from = LURE_LADDER.indexOf(rarityOf(plain) ?? 'secret');
+  if (from < 0) return null;
+  for (const tier of LURE_LADDER.slice(from + 1)) {
+    const pool = entries.filter((e) => rarityOf(e.species) === tier);
+    if (pool.length > 0) return Rng.fromSeed(deriveSeed(seed, 'lure')).weighted(pool).species;
+  }
+  return null;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { HEART_COIN_RULES } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { hook } from './dev-hook.js';
+import { hook, liveMapId } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { careFromRoster, closeRoster } from './roster.js';
 import { trayButton } from './trays.js';
@@ -42,7 +42,7 @@ test('shows Heart Coins on the map, at home and on the patch list, and care pays
   await slowExpect(mapPill).toBeVisible();
   await expect(mapPill).toHaveText('💛0');
   await expect(mapPill).toHaveAccessibleName(/0 Heart Coins/);
-  const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
+  const mapId = await liveMapId(page);
 
   // A top-up (dev builds only); the sheet reads it fresh when it opens.
   const res = await page.request.post(`/api/v1/maps/${mapId}/dev/heart-coins`, {

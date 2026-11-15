@@ -9,8 +9,12 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { PATCH_ECONOMY_CONFIG } from './patch-economy-config.js';
 import {
+  buildIncome,
+  formatLuresAffordable,
   formatWhatPays,
+  luresAffordable,
   renderPatchEconomy,
+  soloGates,
   runPatchEconomy,
   upkeepPercent,
   whatPays,
@@ -24,18 +28,20 @@ const { values } = parseArgs({
 const outDir = resolve(values.out);
 
 const started = performance.now();
-const runs = runPatchEconomy(PATCH_ECONOMY_CONFIG, PROGRESSION_CONFIG);
+const income = buildIncome(PATCH_ECONOMY_CONFIG, PROGRESSION_CONFIG);
+const runs = runPatchEconomy(PATCH_ECONOMY_CONFIG, PROGRESSION_CONFIG, income);
+const lures = luresAffordable(PATCH_ECONOMY_CONFIG, income).map((l) => l.result);
 const seconds = (performance.now() - started) / 1000;
 
 mkdirSync(outDir, { recursive: true });
 const reportPath = resolve(outDir, 'patch-economy-report.md');
-writeFileSync(reportPath, renderPatchEconomy(runs, PATCH_ECONOMY_CONFIG, { seconds }));
+writeFileSync(reportPath, renderPatchEconomy(runs, PATCH_ECONOMY_CONFIG, { seconds, lures }));
 
 console.log(`${String(runs.length)} runs in ${seconds.toFixed(1)} s.`);
 for (const run of runs) {
   const last = run.days.at(-1);
   console.log(
-    `  ${String(run.seats)} seats ${run.kid.padEnd(7)}${run.away.length > 0 ? ` away ${String(run.away[0])}` : '       '}${run.warehouse ? '' : ' no-wh'} first hut day ${String(run.firstHutDay ?? '-')}, upkeep ${String(upkeepPercent(run, run.allHutsDay ?? 999))} % of 💛, ${String(last?.balance ?? 0)} 💛 on day ${String(last?.day ?? 0)}`,
+    `  ${String(run.seats)} seats ${run.kid.padEnd(7)}${run.away.length > 0 ? ` away ${String(run.away[0])}` : '       '}${run.warehouse ? '' : ' no-wh'}${run.solo === 'plain' ? ' solo' : run.solo === 'mates' ? ' solo+mates' : ''} first hut day ${String(run.firstHutDay ?? '-')}, upkeep ${String(upkeepPercent(run, run.allHutsDay ?? 999))} % of 💛, ${String(last?.balance ?? 0)} 💛 on day ${String(last?.day ?? 0)}`,
   );
 }
 const paysRun = runs.find(
@@ -45,10 +51,22 @@ const paysRun = runs.find(
     r.away.length === 0 &&
     r.warehouse,
 );
+// Hard gates since the Post shop shipped (#729): a FAIL exits non-zero.
 if (paysRun) {
-  // TODO(#729): exit non-zero on a FAIL once #729 merges; soft until then.
+  const pays = whatPays(paysRun, PATCH_ECONOMY_CONFIG);
+  console.log(`  ${formatWhatPays(pays, paysRun, PATCH_ECONOMY_CONFIG)}`);
+  if (!pays.pass) process.exitCode = 1;
+} else {
+  console.log('  what pays today: no run for its kid: FAIL');
+  process.exitCode = 1;
+}
+for (const l of lures) {
+  console.log(`  ${formatLuresAffordable(l, PATCH_ECONOMY_CONFIG)}`);
+  if (!l.pass) process.exitCode = 1;
+}
+for (const g of soloGates(runs, PATCH_ECONOMY_CONFIG)) {
   console.log(
-    `  ${formatWhatPays(whatPays(paysRun, PATCH_ECONOMY_CONFIG), paysRun, PATCH_ECONOMY_CONFIG)}`,
+    `  solo gate (${g.kid}): ${String(g.full)} 💛 on ${String(PATCH_ECONOMY_CONFIG.seats[0])} seats, ${String(g.solo)} solo, ${String(g.mates)} with computer mates (${String(g.percent)} %): ${g.pass ? 'pass' : 'FAIL'}`,
   );
 }
 console.log(`Report: ${reportPath}`);

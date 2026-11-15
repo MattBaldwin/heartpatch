@@ -49,11 +49,20 @@ import { hollowRoutes } from './modules/hollow/routes.js';
 import { farHollowRoutes } from './modules/far-hollow/routes.js';
 import { createFarHollowService } from './modules/far-hollow/service.js';
 import { journeysRoutes } from './modules/journeys/routes.js';
+import type { BossEventRules } from '@heartpatch/shared/server';
+import { bossRoutes } from './modules/boss/routes.js';
+import {
+  createBossService,
+  createMinibossBattlePort,
+  type BossService,
+} from './modules/boss/service.js';
 import { challengesRoutes } from './modules/challenges/routes.js';
 import { callOffAsksOf, createChallengesService } from './modules/challenges/service.js';
 import { glimmerSwapRoutes } from './modules/glimmer-swap/routes.js';
 import { createGlimmerSwapService } from './modules/glimmer-swap/service.js';
 import { postSellRoutes } from './modules/post-sell/routes.js';
+import { postShopRoutes } from './modules/post-shop/routes.js';
+import { createPostShopService } from './modules/post-shop/service.js';
 import { createPostSellService } from './modules/post-sell/service.js';
 import { trickOrTreatRoutes } from './modules/trick-or-treat/routes.js';
 import { createTrickOrTreatService } from './modules/trick-or-treat/service.js';
@@ -96,6 +105,13 @@ import { signupCodesRoutes } from './modules/signup-codes/routes.js';
 import { createSignupCodesService } from './modules/signup-codes/service.js';
 import { createMapsService } from './modules/maps/service.js';
 import { wildIsleSwitchOf } from './modules/maps/wild-isle-switch.js';
+import { computerMatesRoutes } from './modules/computer-mates/routes.js';
+import { createComputerMatesService } from './modules/computer-mates/service.js';
+import { computerMatesSwitchOf } from './modules/computer-mates/switch.js';
+import {
+  createComputerMateSteps,
+  type ComputerMateSteps,
+} from './modules/computer-mates/intents.js';
 import { longNightRoutes } from './modules/long-night/routes.js';
 import { createLongNightService } from './modules/long-night/service.js';
 import { longNightSwitchOf } from './modules/long-night/switch.js';
@@ -155,6 +171,18 @@ export interface BuildAppOptions {
    * the app. Called once the service exists, with whether push is on at all.
    */
   onPush?: (push: PushService, enabled: boolean) => void;
+  /**
+   * Mini-boss visits (#190) for `src/index.ts`, which runs their sweep job
+   * next to the app. Called once the service exists.
+   */
+  onBoss?: (boss: BossService) => void;
+  /** Tests only: mini-boss rules with a stand-in boss (production's bag is empty, #190). */
+  bossRules?: BossEventRules;
+  /**
+   * Computer patch-mates' steps (#386c) for `src/index.ts`, which runs their
+   * paced job next to the app. Called once they exist, unless the switch is off.
+   */
+  onComputerMates?: (steps: ComputerMateSteps) => void;
 }
 
 /** Builds the Fastify app without listening, so tests can use `app.inject()`. */
@@ -164,6 +192,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   const house = houseSwitchOf(config);
   // The Long Night (#727), off by default until the client PR (#727e).
   const longNight = longNightSwitchOf(config);
+  // Computer patch-mates (#386), off by default until the client lane (#386b).
+  const computerMates = computerMatesSwitchOf(config);
   // Evolution rolls are seeded with a server secret (#32); config refuses a
   // production start without it.
   setEvolutionSalt(config.HP_EVOLUTION_SALT);
@@ -209,6 +239,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   // The friend nudge (#726d): the hub reports a player arriving on a patch;
   // the push service, built with the game routes below, takes it from there.
   let onArrival: ((mapId: string, userId: string) => void) | null = null;
+  // A real member opened the patch: computer mates may act (#386c, rule C).
+  let onKeeperSeen: ((mapId: string) => void) | null = null;
   const wsHub =
     db && authRepo
       ? createWsHub({
@@ -217,7 +249,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           sessionIsValid: async (token) => (await sessionUser(token)) !== null,
           logger: app.log,
           clock,
-          onSubscribed: (mapId, userId) => onArrival?.(mapId, userId),
+          onSubscribed: (mapId, userId) => {
+            onKeeperSeen?.(mapId);
+            onArrival?.(mapId, userId);
+          },
           ...options.wsHubOptions,
         })
       : null;
@@ -269,25 +304,27 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           clock,
           ...(wsHub ? { publish: wsHub.publish } : {}),
         });
+        // A Keeper leaving calls off their trade offers (#271) and their asks (#29).
+        // Each on its own: one failing never keeps the other from running.
+        const departed = async (mapId: string, userId: string, actorUserId: string) => {
+          const results = await Promise.allSettled([
+            trades.memberLeft(mapId, userId, actorUserId),
+            callOffAsksOf(
+              { db, clock, ...(wsHub ? { publish: wsHub.publish } : {}) },
+              mapId,
+              userId,
+              actorUserId,
+            ),
+          ]);
+          for (const result of results) {
+            if (result.status === 'rejected') throw result.reason;
+          }
+        };
         const maps = createMapsService({
           db,
           house,
-          // A Keeper leaving calls off their trade offers (#271) and their asks (#29).
-          // Each on its own: one failing never keeps the other from running.
-          departed: async (mapId, userId, actorUserId) => {
-            const results = await Promise.allSettled([
-              trades.memberLeft(mapId, userId, actorUserId),
-              callOffAsksOf(
-                { db, clock, ...(wsHub ? { publish: wsHub.publish } : {}) },
-                mapId,
-                userId,
-                actorUserId,
-              ),
-            ]);
-            for (const result of results) {
-              if (result.status === 'rejected') throw result.reason;
-            }
-          },
+          departed,
+          computerMates,
           tutorialRequired: config.HP_TUTORIAL_REQUIRED,
           keeperRequired: config.HP_KEEPER_REQUIRED,
           // Who can make a Wild Isle (#621), off by default.
@@ -348,6 +385,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           tileBattles: createTileBattlePort(),
           // Journeys to trading posts (#270): the visit pass in the finish.
           journeys: createJourneyBattlePort(),
+          // Mini-bosses (#190): a win ends the visit for its Keeper.
+          minibosses: createMinibossBattlePort(options.bossRules),
           ...(wsHub ? { publish: wsHub.publish } : {}),
         });
         const idempotencyStore = createIdempotencyStore(db);
@@ -418,22 +457,20 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
+        const territory = createTerritoryService({
+          db,
+          clock,
+          battles,
+          ...publish,
+          // "Defend now?" (#29-C) goes to a defender whose app is open.
+          ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
+        });
         await api.register(
-          territoryRoutes(
-            createTerritoryService({
-              db,
-              clock,
-              battles,
-              ...publish,
-              // "Defend now?" (#29-C) goes to a defender whose app is open.
-              ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
-            }),
-            {
-              hooks: authHooks,
-              idempotency,
-              devTools: config.HP_DEV_SQUISHY_GRANTS,
-            },
-          ),
+          territoryRoutes(territory, {
+            hooks: authHooks,
+            idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
+          }),
         );
         // The raid log and defense style (#16); the raid-log consumer writes
         // the rows (`modules/raids/consumer.ts`, started in index.ts).
@@ -536,6 +573,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             idempotency,
           }),
         );
+        // The trading post's Shop: consumables for Heart Coins (#729).
+        await api.register(
+          postShopRoutes(createPostShopService({ db, clock, ...publish }), {
+            hooks: authHooks,
+            idempotency,
+          }),
+        );
         // Trick-or-treat at patch-mates' homes (#515).
         await api.register(
           trickOrTreatRoutes(createTrickOrTreatService({ db, clock, ...publish }), {
@@ -554,6 +598,40 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
+        // Computer patch-mates (#386): the owner's switch; mates hold seats only so far.
+        await api.register(
+          computerMatesRoutes(
+            createComputerMatesService({
+              db,
+              clock,
+              computerMates,
+              departed,
+              log: app.log,
+              ...publish,
+            }),
+            { hooks: authHooks },
+          ),
+        );
+        // Their steps (#386c): a paced job in `src/index.ts`, only while a kid is around.
+        if (computerMates.mode !== 'off') {
+          const steps = createComputerMateSteps({
+            db,
+            clock,
+            // Their challenges and battles (#386e), through territory's and battles' own code.
+            territory,
+            battles,
+            ...publish,
+            // A mate challenges only a kid with the patch open right now (#823 ruling).
+            ...(wsHub ? { openMaps: wsHub.openMaps, isOnline: wsHub.isOnline } : {}),
+            log: app.log,
+          });
+          onKeeperSeen = (mapId) => {
+            void steps.seen(mapId).catch((err: unknown) => {
+              app.log.error({ err, mapId }, 'computer mates: stamping a visit failed');
+            });
+          };
+          options.onComputerMates?.(steps);
+        }
         // The Long Night (#727): the owner's weekday and Juniper's Gap
         // encounters (wild battles); nightfall resolves it.
         await api.register(
@@ -563,6 +641,17 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
+        // Mini-bosses (#190): this week's visit and its fights. The sweep job
+        // (`src/index.ts`) opens visits; no boss visits while the bag is empty.
+        const boss = createBossService({
+          db,
+          clock,
+          battles,
+          ...publish,
+          ...(options.bossRules && { rules: options.bossRules }),
+        });
+        options.onBoss?.(boss);
+        await api.register(bossRoutes(boss, { hooks: authHooks, idempotency }));
         // Push nudges (#726), off by default until the client lane (#726e).
         // Config makes sure the VAPID keys are there whenever it isn't off.
         const vapid = vapidOf(config);

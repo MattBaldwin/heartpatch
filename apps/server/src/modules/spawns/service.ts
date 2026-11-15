@@ -11,6 +11,7 @@ import {
   type PublicUser,
   type Species,
   type WildHints,
+  hiddenUntilSeen,
 } from '@heartpatch/shared';
 import {
   resolveWildSpawn,
@@ -25,6 +26,7 @@ import { AppError } from '../../lib/errors.js';
 import { spawnWindowFor, type Clock } from '../../lib/time.js';
 import type { WildEncounter, WildEncounterContext } from '../battles/service.js';
 import { requireMember } from '../maps/members.js';
+import { heldLure } from '../post-shop/repo.js';
 import { createSpawnsRepo, type SpawnTileRow } from './repo.js';
 
 /*
@@ -134,7 +136,8 @@ export function createSpawnsService(options: SpawnsServiceOptions): SpawnsServic
     userId: string,
     at: Date,
     only: Hex | null,
-  ): Promise<{ found: TileSpawn[]; window: string }> => {
+    lure = false,
+  ): Promise<{ found: TileSpawn[]; window: string; tutorial: boolean }> => {
     const map = await store.findMap(mapId);
     if (!map) throw new AppError('NOT_FOUND', MESSAGES.noMap);
     const window = spawnWindowFor(at, map.timeZone, data.rules.windowHours);
@@ -154,36 +157,49 @@ export function createSpawnsService(options: SpawnsServiceOptions): SpawnsServic
       if (gone.has(hexKey(tile))) return [];
       if (tutorial) return [{ tile, spawn: gladeSpawn(tile) }];
       const seed = deriveSeed(mapSeed, 'spawn', tile.q, tile.r, window.id);
-      const spawn = resolveWildSpawn({ seed, terrain: tile.terrain, window, partnerLevel }, data);
+      const spawn = resolveWildSpawn(
+        { seed, terrain: tile.terrain, window, partnerLevel, lure },
+        data,
+      );
       return spawn ? [{ tile, spawn }] : [];
     });
-    return { found, window: window.id };
+    return { found, window: window.id, tutorial };
   };
 
   return {
-    findWildEncounter: async ({ mapId, userId, now: at, tile }) => {
-      const { found, window } = await spawnsFor(mapId, userId, at, tile);
+    findWildEncounter: async ({ mapId, userId, now: at, tile, lure }) => {
+      // A Rare Lure (#729) never changes which tiles have someone, so the
+      // nearest pick is the same; only that squishy may be rarer.
+      const { found, window } = await spawnsFor(mapId, userId, at, tile, lure === true);
       const first = found[0];
       if (!first) return null;
       return {
         squishies: [{ id: 'wild-1', speciesId: first.spawn.speciesId, level: first.spawn.level }],
         spawn: { q: first.tile.q, r: first.tile.r, window },
+        ...(lure ? { lured: first.spawn.lured === true } : {}),
       };
     },
 
     wildHints: async (user, mapId) => {
       await requireMember(db, user, mapId);
-      const { found } = await spawnsFor(mapId, user.id, now(), null);
-      return { tiles: found.map(({ tile }) => ({ q: tile.q, r: tile.r })) };
+      const { found, tutorial } = await spawnsFor(mapId, user.id, now(), null);
+      const tiles = found.map(({ tile }) => ({ q: tile.q, r: tile.r }));
+      // Only that a lure is waiting (the glow); never what it does (rule 6).
+      return tutorial
+        ? { tiles }
+        : { tiles, lureHeld: (await heldLure(db, mapId, user.id)) !== null };
     },
 
     catalog: async (user, mapId) => {
       await requireMember(db, user, mapId);
       const seen = await store.listSeen(mapId, user.id);
-      // Secret species go only to a player who has met them (CLAUDE.md rule 6).
+      // Secret and mini-boss species go only to a player who has met them
+      // (CLAUDE.md rule 6, #190 `hiddenUntilSeen`).
       const speciesDefs = seen.flatMap(({ speciesId }) => {
         const species = data.species.get(speciesId);
-        return species && !PUBLIC_SPECIES.has(speciesId) ? [species] : [];
+        return species && (!PUBLIC_SPECIES.has(speciesId) || hiddenUntilSeen(species))
+          ? [species]
+          : [];
       });
       return {
         entries: seen.map((row) => ({

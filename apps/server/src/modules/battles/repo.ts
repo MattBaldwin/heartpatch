@@ -31,7 +31,15 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, not, or, sql } from 'dr
 import { z } from 'zod';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { battles, liveBattles, mapMembers, maps, squishies, tiles } from '../../db/schema.js';
+import {
+  battles,
+  liveBattles,
+  mapMembers,
+  maps,
+  squishies,
+  tiles,
+  users,
+} from '../../db/schema.js';
 import { squishyAtWork } from '../jobs/repo.js';
 import { squishyOnWatch } from '../territory/repo.js';
 
@@ -118,7 +126,8 @@ export interface BattlesRepo {
   /** Does the player have a squishy that isn't in the Hollow (busy ones too)? */
   hasActiveSquishy: (mapId: string, userId: string) => Promise<boolean>;
   /**
-   * How many finished battles each of `squishyIds` joined and won on this
+   * How many finished battles each of `squishyIds` joined (or sat on the
+   * bench for, #732, counted from `rewards`) and won on this
    * map on `at`'s map-local day, on either side (#728: a guard's holds
    * count), friendlies included only when won and paid XP (#728, owner
    * decision 2026-11-15; `countsTowardFalloff` on the paid amount, from
@@ -140,6 +149,17 @@ export interface BattlesRepo {
     mapId: string,
     winnerUserId: string,
     loserUserId: string,
+    at: Date,
+  ) => Promise<number>;
+  /**
+   * Friendly battles `winnerUserId` won on side `a` against any computer
+   * patch-mate on this map on `at`'s map-local day, not a scoot (#386e,
+   * `CHALLENGE_RULES.paidWinsPerDayVsComputers`). A mate never asks, so it
+   * is always side `b`. Finished ones only, like `friendlyWinsAgainstToday`.
+   */
+  friendlyWinsAgainstComputersToday: (
+    mapId: string,
+    winnerUserId: string,
     at: Date,
   ) => Promise<number>;
   /** Row-locks the squishies until commit (XP is written under it, care's `applyXp`). */
@@ -230,16 +250,17 @@ const LogSchema = ClientBattleViewSchema.shape.log;
 
 /**
  * A battle's whole setup, as `replayBattle` takes it: its seed and stored
- * sides, plus a fence battle's turn limit (#203) and a gentle battle's flag
- * (#587), which live in its state.
+ * sides, plus a fence battle's turn limit (#203), a gentle battle's flag
+ * (#587) and a team battle's format (#190), which live in its state.
  */
 export function setupOf(row: Pick<BattleRow, 'seed' | 'setup' | 'state'>): BattleSetup {
-  const { turnLimit, gentle } = row.state;
+  const { turnLimit, gentle, format } = row.state;
   return {
     seed: row.seed,
     sides: row.setup,
     ...(turnLimit !== undefined && { turnLimit }),
     ...(gentle && { gentle }),
+    ...(format && { format }),
   };
 }
 
@@ -384,22 +405,28 @@ function queries(db: Executor): BattlesRepo {
       const wanted = new Set(squishyIds);
       for (const row of rows) {
         const result = ResultSchema.parse(row.result);
-        // A friendly counts what each side was actually paid (#728): its
-        // share of the engine's XP, and nothing for a squishy that changed
-        // Keeper, went to the post or the Hollow before the finish.
+        // What each side was actually paid (#728, #732): a friendly's share,
+        // nothing for a squishy that changed Keeper, went to the post or the
+        // Hollow before the finish, and the bench (benched teammates are in
+        // `rewards`, never in the engine's `result.xp`). Rows stored before
+        // `rewards` count from the engine's awards; a friendly has none.
         const isFriendly = row.kind === 'friendly';
-        const rewards =
-          isFriendly && row.rewards !== null ? BattleRewardsSchema.parse(row.rewards) : null;
-        const paid = new Map<string, number>(
-          [...(rewards?.xp ?? []), ...(rewards?.b?.xp ?? [])].map((x) => [x.squishyId, x.xp]),
-        );
-        for (const award of result.xp) {
+        const rewards = row.rewards === null ? null : BattleRewardsSchema.parse(row.rewards);
+        const paid: { side: BattleSideId; squishyId: string; xp: number }[] = rewards
+          ? [
+              ...rewards.xp.map((x) => ({ side: 'a' as const, ...x })),
+              ...(rewards.b?.xp ?? []).map((x) => ({ side: 'b' as const, ...x })),
+            ]
+          : isFriendly
+            ? []
+            : result.xp;
+        for (const award of paid) {
           // Either side (#728): a challenger's wins, a guard's holds, and
           // a won friendly that paid something (a lost or tied one fills
-          // no slot, owner decision 2026-11-15).
+          // no slot, owner decision 2026-11-15). A bench squishy's count
+          // works the same way (#732).
           if (!wanted.has(award.squishyId)) continue;
-          const xp = isFriendly ? (paid.get(award.squishyId) ?? 0) : award.xp;
-          if (!countsTowardFalloff(row.kind, award.side, result.winner, xp)) continue;
+          if (!countsTowardFalloff(row.kind, award.side, result.winner, award.xp)) continue;
           wins.set(award.squishyId, (wins.get(award.squishyId) ?? 0) + 1);
         }
       }
@@ -430,6 +457,28 @@ function queries(db: Executor): BattlesRepo {
                 sql`${battles.result}->>'winner' = 'b'`,
               ),
             ),
+            sql`(${battles.endedAt} at time zone ${maps.timeZone})::date = (${at.toISOString()}::timestamptz at time zone ${maps.timeZone})::date`,
+          ),
+        );
+      return row?.n ?? 0;
+    },
+
+    friendlyWinsAgainstComputersToday: async (mapId, winnerUserId, at) => {
+      const [row] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(battles)
+        .innerJoin(liveBattles, eq(liveBattles.battleId, battles.id))
+        .innerJoin(users, eq(users.id, liveBattles.bUserId))
+        .innerJoin(maps, eq(maps.id, battles.mapId))
+        .where(
+          and(
+            eq(battles.mapId, mapId),
+            eq(battles.kind, 'friendly'),
+            eq(battles.status, 'finished'),
+            eq(battles.playerUserId, winnerUserId),
+            eq(users.kind, 'computer'),
+            sql`${battles.result}->>'reason' <> 'forfeit'`,
+            sql`${battles.result}->>'winner' = 'a'`,
             sql`(${battles.endedAt} at time zone ${maps.timeZone})::date = (${at.toISOString()}::timestamptz at time zone ${maps.timeZone})::date`,
           ),
         );

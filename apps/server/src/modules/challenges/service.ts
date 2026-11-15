@@ -16,6 +16,7 @@ import { AppError } from '../../lib/errors.js';
 import { MINUTE_MS, type Clock } from '../../lib/time.js';
 import type { BattlesService } from '../battles/service.js';
 import { createBattlesRepo } from '../battles/repo.js';
+import { createComputerMatesRepo } from '../computer-mates/repo.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { createChallengesRepo, type ChallengeRow, type ChallengesTxRepo } from './repo.js';
@@ -179,14 +180,86 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
     return row;
   };
 
+  /**
+   * Starts the battle for a waiting ask `actorUserId` (its asked Keeper)
+   * said yes to: a kid's tap, or a computer patch-mate at once (#386e).
+   */
+  const startAccepted = async (asked: ChallengeRow, actorUserId: string): Promise<string> => {
+    const { mapId } = asked;
+    const challengeId = asked.id;
+    try {
+      return await battles.startFriendly({
+        mapId,
+        aUserId: asked.fromUserId,
+        bUserId: asked.toUserId,
+        // The ask is locked after the member rows and the new battle
+        // (lock order step 9c), and settles with the battle (rule 7).
+        started: async (tx, battle): Promise<NewGameEvent[]> => {
+          const repo = createChallengesRepo(tx);
+          const at = battle.startedAt;
+          // This ask and both Keepers' other waiting asks, in one id-ordered
+          // lock (9c), like expiry's, so the two can never cross.
+          const waiting = await repo.lockPendingOf(mapId, [asked.fromUserId, asked.toUserId]);
+          const row = waiting.find((w) => w.id === challengeId);
+          if (!row || row.expiresAt.getTime() <= at.getTime()) {
+            throw new AppError('CONFLICT', MESSAGES.gone);
+          }
+          await repo.settle(row.id, { status: 'accepted', at, battleId: battle.id });
+          // Both are in a battle now: their other waiting asks go. A
+          // "Defend now?" prompt stays: it ends with its own battle (#29-C).
+          const others = waiting.filter((w) => w.id !== challengeId && w.kind === 'friendly');
+          for (const other of others) await repo.settle(other.id, { status: 'cancelled', at });
+          return [
+            {
+              mapId,
+              type: 'challenge.answered',
+              actorUserId,
+              payload: { ...pair(row), answer: 'yes', battleId: battle.id },
+            },
+            ...others.map((other): NewGameEvent => ({
+              mapId,
+              type: 'challenge.cancelled',
+              actorUserId: null,
+              payload: { ...pair(other), reason: 'cancelled' },
+            })),
+          ];
+        },
+      });
+    } catch (err) {
+      // Too late: let it float away for both of them, then say so.
+      if (err instanceof AppError && err.code === 'CONFLICT') await expireNow(mapId);
+      throw err;
+    }
+  };
+
+  /** "Not now!" from the asked Keeper (a kid's tap, or a computer mate that can't battle). */
+  const notNow = async (challengeId: string, actorUserId: string): Promise<void> => {
+    const mapId = await store.transaction(async (repo) => {
+      const at = now();
+      const row = await lockLive(repo, challengeId, at);
+      await repo.settle(row.id, { status: 'declined', at });
+      await repo.appendEvent({
+        mapId: row.mapId,
+        type: 'challenge.answered',
+        actorUserId,
+        payload: { ...pair(row), answer: 'not-now', battleId: null },
+      });
+      return row.mapId;
+    });
+    published(mapId);
+  };
+
   return {
     view: async (user, mapId) => {
       await requireMember(db, user, mapId);
       const at = now();
       await expireNow(mapId, at);
       const battlesRepo = createBattlesRepo(db);
-      const memberIds = (await store.memberIds(mapId)).filter(
-        (id) => id !== user.id && isOnline(mapId, id),
+      const members = await store.memberIds(mapId);
+      // A computer patch-mate (#386e) is always here for a friendly.
+      const computers = await createComputerMatesRepo(db).computerIds(members);
+      const memberIds = members.filter(
+        (id) => id !== user.id && (computers.has(id) || isOnline(mapId, id)),
       );
       const names = await store.usernames(memberIds);
       const online = [];
@@ -220,7 +293,10 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
       if (!(await store.memberIds(mapId)).includes(toUserId)) {
         throw new AppError('NOT_FOUND', MESSAGES.notHere);
       }
-      if (!isOnline(mapId, toUserId)) throw new AppError('CONFLICT', MESSAGES.notHere);
+      const computer = (await createComputerMatesRepo(db).computerIds([toUserId])).has(toUserId);
+      if (!computer && !isOnline(mapId, toUserId)) {
+        throw new AppError('CONFLICT', MESSAGES.notHere);
+      }
       const begin = () =>
         store.transaction(async (repo, tx) => {
           // Both member rows, in id order (lock order step 2), so the limits
@@ -284,7 +360,19 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
         throw err;
       }
       published(mapId);
-      return toView(row);
+      if (!computer) return toView(row);
+      // A computer patch-mate (#386e, plan §1 D) answers at once, through
+      // the same start as a kid's yes, and plays its side with the AI. It
+      // says Not now! only when it can't battle (no team free).
+      try {
+        await startAccepted(row, toUserId);
+      } catch (err) {
+        if (!(err instanceof AppError) || err.code !== 'CONFLICT') throw err;
+        await notNow(row.id, toUserId).catch((e: unknown) => {
+          if (!(e instanceof AppError)) throw e;
+        });
+      }
+      return toView((await store.find(row.id)) ?? row);
     },
 
     answer: async (user, challengeId, { answer }) => {
@@ -294,67 +382,12 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
         return { challenge: await toView(answered.challenge), battle: answered.battle };
       }
       const asked = await requireAsk(user, challengeId, 'to');
-      const { mapId } = asked;
       if (answer === 'not-now') {
-        await store.transaction(async (repo) => {
-          const at = now();
-          const row = await lockLive(repo, challengeId, at);
-          await repo.settle(row.id, { status: 'declined', at });
-          await repo.appendEvent({
-            mapId,
-            type: 'challenge.answered',
-            actorUserId: user.id,
-            payload: { ...pair(row), answer: 'not-now', battleId: null },
-          });
-        });
-        published(mapId);
+        await notNow(challengeId, user.id);
         const row = await store.find(challengeId);
         return { challenge: await toView(row ?? asked), battle: null };
       }
-      let battleId: string;
-      try {
-        battleId = await battles.startFriendly({
-          mapId,
-          aUserId: asked.fromUserId,
-          bUserId: asked.toUserId,
-          // The ask is locked after the member rows and the new battle
-          // (lock order step 9c), and settles with the battle (rule 7).
-          started: async (tx, battle): Promise<NewGameEvent[]> => {
-            const repo = createChallengesRepo(tx);
-            const at = battle.startedAt;
-            // This ask and both Keepers' other waiting asks, in one id-ordered
-            // lock (9c), like expiry's, so the two can never cross.
-            const waiting = await repo.lockPendingOf(mapId, [asked.fromUserId, asked.toUserId]);
-            const row = waiting.find((w) => w.id === challengeId);
-            if (!row || row.expiresAt.getTime() <= at.getTime()) {
-              throw new AppError('CONFLICT', MESSAGES.gone);
-            }
-            await repo.settle(row.id, { status: 'accepted', at, battleId: battle.id });
-            // Both are in a battle now: their other waiting asks go. A
-            // "Defend now?" prompt stays: it ends with its own battle (#29-C).
-            const others = waiting.filter((w) => w.id !== challengeId && w.kind === 'friendly');
-            for (const other of others) await repo.settle(other.id, { status: 'cancelled', at });
-            return [
-              {
-                mapId,
-                type: 'challenge.answered',
-                actorUserId: user.id,
-                payload: { ...pair(row), answer: 'yes', battleId: battle.id },
-              },
-              ...others.map((other): NewGameEvent => ({
-                mapId,
-                type: 'challenge.cancelled',
-                actorUserId: null,
-                payload: { ...pair(other), reason: 'cancelled' },
-              })),
-            ];
-          },
-        });
-      } catch (err) {
-        // Too late: let it float away for both of them, then say so.
-        if (err instanceof AppError && err.code === 'CONFLICT') await expireNow(mapId);
-        throw err;
-      }
+      const battleId = await startAccepted(asked, user.id);
       const row = await store.find(challengeId);
       return {
         challenge: await toView(row ?? asked),

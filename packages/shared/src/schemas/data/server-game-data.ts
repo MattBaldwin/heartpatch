@@ -190,6 +190,11 @@ export function checkServerGameData(input: unknown, gameData: GameData): string[
     const publicSpecies = new Set(gameData.species.map((s) => s.id));
     const secretSpecies = new Set(data.secretSpecies.map((s) => s.id));
     const species = new Set([...publicSpecies, ...secretSpecies]);
+    const bossLine = new Set(
+      [...gameData.species, ...data.secretSpecies]
+        .filter((s) => s.line === 'boss')
+        .map((s) => s.id),
+    );
     const moves = new Set([...gameData.moves, ...data.secretMoves].map((m) => m.id));
     const seasons = new Set(gameData.seasons.map((s) => s.id));
     const terrains = new Set(gameData.terrains.map((t) => t.id));
@@ -209,6 +214,9 @@ export function checkServerGameData(input: unknown, gameData: GameData): string[
           ['spawnTables', i, 'entries', j, 'species'],
           report,
         );
+        if (bossLine.has(entry.species)) {
+          report(['spawnTables', i, 'entries', j, 'species'], 'a mini-boss is never wild (#190)');
+        }
       });
     });
 

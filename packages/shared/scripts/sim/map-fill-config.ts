@@ -61,6 +61,12 @@ export interface MapFillRules {
 export interface Seat {
   readonly kid: MapFillKid;
   readonly stopsAfterDay: number | null;
+  /**
+   * A computer patch-mate (#386c) with this persona id: it never plays like a
+   * kid; on a day a kid plays (the patch is warm, rule C) it takes the
+   * server's steps through the shared `nextIntent`.
+   */
+  readonly computer?: string;
 }
 
 export interface MapFillScenario {
@@ -102,6 +108,14 @@ export const PART_TIME: MapFillKid = {
 
 /** When the idle kid in the "stops playing" scenarios walks away. */
 export const STOPS_AFTER_DAY = 30;
+
+/**
+ * Computer mates in the model (#386c): on a warm day (a kid played), each
+ * mate takes `catchUpSteps` catch-up steps when the kid opens the patch,
+ * then this many ordinary steps while it stays open (steps are 20–60 min
+ * apart and the patch stays warm `warmMinutes` after a kid looks).
+ */
+export const MATE_STEPS_WHILE_OPEN = 3; // TUNE: guess, about one short session a day
 
 export const MAP_FILL_CONFIG = {
   rootSeed: 'heartpatch-map-fill-v1',
@@ -161,6 +175,17 @@ export const MAP_FILL_RULES: readonly MapFillRules[] = [
 
 const playing = (kid: MapFillKid): Seat => ({ kid, stopsAfterDay: null });
 const stopping = (kid: MapFillKid): Seat => ({ kid, stopsAfterDay: STOPS_AFTER_DAY });
+/** A computer mate's seat: a kid who never plays, carrying the persona. */
+const computer = (persona: string): Seat => ({
+  kid: { ...CASUAL, id: `computer-${persona}`, playDays: [], visits: false },
+  stopsAfterDay: null,
+  computer: persona,
+});
+/** The three mates `fillTo: 4` gives a solo kid (the first three personas). */
+const MATES = ['bramble', 'marigold', 'pocket'].map(computer);
+
+/** Days a solo kid with computer mates plays before walking away (gate d). */
+export const SOLO_AWAY_AFTER_DAY = 14;
 
 export const MAP_FILL_SCENARIOS: readonly MapFillScenario[] = [
   {
@@ -211,6 +236,38 @@ export const MAP_FILL_SCENARIOS: readonly MapFillScenario[] = [
     mapSeats: 4,
     seats: [playing(ENGAGED), playing(CASUAL), playing(PART_TIME), stopping(CASUAL)],
   },
+  // Computer mates (#386c, plan §9): a solo kid with the 3 mates
+  // `fillTo: 4` gives, against the matching 4-kid patch.
+  {
+    id: 'engaged-4-full',
+    title: '4 engaged kids, 4 seats',
+    mapSeats: 4,
+    seats: Array.from({ length: 4 }, () => playing(ENGAGED)),
+  },
+  {
+    id: 'casual-4-full',
+    title: '4 casual kids, 4 seats',
+    mapSeats: 4,
+    seats: Array.from({ length: 4 }, () => playing(CASUAL)),
+  },
+  {
+    id: 'solo-engaged-3-computers',
+    title: '1 engaged kid and 3 computer mates, 4 seats',
+    mapSeats: 4,
+    seats: [playing(ENGAGED), ...MATES],
+  },
+  {
+    id: 'solo-casual-3-computers',
+    title: '1 casual kid and 3 computer mates, 4 seats',
+    mapSeats: 4,
+    seats: [playing(CASUAL), ...MATES],
+  },
+  {
+    id: 'solo-away-3-computers',
+    title: `1 casual kid and 3 computer mates, 4 seats; the kid stops after day ${String(SOLO_AWAY_AFTER_DAY)}`,
+    mapSeats: 4,
+    seats: [{ kid: CASUAL, stopsAfterDay: SOLO_AWAY_AFTER_DAY }, ...MATES],
+  },
   // Wild Isle (#621, plan §2): water is a wall until roads, bridges and
   // ferries (W1-5a/5b), so this is the slowest a kid fills a Wild Isle.
   {
@@ -234,3 +291,18 @@ export const MAP_FILL_SCENARIOS: readonly MapFillScenario[] = [
  * holds at least this many tiles by `byDay`.
  */
 export const WILD_ISLE_FILL_GATE = { tiles: 40, byDay: 14 } as const; // TUNE:
+
+/**
+ * The computer-mates gates (#386c, plan §9), soft: `pnpm sim:map-fill`
+ * prints PASS/FAIL. Each solo scenario's kid against the same kind of kid
+ * in the 4-kid patch, on `byDay`, within `withinPercent`.
+ */
+export const COMPUTER_MATES_GATES = [
+  { solo: 'solo-engaged-3-computers', full: 'engaged-4-full' },
+  { solo: 'solo-casual-3-computers', full: 'casual-4-full' },
+] as const;
+export const COMPUTER_MATES_GATE = {
+  byDay: 30,
+  withinPercent: 10,
+  away: 'solo-away-3-computers',
+} as const; // TUNE:

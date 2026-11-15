@@ -34,6 +34,8 @@ const id = () =>
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 
 export const mapKind = pgEnum('map_kind', ['multiplayer', 'tutorial']);
+// A real kid, or a computer patch-mate (#386) the server plays on one patch.
+export const userKind = pgEnum('user_kind', ['player', 'computer']);
 // A patch's type (#621), chosen when it's made and never changed. Every rule
 // that differs reads it through shared `patchRules`; existing patches are cozy.
 export const patchType = pgEnum('patch_type', ['cozy', 'wild-isle']);
@@ -60,6 +62,7 @@ export const battleKind = pgEnum('battle_kind', [
   'rescue',
   'journey',
   'friendly',
+  'miniboss',
 ]);
 /** `no-contest`: the server called it off (content re-tuned mid-battle). */
 export const battleStatus = pgEnum('battle_status', ['active', 'finished', 'no-contest']);
@@ -74,9 +77,14 @@ export const users = pgTable(
   {
     id: id(),
     username: text('username').notNull(),
-    passwordHash: text('password_hash').notNull(),
-    // The only personal detail we keep (design doc §18).
-    birthYear: smallint('birth_year').notNull(),
+    // Null only for a computer patch-mate (#386): the CHECK below makes sure
+    // a computer row has no secret to match, and a player row always has one.
+    passwordHash: text('password_hash'),
+    // The only personal detail we keep (design doc §18). Null for a computer mate.
+    birthYear: smallint('birth_year'),
+    // `computer` (#386): made for one patch and one persona, never logs in.
+    // Every "real Keepers only" rule reads this (`isPlayer`).
+    kind: userKind('kind').notNull().default('player'),
     // IANA zone from the device at signup; account-level daily caps reset at
     // its midnight (design doc §3). Validated by the auth service.
     timeZone: text('time_zone').notNull().default('UTC'),
@@ -102,8 +110,15 @@ export const users = pgTable(
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
-    // "Pumpkin" and "pumpkin" are the same player.
-    uniqueIndex('users_username_lower_key').on(sql`lower(${t.username})`),
+    // "Pumpkin" and "pumpkin" are the same player. Players only (#386):
+    // every patch has its own "Bramble", so computer names repeat.
+    uniqueIndex('users_username_lower_key')
+      .on(sql`lower(${t.username})`)
+      .where(sql`${t.kind} = 'player'`),
+    check(
+      'users_kind_credentials_check',
+      sql`(${t.kind} = 'player' and ${t.passwordHash} is not null and ${t.birthYear} is not null) or (${t.kind} = 'computer' and ${t.passwordHash} is null)`,
+    ),
     check('users_birth_year_range', sql`${t.birthYear} between 1900 and 2100`),
   ],
 );
@@ -337,6 +352,13 @@ export const maps = pgTable(
     // is `LONG_NIGHT_RULES.defaultWeekday` (owner decision Q5: Saturday for
     // every patch, old and new); a test keeps the two the same.
     longNightWeekday: smallint('long_night_weekday').default(6),
+    // The owner's computer patch-mates switch (#386): on fills the patch to
+    // `COMPUTER_MATE_RULES.fillTo` Keepers. Off by default; never on a tutorial map.
+    computerMates: boolean('computer_mates').notNull().default(false),
+    // When the switch last changed: turning it back on waits `toggleCooldownHours`.
+    computerMatesChangedAt: timestamptz('computer_mates_changed_at'),
+    // When a real member last opened the patch (#386c stamps it; mates act only while it's warm).
+    keepersSeenAt: timestamptz('keepers_seen_at'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
@@ -400,6 +422,40 @@ export const mapMembers = pgTable(
       .on(t.mapId, t.homeSlot)
       .where(sql`${t.status} = 'active'`),
     check('map_members_home_slot_nonnegative', sql`${t.homeSlot} >= 0`),
+  ],
+);
+
+/**
+ * Computer patch-mates (#386): one row per patch and persona, kept when the
+ * mate departs, so turning the switch back on brings the same `users` row
+ * back (per-pair daily caps carry over). Its lock comes right after the
+ * seats lock (tech spec §7, step 3a). `next_act_at` null = not on the patch.
+ */
+export const computerMates = pgTable(
+  'computer_mates',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    // `COMPUTER_PERSONAS` id (shared data).
+    personaId: text('persona_id').notNull(),
+    // Server-only: a mate's whole history replays from its seed and step (#386c).
+    seed: text('seed').notNull(),
+    step: integer('step').notNull().default(0),
+    nextActAt: timestamptz('next_act_at'),
+    // Per-behaviour last-done stamps (#386c-e).
+    state: jsonb('state').$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    unique('computer_mates_map_id_persona_id_key').on(t.mapId, t.personaId),
+    index('computer_mates_due_idx')
+      .on(t.nextActAt)
+      .where(sql`${t.nextActAt} is not null`),
+    check('computer_mates_step_nonnegative', sql`${t.step} >= 0`),
   ],
 );
 
@@ -1267,6 +1323,11 @@ export const tileAttacks = pgTable(
     }),
     // Attempts today, cooldowns, losses today.
     index('tile_attacks_map_id_attacker_idx').on(t.mapId, t.attackerUserId, t.startedAt),
+    // A map's attacks still running (computer mates' claim guard, every
+    // step), without walking the map's whole season of finished ones.
+    index('tile_attacks_map_id_open_idx')
+      .on(t.mapId)
+      .where(sql`${t.endedAt} is null`),
     index('tile_attacks_tile_id_idx').on(t.tileId, t.cooldownUntil),
     index('tile_attacks_map_id_defender_idx')
       .on(t.mapId, t.defenderUserId, t.endedAt)
@@ -2139,6 +2200,9 @@ export const raids = pgTable(
       .notNull()
       .references(() => tiles.id, { onDelete: 'cascade' }),
     attackerUserId: uuid('attacker_user_id').notNull(),
+    // The challenger was a computer patch-mate (#386), from its `users.kind`
+    // when the raid was written, so the report keeps saying so after it leaves.
+    attackerComputer: boolean('attacker_computer').notNull().default(false),
     defenderUserId: uuid('defender_user_id').notNull(),
     outcome: raidOutcome('outcome').notNull(),
     // `battle.ended`'s reason (`forfeit`: the challenger scooted home).
@@ -2304,6 +2368,136 @@ export const heartCoinBalances = pgTable(
       foreignColumns: [mapMembers.mapId, mapMembers.userId],
     }),
     check('heart_coin_balances_balance_nonnegative', sql`${t.balance} >= 0`),
+  ],
+);
+
+/**
+ * Everything bought at a trading post's Shop (#729): one row per purchase,
+ * per player per patch, inserted in the same transaction as its `shop`
+ * Heart Coin ledger row (`ref_id` is this id), so there is never a paid
+ * purchase without a row or a row without a payment. `day` is the patch's
+ * local date, for the caps; `price` is what was charged (the data may be
+ * retuned later). A Rare Lure stays held until a wild start uses it
+ * (`consumed_at`, `consumed_battle_id`), and the partial unique index makes
+ * "one held at a time" a database fact. Rows are inserted, never locked,
+ * except a lure's consume (tech spec §7 step 5d).
+ */
+export const postPurchases = pgTable(
+  'post_purchases',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    // `PostShopItemId` from shared, checked by zod on the way in.
+    itemId: text('item_id').notNull(),
+    price: integer('price').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    createdAt: timestamptz('created_at').notNull(),
+    consumedAt: timestamptz('consumed_at'),
+    consumedBattleId: uuid('consumed_battle_id').references(() => battles.id, {
+      onDelete: 'set null',
+    }),
+  },
+  (t) => [
+    foreignKey({
+      name: 'post_purchases_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }).onDelete('cascade'),
+    // The caps count one player's purchases of an item by patch day.
+    index('post_purchases_caps_idx').on(t.mapId, t.userId, t.itemId, t.day),
+    uniqueIndex('post_purchases_one_lure_held')
+      .on(t.mapId, t.userId)
+      .where(sql`${t.itemId} = 'rare-lure' and ${t.consumedAt} is null`),
+    check('post_purchases_price_positive', sql`${t.price} > 0`),
+  ],
+);
+
+/**
+ * A mini-boss's visit to a patch (#190): one row per patch and week, written
+ * once by the boss module when the visit opens (the insert is the
+ * idempotency), so its boss and tile are pinned even if land changes hands
+ * mid-visit. `window_id` is the patch-local Monday of its week. Server-only:
+ * the species and the schedule never reach a client that hasn't met it.
+ */
+export const bossWindows = pgTable(
+  'boss_windows',
+  {
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    windowId: date('window_id', { mode: 'string' }).notNull(),
+    speciesId: text('species_id').notNull(),
+    q: smallint('q').notNull(),
+    r: smallint('r').notNull(),
+    opensAt: timestamptz('opens_at').notNull(),
+    endsAt: timestamptz('ends_at').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.mapId, t.windowId] }),
+    check('boss_windows_ends_after_opens', sql`${t.endsAt} > ${t.opensAt}`),
+  ],
+);
+
+/**
+ * One Keeper's go at one visit (#190): written when they first fight it.
+ * `won_battle_id` is set by the win that ends the visit for them; `asks` is
+ * the befriend asks after it (190c). Tries are counted from `battles`, so a
+ * no-contest gives its try back with no bookkeeping.
+ */
+export const bossEncounters = pgTable(
+  'boss_encounters',
+  {
+    mapId: uuid('map_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    windowId: date('window_id', { mode: 'string' }).notNull(),
+    wonBattleId: uuid('won_battle_id').references(() => battles.id, { onDelete: 'set null' }),
+    asks: jsonb('asks').notNull().default([]),
+    createdAt: timestamptz('created_at').notNull(),
+    // When the Keeper last started or stepped a fight in this visit (#190
+    // plan §12, migration 0067): `idleMinutes` with nothing and they've left
+    // (a loss; the try is used). Null on rows from before it: the battle's start.
+    lastActionAt: timestamptz('last_action_at'),
+  },
+  (t) => [
+    primaryKey({ columns: [t.mapId, t.userId, t.windowId] }),
+    foreignKey({
+      name: 'boss_encounters_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'boss_encounters_window_fk',
+      columns: [t.mapId, t.windowId],
+      foreignColumns: [bossWindows.mapId, bossWindows.windowId],
+    }).onDelete('cascade'),
+  ],
+);
+
+/**
+ * A Keeper's bond with one boss kind (#190, written by 190c's befriend): the
+ * "not yet"s so far, and the squishy once one joined. One per player per kind.
+ */
+export const bossBonds = pgTable(
+  'boss_bonds',
+  {
+    mapId: uuid('map_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    speciesId: text('species_id').notNull(),
+    misses: integer('misses').notNull().default(0),
+    squishyId: uuid('squishy_id').references(() => squishies.id, { onDelete: 'set null' }),
+    befriendedAt: timestamptz('befriended_at'),
+  },
+  (t) => [
+    primaryKey({ columns: [t.mapId, t.userId, t.speciesId] }),
+    foreignKey({
+      name: 'boss_bonds_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }).onDelete('cascade'),
+    check('boss_bonds_misses_nonnegative', sql`${t.misses} >= 0`),
   ],
 );
 

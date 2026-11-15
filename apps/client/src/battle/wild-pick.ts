@@ -14,6 +14,12 @@ export const WILD_TEXT = {
   /** Where nothing is marked (the Tutorial Glade): no rustles to point at. */
   nearbyOne: 'A wild squishy is nearby!',
   nearbyMany: (count: number) => `${String(count)} wild squishies nearby!`,
+  /** Under a glowing "Find a squishy": a Rare Lure is waiting (#729). */
+  lureNear: 'Something rare is near… ✨',
+  /** The encounter's first line when the lure made it rarer (and was used up). */
+  lureWorked: 'Your lure worked! ✨',
+  /** …and when nothing rarer lives there, so the lure is kept. */
+  lureWaiting: 'Your lure is still waiting ✨',
 } as const;
 
 /**
@@ -24,6 +30,17 @@ export function nearbyNote(count: number, marked = true): string {
   if (count === 0) return WILD_TEXT.none;
   if (marked) return WILD_TEXT.nearby(count);
   return count === 1 ? WILD_TEXT.nearbyOne : WILD_TEXT.nearbyMany(count);
+}
+
+/** The note under the button: the lure's, while one is held, else how many are near. */
+export function entryNote(count: number, marked: boolean, lureHeld: boolean): string {
+  return lureHeld ? WILD_TEXT.lureNear : nearbyNote(count, marked);
+}
+
+/** What a wild start says about the lure: nothing unless the server said (`lured` is on the start reply only). */
+export function lureLine(lured: boolean | undefined): string | null {
+  if (lured === undefined) return null;
+  return lured ? WILD_TEXT.lureWorked : WILD_TEXT.lureWaiting;
 }
 
 /**

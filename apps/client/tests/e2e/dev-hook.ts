@@ -12,6 +12,7 @@ export type HookName =
   | 'trays'
   | 'recipeBook'
   | 'tutorial'
+  | 'boss'
   | 'updatesHeld'
   | 'battle'
   | 'keeper'
@@ -39,6 +40,7 @@ export type HookName =
   | 'nextUp'
   | 'chat'
   | 'friendly'
+  | 'computerMates'
   | 'audio'
   | 'jobs'
   | 'homeAlerts'
@@ -83,6 +85,17 @@ export async function waitForLiveMap(page: Page, mapId?: string): Promise<void> 
       timeout: LIVE_MAP_TIMEOUT,
     })
     .toMatchObject(mapId === undefined ? { live: 'live' } : { id: mapId, live: 'live' });
+}
+
+/**
+ * The open map's id, polled: the hook is null for a moment after `data-ready`
+ * (the patch is still loading), so a one-shot read can throw on a slow runner.
+ */
+export async function liveMapId(page: Page): Promise<string> {
+  await expect
+    .poll(async () => (await hook<{ id: string }>(page, 'map'))?.id, { timeout: LIVE_MAP_TIMEOUT })
+    .toBeTruthy();
+  return (await hook<{ id: string }>(page, 'map'))!.id;
 }
 
 /** Frames drawn so far (0 without the hook); stays put while the scene is idle. */

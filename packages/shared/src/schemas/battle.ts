@@ -5,6 +5,8 @@ import { ContentIdSchema } from './data/common.js';
 import { BattleStatSchema, MoveSchema } from './data/moves.js';
 import { SpeciesSchema } from './data/species.js';
 import { ElementIdSchema, FeelingIdSchema } from './data/elements.js';
+import { ItemCountsSchema } from './inventory.js';
+import { LocalDateSchema } from './time.js';
 
 /**
  * Battle inputs (design doc §6): the setup a battle starts from and the
@@ -388,6 +390,7 @@ export const BattleKindSchema = z.enum([
   'rescue',
   'journey',
   'friendly',
+  'miniboss',
 ]);
 export type BattleKind = z.infer<typeof BattleKindSchema>;
 
@@ -430,6 +433,12 @@ const RewardXpSchema = z.object({
    */
   evolvingBefore: EvolvingPercentSchema,
   evolvingAfter: EvolvingPercentSchema,
+  /**
+   * True when it sat on the bench (#732): on the team, never came out, and
+   * paid a share of the best award on its side. Absent on fighters and on
+   * battles stored before it.
+   */
+  bench: z.boolean().optional(),
 });
 
 /**
@@ -447,9 +456,11 @@ const RewardCoinsSchema = z.object({
  * scooted home (coins never pay for a scoot, owner decision 2026-11-14), a
  * friendly's paid wins over that patch-mate today are used up
  * (`paidWinsPerPairPerDay`), or the land's guardians held it alone (nobody
- * on watch, nobody played it live; side `b` only).
+ * on watch, nobody played it live; side `b` only), or a kid's friendly win
+ * over a computer patch-mate when their paid wins over all computer mates
+ * today are used up (`paidWinsPerDayVsComputers`, #386e: `'computer-cap'`).
  */
-export const UnpaidReasonSchema = z.enum(['scooted', 'pair-cap', 'guardians']);
+export const UnpaidReasonSchema = z.enum(['scooted', 'pair-cap', 'guardians', 'computer-cap']);
 export type UnpaidReason = z.infer<typeof UnpaidReasonSchema>;
 
 export const BattleRewardsSchema = z.object({
@@ -470,9 +481,15 @@ export const BattleRewardsSchema = z.object({
   /**
    * Set when side `a` won but got no win coins (#728): it was a scoot
    * (`'scooted'`), or a friendly past `paidWinsPerPairPerDay` over that
-   * patch-mate today (`'pair-cap'`). Null otherwise and for older battles.
+   * patch-mate today (`'pair-cap'`), or over all computer patch-mates
+   * together (`'computer-cap'`, #386e). Null otherwise and for older battles.
    */
   unpaid: UnpaidReasonSchema.nullable().default(null),
+  /**
+   * What a won mini-boss fight put in side `a`'s bag (#190): item id →
+   * count. Null for every other battle, a loss or scoot, and older battles.
+   */
+  bundle: ItemCountsSchema.nullable().default(null),
   /**
    * Side `b`'s rewards (#728): the Keeper whose land held, or a friendly
    * battle's side-`b` player, win or lose. Null when side `b` earned
@@ -526,6 +543,42 @@ export const LiveBattleViewSchema = z.object({
 });
 export type LiveBattleView = z.infer<typeof LiveBattleViewSchema>;
 
+/**
+ * Where a won mini-boss fight's befriending stands for its Keeper (#190 plan §3):
+ * - `none`: nothing to ask (the fight is going, or it wasn't won);
+ * - `offer`: "Ask it to be your friend?", no ask yet;
+ * - `not-yet`: the last ask was a "not yet" (`asksLeft` says if another can follow);
+ * - `joined`: an ask from this win said yes;
+ * - `have-one`: they already have one of this boss, so there's no ask.
+ */
+export const BossBefriendStateSchema = z.enum(['none', 'offer', 'not-yet', 'joined', 'have-one']);
+export type BossBefriendState = z.infer<typeof BossBefriendStateSchema>;
+
+/** The top `PlayerBattle.boss.warmth` step: the next ask always works (#190). */
+export const BOSS_WARMTH_STEPS = 4;
+
+/**
+ * A mini-boss fight's extras (#190 plan §1), to its own Keeper only. Never
+ * the odds, the misses or the schedule (CLAUDE.md rule 6): warmth is a coarse
+ * 0–`BOSS_WARMTH_STEPS` step for the "not yet" hearts, nothing finer.
+ */
+export const PlayerBattleBossSchema = z.object({
+  /** The visit the fight was in. */
+  eventWindow: z.object({ id: LocalDateSchema, endsAt: z.iso.datetime() }),
+  /** Fights left today on this visit. */
+  triesLeftToday: z.number().int().min(0),
+  /** Heart Charms one ask spends. */
+  charmsPerAsk: z.number().int().min(1),
+  /** Asks this win still has (0 once it joined, if they have one, or the asks closed). */
+  asksLeft: z.number().int().min(0),
+  befriend: BossBefriendStateSchema,
+  /** The boss line's base form's name: the friend who joins ("You already have a Puddlet!"). */
+  baseName: z.string().min(1),
+  /** How warm this boss kind is to the Keeper, 0–`BOSS_WARMTH_STEPS`, kept across visits. */
+  warmth: z.number().int().min(0).max(BOSS_WARMTH_STEPS),
+});
+export type PlayerBattleBoss = z.infer<typeof PlayerBattleBossSchema>;
+
 export const PlayerBattleSchema = z.object({
   id: z.uuid(),
   mapId: z.uuid(),
@@ -567,6 +620,12 @@ export const PlayerBattleSchema = z.object({
    * before. Absent on every other battle.
    */
   firstEver: z.boolean().optional(),
+  /**
+   * A wild battle just started while I held a Rare Lure (#729): true when the
+   * lure made the squishy one rarity tier rarer (and was used up), false when
+   * nothing rarer lives there (it's still waiting). Absent otherwise.
+   */
+  lured: z.boolean().optional(),
   startedAt: z.iso.datetime(),
   endedAt: z.iso.datetime().nullable(),
   /** Present only for a battle between two players (#29). */
@@ -577,6 +636,8 @@ export const PlayerBattleSchema = z.object({
    * answers. Giving up meanwhile counts as leaving (the land holds).
    */
   defensePrompt: z.object({ expiresAt: z.iso.datetime(), now: z.iso.datetime() }).optional(),
+  /** A mini-boss fight (#190), to its own Keeper. Absent on every other battle. */
+  boss: PlayerBattleBossSchema.optional(),
 });
 export type PlayerBattle = z.infer<typeof PlayerBattleSchema>;
 
@@ -618,6 +679,17 @@ export const PlayerBattleActionSchema = z.discriminatedUnion('type', [
    * from before #403 send it; new ones sip with `move`'s `item`.
    */
   z.strictObject({ type: z.literal('item'), item: ContentIdSchema }),
+  /**
+   * A team battle's round (#190, a mini-boss): one pick per squishy still
+   * standing, and at most one free sip (costs one from the bag), as the
+   * engine's `team` choice. Only in a team battle; every other battle
+   * refuses it, and a team battle refuses every other turn action.
+   */
+  z.strictObject({
+    type: z.literal('team'),
+    picks: z.array(TeamPickSchema).min(1).max(3),
+    item: z.strictObject({ item: ContentIdSchema, slot: SlotSchema }).optional(),
+  }),
 ]);
 export type PlayerBattleAction = z.infer<typeof PlayerBattleActionSchema>;
 

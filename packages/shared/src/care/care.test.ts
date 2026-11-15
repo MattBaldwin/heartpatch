@@ -26,6 +26,8 @@ import {
   addXp,
   battleXpPercent,
   befriendedLevel,
+  benchedIn,
+  benchXp,
   countsTowardFalloff,
   friendlyBattleXp,
   joiningSpecies,
@@ -663,5 +665,49 @@ describe('evolutionAt (Phase 1: the single next form)', () => {
     expect(evolutionAt('mallow', 31, steps)).toBeNull();
     expect(evolutionAt('mallow', 32, steps)?.into).toBe('cloud');
     expect(evolutionAt('nobody', 99, steps)).toBeNull();
+  });
+});
+
+describe('benchXp (#732)', () => {
+  it('pays benchXpPercent of the best award on the side, floored', () => {
+    expect(benchXp([{ xp: 30 }, { xp: 45 }], { benchXpPercent: 50 })).toBe(22);
+    expect(benchXp([{ xp: 45 }, { xp: 30 }], { benchXpPercent: 25 })).toBe(11);
+    expect(benchXp([{ xp: 1 }], { benchXpPercent: 50 })).toBe(0);
+  });
+
+  it('is 0 with the knob off or left out of the data', () => {
+    expect(benchXp([{ xp: 40 }], { benchXpPercent: 0 })).toBe(0);
+    expect(benchXp([{ xp: 40 }], {})).toBe(0);
+  });
+
+  it('is 0 with no award on the side (a scoot at turn 0)', () => {
+    expect(benchXp([], { benchXpPercent: 50 })).toBe(0);
+    expect(benchXp([{ xp: 0 }], { benchXpPercent: 50 })).toBe(0);
+  });
+
+  it('is on at 50 in the shipped data, and the data parses', () => {
+    expect(GROWTH_RULES.benchXpPercent).toBe(50);
+    expect(checkGrowthRules({ ...GROWTH_RULES, benchXpPercent: 101 })).not.toEqual([]);
+    expect(checkGrowthRules({ ...GROWTH_RULES, benchXpPercent: undefined })).toEqual([]);
+  });
+});
+
+describe('benchedIn (#732)', () => {
+  it('names the squishies that never came out, not the ones that fought a turn', () => {
+    const side = {
+      squishies: [
+        { id: 'lead', joined: true },
+        { id: 'swapped-in', joined: true },
+        { id: 'sat-out', joined: false },
+      ],
+    };
+    expect(benchedIn(side)).toEqual(['sat-out']);
+  });
+
+  it('never names a fence', () => {
+    expect(benchedIn({ squishies: [{ id: 'fence', joined: false, fence: 'fence-wood' }] })).toEqual(
+      [],
+    );
+    expect(benchedIn({ squishies: [] })).toEqual([]);
   });
 });

@@ -1,12 +1,17 @@
 import { BUILDINGS } from '../../src/data/buildings.js';
+import { BOSS_EVENTS } from '../../src/data/server/boss-events.js';
+import { STARTERS } from '../../src/data/starters.js';
 import { GROWTH_RULES } from '../../src/data/care.js';
 import { EXPLORE_RULES } from '../../src/data/explore.js';
 import { JOB_RULES } from '../../src/data/jobs.js';
+import { COMPUTER_MATES } from '../../src/data/server/computer-mates.js';
 import { SPAWN_RULES } from '../../src/data/server/spawn-rules.js';
 import { TERRITORY_RULES } from '../../src/data/territory.js';
+import type { BossEventRules } from '../../src/schemas/data/boss-events.js';
 import type { GrowthRules } from '../../src/schemas/data/care.js';
 import type { BattleAiPolicy } from '../../src/schemas/data/battle.js';
 import type { SpawnRules } from '../../src/schemas/data/spawn-rules.js';
+import { FACTORY_CONFIG } from './factory-config.js';
 import type { Tier } from './progression-firsts.js';
 
 /**
@@ -34,6 +39,12 @@ export interface ProgressionRules {
   readonly growth: GrowthRules;
   readonly spawn: SpawnRules;
   readonly attemptsPerDay: number;
+  /**
+   * A benched teammate's share (%) of the best award on its side (#732):
+   * `GROWTH_RULES.benchXpPercent` in the shipped data (`SHIPPED_BENCH_XP`).
+   * None or 0: the bench earns nothing.
+   */
+  readonly benchXpPercent?: number;
   /**
    * How the sim kid picks a new friend after a won wild battle (#732 D3);
    * none means `'stronger'`. `'stronger'`: the friend replaces the weakest
@@ -99,6 +110,69 @@ export interface ProgressionRules {
     readonly maxDefenders: number;
     readonly guardLevel: { readonly partnerBonus: number };
   };
+  /**
+   * One kid alone on the map (#386e, plan §9), or two (none): the second kid
+   * doesn't exist, so nobody plays friendlies with or challenges the kid
+   * unless `computerMates` stand in.
+   */
+  readonly solo?: boolean;
+  /**
+   * Computer patch-mates for a `solo` kid (#386e), or none. Friendlies
+   * (`friendlies.perDay`, paid as between two kids) are played against a
+   * mate, and the mates challenge the kid's land `challengesPerWeek` times a
+   * week (spread evenly, none in the `defences` shield), each against the
+   * kid's guards as a rival's would be (`defences`). A mate fields the kid's
+   * own team with every level at max(1, the kid's Partner level +
+   * `levelOffset`). Mates' coins caps (`paidWinsPerDayVsComputers`) don't
+   * touch XP, so they aren't modelled.
+   */
+  readonly computerMates?: {
+    readonly levelOffset: number;
+    readonly challengesPerWeek: number;
+  };
+  /**
+   * Mini-boss visits (#190 plan §2, §3), or none (`BossModel`): a weekly
+   * window in `play`, fought through the real team format, and the Heart
+   * Charm asks after a win, paid from the kid's modelled charm supply.
+   */
+  readonly boss?: BossModel;
+}
+
+/**
+ * The mini-boss model (#190 plan §9). `events` is the shipped
+ * `BOSS_EVENTS` with a sim-only stand-in bag (the shipped bag is empty
+ * until 234b), so the schedule, tries, levels and bundle are the server's.
+ */
+export interface BossModel {
+  readonly events: BossEventRules;
+  /** Stand-in bosses: this many grown-ups of different elements (`standInBosses`). */
+  readonly standIns: number;
+  /** Fights a kid starts on each patch-local day the boss is out (capped at `events.triesPerDay`). */
+  readonly triesPerDay: Readonly<Record<string, number>>;
+  /** The befriend ask after a win (plan §3, the numbers 190c ships). */
+  readonly befriend: {
+    readonly charmsPerAsk: number;
+    readonly asksPerWin: number;
+    readonly basePercent: number;
+    /** Per squishy of the kid's still standing at the win. */
+    readonly perStandingPercent: number;
+    /** Per earlier "not yet" from this boss kind (warmth carries across visits). */
+    readonly perMissPercent: number;
+    /** The ask after this many misses always works. */
+    readonly sureAfterMisses: number;
+    /** A friend joins at this share (%) of the Partner's level, at least `minJoinLevel`, below its first evolution. */
+    readonly joinLevelPercent: number;
+    readonly minJoinLevel: number;
+  };
+  /** The kid's Heart Charm supply (none of it is in the base model). */
+  readonly charms: {
+    /** Charms in the bag on day 1 (the starter gift). */
+    readonly start: number;
+    /** Charms a kid makes a day (crafting). */
+    readonly perDay: Readonly<Record<string, number>>;
+    /** Charms a wild befriend costs, on average (the capture rolls). */
+    readonly perWildFriend: number;
+  };
 }
 
 /**
@@ -109,6 +183,12 @@ export const SHIPPED_FRIENDLY_XP = {
   xpPercent: GROWTH_RULES.battleXpFalloff?.friendlyPercent ?? 100,
   oneOpponent: GROWTH_RULES.battleXpFalloff?.friendlyOneOpponent ?? false,
 } as const;
+
+/**
+ * The bench's share as the battles service pays it (#732): the shipped
+ * `GROWTH_RULES.benchXpPercent`, so the sim and production can't drift.
+ */
+export const SHIPPED_BENCH_XP = GROWTH_RULES.benchXpPercent ?? 0;
 
 /**
  * The shipped Training Grounds at their top level, trained a whole capped
@@ -190,6 +270,7 @@ export const CURRENT_RULES: ProgressionRules = {
   spawn: SPAWN_RULES,
   attemptsPerDay: TERRITORY_RULES.attemptsPerDay,
   training: topTraining(),
+  benchXpPercent: SHIPPED_BENCH_XP,
 };
 
 /**
@@ -236,6 +317,63 @@ export const WITH_FRIENDLIES_RULES: ProgressionRules = {
 export const FRIENDLY_GATE: FriendlyGate = { kid: 'engaged', day: 14, maxLevels: 1 }; // the issue's criterion 2
 
 /**
+ * One kid of each kind alone on the map (#386e, plan §9): no friendlies, no
+ * defences, no rival. The "before" for `SOLO_MATES_RULES`.
+ */
+export const SOLO_RULES: ProgressionRules = {
+  ...CURRENT_RULES,
+  label: 'solo',
+  solo: true,
+};
+
+/**
+ * The solo kid plus computer patch-mates (#386e): friendlies against a mate
+ * at `WITH_FRIENDLIES_RULES`' volume and pay, and the mates' gentle
+ * challenges on the kid's land under the same defence rules.
+ */
+export const SOLO_MATES_RULES: ProgressionRules = {
+  ...SOLO_RULES,
+  label: 'solo + computer mates',
+  friendlies: WITH_FRIENDLIES_RULES.friendlies,
+  defences: WITH_FRIENDLIES_RULES.defences,
+  computerMates: {
+    // TUNE: the middle of the personas' offsets (−1 mildest … −3), as `COMPUTER_MATES.personas` has them.
+    levelOffset: -2,
+    challengesPerWeek: COMPUTER_MATES.rules.challengesPerPatchWeek.gentle,
+  },
+};
+
+/**
+ * #386e's gate (plan §9): each kind's solo-with-mates Partner level on each
+ * of `days` is within `maxPercent` % of the same kind's `WITH_FRIENDLIES_RULES`
+ * row on the first map size (the pair's mean, two kids who play friendlies
+ * and defend).
+ */
+export interface SoloGate {
+  readonly days: readonly number[];
+  readonly maxPercent: number;
+}
+
+export const SOLO_GATE: SoloGate = { days: [14, 30], maxPercent: 10 }; // TUNE: plan §9, ±10 %
+
+/**
+ * The shipped data with the bench at 25 % (#732: 25–50 is pre-approved as
+ * data), beside the shipped 50 %, so the knob's lever shows in the report.
+ */
+export const BENCH_25_RULES: ProgressionRules = {
+  ...CURRENT_RULES,
+  label: 'now (bench 25 %)',
+  benchXpPercent: 25,
+};
+
+/** `WITH_FRIENDLIES_RULES` with the bench at 25 % (#732). */
+export const WITH_FRIENDLIES_BENCH_25_RULES: ProgressionRules = {
+  ...WITH_FRIENDLIES_RULES,
+  label: 'now + friendlies (bench 25 %)',
+  benchXpPercent: 25,
+};
+
+/**
  * The shipped data with the collector befriend choice (#732 D3): a kid who
  * puts a rarer friend on the team even when it's weaker, so "the first day a
  * casual kid evolves a befriended rare" measures the game, not the sim kid's
@@ -252,6 +390,57 @@ export const WITH_FRIENDLIES_COLLECTOR_RULES: ProgressionRules = {
   ...WITH_FRIENDLIES_RULES,
   label: 'now + friendlies (collector)',
   befriendPolicy: 'collector',
+};
+
+/**
+ * The shipped data plus mini-boss visits (#190): a variant, not
+ * `CURRENT_RULES`, because the shipped boss bag is empty until the boss
+ * content lands (234b). The report holds it to `BOSS_GATE`.
+ */
+export const WITH_BOSS_RULES: ProgressionRules = {
+  ...CURRENT_RULES,
+  label: 'now + boss',
+  boss: {
+    events: BOSS_EVENTS,
+    standIns: 3, // as `pnpm sim:boss`
+    // TUNE: plan §9: a casual kid tries once a day while it's out; an engaged kid uses every try.
+    triesPerDay: { casual: 1, engaged: BOSS_EVENTS.triesPerDay },
+    // Plan §3 (owner-approved 2026-11-15); modelled from the plan, not 190c's code.
+    befriend: {
+      charmsPerAsk: 3,
+      asksPerWin: 2,
+      basePercent: 20,
+      perStandingPercent: 5,
+      perMissPercent: 15,
+      sureAfterMisses: 4,
+      joinLevelPercent: 50, // owner decision 4: half the Partner's level…
+      minJoinLevel: 5, // …at least 5, below its first evolution
+    },
+    charms: {
+      start: STARTERS.firstPickGift['heart-charm'] ?? 0,
+      perDay: FACTORY_CONFIG.charmsPerDay, // the factory model's guess, so the sims agree
+      perWildFriend: 2, // TUNE: guess; a near-out capture is 60–90 % for common to rare
+    },
+  },
+};
+
+/**
+ * #190's gates (plan §9): the first boss beaten and the first boss friend
+ * by these days (each kid kind, first map size, kid 0), and the boss's XP
+ * moving day-14 and day-30 levels by at most `maxLevels` against the run
+ * without bosses.
+ */
+export interface BossGate {
+  readonly byDay: Readonly<Record<string, { readonly beaten: number; readonly friend: number }>>;
+  readonly xpDays: readonly number[];
+  readonly maxLevels: number;
+}
+
+// TUNE: plan §9's targets (owner-approved 2026-11-15).
+export const BOSS_GATE: BossGate = {
+  byDay: { casual: { beaten: 21, friend: 45 }, engaged: { beaten: 14, friend: 28 } },
+  xpDays: [14, 30],
+  maxLevels: 1,
 };
 
 /**

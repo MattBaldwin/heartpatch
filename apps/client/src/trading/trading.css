@@ -29,6 +29,13 @@
   background: rgb(255 228 240 / 95%);
 }
 
+/* A Computer friend's home (#386b, mockup 2c): the name, then the plum badge beside it. */
+.home-flag-computer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .post-flag[hidden] {
   display: none;
 }
@@ -202,8 +209,8 @@
 
 .post-tabs {
   display: grid;
-  /* Trade, Gift, Mailbox, the Glimmer swap (#523) and Sell (#601). */
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  /* Trade, Gift, Mail, the Glimmer swap (#523), Sell (#601) and Shop (#729). */
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 4px;
   padding: 4px;
   border-radius: 22px;
@@ -223,7 +230,7 @@
   border-radius: 18px;
   background: transparent;
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1.15;
   color: #7a2d55;
@@ -631,6 +638,8 @@ button.post-slot {
   position: relative;
   container-type: inline-size;
   display: grid;
+  /* One track that may shrink: a wide header can't push the column past its half (#386f). */
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   border: 2px solid var(--own);
   border-radius: 18px;
@@ -663,7 +672,9 @@ button.post-slot {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
   min-height: 52px;
   padding: var(--hp-pad-y) var(--hp-pad-x);
   box-sizing: border-box;
@@ -693,6 +704,25 @@ button.post-col-head {
   display: grid;
   flex: 1;
   min-width: 0;
+}
+
+/* A mate's pill sits on its own row under the header, so it never pushes the column wider (#386f). */
+.post-col-head {
+  flex-wrap: wrap;
+}
+
+.post-col-badge {
+  display: flex;
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+.post-col-badge .cf-badge {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .post-col-name {
@@ -1814,4 +1844,131 @@ button.post-col-head {
 .post-to-chip:focus-visible {
   outline: 3px solid #ffc94d;
   outline-offset: 2px;
+}
+
+/* The Shop tab (#729; the owner-approved mockup v3): a card per item. */
+.shop-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.shop-top .post-small {
+  font-weight: 700;
+}
+
+.shop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shop-card {
+  gap: 8px;
+}
+
+.shop-card .post-icon {
+  width: 52px;
+  height: 52px;
+  font-size: 30px;
+  border-radius: 16px;
+}
+
+.shop-head {
+  align-items: flex-start;
+}
+
+.shop-name {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.2;
+  font-weight: 900;
+}
+
+.shop-line {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b4b6e;
+  line-height: 1.3;
+}
+
+.shop-cap {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  color: #8a6f8c;
+}
+
+.shop-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.shop-foot .hp-button {
+  margin-left: auto;
+  min-width: 96px;
+}
+
+.shop-price {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  padding: 6px 12px 6px 10px;
+  border-radius: 999px;
+  background: #ffe1ec;
+  box-shadow:
+    inset 0 0 0 2px #ffc2d8,
+    inset 0 -2px 0 rgb(0 0 0 / 6%);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+  color: #8a2d5a;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.shop-why {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: #8a5a00;
+  line-height: 1.25;
+}
+
+.shop-state {
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: #fff8ec;
+  border: 2px solid #f6e6c9;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.shop-state.glow {
+  background: #f3ebff;
+  border-color: #d9c8f7;
+  color: #5a3a99;
+}
+
+.shop-card.cream {
+  background: #fff8ec;
+  box-shadow: none;
+  border: 2px solid #f6e6c9;
+}
+
+.shop-card.cream .post-icon {
+  background: #fff;
+  opacity: 0.75;
+}
+
+.post-shop-note {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: #fff8ec;
+  font-size: 15px;
+  font-weight: 700;
 }

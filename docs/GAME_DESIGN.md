@@ -30,6 +30,7 @@
 24. [Keeper milestones](#24-keeper-milestones)
 25. [Opening cinematic](#25-opening-cinematic-the-great-scatter)
 26. [Single-player tutorial](#26-single-player-tutorial-the-first-patch)
+27. [Mini-boss: the BIG squishy](#27-mini-boss-the-big-squishy)
 
 ---
 
@@ -135,7 +136,7 @@ A **balance simulator** (see issues) runs thousands of seeded battles and flags 
 - **Diminishing returns:** the first **[DEFAULT: 3]** care actions per squishy per day give full contentment; later ones give less (50%, then 25%, then 10%). Patch Coins from care are capped per account per day **[DEFAULT: 10]**, and only full-value actions earn one. Attentive play is rewarded without turning care into a chore that favours whoever has the most screen time.
 - **Heart Snack (rare treat).** A care button that costs **[DEFAULT: 3]** Heartdust and adds **[DEFAULT: 25]** contentment. It always counts in full, sits outside the day's diminishing returns and earns no Patch Coins, so Heartdust from rescues has a use (owner decision 2026-10-06).
 - **Why three everyday actions:** each maps to close-up gestures (§20): drag a treat → **feed**, stroke → **pet**, tap to boop or pinch to tickle → **play**. Each also has a visible button. This keeps care easy to pick up. Training is the **Training Grounds** building (§13), not a care button. Grooming returns with squishy dress-up (Phase 2). Care actions are data, so adding one later needs no engine change.
-- **Levels and pace.** Levels go up to 100. Wild squishies match the player's Partner at **[DEFAULT: −2 to +0]** of its level, so a lone Partner beats an ordinary one about 75% of the time as it grows (owner decision 2026-10-07). The XP curve steepens past level 16 (when starters reach their kid stage) and again past 30, so 30–100 is a long tail rather than a first-week sprint. A befriended squishy joins at most **[DEFAULT: 1]** level below its first evolution, so it grows up by training rather than by being caught. Battle XP tires out over a day: each squishy gets full XP for its first **[DEFAULT: 7]** wins of the map-local day, then **[DEFAULT: 10%]**, so playing all day doesn't race far ahead (owner decisions 2026-10-06). `pnpm sim:progression` shows the pace day by day.
+- **Levels and pace.** Levels go up to 100. Wild squishies match the player's Partner at **[DEFAULT: −2 to +0]** of its level, so a lone Partner beats an ordinary one about 75% of the time as it grows (owner decision 2026-10-07). The XP curve steepens past level 16 (when starters reach their kid stage) and again past 30, so 30–100 is a long tail rather than a first-week sprint. A befriended squishy joins at most **[DEFAULT: 1]** level below its first evolution, so it grows up by training rather than by being caught. Battle XP tires out over a day: each squishy gets full XP for its first **[DEFAULT: 7]** wins of the map-local day, then **[DEFAULT: 10%]**, so playing all day doesn't race far ahead (owner decisions 2026-10-06). Squishies on the team that never came out (the bench) get **[DEFAULT: 50%]** of the best award on their side, through their own care and their own falloff, and a win they were cheered on from the bench fills one of their daily slots too (#732, owner decision 2026-11-15). `pnpm sim:progression` shows the pace day by day.
 - Care history (a rolling score over the squishy's life) feeds evolution odds (§8).
 
 ## 8. Evolution
@@ -491,3 +492,19 @@ Every new player plays a short solo tutorial before joining or creating a multip
 - **Defend** is posting a guard: the step completes when a squishy goes on watch on the new tile. There is no echo raid and no stance pick.
 - **Nightfall** is a scripted button ("Night falls"); the Hollow Man takes nothing. Moving a squishy into the firelight isn't a beat yet.
 - A Glade friend (a level-5 Pebblesnooze) plays the first battle, and the Glade's wild squishies are the three starters.
+
+---
+
+## 27. Mini-boss: the BIG squishy
+
+Once a week, a BIG squishy wanders onto your patch. It stands on one tile, a golden hexagon with a wobbly marker ("?!" and "A BIG squishy" until you've met it). Bring your whole team, work together, and it might become your friend. Nothing here is scary: a beaten boss is just "tuckered out", and a friendly one can join you.
+
+*Built as #190 (DECISIONS "Supervisor 41"). Every number below is a **[DEFAULT]**, lives in data (`BOSS_EVENTS`, server-only, `// TUNE:`) and can change without code.*
+
+- **When:** one visit a week per patch. A visit lasts **48 hours from 16:00 patch-local** (it spans three patch-local days) and never lands on the Long Night. The tile is one the boss likes, with a fallback. Its level is the Partner's plus 2 (floor 15). The marker says "here until <day>", and "last day!" on the visit's final calendar day in the patch's zone.
+- **How it fights:** your whole team (up to 3) against the one BIG squishy. It uses the team-battle engine. You get **3 tries a patch day**; a try that ends in a no-contest is given back. If you leave a fight alone for 10 minutes the BIG squishy wanders off, and that try is used.
+- **The first win each week pays a bundle:** 3 Heart Charms, 5 Heartdust, 3 Treats, 5 coins and 5 Heart Coins, and a 20% chance of a piece of clothing. Winning again that week is for fun and for the Big Friend milestones. Nothing is paid for a fight a kid scoots out of.
+- **Befriending:** after a win the BIG squishy may ask to be friends. Each ask costs **3 Heart Charms**, and you get **2 asks per win**, open for 24 hours. The chance is 20%, plus 5% for each squishy you already have, plus 15% for every earlier miss; **after 4 misses the next ask always works.** The boss gives a hint, never a number: its warmth goes from 0 to 4 as it likes you more ("Not yet! Rakelet likes you a little more now."). A yes brings the BIG squishy's **small first form** to your team, at your Partner's level × 50% (at least level 5). You can have one friend of each boss kind; asking again says "You already have a ...!" and spends nothing.
+- **Big Friend milestones:** beat a BIG squishy **1 / 4 / 10** times to earn Big Hugger, Big Friend and Giant Heart (25 / 50 / 100 coins).
+- **Catalog:** a boss's page appears once you've met it, and it sits outside the Catalog tiers, so it never makes a tier look unfinished.
+- **Secrets stay server-side (§16):** boss species, their odds and their schedule are never sent to the client until a Keeper has met one.

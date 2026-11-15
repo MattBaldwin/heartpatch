@@ -16,6 +16,7 @@ import { ToolIdSchema } from './data/explore.js';
 import { HollowStageSchema, WalkKindSchema } from './hollow-stage.js';
 import { RaidOutcomeSchema } from './raids.js';
 import { TradeKindSchema, TradeLineSchema } from './trading.js';
+import { PostShopItemIdSchema } from './data/post-shop.js';
 import { ChallengeKindSchema } from './challenges.js';
 import { LocalDateSchema } from './time.js';
 import { TrickOrTreatPrizeSchema } from './trick-or-treat.js';
@@ -52,6 +53,8 @@ const MapSettingsSchema = z.strictObject({
   friendlyChallenges: z.boolean().optional(),
   /** The owner's Long Night weekday (#727, null: Off), when it's what changed (or on any newer update). */
   longNightWeekday: LongNightWeekdaySchema.nullable().optional(),
+  /** The owner's computer patch-mates switch (#386), when it's what changed. */
+  computerMates: z.boolean().optional(),
 });
 /**
  * One Keeper's Long Night (#727), as `long_nights.outcomes` stores it and
@@ -104,6 +107,10 @@ const DepartedSchema = z.strictObject({
   userId: z.uuid(),
   /** Tiles that went back to neutral (their home base and any land they held). */
   releasedTiles: z.number().int().min(0),
+  /** A computer patch-mate (#386) left. */
+  computer: z.literal(true).optional(),
+  /** It left to make room for this real Keeper joining (#386). */
+  madeRoomFor: z.uuid().optional(),
 });
 const DepartedPublicSchema = z.object(DepartedSchema.shape);
 const TutorialAdvancedSchema = z.strictObject({
@@ -236,12 +243,16 @@ export const GAME_EVENTS = {
       username: z.string(),
       homeSlot: z.number().int().min(0),
       heartSeed: HexSchema,
+      /** A computer patch-mate (#386) moved in. */
+      computer: z.literal(true).optional(),
     }),
     public: z.object({
       userId: z.uuid(),
       username: z.string(),
       homeSlot: z.number().int().min(0),
       heartSeed: HexSchema,
+      /** A computer patch-mate (#386) moved in. */
+      computer: z.literal(true).optional(),
     }),
   },
   /** A member named their home (#306 PR 0): its flag on the map shows it. */
@@ -517,6 +528,22 @@ export const GAME_EVENTS = {
       returnedSquishyIds: z.array(z.uuid()),
     }),
     public: z.object({ userId: z.uuid(), fromUserId: z.uuid().nullable(), ...coords }),
+  },
+  /**
+   * A computer patch-mate claimed a wild tile (#386c; shared-contract
+   * addition approved by the coordinator). No battle: it takes the land the
+   * way a won capture does, without the attempt log, so `tile.captured`'s
+   * consumers (lore, settle, tutorial) never fire for it. Every member's map
+   * shows the new owner; `computer` stays server-side (`MapMember.computer`).
+   */
+  'tile.claimed': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      ...coords,
+      terrain: z.string(),
+      computer: z.literal(true),
+    }),
+    public: z.object({ userId: z.uuid(), ...coords }),
   },
   /**
    * Land that misses you (owner decision 2026-10-06, design review Q2): at a
@@ -1523,6 +1550,26 @@ export const GAME_EVENTS = {
     public: z.object({ night: LocalDateSchema, closesAt: z.iso.datetime() }),
   },
   /**
+   * A mini-boss came stomping onto the patch (#190): its visit's `window`
+   * (the patch-local Monday of its week), its tile and when it leaves.
+   * Never the species, the schedule or the next boss (CLAUDE.md rule 6):
+   * the boss module keeps those in `boss_windows`, server-side.
+   */
+  'boss.appeared': {
+    internal: z.strictObject({
+      window: LocalDateSchema,
+      q: z.number().int(),
+      r: z.number().int(),
+      endsAt: z.iso.datetime(),
+    }),
+    public: z.object({
+      window: LocalDateSchema,
+      q: z.number().int(),
+      r: z.number().int(),
+      endsAt: z.iso.datetime(),
+    }),
+  },
+  /**
    * The Hollow Man took one of a player's squishies to the Hollow (#21). Only
    * its owner gets this live (`PUBLIC_VIEWS` override); others see
    * `hollow.nightfall`.
@@ -1640,6 +1687,26 @@ export const GAME_EVENTS = {
       items: z.record(z.string(), z.number().int().min(1)),
     }),
     public: z.object({ userId: z.uuid() }),
+  },
+  /**
+   * Something bought at a trading post's Shop (#729). Only the buyer hears it
+   * (`ownerOnlyView`), so their other device's Heart Coin pill and Shop tab
+   * catch up; nobody else sees a purchase.
+   */
+  'post.bought': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      purchaseId: z.uuid(),
+      itemId: PostShopItemIdSchema,
+      price: z.number().int().min(1),
+      balance: z.number().int().min(0),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      itemId: PostShopItemIdSchema,
+      price: z.number().int().min(1),
+      balance: z.number().int().min(0),
+    }),
   },
 } satisfies Record<string, GameEventSchemas>;
 

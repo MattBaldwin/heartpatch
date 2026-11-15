@@ -10,20 +10,28 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import {
   BASELINE_RULES,
+  BENCH_25_RULES,
   COLLECTOR_RULES,
   CURRENT_RULES,
   NO_FALLOFF_RULES,
   NO_TRAINING_RULES,
   PROGRESSION_CONFIG,
+  SOLO_MATES_RULES,
+  SOLO_RULES,
   UNCAPPED_BEFRIEND_RULES,
   WITH_EXPLORE_RULES,
+  WITH_FRIENDLIES_BENCH_25_RULES,
   WITH_FRIENDLIES_COLLECTOR_RULES,
+  WITH_BOSS_RULES,
   WITH_FRIENDLIES_RULES,
 } from './progression-config.js';
+import { bossGate, formatBossGate } from './progression-boss-report.js';
 import { JOURNEY_RULES } from '../../src/data/journeys.js';
 import {
   formatFriendlyGate,
+  formatSoloGate,
   friendlyGate,
+  soloGate,
   journeyGateMisses,
   renderProgression,
   summarise,
@@ -66,11 +74,24 @@ for (const rules of [
   // #732 D3: the collector befriend choice, after the existing rows.
   COLLECTOR_RULES,
   WITH_FRIENDLIES_COLLECTOR_RULES,
+  // #732 D1: the bench at 25 %, beside the shipped 50 % in `now`.
+  BENCH_25_RULES,
+  WITH_FRIENDLIES_BENCH_25_RULES,
+  // #190: mini-boss visits, beside `now` (the no-boss comparison).
+  WITH_BOSS_RULES,
 ]) {
   for (const seats of PROGRESSION_CONFIG.seats) {
     for (const kid of PROGRESSION_CONFIG.kids) {
       runs.push(runProgression(data, PROGRESSION_CONFIG, rules, kid, seats));
     }
+  }
+}
+// #386e: one kid alone, and alone with computer mates, on the first map size only.
+for (const rules of [SOLO_RULES, SOLO_MATES_RULES]) {
+  for (const kid of PROGRESSION_CONFIG.kids) {
+    runs.push(
+      runProgression(data, PROGRESSION_CONFIG, rules, kid, PROGRESSION_CONFIG.seats[0] ?? 4),
+    );
   }
 }
 const odds = wildOdds(data, PROGRESSION_CONFIG, [-2, -1, 0, 1], 200);
@@ -112,7 +133,8 @@ console.log(
 // Firsts (#736): the shipped rules and #728's friendlies variant, kid 0 of each run.
 const gate = PROGRESSION_CONFIG.firstsGate;
 for (const run of runs.filter(
-  (r) => r.rules === CURRENT_RULES || r.rules === WITH_FRIENDLIES_RULES,
+  (r) =>
+    r.rules === CURRENT_RULES || r.rules === WITH_FRIENDLIES_RULES || r.rules === WITH_BOSS_RULES,
 )) {
   const firsts = firstsOf(run.kids[0]?.days ?? [], facts);
   console.log(
@@ -132,6 +154,8 @@ for (const run of runs.filter(
 const tierRules = [
   CURRENT_RULES,
   WITH_FRIENDLIES_RULES,
+  BENCH_25_RULES,
+  WITH_FRIENDLIES_BENCH_25_RULES,
   COLLECTOR_RULES,
   WITH_FRIENDLIES_COLLECTOR_RULES,
 ];
@@ -141,7 +165,7 @@ for (const run of runs.filter((r) => tierRules.includes(r.rules))) {
       formatTierFirsts(tierFirstsOf(run.kids[0]?.days ?? [], facts), PROGRESSION_CONFIG.days),
   );
 }
-// TODO(#732 D1): exit non-zero on a FAIL once bench share lands; soft until then.
+// TODO(#732): exit non-zero on a FAIL once the owner makes it hard; soft in D1 (owner decision 2026-11-15).
 console.log(`  ${tierGateLine(runs, PROGRESSION_CONFIG, facts) ?? '#732 per-tier gate: not run'}`);
 // Friendlies and defences (#728): the engaged kid's day-14 level moves by at most 1.
 const friendly = friendlyGate(runs, PROGRESSION_CONFIG);
@@ -149,4 +173,22 @@ if (!friendly) throw new Error('the friendly gate needs the now and now + friend
 // Hard since 728b shipped the owner's friendly XP rule: a FAIL fails the run.
 console.log(`  ${formatFriendlyGate(friendly)}`);
 if (!friendly.passes) process.exitCode = 1;
+// Solo and computer mates (#386e): each kind within ±10 % of the friendlies pair on days 14 and 30.
+const solo = soloGate(runs, PROGRESSION_CONFIG);
+if (!solo) throw new Error('the solo gate needs the solo, solo + mates and now + friendlies runs');
+for (const row of solo) {
+  for (const d of row.days) {
+    console.log(
+      `  solo ${row.kid.padEnd(7)} day ${String(d.day)}: solo Lv ${String(d.solo)} (${String(d.soloPercent)} %), ` +
+        `solo + mates Lv ${String(d.mates)} (${String(d.matesPercent)} %), pair ${d.paired.join(' / ')}`,
+    );
+  }
+}
+console.log(`  ${formatSoloGate(solo)}`);
+if (!solo.every((r) => r.passes)) process.exitCode = 1;
+
+// #190: mini-boss firsts and the XP gate; soft (reports, never fails the run).
+const boss = bossGate(runs, PROGRESSION_CONFIG, facts);
+if (!boss) throw new Error('the boss gate needs the now and now + boss runs');
+for (const line of formatBossGate(boss, PROGRESSION_CONFIG.days)) console.log(`  ${line}`);
 console.log(`Report: ${reportPath}`);

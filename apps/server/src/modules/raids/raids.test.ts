@@ -308,6 +308,36 @@ describe.skipIf(!url)('raids (needs DATABASE_URL)', () => {
   });
 
   describe('the raid log', () => {
+    it('keeps a Computer friend challenger badged after it leaves the patch (#386)', async () => {
+      const server = await start();
+      const { kid, rival, mapId, attack } = await challenge(server);
+      const done = await playOut(server, kid, battleOf(await attack()));
+      // The challenger is a computer patch-mate when the raid is written.
+      await db.execute(
+        `update users set kind = 'computer', password_hash = null, birth_year = null where id = '${uuid(kid.id)}'`,
+      );
+      await runConsumer(db, consumer, mapId);
+      const [row] = await raidsOf(mapId);
+      expect(row).toMatchObject({ battleId: done.id, attackerComputer: true });
+
+      // It leaves the patch; the stored flag is the truth, not today's row
+      // (flipped back here only to prove the read doesn't re-derive it).
+      await db.execute(
+        `update map_members set status = 'removed' where map_id = '${uuid(mapId)}' and user_id = '${uuid(kid.id)}'`,
+      );
+      await db.execute(
+        `update users set kind = 'player', password_hash = 'not-a-hash', birth_year = 2014 where id = '${uuid(kid.id)}'`,
+      );
+      const seen = await report(server, rival, mapId);
+      expect(seen.raids).toEqual([
+        expect.objectContaining({
+          id: row!.id,
+          attackerName: kid.username,
+          attackerComputer: true,
+        }),
+      ]);
+    });
+
     it('logs a lost tile for the defender, with a replay that matches the recorded log (acceptance)', async () => {
       const server = await start();
       const { kid, rival, mapId, near, attack } = await challenge(server);
@@ -339,6 +369,7 @@ describe.skipIf(!url)('raids (needs DATABASE_URL)', () => {
           battleId: done.id,
           attackerUserId: kid.id,
           attackerName: kid.username,
+          attackerComputer: false,
           q: near.q,
           r: near.r,
           outcome: 'taken',

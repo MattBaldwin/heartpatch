@@ -54,6 +54,7 @@ const E2E_GROUPS = [
     'hollowed-explore',
     'hollowed-restore',
     'landscape-phone',
+    'post-shop',
     'recipe-book',
     'squishy-gallery',
     'tutorial-flow',
@@ -62,8 +63,10 @@ const E2E_GROUPS = [
   [
     'auth',
     'battle-ui',
+    'boss-battle',
     'capture',
     'care-layout',
+    'computer-friends',
     'hollowed-cellar',
     'house',
     'lobby',
@@ -83,6 +86,7 @@ const E2E_GROUPS = [
     'trade-split',
     'tray-layout',
     'wild-picker',
+    'boss-marker',
   ],
   // ~24.4 iPhone, ~24.2 iPad. A first attempt of trick-or-treat that times out adds a few more.
   [

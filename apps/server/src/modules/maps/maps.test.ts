@@ -869,7 +869,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
           Array.from({ length: MAP_MAX_PLAYERS }, (_, i) => i + 1),
         );
       }
-    });
+    }, 30_000); // 5 rounds of a full patch, each with DB and event checks; 2.8-4.4 s on a busy CI runner
 
     it('lets one approval through when the same request is approved twice at once', async () => {
       const server = await start();
