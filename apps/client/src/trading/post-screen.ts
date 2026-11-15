@@ -25,11 +25,7 @@ import { glimmerSwapApi, type GlimmerSwapApi } from './glimmer-swap-api.js';
 import { hoursToReset, SWAP_TEXT, swapCards, swapsLeft } from './glimmer-swap-model.js';
 import { postConfirm, postSheet } from './post-confirm.js';
 import { computerAvatar, computerBadge } from '../computer-mates/computer-badge.js';
-import {
-  COMPUTER_TEXT,
-  computerLabel,
-  isComputer,
-} from '../computer-mates/computer-mates-model.js';
+import { computerLabel, isComputer } from '../computer-mates/computer-mates-model.js';
 import { sellApi, type SellApi } from './sell-api.js';
 import { shopApi, type ShopApi } from './shop-api.js';
 import { buyRequest, receipt as shopReceipt, SHOP_TEXT } from './shop-model.js';
