@@ -1088,7 +1088,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           'data-testid': 'post-mate-switch',
           'aria-haspopup': 'true',
           'aria-expanded': menu === 'mates' ? 'true' : 'false',
-          'aria-label': `${name}. ${TRADE_TEXT.otherMate}`,
+          'aria-label': `${owner !== null ? labelOf(owner, name) : name}. ${TRADE_TEXT.otherMate}`,
         },
         face,
         who,
