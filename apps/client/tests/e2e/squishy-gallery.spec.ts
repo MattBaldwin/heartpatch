@@ -1,4 +1,10 @@
-import { BODIES, PartShapeSchema, SPECIES, SQUISHY_COSTUME_IDS } from '@heartpatch/shared';
+import {
+  GAME_DATA,
+  PartAccentMeshSchema,
+  PartShapeSchema,
+  SPECIES,
+  SQUISHY_COSTUME_IDS,
+} from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { draws, idle } from './dev-hook.js';
 
@@ -159,9 +165,15 @@ test('draw calls stay flat as squishies multiply (shared geometry, thin instance
   expect(twice.squishies).toBe(once.squishies * 2);
   expect(twice.meshes).toBe(once.meshes);
   // The gallery shows every body kind, so its ceiling is the registry's: one
-  // draw call per body kind and per part primitive, plus the contact
-  // shadows, never one per squishy (CLAUDE.md rule 8, ART_BIBLE appendix).
-  expect(twice.meshes).toBeLessThanOrEqual(BODIES.length + PartShapeSchema.options.length + 1);
+  // draw call per body kind (the boss kit's too, #234), per part primitive
+  // and per two-tone accent mesh, plus the contact shadows, never one per
+  // squishy (CLAUDE.md rule 8, ART_BIBLE appendix).
+  expect(twice.meshes).toBeLessThanOrEqual(
+    GAME_DATA.bodies.length +
+      PartShapeSchema.options.length +
+      PartAccentMeshSchema.options.length +
+      1,
+  );
   // Every piece of every squishy is a thin instance, and nothing else is: the
   // count is exactly what the squishies' own params call for. (Not exactly
   // twice: a scatter can leave out a crowded piece, per instance id.)

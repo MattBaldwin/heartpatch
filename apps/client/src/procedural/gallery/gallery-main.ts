@@ -22,7 +22,6 @@ import { accessoryItem } from '../accessory.js';
 import { paramsHash, squishyParams } from '../params.js';
 import type { SquishyField, SquishyHandle } from '../squishy-field.js';
 import type { KeeperField } from '../keeper/keeper-field.js';
-import { DRAFT_BODIES, DRAFT_PARTS, draftLooks } from './boss-drafts.js';
 import { buildGalleryScene } from './gallery-scene.js';
 import { galleryLooks } from './showcase.js';
 import '../../styles.css';
@@ -37,7 +36,7 @@ setPerfReports(false);
  * body and part; tap a squishy to jiggle it.
  *
  * Query flags: `?count=50` (stress test), `?look=showcase-3` (or a comma list), `?view=closeup`,
- * `?drafts` (the #234 mini-boss drafts), `?row` (one line), `?spacing=4`, `?keeper=pip` (a Keeper for scale),
+ * `?row` (one line), `?spacing=4`, `?keeper=pip` (a Keeper for scale),
  * `?yaw=180` (turn them round), `?pitch=15`, `?distance=14` and `?drop=3` (the camera, and how far below it the floor sits), `?still` (no breathing, so the scene goes
  * idle), `?shadow` (the rescue guardians' shadow look), `?accessory=tiny-crown,snuggle-scarf`
  * (wardrobe accessories, one per squishy in turn, #340), plus the main page's
@@ -59,16 +58,11 @@ const params = new URLSearchParams(window.location.search);
 const pinTier = isQualityTier(params.get('tier'));
 const tier = pickInitialTier(params.get('tier'), params.get('quality'));
 const view: SquishyView = params.get('view') === 'closeup' ? 'closeUp' : 'map';
-/** `?drafts` (#234): the mini-boss mockup looks and their draft bodies and parts. Never shipped. */
-const drafts = params.has('drafts');
-const registry = visualRegistry({
-  bodies: drafts ? [...GAME_DATA.bodies, ...DRAFT_BODIES] : GAME_DATA.bodies,
-  parts: drafts ? [...GAME_DATA.parts, ...DRAFT_PARTS] : GAME_DATA.parts,
-});
-const allLooks = [
-  ...(drafts ? draftLooks() : []),
-  ...galleryLooks(GAME_DATA.species, GAME_DATA.bodies, GAME_DATA.parts),
-];
+// `?drafts` is gone (#234 234b-1): the boss kit is public data now and the
+// species are server-only, so the gallery can't name them; 234b-3 brings
+// them back as `?bosses`, fetched from a dev-only server route.
+const registry = visualRegistry(GAME_DATA);
+const allLooks = galleryLooks(GAME_DATA.species, GAME_DATA.bodies, GAME_DATA.parts);
 /** `?keeper=pip` puts one Keeper at the end of the row, for scale (#234). */
 const keeperBase = KEEPER_DATA.bases.find((b) => b.id === params.get('keeper'));
 const lookParam = params.get('look');
