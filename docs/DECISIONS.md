@@ -2392,3 +2392,45 @@ This block supersedes the "Pending owner decisions" and "Pending merge" lists ab
 - **Boss rule change kept:** `rules.boss` hp ×3 → ×1.5, `actionsPerRound` 2 → 1, with the stat totals and sim results above.
 - **Boss defaults kept:** names, evolution at 30 then 50, moves redrafted to existing effect kinds.
 - **Enabling:** `HP_MINI_BOSSES=testers` on the owner's patch for the frame-time capture, then `on`.
+
+## Supervisor 42 (2026-11-16 ~05:30 → ~08:45 UTC)
+
+Merged: #841, #842, #845, #843, #846. Closed: #655 (parts A–E), #729 (729a–d). Open at handoff: #844 (owner SHIP-OK pending), #847 (CI). Lanes running: #234 PR 2 and PR 3.
+
+**Mini-boss engine (#234, big feature)**
+- **Four generic move effects** (#846, Fable plan at #234 comment 6909115859, Opus code, round 1 = Opus + Fable second reviewer): `windup` (charge this round, land next round), `flinch { chance }` (the target loses its action if it has not acted yet), `low-energy { extraPercent }` (power × (1 + extra × share of energy lost), integer maths, exactly base power at full energy), `assist { move }` (the user resolves the called move right after, with its own stats, no stance, no nesting). They are data any species' move may carry (rule 5); zod validates them; a shared `moveEffectProblems` check runs for public and secret moves.
+- **Additive shared contract** (coordinator pre-approved): `BattleSquishyViewSchema.windup?: { move, target? }` and four `BattleEventSchema` members (`windup`, `windup-lost`, `flinch`, `assist`). `BattleState.version` stays 1; `draftOf` never writes `windup: undefined`.
+- **A windup is not interruptible by damage** (coordinator ruling on the plan's open question 1). It is lost on a dizzy/sleepy skip, a flinch, a swap, a Heart Charm or a bare potion; a sip WITH the pending move keeps it. Picks must name the pending move in both formats (`BattleRuleError`, mapped to `CONFLICT` on the server); `legalChoices`/`teamPickOptions` list only that move. AI sides keep the count with no RNG draw.
+- **A boss that starts a count spends the round** under `actionsPerRound > 1` (plan deviation 4; inert at the shipped 1). A flinched boss loses only its first action.
+- **No new `BATTLE_RULES` key**: `replay-pre-190.test.ts` rebuilds the pre-#190 content hash from `BATTLE_RULES` minus `team`/`boss`, so a new top-level key would break it; the effects' tunables live on the effect.
+- **Determinism evidence:** both content hashes identical before and after (public `28aea29116d27d7b660e7e4849f3caf2`, server `782b4d05c6ee96c8554ba20b1775e53b`); the Fable reviewer's differential check (72 scenarios / 940 turns on `main` and the branch) was byte-identical; Opus fuzzed 1,500 random 1-v-1 battles plus every boss sim cell with identical state hashes. Deploying PR 1 alone ends no battle no-contest.
+- **Leak guard:** `extraPercent` and `move` are public rule data (like `power`, `accuracy`, heal `percent`); `chance` stays the only odds key; no allowlist change. A kid who met Papa Brrr but not Mommentum will receive the `mama-bear-charge` def once PR 2 ships (species names/ids stay hidden): accepted as a flavour hint.
+- **Ask Your Mother assists `mama-bear-charge`** (coordinator ruling on open question 2; the `pnpm sim:boss` gates decide in PR 2). PR 2 must carry the `defsFor` one-hop so an assist's move def reaches the client (else "Mystery move").
+- **PR split:** PR 1 shared engine (#846, merged `d7d4501`); PR 2 boss data redraft + sims (lane running); PR 3 client cues and copy (lane running; `changes/234-boss-moves.md` lands there).
+
+**Boss follow-ups chore (#841)**
+- One `HexColorSchema` in `schemas/data/common.ts` (imports only zod, no cycle) replaces the inline regexes in `visuals.ts` and `crooked-house.ts`; accepted strings identical (`common.test.ts`). The DECISIONS "`PartSchema.accent`" bullet's "regex inline in `visuals.ts`" is superseded.
+- `bossLooksReply.parse` validates `rarity` with `RaritySchema`; `boss-stub.ts` throws when `BATTLE_RULES.boss` is missing; the "Stomps twice" chip is a pure rule-driven `stompsChip()` with tests at 1 and 2 actions.
+
+**Post shop 729b (#843)**
+- **Night supplies** 80 💛 `{ kind: 'fuel-all', nights: 3 }`, cap `{ count: 1, per: 'week' }`; **Fence patch kit** 50 💛 `{ kind: 'repair-fences' }`, cap `{ count: 1, per: 'day' }`; all `// TUNE:`. Additive contract: two `PostShopEffectSchema` kinds, two item ids, two `ShopGotSchema` members.
+- "1 per Long Night" is the existing rolling 7-patch-day `week` cap (coordinator ruling; no new cap kind). A buy that would change nothing is refused before any coins move ("No fires to stock yet 🔥", "Your fires are all stocked up! 🔥", "No fences to fix yet 🪵", "Your fences are all fine! 🪵"); a partial result is charged in full. The kit mends only fences the buyer owns on tiles they still hold and writes `fence.repaired` with `cost: {}`. Lock order: fires (8) or fence tiles (6) then segments (8), then bag (11), balance (12b), cap check, no-op check, spend, purchase row, effect, events (`building.fueled`/`fence.repaired` before `post.bought`), `maps` last; TECH_SPEC §7 updated.
+- Helper extraction: `lockMyFires`/`fuelFires` (buildings) and `mendFence`/`lockMyWornFences` (fences); the `fuel-all` and `repair` routes are byte-for-byte unchanged in their events.
+- #729 is complete and closed.
+
+**Milestones (#732 B2, PR #844, pending owner SHIP-OK)**
+- New track `commons` ("Every Common"): `squishy.captured` with `distinct: 'speciesId'`, restricted to `EVERYDAY_COMMON_SPECIES`, the **15 all-year common BASE forms** (only base forms spawn wild; counting kid forms would make the track unreachable). One tier, 75 coins (`// TUNE:`), title "Everyday Friend" (`// TUNE:`), reward `patchwork-pal-scarf` (top slot, rare, milestone-only, not tradable).
+- Next-up ranks by progress share, so a 0-of-15 track does not crowd out nearer goals; ties at 0% go to the bigger prize (a brand-new account sees this 75-coin goal first). Left as is.
+- Render-check round 1 was FIX (yellow collar blended into the yellow top; tails read as a badge); round 2 PASS after a deep-berry wrap with a knot and two long tails. The scarf's clothing data lives in `clothing.ts`; any new Keeper item must be added to `addedSince` in `keeper-params.test.ts`.
+
+**Selling (#655)**: part E (#842) removed the legacy one-line sell request; a legacy body gets the standard 400 `VALIDATION_FAILED` and moves nothing. #655 closed.
+
+**Buildings guide (#715, #845)**: a 24px CSS-mask edge fade on the chip row driven by `data-fade-left/right`; `scroll-padding-inline` uses the same variable so a picked chip slides clear of the fade; a blocked seasonal card shows the Build sheet's reason ahead of "Back next…". The shared `ECONOMY` const stays duplicated (no shared export; follow-up). Still open on #715: "Your tile" line, "Show me" highlight, per-level detail, unlock labels.
+
+**CI and process**
+- **New flake class, root-caused (#847 fixes it):** `hollowed-restore.spec.ts` flags poll empty after naming a village. Sprout's first-time tray hint is a `role="dialog"` card that opens on every map open for a new account; any open dialog hides map flags under it (`OVER_MAP` includes `SHEET_SELECTOR`), so a randomly placed village under the hint box has no visible flag for the whole wait. Reproduced 5 of 28 runs on `main`; the fix dismisses `tray-hint-ok` after `data-ready` (local 10/10). Not a #784 tap-stall; it also explains #797's one-off. `ECONNRESET` noise in those logs is Vite's websocket proxy teardown, unrelated.
+- **#784 tally this shift: +6** (#842: auth.spec tap timeout, far-hollow-house `Test ended`, a 55-minute cancel; #845: first-session + roads tap-stalls; #846: roads `Test ended`; #844: a 55-minute cancel, pending merge). The `check` aggregator red only from accepted reds does not block.
+- **Artifact publish refusals:** two Sonnet lanes had their captures Artifact publish refused by the auto-mode classifier (B2 v1, #715); a third Sonnet lane published fine. When a lane reports a refusal, the coordinator reproduces the captures with an Opus agent on a worktree (done for #845) or starts a fresh lane; never merge visual work without a render-check.
+- **Lane context:** several lanes overran the 150k cap before handing off (729b 238k, engine PR 1 274k); the handoffs were clean. Briefs now carry an explicit CONTEXT BUDGET line; the supervisor checks `get_session` every sweep.
+
+**Owner decisions (2026-11-16)**: none received this shift. Pending: #844 SHIP-OK; boss enable (`testers` first, recommended).
