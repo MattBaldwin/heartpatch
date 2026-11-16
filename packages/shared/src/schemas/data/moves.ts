@@ -33,6 +33,31 @@ export const MoveEffectSchema = z.discriminatedUnion('type', [
     status: z.enum(['dizzy', 'sleepy']),
     chance: z.number().int().min(1).max(100),
   }),
+  /**
+   * The move takes a round to wind up (#234): this round it only announces
+   * itself, next round it lands as a fresh use of the move. Being hit never
+   * spoils it; losing the action (dizzy, sleepy, a flinch), a swap, a Heart
+   * Charm or a bare potion does.
+   */
+  z.strictObject({ type: z.literal('windup') }),
+  /**
+   * On a hit, `chance`% that the target flinches (#234): if it hasn't acted
+   * yet this round, it loses its action.
+   */
+  z.strictObject({ type: z.literal('flinch'), chance: z.number().int().min(1).max(100) }),
+  /**
+   * Hits harder the lower the user's energy (#234): power × (1 +
+   * `extraPercent`% × the share of energy lost), rounded down.
+   */
+  z.strictObject({
+    type: z.literal('low-energy'),
+    extraPercent: z.number().int().min(1).max(300),
+  }),
+  /**
+   * The user calls in a friend (#234): `move` is resolved right after, by
+   * the same user, on the same targets. No new squishy and no new state.
+   */
+  z.strictObject({ type: z.literal('assist'), move: ContentIdSchema }),
 ]);
 export type MoveEffect = z.infer<typeof MoveEffectSchema>;
 
@@ -69,3 +94,35 @@ export const MoveSchema = z.strictObject({
   targets: MoveTargetsSchema.optional(),
 });
 export type Move = z.infer<typeof MoveSchema>;
+
+/** The effect types a move may carry at most once each, and that need extra checks (#234). */
+const ONCE_EACH = ['windup', 'flinch', 'low-energy', 'assist'] as const;
+
+/**
+ * What's wrong with `move`'s #234 effects, given every move it may call in
+ * (public + secret on the server): each of windup, flinch, low-energy and
+ * assist at most once; low-energy and windup need power; an assist must call
+ * in a known move that doesn't itself assist or wind up. Empty when fine.
+ */
+export function moveEffectProblems(move: Move, moves: ReadonlyMap<string, Move>): string[] {
+  const problems: string[] = [];
+  const effects = move.effects ?? [];
+  for (const type of ONCE_EACH) {
+    if (effects.filter((e) => e.type === type).length > 1) {
+      problems.push(`"${type}" is listed more than once`);
+    }
+  }
+  for (const effect of effects) {
+    if ((effect.type === 'low-energy' || effect.type === 'windup') && move.power === 0) {
+      problems.push(`a "${effect.type}" move needs power`);
+    }
+    if (effect.type !== 'assist') continue;
+    const called = moves.get(effect.move);
+    if (!called) {
+      problems.push(`assist calls in unknown move "${effect.move}"`);
+    } else if ((called.effects ?? []).some((e) => e.type === 'assist' || e.type === 'windup')) {
+      problems.push(`assist can't call in "${effect.move}": it assists or winds up itself`);
+    }
+  }
+  return problems;
+}

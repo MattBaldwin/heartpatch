@@ -60,6 +60,12 @@ export interface BattleSquishy {
    * up to `rules.boss.actionsPerRound` times a round and picks its targets.
    */
   readonly boss?: true;
+  /**
+   * A move it is winding up (#234), landing on its next action: `move` is
+   * the move's id, `target` the foe slot it aims at in a team battle. Left
+   * out when it has none, so battles before #234 keep their bytes.
+   */
+  readonly windup?: { readonly move: string; readonly target?: number };
 }
 
 /** The stats a potion can boost (#214). */
@@ -173,6 +179,14 @@ export type BattleEvent =
    * (#279); the battle ends if nobody is left on its side.
    */
   | (At & { readonly type: 'capture'; readonly caught: boolean })
+  /** The squishy at `side`/`slot` started winding up `move` (#234); it lands on its next action. */
+  | (At & { readonly type: 'windup'; readonly move: string })
+  /** The squishy at `side`/`slot` lost its count (#234): `move` won't land. */
+  | (At & { readonly type: 'windup-lost'; readonly move: string })
+  /** The squishy at `side`/`slot` flinched (#234): it loses its action this round. */
+  | (At & { readonly type: 'flinch' })
+  /** The squishy at `side`/`slot` called in a friend's `move` (#234); that move follows. */
+  | (At & { readonly type: 'assist'; readonly move: string })
   | { readonly turn: number; readonly type: 'forfeit'; readonly side: BattleSideId }
   | {
       readonly turn: number;

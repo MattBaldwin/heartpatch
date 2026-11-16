@@ -122,6 +122,52 @@ describe('checkGameData', () => {
     ]);
   });
 
+  it('accepts the four #234 effects on a public move', () => {
+    const problems = problemsAfter((d) => {
+      const base = d.moves[0]!;
+      d.moves.push(
+        { ...base, id: 'fixture-countdown', power: 120, effects: [{ type: 'windup' }] },
+        { ...base, id: 'fixture-shout', power: 0, effects: [{ type: 'flinch', chance: 30 }] },
+        { ...base, id: 'fixture-last-stand', effects: [{ type: 'low-energy', extraPercent: 100 }] },
+        { ...base, id: 'fixture-backup', power: 0, effects: [{ type: 'assist', move: base.id }] },
+      );
+    });
+    expect(problems).toEqual([]);
+  });
+
+  it('refuses an assist to an unknown move, a nested assist or windup, and low-energy on a 0-power move', () => {
+    const problems = problemsAfter((d) => {
+      const base = d.moves[0]!;
+      d.moves.push(
+        { ...base, id: 'fixture-wind', effects: [{ type: 'windup' }] },
+        { ...base, id: 'fixture-call', power: 0, effects: [{ type: 'assist', move: 'nobody' }] },
+        { ...base, id: 'fixture-call-call', effects: [{ type: 'assist', move: 'fixture-call' }] },
+        { ...base, id: 'fixture-call-wind', effects: [{ type: 'assist', move: 'fixture-wind' }] },
+        {
+          ...base,
+          id: 'fixture-tired',
+          power: 0,
+          effects: [{ type: 'low-energy', extraPercent: 50 }],
+        },
+        {
+          ...base,
+          id: 'fixture-twice',
+          effects: [
+            { type: 'flinch', chance: 10 },
+            { type: 'flinch', chance: 20 },
+          ],
+        },
+      );
+    });
+    expect(problems).toEqual([
+      'moves["fixture-call"].effects: assist calls in unknown move "nobody"',
+      'moves["fixture-call-call"].effects: assist can\'t call in "fixture-call": it assists or winds up itself',
+      'moves["fixture-call-wind"].effects: assist can\'t call in "fixture-wind": it assists or winds up itself',
+      'moves["fixture-tired"].effects: a "low-energy" move needs power',
+      'moves["fixture-twice"].effects: "flinch" is listed more than once',
+    ]);
+  });
+
   it('reports evolutions into unknown species or into itself', () => {
     const problems = problemsAfter((d) => {
       d.species[0]!.evolutions = [

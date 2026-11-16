@@ -5,6 +5,7 @@ import {
   patchActive,
   squishy,
 } from '../../tests/fixtures/battle.js';
+import { FIXTURE_EFFECT_CONTENT } from '../../tests/fixtures/team-battle.js';
 import { LIVE_BATTLE_RULES } from '../data/live-battles.js';
 import type { BattleAction } from '../schemas/battle.js';
 import { LiveBattleRulesSchema } from '../schemas/data/live-battles.js';
@@ -119,6 +120,27 @@ describe('live turns (#29)', () => {
     const action = coverReplacement(content, state, 'b', 'balanced', SEED);
     expect(action).toEqual({ type: 'replace', side: 'b', slot: 1 });
     expect(applyBattleAction(content, state, action).phase).toEqual({ type: 'turn' });
+  });
+
+  it('covers a winding-up side with its pending move (#234)', () => {
+    const state = startBattle(
+      FIXTURE_EFFECT_CONTENT,
+      battleSetup(
+        SEED,
+        { squishies: [squishy('fixture-counterbun')] },
+        { squishies: [squishy('fixture-bonkbun')] },
+      ),
+    );
+    const winding = patchActive(state, 'b', {
+      moves: ['fixture-bonk', 'fixture-countdown'],
+      windup: { move: 'fixture-countdown' },
+    });
+    for (const policy of ['wild', 'aggressive', 'balanced'] as const) {
+      expect(coverChoice(FIXTURE_EFFECT_CONTENT, winding, 'b', policy, SEED)).toEqual({
+        type: 'move',
+        move: 'fixture-countdown',
+      });
+    }
   });
 
   it('refuses to cover a side with nothing to do', () => {

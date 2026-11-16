@@ -7,6 +7,14 @@ import {
   squishy,
   FIXTURE_BATTLE_RULES,
 } from '../../tests/fixtures/battle.js';
+import {
+  FIXTURE_BACKUP,
+  FIXTURE_BONK,
+  FIXTURE_COUNTDOWN,
+  FIXTURE_EFFECT_CONTENT,
+  FIXTURE_SHOUT,
+  sturdy,
+} from '../../tests/fixtures/team-battle.js';
 import { Rng } from '../rng/index.js';
 import type { BattleChoice, BattleSquishySetup } from '../schemas/battle.js';
 import type { BattleAiPolicy } from '../schemas/data/battle.js';
@@ -165,5 +173,58 @@ describe('scoreMove', () => {
   it('scales by accuracy', () => {
     const shaky = { ...dance, accuracy: 50 };
     expect(scoreMove(content, policy, shaky, user, target)).toBeCloseTo(policy.status / 2);
+  });
+});
+
+describe('the AI and the #234 move effects', () => {
+  const effects = FIXTURE_EFFECT_CONTENT;
+  const policy = effects.rules.ai.balanced;
+  const duel = startBattle(
+    effects,
+    battleSetup(
+      'effects',
+      { squishies: [squishy('fixture-counterbun', { stats: sturdy(50) })] },
+      { squishies: [squishy('fixture-shoutbun', { stats: sturdy(50) })] },
+    ),
+  );
+  const me = duel.sides.a.squishies[0]!;
+  const foe = duel.sides.b.squishies[0]!;
+  const fast = { ...me, stats: { ...me.stats, speed: 90 } };
+  const slow = { ...me, stats: { ...me.stats, speed: 10 } };
+  const plain = (move: Move): Move => ({ ...move, effects: [] });
+
+  it('values a flinch only when it moves first', () => {
+    const base = scoreMove(effects, policy, plain(FIXTURE_SHOUT), me, foe);
+    const bonus = policy.status; // chance 100 × the status weight
+    expect(scoreMove(effects, policy, FIXTURE_SHOUT, fast, foe)).toBeCloseTo(base + bonus, 10);
+    expect(scoreMove(effects, policy, FIXTURE_SHOUT, me, foe)).toBeCloseTo(base + bonus / 2, 10);
+    expect(scoreMove(effects, policy, FIXTURE_SHOUT, slow, foe)).toBe(base);
+  });
+
+  it('discounts a windup by the foe’s threat and stops counting when nearly out', () => {
+    const now = scoreMove(effects, policy, plain(FIXTURE_COUNTDOWN), me, foe);
+    const later = scoreMove(effects, policy, FIXTURE_COUNTDOWN, me, foe);
+    expect(later).toBeGreaterThan(0);
+    expect(later).toBeLessThan(now);
+    const nearlyOut = { ...me, energy: 1 };
+    expect(scoreMove(effects, policy, FIXTURE_COUNTDOWN, nearlyOut, foe)).toBe(0);
+  });
+
+  it('scores an assist’s move as its own', () => {
+    const callOnly: Move = { ...FIXTURE_BACKUP, effects: [FIXTURE_BACKUP.effects![0]!] };
+    expect(scoreMove(effects, policy, callOnly, me, foe)).toBe(
+      scoreMove(effects, policy, FIXTURE_BONK, me, foe),
+    );
+  });
+
+  it('picks the pending windup move without a draw', () => {
+    const winding = patchActive(duel, 'a', { windup: { move: FIXTURE_COUNTDOWN.id } });
+    const rng = Rng.fromSeed('no-draw');
+    const before = rng.state();
+    expect(chooseAiChoice(effects, winding, 'a', 'balanced', rng)).toEqual({
+      type: 'move',
+      move: FIXTURE_COUNTDOWN.id,
+    });
+    expect(rng.state()).toEqual(before);
   });
 });

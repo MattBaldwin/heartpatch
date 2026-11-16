@@ -256,6 +256,8 @@ export const BattleSquishyViewSchema = z.object({
   befriended: z.literal(true).optional(),
   /** A mini-boss (#190). */
   boss: z.literal(true).optional(),
+  /** A move it is winding up (#234), landing on its next action; `target` in a team battle. */
+  windup: z.object({ move: ContentIdSchema, target: SlotSchema.optional() }).optional(),
   /**
    * The wardrobe accessory it wears (#373), for drawing only. The server adds
    * it when it builds a player's view (read through ownership, like the care
@@ -342,6 +344,11 @@ export const BattleEventSchema = z.discriminatedUnion('type', [
   z.object({ ...at, type: z.literal('tuckered-out') }),
   z.object({ ...at, type: z.literal('item'), item: ContentIdSchema }),
   z.object({ ...at, type: z.literal('capture'), caught: z.boolean() }),
+  // Move effects (#234).
+  z.object({ ...at, type: z.literal('windup'), move: ContentIdSchema }),
+  z.object({ ...at, type: z.literal('windup-lost'), move: ContentIdSchema }),
+  z.object({ ...at, type: z.literal('flinch') }),
+  z.object({ ...at, type: z.literal('assist'), move: ContentIdSchema }),
   z.object({ turn: at.turn, type: z.literal('forfeit'), side: BattleSideIdSchema }),
   z.object({
     turn: at.turn,

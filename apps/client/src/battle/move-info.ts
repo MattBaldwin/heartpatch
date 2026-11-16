@@ -138,6 +138,18 @@ function effectSentence(effect: MoveEffect): string {
       const line = `${who.charAt(0).toUpperCase()}${who.slice(1)} ${STAT_WORDS[effect.stat]} goes ${stagesWord(effect.stages)}${way}.`;
       return effect.chance >= 100 ? line : `${String(effect.chance)}% chance: ${line}`;
     }
+    // #234 effects: the minimal sentences so this switch stays exhaustive;
+    // PR 3 polishes them (and names the assist's move).
+    case 'windup':
+      return 'Takes a round to wind up, then hits next round.';
+    case 'flinch':
+      return effect.chance >= 100
+        ? 'They flinch and skip their move this round.'
+        : `${String(effect.chance)}% chance they flinch and skip their move this round.`;
+    case 'low-energy':
+      return `Hits harder the lower your energy: up to ${String(effect.extraPercent)}% harder.`;
+    case 'assist':
+      return 'Calls in a friend to help!';
   }
 }
 

@@ -7,7 +7,7 @@ import type {
 } from '../schemas/data/battle.js';
 import type { Move } from '../schemas/data/moves.js';
 import { getMove, moveKindOf, type BattleContent } from './content.js';
-import { expectedDamage, matchupMultiplier } from './formulas.js';
+import { effectiveStat, expectedDamage, matchupMultiplier } from './formulas.js';
 import {
   activeSquishy,
   benchOf,
@@ -115,7 +115,29 @@ export function scoreMove(
       case 'status':
         if (target.status === null) score += (policy.status * effect.chance) / 100;
         break;
+      case 'flinch': {
+        // #234: a flinch only bites if the user moves first, so it's worth
+        // the `status` weight × chance × (1 if faster, ½ on a tie, else 0).
+        const mine = effectiveStat(user, 'speed', content.rules);
+        const theirs = effectiveStat(target, 'speed', content.rules);
+        const first = mine > theirs ? 1 : mine === theirs ? 0.5 : 0;
+        score += (policy.status * effect.chance * first) / 100;
+        break;
+      }
+      case 'assist':
+        // #234: the called-in move is worth what it would score on its own
+        // (one hop: the data check refuses nested assists).
+        score += scoreMove(content, policy, getMove(content, effect.move), user, target);
+        break;
+      case 'low-energy': // Already in `expectedDamage` (`movePower`).
+      case 'windup': // Discounted below.
+        break;
     }
+  }
+  // #234: a windup's value comes a round late, so it's discounted by the
+  // foe's best hit share into the user meanwhile (the stance's "threat").
+  if (move.effects?.some((e) => e.type === 'windup')) {
+    score *= Math.max(0, 1 - bestDamageShare(content, target, user));
   }
   const stance = policyId ? stanceScore(content, policyId, move, user, target) : 0;
   return score * lands + stance;
@@ -140,6 +162,8 @@ export function chooseAiChoice(
 ): BattleChoice {
   const policy = content.rules.ai[policyId];
   const user = activeSquishy(state, side);
+  // Winding up (#234): the pending move is the only pick, so no draw.
+  if (user.windup) return { type: 'move', move: user.windup.move };
   const target = activeSquishy(state, otherSide(side));
 
   const options: Option<BattleChoice>[] = user.moves.map((id) => ({
@@ -196,12 +220,19 @@ export function standingOut(
   });
 }
 
-/** Does `move` aim at foes (damage, or a status or stat drop on the foe)? */
-function aimsAtFoe(move: Move): boolean {
+/**
+ * Does `move` aim at foes (damage, or a status, flinch or stat drop on the
+ * foe, or an assist whose move does, #234)?
+ */
+function aimsAtFoe(content: BattleContent, move: Move): boolean {
   return (
     move.power > 0 ||
     (move.effects ?? []).some(
-      (e) => e.type === 'status' || (e.type === 'stat' && e.target === 'opponent'),
+      (e) =>
+        e.type === 'status' ||
+        e.type === 'flinch' ||
+        (e.type === 'stat' && e.target === 'opponent') ||
+        (e.type === 'assist' && aimsAtFoe(content, getMove(content, e.move))),
     )
   );
 }
@@ -296,7 +327,7 @@ export function chooseTeamMove(
   }));
   const move = getMove(content, rng.weighted(options).value);
   if (move.targets === 'all-foes') return { move: move.id, targets: foes.map((f) => f.slot) };
-  if (!aimsAtFoe(move)) return { move: move.id, targets: [first.slot] };
+  if (!aimsAtFoe(content, move)) return { move: move.id, targets: [first.slot] };
   return {
     move: move.id,
     targets: [chooseTarget(content, move, user, foes, alreadyHit, rng)],

@@ -69,6 +69,11 @@ export interface PlaybackStep {
   readonly shielded: boolean;
   /** For a steady or big move (#587): the stance its user takes, until the next hit. */
   readonly stance: 'guard' | 'open' | null;
+  /**
+   * A `windup` step (#234): its squishy started winding up a move that lands
+   * next round. Optional so steps built elsewhere needn't say false.
+   */
+  readonly windup?: boolean;
   readonly ms: number;
 }
 
@@ -91,6 +96,22 @@ export const STANCE_WORDS = {
   /** A gentle move that did nothing: say what will. */
   whisker: (who: string) => `${who} is holding on by a whisker! Try a Big move or a Heart Charm.`,
   gentleCallout: 'So gentle!',
+} as const;
+
+/** What the log says about the #234 move effects, style guide §3. */
+export const EFFECT_WORDS = {
+  windup: (who: string, move: string) => `${who} is winding up ${move}… watch out next round!`,
+  windupCallout: 'Winding up!',
+  /** Callout on the `move` step when that squishy's windup lands. */
+  windupLanding: 'Here it comes!',
+  windupLost: (who: string) => `${who} lost count! Phew.`,
+  flinch: (who: string) => `${who} flinched! No move this round.`,
+  flinchCallout: 'Flinched!',
+  /** Callout on a low-energy move when its user is at half energy or less. */
+  firedUp: 'Fired up! 🔥',
+  assist: (who: string) => `${who} called for backup! 📣`,
+  /** The `move` step right after an `assist` for the same squishy. */
+  backup: (move: string) => `Backup! ${move}!`,
 } as const;
 
 export function shownFrom(battle: PlayerBattle): ShownState {
@@ -148,6 +169,7 @@ function step(
       | 'item'
       | 'shielded'
       | 'stance'
+      | 'windup'
     >
   > = {},
 ): PlaybackStep {
@@ -167,6 +189,7 @@ function step(
     item: extra.item ?? null,
     shielded: extra.shielded ?? false,
     stance: extra.stance ?? null,
+    windup: extra.windup ?? false,
   };
 }
 
@@ -348,6 +371,42 @@ export function playbackSteps(
           `${name(event.side, event.slot)} ${STATUS_WORDS[event.status].end}`,
           PLAYBACK.effectMs,
           { squish: 'bounce' },
+        );
+      case 'windup':
+        return step(
+          'effect',
+          event.side,
+          event.slot,
+          EFFECT_WORDS.windup(name(event.side, event.slot), content.moveName(event.move)),
+          PLAYBACK.effectMs,
+          { squish: 'jiggle', callout: EFFECT_WORDS.windupCallout, move: event.move, windup: true },
+        );
+      case 'windup-lost':
+        return step(
+          'effect',
+          event.side,
+          event.slot,
+          EFFECT_WORDS.windupLost(name(event.side, event.slot)),
+          PLAYBACK.effectMs,
+          { move: event.move },
+        );
+      case 'flinch':
+        return step(
+          'effect',
+          event.side,
+          event.slot,
+          EFFECT_WORDS.flinch(name(event.side, event.slot)),
+          PLAYBACK.effectMs,
+          { squish: 'wobble', callout: EFFECT_WORDS.flinchCallout },
+        );
+      case 'assist':
+        return step(
+          'effect',
+          event.side,
+          event.slot,
+          EFFECT_WORDS.assist(name(event.side, event.slot)),
+          PLAYBACK.effectMs,
+          { squish: 'bounce', move: event.move },
         );
       case 'tuckered-out':
         return step(
