@@ -763,6 +763,9 @@ describe.skipIf(!url)('the mini-boss switch over the real bag (#234, needs DATAB
     await h.close();
 
     await h.start(REAL_BAG_RULES, { devTools: true });
+    // Signed in, as every dev route.
+    const stranger = { ...kid, token: 'not-a-session' };
+    expect((await h.call('GET', '/dev/boss-looks', stranger)).statusCode).toBe(401);
     const res = await h.call('GET', '/dev/boss-looks', kid);
     expect(res.statusCode, res.body).toBe(200);
     const { looks } = BossLooksResponseSchema.parse(res.json());

@@ -109,11 +109,17 @@ export const bossRoutes =
     );
 
     // The dev gallery's mini-boss looks (#234, `?bosses`): the client can't
-    // import server data, so it fetches them. No session needed (the gallery
-    // is its own page); it only exists with dev tools, never in production.
+    // import server data, so it fetches them. Signed in and rate-limited like
+    // every dev route (the gallery capture logs in first); it only exists
+    // with dev tools, never in production.
     if (options.devTools) {
-      app.get('/dev/boss-looks', { schema: { response: { 200: BossLooksResponseSchema } } }, () =>
-        bossLooks(),
+      app.get(
+        '/dev/boss-looks',
+        {
+          schema: { response: { 200: BossLooksResponseSchema } },
+          preHandler: [requireAuth, rateLimit('dev')],
+        },
+        () => bossLooks(),
       );
     }
 

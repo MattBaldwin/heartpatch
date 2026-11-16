@@ -119,7 +119,8 @@ const mapColumns = {
   longNightWeekday: maps.longNightWeekday,
   ownerUsername: users.username,
 };
-// The owner's seat (at most one per map, `map_members_one_owner_key`).
+// The owner's seat (at most one per map, `map_members_one_owner_key`). Its
+// `status` is ignored on purpose: the switch follows who owns the patch.
 const ownerSeat = and(eq(mapMembers.mapId, maps.id), eq(mapMembers.role, 'owner'));
 
 const withSeed = (
