@@ -100,15 +100,16 @@ export interface PatchEconomyConfig {
 /**
  * The Post shop as a week of buying (#729 plan §8): a day cap is `count`
  * a day for `weekDays` days, a week cap is `count` (rolling 7 patch days).
- * Night supplies (729b) are once per Long Night, not weekly: leave them out
- * when they ship.
+ * Night supplies and the Fence patch kit (729b) count at their caps like the
+ * rest ("1 per Long Night" is the rolling week cap, 729b ruling), though a
+ * kid needs fires or a worn fence to use them.
  */
 export function shopWeek(
   shop: PostShop,
   weekDays: number,
 ): { id: string; price: number; perWeek: number }[] {
-  // Exhaustive on purpose: a new cap kind (729b's `long-night`) fails to
-  // compile here until it is counted or left out.
+  // Exhaustive on purpose: a new cap kind fails to compile here until it
+  // is counted or left out.
   return shop.map((item) => {
     switch (item.cap.per) {
       case 'day':

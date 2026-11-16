@@ -23,6 +23,8 @@ export const SHOP_ITEMS: Record<
     readonly line: string;
     /** Added after "Need 💛 N more" when the card is too dear. */
     readonly poorHint?: string;
+    /** A plural name takes no "a" in the confirm ("Buy Night supplies for 💛 80?"). */
+    readonly plural?: boolean;
   }
 > = {
   'rare-lure': {
@@ -40,6 +42,17 @@ export const SHOP_ITEMS: Record<
     icon: '📦',
     name: 'Potion crate',
     line: 'Brave Brew, Cozy Cocoa and Hearty Soup.',
+  },
+  'night-supplies': {
+    icon: '🔥',
+    name: 'Night supplies',
+    plural: true,
+    line: 'Three cozy nights of fuel for every fire you own!',
+  },
+  'fence-patch-kit': {
+    icon: '🪵',
+    name: 'Fence patch kit',
+    line: 'Fixes up every one of your fences, good as new!',
   },
 };
 
@@ -63,12 +76,20 @@ export const SHOP_TEXT = {
   lureReady: 'Got it! Your lure is ready ✨',
   lureReadyLine: 'Tap Find a squishy to go looking.',
   got: 'Got it! ✨',
+  firesStocked: 'Fires stocked! 🔥',
+  /** "3 nights of fuel across 2 fires". */
+  firesLine: (nights: number, fires: number) =>
+    `${String(nights)} ${nights === 1 ? 'night' : 'nights'} of fuel across ${String(fires)} ${fires === 1 ? 'fire' : 'fires'}`,
+  fencesMended: 'Fences fixed! 🪵',
+  /** "4 fences good as new". */
+  fencesLine: (n: number) => `${String(n)} ${n === 1 ? 'fence' : 'fences'} good as new`,
   needMore: (n: number) => `Need 💛 ${String(n)} more`,
   capLabel: (count: number, per: 'day' | 'week') => `${String(count)} a ${per}`,
   /** "Two a week is plenty! Next one in 3 days". */
   weekFull: (count: number, days: number) =>
     `${WORDS[count] ?? String(count)} a week is plenty! Next one in ${String(days)} ${days === 1 ? 'day' : 'days'}`,
-  confirmTitle: (name: string, price: number) => `Buy ${aOrAn(name)} for 💛 ${String(price)}?`,
+  confirmTitle: (name: string, price: number, plural = false) =>
+    `Buy ${plural ? name : aOrAn(name)} for 💛 ${String(price)}?`,
   after: (coins: number) => `You'll have 💛 ${String(coins)} after.`,
   price: (n: number) => `💛 ${String(n)}`,
 } as const;
@@ -83,6 +104,7 @@ export interface ShopCard {
   readonly icon: string;
   readonly name: string;
   readonly line: string;
+  readonly plural?: boolean;
   readonly cap: string;
   readonly price: number;
   /** Cream card: capped or held (the price stays visible, Buy greyed). */
@@ -168,7 +190,7 @@ export const buyRequest = (id: PostShopItemId, at: { q: number; r: number }): Bu
 /** What the confirm sheet says about one card. */
 export function confirmContent(card: ShopCard, balance: number) {
   return {
-    title: SHOP_TEXT.confirmTitle(card.name, card.price),
+    title: SHOP_TEXT.confirmTitle(card.name, card.price, card.plural),
     rows: [{ icon: card.icon, text: card.name, right: SHOP_TEXT.price(card.price) }],
     line: card.line,
     after: SHOP_TEXT.after(Math.max(0, balance - card.price)),
@@ -177,10 +199,17 @@ export function confirmContent(card: ShopCard, balance: number) {
 
 /** The green receipt card after a buy. */
 export function receipt(res: BuyResponse): { title: string; line: string } {
-  if (res.bought.got.kind === 'lure') {
+  const { got } = res.bought;
+  if (got.kind === 'lure') {
     return { title: SHOP_TEXT.lureReady, line: SHOP_TEXT.lureReadyLine };
   }
-  const parts = Object.entries(res.bought.got.items).map(
+  if (got.kind === 'fuel-all') {
+    return { title: SHOP_TEXT.firesStocked, line: SHOP_TEXT.firesLine(got.nights, got.fires) };
+  }
+  if (got.kind === 'repair-fences') {
+    return { title: SHOP_TEXT.fencesMended, line: SHOP_TEXT.fencesLine(got.fences) };
+  }
+  const parts = Object.entries(got.items).map(
     ([id, n]) =>
       `${String(n)} ${n === 1 ? (RESOURCES.get(id) ?? id) : pluralName(RESOURCES.get(id) ?? id)}`,
   );

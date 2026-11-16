@@ -131,4 +131,52 @@ describe('buy', () => {
     };
     expect(receipt(pack).line).toBe('5 Heart Charms');
   });
+
+  it('the receipt says how much fuel went in, or how many fences were fixed (729b)', () => {
+    const base = { balance: 0, shop: view([]) };
+    const fuel = (fires: number, nights: number): BuyResponse => ({
+      ...base,
+      bought: { itemId: 'night-supplies', price: 80, got: { kind: 'fuel-all', fires, nights } },
+    });
+    expect(receipt(fuel(2, 5))).toEqual({
+      title: 'Fires stocked! 🔥',
+      line: '5 nights of fuel across 2 fires',
+    });
+    expect(receipt(fuel(1, 1)).line).toBe('1 night of fuel across 1 fire');
+    const fences = (n: number): BuyResponse => ({
+      ...base,
+      bought: { itemId: 'fence-patch-kit', price: 50, got: { kind: 'repair-fences', fences: n } },
+    });
+    expect(receipt(fences(4))).toEqual({
+      title: 'Fences fixed! 🪵',
+      line: '4 fences good as new',
+    });
+    expect(receipt(fences(1)).line).toBe('1 fence good as new');
+  });
+
+  it('Night supplies and the Fence patch kit get cards and a confirm that reads right', () => {
+    const [supplies, kit] = shopCards(
+      view(
+        [
+          item({ id: 'night-supplies', price: 80, left: 1 }),
+          item({ id: 'fence-patch-kit', price: 50, left: 1 }),
+        ],
+        100,
+      ),
+      NOW,
+    );
+    expect(supplies).toMatchObject({ icon: '🔥', name: 'Night supplies', cap: '1 a week' });
+    expect(kit).toMatchObject({ icon: '🪵', name: 'Fence patch kit', cap: '1 a day' });
+    expect(confirmContent(supplies!, 100).title).toBe('Buy Night supplies for 💛 80?');
+    expect(confirmContent(kit!, 100).title).toBe('Buy a Fence patch kit for 💛 50?');
+  });
+
+  it('capped Night supplies says when the next one comes', () => {
+    const nextAt = new Date(NOW + 3 * 86_400_000 - 1000).toISOString();
+    const [card] = shopCards(
+      view([item({ id: 'night-supplies', price: 80, status: 'capped', left: 0, nextAt })]),
+      NOW,
+    );
+    expect(card?.state?.text).toBe('One a week is plenty! Next one in 3 days');
+  });
 });
