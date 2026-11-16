@@ -9,6 +9,15 @@ export const ContentIdSchema = z
   .regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/, 'Expected a lowercase kebab-case id like "ember-den"');
 export type ContentId = z.infer<typeof ContentIdSchema>;
 
+/**
+ * A colour as data holds it: `#` and six lowercase hex digits (`#ffaa00`).
+ * It lives here, not in species.ts, so `visuals.ts` (which species.ts
+ * imports) can use it without an import cycle.
+ */
+export const HexColorSchema = z
+  .string()
+  .regex(/^#[0-9a-f]{6}$/, 'Expected a colour like "#ffaa00"');
+
 /** Player-facing names: short enough for a button or a card title (style guide §2). */
 export const DisplayNameSchema = z.string().trim().min(1).max(32);
 
