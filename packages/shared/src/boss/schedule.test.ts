@@ -53,9 +53,26 @@ describe('boss schedule (#190)', () => {
     }
   });
 
-  it('has no visits with an empty bag (production until #234)', () => {
-    expect(BOSS_EVENTS.bag).toEqual([]);
-    expect(bossVisitFor('seed', '2026-11-16', 6, BOSS_EVENTS)).toBeNull();
+  it('has no visits with an empty bag', () => {
+    expect(bossVisitFor('seed', '2026-11-16', 6, { ...BOSS_EVENTS, bag: [] })).toBeNull();
+  });
+
+  it('visits from the shipped bag of four boss forms (#234), each once before a repeat', () => {
+    expect(BOSS_EVENTS.bag.map((e) => e.speciesId)).toEqual([
+      'rakelet',
+      'mommentum',
+      'papa-brrr',
+      'rickeyride',
+    ]);
+    // A shuffle per four weeks: over 16 weeks every boss visits, and some
+    // run of four consecutive weeks (one whole bag) has all four.
+    const visitors = Array.from(
+      { length: 16 },
+      (_, i) => bossVisitFor('seed', addDays('2026-11-16', i * 7), 6, BOSS_EVENTS)?.boss.speciesId,
+    );
+    const runs = visitors.slice(0, 13).map((_, i) => new Set(visitors.slice(i, i + 4)).size);
+    expect(new Set(visitors).size).toBe(4);
+    expect(runs).toContain(4);
   });
 
   it('stands on liked terrain, nearest to the farthest home', () => {

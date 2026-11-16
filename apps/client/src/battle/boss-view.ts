@@ -26,7 +26,7 @@ export const BOSS_TEXT = {
   stompAgain: 'Stomp again!',
   round: (n: number) => `Round ${String(n)}`,
   order: 'Order',
-  /** `names`: the movers, in order, joined ("Pip, Rakelet, Bun"). */
+  /** `names`: the movers, in order, joined ("Pip, Puff, Bun"). */
   orderLabel: (names: string) => `Who goes when: ${names}.`,
   everyone: 'Everyone!',
   /** A move that hits every foe (`targets: 'all-foes'`). */

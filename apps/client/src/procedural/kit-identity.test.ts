@@ -5,10 +5,10 @@ import {
   PartShapeSchema,
   visualRegistry,
   type PartShape,
+  type SpeciesVisual,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { FIXED_COLORS, LOD } from './config.js';
-import { DRAFT_BODIES, DRAFT_PARTS, draftLooks } from './gallery/boss-drafts.js';
 import { squishyParams } from './params.js';
 import { bentProportions, bentTip, partArrays } from './part-shapes.js';
 import { partMatrix } from './placement.js';
@@ -22,6 +22,95 @@ import { partMatrix } from './placement.js';
  */
 
 const registry = visualRegistry(GAME_DATA);
+
+/**
+ * The rake line's three stages, built here from the public boss kit
+ * (#234 234b-1): the species themselves are server-only, so the client
+ * can't import them. Bar, tines, rivets and cavity as each stage ships.
+ */
+const RAKE_PALETTE = ['#9fd46e', '#fff6dc', '#f08a3c', '#b07a48'];
+const RAKE_LOOKS: readonly { id: string; visual: SpeciesVisual }[] = [
+  {
+    id: 'rake-base',
+    visual: {
+      body: 'blob',
+      palette: RAKE_PALETTE,
+      parts: [
+        'dot-eyes',
+        'soft-brows',
+        'rake-bar-small',
+        'rake-tines-small',
+        'rake-rivets-small',
+        'rake-cavity-small',
+        'face-freckles',
+        'leaf-tuft',
+        'stubby-arms',
+        'biped-legs',
+      ],
+      size: 1,
+      finish: 'iridescent',
+      head: { body: 'orb', size: 0.9, forward: 0.06, up: 0.72 },
+      stance: 0.25,
+      pose: 'stand',
+      attackPart: 'fangs',
+    },
+  },
+  {
+    id: 'rake-middle',
+    visual: {
+      body: 'upright',
+      palette: RAKE_PALETTE,
+      parts: [
+        'dot-eyes',
+        'soft-brows',
+        'rake-bar',
+        'rake-tines-mid',
+        'rake-rivets-mid',
+        'rake-cavity',
+        'face-freckles',
+        'leaf-pile-hair',
+        'lanky-arms',
+        'lanky-legs',
+      ],
+      size: 1.36,
+      finish: 'iridescent',
+      head: { body: 'orb', size: 0.9, forward: 0.06, up: 0.78 },
+      stance: 0.3,
+      pose: 'upright',
+      attackPart: 'fangs',
+    },
+  },
+  {
+    id: 'rake-boss',
+    visual: {
+      body: 'upright',
+      palette: RAKE_PALETTE,
+      parts: [
+        'sharp-eyes',
+        'fierce-brows',
+        'rake-tool-bar',
+        'rake-tool-tines',
+        'rake-tool-rivets',
+        'rake-tool-cavity',
+        'leaf-pile-hair',
+        'falling-leaf-top',
+        'droop-arms',
+        'lanky-legs',
+      ],
+      size: 1.88,
+      finish: 'shimmer',
+      head: { body: 'rake-head', size: 0.86, forward: 0.06, up: 0.8 },
+      stance: 0.38,
+      pose: 'upright',
+      attackPart: 'fangs',
+    },
+  },
+];
+const rakeLook = (id: string) => {
+  const look = RAKE_LOOKS.find((l) => l.id === id);
+  if (!look) throw new Error(`no look ${id}`);
+  return look;
+};
 
 /** The shapes that existed before the extension. */
 const ORIGINAL_SHAPES: readonly PartShape[] = ['ellipsoid', 'capsule', 'cone', 'teardrop', 'arc'];
@@ -169,27 +258,23 @@ describe('ring splay and the metal role (#234 round 8)', () => {
     sink: 0.1,
     jitter: 0,
   };
-  const drafts = visualRegistry({
-    bodies: [...GAME_DATA.bodies, ...DRAFT_BODIES],
-    parts: [...GAME_DATA.parts, ...DRAFT_PARTS, fanPart],
+  const kit = visualRegistry({
+    bodies: GAME_DATA.bodies,
+    parts: [...GAME_DATA.parts, fanPart],
   });
-  const lookOf = (id: string) => {
-    const look = draftLooks().find((l) => l.id === id);
-    if (!look) throw new Error(`no look ${id}`);
-    return look;
-  };
+  const lookOf = rakeLook;
   const tinesOf = (id: string, visual = lookOf(id).visual) => {
-    const params = squishyParams({ id, visual }, 'kit-ring', drafts);
+    const params = squishyParams({ id, visual }, 'kit-ring', kit);
     const tines = params.parts.find((p) => p.slot === 'fangs');
     if (!tines) throw new Error(`no tines on ${id}`);
     return tines;
   };
 
   it('fans a ring out with splay: mirrored, growing towards the ends', () => {
-    const rakelet = lookOf('draft-rakelet').visual;
+    const rakeBoss = lookOf('rake-boss').visual;
     const visual = {
-      ...rakelet,
-      parts: rakelet.parts.map((id) => (id === 'draft-rake-tool-tines' ? fanPart.id : id)),
+      ...rakeBoss,
+      parts: rakeBoss.parts.map((id) => (id === 'rake-tool-tines' ? fanPart.id : id)),
     };
     const fan = tinesOf('test-fan', visual).placements;
     expect(fan).toHaveLength(11);
@@ -208,11 +293,11 @@ describe('ring splay and the metal role (#234 round 8)', () => {
   });
 
   it('keeps a ring without splay parallel and the same size', () => {
-    // Rakeling's rivets set neither.
+    // The middle form's rivets set neither.
     const rivets = squishyParams(
-      { id: 'draft-rakeling', visual: lookOf('draft-rakeling').visual },
+      { id: 'rake-middle', visual: lookOf('rake-middle').visual },
       'kit-ring',
-      drafts,
+      kit,
     ).parts.find((p) => p.slot === 'horns');
     expect(rivets?.placements).toHaveLength(4);
     for (const p of rivets?.placements ?? []) {
@@ -222,7 +307,7 @@ describe('ring splay and the metal role (#234 round 8)', () => {
   });
 
   it('gives every stage matching tines: the same size, evenly fanned (v15)', () => {
-    for (const id of ['draft-pileup', 'draft-rakeling', 'draft-rakelet']) {
+    for (const id of ['rake-base', 'rake-middle', 'rake-boss']) {
       const tines = tinesOf(id).placements;
       for (const p of tines) expect(p.size, id).toEqual(tines[0]!.size);
       // Mirrored fan, the middle (or middle pair) least splayed.
@@ -233,7 +318,7 @@ describe('ring splay and the metal role (#234 round 8)', () => {
 
   it('gives each stage two-tone tines: a lighter steel toe on the same placements (v16)', () => {
     const luma = (c: readonly number[]) => 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!;
-    for (const id of ['draft-pileup', 'draft-rakeling', 'draft-rakelet']) {
+    for (const id of ['rake-base', 'rake-middle', 'rake-boss']) {
       const tines = tinesOf(id);
       expect(tines.accent?.mesh, id).toBe('bent-toe');
       // #b4bdc8: clearly lighter than the shaft's steel.
@@ -245,16 +330,16 @@ describe('ring splay and the metal role (#234 round 8)', () => {
     }
     // A one-mesh part stays exactly as it was: no accent key at all.
     const params = squishyParams(
-      { id: 'draft-rakelet', visual: lookOf('draft-rakelet').visual },
+      { id: 'rake-boss', visual: lookOf('rake-boss').visual },
       'kit-ring',
-      drafts,
+      kit,
     );
     for (const p of params.parts.filter((p) => p.slot !== 'fangs'))
       expect('accent' in p, p.id).toBe(false);
   });
 
   it('colours metal parts the fixed metal grey', () => {
-    const [r, g, b] = tinesOf('draft-rakelet').color;
+    const [r, g, b] = tinesOf('rake-boss').color;
     const hex = FIXED_COLORS.metal;
     expect([r, g, b].map((c) => Math.round(c * 255))).toEqual([
       parseInt(hex.slice(1, 3), 16),
@@ -264,11 +349,11 @@ describe('ring splay and the metal role (#234 round 8)', () => {
   });
 
   it('keeps metal parts and the rake bar (a mouth stand-in) plain, without the vinyl finish', () => {
-    expect(tinesOf('draft-rakelet').plain).toBe(true);
+    expect(tinesOf('rake-boss').plain).toBe(true);
     const bar = squishyParams(
-      { id: 'draft-rakelet', visual: lookOf('draft-rakelet').visual },
+      { id: 'rake-boss', visual: lookOf('rake-boss').visual },
       'kit-ring',
-      drafts,
+      kit,
     ).parts.find((p) => p.slot === 'mane');
     // v14: under the boss shimmer the wooden bar read salmon pink.
     expect(bar?.plain).toBe(true);
@@ -303,7 +388,7 @@ describe('bent tine proportions (#234 round 11b)', () => {
 
   it("never turns the toe up: each stage's lean plus the hook stays under 90 degrees (no J)", () => {
     const { turn } = bentTip();
-    for (const part of DRAFT_PARTS.filter((p) => p.shape === 'bent' && p.anchor === 'front'))
+    for (const part of GAME_DATA.parts.filter((p) => p.shape === 'bent' && p.anchor === 'front'))
       expect((part.tilt ?? 0) + turn, part.id).toBeLessThan(88);
   });
 
@@ -342,27 +427,25 @@ describe('bent tine proportions (#234 round 11b)', () => {
 
   it("sizes the tines in the strip's own proportions, so the curve stays true", () => {
     const [w, l, t] = bentProportions();
-    for (const part of DRAFT_PARTS.filter((p) => p.shape === 'bent' && p.anchor === 'front')) {
+    for (const part of GAME_DATA.parts.filter((p) => p.shape === 'bent' && p.anchor === 'front')) {
       const k = part.size[1] / l;
       // Length against depth carries the curve: exact.
       expect(part.size[2] / k, part.id).toBeCloseTo(t, 2);
-      // Width is sideways only, so it may widen with a chunky bar (v16 Pileup) without bending the curve.
+      // Width is sideways only, so it may widen with a chunky bar (v16 base form) without bending the curve.
       expect(part.size[0] / k / w, part.id).toBeGreaterThanOrEqual(0.98);
       expect(part.size[0] / k / w, part.id).toBeLessThanOrEqual(1.3);
     }
   });
 
-  it("widens Pileup's tines with its bar, so they're never hair-thin beside Rakelet's (v16)", () => {
+  it("widens the base form's tines with its bar, so they're never hair-thin beside the boss's (v16)", () => {
     const widthOverBar = (tines: string, bar: string) => {
-      const t = DRAFT_PARTS.find((p) => p.id === tines)!;
-      const b = DRAFT_PARTS.find((p) => p.id === bar)!;
+      const t = GAME_DATA.parts.find((p) => p.id === tines)!;
+      const b = GAME_DATA.parts.find((p) => p.id === bar)!;
       return t.size[0] / b.size[2]; // the bar's size[2] is its height on the face
     };
-    const rakelet = widthOverBar('draft-rake-tool-tines', 'draft-rake-tool-bar');
-    expect(widthOverBar('draft-rake-tines-small', 'draft-rake-bar-small')).toBeGreaterThan(
-      rakelet * 0.8,
-    );
-    expect(widthOverBar('draft-rake-tines-mid', 'draft-rake-bar')).toBeGreaterThan(rakelet * 0.8);
+    const boss = widthOverBar('rake-tool-tines', 'rake-tool-bar');
+    expect(widthOverBar('rake-tines-small', 'rake-bar-small')).toBeGreaterThan(boss * 0.8);
+    expect(widthOverBar('rake-tines-mid', 'rake-bar')).toBeGreaterThan(boss * 0.8);
   });
 });
 
@@ -459,11 +542,7 @@ describe("anchor: 'front' (#234 round 11)", () => {
   });
 
   it('holds the rake bar still on every squishy, so it never slides off its rivets (v14)', () => {
-    const registry = visualRegistry({
-      bodies: [...GAME_DATA.bodies, ...DRAFT_BODIES],
-      parts: [...GAME_DATA.parts, ...DRAFT_PARTS],
-    });
-    const look = draftLooks().find((l) => l.id === 'draft-pileup')!;
+    const look = rakeLook('rake-base');
     const bars = ['kit-front', 'gallery-1', 'abc'].map(
       (iid) =>
         squishyParams({ id: look.id, visual: look.visual }, iid, registry).parts.find(
@@ -473,14 +552,10 @@ describe("anchor: 'front' (#234 round 11)", () => {
     for (const b of bars) expect(b).toEqual(bars[0]);
   });
 
-  it("roots Rakelet's tines on each stage's bar front face, under a rivet set into it", () => {
-    const registry = visualRegistry({
-      bodies: [...GAME_DATA.bodies, ...DRAFT_BODIES],
-      parts: [...GAME_DATA.parts, ...DRAFT_PARTS],
-    });
+  it("roots the rake line's tines on each stage's bar front face, under a rivet set into it", () => {
     const luma = (c: readonly number[]) => 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!;
-    for (const id of ['draft-pileup', 'draft-rakeling', 'draft-rakelet']) {
-      const look = draftLooks().find((l) => l.id === id)!;
+    for (const id of ['rake-base', 'rake-middle', 'rake-boss']) {
+      const look = rakeLook(id);
       const params = squishyParams({ id, visual: look.visual }, 'kit-front', registry);
       const head = params.head!;
       const body = registry.bodies.get(look.visual.head!.body)!;

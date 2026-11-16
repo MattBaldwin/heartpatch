@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { BOSS_PARTS } from '../../data/boss-parts.js';
 import { ART_RULES, BODIES, PARTS } from '../../data/visuals.js';
 import { checkSpeciesArt } from './art-rules.js';
 import type { SpeciesVisual } from './species.js';
-import { checkSpeciesVisual, PartSchema, visualRegistry, type Part } from './visuals.js';
+import {
+  checkSpeciesVisual,
+  PartAccentMeshSchema,
+  PartSchema,
+  visualRegistry,
+  type Part,
+} from './visuals.js';
 
 // #234 kit extension: the `box` and `bent` shapes, `anchor: 'front'` and `replaces: 'mouth'`.
 
@@ -56,6 +63,7 @@ describe('kit extension schema', () => {
     for (const p of PARTS) {
       expect(p.anchor).toBeUndefined();
       expect(p.replaces).toBeUndefined();
+      expect(p.accent).toBeUndefined();
       expect(PartSchema.parse(p)).toEqual(p);
     }
   });
@@ -157,5 +165,57 @@ describe('ring layout', () => {
       PartSchema.safeParse({ ...ring, layout: { kind: 'ring', count: 5, spread: 60, grow: 0.12 } })
         .success,
     ).toBe(false);
+  });
+});
+
+describe('two-tone accent (#234 234b)', () => {
+  const tine: Part = {
+    id: 'test-tine',
+    slot: 'fangs',
+    shape: 'bent',
+    size: [0.07, 0.25, 0.1],
+    color: 'metal',
+    layout: { kind: 'ring', count: 4, spread: 86 },
+    around: 0,
+    up: -15,
+    jitter: 0,
+    accent: { mesh: 'bent-toe', color: '#b4bdc8' },
+  };
+
+  it('parses a bent part with a bent-toe accent', () => {
+    expect(PartAccentMeshSchema.options).toEqual(['bent-toe']);
+    expect(PartSchema.parse(tine)).toEqual(tine);
+    const plain: Part = { ...tine, accent: undefined };
+    expect(PartSchema.parse(plain).accent).toBeUndefined();
+  });
+
+  it('refuses an unknown mesh, a bad colour or extra fields', () => {
+    expect(
+      PartSchema.safeParse({ ...tine, accent: { mesh: 'knob', color: '#b4bdc8' } }).success,
+    ).toBe(false);
+    for (const color of ['#B4BDC8', 'b4bdc8', '#b4b', 'grey']) {
+      expect(PartSchema.safeParse({ ...tine, accent: { mesh: 'bent-toe', color } }).success).toBe(
+        false,
+      );
+    }
+    expect(
+      PartSchema.safeParse({ ...tine, accent: { mesh: 'bent-toe', color: '#b4bdc8', size: 2 } })
+        .success,
+    ).toBe(false);
+    expect(PartSchema.safeParse({ ...tine, accent: { color: '#b4bdc8' } }).success).toBe(false);
+  });
+
+  it('only puts a bent-toe on a bent part', () => {
+    const result = PartSchema.safeParse({ ...tine, shape: 'capsule' });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((i) => i.path.join('.'))).toEqual(['accent.mesh']);
+    expect(PartSchema.safeParse({ ...tine, shape: 'box' }).success).toBe(false);
+  });
+
+  it('parses every boss kit part, the accent only on bent ones', () => {
+    for (const p of BOSS_PARTS) {
+      expect(PartSchema.parse(p)).toEqual(p);
+      if (p.accent) expect(p.shape).toBe('bent');
+    }
   });
 });

@@ -1,5 +1,5 @@
 import { BossBefriendResponseSchema, PlayerBattleBossSchema } from '@heartpatch/shared';
-import { SECRET_SPECIES, type BossEventRules } from '@heartpatch/shared/server';
+import { SECRET_MOVES, SECRET_SPECIES, type BossEventRules } from '@heartpatch/shared/server';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
 import type { GameEvent } from '../../db/game-events.js';
@@ -31,13 +31,28 @@ const SECRET_KEYS = [
   'minPlayerLevel',
 ];
 
-/** Every key anywhere in a JSON value. */
-function keysOf(value: unknown, into = new Set<string>()): Set<string> {
-  if (Array.isArray(value)) for (const item of value) keysOf(item, into);
+/**
+ * Every key anywhere in a JSON value, except a move effect's own `chance`
+ * (`moveDefs[].effects[].chance`). That is the public move schema
+ * (`MoveEffectSchema`: "dizzy 20% of the time"), the same field most moves in
+ * `GAME_DATA.moves` carry, and a met boss's signature moves go out as move
+ * defs so the client can show them (#234 CI, 234b-1c). It says nothing about
+ * the befriend odds; `chance` anywhere else (the boss view, the befriend
+ * reply, an event, a species def) is still a leak.
+ */
+function keysOf(value: unknown, into = new Set<string>(), inMoveEffect = false): Set<string> {
+  if (Array.isArray(value)) for (const item of value) keysOf(item, into, inMoveEffect);
   else if (value && typeof value === 'object') {
     for (const [key, inner] of Object.entries(value)) {
-      into.add(key);
-      keysOf(inner, into);
+      if (!(inMoveEffect && key === 'chance')) into.add(key);
+      if (key === 'moveDefs' && Array.isArray(inner)) {
+        for (const move of inner) {
+          for (const [k, v] of Object.entries(move as object)) {
+            into.add(k);
+            keysOf(v, into, k === 'effects');
+          }
+        }
+      } else keysOf(inner, into);
     }
   }
   return into;
@@ -206,6 +221,18 @@ describe.skipIf(!url)('mini-boss secrets stay on the server (#190c, needs DATABA
       .filter((id) => id !== window!.speciesId);
     expect(battle.speciesDefs.map((s) => s.id).filter((id) => others.includes(id))).toEqual([]);
     expect(leaks(battle)).toEqual([]);
+    // Its signature moves do reach the client, effects and all: public move
+    // data, exactly as the server holds it (the walker above allows only this `chance`).
+    const boss = battle.speciesDefs.find((s) => s.id === window!.speciesId)!;
+    const signature = SECRET_MOVES.filter((m) => boss.moves.includes(m.id));
+    expect(signature.some((m) => (m.effects ?? []).some((e) => 'chance' in e))).toBe(true);
+    for (const move of signature)
+      expect(
+        battle.moveDefs.find((m) => m.id === move.id),
+        move.id,
+      ).toEqual(move);
+    // The walker still catches an odds-like `chance` outside a move effect.
+    expect(leaks({ ...battle, boss: { ...battle.boss, chance: 40 } })).toEqual(['chance']);
   });
 
   it('the switch closed (#234): nothing about the visit is sent', async () => {

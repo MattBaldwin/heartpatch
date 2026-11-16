@@ -81,6 +81,7 @@ export * from './data/crooked-house.js';
 export * from './data/memory-puzzles.js';
 export * from './data/found-sets.js';
 export * from './data/visuals.js';
+export * from './data/boss-parts.js';
 export * from './data/season-windows.js';
 export * from './data/index.js';
 export * from './data/avoided-words.js';

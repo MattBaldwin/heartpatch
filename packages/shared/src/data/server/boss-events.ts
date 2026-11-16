@@ -2,8 +2,8 @@ import type { BossEventRules } from '../../schemas/data/boss-events.js';
 
 /**
  * When, where and who a mini-boss visits (#190 plan §2). Secret (CLAUDE.md
- * rule 6). The bag is empty until the boss content lands (#234), so no
- * boss visits in production and nothing half-made shows (#735).
+ * rule 6). The bag holds the four boss forms (#234); production stays dark
+ * until the server's mini-boss switch opens it (#234 plan, `HP_MINI_BOSSES`).
  */
 export const BOSS_EVENTS: BossEventRules = {
   windowHours: 48, // TUNE: out for two days (owner decision 2026-11-15)
@@ -14,7 +14,14 @@ export const BOSS_EVENTS: BossEventRules = {
   minLevel: 15, // TUNE: so an early visit still feels BIG
   triesPerDay: 3, // TUNE: a loss costs nothing; the boss stays
   idleMinutes: 10, // TUNE: plan §12, "ten minutes with no action is a leave"
-  bag: [],
+  // Each boss visits once before any repeats (`bossVisitFor`); its tile
+  // prefers a terrain it likes (`// TUNE:` all four lists).
+  bag: [
+    { speciesId: 'rakelet', terrains: ['forest', 'pumpkin-fields', 'old-forest'] }, // TUNE:
+    { speciesId: 'mommentum', terrains: ['hills', 'meadow'] }, // TUNE:
+    { speciesId: 'papa-brrr', terrains: ['mountains', 'hills'] }, // TUNE:
+    { speciesId: 'rickeyride', terrains: ['meadow', 'clearing'] }, // TUNE:
+  ],
   // TUNE: a win's sure bundle; 3 Heart Charms is one befriend ask (190c).
   bundle: { 'heart-charm': 3, heartdust: 5, treats: 3 },
   // Owner decision 2026-11-15 (#190 open questions 3 and 4).

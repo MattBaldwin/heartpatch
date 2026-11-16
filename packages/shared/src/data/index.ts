@@ -1,4 +1,5 @@
 import type { GameData } from '../schemas/data/game-data.js';
+import { BOSS_BODIES, BOSS_PARTS } from './boss-parts.js';
 import { BUILDINGS } from './buildings.js';
 import { CARE_ACTIONS } from './care-actions.js';
 import { ELEMENTS, FEELINGS } from './elements.js';
@@ -27,7 +28,8 @@ export const GAME_DATA: GameData = {
   careActions: CARE_ACTIONS,
   terrains: TERRAINS,
   mapGen: MAP_GEN,
-  bodies: BODIES,
-  parts: PARTS,
+  // The mini-boss kit (#234) is public: a met boss is drawn from these.
+  bodies: [...BODIES, ...BOSS_BODIES],
+  parts: [...PARTS, ...BOSS_PARTS],
   artRules: ART_RULES,
 };

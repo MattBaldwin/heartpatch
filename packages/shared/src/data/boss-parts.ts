@@ -1,37 +1,37 @@
-import type { Body, ElementId, FeelingId, SpeciesVisual } from '@heartpatch/shared';
-import type { KitPart } from '../params.js';
+import type { Body, Part } from '../schemas/data/visuals.js';
 
-/**
- * DRAFT (#234, lane 234a): the four mini-boss lines, for the owner's mockup
- * round only. Nothing here ships: this file lives in the dev-only squishy
- * gallery (`/gallery.html?drafts`), it is not part of `GAME_DATA`, and no
- * roster, spawn table or server code imports it. Lane 234b moves the approved
- * bodies, parts and lines into `packages/shared/src/data` once the owner signs
- * off on the renders.
+/*
+ * The mini-boss kit (#234, art from #810): the bodies and parts the four
+ * boss lines are built from. Public on purpose: a boss's def reaches a
+ * Keeper only once they meet it (`hiddenUntilSeen`), and the client then
+ * draws it from these public tables (`visualRegistry(GAME_DATA)`), so every
+ * body and part a boss uses lives here. The species themselves, their
+ * names and moves are server-only (`data/server/boss-species.ts`).
+ *
+ * Bundle-leak guard (#234 plan risk 1): nothing in this file, ids or
+ * comments, may name a boss species. The client bundle check bans every
+ * secret species id and name as a substring, source maps included, so the
+ * lines are "the rake line", "the mom line", "the dad line" and "the kart
+ * line" here (a shared boundary test reads this file to check).
  *
  * Hair sits in `crown` and `mane`, a moustache or rake tines in `fangs`, a
  * cap brim, goggles or rivets in `horns`, and a cardigan's buttons in
- * `pattern`. Mommentum, Papa Brrr and Rickeyride use only the original five
- * primitives. Rakelet's rake uses the #234 kit extension (ART_BIBLE §1.9):
+ * `pattern`. The mom, dad and kart lines use only the original five
+ * primitives. The rake line uses the #234 kit extension (ART_BIBLE §1.9):
  * `box` and `bent` shapes, the `metal` colour, ring `splay`, `anchor:
- * 'front'` with `standoff`, `replaces: 'mouth'`, and the client-only
- * two-tone `accent` (a `KitPart` field the shared `Part` schema doesn't
- * carry yet; lane 234b adds it). Every part here is used by some form
- * (`boss-drafts.test.ts`).
+ * 'front'` with `standoff`, `replaces: 'mouth'`, and the two-tone `accent`.
+ * Every body and part here is used by some boss form (checked by a shared boundary test).
  */
-
-/** `?drafts` in the gallery shows these looks; every id starts with this. */
-export const DRAFT_PREFIX = 'draft-';
 
 /**
  * A taller, upright toy torso for grown-up bosses: still a soft blob with a
  * big head on top (never Keeper proportions), with a slight waist so the
- * head reads as sitting on shoulders. Plus a low, boxy kart for Rickeyride
- * and a round belly for Dad.
+ * head reads as sitting on shoulders. Plus a low, boxy kart for the kart line
+ * and a round belly for the dad line.
  */
-export const DRAFT_BODIES: Body[] = [
+export const BOSS_BODIES: Body[] = [
   {
-    id: 'draft-upright',
+    id: 'upright',
     width: 1.0,
     height: 1.12,
     depth: 0.92,
@@ -44,7 +44,7 @@ export const DRAFT_BODIES: Body[] = [
   },
   {
     // A cardigan flaring out into a triangle at the hem.
-    id: 'draft-cardigan',
+    id: 'cardigan',
     width: 1.24,
     height: 1.1,
     depth: 0.98,
@@ -57,7 +57,7 @@ export const DRAFT_BODIES: Body[] = [
   },
   {
     // Widest at the belly.
-    id: 'draft-dad-belly',
+    id: 'dad-belly',
     width: 1.22,
     height: 1.14,
     depth: 1.08,
@@ -68,7 +68,7 @@ export const DRAFT_BODIES: Body[] = [
     jitter: 0.04,
   },
   {
-    id: 'draft-kart',
+    id: 'kart',
     width: 1.3,
     height: 0.62,
     depth: 1.12,
@@ -79,10 +79,10 @@ export const DRAFT_BODIES: Body[] = [
     jitter: 0.03,
   },
   {
-    // Rakelet's head: wide and flat-faced, so the rake bar spans wider than
+    // The rake line's boss head: wide and flat-faced, so the rake bar spans wider than
     // the body. A true oval (squareness 0, round 9): any squareness pushes a
     // ring's middle copies apart, which opened a gap between the middle tines.
-    id: 'draft-rake-head',
+    id: 'rake-head',
     width: 1.3,
     height: 1.0,
     depth: 0.92,
@@ -94,15 +94,15 @@ export const DRAFT_BODIES: Body[] = [
   },
 ];
 
-const part = (p: KitPart): KitPart => p;
+const part = (p: Part): Part => p;
 
-/** TUNE (#234 v16): the rake tines' chisel toes, a clearly lighter steel than the shaft. */
+/** // TUNE: (#234 v16): the rake tines' chisel toes, a clearly lighter steel than the shaft. */
 const RAKE_TOE_STEEL = '#b4bdc8';
 
-export const DRAFT_PARTS: KitPart[] = [
+export const BOSS_PARTS: Part[] = [
   // ── Faces: brows for all four (each keeps its feeling's eye kit, §1.6) ──
   part({
-    id: 'draft-soft-brows',
+    id: 'soft-brows',
     slot: 'brows',
     shape: 'capsule',
     size: [0.12, 0.035, 0.04],
@@ -116,7 +116,7 @@ export const DRAFT_PARTS: KitPart[] = [
   }),
   part({
     // Inner ends down: determined, never angry (§1.1).
-    id: 'draft-fierce-brows',
+    id: 'fierce-brows',
     slot: 'brows',
     shape: 'capsule',
     size: [0.13, 0.04, 0.045],
@@ -129,7 +129,7 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0,
   }),
   part({
-    id: 'draft-bushy-brows',
+    id: 'bushy-brows',
     slot: 'brows',
     shape: 'capsule',
     size: [0.15, 0.06, 0.06],
@@ -145,7 +145,7 @@ export const DRAFT_PARTS: KitPart[] = [
   part({
     // Freckles across the nose: on the head, not the torso. Round 11b: tiny
     // bumps in the ears slot, so the mouth cavity can take cheeks (plain dark).
-    id: 'draft-face-freckles',
+    id: 'face-freckles',
     slot: 'ears',
     shape: 'ellipsoid',
     size: [0.03, 0.014, 0.03], // [width, out from the face, height]
@@ -157,8 +157,8 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0.2,
   }),
 
-  // ── Rakelet: rake-tine teeth, leaf-pile hair, one leaf sliding off ─────
-  // Round 8 (owner decision): "Rakelet should never have a handle. His
+  // ── The rake line: rake-tine teeth, leaf-pile hair, one leaf sliding off ─────
+  // Round 8 (owner decision): "[The rake boss] should never have a handle. His
   // mouth is the rake." Every stage's mouth is a rake head on its own: a
   // wooden crossbar (`box`, `replaces: 'mouth'`) wider than the face, and a
   // dark cavity behind the tines so it still reads as a mouth. No handle,
@@ -188,10 +188,10 @@ export const DRAFT_PARTS: KitPart[] = [
   // shaft now curves evenly over its lower 60% (same 65° turn, no straight
   // foot), so it foreshortens head-on instead of reading as a straight peg.
   // The strip is wider and flatter (1.8 × 0.7), the rivets are low pan-heads,
-  // and Pileup's tines are widened to suit its chunky bar.
+  // and the base form's tines are widened to suit its chunky bar.
   part({
-    // Pileup's baby crossbar: its mouth, a little wider than its face.
-    id: 'draft-rake-bar-small',
+    // The rake line's base form: its baby crossbar: its mouth, a little wider than its face.
+    id: 'rake-bar-small',
     slot: 'mane',
     shape: 'box',
     size: [1.1, 0.14, 0.2], // [width, depth off the face, height]; TUNE
@@ -205,8 +205,8 @@ export const DRAFT_PARTS: KitPart[] = [
     replaces: 'mouth',
   }),
   part({
-    // Pileup's three baby tines.
-    id: 'draft-rake-tines-small',
+    // The base form's three baby tines.
+    id: 'rake-tines-small',
     slot: 'fangs',
     shape: 'bent',
     size: [0.08, 0.22, 0.0862], // v16: bentProportions() scaled (the curve stays true), widened ~1.25× to match its chunky bar
@@ -224,7 +224,7 @@ export const DRAFT_PARTS: KitPart[] = [
   }),
   part({
     // A metal rivet at each tine's root, half set into the bar's front face (v14: lighter than the cavity, so not a hole).
-    id: 'draft-rake-rivets-small',
+    id: 'rake-rivets-small',
     slot: 'horns',
     shape: 'ellipsoid',
     size: [0.085, 0.022, 0.085], // v16: a low pan-head (55% of v15's dome), a touch wider than the widened tine
@@ -239,8 +239,8 @@ export const DRAFT_PARTS: KitPart[] = [
     standoff: 0.097,
   }),
   part({
-    // Pileup's mouth cavity behind its tines.
-    id: 'draft-rake-mouth-small',
+    // The base form's mouth cavity behind its tines.
+    id: 'rake-cavity-small',
     slot: 'cheeks', // a head surface patch: plain dark, no rainbow rim (round 11b)
     shape: 'ellipsoid',
     size: [0.58, 0.21, 0.03], // [width, height, depth]: a flat dark opening, not a plate; v14: wider, shading the tine roots
@@ -252,8 +252,8 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0,
   }),
   part({
-    // Rakeling's crossbar: wider than its face, overhanging both cheeks.
-    id: 'draft-rake-bar',
+    // The middle form's crossbar: wider than its face, overhanging both cheeks.
+    id: 'rake-bar',
     slot: 'mane',
     shape: 'box',
     size: [1.12, 0.1, 0.14], // [width, depth off the face, height]; TUNE
@@ -267,8 +267,8 @@ export const DRAFT_PARTS: KitPart[] = [
     replaces: 'mouth',
   }),
   part({
-    // Rakeling's four tines.
-    id: 'draft-rake-tines-mid',
+    // The middle form's four tines.
+    id: 'rake-tines-mid',
     slot: 'fangs',
     shape: 'bent',
     size: [0.0736, 0.25, 0.0979], // bentProportions() scaled, so the strip and its curve stay true (v16)
@@ -286,7 +286,7 @@ export const DRAFT_PARTS: KitPart[] = [
   }),
   part({
     // A metal rivet at each tine's root, half set into the bar's front face (v14: lighter than the cavity, so not a hole).
-    id: 'draft-rake-rivets-mid',
+    id: 'rake-rivets-mid',
     slot: 'horns',
     shape: 'ellipsoid',
     size: [0.08, 0.025, 0.08], // v16: a low pan-head, 55% of v15's dome
@@ -301,8 +301,8 @@ export const DRAFT_PARTS: KitPart[] = [
     standoff: 0.069,
   }),
   part({
-    // Rakeling's mouth cavity behind its tines.
-    id: 'draft-rake-mouth',
+    // The middle form's mouth cavity behind its tines.
+    id: 'rake-cavity',
     slot: 'cheeks', // a head surface patch: plain dark, no rainbow rim (round 11b)
     shape: 'ellipsoid',
     size: [0.82, 0.26, 0.03], // [width, height, depth]: a flat dark opening, not a plate; v14: wider, shading the tine roots
@@ -314,8 +314,8 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0,
   }),
   part({
-    // Rakelet's crossbar: a straight rake head, well wider than his face, as his jaw and upper lip.
-    id: 'draft-rake-tool-bar',
+    // The rake boss's crossbar: a straight rake head, well wider than his face, as his jaw and upper lip.
+    id: 'rake-tool-bar',
     slot: 'mane',
     shape: 'box',
     size: [1.3, 0.16, 0.18], // [width, depth off the face, height]; TUNE
@@ -329,8 +329,8 @@ export const DRAFT_PARTS: KitPart[] = [
     replaces: 'mouth',
   }),
   part({
-    // Rakelet's five tines.
-    id: 'draft-rake-tool-tines',
+    // The rake boss's five tines.
+    id: 'rake-tool-tines',
     slot: 'fangs',
     shape: 'bent',
     size: [0.0871, 0.296, 0.1159], // bentProportions() scaled, so the strip and its curve stay true (v16)
@@ -348,7 +348,7 @@ export const DRAFT_PARTS: KitPart[] = [
   }),
   part({
     // A metal rivet at each tine's root, half set into the bar's front face (v14: lighter than the cavity, so not a hole).
-    id: 'draft-rake-tool-rivets',
+    id: 'rake-tool-rivets',
     slot: 'horns',
     shape: 'ellipsoid',
     size: [0.095, 0.028, 0.095], // v16: a low pan-head, 55% of v15's dome
@@ -363,8 +363,8 @@ export const DRAFT_PARTS: KitPart[] = [
     standoff: 0.109,
   }),
   part({
-    // Rakelet's mouth cavity behind the tines.
-    id: 'draft-rake-tool-mouth',
+    // The rake boss's mouth cavity behind the tines.
+    id: 'rake-tool-cavity',
     slot: 'cheeks', // a head surface patch: plain dark, no rainbow rim (round 11b)
     shape: 'ellipsoid',
     size: [1.1, 0.3, 0.03], // [width, height, depth]: a flat dark opening, not a plate; v14: wider, shading the tine roots
@@ -378,7 +378,7 @@ export const DRAFT_PARTS: KitPart[] = [
   part({
     // A green leaf mid-fall on the leaf pile (round 6: wider than tall, flat,
     // tipped over sideways so it can't read as a horn).
-    id: 'draft-falling-leaf-top',
+    id: 'falling-leaf-top',
     slot: 'ears',
     shape: 'teardrop',
     size: [0.42, 0.3, 0.05],
@@ -393,7 +393,7 @@ export const DRAFT_PARTS: KitPart[] = [
   part({
     // Drooping lanky arms: one soft, unjointed piece each side (no elbow
     // seam), thin at the shoulder and swelling to a heavy hanging hand.
-    id: 'draft-droop-arms',
+    id: 'droop-arms',
     slot: 'arms',
     shape: 'teardrop',
     size: [0.26, 1.15, 0.26],
@@ -409,7 +409,7 @@ export const DRAFT_PARTS: KitPart[] = [
   }),
   part({
     // A messy, spiky heap of autumn leaves for hair.
-    id: 'draft-leaf-pile-hair',
+    id: 'leaf-pile-hair',
     slot: 'crown',
     shape: 'teardrop',
     size: [0.3, 0.42, 0.07],
@@ -422,7 +422,7 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0.15,
   }),
   part({
-    id: 'draft-leaf-tuft',
+    id: 'leaf-tuft',
     slot: 'crown',
     shape: 'teardrop',
     size: [0.24, 0.34, 0.07],
@@ -437,7 +437,7 @@ export const DRAFT_PARTS: KitPart[] = [
   part({
     // Long, lanky arms dangling almost to the ground, angled out so they
     // clear the torso instead of sinking into it at the hips.
-    id: 'draft-lanky-arms',
+    id: 'lanky-arms',
     slot: 'arms',
     shape: 'capsule',
     size: [0.14, 0.9, 0.14],
@@ -451,7 +451,7 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0,
   }),
   part({
-    id: 'draft-lanky-legs',
+    id: 'lanky-legs',
     slot: 'legs',
     shape: 'capsule',
     size: [0.24, 0.3, 0.26],
@@ -464,11 +464,11 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0,
   }),
 
-  // ── Mom: a bun bigger than her head, curls, cardigan buttons, earrings ──
+  // ── The mom line: a bun bigger than her head, curls, cardigan buttons, earrings ──
   part({
     // Bigger than her head: head parts size against the head's own height,
     // and the orb head is one head-height across, so the bun is wider than 1.
-    id: 'draft-big-bun',
+    id: 'big-bun',
     slot: 'crown',
     shape: 'ellipsoid',
     size: [1.4, 1.14, 1.3],
@@ -482,7 +482,7 @@ export const DRAFT_PARTS: KitPart[] = [
   part({
     // A soft fringe of bangs across the forehead (the base form's hair; it
     // stays through the line). Replaces the side curls that read as ears.
-    id: 'draft-fringe',
+    id: 'fringe',
     slot: 'mane',
     shape: 'ellipsoid',
     size: [0.24, 0.16, 0.13],
@@ -495,9 +495,9 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0.06,
   }),
   part({
-    // Two gold hair sticks through the bun: Mommentum's fire glow accent (the
+    // Two gold hair sticks through the bun: the mom boss's fire glow accent (the
     // fire rule needs glow: 'accent'). Long enough to poke out of the bun.
-    id: 'draft-hair-sticks',
+    id: 'hair-sticks',
     slot: 'horns',
     shape: 'capsule',
     size: [0.09, 1.2, 0.09],
@@ -513,7 +513,7 @@ export const DRAFT_PARTS: KitPart[] = [
   part({
     // Hands on hips, elbows out (two straight pieces, ruling 3): the upper
     // arm angles down and out from the shoulder to the elbow...
-    id: 'draft-akimbo-arms',
+    id: 'akimbo-arms',
     slot: 'arms',
     shape: 'capsule',
     size: [0.16, 0.6, 0.16],
@@ -529,7 +529,7 @@ export const DRAFT_PARTS: KitPart[] = [
     // ...and the forearm comes back up from the hip to meet it. Both run
     // past the elbow into each other, so it reads as one bent arm (round 4:
     // tip-to-tip they showed a break and read as two loose pieces).
-    id: 'draft-akimbo-forearms',
+    id: 'akimbo-forearms',
     slot: 'back',
     shape: 'capsule',
     size: [0.16, 0.56, 0.16],
@@ -542,10 +542,10 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0,
   }),
 
-  // ── Dad: moustache wings, ball cap and brim, big sneakers ──────────────
+  // ── The dad line: moustache wings, ball cap and brim, big sneakers ──────────────
   part({
     // Wider than his face: two long wings swept out sideways.
-    id: 'draft-moustache',
+    id: 'moustache',
     slot: 'fangs',
     shape: 'teardrop',
     size: [0.2, 0.7, 0.13],
@@ -559,7 +559,7 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0,
   }),
   part({
-    id: 'draft-moustache-small',
+    id: 'moustache-small',
     slot: 'fangs',
     shape: 'teardrop',
     size: [0.1, 0.2, 0.08],
@@ -575,7 +575,7 @@ export const DRAFT_PARTS: KitPart[] = [
   part({
     // Seated: as wide as the head and centred on its crown (sink 1), so it
     // wraps the top instead of perching on it as a disc.
-    id: 'draft-ball-cap',
+    id: 'ball-cap',
     slot: 'crown',
     shape: 'ellipsoid',
     size: [1.04, 0.62, 1.04],
@@ -588,7 +588,7 @@ export const DRAFT_PARTS: KitPart[] = [
   }),
   part({
     // A flat brim straight out the front, rooted in the cap's front edge.
-    id: 'draft-cap-brim',
+    id: 'cap-brim',
     slot: 'horns',
     shape: 'ellipsoid',
     size: [0.6, 0.44, 0.1],
@@ -602,7 +602,7 @@ export const DRAFT_PARTS: KitPart[] = [
   }),
   part({
     // Up on the belly, clear of the sneakers in 3/4.
-    id: 'draft-belly-patch',
+    id: 'dad-belly-patch',
     slot: 'pattern',
     shape: 'ellipsoid',
     size: [0.5, 0.42, 0.04],
@@ -614,7 +614,7 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0,
   }),
   part({
-    id: 'draft-sneakers',
+    id: 'sneakers',
     slot: 'legs',
     shape: 'capsule',
     size: [0.44, 0.3, 0.58],
@@ -627,7 +627,7 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0,
   }),
   part({
-    id: 'draft-dad-arms',
+    id: 'dad-arms',
     slot: 'arms',
     shape: 'capsule',
     size: [0.2, 0.5, 0.2],
@@ -641,10 +641,10 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0,
   }),
 
-  // ── Rickeyride: a kid in a bumper kart, never standing still ────────────
+  // ── The kart line: a kid in a bumper kart, never standing still ────────────
   part({
     // His "legs" are four chunky wheels (legs grow to the ground).
-    id: 'draft-kart-wheels',
+    id: 'kart-wheels',
     slot: 'legs',
     shape: 'ellipsoid',
     size: [0.32, 0.3, 0.6],
@@ -658,7 +658,7 @@ export const DRAFT_PARTS: KitPart[] = [
   }),
   part({
     // Hair blown straight back by the wind.
-    id: 'draft-wind-swoop',
+    id: 'wind-swoop',
     slot: 'crown',
     shape: 'teardrop',
     size: [0.34, 0.56, 0.16],
@@ -671,7 +671,7 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0.05,
   }),
   part({
-    id: 'draft-wind-swoop-small',
+    id: 'wind-swoop-small',
     slot: 'crown',
     shape: 'teardrop',
     size: [0.26, 0.36, 0.14],
@@ -684,7 +684,7 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0.05,
   }),
   part({
-    id: 'draft-goggles',
+    id: 'goggles',
     slot: 'horns',
     shape: 'ellipsoid',
     size: [0.27, 0.25, 0.16],
@@ -698,7 +698,7 @@ export const DRAFT_PARTS: KitPart[] = [
   }),
   part({
     // Arms reaching forward to steer, out of the top of the kart.
-    id: 'draft-steer-arms',
+    id: 'steer-arms',
     slot: 'arms',
     shape: 'capsule',
     size: [0.19, 0.9, 0.19],
@@ -714,7 +714,7 @@ export const DRAFT_PARTS: KitPart[] = [
   part({
     // The boss's steering arms: the same angles as the others, a third
     // longer (owner, round 4), so they reach out past the kart's front.
-    id: 'draft-steer-arms-long',
+    id: 'steer-arms-long',
     slot: 'arms',
     shape: 'capsule',
     size: [0.19, 1.2, 0.19], // TUNE
@@ -731,7 +731,7 @@ export const DRAFT_PARTS: KitPart[] = [
     // The boss's whippy kart-flag antenna off the back, tall enough to show
     // above his head (owner, round 4: replaces the spoiler, which read as
     // bat wings from the front).
-    id: 'draft-kart-antenna',
+    id: 'kart-antenna',
     slot: 'tail',
     shape: 'capsule',
     size: [0.06, 0.75, 0.06],
@@ -744,9 +744,9 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0,
   }),
   part({
-    // Twin hot-rod exhaust stacks standing up at the back (Revvy's new
+    // Twin hot-rod exhaust stacks standing up at the back (the middle form's new
     // part): tall enough to show over the kart from the front.
-    id: 'draft-exhaust-pipes',
+    id: 'exhaust-pipes',
     slot: 'back',
     shape: 'capsule',
     size: [0.16, 0.7, 0.16],
@@ -760,405 +760,3 @@ export const DRAFT_PARTS: KitPart[] = [
     jitter: 0,
   }),
 ];
-
-export type DraftStage = 'base' | 'middle' | 'boss';
-
-export interface DraftBossForm {
-  readonly id: string;
-  /** Draft name, settled at the owner's mockup round. */
-  readonly name: string;
-  readonly stage: DraftStage;
-  /** Plan §8 / owner decision 5: base and middle legendary, boss form mythic. */
-  readonly plannedRarity: 'legendary' | 'mythic';
-  readonly visual: SpeciesVisual;
-}
-
-export interface DraftBossLine {
-  readonly key: 'rakelet' | 'mom' | 'dad' | 'rickeyride';
-  readonly element: ElementId;
-  readonly feeling: FeelingId;
-  readonly forms: readonly [DraftBossForm, DraftBossForm, DraftBossForm];
-}
-
-const RAKELET_PALETTE = ['#9fd46e', '#fff6dc', '#f08a3c', '#b07a48']; // round 8: wood-brown crossbar, not orange
-const MOM_PALETTE = ['#ff8a6a', '#fff0e6', '#ffd166', '#8a3550'];
-const DAD_PALETTE = ['#a9d4f5', '#f4fbff', '#e2574c', '#f7f1ea'];
-const RICKEY_PALETTE = ['#ffd84a', '#bff0ff', '#3f8fe8', '#4a3a5c'];
-
-// Sizes step ×1.08–1.4 per evolution (ART_RULES.evolutionScale); each step
-// adds a sticking-out part; each form keeps its feeling's face kit (§1.6).
-export const DRAFT_BOSS_LINES: readonly DraftBossLine[] = [
-  {
-    key: 'rakelet',
-    element: 'leaf',
-    feeling: 'silly',
-    forms: [
-      {
-        id: 'draft-pileup',
-        name: 'Pileup',
-        stage: 'base',
-        plannedRarity: 'legendary',
-        visual: {
-          body: 'blob',
-          palette: RAKELET_PALETTE,
-          parts: [
-            'dot-eyes',
-            'draft-soft-brows',
-            'draft-rake-bar-small',
-            'draft-rake-tines-small',
-            'draft-rake-rivets-small',
-            'draft-rake-mouth-small',
-            'draft-face-freckles',
-            'draft-leaf-tuft',
-            'stubby-arms',
-            'biped-legs',
-          ],
-          size: 1,
-          finish: 'iridescent',
-          head: { body: 'orb', size: 0.9, forward: 0.06, up: 0.72 },
-          stance: 0.25,
-          pose: 'stand',
-          attackPart: 'fangs',
-        },
-      },
-      {
-        id: 'draft-rakeling',
-        name: 'Rakeling',
-        stage: 'middle',
-        plannedRarity: 'legendary',
-        visual: {
-          body: 'draft-upright',
-          palette: RAKELET_PALETTE,
-          parts: [
-            'dot-eyes',
-            'draft-soft-brows',
-            'draft-rake-bar',
-            'draft-rake-tines-mid',
-            'draft-rake-rivets-mid',
-            'draft-rake-mouth',
-            'draft-face-freckles',
-            'draft-leaf-pile-hair',
-            'draft-lanky-arms',
-            'draft-lanky-legs',
-          ],
-          size: 1.36,
-          finish: 'iridescent',
-          head: { body: 'orb', size: 0.9, forward: 0.06, up: 0.78 },
-          stance: 0.3,
-          pose: 'upright',
-          attackPart: 'fangs',
-        },
-      },
-      {
-        id: 'draft-rakelet',
-        name: 'Rakelet',
-        stage: 'boss',
-        plannedRarity: 'mythic',
-        visual: {
-          body: 'draft-upright',
-          palette: RAKELET_PALETTE,
-          parts: [
-            'sharp-eyes',
-            'draft-fierce-brows',
-            'draft-rake-tool-bar',
-            'draft-rake-tool-tines',
-            'draft-rake-tool-rivets',
-            'draft-rake-tool-mouth',
-            'draft-leaf-pile-hair',
-            'draft-falling-leaf-top',
-            'draft-droop-arms',
-            'draft-lanky-legs',
-          ],
-          size: 1.88,
-          finish: 'shimmer',
-          head: { body: 'draft-rake-head', size: 0.86, forward: 0.06, up: 0.8 },
-          stance: 0.38,
-          pose: 'upright',
-          attackPart: 'fangs',
-        },
-      },
-    ],
-  },
-  {
-    key: 'mom',
-    element: 'fire',
-    feeling: 'brave',
-    forms: [
-      {
-        id: 'draft-momo',
-        name: 'Momo',
-        stage: 'base',
-        plannedRarity: 'legendary',
-        visual: {
-          body: 'pear',
-          palette: MOM_PALETTE,
-          parts: [
-            'oval-eyes',
-            'brave-brows',
-            'smile',
-            'blush-cheeks',
-            'draft-fringe',
-            'stubby-arms',
-            'biped-legs',
-          ],
-          size: 1,
-          finish: 'iridescent',
-          glow: 'accent',
-          head: { body: 'orb', size: 0.9, forward: 0.06, up: 0.72 },
-          stance: 0.22,
-          pose: 'stand',
-          attackPart: 'arms',
-        },
-      },
-      {
-        id: 'draft-mamarama',
-        name: 'Mamarama',
-        stage: 'middle',
-        plannedRarity: 'legendary',
-        visual: {
-          body: 'draft-upright',
-          palette: MOM_PALETTE,
-          parts: [
-            'oval-eyes',
-            'brave-brows',
-            'smirk',
-            'blush-cheeks',
-            'draft-fringe',
-            'draft-big-bun',
-            'draft-akimbo-arms',
-            'draft-akimbo-forearms',
-            'biped-legs',
-          ],
-          size: 1.36,
-          finish: 'iridescent',
-          glow: 'accent',
-          head: { body: 'orb', size: 0.8, forward: 0.06, up: 0.8 },
-          stance: 0.28,
-          pose: 'upright',
-          attackPart: 'arms',
-        },
-      },
-      {
-        id: 'draft-mommentum',
-        name: 'Mommentum',
-        stage: 'boss',
-        plannedRarity: 'mythic',
-        visual: {
-          body: 'draft-cardigan',
-          palette: MOM_PALETTE,
-          parts: [
-            'sharp-eyes',
-            'brave-brows',
-            'smirk',
-            'blush-cheeks',
-            'draft-fringe',
-            'draft-big-bun',
-            'draft-hair-sticks',
-            'draft-akimbo-arms',
-            'draft-akimbo-forearms',
-            'biped-legs',
-          ],
-          size: 1.88,
-          finish: 'shimmer',
-          glow: 'accent',
-          head: { body: 'orb', size: 0.76, forward: 0.06, up: 0.82 },
-          stance: 0.32,
-          pose: 'upright',
-          attackPart: 'arms',
-        },
-      },
-    ],
-  },
-  {
-    key: 'dad',
-    element: 'frost',
-    feeling: 'cozy',
-    forms: [
-      {
-        id: 'draft-snowpop',
-        name: 'Snowpop',
-        stage: 'base',
-        plannedRarity: 'legendary',
-        visual: {
-          body: 'blob',
-          palette: DAD_PALETTE,
-          parts: [
-            'oval-eyes',
-            'draft-bushy-brows',
-            'tiny-smile',
-            'blush-cheeks',
-            'draft-moustache-small',
-            'draft-ball-cap',
-            'draft-cap-brim',
-            'stubby-arms',
-            'draft-sneakers',
-          ],
-          size: 1,
-          finish: 'iridescent',
-          head: { body: 'orb', size: 0.9, forward: 0.06, up: 0.72 },
-          stance: 0.2,
-          pose: 'stand',
-          attackPart: 'arms',
-        },
-      },
-      {
-        id: 'draft-frostpop',
-        name: 'Frostpop',
-        stage: 'middle',
-        plannedRarity: 'legendary',
-        visual: {
-          body: 'draft-dad-belly',
-          palette: DAD_PALETTE,
-          parts: [
-            'oval-eyes',
-            'draft-bushy-brows',
-            'smile',
-            'blush-cheeks',
-            'draft-moustache-small',
-            'draft-ball-cap',
-            'draft-cap-brim',
-            'draft-belly-patch',
-            'draft-dad-arms',
-            'draft-sneakers',
-          ],
-          size: 1.36,
-          finish: 'iridescent',
-          head: { body: 'orb', size: 0.74, forward: 0.06, up: 0.8 },
-          stance: 0.2,
-          pose: 'upright',
-          attackPart: 'arms',
-        },
-      },
-      {
-        id: 'draft-papa-brrr',
-        name: 'Papa Brrr',
-        stage: 'boss',
-        plannedRarity: 'mythic',
-        visual: {
-          body: 'draft-dad-belly',
-          palette: DAD_PALETTE,
-          parts: [
-            'oval-eyes',
-            'draft-bushy-brows',
-            'smile',
-            'blush-cheeks',
-            'draft-moustache',
-            'draft-ball-cap',
-            'draft-cap-brim',
-            'draft-belly-patch',
-            'draft-dad-arms',
-            'draft-sneakers',
-          ],
-          size: 1.88,
-          finish: 'shimmer',
-          head: { body: 'orb', size: 0.7, forward: 0.06, up: 0.82 },
-          stance: 0.22,
-          pose: 'upright',
-          attackPart: 'arms',
-        },
-      },
-    ],
-  },
-  {
-    key: 'rickeyride',
-    element: 'spark',
-    // Silly, not joy (coordinator ruling 1): silly's face kit allows open
-    // dot or sharp eyes, joy's needs closed happy arcs.
-    feeling: 'silly',
-    forms: [
-      {
-        id: 'draft-zoomlet',
-        name: 'Zoomlet',
-        stage: 'base',
-        plannedRarity: 'legendary',
-        visual: {
-          body: 'draft-kart',
-          palette: RICKEY_PALETTE,
-          parts: [
-            'dot-eyes',
-            'draft-soft-brows',
-            'open-mouth',
-            'blush-cheeks',
-            'draft-wind-swoop-small',
-            'draft-kart-wheels',
-            'draft-steer-arms',
-          ],
-          size: 0.95,
-          finish: 'iridescent',
-          head: { body: 'orb', size: 1.02, forward: 0.06, up: 0.78 },
-          stance: 0.16,
-          pose: 'stand',
-          attackPart: 'legs',
-        },
-      },
-      {
-        id: 'draft-revvy',
-        name: 'Revvy',
-        stage: 'middle',
-        plannedRarity: 'legendary',
-        visual: {
-          body: 'draft-kart',
-          palette: RICKEY_PALETTE,
-          parts: [
-            'dot-eyes',
-            'draft-soft-brows',
-            'open-mouth',
-            'blush-cheeks',
-            'draft-wind-swoop',
-            'draft-goggles',
-            'draft-kart-wheels',
-            'draft-steer-arms',
-            'draft-exhaust-pipes',
-          ],
-          size: 1.3,
-          finish: 'iridescent',
-          head: { body: 'orb', size: 0.98, forward: 0.06, up: 0.84 },
-          stance: 0.18,
-          pose: 'stand',
-          attackPart: 'legs',
-        },
-      },
-      {
-        id: 'draft-rickeyride',
-        name: 'Rickeyride',
-        stage: 'boss',
-        plannedRarity: 'mythic',
-        visual: {
-          body: 'draft-kart',
-          palette: RICKEY_PALETTE,
-          parts: [
-            'dot-eyes',
-            'draft-fierce-brows',
-            'open-mouth',
-            'blush-cheeks',
-            'draft-wind-swoop',
-            'draft-goggles',
-            'draft-kart-wheels',
-            'draft-steer-arms-long',
-            'draft-exhaust-pipes',
-            'draft-kart-antenna',
-          ],
-          size: 1.8,
-          finish: 'shimmer',
-          head: { body: 'orb', size: 0.95, forward: 0.06, up: 0.88 },
-          stance: 0.2,
-          pose: 'stand',
-          attackPart: 'legs',
-        },
-      },
-    ],
-  },
-];
-
-/** Every draft form as a gallery look, at its planned rarity's material tier. */
-export function draftLooks(): {
-  id: string;
-  visual: SpeciesVisual;
-  rarity: 'legendary' | 'mythic';
-}[] {
-  return DRAFT_BOSS_LINES.flatMap((line) => line.forms).map((f) => ({
-    id: f.id,
-    visual: f.visual,
-    rarity: f.plannedRarity,
-  }));
-}
