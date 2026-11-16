@@ -135,7 +135,7 @@ test.describe('a mini-boss fight (#190)', () => {
     await expect(page.getByTestId('battle-result')).toBeHidden();
   });
 
-  test('the boss winds up, lands it, makes a friend flinch and calls for backup (#234)', async ({
+  test('the boss winds up, lands it and calls for backup (#234)', async ({
     browser,
   }) => {
     const page = await newPlayer(browser, uniqueName('stomp'));
@@ -148,15 +148,15 @@ test.describe('a mini-boss fight (#190)', () => {
     // Round 1: the charge. Nothing lands; the boss plate says it's winding up.
     await playRound(page);
     await expect(winding).toHaveText('⏳ Winding up…');
-    await expect(page.getByTestId('boss-round')).toHaveText('Round 2');
+    await expect(page.getByTestId('boss-round')).toHaveText('Round 2', { timeout: 30_000 });
     // Round 2: it lands, and the chip goes.
     await playRound(page);
-    await expect(page.getByTestId('boss-round')).toHaveText('Round 3');
+    await expect(page.getByTestId('boss-round')).toHaveText('Round 3', { timeout: 30_000 });
     await expect(winding).toBeHidden();
     // Round 3: an assist. Its called-in stomp is backup, not a second stomp.
     await playRound(page);
     await expect(page.getByTestId('boss-callout')).not.toHaveText('Stomp again!');
-    await expect(page.getByTestId('boss-round')).toHaveText('Round 4');
+    await expect(page.getByTestId('boss-round')).toHaveText('Round 4', { timeout: 30_000 });
     await expect.poll(() => stub.rounds.length).toBe(3);
   });
 

@@ -1167,6 +1167,12 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   height: 14px;
 }
 
+/* A chip the plate hides (the stomps and ⏳ chips) stays hidden: the
+   display below would beat the attribute. */
+.boss-chip[hidden] {
+  display: none;
+}
+
 .boss-chip {
   display: inline-flex;
   align-items: center;
