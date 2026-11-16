@@ -111,6 +111,26 @@ describe('mini-boss species (#234)', () => {
     }
   });
 
+  it('gives the signature moves the #234 engine effects', () => {
+    const move = (id: string) => {
+      const m = BOSS_MOVES.find((x) => x.id === id);
+      if (!m) throw new Error(`no boss move "${id}"`);
+      return m;
+    };
+    const kinds = (id: string) => (move(id).effects ?? []).map((e) => e.type);
+    expect(kinds('count-to-three')).toEqual(['windup']);
+    expect(kinds('leaf-pile-pounce')).toEqual(['flinch']);
+    expect(kinds('full-name-shout')).toEqual(['flinch']);
+    expect(kinds('mama-bear-charge')).toEqual(['low-energy']);
+    expect(move('ask-your-mother').effects?.[0]).toEqual({
+      type: 'assist',
+      move: 'mama-bear-charge',
+    });
+    // Count to Three replaces Mossy Nap (#234 lever A): no heal left to stall on.
+    expect(get('rakelet').moves).toContain('count-to-three');
+    expect(get('rakelet').moves).not.toContain('mossy-nap');
+  });
+
   it('checks clean with the public and server data', () => {
     expect(checkGameData(GAME_DATA)).toEqual([]);
     expect(checkServerGameData(SERVER_GAME_DATA, GAME_DATA)).toEqual([]);
