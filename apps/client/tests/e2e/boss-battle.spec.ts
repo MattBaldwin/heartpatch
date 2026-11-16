@@ -141,6 +141,21 @@ test.describe('a mini-boss fight (#190)', () => {
       openRounds: 3,
       tricks: ['windup', 'land', 'assist'],
     });
+    // Captions and callouts come and go with each step: keep every one the screen shows.
+    await page.evaluate(() => {
+      const seen: string[] = [];
+      (window as unknown as { hpCaptions: string[] }).hpCaptions = seen;
+      const note = (selector: string) => {
+        const text = document.querySelector(selector)?.textContent ?? '';
+        if (text && !seen.includes(text)) seen.push(text);
+      };
+      new MutationObserver(() => {
+        note('[data-testid="battle-caption"]');
+        note('[data-testid="boss-callout"]');
+      }).observe(document.body, { childList: true, characterData: true, subtree: true });
+    });
+    const captions = () =>
+      page.evaluate(() => (window as unknown as { hpCaptions: string[] }).hpCaptions);
     const winding = page.getByTestId('boss-windup');
     await expect(winding).toBeHidden();
     // Round 1: the charge. Nothing lands; the boss plate says it's winding up.
@@ -153,8 +168,9 @@ test.describe('a mini-boss fight (#190)', () => {
     await expect(winding).toBeHidden();
     // Round 3: an assist. Its called-in stomp is backup, not a second stomp.
     await playRound(page);
-    await expect(page.getByTestId('boss-callout')).not.toHaveText('Stomp again!');
     await expect(page.getByTestId('boss-round')).toHaveText('Round 4', { timeout: 30_000 });
+    await expect.poll(captions).toContain('Backup! Big Stomp!');
+    expect(await captions()).not.toContain('Stomp again!');
     await expect.poll(() => stub.rounds.length).toBe(3);
   });
 

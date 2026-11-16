@@ -72,7 +72,11 @@ const CHARMS_PER_ASK = 3;
 
 const DAY = 24 * 60 * 60 * 1000;
 const STOMP = 'big-stomp';
-/** The #234 trick moves' ids (stand-ins for PR 2's boss moves). */
+/**
+ * The #234 trick moves' ids: stub copies shaped like the real boss moves (Count
+ * to Three, Full Name Shout, Ask Your Mother), each spread from the area stomp, so
+ * unlike the real one-foe Count to Three, the stub's hits everyone.
+ */
 const TRICK = {
   windup: 'stub-count-to-three',
   flinch: 'stub-full-name-shout',

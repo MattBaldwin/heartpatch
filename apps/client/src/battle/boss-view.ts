@@ -294,7 +294,7 @@ export function isAreaMove(move: Pick<Move, 'targets'> | undefined | null): bool
 /**
  * The callout for a log step in a boss fight: "Stomp again!" on the boss's
  * second (or later) move in a round, "Everyone!" on an area move. `bossMoves`
- * counts the boss's own moves played so far this round (`countsAsBossMove`).
+ * counts the boss's own moves played so far this round (`isOwnMove`).
  * A move an assist called in (#234) is not the boss's own, and a landing
  * windup keeps its "Here it comes!".
  */
