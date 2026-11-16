@@ -707,7 +707,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
               'data-testid': 'battle-move',
               'data-kind': info.kind,
               ...(info.style && { 'data-style': info.style }),
-              'aria-label': moveLabel(move.name, info),
+              'aria-label': moveLabel(move.name, info, move.locked === true),
             },
             el('span', { class: 'battle-move-name' }, move.name),
             el(

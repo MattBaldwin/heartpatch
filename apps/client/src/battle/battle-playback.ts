@@ -277,31 +277,48 @@ interface MoveCue {
 /**
  * The #234 cues for every `move` in the log, by log index. The whole log is
  * read, so a windup started in an earlier round still lands with its callout.
- * Each mover's energy is rebuilt backwards from the view (a hit's and a
- * heal's `amount` is what it really moved), so "Fired up!" reads the energy
- * the bars show at that moment.
+ * "Fired up!" reads the mover's energy at that moment from the nearest event
+ * that reports it: the last earlier `hit`/`heal` on that slot (its `energy`),
+ * else the next later one (its `energy` before the `amount` moved), else the
+ * view. No running sum, so an event that changes energy some other way can't
+ * skew it.
  */
 function moveCues(battle: PlayerBattle, content: BattleContent): Map<number, MoveCue> {
   const { log, sides } = battle.view;
   const key = (side: BattleSideId, slot: number) => `${side}:${String(slot)}`;
-  const energy = new Map<string, number>();
+  /** Each low-energy `move` (by log index) and its user's full energy. */
+  const lowMoves = new Map<number, number>();
+  const energyAt = new Map<number, number>();
+  const last = new Map<string, number>();
+  log.forEach((event, i) => {
+    if (event.type === 'forfeit' || event.type === 'battle-end') return;
+    const at = key(event.side, event.slot);
+    if (event.type === 'hit' || event.type === 'heal') last.set(at, event.energy);
+    else if (event.type === 'move') {
+      const low = content.moves.get(event.move)?.effects?.some((e) => e.type === 'low-energy');
+      const hp = sides[event.side].squishies[event.slot]?.stats.hp ?? 0;
+      if (low !== true || hp <= 0) return;
+      lowMoves.set(i, hp);
+      const known = last.get(at);
+      if (known !== undefined) energyAt.set(i, known);
+    }
+  });
+  const next = new Map<string, number>();
   for (const side of ['a', 'b'] as const) {
-    sides[side].squishies.forEach((s, slot) => energy.set(key(side, slot), s.energy));
+    sides[side].squishies.forEach((s, slot) => next.set(key(side, slot), s.energy));
   }
-  const firedUp = new Set<number>();
   for (let i = log.length - 1; i >= 0; i--) {
     const event = log[i];
     if (!event || event.type === 'forfeit' || event.type === 'battle-end') continue;
     const at = key(event.side, event.slot);
-    const now = energy.get(at) ?? 0;
-    if (event.type === 'hit') energy.set(at, now + event.amount);
-    else if (event.type === 'heal') energy.set(at, now - event.amount);
-    else if (event.type === 'move') {
-      const low = content.moves.get(event.move)?.effects?.some((e) => e.type === 'low-energy');
-      const hp = sides[event.side].squishies[event.slot]?.stats.hp ?? 0;
-      if (low === true && hp > 0 && now * 2 <= hp) firedUp.add(i);
-    }
+    if (event.type === 'hit') next.set(at, event.energy + event.amount);
+    else if (event.type === 'heal') next.set(at, event.energy - event.amount);
+    else if (lowMoves.has(i) && !energyAt.has(i)) energyAt.set(i, next.get(at) ?? 0);
   }
+  const firedUp = new Set<number>();
+  lowMoves.forEach((hp, i) => {
+    if ((energyAt.get(i) ?? hp) * 2 <= hp) firedUp.add(i);
+  });
   const cues = new Map<number, MoveCue>();
   const winding = new Set<string>();
   log.forEach((event, i) => {

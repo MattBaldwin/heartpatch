@@ -719,4 +719,17 @@ describe('the #234 cues', () => {
       .map((s) => s.callout);
     expect(callouts).toEqual([null, EFFECT_WORDS.firedUp, null, null]);
   });
+
+  it('Fired up! trusts the energy a hit reports over the end-of-log bar', () => {
+    // Puff ends on 40/40 by some way the log doesn't spell out as a heal; the
+    // hit's own `energy` (15) is what its bar showed when it charged.
+    const b = withMoves([
+      { ...at('a'), type: 'hit', amount: 25, energy: 15, effectiveness: 'normal' },
+      { ...at('a'), type: 'move', move: 'test-mama-charge' },
+    ]);
+    const callouts = playbackSteps(b, new BattleContent(b), 0)
+      .filter((s) => s.kind === 'move')
+      .map((s) => s.callout);
+    expect(callouts).toEqual([EFFECT_WORDS.firedUp]);
+  });
 });

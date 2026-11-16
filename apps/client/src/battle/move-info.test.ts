@@ -14,6 +14,7 @@ import {
   gentleHintShows,
   lockForWindup,
   WINDUP_HINT,
+  WINDUP_LOCKED,
   moveEdge,
   moveLabel,
   STYLE_MORE,
@@ -91,6 +92,13 @@ describe('lockForWindup (#234)', () => {
       { id: 'b', name: 'B', info: { ...info, hint: WINDUP_HINT } },
     ]);
     expect(WINDUP_HINT).toBe('Keep winding up!');
+  });
+
+  it('tells a screen reader why a locked move is dimmed', () => {
+    expect(moveLabel('Ember Boop', info, true)).toBe(
+      `Ember Boop. Boop. Takes their energy. Power 40. ${WINDUP_LOCKED}`,
+    );
+    expect(findAvoidedWords(WINDUP_LOCKED)).toEqual([]);
   });
 
   it('leaves the buttons alone when nothing is winding up', () => {

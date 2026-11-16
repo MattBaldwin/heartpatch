@@ -216,8 +216,9 @@ function openRound(
     sides[side] = {
       ...sides[side],
       squishies: sides[side].squishies.map((s, slot) => {
+        // A swing that was winding up has landed: drop the old windup before maybe setting a new one.
         const moved = { ...s, energy: next.get(`${side}${String(slot)}`) ?? s['energy'] };
-        delete moved['windup'];
+        delete (moved as Json)['windup'];
         return side === 'b' && slot === 0 && windup ? { ...moved, windup } : moved;
       }),
     };

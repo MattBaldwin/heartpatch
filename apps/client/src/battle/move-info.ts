@@ -53,6 +53,8 @@ export const GENTLE_HINT = 'Gentle! Leaves a sliver for a Heart Charm';
 
 /** The pending move's hint while its squishy winds up (#234); the others wait. */
 export const WINDUP_HINT = 'Keep winding up!';
+/** Read out on a locked move (#234): why the button is dimmed. */
+export const WINDUP_LOCKED = 'Busy winding up another move';
 
 /**
  * The move buttons while a squishy winds up (#234): the pending move carries
@@ -299,11 +301,12 @@ export function describeMove(
 }
 
 /** The words a screen reader gets for the whole button. */
-export function moveLabel(name: string, info: MoveInfo): string {
+export function moveLabel(name: string, info: MoveInfo, locked = false): string {
   const parts = [name, info.look.label, info.line];
   if (info.number) parts.push(`Power ${info.number}`);
   if (info.hits) parts.push(info.hits);
   if (info.edge) parts.push(`${EDGE_WORDS[info.edge].label} against them`);
   if (info.hint) parts.push(info.hint);
+  if (locked) parts.push(WINDUP_LOCKED);
   return parts.join('. ');
 }
