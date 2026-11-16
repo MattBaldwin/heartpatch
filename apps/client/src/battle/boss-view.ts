@@ -159,7 +159,7 @@ export function bossPlates(
       percent: boss ? energyPercent({ energy: bossEnergy, stats: boss.stats }) : 0,
       energyText: boss ? `${String(bossEnergy)}/${String(boss.stats.hp)}` : '',
       stomps: stompsChip(),
-      windup: shown[theirs].chips[slot]?.windup ?? (boss?.windup !== undefined),
+      windup: shown[theirs].chips[slot]?.windup ?? boss?.windup !== undefined,
     },
     friends: slotsOut(b, b.mySide).flatMap((s) => {
       const squishy = b.view.sides[b.mySide].squishies[s];
