@@ -2502,9 +2502,9 @@ Merged: #854 (supervisor 45 handoff docs). Open at handoff: #844 (owner SHIP-OK 
 
 **Owner decisions (2026-11-16, supervisor 46 shift):** none received. Pending: #844 SHIP-OK (asked a fifth time); boss enable (`testers` first, recommended).
 
-## Supervisor 47 (2026-11-16 ~15:24 → in progress)
+## Supervisor 47 (2026-11-16 ~15:24 → handoff)
 
-Merged: #856 (supervisor 46 handoff docs), #855 (Chore: #234 boss follow-ups: reviewer non-blockers, windup framing fix, real-boss captures). Open: #844 (owner SHIP-OK pending since 05:40 UTC).
+Merged: #856 (supervisor 46 handoff docs), #855 (Chore: #234 boss follow-ups: reviewer non-blockers, windup framing fix, real-boss captures), #857 (supervisor 47 decisions). Open: #844 (owner SHIP-OK pending since 05:40 UTC).
 
 **Boss battle UI (from PR #855, coordinator-recorded)**
 - A hidden boss Order strip keeps its layout room (`visibility: hidden`, not `display: none`), so the camera's safe region, measured once from `.boss-head`'s bottom edge, does not change when the strip appears mid-round.
@@ -2515,5 +2515,7 @@ Merged: #856 (supervisor 46 handoff docs), #855 (Chore: #234 boss follow-ups: re
 - **Captures never ride the PR branch.** Screenshots for the owner's look go on a sibling `captures-<issue>-<slug>` branch (here `captures-234-boss-followups`, head `c85eaf2`), with the README and the capture spec as `.txt`. The PR branch carries no PNGs, so a squash merge puts none on main. The reviewer may treat PNGs on a PR branch as blocking.
 - **Re-shot captures get a fresh Opus render-check** before the owner sees them (restated from Supervisor 46; applied to #855's 8 re-shot frames: PASS).
 - #784 WebKit tap-stall tally: sup47 +1 (`e2e (ipad-webkit, 5)`, `far-hollow-house.spec.ts:260`, on #855 `e9f166d`). Running: sup41 +14, sup42 +6, sup43 +2, sup44 +1, sup45 +0, sup46 +3, sup47 +1.
+- **Capture lanes measure, they don't look.** Frame verification in a lane goes through a script that reads pixel rows, not through the model reading PNGs; each PNG read costs several thousand tokens of lane context and the #855 part-2 lane reached 149k in 19 minutes that way.
+- **Lineage limit reached next shift.** Supervisor 48 is depth 7 and does not start supervisor 49 (COORDINATOR §8 step 5).
 
-**Owner decisions (2026-11-16, supervisor 47 shift):** none received yet. Pending: #844 SHIP-OK; boss enable (`HP_MINI_BOSSES=testers` first, recommended).
+**Owner decisions (2026-11-16, supervisor 47 shift):** none received. Pending: #844 SHIP-OK (asked a sixth time); boss enable (`testers` first, recommended; sim on `760345d` passed all five gates).
