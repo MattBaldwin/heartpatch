@@ -3,7 +3,13 @@ import { SECRET_MOVES, SECRET_SPECIES, type BossEventRules } from '@heartpatch/s
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
 import type { GameEvent } from '../../db/game-events.js';
-import { BOSS_RULES, REAL_BAG_RULES, STAND_IN_BOSS, bossHarness } from '../../../tests/boss.js';
+import {
+  BOSS_RULES,
+  REAL_BAG_IS_REAL,
+  REAL_BAG_RULES,
+  STAND_IN_BOSS,
+  bossHarness,
+} from '../../../tests/boss.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 
 const url = inject('testDatabaseUrl');
@@ -234,6 +240,34 @@ describe.skipIf(!url)('mini-boss secrets stay on the server (#190c, needs DATABA
     // The walker still catches an odds-like `chance` outside a move effect.
     expect(leaks({ ...battle, boss: { ...battle.boss, chance: 40 } })).toEqual(['chance']);
   });
+
+  it.skipIf(!REAL_BAG_IS_REAL)(
+    'moveDefs carry a move an assist calls in (#234): Papa Brrr brings Mama Bear Charge',
+    async () => {
+      const papaOnly: BossEventRules = {
+        ...REAL_BAG_RULES,
+        bag: REAL_BAG_RULES.bag.filter((b) => b.speciesId === 'papa-brrr'),
+      };
+      expect(papaOnly.bag).toHaveLength(1);
+      await h.start(papaOnly, { miniBosses: 'on' });
+      const kid = await h.player();
+      const mapId = await h.patch(kid);
+      await h.grow(mapId, kid, 20);
+      await h.toVisit(mapId, papaOnly);
+      const battle = await h.fight(kid, mapId);
+
+      const ask = SECRET_MOVES.find((m) => m.id === 'ask-your-mother')!;
+      expect(ask.effects).toContainEqual({ type: 'assist', move: 'mama-bear-charge' });
+      const charge = SECRET_MOVES.find((m) => m.id === 'mama-bear-charge')!;
+      // Papa Brrr doesn't know it himself: it rides along only for the assist.
+      expect(battle.speciesDefs.find((s) => s.id === 'papa-brrr')!.moves).not.toContain(charge.id);
+      expect(battle.moveDefs.find((m) => m.id === charge.id)).toEqual(charge);
+      // A flavour hint, not a secret: Mommentum herself is never named.
+      expect(battle.speciesDefs.map((s) => s.id)).not.toContain('mommentum');
+      expect(JSON.stringify(battle)).not.toMatch(/mommentum/i);
+      expect(leaks(battle)).toEqual([]);
+    },
+  );
 
   it('the switch closed (#234): nothing about the visit is sent', async () => {
     await h.start(REAL_BAG_RULES, { miniBosses: 'off' });

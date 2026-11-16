@@ -621,7 +621,8 @@ const PUBLIC_MOVES = new Set(GAME_DATA.moves.map((m) => m.id));
 
 /**
  * Rows the client may not have: species and moves outside the public tables
- * (a secret squishy the player just met), so it can draw and name them.
+ * (a secret squishy the player just met), so it can draw and name them,
+ * plus any secret move one of those moves calls in with `assist`.
  */
 function defsFor(
   content: BattleContent,
@@ -640,7 +641,16 @@ function defsFor(
       }
       for (const id of squishy.moves) {
         const move = content.moves.get(id);
-        if (move && !PUBLIC_MOVES.has(id)) moveDefs.set(id, move);
+        if (!move) continue;
+        if (!PUBLIC_MOVES.has(id)) moveDefs.set(id, move);
+        // One hop (#234): the move an `assist` calls in goes too, so the
+        // client can name it. The data check forbids an assist calling in
+        // another assist, so one hop is all there is.
+        for (const effect of move.effects ?? []) {
+          if (effect.type !== 'assist' || PUBLIC_MOVES.has(effect.move)) continue;
+          const called = content.moves.get(effect.move);
+          if (called) moveDefs.set(called.id, called);
+        }
       }
     }
   }
