@@ -1199,8 +1199,20 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
    chip. Scoped to the plate: map/boss.css's own `.boss-chip` (the map card's
    blue pill) loads later and would win a tie. */
 .boss-plate .boss-chip-windup {
+  order: 1;
   background: #fff3c4;
   color: #7a5a00;
+}
+
+/*
+ * A hidden ⏳ chip keeps its slot, last in the row (#234), so the chip row is
+ * the same height whether or not the boss winds up: at 393 px the three chips
+ * wrap, and a row that grew mid-round would push the boss's face up under the
+ * order strip (see `.boss-order[hidden]`).
+ */
+.boss-plate .boss-chip-windup[hidden] {
+  display: inline-flex;
+  visibility: hidden;
 }
 
 .boss-chip-try {
@@ -1362,9 +1374,10 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 
 /*
  * A hidden order strip keeps its room (#234): the camera frames the boss under
- * the boss head, measured once per layout change, so a strip that took no room
- * at rest would cover the boss's face when it shows mid-round (a windup's
- * power-up lifts it right up to that edge).
+ * the boss head, measured once per layout change (the head is absolutely
+ * placed, so nothing re-measures it mid-round). Nothing in the head may change
+ * height mid-round, or it covers the boss's face when a windup's power-up
+ * lifts it right up to that edge: this strip and the ⏳ chip keep their room.
  */
 .boss-order[hidden] {
   visibility: hidden;
