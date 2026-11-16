@@ -227,7 +227,10 @@ describe.skipIf(!url)('mini-boss secrets stay on the server (#190c, needs DATABA
     const signature = SECRET_MOVES.filter((m) => boss.moves.includes(m.id));
     expect(signature.some((m) => (m.effects ?? []).some((e) => 'chance' in e))).toBe(true);
     for (const move of signature)
-      expect(battle.moveDefs.find((m) => m.id === move.id), move.id).toEqual(move);
+      expect(
+        battle.moveDefs.find((m) => m.id === move.id),
+        move.id,
+      ).toEqual(move);
     // The walker still catches an odds-like `chance` outside a move effect.
     expect(leaks({ ...battle, boss: { ...battle.boss, chance: 40 } })).toEqual(['chance']);
   });
