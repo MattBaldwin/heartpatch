@@ -725,18 +725,18 @@ describe.skipIf(!url)('the mini-boss switch over the real bag (#234, needs DATAB
     expect(friend?.speciesId).toBe(baseFormOf(bossId, EVOLUTION_STEPS));
   });
 
-  it('a fight already going still finishes after the switch closes', async () => {
-    await h.start(REAL_BAG_RULES, { miniBosses: 'on' });
+  it('a fight already going still finishes after the switch closes, and can still befriend', async () => {
+    await h.start(SURE_REAL, { miniBosses: 'on' });
     const kid = await h.player();
     const mapId = await h.patch(kid);
     await h.grow(mapId, kid, 20);
-    await h.toVisit(mapId, REAL_BAG_RULES);
+    await h.toVisit(mapId, SURE_REAL);
     const started = await h.fight(kid, mapId);
     const at = h.clock.getTime();
 
     await h.close();
     h.clock.setTime(at);
-    await h.start(REAL_BAG_RULES, { miniBosses: 'off' });
+    await h.start(SURE_REAL, { miniBosses: 'off' });
     // Closed: no visit to see, but the fight going comes back to its Keeper.
     const res = await h.call('GET', `/maps/${mapId}/boss`, kid);
     expect(BossVisitResponseSchema.parse(res.json()).boss).toBeNull();
@@ -745,7 +745,12 @@ describe.skipIf(!url)('the mini-boss switch over the real bag (#234, needs DATAB
     const resumed = BattleResponseSchema.parse(again.json()).battle;
     expect(resumed.id).toBe(started.id);
     const done = await h.playOut(kid, resumed);
-    expect(done.status).not.toBe('active');
+    expect(done.view.phase).toMatchObject({ type: 'over', result: { winner: 'a' } });
+    // The won fight can still be asked to be a friend: befriending isn't gated.
+    await grantItems(db, { mapId, userId: kid.id }, { 'heart-charm': 3 }, 'dev-grant');
+    const yes = await h.call('POST', `/battles/${done.id}/befriend`, kid, { ask: 1 });
+    expect(yes.statusCode, yes.body).toBe(200);
+    expect(yes.json<{ outcome: string }>().outcome).toBe('joined');
     // And a new one doesn't start.
     const next = await h.call('POST', `/maps/${mapId}/boss/battle`, kid);
     expect(next.statusCode, next.body).toBe(404);
