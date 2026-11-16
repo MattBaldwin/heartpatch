@@ -1195,8 +1195,10 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   color: #6b4a06;
 }
 
-/* The boss is winding up a big move (#234): the same ⏳ tint as the plate chip. */
-.boss-chip-windup {
+/* The boss is winding up a big move (#234): the same ⏳ tint as the plate
+   chip. Scoped to the plate: map/boss.css's own `.boss-chip` (the map card's
+   blue pill) loads later and would win a tie. */
+.boss-plate .boss-chip-windup {
   background: #fff3c4;
   color: #7a5a00;
 }
