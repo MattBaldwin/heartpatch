@@ -159,10 +159,37 @@
   gap: 6px;
   padding: 4px var(--hp-pad-x) 8px;
   /* A picked chip slides in with this much room, so its label never touches the edge. */
-  scroll-padding-inline: var(--hp-pad-x);
+  scroll-padding-inline: var(--guide-fade);
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
+  /* Soft edge where more chips are scrolled off (set by data-fade-*). It is no
+     wider than the row's scroll padding (the same variable), so a picked chip is never dimmed. */
+  --guide-fade: 24px; /* TUNE: wide enough to read as "more this way" */
+  --fade-left: 0px;
+  --fade-right: 0px;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--fade-left),
+    #000 calc(100% - var(--fade-right)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--fade-left),
+    #000 calc(100% - var(--fade-right)),
+    transparent 100%
+  );
+}
+
+.guide-jump[data-fade-left] {
+  --fade-left: var(--guide-fade);
+}
+
+.guide-jump[data-fade-right] {
+  --fade-right: var(--guide-fade);
 }
 
 .guide-jump::-webkit-scrollbar {

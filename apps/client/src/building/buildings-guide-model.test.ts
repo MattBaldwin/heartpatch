@@ -166,6 +166,14 @@ describe('buildings guide words (#715)', () => {
     expect(fitHere(barn, [card('pumpkin-barn')])).toMatchObject({ kind: 'fits' });
   });
 
+  it("a seasonal card the sheet blocks for the tile shows the sheet's reason, not Back next", () => {
+    const barn = entry('pumpkin-barn', [], 'cozy');
+    expect(fitHere(barn, [card('pumpkin-barn', { blocked: 'Needs a grass tile 🌱' })])).toEqual({
+      kind: 'no',
+      reason: 'Needs a grass tile 🌱',
+    });
+  });
+
   it('shelves by fit, so an offered seasonal card leaves Coming later and counts as fitting', () => {
     const barn = entry('pumpkin-barn', [], 'cozy');
     const den = entry('ember-den');

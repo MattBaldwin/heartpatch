@@ -232,12 +232,15 @@ export function fitHere(entry: BuildingGuideEntry, here: readonly BuildCard[]): 
   // A card the sheet offers unblocked wins: the server's season beats the phone's date.
   const card = here.find((c) => c.id === entry.id);
   if (card && card.blocked === null) return { kind: 'fits', card };
+  // A card the sheet offers but blocks says its own why (the tile's reason),
+  // not "Back next…": the sheet knows the season, the phone's date only guesses.
+  if (card?.blocked) return { kind: 'no', reason: card.blocked };
   const label = gateLabel(entry);
   if (label !== null) return { kind: 'later', label };
   if (entry.place.some((p) => p.kind === 'placement' && p.placement === 'home')) {
     return { kind: 'home' };
   }
-  return { kind: 'no', reason: card?.blocked ?? needsLine(entry.place) };
+  return { kind: 'no', reason: needsLine(entry.place) };
 }
 
 /** One shelf of the list: a group, or "Coming later". */
