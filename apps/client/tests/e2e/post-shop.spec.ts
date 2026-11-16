@@ -139,3 +139,30 @@ test("shop: a refused purchase keeps the server's words after the card re-reads"
   await expect(page.getByTestId('post-shop-note')).not.toHaveText('');
   await expect(page.getByTestId('post-shop-done')).toBeHidden();
 });
+
+test('shop: Night supplies and the Fence patch kit, with nothing to stock or fix, say so and charge nothing (729b)', async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const { page, errors } = await shopper(browser, 200);
+  await expect(card(page, 'night-supplies')).toContainText('Night supplies');
+  await expect(card(page, 'night-supplies')).toContainText('1 a week');
+  await expect(card(page, 'fence-patch-kit')).toContainText('Fence patch kit');
+
+  // A new patch has no fires: the server's words, and the coins stay.
+  await page.getByTestId('post-shop-buy-night-supplies').tap();
+  await expect(page.getByTestId('post-shop-confirm')).toContainText(
+    'Buy Night supplies for 💛 80?',
+  );
+  await page.getByTestId('post-shop-confirm-yes').tap();
+  await expect(page.getByTestId('post-shop-note')).toHaveText('No fires to stock yet 🔥');
+  await expect(page.getByTestId('post-shop-done')).toBeHidden();
+  await expect(page.getByTestId('post-shop-balance')).toHaveText('💛 200');
+
+  // No fences either.
+  await page.getByTestId('post-shop-buy-fence-patch-kit').tap();
+  await page.getByTestId('post-shop-confirm-yes').tap();
+  await expect(page.getByTestId('post-shop-note')).toHaveText('No fences to fix yet 🪵');
+  await expect(page.getByTestId('post-shop-balance')).toHaveText('💛 200');
+  expect(errors).toEqual([]);
+});

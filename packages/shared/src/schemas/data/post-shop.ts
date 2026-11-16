@@ -5,11 +5,17 @@ import { isTradableResource, type Resource } from './resources.js';
 
 // The trading post's Shop (#729): consumables bought with Heart Coins on this
 // patch, never traded, gifted or refunded. Priced in Heart Coins only (Patch
-// Coins stay the Boutique's, DECISIONS F). The Fence patch kit and Night
-// supplies come with 729b; the shape grows then.
+// Coins stay the Boutique's, DECISIONS F). Night supplies and the Fence
+// patch kit (729b) work on what the buyer already has on the patch.
 
 /** What the Shop sells, by id. */
-export const PostShopItemIdSchema = z.enum(['rare-lure', 'heart-charm-pack', 'potion-crate']);
+export const PostShopItemIdSchema = z.enum([
+  'rare-lure',
+  'heart-charm-pack',
+  'potion-crate',
+  'night-supplies',
+  'fence-patch-kit',
+]);
 export type PostShopItemId = z.infer<typeof PostShopItemIdSchema>;
 
 /**
@@ -17,6 +23,9 @@ export type PostShopItemId = z.infer<typeof PostShopItemIdSchema>;
  * - `lure`: the buyer's next wild encounter on the patch rolls one rarity tier
  *   up, held until a wild start uses it.
  * - `items`: these go straight into the buyer's bag on the patch.
+ * - `fuel-all`: `nights` of fuel to every Hearthfire the buyer owns on the
+ *   patch, each only as much as fits (`fuelSpace`).
+ * - `repair-fences`: every fence segment the buyer owns on the patch back to full.
  */
 export const PostShopEffectSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('lure') }),
@@ -24,6 +33,8 @@ export const PostShopEffectSchema = z.discriminatedUnion('kind', [
     kind: z.literal('items'),
     items: z.record(ContentIdSchema, z.number().int().min(1).max(99)),
   }),
+  z.strictObject({ kind: z.literal('fuel-all'), nights: z.number().int().min(1).max(14) }),
+  z.strictObject({ kind: z.literal('repair-fences') }),
 ]);
 export type PostShopEffect = z.infer<typeof PostShopEffectSchema>;
 

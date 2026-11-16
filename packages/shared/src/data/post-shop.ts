@@ -1,8 +1,8 @@
 import type { PostShop, PostShopItem, PostShopItemId } from '../schemas/data/post-shop.js';
 
 /**
- * The trading post's Shop (#729, owner decision 2026-11-15): three
- * consumables in Phase 1, priced in Heart Coins on the patch. Checked by
+ * The trading post's Shop (#729, owner decision 2026-11-15): five
+ * consumables, priced in Heart Coins on the patch. Checked by
  * `checkPostShop` in tests. `pnpm sim:patch-economy` says a casual kid nets
  * about 777 a week after upkeep, so two Lures a week are about a third of it.
  */
@@ -24,6 +24,19 @@ export const POST_SHOP: PostShop = [
     id: 'potion-crate',
     price: 60, // TUNE: one of each battle potion
     effect: { kind: 'items', items: { 'brave-brew': 1, 'cozy-cocoa': 1, 'hearty-soup': 1 } },
+    cap: { count: 1, per: 'day' }, // TUNE:
+  },
+  {
+    id: 'night-supplies',
+    price: 80, // TUNE: #729 table
+    effect: { kind: 'fuel-all', nights: 3 }, // TUNE: each fire takes only what fits
+    // TUNE: "1 per Long Night" as the rolling 7 patch days (729b ruling)
+    cap: { count: 1, per: 'week' },
+  },
+  {
+    id: 'fence-patch-kit',
+    price: 50, // TUNE: #729 table
+    effect: { kind: 'repair-fences' },
     cap: { count: 1, per: 'day' }, // TUNE:
   },
 ];

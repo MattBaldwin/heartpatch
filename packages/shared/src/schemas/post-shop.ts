@@ -55,10 +55,20 @@ export const BuyRequestSchema = z.strictObject({
 });
 export type BuyRequest = z.infer<typeof BuyRequestSchema>;
 
-/** What a purchase gave: things in the bag, or a Rare Lure held. */
+/**
+ * What a purchase gave: things in the bag, a Rare Lure held, fuel in my
+ * fires (`fires` that took some, `nights` added across them), or my fences
+ * mended (`fences` segments back to full).
+ */
 export const ShopGotSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('items'), items: ItemCountsSchema }),
   z.object({ kind: z.literal('lure') }),
+  z.object({
+    kind: z.literal('fuel-all'),
+    fires: z.number().int().min(1),
+    nights: z.number().int().min(1),
+  }),
+  z.object({ kind: z.literal('repair-fences'), fences: z.number().int().min(1) }),
 ]);
 export type ShopGot = z.infer<typeof ShopGotSchema>;
 

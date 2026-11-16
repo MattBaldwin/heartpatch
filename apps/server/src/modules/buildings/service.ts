@@ -1087,10 +1087,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     fuelAll: (user, mapId) =>
       command(user, mapId, async ({ repo, tx, at, local, timeZone, mapKind }) => {
         // My fires (step 8, id order), then the bag's rows (step 11, `consumeItems`).
-        const fires = (await repo.lockFires(mapId, user.id)).flatMap((row) => {
-          const fire = BUILDING_DATA.get(row.buildingId);
-          return fire?.kind === 'hearthfire' ? [{ row, fire }] : [];
-        });
+        const fires = await lockMyFires(repo, mapId, user.id);
         if (fires.length === 0) throw new AppError('CONFLICT', MESSAGES.noFires);
         const items = await createInventoryRepo(tx).list({ mapId, userId: user.id });
         const plan = planFuelAll(
@@ -1132,25 +1129,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         }
         // One spend for all of it: the rows lock once, in item-id order.
         await consumeItems(tx, { mapId, userId: user.id }, total, 'fuel', null);
-        let nights = 0;
-        for (const { row, fire } of fires) {
-          const adding = plan.get(row.id) ?? 0;
-          if (adding === 0) continue;
-          const fuelledThrough = addFuel(fire, row.fuelledThrough, local, adding, HOME_BASE_RULES);
-          await repo.setFuel(row.id, fuelledThrough, at);
-          nights += adding;
-          await repo.appendEvent({
-            mapId,
-            type: 'building.fueled',
-            actorUserId: user.id,
-            payload: {
-              userId: user.id,
-              building: placed({ ...row, fuelledThrough }, local),
-              nights: adding,
-              fuelledThrough,
-            },
-          });
-        }
+        const nights = await fuelFires(repo, { mapId, userId: user.id, local, at }, fires, plan);
         return {
           fires: plan.size,
           nights,
@@ -1411,6 +1390,60 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         return homeView(repo, tx, mapId, user, at, { timeZone, kind: mapKind });
       }),
   };
+}
+
+/** One of my fires, locked, with its data. */
+export interface MyFire {
+  row: BuildingRow;
+  fire: Extract<Building, { kind: 'hearthfire' }>;
+}
+
+/** My fires on a patch, locked (tech spec §7 step 8, id order). */
+export async function lockMyFires(
+  repo: Pick<BuildingsRepo, 'lockFires'>,
+  mapId: string,
+  userId: string,
+): Promise<MyFire[]> {
+  return (await repo.lockFires(mapId, userId)).flatMap((row) => {
+    const fire = BUILDING_DATA.get(row.buildingId);
+    return fire?.kind === 'hearthfire' ? [{ row, fire }] : [];
+  });
+}
+
+/**
+ * Adds `plan`'s nights (by building row id, each within its `fuelSpace`) to
+ * these fires, locked by `lockMyFires`, with one `building.fueled` each
+ * (`maps`, so after every other lock). Takes no fuel: Fuel all fires (#202)
+ * spends it first, and the Post shop's Night supplies (#729b) was paid for
+ * in Heart Coins. The nights added in all.
+ */
+export async function fuelFires(
+  repo: Pick<BuildingsTxRepo, 'setFuel' | 'appendEvent'>,
+  owner: { mapId: string; userId: string; local: MapLocalTime; at: Date },
+  fires: readonly MyFire[],
+  plan: ReadonlyMap<string, number>,
+): Promise<number> {
+  const { mapId, userId, local, at } = owner;
+  let nights = 0;
+  for (const { row, fire } of fires) {
+    const adding = plan.get(row.id) ?? 0;
+    if (adding === 0) continue;
+    const fuelledThrough = addFuel(fire, row.fuelledThrough, local, adding, HOME_BASE_RULES);
+    await repo.setFuel(row.id, fuelledThrough, at);
+    nights += adding;
+    await repo.appendEvent({
+      mapId,
+      type: 'building.fueled',
+      actorUserId: userId,
+      payload: {
+        userId,
+        building: placed({ ...row, fuelledThrough }, local),
+        nights: adding,
+        fuelledThrough,
+      },
+    });
+  }
+  return nights;
 }
 
 /**

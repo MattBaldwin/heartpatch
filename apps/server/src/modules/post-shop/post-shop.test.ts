@@ -1,7 +1,11 @@
 import {
+  addFuel,
   ApiErrorSchema,
   BuyResponseSchema,
+  fenceMaxHp,
+  GAME_DATA,
   heartSeedOf,
+  HOME_BASE_RULES,
   hexDistance,
   MapResponseSchema,
   POST_SHOP,
@@ -19,9 +23,19 @@ import {
   type DbClient,
   type Transaction,
 } from '../../db/client.js';
-import { keepers, mapMembers, maps, postPurchases, sessions, users } from '../../db/schema.js';
+import {
+  buildings,
+  fenceSegments,
+  keepers,
+  mapMembers,
+  maps,
+  postPurchases,
+  sessions,
+  users,
+} from '../../db/schema.js';
 import { backendPid, waitUntilBlockedBy } from '../../../tests/lock-waits.js';
 import { AppError } from '../../lib/errors.js';
+import { mapLocalTime } from '../../lib/time.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { createHeartCoinsRepo } from '../heart-coins/repo.js';
@@ -441,25 +455,25 @@ describe.skipIf(!url)('the trading post Shop (#729, needs DATABASE_URL)', () => 
     });
   });
 
-  describe('lock order (tech spec §7)', () => {
-    /** Holds `first`, starts the purchase, and once it waits on us takes `then` too. */
-    async function holdThen(
-      first: (tx: Transaction) => Promise<unknown>,
-      command: () => Promise<LightMyRequestResponse>,
-      then: (tx: Transaction) => Promise<unknown>,
-    ): Promise<LightMyRequestResponse> {
-      let running: Promise<LightMyRequestResponse> | undefined;
-      await db.transaction(async (tx) => {
-        await tx.execute(`set local lock_timeout = '10s'`);
-        await first(tx);
-        const pid = await backendPid(tx);
-        running = command();
-        await waitUntilBlockedBy(db, pid);
-        await then(tx);
-      });
-      return running!;
-    }
+  /** Holds `first`, starts the purchase, and once it waits on us takes `then` too. */
+  async function holdThen(
+    first: (tx: Transaction) => Promise<unknown>,
+    command: () => Promise<LightMyRequestResponse>,
+    then: (tx: Transaction) => Promise<unknown>,
+  ): Promise<LightMyRequestResponse> {
+    let running: Promise<LightMyRequestResponse> | undefined;
+    await db.transaction(async (tx) => {
+      await tx.execute(`set local lock_timeout = '10s'`);
+      await first(tx);
+      const pid = await backendPid(tx);
+      running = command();
+      await waitUntilBlockedBy(db, pid);
+      await then(tx);
+    });
+    return running!;
+  }
 
+  describe('lock order (tech spec §7)', () => {
     it('a pack purchase takes bag rows (11) before the balance (12b)', async () => {
       const server = await start();
       const kid = await player();
@@ -493,6 +507,228 @@ describe.skipIf(!url)('the trading post Shop (#729, needs DATABASE_URL)', () => 
       expect([a.statusCode, b.statusCode].sort()).toEqual([200, 409]);
       expect(await purchases(at.mapId, kid)).toHaveLength(1);
       expect(await balanceOf(at.mapId, kid)).toBe(500 - priceOf('potion-crate'));
+    });
+  });
+
+  describe('Night supplies and the Fence patch kit (729b)', () => {
+    const HEARTH = GAME_DATA.buildings.find((b) => b.id === 'hearthfire');
+    const PALISADE = GAME_DATA.buildings.find((b) => b.id === 'emberwood-palisade');
+    if (HEARTH?.kind !== 'hearthfire' || PALISADE?.kind !== 'fence') throw new Error('no data');
+    const local = () => mapLocalTime(clock, 'America/Denver');
+    /** The fuel date `nights` of fuel from empty reaches now. */
+    const fuelled = (nights: number) => addFuel(HEARTH, null, local(), nights, HOME_BASE_RULES);
+
+    /** Two tiles of the kid's land out of home (claiming neutral land if the way to the post is short). */
+    async function landOf(mapId: string, kid: PublicUser) {
+      const tiles = await db.query.tiles.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) });
+      const out = tiles.filter((t) => t.homeSlot === null && t.terrain !== 'trading-post');
+      const mine = out.filter((t) => t.ownerUserId === kid.id);
+      for (const t of out.filter((t) => t.ownerUserId === null).slice(0, 2 - mine.length)) {
+        await db.execute(`update tiles set owner_user_id = '${kid.id}' where id = '${t.id}'`);
+        mine.push(t);
+      }
+      return mine.slice(0, 2);
+    }
+    async function fire(mapId: string, kid: PublicUser, tileId: string, fuel: string | null) {
+      const [row] = await db
+        .insert(buildings)
+        .values({
+          mapId,
+          ownerUserId: kid.id,
+          tileId,
+          buildingId: 'hearthfire',
+          kind: 'hearthfire',
+          spot: 0,
+          fuelledThrough: fuel,
+        })
+        .returning({ id: buildings.id });
+      return row!.id;
+    }
+    const fuelOf = async (id: string) =>
+      (await db.query.buildings.findFirst({ where: (t, { eq }) => eq(t.id, id) }))!.fuelledThrough;
+    async function fence(
+      mapId: string,
+      owner: PublicUser,
+      tileId: string,
+      edge: number,
+      hp: number,
+    ) {
+      const [row] = await db
+        .insert(fenceSegments)
+        .values({ mapId, ownerUserId: owner.id, tileId, edge, buildingId: PALISADE!.id, hp })
+        .returning({ id: fenceSegments.id });
+      return row!.id;
+    }
+    const hpOf = async (id: string) =>
+      (await db.query.fenceSegments.findFirst({ where: (t, { eq }) => eq(t.id, id) }))!.hp;
+    const full = fenceMaxHp(PALISADE, 1);
+    const eventsOf = async (mapId: string, type: string) =>
+      (
+        await db.query.gameEvents.findMany({
+          where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.type, type)),
+        })
+      ).map((e) => e.payload as Record<string, unknown>);
+
+    it('Night supplies adds 3 nights to each fire, only what fits, and charges 80 once', async () => {
+      const server = await start();
+      const kid = await player();
+      const at = await patch(server, kid, 200);
+      const [a, b] = await landOf(at.mapId, kid);
+      const empty = await fire(at.mapId, kid, a!.id, null);
+      const nearlyFull = await fire(at.mapId, kid, b!.id, fuelled(HEARTH.maxFuelNights - 1));
+      const res = await buy(server, kid, at, 'night-supplies');
+      expect(res.statusCode, res.body).toBe(200);
+      const body = BuyResponseSchema.parse(res.json());
+      expect(body.bought).toEqual({
+        itemId: 'night-supplies',
+        price: 80,
+        got: { kind: 'fuel-all', fires: 2, nights: 4 },
+      });
+      expect(body.balance).toBe(120);
+      expect(await fuelOf(empty)).toBe(fuelled(3));
+      expect(await fuelOf(nearlyFull)).toBe(fuelled(HEARTH.maxFuelNights));
+      const [row] = await purchases(at.mapId, kid);
+      expect(await heartRows(at.mapId, kid)).toEqual([
+        { source: 'shop', refId: row!.id, amount: -80 },
+      ]);
+      // No fuel taken from the bag: it was paid for in Heart Coins.
+      expect(await bag(at.mapId, kid)).toEqual({});
+      const fueled = await eventsOf(at.mapId, 'building.fueled');
+      expect(fueled.map((p) => p['nights']).sort()).toEqual([1, 3]);
+      expect(await eventsOf(at.mapId, 'post.bought')).toHaveLength(1);
+      // One a rolling week: the next day is still capped, with the supplies' words.
+      clock.setTime(Date.parse(START) + DAY_MS);
+      const again = await buy(server, kid, at, 'night-supplies');
+      expect(again.statusCode, again.body).toBe(409);
+      expect(errorOf(again).message).toBe("That's this week's supplies! More in 6 days. 🔥");
+      expect(await balanceOf(at.mapId, kid)).toBe(120);
+    });
+
+    it('Night supplies with no fire, or every fire full, is CONFLICT and charges nothing', async () => {
+      const server = await start();
+      const kid = await player();
+      const at = await patch(server, kid, 200);
+      const none = await buy(server, kid, at, 'night-supplies');
+      expect(none.statusCode, none.body).toBe(409);
+      expect(errorOf(none).message).toBe('No fires to stock yet 🔥');
+      const [a] = await landOf(at.mapId, kid);
+      const id = await fire(at.mapId, kid, a!.id, fuelled(HEARTH.maxFuelNights));
+      const stocked = await buy(server, kid, at, 'night-supplies');
+      expect(stocked.statusCode, stocked.body).toBe(409);
+      expect(errorOf(stocked).message).toBe('Your fires are all stocked up! 🔥');
+      expect(await fuelOf(id)).toBe(fuelled(HEARTH.maxFuelNights));
+      expect(await purchases(at.mapId, kid)).toHaveLength(0);
+      expect(await heartRows(at.mapId, kid)).toEqual([]);
+      expect(await balanceOf(at.mapId, kid)).toBe(200);
+    });
+
+    it("Night supplies leaves another Keeper's fires alone", async () => {
+      const server = await start();
+      const kid = await player();
+      const other = await player();
+      const at = await patch(server, kid, 100);
+      const theirs = await patch(server, other, 0);
+      const [mine] = await landOf(at.mapId, kid);
+      const [far] = await landOf(theirs.mapId, other);
+      await fire(at.mapId, kid, mine!.id, null);
+      const notMine = await fire(theirs.mapId, other, far!.id, null);
+      expect((await buy(server, kid, at, 'night-supplies')).statusCode).toBe(200);
+      expect(await fuelOf(notMine)).toBeNull();
+    });
+
+    it('a retried Night supplies (same Idempotency-Key) fuels and charges once', async () => {
+      const server = await start();
+      const kid = await player();
+      const at = await patch(server, kid, 200);
+      const [a] = await landOf(at.mapId, kid);
+      const id = await fire(at.mapId, kid, a!.id, null);
+      const key = { 'idempotency-key': crypto.randomUUID() };
+      const first = await buy(server, kid, at, 'night-supplies', key);
+      const retry = await buy(server, kid, at, 'night-supplies', key);
+      expect(first.statusCode, first.body).toBe(200);
+      expect(retry.json()).toEqual(first.json());
+      expect(await fuelOf(id)).toBe(fuelled(3));
+      expect(await purchases(at.mapId, kid)).toHaveLength(1);
+      expect(await balanceOf(at.mapId, kid)).toBe(120);
+    });
+
+    it('the Fence patch kit mends every worn fence of mine to full, leaves full ones, and charges 50', async () => {
+      const server = await start();
+      const kid = await player();
+      const at = await patch(server, kid, 100);
+      const [a, b] = await landOf(at.mapId, kid);
+      const worn = await fence(at.mapId, kid, a!.id, 0, 10);
+      const alsoWorn = await fence(at.mapId, kid, b!.id, 3, full - 1);
+      const fine = await fence(at.mapId, kid, a!.id, 1, full);
+      const res = await buy(server, kid, at, 'fence-patch-kit');
+      expect(res.statusCode, res.body).toBe(200);
+      const body = BuyResponseSchema.parse(res.json());
+      expect(body.bought.got).toEqual({ kind: 'repair-fences', fences: 2 });
+      expect(body.balance).toBe(50);
+      expect([await hpOf(worn), await hpOf(alsoWorn), await hpOf(fine)]).toEqual([
+        full,
+        full,
+        full,
+      ]);
+      const repaired = await eventsOf(at.mapId, 'fence.repaired');
+      expect(repaired).toHaveLength(2);
+      expect(repaired.every((p) => JSON.stringify(p['cost']) === '{}')).toBe(true);
+      // One a day.
+      await db.execute(`update fence_segments set hp = 5 where map_id = '${at.mapId}'`);
+      const again = await buy(server, kid, at, 'fence-patch-kit');
+      expect(again.statusCode, again.body).toBe(409);
+      expect(errorOf(again).message).toBe("That's today's! Come back tomorrow for another. 🌙");
+      expect(await balanceOf(at.mapId, kid)).toBe(50);
+    });
+
+    it("the Fence patch kit with no fences, or none worn, is CONFLICT and charges nothing; a rival's stay worn", async () => {
+      const server = await start();
+      const kid = await player();
+      const rival = await player();
+      const at = await patch(server, kid, 100);
+      const none = await buy(server, kid, at, 'fence-patch-kit');
+      expect(none.statusCode, none.body).toBe(409);
+      expect(errorOf(none).message).toBe('No fences to fix yet 🪵');
+      const [a, b] = await landOf(at.mapId, kid);
+      await fence(at.mapId, kid, a!.id, 0, full);
+      // A rival's worn segment on the same patch (on a tile they hold) isn't mine to mend.
+      await db.insert(mapMembers).values({ mapId: at.mapId, userId: rival.id, role: 'member' });
+      await db.execute(`update tiles set owner_user_id = '${rival.id}' where id = '${b!.id}'`);
+      const theirs = await fence(at.mapId, rival, b!.id, 2, 10);
+      const fine = await buy(server, kid, at, 'fence-patch-kit');
+      expect(fine.statusCode, fine.body).toBe(409);
+      expect(errorOf(fine).message).toBe('Your fences are all fine! 🪵');
+      expect(await hpOf(theirs)).toBe(10);
+      expect(await purchases(at.mapId, kid)).toHaveLength(0);
+      expect(await balanceOf(at.mapId, kid)).toBe(100);
+    });
+    it('Night supplies takes my fires (8) before the balance (12b)', async () => {
+      const server = await start();
+      const kid = await player();
+      const at = await patch(server, kid, 100);
+      const [a] = await landOf(at.mapId, kid);
+      const id = await fire(at.mapId, kid, a!.id, null);
+      const res = await holdThen(
+        (tx) => tx.execute(`select id from buildings where id = '${id}' for update`),
+        () => buy(server, kid, at, 'night-supplies'),
+        (tx) => createHeartCoinsRepo(tx).lockBalance(at.mapId, kid.id),
+      );
+      expect(res.statusCode, res.body).toBe(200);
+    });
+
+    it('the Fence patch kit takes my tiles (6) and fences (8) before the balance (12b)', async () => {
+      const server = await start();
+      const kid = await player();
+      const at = await patch(server, kid, 100);
+      const [a] = await landOf(at.mapId, kid);
+      const id = await fence(at.mapId, kid, a!.id, 0, 10);
+      const res = await holdThen(
+        (tx) => tx.execute(`select id from fence_segments where id = '${id}' for update`),
+        () => buy(server, kid, at, 'fence-patch-kit'),
+        (tx) => createHeartCoinsRepo(tx).lockBalance(at.mapId, kid.id),
+      );
+      expect(res.statusCode, res.body).toBe(200);
+      expect(await hpOf(id)).toBe(full);
     });
   });
 

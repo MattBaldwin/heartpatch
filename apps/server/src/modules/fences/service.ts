@@ -39,7 +39,13 @@ import {
 } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import { createTerritoryRepo } from '../territory/repo.js';
-import { createFencesRepo, type FenceRow, type FencesTxRepo, type FenceTileRow } from './repo.js';
+import {
+  createFencesRepo,
+  type FenceRow,
+  type FencesRepo,
+  type FencesTxRepo,
+  type FenceTileRow,
+} from './repo.js';
 
 /*
  * Fences (#203, #204; owner decisions 2026-10-06 and 2026-10-07). Segments
@@ -280,14 +286,7 @@ export function createFencesService(options: FencesServiceOptions): FencesServic
         if (Object.keys(cost).length === 0)
           throw new AppError('CONFLICT', MESSAGES.full(fence.name));
         await consumeItems(tx, { mapId, userId: user.id }, cost, 'repair', row.id);
-        const hp = fenceMaxHp(fence, row.level);
-        await repo.setHp(row.id, hp);
-        await repo.appendEvent({
-          mapId,
-          type: 'fence.repaired',
-          actorUserId: user.id,
-          payload: { userId: user.id, fence: toPlacedFence({ ...row, hp }), cost },
-        });
+        await mendFence(repo, { mapId, userId: user.id }, row, fence, cost);
         return tileView(repo, tx, mapId, user.id, tile);
       }),
 
@@ -316,6 +315,50 @@ export function createFencesService(options: FencesServiceOptions): FencesServic
         return tileView(repo, tx, mapId, user.id, tile, refund);
       }),
   };
+}
+
+/**
+ * Sets a locked segment back to full and appends `fence.repaired` (`maps`,
+ * so after every other lock). Takes nothing: Repair (#204) spends `cost`
+ * first; the Post shop's Fence patch kit (#729b) was paid for in Heart
+ * Coins and passes `{}`.
+ */
+export async function mendFence(
+  repo: Pick<FencesTxRepo, 'setHp' | 'appendEvent'>,
+  owner: { mapId: string; userId: string },
+  row: FenceRow,
+  fence: FenceBuilding,
+  cost: ItemCounts,
+): Promise<void> {
+  const hp = fenceMaxHp(fence, row.level);
+  await repo.setHp(row.id, hp);
+  await repo.appendEvent({
+    mapId: owner.mapId,
+    type: 'fence.repaired',
+    actorUserId: owner.userId,
+    payload: { userId: owner.userId, fence: toPlacedFence({ ...row, hp }), cost },
+  });
+}
+
+/** My segments on a patch that are below full, locked: their tiles (step 6, id order), then the segments (step 8, id order). */
+export async function lockMyWornFences(
+  repo: Pick<FencesRepo, 'listOwned' | 'lockTile' | 'lockOnTiles'>,
+  mapId: string,
+  userId: string,
+): Promise<{ owned: number; worn: { row: FenceRow; fence: FenceBuilding }[] }> {
+  const seen = await repo.listOwned(mapId, userId);
+  const tileIds = [...new Set(seen.map((f) => f.tileId))].sort();
+  const mine = new Set<string>();
+  for (const id of tileIds) {
+    const tile = await repo.lockTile(id);
+    if (tile?.ownerUserId === userId) mine.add(id);
+  }
+  const rows = (await repo.lockOnTiles([...mine])).filter((r) => r.ownerUserId === userId);
+  const worn = rows.flatMap((row) => {
+    const fence = FENCE_DATA.get(row.buildingId);
+    return fence && row.hp < fenceMaxHp(fence, row.level) ? [{ row, fence }] : [];
+  });
+  return { owned: rows.length, worn };
 }
 
 /** A segment that came down with its land, for the caller to finish. */

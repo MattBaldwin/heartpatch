@@ -53,12 +53,24 @@ describe('POST_SHOP (#729)', () => {
     expect(check(held).join('\n')).toMatch(/only a lure is held/);
   });
 
-  it('caps match the owner decision (lure 2 a rolling week, packs 1 a day)', () => {
+  it('caps match the owner decision (lure 2 a rolling week, packs 1 a day, Night supplies 1 a rolling week)', () => {
     const caps = Object.fromEntries(POST_SHOP.map((i) => [i.id, i.cap]));
     expect(caps).toEqual({
       'rare-lure': { count: 2, per: 'week' },
       'heart-charm-pack': { count: 1, per: 'day' },
       'potion-crate': { count: 1, per: 'day' },
+      'night-supplies': { count: 1, per: 'week' },
+      'fence-patch-kit': { count: 1, per: 'day' },
     });
+  });
+
+  it('Night supplies stocks 3 nights; the Fence patch kit mends fences (729b)', () => {
+    const effects = Object.fromEntries(POST_SHOP.map((i) => [i.id, i.effect]));
+    expect(effects['night-supplies']).toEqual({ kind: 'fuel-all', nights: 3 });
+    expect(effects['fence-patch-kit']).toEqual({ kind: 'repair-fences' });
+    const bad = POST_SHOP.map((item) =>
+      item.id === 'night-supplies' ? { ...item, effect: { kind: 'fuel-all', nights: 0 } } : item,
+    );
+    expect(check(bad)).not.toEqual([]);
   });
 });
