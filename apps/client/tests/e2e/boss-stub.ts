@@ -44,7 +44,16 @@ export interface BossStubOptions {
   readonly warmth?: number;
   /** Rounds before the one that ends it (0 by default): each stomps everyone and goes on. */
   readonly openRounds?: number;
+  /**
+   * The boss's #234 trick in each open round, in order (a plain stomp past
+   * the end): `windup` charges Count to Three (no hits), `land` lands it,
+   * `flinch` stomps and makes the first friend flinch (no move for it), and
+   * `assist` calls in a friend whose stomp hits everyone.
+   */
+  readonly tricks?: readonly BossTrick[];
 }
+
+export type BossTrick = 'windup' | 'land' | 'flinch' | 'assist';
 
 export interface BossStub {
   /** The `team` actions the client sent. */
@@ -63,6 +72,12 @@ const CHARMS_PER_ASK = 3;
 
 const DAY = 24 * 60 * 60 * 1000;
 const STOMP = 'big-stomp';
+/** The #234 trick moves' ids (stand-ins for PR 2's boss moves). */
+const TRICK = {
+  windup: 'stub-count-to-three',
+  flinch: 'stub-full-name-shout',
+  assist: 'stub-ask-your-mother',
+} as const;
 /** The shipped boss hp rule; a stub with no boss rule would test a fight that can't happen. */
 const BOSS_HP_PERCENT = (() => {
   const hp = BATTLE_RULES.boss?.stats.hp;
@@ -82,6 +97,29 @@ function toBoss(b: Battle, options: BossStubOptions): Battle {
     GAME_DATA.moves.find((m) => m.id === boss?.moves[0] && m.power > 0) ??
     GAME_DATA.moves.find((m) => m.power > 0)!;
   const stomp = { ...base, id: STOMP, name: 'Big Stomp', targets: 'all-foes' };
+  // The #234 tricks, as move defs the way PR 2's boss moves reach the client.
+  const tricks = [
+    {
+      ...stomp,
+      id: TRICK.windup,
+      name: 'Count to Three',
+      power: base.power * 2,
+      effects: [{ type: 'windup' }],
+    },
+    {
+      ...stomp,
+      id: TRICK.flinch,
+      name: 'Full Name Shout',
+      effects: [{ type: 'flinch', chance: 35 }],
+    },
+    {
+      ...stomp,
+      id: TRICK.assist,
+      name: 'Ask Your Mother',
+      power: 0,
+      effects: [{ type: 'assist', move: STOMP }],
+    },
+  ];
   if (boss) {
     boss.moves = [STOMP, ...boss.moves.slice(0, 3)];
     boss['boss'] = true;
@@ -97,7 +135,7 @@ function toBoss(b: Battle, options: BossStubOptions): Battle {
   return {
     ...b,
     kind: 'miniboss',
-    moveDefs: [...((b['moveDefs'] as Json[] | undefined) ?? []), stomp],
+    moveDefs: [...((b['moveDefs'] as Json[] | undefined) ?? []), stomp, ...tricks],
     view: {
       ...b.view,
       format: { a: team, b: 1 },
@@ -119,7 +157,11 @@ function toBoss(b: Battle, options: BossStubOptions): Battle {
 }
 
 /** A round that doesn't end it: the boss's one area stomp (one action a round), then each friend's move. */
-function openRound(b: Battle, picks: { slot: number; move: string }[]): Battle {
+function openRound(
+  b: Battle,
+  picks: { slot: number; move: string }[],
+  trick: BossTrick | null = null,
+): Battle {
   const turn = b.view.turn;
   const mine = b.view.sides.a.squishies;
   const boss = b.view.sides.b.squishies[0]!;
@@ -130,14 +172,40 @@ function openRound(b: Battle, picks: { slot: number; move: string }[]): Battle {
   const energy = (s: Json & { stats: Json & { hp: number } }) =>
     Math.max(1, Math.round(((s['energy'] as number | undefined) ?? s.stats.hp) * 0.8));
   const next = new Map<string, number>();
-  log.push({ ...at('b', 0), type: 'move', move: bossMove });
-  for (const slot of out) {
-    const e = energy(mine[slot]!);
-    next.set(`a${String(slot)}`, e);
-    log.push({ ...at('a', slot), type: 'hit', amount: 5, energy: e, effectiveness: 'normal' });
+  const stompAll = () => {
+    for (const slot of out) {
+      const was = (mine[slot]!['energy'] as number | undefined) ?? mine[slot]!.stats.hp;
+      const e = energy(mine[slot]!);
+      next.set(`a${String(slot)}`, e);
+      log.push({
+        ...at('a', slot),
+        type: 'hit',
+        amount: was - e,
+        energy: e,
+        effectiveness: 'normal',
+      });
+    }
+  };
+  let windup: Json | undefined;
+  if (trick === 'windup') {
+    // The charge round: a move, then the windup; nothing lands.
+    log.push({ ...at('b', 0), type: 'move', move: TRICK.windup });
+    log.push({ ...at('b', 0), type: 'windup', move: TRICK.windup });
+    windup = { move: TRICK.windup };
+  } else if (trick === 'assist') {
+    log.push({ ...at('b', 0), type: 'move', move: TRICK.assist });
+    log.push({ ...at('b', 0), type: 'assist', move: STOMP });
+    log.push({ ...at('b', 0), type: 'move', move: STOMP });
+    stompAll();
+  } else {
+    const move = trick === 'land' ? TRICK.windup : trick === 'flinch' ? TRICK.flinch : bossMove;
+    log.push({ ...at('b', 0), type: 'move', move });
+    stompAll();
+    if (trick === 'flinch') log.push({ ...at('a', out[0] ?? 0), type: 'flinch' });
   }
+  const flinched = trick === 'flinch' ? (out[0] ?? 0) : null;
   let left = (boss['energy'] as number | undefined) ?? boss.stats.hp;
-  for (const pick of picks) {
+  for (const pick of picks.filter((p) => p.slot !== flinched)) {
     left = Math.max(1, Math.round(left * 0.85));
     log.push({ ...at('a', pick.slot), type: 'move', move: pick.move });
     log.push({ ...at('b', 0), type: 'hit', amount: 10, energy: left, effectiveness: 'normal' });
@@ -147,10 +215,11 @@ function openRound(b: Battle, picks: { slot: number; move: string }[]): Battle {
   for (const side of ['a', 'b'] as const) {
     sides[side] = {
       ...sides[side],
-      squishies: sides[side].squishies.map((s, slot) => ({
-        ...s,
-        energy: next.get(`${side}${String(slot)}`) ?? s['energy'],
-      })),
+      squishies: sides[side].squishies.map((s, slot) => {
+        const moved = { ...s, energy: next.get(`${side}${String(slot)}`) ?? s['energy'] };
+        delete moved['windup'];
+        return side === 'b' && slot === 0 && windup ? { ...moved, windup } : moved;
+      }),
     };
   }
   return { ...b, view: { ...b.view, turn: turn + 1, log, sides } };
@@ -256,6 +325,7 @@ function playRound(
 export async function stubBossFight(page: Page, options: BossStubOptions = {}): Promise<BossStub> {
   let charms = options.charms ?? 3;
   let open = options.openRounds ?? 0;
+  let opened = 0;
   let fetches = 0;
   const conflicts = new Set(options.conflictOn ?? []);
   const stub: BossStub = {
@@ -287,7 +357,9 @@ export async function stubBossFight(page: Page, options: BossStubOptions = {}): 
       const picks = (body.action['picks'] as { slot: number; move: string }[] | undefined) ?? [];
       if (open > 0) {
         open -= 1;
-        await route.fulfill({ json: { battle: keep(openRound(last, picks)) } });
+        const trick = options.tricks?.[opened] ?? null;
+        opened += 1;
+        await route.fulfill({ json: { battle: keep(openRound(last, picks, trick)) } });
         return;
       }
       const played = keep(playRound(last, picks, options));

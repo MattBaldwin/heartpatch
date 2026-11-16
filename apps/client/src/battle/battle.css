@@ -199,6 +199,12 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   color: #8a3a12;
 }
 
+/* Winding up (#234): ⏳ until the move lands or the count is lost. */
+.battle-chip-windup {
+  background: #fff3c4;
+  color: #7a5a00;
+}
+
 /* Saturday Morning Smackdown's comic callout: bold, outlined, a little tilted. */
 .battle-callout {
   position: absolute;
@@ -889,6 +895,13 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   --move-edge: #a3d4b9;
 }
 
+/* Winding up (#234): the other moves wait a round, dimmed (the pending one
+   carries "Keep winding up!"). */
+.battle-move-locked {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .battle-move-hint {
   font-size: 12px;
   font-weight: 800;
@@ -1170,6 +1183,12 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   color: #6b4a06;
 }
 
+/* The boss is winding up a big move (#234): the same ⏳ tint as the plate chip. */
+.boss-chip-windup {
+  background: #fff3c4;
+  color: #7a5a00;
+}
+
 .boss-chip-try {
   background: #d9ecff;
   color: #1f4f7a;
@@ -1443,6 +1462,11 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 .boss-tag-area {
   background: #ffe9a8;
   color: #6b4a06;
+}
+
+.boss-tag-windup {
+  background: #fff3c4;
+  color: #7a5a00;
 }
 
 .boss-picker-row {

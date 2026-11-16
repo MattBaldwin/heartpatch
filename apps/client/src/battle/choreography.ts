@@ -687,6 +687,13 @@ export function planStep(step: PlaybackStep, ctx: PlanContext): StepPlan {
 
   switch (step.kind) {
     case 'move': {
+      // A charge round (#234): no dash or cast, since nothing lands this
+      // round. The squishy gathers itself; its `windup` step powers up next.
+      if (step.charge === true) {
+        fx('charge', step.side, ms * 0.1);
+        cam = camera({ focus: step.side });
+        break;
+      }
       const style = moveStyle(ctx.move);
       if (style === 'strike') {
         act(step.side, 'dash');
@@ -757,11 +764,14 @@ export function planStep(step: PlaybackStep, ctx: PlanContext): StepPlan {
       cam = camera({ focus: step.side });
       break;
     case 'effect': {
-      const up = step.squish === 'bounce';
+      // A windup (#234) powers up like a boost, and jiggles: brace!
+      const up = step.squish === 'bounce' || step.windup === true;
       const status: EffectKind = step.status ?? 'droop';
       if (up) {
         act(step.side, 'power-up', 0, ms * 0.9);
         fx('aura', step.side);
+        if (step.squish === 'jiggle')
+          squish.push({ side: step.side, move: 'jiggle', delay: 0, strength: 0.8 });
       } else if (step.squish === 'jiggle') {
         // A stat going down, or a status taking hold.
         act(step.side, 'shiver', 0, ms * 0.6);

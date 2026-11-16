@@ -20,6 +20,8 @@ export interface PickerMove {
   readonly name: string;
   readonly tags: readonly string[];
   readonly area: boolean;
+  /** Takes a round to wind up (#234): the "⏳ Winds up" tag. */
+  readonly windup?: boolean;
 }
 
 export interface PickerHandlers {
@@ -118,6 +120,12 @@ export function mountBossHud(): BossHud {
   const bossName = el('span', { class: 'boss-name', 'data-testid': 'boss-name' });
   const bossLevel = el('span', { class: 'boss-level' });
   const stomps = el('span', { class: 'boss-chip boss-chip-gold' }, BOSS_TEXT.stompsTwice);
+  const winding = el(
+    'span',
+    { class: 'boss-chip boss-chip-windup', 'data-testid': 'boss-windup' },
+    BOSS_TEXT.windingUp,
+  );
+  winding.hidden = true;
   const tries = el('span', { class: 'boss-chip boss-chip-try', 'data-testid': 'boss-tries' });
   const until = el('span', { class: 'boss-chip boss-chip-until', 'data-testid': 'boss-until' });
   const bossBar = bar('boss-energy');
@@ -132,7 +140,7 @@ export function mountBossHud(): BossHud {
     { class: 'boss-plate', 'data-testid': 'boss-plate' },
     el('div', { class: 'boss-plate-row' }, bossName, bossLevel, stomps),
     bossBar.track,
-    el('div', { class: 'boss-plate-row boss-plate-chips' }, tries, until),
+    el('div', { class: 'boss-plate-row boss-plate-chips' }, winding, tries, until),
   );
   const friendRow = el('div', { class: 'boss-friends', 'data-testid': 'boss-friends' });
   const round = el('span', { class: 'boss-round', 'data-testid': 'boss-round' });
@@ -206,6 +214,7 @@ export function mountBossHud(): BossHud {
       bossName.textContent = plates.boss.name;
       bossLevel.textContent = `Lv ${String(plates.boss.level)}`;
       stomps.hidden = !plates.boss.stomps;
+      winding.hidden = !plates.boss.windup;
       setBar(bossBar, plates.boss.percent, plates.boss.energyText);
       const seen = new Set<number>();
       for (const friend of plates.friends) {
@@ -361,7 +370,12 @@ export function mountBossHud(): BossHud {
             'data-testid': `boss-step-${String(step.slot)}`,
             'aria-current': current ? 'step' : 'false',
           },
-          el('span', { class: 'boss-step-name' }, step.name),
+          el(
+            'span',
+            { class: 'boss-step-name' },
+            // Winding up (#234): ⏳ by its name, and its one move to pick again.
+            step.windingUp === true ? `⏳ ${step.name}` : step.name,
+          ),
           el('span', { class: 'boss-step-status' }, status),
         );
         // A finished chip goes back to that squishy's step.
@@ -422,6 +436,9 @@ export function mountBossHud(): BossHud {
                 ...move.tags.map((t) => el('span', { class: 'boss-tag' }, t)),
                 ...(move.area
                   ? [el('span', { class: 'boss-tag boss-tag-area' }, BOSS_TEXT.areaTag)]
+                  : []),
+                ...(move.windup === true
+                  ? [el('span', { class: 'boss-tag boss-tag-windup' }, BOSS_TEXT.windupTag)]
                   : []),
               ),
             );

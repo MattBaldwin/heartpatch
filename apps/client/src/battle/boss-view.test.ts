@@ -7,6 +7,8 @@ import {
   BOSS_TEXT,
   befriendView,
   bossCallout,
+  isOwnMove,
+  isWindupMove,
   bossPlates,
   bossResult,
   bundleText,
@@ -192,6 +194,44 @@ describe('a mini-boss fight on screen (#190)', () => {
       expect(p.picks[1]).toBe(bun.moves[0]);
     });
 
+    it('pickerFor offers only the pending move to a squishy winding up', () => {
+      const b = battle();
+      const pending = bun.moves[1]!;
+      const winding: PlayerBattle = {
+        ...b,
+        view: {
+          ...b.view,
+          sides: {
+            ...b.view.sides,
+            a: {
+              ...b.view.sides.a,
+              squishies: b.view.sides.a.squishies.map((s, i) =>
+                i === 1 ? { ...s, windup: { move: pending, target: 0 } } : s,
+              ),
+            },
+          },
+        },
+      };
+      let p = pickerFor(winding, nameOf(winding));
+      expect(p.steps.map((s) => [s.slot, s.moves, s.windingUp === true])).toEqual([
+        [0, pip.moves, false],
+        [1, [pending], true],
+        [2, moss.moves, false],
+      ]);
+      // Any other move is refused; the team pick still has one move per squishy.
+      p = pickMove(p, pip.moves[0]!);
+      expect(pickMove(p, bun.moves[0]!)).toBe(p);
+      p = pickMove(pickMove(p, pending), moss.moves[0]!);
+      expect(teamAction(p)).toEqual({
+        type: 'team',
+        picks: [
+          { slot: 0, move: pip.moves[0] },
+          { slot: 1, move: pending },
+          { slot: 2, move: moss.moves[0] },
+        ],
+      });
+    });
+
     it('refuses a move the squishy does not know', () => {
       const b = battle();
       const p = pickerFor(b, nameOf(b));
@@ -218,6 +258,25 @@ describe('a mini-boss fight on screen (#190)', () => {
     expect(bossCallout(step('b', plain.id), 'a', 1, moves)).toBe(BOSS_TEXT.stompAgain);
     expect(bossCallout(step('a', plain.id), 'a', 1, moves)).toBeNull();
     if (area) expect(bossCallout(step('b', area.id), 'a', 0, moves)).toBe(BOSS_TEXT.everyone);
+    // #234: a move an assist called in is not a second stomp, and a landing
+    // windup keeps its own "Here it comes!".
+    expect(bossCallout({ ...step('b', plain.id), backup: true }, 'a', 1, moves)).toBeNull();
+    expect(bossCallout({ ...step('b', plain.id), landing: true }, 'a', 1, moves)).toBeNull();
+    expect(isOwnMove({ kind: 'move', backup: true })).toBe(false);
+    expect(isOwnMove({ kind: 'move' })).toBe(true);
+    expect(isOwnMove({ kind: 'hit' })).toBe(false);
+  });
+
+  it('shows the boss winding up from the log played so far (#234)', () => {
+    const b = battle();
+    const shown = shownFrom(b);
+    const names = new BattleContent(b);
+    expect(bossPlates(b, shown, names, nameOf(b)).boss.windup).toBe(false);
+    const chips = shown.b.chips.map((c) => ({ ...c, windup: true }));
+    const winding = { ...shown, b: { ...shown.b, chips } };
+    expect(bossPlates(b, winding, names, nameOf(b)).boss.windup).toBe(true);
+    expect(isWindupMove({ effects: [{ type: 'windup' }] })).toBe(true);
+    expect(isWindupMove({ effects: [] })).toBe(false);
   });
 
   it('names the bundle with plurals', () => {

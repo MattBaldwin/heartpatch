@@ -9,8 +9,11 @@ import {
 import { describe, expect, it } from 'vitest';
 import {
   describeMove,
+  type MoveContext,
   GENTLE_HINT,
   gentleHintShows,
+  lockForWindup,
+  WINDUP_HINT,
   moveEdge,
   moveLabel,
   STYLE_MORE,
@@ -75,24 +78,52 @@ describe('describeMove', () => {
   });
 });
 
-describe('the #234 effect sentences', () => {
-  const withEffect = (effect: MoveEffect): string[] =>
-    describeMove({ ...move('ember-boop'), effects: [effect] }, me, plain).more.slice(2);
+describe('lockForWindup (#234)', () => {
+  const info = describeMove(move('ember-boop'), me, plain);
+  const buttons = [
+    { id: 'a', name: 'A', info },
+    { id: 'b', name: 'B', info },
+  ];
 
-  it('reads windup, flinch, low-energy and assist in the "More" view', () => {
+  it('locks every move but the pending one, which says to keep winding up', () => {
+    expect(lockForWindup(buttons, 'b')).toEqual([
+      { id: 'a', name: 'A', info, locked: true },
+      { id: 'b', name: 'B', info: { ...info, hint: WINDUP_HINT } },
+    ]);
+    expect(WINDUP_HINT).toBe('Keep winding up!');
+  });
+
+  it('leaves the buttons alone when nothing is winding up', () => {
+    expect(lockForWindup(buttons, null)).toEqual(buttons);
+  });
+});
+
+describe('the #234 effect sentences', () => {
+  const withEffect = (effect: MoveEffect, context: MoveContext = {}): string[] =>
+    describeMove({ ...move('ember-boop'), effects: [effect] }, me, plain, context).more.slice(2);
+
+  it('describes the four new effects in plain words', () => {
     expect(withEffect({ type: 'windup' })).toEqual([
       'Takes a round to wind up, then hits next round.',
     ]);
     expect(withEffect({ type: 'flinch', chance: 100 })).toEqual([
-      'Might make them flinch and miss their move.',
+      'They might flinch and skip their move this round.',
     ]);
     expect(withEffect({ type: 'flinch', chance: 30 })).toEqual([
-      'Might make them flinch and miss their move (30% chance).',
+      'They might flinch and skip their move this round (30% chance).',
     ]);
     expect(withEffect({ type: 'low-energy', extraPercent: 50 })).toEqual([
       'Hits harder the lower your energy: up to 50% harder.',
     ]);
+    // The called-in move's name, from the battle's move defs; none known yet: a friend.
     expect(withEffect({ type: 'assist', move: 'ember-boop' })).toEqual([
+      'Calls in a friend to help!',
+    ]);
+    const moveName = (id: string) => (id === 'mama-bear-charge' ? 'Mama Bear Charge' : undefined);
+    expect(withEffect({ type: 'assist', move: 'mama-bear-charge' }, { moveName })).toEqual([
+      "Calls in a friend's Mama Bear Charge!",
+    ]);
+    expect(withEffect({ type: 'assist', move: 'nope' }, { moveName })).toEqual([
       'Calls in a friend to help!',
     ]);
   });

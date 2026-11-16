@@ -24,6 +24,8 @@ import {
   goTo,
   hereUntil,
   isAreaMove,
+  isOwnMove,
+  isWindupMove,
   pickerFor,
   slotsOut,
   pickMove,
@@ -174,7 +176,9 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     const styles = rules
       ? speciesMoveKinds({ id: me.speciesId, moves: me.moves }, names.moves, rules)
       : new Map<string, MoveKind>();
-    return me.moves.map((id) => {
+    // Winding up (#234): only the pending move, as `pickerFor` steps it.
+    const ids = me.windup ? [me.windup.move] : me.moves;
+    return ids.map((id) => {
       const move = names.moves.get(id);
       const tags: string[] = [];
       if (move) {
@@ -183,7 +187,13 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
         const info = describeMove(move, me, them, { style: styles.get(id) });
         tags.push(`${info.look.icon} ${info.look.label}`);
       }
-      return { id, name: names.moveName(id), tags, area: isAreaMove(move) };
+      return {
+        id,
+        name: names.moveName(id),
+        tags,
+        area: isAreaMove(move),
+        windup: isWindupMove(move),
+      };
     });
   };
 
@@ -392,22 +402,20 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
       drawn = null;
       playingRound = Math.max(1, b.view.turn);
       ui.setRound(playingRound);
-      movers = steps
-        .filter((s) => s.kind === 'move')
-        .map((s) => ({
-          who: s.side === b.mySide ? s.slot : ('boss' as const),
-          name: deps.nameOf(b, s.side, s.slot),
-        }));
+      movers = steps.filter(isOwnMove).map((s) => ({
+        who: s.side === b.mySide ? s.slot : ('boss' as const),
+        name: deps.nameOf(b, s.side, s.slot),
+      }));
       moving = -1;
       ui.setOrder({ movers, current: moving });
     },
     step: (b, step, names) => {
-      if (step.kind === 'move' && movers.length > 0) {
+      if (isOwnMove(step) && movers.length > 0) {
         moving = Math.min(movers.length - 1, moving + 1);
         ui.setOrder({ movers, current: moving });
       }
       const extra = bossCallout(step, b.mySide, bossMoves, names.moves);
-      if (step.kind === 'move' && step.side !== b.mySide) bossMoves += 1;
+      if (isOwnMove(step) && step.side !== b.mySide) bossMoves += 1;
       if (extra) ui.callout('boss', extra);
       else if (step.callout) ui.callout(step.side === b.mySide ? step.slot : 'boss', step.callout);
     },
