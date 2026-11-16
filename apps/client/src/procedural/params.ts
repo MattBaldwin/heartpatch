@@ -9,6 +9,7 @@ import {
   type FloaterGlyph,
   type PaletteRole,
   type Part,
+  type PartAccentMesh,
   type PartShape,
   type PartSlot,
   type Pose,
@@ -67,23 +68,6 @@ export interface PartPlacement {
   };
 }
 
-/** A two-tone part's second mesh (#234 v16): built per main shape in `accentArrays`. */
-export type AccentMesh = 'bent-toe';
-
-/**
- * A part's optional second mesh in its own colour (sRGB hex), drawn with the
- * same placements as the part, so one part can be two-tone without another
- * slot. A client art-kit field: the shared `Part` schema doesn't carry it, so
- * only the dev gallery's draft parts use it until lane 234b moves them.
- */
-export interface PartAccent {
-  readonly mesh: AccentMesh;
-  readonly color: string;
-}
-
-/** A shared `Part`, optionally two-tone. */
-export type KitPart = Part & { readonly accent?: PartAccent };
-
 export interface PartParams {
   readonly id: string;
   readonly slot: PartSlot;
@@ -111,7 +95,7 @@ export interface PartParams {
   readonly glow: boolean;
   readonly placements: readonly PartPlacement[];
   /** Set only on a two-tone part: its second mesh and that mesh's colour, at the same placements. */
-  readonly accent?: { readonly mesh: AccentMesh; readonly color: Rgb };
+  readonly accent?: { readonly mesh: PartAccentMesh; readonly color: Rgb };
 }
 
 /** A camera-facing glyph floating beside the squishy (the species' `visual.floater`). */
@@ -339,7 +323,7 @@ function placementsFor(part: Part, height: number, rng: Rng): PartPlacement[] {
 }
 
 /** A two-tone part's second mesh and its colour; nothing for a one-mesh part. */
-function accentOf(part: KitPart): Pick<PartParams, 'accent'> {
+function accentOf(part: Part): Pick<PartParams, 'accent'> {
   return part.accent
     ? { accent: { mesh: part.accent.mesh, color: hexToRgb(part.accent.color) } }
     : {};

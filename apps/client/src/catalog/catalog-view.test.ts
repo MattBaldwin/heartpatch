@@ -99,6 +99,22 @@ describe('catalogPage (design doc §21: seen vs caught)', () => {
     expect(met.tiers.find((t) => t.rarity === 'rare')).toMatchObject({ total: 1, seen: 0 });
   });
 
+  it('adds one card for a seen mythic boss and leaves the rarity goals alone (#234)', () => {
+    const big: Species = { ...species('big-test', 'Big Test', '#e07f3f', 'mythic'), line: 'boss' };
+    const before = catalogPage(ROSTER, catalog({ speciesDefs: [big] }));
+    const met = catalogPage(
+      ROSTER,
+      catalog({
+        entries: [{ speciesId: 'big-test', firstSeenAt: SEEN_AT, firstCaughtAt: null }],
+        speciesDefs: [big],
+      }),
+    );
+    expect(met.cards.length).toBe(before.cards.length + 1);
+    expect(met.cards.filter((c) => c.boss)).toHaveLength(1);
+    expect(met.cards.at(-1)).toMatchObject({ name: 'Big Test', boss: true, seen: true });
+    expect(met.tiers).toEqual(before.tiers);
+  });
+
   it('adds a secret squishy only once it has been seen', () => {
     const moonpuff = species('moonpuff', 'Moonpuff', '#3b3561', 'secret');
     // A row without a seen entry stays off the page.

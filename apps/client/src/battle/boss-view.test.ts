@@ -1,4 +1,4 @@
-import { findAvoidedWords, GAME_DATA, type PlayerBattle } from '@heartpatch/shared';
+import { BATTLE_RULES, findAvoidedWords, GAME_DATA, type PlayerBattle } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { shownFrom } from './battle-playback.js';
 import { REWARD_TEXT } from './result-card.js';
@@ -123,6 +123,13 @@ describe('a mini-boss fight on screen (#190)', () => {
     expect(plates.friends).toHaveLength(team);
     expect(plates.boss).toMatchObject({ name: boss.name, percent: 100, energyText: '300/300' });
     expect(plates.friends.map((f) => f.slot)).toEqual([0, 1, 2].slice(0, team));
+  });
+
+  it('hides the "Stomps twice" chip while the shipped rule is one action a round (#234)', () => {
+    const b = battle();
+    const plates = bossPlates(b, shownFrom(b), new BattleContent(b), nameOf(b));
+    expect(BATTLE_RULES.boss?.actionsPerRound).toBe(1);
+    expect(plates.boss.stomps).toBe(false);
   });
 
   it('plates follow the energy shown, not the final view', () => {

@@ -22,6 +22,7 @@ import { accessoryItem } from '../accessory.js';
 import { paramsHash, squishyParams } from '../params.js';
 import type { SquishyField, SquishyHandle } from '../squishy-field.js';
 import type { KeeperField } from '../keeper/keeper-field.js';
+import { loadBossLooks } from './boss-looks.js';
 import { buildGalleryScene } from './gallery-scene.js';
 import { galleryLooks } from './showcase.js';
 import '../../styles.css';
@@ -37,6 +38,7 @@ setPerfReports(false);
  *
  * Query flags: `?count=50` (stress test), `?look=showcase-3` (or a comma list), `?view=closeup`,
  * `?row` (one line), `?spacing=4`, `?keeper=pip` (a Keeper for scale),
+ * `?bosses` (the mini-boss looks from the dev route; sign in and set `HP_DEV_SQUISHY_GRANTS`),
  * `?yaw=180` (turn them round), `?pitch=15`, `?distance=14` and `?drop=3` (the camera, and how far below it the floor sits), `?still` (no breathing, so the scene goes
  * idle), `?shadow` (the rescue guardians' shadow look), `?accessory=tiny-crown,snuggle-scarf`
  * (wardrobe accessories, one per squishy in turn, #340), plus the main page's
@@ -58,11 +60,22 @@ const params = new URLSearchParams(window.location.search);
 const pinTier = isQualityTier(params.get('tier'));
 const tier = pickInitialTier(params.get('tier'), params.get('quality'));
 const view: SquishyView = params.get('view') === 'closeup' ? 'closeUp' : 'map';
-// `?drafts` is gone with the drafts file (#234 234b-1): the boss kit is
-// public data now (shown in the showcase looks) and the species are
-// server-only; 234b-3 brings the looks back as `?bosses`.
 const registry = visualRegistry(GAME_DATA);
-const allLooks = galleryLooks(GAME_DATA.species, GAME_DATA.bodies, GAME_DATA.parts);
+// `?bosses` swaps the roster for the mini-boss looks (#234), fetched from the dev route
+// (server-only data can't be imported). The same `look=`, `row`, `spacing`, `tier` and `still` apply.
+const bosses = params.has('bosses') ? await loadBossLooks() : null;
+const allLooks = bosses
+  ? bosses.looks
+  : galleryLooks(GAME_DATA.species, GAME_DATA.bodies, GAME_DATA.parts);
+if (bosses?.problem) {
+  document.body.append(
+    el(
+      'p',
+      { class: 'gallery-problem', 'data-testid': 'gallery-problem', role: 'alert' },
+      bosses.problem,
+    ),
+  );
+}
 /** `?keeper=pip` puts one Keeper at the end of the row, for scale (#234). */
 const keeperBase = KEEPER_DATA.bases.find((b) => b.id === params.get('keeper'));
 const lookParam = params.get('look');

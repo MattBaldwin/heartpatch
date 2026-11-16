@@ -118,7 +118,7 @@ export interface BossPlates {
     readonly level: number;
     readonly percent: number;
     readonly energyText: string;
-    /** The "👣 Stomps twice" chip: the boss acts more than once a round. */
+    /** The "👣 Stomps twice" chip: only when the rule has the boss act more than once a round (shipped: once, so never). */
     readonly stomps: boolean;
   };
   readonly friends: readonly FriendPlate[];
