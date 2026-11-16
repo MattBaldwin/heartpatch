@@ -299,7 +299,7 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
                     who: seen ?? {
                       userId: mate.userId,
                       username: mate.username,
-                      teamLevel: view?.myTeamLevel ?? 0,
+                      teamLevel: 0, // unknown: renderCard skips the level-gap line
                       inBattle: false,
                     },
                     computer: true,
@@ -321,7 +321,9 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
 
   function renderCard(who: OnlineMember, computer = false): HTMLElement[] {
     const mine = view?.myTeamLevel ?? 0;
-    const gap = gapLine(mine, who.teamLevel, who.username);
+    // A mate missing from the roster has no known level: no gap line then.
+    const known = view?.online.some((m) => m.userId === who.userId) ?? false;
+    const gap = known ? gapLine(mine, who.teamLevel, who.username) : null;
     const id = mapId;
     return [
       el(
@@ -599,7 +601,7 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
       void joinBattle(sent.battleId);
       return;
     }
-    if (sent.status === 'declined') {
+    if (sent.status === 'declined' || sent.status === 'expired' || sent.status === 'cancelled') {
       if (mode.type === 'card')
         mode = { type: 'declined', name: who.username, computer: mode.computer === true };
       render();
@@ -652,6 +654,7 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
       closeSheet();
       options.openBattle(battle);
     } catch (err) {
+      joined.delete(battleId); // let a later `challenge.answered` retry
       if (at === ticket) showToast(messageOf(err));
     }
   }

@@ -75,7 +75,7 @@ import { FENCE_RESULTS, fenceResult, resultLine } from './result-line.js';
 import { coinLine, xpLines } from './result-card.js';
 import { keepGoing, KEEP_GOING_TEXT, type KeepGoingApi } from './keep-going.js';
 import { createBossBattle } from './boss-battle.js';
-import { BOSS_TEXT, bossSlot, isTeamBattle, slotsOut, teamXpLine } from './boss-view.js';
+import { BOSS_TEXT, bossSlot, bossXp, isTeamBattle, slotsOut } from './boss-view.js';
 import { mapApi } from '../map/map-api.js';
 import { territoryApi } from '../territory/territory-api.js';
 import { COMMAND_RETRY_MS } from '../inventory/send-command.js';
@@ -889,14 +889,17 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       // One XP line for the whole team, and the coins ride in the card's
       // "You won …" line (mockup frame 3): the card fits under the boss.
       const nameOf = (id: string) => squishyName(names, mine, id);
-      const xp = teamXpLine(b.rewards?.xp ?? [], nameOf);
+      // One XP line for the team, then a benched teammate's softer cheer (#732)
+      // with its own evolving meter (#205); the team's meters sit in a row.
+      const team = bossXp(b.rewards?.xp ?? [], nameOf);
       hud.setCaption(null);
       hud.showResult({
         title: bossCard.title,
         subtitle: bossCard.subtitle,
-        xp: [xp ?? MESSAGES.noXp],
-        // Each friend's evolving meter (#205), in a row under the team's line.
-        evolvingRow: xpLines(b.rewards?.xp ?? [], nameOf).evolving,
+        ...(team.xp.length > 0
+          ? { xp: team.xp, bench: team.bench, evolving: team.evolving }
+          : { xp: [MESSAGES.noXp] }),
+        evolvingRow: team.evolvingRow,
         lines: bossCard.lines,
         extra: bossCard.extra,
         done: MESSAGES.done,
