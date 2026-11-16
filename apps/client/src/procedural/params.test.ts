@@ -1,6 +1,7 @@
 import { GAME_DATA, visualRegistry, type Floater, type SpeciesVisual } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { FIXED_COLORS } from './config.js';
+import { FIXED_COLORS, LOD } from './config.js';
+import { accentArrays, partArrays } from './part-shapes.js';
 import { hexToRgb, paramsHash, squishyParams, type SquishySpecies } from './params.js';
 
 const registry = visualRegistry(GAME_DATA);
@@ -231,4 +232,42 @@ describe('sparkle kept off a face', () => {
       );
     }
   });
+});
+
+describe('every public part builds (#234)', () => {
+  const body = GAME_DATA.bodies[0]!;
+
+  it('has a squishy-ready param set for each part', () => {
+    for (const part of GAME_DATA.parts) {
+      const params = squishyParams(
+        {
+          id: 'every-part',
+          visual: { body: body.id, palette: ['#ffb3c7', '#fff4ea'], parts: [part.id] },
+        },
+        'p',
+        registry,
+      );
+      expect(params.missing, part.id).toEqual([]);
+      expect(
+        params.parts.some((p) => p.id === part.id),
+        part.id,
+      ).toBe(true);
+    }
+  });
+
+  it.each(['low', 'high', 'hero'] as const)(
+    'makes finite, non-empty geometry at %s detail',
+    (lod) => {
+      for (const part of GAME_DATA.parts) {
+        const meshes = [partArrays(part.shape, LOD[lod])];
+        if (part.accent) meshes.push(accentArrays(part.accent.mesh, LOD[lod]));
+        for (const m of meshes) {
+          expect(m.indices.length, part.id).toBeGreaterThan(0);
+          expect(m.positions.length, part.id).toBe(m.normals.length);
+          expect(m.positions.every(Number.isFinite), part.id).toBe(true);
+          expect(Math.max(...m.indices), part.id).toBeLessThan(m.positions.length / 3);
+        }
+      }
+    },
+  );
 });

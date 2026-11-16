@@ -1,7 +1,7 @@
-import type { PartShape } from '@heartpatch/shared';
+import type { PartAccentMesh, PartShape } from '@heartpatch/shared';
 import { cross, dot, normalize, type MeshArrays } from './body-shape.js';
 import type { LodSettings } from './config.js';
-import type { AccentMesh, Vec3 } from './params.js';
+import type { Vec3 } from './params.js';
 
 /**
  * Part primitives, each filling the unit box [−0.5, 0.5]³ so a part's size
@@ -459,12 +459,12 @@ export function partArrays(shape: PartShape, lod: LodSettings): MeshArrays {
  * own unit-box frame, so the same placement matrix puts both in place. It
  * may reach a little outside that box (the toe is wider than the shaft).
  */
-export function accentArrays(mesh: AccentMesh, lod: LodSettings): MeshArrays {
+export function accentArrays(mesh: PartAccentMesh, lod: LodSettings): MeshArrays {
   return ACCENTS[mesh](lod);
 }
 
-/** One builder per accent mesh: a new `AccentMesh` fails to typecheck here until it has one. */
-const ACCENTS: Readonly<Record<AccentMesh, (lod: LodSettings) => MeshArrays>> = {
+/** One builder per accent mesh: a new `PartAccentMesh` fails to typecheck here until it has one. */
+const ACCENTS: Readonly<Record<PartAccentMesh, (lod: LodSettings) => MeshArrays>> = {
   'bent-toe': (lod) =>
     orientTriangles(
       applyFit(

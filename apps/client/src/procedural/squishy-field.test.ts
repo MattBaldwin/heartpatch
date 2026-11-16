@@ -17,9 +17,10 @@ import {
   FLOATER_BATCH,
   GLUM_FACE,
   SQUISH_LOOK_CODE,
+  type SquishyDetail,
   type SquishyLod,
 } from './config.js';
-import type { KitPart, SquishySpecies } from './params.js';
+import type { SquishySpecies } from './params.js';
 import { decodeSquishCode, glowHueIndex } from './rare-glow.js';
 import { SquishyField, type SquishyHandle } from './squishy-field.js';
 
@@ -821,58 +822,74 @@ describe('SquishyField rare finds glow (#391)', () => {
     expect(after).toBeGreaterThan(before);
   });
 
-  it("draws a two-tone part's accent on its own batch, one instance per placement (#234 v16)", () => {
-    const tines: KitPart = {
-      id: 'test-two-tone-tines',
-      slot: 'fangs',
-      shape: 'bent',
-      size: [0.08, 0.3, 0.12],
-      color: 'metal',
-      accent: { mesh: 'bent-toe', color: '#b4bdc8' },
-      layout: { kind: 'ring', count: 3, spread: 60 },
-      around: 0,
-      up: -15,
-      jitter: 0,
-    };
-    const scene = new Scene(engine);
-    const f = new SquishyField<SquishyLod>(scene, {
-      registry: visualRegistry({ bodies: GAME_DATA.bodies, parts: [...GAME_DATA.parts, tines] }),
-      lod: 'low',
-      shadows: false,
-    });
-    const one = {
-      ...species,
-      visual: { ...species.visual, parts: [...species.visual.parts, tines.id] },
-    };
-    f.add(one, 'p', { x: 0, z: 0 });
-    f.flush();
-    const meshNamed = (prefix: string): Mesh => {
-      const found = scene.meshes.find((m) => m.name.startsWith(prefix));
-      expect(found, prefix).toBeInstanceOf(Mesh);
-      if (!(found instanceof Mesh)) throw new Error(`no mesh ${prefix}`);
-      return found;
-    };
-    const accent = meshNamed('squishy-accent:bent-toe');
-    expect(accent.thinInstanceCount).toBe(3);
-    const shaft = meshNamed('squishy-part:bent');
-    expect(shaft.thinInstanceCount).toBe(3);
-    // The same placement matrices: the toe rides on its tine.
-    expect(
-      Array.from(
-        accent
-          .thinInstanceGetWorldMatrices()
-          .map((m) => m.m)
-          .flat(),
-      ),
-    ).toEqual(
-      Array.from(
-        shaft
-          .thinInstanceGetWorldMatrices()
-          .map((m) => m.m)
-          .flat(),
-      ),
-    );
+  const TINES = GAME_DATA.parts.filter((p) => p.accent);
+  const meshNamed = (scene: Scene, prefix: string): Mesh => {
+    const found = scene.meshes.find((m) => m.name.startsWith(prefix));
+    if (!(found instanceof Mesh)) throw new Error(`no mesh ${prefix}`);
+    return found;
+  };
+  const matrices = (mesh: Mesh): number[] =>
+    mesh
+      .thinInstanceGetWorldMatrices()
+      .map((m) => Array.from(m.m))
+      .flat();
+
+  it('has public two-tone parts to draw (the rake tines)', () => {
+    expect(TINES.map((p) => p.accent?.mesh)).toEqual(TINES.map(() => 'bent-toe'));
+    expect(TINES.length).toBeGreaterThanOrEqual(3);
   });
+
+  it.each(TINES.map((p) => [p.id, p] as const))(
+    "draws %s's accent on its own batch, one instance per placement, on the shaft's matrices (#234)",
+    (_id, tines) => {
+      const scene = new Scene(engine);
+      const f = new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false });
+      f.add(
+        { ...species, visual: { ...species.visual, parts: [...species.visual.parts, tines.id] } },
+        'p',
+        { x: 0, z: 0 },
+      );
+      f.flush();
+      const accent = meshNamed(scene, 'squishy-accent:bent-toe');
+      const shaft = meshNamed(scene, 'squishy-part:bent');
+      expect(accent.thinInstanceCount).toBeGreaterThanOrEqual(3);
+      expect(accent.thinInstanceCount).toBe(shaft.thinInstanceCount);
+      // The same placement matrices: the toe rides on its tine.
+      expect(matrices(accent)).toEqual(matrices(shaft));
+    },
+  );
+
+  it.each(['low', 'high', 'hero'] as const)(
+    'a bent + accent squishy adds at most the bent and bent-toe batches at %s detail',
+    (lod) => {
+      const meshesOf = (parts: string[]): Set<string> => {
+        const scene = new Scene(engine);
+        const f = new SquishyField<SquishyDetail>(scene, { registry, lod, shadows: false });
+        f.add({ ...species, visual: { ...species.visual, parts } }, 'p', { x: 0, z: 0 });
+        f.flush();
+        return new Set(
+          scene.meshes.filter((m) => m.name.startsWith('squishy-')).map((m) => m.name),
+        );
+      };
+      const base = meshesOf(species.visual.parts);
+      const withTines = meshesOf([...species.visual.parts, 'rake-tool-tines']);
+      const added = [...withTines].filter((n) => !base.has(n)).sort();
+      expect(added).toEqual([`squishy-accent:bent-toe-${lod}`, `squishy-part:bent-${lod}`]);
+      // A second squishy with the same tines shares those batches: no further meshes.
+      const scene = new Scene(engine);
+      const f = new SquishyField<SquishyDetail>(scene, { registry, lod, shadows: false });
+      const tined = {
+        ...species,
+        visual: { ...species.visual, parts: [...species.visual.parts, 'rake-tool-tines'] },
+      };
+      f.add(tined, 'a', { x: 0, z: 0 });
+      f.flush();
+      const one = f.stats.meshes;
+      f.add(tined, 'b', { x: 1, z: 0 });
+      f.flush();
+      expect(f.stats.meshes).toBe(one);
+    },
+  );
 
   it('adds no meshes: a rare kind draws on the same batches as a common one', () => {
     const plain = make();

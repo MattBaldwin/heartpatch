@@ -1,4 +1,4 @@
-import { GAME_DATA } from '@heartpatch/shared';
+import { BATTLE_RULES, GAME_DATA } from '@heartpatch/shared';
 import type { Page, Request } from '@playwright/test';
 
 /**
@@ -63,6 +63,7 @@ const CHARMS_PER_ASK = 3;
 
 const DAY = 24 * 60 * 60 * 1000;
 const STOMP = 'big-stomp';
+const BOSS_HP_PERCENT = BATTLE_RULES.boss?.stats.hp ?? 100;
 
 function toBoss(b: Battle, options: BossStubOptions): Battle {
   const mine = b.view.sides.a;
@@ -78,7 +79,8 @@ function toBoss(b: Battle, options: BossStubOptions): Battle {
   if (boss) {
     boss.moves = [STOMP, ...boss.moves.slice(0, 3)];
     boss['boss'] = true;
-    boss.stats = { ...boss.stats, hp: boss.stats.hp * 3 };
+    // The shipped boss rule (hp ×1.5 today), so the stub never drifts from it.
+    boss.stats = { ...boss.stats, hp: Math.round((boss.stats.hp * BOSS_HP_PERCENT) / 100) };
     boss['energy'] = boss.stats.hp;
   }
   delete b['firstMeeting'];
@@ -110,7 +112,7 @@ function toBoss(b: Battle, options: BossStubOptions): Battle {
   };
 }
 
-/** A round that doesn't end it: the boss's area stomp, a second stomp, then each friend's move. */
+/** A round that doesn't end it: the boss's one area stomp (one action a round), then each friend's move. */
 function openRound(b: Battle, picks: { slot: number; move: string }[]): Battle {
   const turn = b.view.turn;
   const mine = b.view.sides.a.squishies;
@@ -128,11 +130,6 @@ function openRound(b: Battle, picks: { slot: number; move: string }[]): Battle {
     next.set(`a${String(slot)}`, e);
     log.push({ ...at('a', slot), type: 'hit', amount: 5, energy: e, effectiveness: 'normal' });
   }
-  log.push({ ...at('b', 0), type: 'move', move: bossMove });
-  const first = out[1] ?? out[0]!;
-  const hurt = Math.max(1, Math.round((next.get(`a${String(first)}`) ?? 1) * 0.85));
-  next.set(`a${String(first)}`, hurt);
-  log.push({ ...at('a', first), type: 'hit', amount: 3, energy: hurt, effectiveness: 'normal' });
   let left = (boss['energy'] as number | undefined) ?? boss.stats.hp;
   for (const pick of picks) {
     left = Math.max(1, Math.round(left * 0.85));
@@ -153,7 +150,7 @@ function openRound(b: Battle, picks: { slot: number; move: string }[]): Battle {
   return { ...b, view: { ...b.view, turn: turn + 1, log, sides } };
 }
 
-/** The round played out: the boss's area stomp on all three, a second stomp, then the friends win (or nap). */
+/** The round played out: the boss's one area stomp on all three, then the friends win (or nap). */
 function playRound(
   b: Battle,
   picks: { slot: number; move: string }[],
@@ -167,7 +164,7 @@ function playRound(
   const won = (options.outcome ?? 'won') === 'won';
   const at = (side: 'a' | 'b', slot: number) => ({ turn, side, slot });
   const bossMove = boss.moves[0] ?? picks[0]!.move;
-  // The first stomp lands on everyone (an area move), the second on one.
+  // One action a round (`BATTLE_RULES.boss.actionsPerRound`): the stomp lands on everyone (an area move).
   log.push({ ...at('b', 0), type: 'move', move: bossMove });
   for (const slot of out) {
     const s = mine[slot]!;
@@ -182,15 +179,6 @@ function playRound(
     if (!won) log.push({ ...at('a', slot), type: 'tuckered-out' });
   }
   if (won) {
-    log.push({ ...at('b', 0), type: 'move', move: bossMove });
-    const s = mine[out[0]!]!;
-    log.push({
-      ...at('a', out[0]!),
-      type: 'hit',
-      amount: 4,
-      energy: Math.max(1, Math.round(s.stats.hp * 0.45)),
-      effectiveness: 'normal',
-    });
     let left = boss.stats.hp;
     picks.forEach((pick, i) => {
       left = i === picks.length - 1 ? 0 : Math.round(left * 0.5);
