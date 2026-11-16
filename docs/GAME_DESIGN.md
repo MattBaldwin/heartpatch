@@ -504,6 +504,30 @@ Once a week, a BIG squishy wanders onto your patch. It stands on one tile, a gol
 - **When:** one visit a week per patch. A visit lasts **48 hours from 16:00 patch-local** (it spans three patch-local days) and never lands on the Long Night. The tile is one the boss likes, with a fallback. Its level is the Partner's plus 2 (floor 15). The marker says "here until <day>", and "last day!" on the visit's final calendar day in the patch's zone.
 - **How it fights:** your whole team (up to 3) against the one BIG squishy. It uses the team-battle engine. You get **3 tries a patch day**; a try that ends in a no-contest is given back. If you leave a fight alone for 10 minutes the BIG squishy wanders off, and that try is used.
   - **Boss numbers (#838, owner kept):** the BIG squishy acts **once a round** and has **1.5×** a normal squishy's health (`rules.boss`, `// TUNE:`). A team of 3 at the boss's level wins a bit over half the time, and five levels over it wins nearly always. Four lines visit in turn, each growing at level 30 and again at 50. A befriended boss joins as its smallest form.
+  - **Signature moves (#234 PR 2; `BOSS_MOVES`, server-only, `// TUNE:`):** every boss form has moves that use four battle effects, all resolved by the shared battle engine so client and server agree.
+    - **Wind-up:** a *wind-up* move takes a round. The user announces it ("One… two… THREE!"), does nothing else, and the move lands as a fresh hit on its next action. A one-foe wind-up keeps its target, and if that foe is out it is re-aimed when it lands. If the user loses that action (flinched or otherwise skipped) or is tuckered out, the count is lost. The wind-up itself has no accuracy roll and takes no stance.
+    - **Flinch:** a *flinch* chance can make a foe that hasn't had its action yet this round lose it. It rolls once per foe hit, and only for a foe still in and not yet moved this round; nobody else draws a roll or shows anything. A flinched foe skips its action entirely (no status roll, its status doesn't tick). A side that isn't picking a move that round (a swap, a Heart Charm or a fence) has already had its turn, so nobody on it can flinch.
+    - **Backup (assist):** an *assist* move calls in a friend's move at once, using the caller's own stats, on the foes the parent move aimed at (re-aimed if they're out). It rolls accuracy and damage and applies its effects, but gets no status roll and no stance, and a backup move can't itself call backup or wind up. The battle shows "Backup! <move>!".
+    - **Fired up (low energy):** a *low-energy* move adds its **extra percent** of its power, scaled by the share of energy the user has lost: `power + floor(power × extra% × lost ÷ (100 × full))`. At full energy it is just its power; with almost none left it is nearly `power × (1 + extra%)`. There is no roll.
+
+    | Line | Move | Element | Power | Accuracy | What it does |
+    | --- | --- | --- | --- | --- | --- |
+    | Rake | Rake Mouth | Leaf | 90 | 95 | 15% chance of dizzy |
+    | Rake | Stink Bomb | Leaf | 55 | 100 | all foes; 20% chance of dizzy each |
+    | Rake | Leaf Pile Pounce | Leaf | 75 | 100 | 25% chance to flinch |
+    | Rake | Count to Three | Leaf | 170 | 100 | wind-up (lands next action); replaces Mossy Nap |
+    | Mom | The Look | Fire | none | 100 | foe's attack −1 (always) |
+    | Mom | Full Name Shout | Fire | 85 | 100 | 35% chance to flinch (was a 20% dizzy chance) |
+    | Mom | Mama Bear Charge | Fire | 80 | 100 | fired up: extra 80% (up to ×1.8 when nearly out) |
+    | Dad | Dad Joke | Frost | none | 100 | 60% chance of dizzy |
+    | Dad | Lawnmower Rumble | Frost | 65 | 100 | all foes |
+    | Dad | Thermostat Lock | Frost | 70 | 100 | 50% chance foe's speed −1 |
+    | Dad | Ask Your Mother | Frost | none | 100 | backup: calls in Mama Bear Charge; 20% chance the user's defense +1 (no heal) |
+    | Kart | Pit Stop | Spark | none | 100 | heals 30% and speed +1 (always) |
+    | Kart | Drift Spin | Spark | 60 | 100 | all foes |
+    | Kart | Speed Bump | Spark | 70 | 100 | 30% chance foe's speed −1 |
+
+    Ask Your Mother and Mama Bear Charge were tuned down in `pnpm sim:boss` (DECISIONS "Supervisor 43") so a team of 3 at the boss's level wins about 56–61% against each line.
 - **The first win each week pays a bundle:** 3 Heart Charms, 5 Heartdust, 3 Treats, 5 coins and 5 Heart Coins, and a 20% chance of a piece of clothing. Winning again that week is for fun and for the Big Friend milestones. Nothing is paid for a fight a kid scoots out of.
 - **Befriending:** after a win the BIG squishy may ask to be friends. Each ask costs **3 Heart Charms**, and you get **2 asks per win**, open for 24 hours. The chance is 20%, plus 5% for each squishy you already have, plus 15% for every earlier miss; **after 4 misses the next ask always works.** The boss gives a hint, never a number: its warmth goes from 0 to 4 as it likes you more ("Not yet! Rakelet likes you a little more now."). A yes brings the BIG squishy's **small first form** to your team, at your Partner's level × 50% (at least level 5). You can have one friend of each boss kind; asking again says "You already have a ...!" and spends nothing.
 - **Big Friend milestones:** beat a BIG squishy **1 / 4 / 10** times to earn Big Hugger, Big Friend and Giant Heart (25 / 50 / 100 coins).
