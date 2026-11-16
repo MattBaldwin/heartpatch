@@ -166,6 +166,8 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
     },
     { passive: true },
   );
+  jumps.addEventListener('scroll', fadeEdges, { passive: true });
+  window.addEventListener('resize', fadeEdges);
   sheet.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') back.click();
   });
@@ -268,6 +270,18 @@ export function createBuildingsGuide(options: BuildingsGuideOptions): BuildingsG
         showChip(chip);
       } else chip.removeAttribute('aria-current');
     }
+    fadeEdges();
+  }
+
+  /**
+   * Softens a side of the chip row while more chips are scrolled off it
+   * (`data-fade-left/right`, drawn by the CSS mask), so a half-cut chip reads
+   * as "swipe for more".
+   */
+  function fadeEdges(): void {
+    const max = jumps.scrollWidth - jumps.clientWidth;
+    jumps.toggleAttribute('data-fade-left', jumps.scrollLeft > 1);
+    jumps.toggleAttribute('data-fade-right', jumps.scrollLeft < max - 1);
   }
 
   /**

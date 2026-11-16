@@ -178,6 +178,19 @@ test('See all buildings lists every building, what fits here, and builds from it
   await shelfList.evaluate((l) => (l.scrollTop = 0));
   await expect(chips.first()).toHaveAttribute('aria-current', 'true');
   await expect.poll(() => pickedChipShown(page)).toBe(true);
+  // A row wider than the screen softens the side that has more chips off it.
+  const jumpRow = guide.getByTestId('guide-jump');
+  const overflows = await jumpRow.evaluate((r) => r.scrollWidth > r.clientWidth + 2);
+  if (overflows) {
+    await expect(jumpRow).toHaveAttribute('data-fade-right', '');
+    await expect(jumpRow).not.toHaveAttribute('data-fade-left', '');
+    await jumpRow.evaluate((r) => (r.scrollLeft = r.scrollWidth));
+    await expect(jumpRow).toHaveAttribute('data-fade-left', '');
+    await expect(jumpRow).not.toHaveAttribute('data-fade-right', '');
+    await jumpRow.evaluate((r) => (r.scrollLeft = 0));
+  } else {
+    await expect(jumpRow).not.toHaveAttribute('data-fade-right', '');
+  }
   await guide.getByTestId('guide-entry').last().scrollIntoViewIfNeeded();
   expect(await picturesDrawn(page)).toContain(state.ids.at(-1));
   if (state.later.length > 0) {

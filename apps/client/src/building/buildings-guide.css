@@ -163,6 +163,32 @@
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
+  /* Soft edge where more chips are scrolled off (set by data-fade-*). It is no
+     wider than the row's scroll padding, so a picked chip is never dimmed. */
+  --fade-left: 0px;
+  --fade-right: 0px;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--fade-left),
+    #000 calc(100% - var(--fade-right)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--fade-left),
+    #000 calc(100% - var(--fade-right)),
+    transparent 100%
+  );
+}
+
+.guide-jump[data-fade-left] {
+  --fade-left: var(--hp-pad-x);
+}
+
+.guide-jump[data-fade-right] {
+  --fade-right: var(--hp-pad-x);
 }
 
 .guide-jump::-webkit-scrollbar {
