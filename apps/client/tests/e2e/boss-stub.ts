@@ -63,7 +63,13 @@ const CHARMS_PER_ASK = 3;
 
 const DAY = 24 * 60 * 60 * 1000;
 const STOMP = 'big-stomp';
-const BOSS_HP_PERCENT = BATTLE_RULES.boss?.stats.hp ?? 100;
+/** The shipped boss hp rule; a stub with no boss rule would test a fight that can't happen. */
+const BOSS_HP_PERCENT = (() => {
+  const hp = BATTLE_RULES.boss?.stats.hp;
+  if (hp === undefined)
+    throw new Error('boss-stub: BATTLE_RULES.boss is missing (no boss hp rule)');
+  return hp;
+})();
 
 function toBoss(b: Battle, options: BossStubOptions): Battle {
   const mine = b.view.sides.a;

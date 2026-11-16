@@ -169,7 +169,7 @@ export const BOSS_PARTS: Part[] = [
   // front face and passes over its lower edge, leaning ~42° towards the
   // viewer; a leaf-rake tine (`bent`: tapered, a gentle, wide 35° forward arc at
   // the tip, no curl); the row fans out 6° with the outer tines longer
-  // (ring `grow`). 3, 4 and 5 tines by stage, built the same way.
+  // (ring `grow` [dropped in #810 as unused; v15 made the tines one length]). 3, 4 and 5 tines by stage, built the same way.
   // v14: shorter tines (~28%) ending at the chin line; a 30° arc then a short
   // straight forward foot (no J); the fan opens to ~18° with the outer tines
   // ~18% longer, and each fanned tine's curl turns outwards with it so the

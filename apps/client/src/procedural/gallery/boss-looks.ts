@@ -1,4 +1,4 @@
-import { SpeciesVisualSchema, type Rarity } from '@heartpatch/shared';
+import { RaritySchema, SpeciesVisualSchema, type Rarity } from '@heartpatch/shared';
 import { ApiRequestError, apiCallFor } from '../../net/api.js';
 import type { SquishySpecies } from '../params.js';
 
@@ -9,7 +9,7 @@ import type { SquishySpecies } from '../params.js';
  * instead, which only exists with `HP_DEV_SQUISHY_GRANTS`, needs a signed-in
  * session and is rate-limited. Each `visual` is parsed with the public
  * `SpeciesVisualSchema`, so a boss look is only ever drawn from public bodies
- * and parts.
+ * and parts, and each `rarity` with `RaritySchema`.
  */
 
 export interface BossLook extends SquishySpecies {
@@ -25,7 +25,7 @@ const bossLooksReply = {
     return looks.map((raw: Record<string, unknown>) => ({
       id: String(raw['id']),
       name: String(raw['name']),
-      rarity: raw['rarity'] as Rarity,
+      rarity: RaritySchema.parse(raw['rarity']),
       visual: SpeciesVisualSchema.parse(raw['visual']),
     }));
   },

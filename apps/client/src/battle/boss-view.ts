@@ -124,6 +124,17 @@ export interface BossPlates {
   readonly friends: readonly FriendPlate[];
 }
 
+/**
+ * Whether the boss plate shows the "👣 Stomps twice" chip: only when the rule
+ * (`BATTLE_RULES.boss.actionsPerRound`) has the boss act more than once a
+ * round. The shipped rule is one action, so it is hidden (#234).
+ */
+export function stompsChip(
+  actionsPerRound: number = BATTLE_RULES.boss?.actionsPerRound ?? 1,
+): boolean {
+  return actionsPerRound > 1;
+}
+
 /** The four plates (arena A): the boss's wide one on top, one slim one per friend. */
 export function bossPlates(
   b: PlayerBattle,
@@ -141,7 +152,7 @@ export function bossPlates(
       level: boss?.level ?? 1,
       percent: boss ? energyPercent({ energy: bossEnergy, stats: boss.stats }) : 0,
       energyText: boss ? `${String(bossEnergy)}/${String(boss.stats.hp)}` : '',
-      stomps: (BATTLE_RULES.boss?.actionsPerRound ?? 1) > 1,
+      stomps: stompsChip(),
     },
     friends: slotsOut(b, b.mySide).flatMap((s) => {
       const squishy = b.view.sides[b.mySide].squishies[s];
