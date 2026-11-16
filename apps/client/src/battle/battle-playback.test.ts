@@ -1,7 +1,14 @@
 import type { BattleEventView, PlayerBattle } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { findAvoidedWords } from '@heartpatch/shared';
-import { applyStep, FENCE_LINES, playbackSteps, shownFrom, sipStep } from './battle-playback.js';
+import {
+  applyStep,
+  EFFECT_WORDS,
+  FENCE_LINES,
+  playbackSteps,
+  shownFrom,
+  sipStep,
+} from './battle-playback.js';
 import { BattleContent, benchOf, energyPercent, natureLine, plateName } from './battle-view.js';
 
 /** A small battle view, with species and moves the public tables don't have. */
@@ -536,5 +543,41 @@ describe('view helpers', () => {
       slot: 1,
       text: 'Mallow sipped Brave Brew! Feeling bold!',
     });
+  });
+});
+
+describe('the #234 move effects', () => {
+  const log: BattleEventView[] = [
+    { ...at('b'), type: 'move', move: 'test-hush-hum' },
+    { ...at('b'), type: 'windup', move: 'test-hush-hum' },
+    { ...at('a'), type: 'flinch' },
+    { ...at('a'), type: 'assist', move: 'test-moon-blink' },
+    { ...at('b'), type: 'windup-lost', move: 'test-hush-hum' },
+  ];
+  const b = battle(log);
+  const steps = playbackSteps(b, new BattleContent(b), 1);
+
+  it('gives each one effect step with its own words, squish and callout', () => {
+    expect(steps.map((s) => [s.kind, s.text, s.squish, s.callout, s.windup])).toEqual([
+      [
+        'effect',
+        EFFECT_WORDS.windup('Wild Mallow', 'Hush Hum'),
+        'jiggle',
+        EFFECT_WORDS.windupCallout,
+        true,
+      ],
+      ['effect', EFFECT_WORDS.flinch('Puff'), 'wobble', EFFECT_WORDS.flinchCallout, false],
+      ['effect', EFFECT_WORDS.assist('Puff'), 'bounce', null, false],
+      ['effect', EFFECT_WORDS.windupLost('Wild Mallow'), null, null, false],
+    ]);
+    expect(steps[0]!.text).toBe('Wild Mallow is winding up Hush Hum… watch out next round!');
+    for (const text of [
+      ...steps.map((s) => s.text),
+      EFFECT_WORDS.windupLanding,
+      EFFECT_WORDS.firedUp,
+      EFFECT_WORDS.backup('Hush Hum'),
+    ]) {
+      expect(findAvoidedWords(text)).toEqual([]);
+    }
   });
 });
