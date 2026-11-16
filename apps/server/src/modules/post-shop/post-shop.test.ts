@@ -622,17 +622,25 @@ describe.skipIf(!url)('the trading post Shop (#729, needs DATABASE_URL)', () => 
       expect(await balanceOf(at.mapId, kid)).toBe(200);
     });
 
-    it("Night supplies leaves another Keeper's fires alone", async () => {
+    it("Night supplies leaves another Keeper's fires on the same patch alone", async () => {
       const server = await start();
       const kid = await player();
-      const other = await player();
+      const rival = await player();
       const at = await patch(server, kid, 100);
-      const theirs = await patch(server, other, 0);
-      const [mine] = await landOf(at.mapId, kid);
-      const [far] = await landOf(theirs.mapId, other);
-      await fire(at.mapId, kid, mine!.id, null);
-      const notMine = await fire(theirs.mapId, other, far!.id, null);
-      expect((await buy(server, kid, at, 'night-supplies')).statusCode).toBe(200);
+      const [a, b] = await landOf(at.mapId, kid);
+      // A rival on the same patch with an empty fire on a tile they hold.
+      await db.insert(mapMembers).values({ mapId: at.mapId, userId: rival.id, role: 'member' });
+      await db.execute(`update tiles set owner_user_id = '${rival.id}' where id = '${b!.id}'`);
+      const mine = await fire(at.mapId, kid, a!.id, null);
+      const notMine = await fire(at.mapId, rival, b!.id, null);
+      const res = await buy(server, kid, at, 'night-supplies');
+      expect(res.statusCode, res.body).toBe(200);
+      expect(BuyResponseSchema.parse(res.json()).bought.got).toEqual({
+        kind: 'fuel-all',
+        fires: 1,
+        nights: 3,
+      });
+      expect(await fuelOf(mine)).toBe(fuelled(3));
       expect(await fuelOf(notMine)).toBeNull();
     });
 
@@ -702,6 +710,33 @@ describe.skipIf(!url)('the trading post Shop (#729, needs DATABASE_URL)', () => 
       expect(await purchases(at.mapId, kid)).toHaveLength(0);
       expect(await balanceOf(at.mapId, kid)).toBe(100);
     });
+    it('the Fence patch kit skips my fence on a tile I no longer hold, and with only that one charges nothing', async () => {
+      const server = await start();
+      const kid = await player();
+      const rival = await player();
+      const at = await patch(server, kid, 100);
+      const [a, b] = await landOf(at.mapId, kid);
+      // My worn segment, then its tile goes to a rival.
+      const lost = await fence(at.mapId, kid, b!.id, 2, 10);
+      await db.insert(mapMembers).values({ mapId: at.mapId, userId: rival.id, role: 'member' });
+      await db.execute(`update tiles set owner_user_id = '${rival.id}' where id = '${b!.id}'`);
+      const only = await buy(server, kid, at, 'fence-patch-kit');
+      expect(only.statusCode, only.body).toBe(409);
+      expect(errorOf(only).message).toBe('No fences to fix yet 🪵');
+      expect(await hpOf(lost)).toBe(10);
+      expect(await purchases(at.mapId, kid)).toHaveLength(0);
+      expect(await balanceOf(at.mapId, kid)).toBe(100);
+      // With a worn one on land I hold, only that one is mended.
+      const held = await fence(at.mapId, kid, a!.id, 0, 10);
+      const res = await buy(server, kid, at, 'fence-patch-kit');
+      expect(res.statusCode, res.body).toBe(200);
+      expect(BuyResponseSchema.parse(res.json()).bought.got).toEqual({
+        kind: 'repair-fences',
+        fences: 1,
+      });
+      expect([await hpOf(held), await hpOf(lost)]).toEqual([full, 10]);
+    });
+
     it('Night supplies takes my fires (8) before the balance (12b)', async () => {
       const server = await start();
       const kid = await player();

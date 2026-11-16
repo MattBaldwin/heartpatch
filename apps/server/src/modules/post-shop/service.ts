@@ -5,6 +5,8 @@ import {
   POST_SHOP,
   POST_SHOP_BY_ID,
   type BuyRequest,
+  type ItemCounts,
+  type MapLocalTime,
   type BuyResponse,
   type Hex,
   type PostShop,
@@ -25,10 +27,10 @@ import {
   nextLocalMidnight,
   type Clock,
 } from '../../lib/time.js';
-import { createBuildingsRepo } from '../buildings/repo.js';
-import { fuelFires, lockMyFires } from '../buildings/service.js';
+import { createBuildingsRepo, type BuildingsRepo } from '../buildings/repo.js';
+import { fuelFires, lockMyFires, type MyFire } from '../buildings/service.js';
 import { createFencesRepo } from '../fences/repo.js';
-import { lockMyWornFences, mendFence } from '../fences/service.js';
+import { lockMyWornFences, mendFence, type MyWornFences } from '../fences/service.js';
 import { createHeartCoinsRepo } from '../heart-coins/repo.js';
 import { spendHeartCoins } from '../heart-coins/service.js';
 import { grantItems, lockGrantRows } from '../inventory/service.js';
@@ -189,23 +191,32 @@ export function createPostShopService(options: PostShopServiceOptions): PostShop
         const purchaseId = uuidv7();
         const local = mapLocalTime(at, map.timeZone);
 
-        // 2. What a supply works on, before the bag and the balance (tech
-        // spec §7): my fires (step 8), or my fences' tiles (6) then the
-        // segments (8). Night supplies adds what fits in each fire.
+        // 2. What the item works on, before the balance (tech spec §7): my
+        // fires (step 8; Night supplies adds what fits in each), my fences'
+        // tiles (6) then the segments (8), or the bag rows a pack fills (11).
         const buildings = createBuildingsRepo(tx);
         const fences = createFencesRepo(tx);
-        const fuel =
-          item.effect.kind === 'fuel-all'
-            ? await nightSupplies(buildings, owner, item.effect.nights, local)
-            : null;
-        const mend =
-          item.effect.kind === 'repair-fences'
-            ? await lockMyWornFences(fences, mapId, user.id)
-            : null;
-
-        // 2b. The bag rows a pack fills (tech spec §7 step 11), before the balance.
-        const items = item.effect.kind === 'items' ? item.effect.items : null;
-        if (items) await lockGrantRows(tx, mapId, [{ userId: user.id, items }]);
+        const work = await (async (): Promise<ShopWork> => {
+          switch (item.effect.kind) {
+            case 'lure':
+              return { kind: 'lure' };
+            case 'items': {
+              const { items } = item.effect;
+              await lockGrantRows(tx, mapId, [{ userId: user.id, items }]);
+              return { kind: 'items', items };
+            }
+            case 'fuel-all':
+              return {
+                kind: 'fuel-all',
+                fuel: await nightSupplies(buildings, owner, item.effect.nights, local),
+              };
+            case 'repair-fences':
+              return {
+                kind: 'repair-fences',
+                mend: await lockMyWornFences(fences, mapId, user.id),
+              };
+          }
+        })();
 
         // 3. My Heart Coin balance on the patch (step 12b), then the caps
         // under it: one player's purchases on a patch take turns here, so a
@@ -225,16 +236,16 @@ export function createPostShopService(options: PostShopServiceOptions): PostShop
           );
         }
         // Nothing for it to do: refused before any coin moves.
-        if (fuel && fuel.plan.size === 0) {
+        if (work.kind === 'fuel-all' && work.fuel.plan.size === 0) {
           throw new AppError(
             'CONFLICT',
-            fuel.fires.length === 0 ? MESSAGES.noFires : MESSAGES.firesFull,
+            work.fuel.fires.length === 0 ? MESSAGES.noFires : MESSAGES.firesFull,
           );
         }
-        if (mend?.worn.length === 0) {
+        if (work.kind === 'repair-fences' && work.mend.worn.length === 0) {
           throw new AppError(
             'CONFLICT',
-            mend.owned === 0 ? MESSAGES.noFences : MESSAGES.fencesFine,
+            work.mend.owned === 0 ? MESSAGES.noFences : MESSAGES.fencesFine,
           );
         }
 
@@ -257,28 +268,39 @@ export function createPostShopService(options: PostShopServiceOptions): PostShop
           day: localDate(at, map.timeZone),
           createdAt: at,
         });
-        if (items) await grantItems(tx, owner, items, SHOP_REASON, purchaseId, at);
-        let got: ShopGot = items ? { kind: 'items', items } : { kind: 'lure' };
-        if (fuel) {
-          const nights = await fuelFires(
-            { setFuel: buildings.setFuel, appendEvent: repo.appendEvent },
-            { ...owner, local, at },
-            fuel.fires,
-            fuel.plan,
-          );
-          got = { kind: 'fuel-all', fires: fuel.plan.size, nights };
-        }
-        if (mend) {
-          for (const { row, fence } of mend.worn) {
-            await mendFence(
-              { setHp: fences.setHp, appendEvent: repo.appendEvent },
-              owner,
-              row,
-              fence,
-              {},
+        // What it gives: one case per effect kind, no default, so a new kind
+        // doesn't compile until it's handled here.
+        let got: ShopGot;
+        switch (work.kind) {
+          case 'lure':
+            got = { kind: 'lure' };
+            break;
+          case 'items':
+            await grantItems(tx, owner, work.items, SHOP_REASON, purchaseId, at);
+            got = { kind: 'items', items: work.items };
+            break;
+          case 'fuel-all': {
+            const nights = await fuelFires(
+              { setFuel: buildings.setFuel, appendEvent: repo.appendEvent },
+              { ...owner, local, at },
+              work.fuel.fires,
+              work.fuel.plan,
             );
+            got = { kind: 'fuel-all', fires: work.fuel.plan.size, nights };
+            break;
           }
-          got = { kind: 'repair-fences', fences: mend.worn.length };
+          case 'repair-fences':
+            for (const { row, fence } of work.mend.worn) {
+              await mendFence(
+                { setHp: fences.setHp, appendEvent: repo.appendEvent },
+                owner,
+                row,
+                fence,
+                {},
+              );
+            }
+            got = { kind: 'repair-fences', fences: work.mend.worn.length };
+            break;
         }
 
         // 5. The buyer's other devices hear of it (step 13, last).
@@ -300,16 +322,30 @@ export function createPostShopService(options: PostShopServiceOptions): PostShop
   };
 }
 
+/** Night supplies' plan: my fires, locked, and the nights each gets. */
+interface NightSupplies {
+  fires: MyFire[];
+  /** Nights to add, by building row id; a full fire isn't in it. */
+  plan: Map<string, number>;
+}
+
+/** What a purchase works on, found and locked before the balance (12b). */
+type ShopWork =
+  | { kind: 'lure' }
+  | { kind: 'items'; items: ItemCounts }
+  | { kind: 'fuel-all'; fuel: NightSupplies }
+  | { kind: 'repair-fences'; mend: MyWornFences };
+
 /**
  * Night supplies' plan: my fires, locked (step 8), and up to `nights` for
  * each, only what fits (`fuelSpace`); a full fire gets none.
  */
 async function nightSupplies(
-  buildings: Parameters<typeof lockMyFires>[0],
+  buildings: Pick<BuildingsRepo, 'lockFires'>,
   owner: { mapId: string; userId: string },
   nights: number,
-  local: ReturnType<typeof mapLocalTime>,
-) {
+  local: MapLocalTime,
+): Promise<NightSupplies> {
   const fires = await lockMyFires(buildings, owner.mapId, owner.userId);
   const plan = new Map<string, number>();
   for (const { row, fire } of fires) {

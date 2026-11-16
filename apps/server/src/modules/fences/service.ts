@@ -340,12 +340,18 @@ export async function mendFence(
   });
 }
 
+/** My segments on the tiles I hold (`owned`), and those below full (`worn`). */
+export interface MyWornFences {
+  owned: number;
+  worn: { row: FenceRow; fence: FenceBuilding }[];
+}
+
 /** My segments on a patch that are below full, locked: their tiles (step 6, id order), then the segments (step 8, id order). */
 export async function lockMyWornFences(
   repo: Pick<FencesRepo, 'listOwned' | 'lockTile' | 'lockOnTiles'>,
   mapId: string,
   userId: string,
-): Promise<{ owned: number; worn: { row: FenceRow; fence: FenceBuilding }[] }> {
+): Promise<MyWornFences> {
   const seen = await repo.listOwned(mapId, userId);
   const tileIds = [...new Set(seen.map((f) => f.tileId))].sort();
   const mine = new Set<string>();
