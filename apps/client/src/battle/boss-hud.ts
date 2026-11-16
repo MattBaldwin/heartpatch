@@ -1,5 +1,6 @@
 import { buttonClass } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
+import { WIDE_MIN } from './battle-config.js';
 import {
   BOSS_TEXT,
   WARMTH_HEARTS,
@@ -37,10 +38,10 @@ export interface BossHud {
   readonly picker: HTMLElement;
   setPlates: (plates: BossPlates) => void;
   /**
-   * Puts each friend's plate under its body (page x in CSS px, by slot), so
-   * the plates follow the arena's row; a slot left out stays in the plain row.
+   * Each friend's plate under its body: `x` its middle and `feet` its lowest
+   * point, in page pixels (`BattleScene.screenSpot`).
    */
-  placeFriends: (xs: ReadonlyMap<number, number>) => void;
+  placeFriends: (spots: ReadonlyMap<number, FriendSpot>) => void;
   setChips: (chips: { tries: number | null; until: string | null }) => void;
   /** The "Round N" pill (mockup frame 1), or null to hide it. */
   setRound: (round: number | null) => void;
@@ -61,6 +62,17 @@ export interface BossHud {
 }
 
 const CALLOUT_MS = 1100; // TUNE: the HUD's own callout length
+
+/** Where a friend stands on screen, in page pixels. */
+export interface FriendSpot {
+  readonly x: number;
+  readonly feet: number;
+}
+
+/** A plate sits this far under the lowest friend's feet on a wide screen. */
+const PLATE_GAP = 8; // TUNE:
+/** Left to right, for `placeFriends`' sort (one function, not one per pass). */
+const byX = (a: { x: number }, b: { x: number }) => a.x - b.x;
 
 /** One mover on the order strip: the boss, or a friend by slot. */
 export interface OrderMover {
@@ -141,8 +153,36 @@ export function mountBossHud(): BossHud {
 
   const friendNodes = new Map<
     number,
-    { node: HTMLElement; name: HTMLElement; b: ReturnType<typeof bar>; callout: HTMLElement }
+    {
+      node: HTMLElement;
+      name: HTMLElement;
+      b: ReturnType<typeof bar>;
+      callout: HTMLElement;
+      /** `placeFriends`' working value: its x in the row, then its plate's left. */
+      x: number;
+      /** The left and width last written, so an unchanged pass writes nothing. */
+      left: string;
+      width: string;
+    }
   >();
+  /** `placeFriends`' left-to-right order, reused pass after pass. */
+  const plateOrder: { x: number; node: HTMLElement; left: string; width: string }[] = [];
+  let lastLift = '';
+  /** Writes a plate's left and width only when they change (rounded to whole px). */
+  const setPlace = (
+    plate: { node: HTMLElement; left: string; width: string },
+    left: string,
+    width: string,
+  ) => {
+    if (plate.left !== left) {
+      plate.left = left;
+      plate.node.style.left = left;
+    }
+    if (plate.width !== width) {
+      plate.width = width;
+      plate.node.style.width = width;
+    }
+  };
   const timers = new Set<number>();
 
   const flash = (node: HTMLElement, text: string) => {
@@ -187,7 +227,7 @@ export function mountBossHud(): BossHud {
             b.track,
             callout,
           );
-          node = { node: wrap, name, b, callout };
+          node = { node: wrap, name, b, callout, x: 0, left: '', width: '' };
           friendNodes.set(friend.slot, node);
           friendRow.append(wrap);
         }
@@ -202,36 +242,61 @@ export function mountBossHud(): BossHud {
         }
       }
     },
-    placeFriends: (xs) => {
+    placeFriends: (spots) => {
+      // Runs each frame the camera moves (`once-per-frame.ts`): one layout read,
+      // reused buffers, and a style is written only when it changes.
       const row = friendRow.getBoundingClientRect();
       if (row.width <= 0) return;
-      const placed = [...friendNodes].every(([slot]) => xs.has(slot));
-      friendRow.classList.toggle('boss-friends-placed', placed);
-      const gap = 8;
-      const n = Math.max(1, friendNodes.size);
-      // Never wider than a third of the row less the gaps, so plates never overlap.
-      const width = Math.min(114, (row.width - gap * (n - 1)) / n);
-      const half = width / 2;
-      // Left to right, each at least a plate and a gap from the last, inside the row.
-      const order = [...friendNodes]
-        .map(([slot, node]) => ({ node, x: (xs.get(slot) ?? 0) - row.left }))
-        .sort((a, b) => a.x - b.x);
-      let min = half;
-      const lefts = order.map(({ x }) => {
-        const left = Math.max(min, x);
-        min = left + width + gap;
-        return left;
-      });
-      // Pushed past the right edge: slide the lot back in.
-      let max = row.width - half;
-      for (let i = lefts.length - 1; i >= 0; i--) {
-        lefts[i] = Math.min(lefts[i] ?? 0, max);
-        max = (lefts[i] ?? 0) - width - gap;
+      let placed = friendNodes.size > 0;
+      plateOrder.length = 0;
+      for (const [slot, node] of friendNodes) {
+        const spot = spots.get(slot);
+        if (!spot) placed = false;
+        node.x = (spot?.x ?? 0) - row.left;
+        plateOrder.push(node);
       }
-      order.forEach(({ node }, i) => {
-        node.node.style.left = placed ? `${String(Math.round(lefts[i] ?? 0))}px` : '';
-        node.node.style.width = placed ? `${String(Math.floor(width))}px` : '';
-      });
+      friendRow.classList.toggle('boss-friends-placed', placed);
+      if (!placed) {
+        for (const plate of plateOrder) setPlace(plate, '', '');
+      } else {
+        const gap = 8;
+        const n = Math.max(1, plateOrder.length);
+        // Never wider than a third of the row less the gaps, so plates never overlap.
+        const width = Math.min(114, (row.width - gap * (n - 1)) / n);
+        const half = width / 2;
+        // Left to right, each at least a plate and a gap from the last, inside the row.
+        plateOrder.sort(byX);
+        let min = half;
+        for (const plate of plateOrder) {
+          plate.x = Math.max(min, plate.x);
+          min = plate.x + width + gap;
+        }
+        // Pushed past the right edge: slide the lot back in.
+        let max = row.width - half;
+        for (let i = plateOrder.length - 1; i >= 0; i--) {
+          const plate = plateOrder[i];
+          if (!plate) continue;
+          plate.x = Math.min(plate.x, max);
+          max = plate.x - width - gap;
+        }
+        const w = `${String(Math.floor(width))}px`;
+        for (const plate of plateOrder) setPlace(plate, `${String(Math.round(plate.x))}px`, w);
+      }
+      // On iPad the row is pinned above the sheet's full share, well below the
+      // friends' feet: lift the plates (never lower them) to just under the
+      // lowest friend's feet, all in one line. The row's own box stays put, so
+      // the camera's frame (which reads it) doesn't chase the plates.
+      let lift = 0;
+      if (placed && window.innerWidth >= WIDE_MIN) {
+        let feet = 0;
+        for (const spot of spots.values()) feet = Math.max(feet, spot.feet);
+        lift = Math.min(0, Math.round(feet + PLATE_GAP - row.top));
+      }
+      const liftPx = `${String(lift)}px`;
+      if (liftPx !== lastLift) {
+        lastLift = liftPx;
+        friendRow.style.setProperty('--boss-plate-lift', liftPx);
+      }
     },
     setRound: (n) => {
       round.hidden = n === null;
@@ -482,9 +547,8 @@ export function befriendPanel(
       ask.addEventListener('click', () => {
         handlers.onAsk(view.ask);
       });
-      if (view.needHint) {
-        // "Make Heart Charms 🏠" says where charms come from, so the view's
-        // `needHint` line ("…made at home.") isn't drawn: the card stays short.
+      if (view.needCharms) {
+        // "Make Heart Charms 🏠" says where charms come from: the card stays short.
         const home = el(
           'button',
           {

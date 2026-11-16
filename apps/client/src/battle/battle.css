@@ -1577,6 +1577,12 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   white-space: nowrap;
 }
 
+.battle-evolving-row .evolving-line > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .battle-evolving-row .evolving-bar {
   height: 6px;
 }
@@ -1628,5 +1634,6 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 .boss-friends-placed > .boss-friend {
   position: absolute;
   bottom: 0;
-  transform: translateX(-50%);
+  /* Lifted to just under the friends' feet on iPad (`placeFriends`). */
+  transform: translate(-50%, var(--boss-plate-lift, 0px));
 }

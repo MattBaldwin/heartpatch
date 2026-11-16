@@ -5,6 +5,7 @@ import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Viewport } from '@babylonjs/core/Maths/math.viewport';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
@@ -49,7 +50,13 @@ import {
 } from './battle-config.js';
 import type { PlaybackStep } from './battle-playback.js';
 import type { BattleContent } from './battle-view.js';
-import { battleScale, CameraDirector, type FitPoint, type SafeRegion } from './camera-director.js';
+import {
+  battleScale,
+  CameraDirector,
+  type CameraShot,
+  type FitPoint,
+  type SafeRegion,
+} from './camera-director.js';
 import {
   actPose,
   actRunning,
@@ -277,6 +284,18 @@ export class BattleScene {
   #acts = 0;
   #salt = 1;
   #drawCalls = 0;
+  /** The last shot written (position, target, fov, lens shift), to tell when the camera moved. */
+  readonly #lastShot = new Float64Array(11).fill(Number.NaN);
+  /** `screenSpot`'s scratch: no vector or viewport per call. */
+  readonly #spotAt = new Vector3();
+  readonly #spotMid = new Vector3();
+  readonly #spotTop = new Vector3();
+  readonly #spotViewport = new Viewport(0, 0, 0, 0);
+  #box: DOMRect | null = null;
+  #boxFrame = -1;
+  #cameraMoved = false;
+  /** Told after a render whose camera moved (a HUD that lines things up under the fighters, #190). */
+  readonly #cameraWatchers = new Set<() => void>();
   #casterMeshes = -1;
   #imageProcessed = false;
 
@@ -403,6 +422,11 @@ export class BattleScene {
     });
     this.#afterRender = scene.onAfterRenderObservable.add(() => {
       this.#drawCalls = this.#instrumentation.drawCallsCounter.current;
+      // After the render the camera's matrices are this frame's, so `screenSpot` is current.
+      if (this.#cameraMoved) {
+        this.#cameraMoved = false;
+        for (const watcher of this.#cameraWatchers) watcher();
+      }
     });
 
     this.content = {
@@ -842,28 +866,95 @@ export class BattleScene {
     side: BattleSideId,
     slot?: number,
     atHome = false,
+    out?: { x: number; y: number; r: number },
   ): { x: number; y: number; r: number } | null {
     const rig = this.#rigAt(side, slot);
     const fighter = rig.out;
     const camera = this.#scene.activeCamera;
     const canvas = this.#scene.getEngine().getRenderingCanvas();
     if (!fighter || !camera || !canvas) return null;
-    const box = canvas.getBoundingClientRect();
+    const box = this.#canvasBox(canvas);
     if (box.width <= 0 || box.height <= 0) return null;
-    const viewport = camera.viewport.toGlobal(box.width, box.height);
+    // `toGlobalToRef` fills the ref but returns the camera's own 0..1 viewport:
+    // project into the ref.
+    camera.viewport.toGlobalToRef(box.width, box.height, this.#spotViewport);
+    const viewport = this.#spotViewport;
     const transform = camera.getTransformationMatrix();
     // `atHome`: where it stands, not where a dash has taken it (a plate under it, #190).
     const pose = atHome ? REST : rig.pose;
     const c = this.#centre(rig, pose, fighter);
     const half = (fighter.height * pose.scale) / 2;
-    const mid = Vector3.Project(new Vector3(c.x, c.y, c.z), Matrix.Identity(), transform, viewport);
-    const top = Vector3.Project(
-      new Vector3(c.x, c.y + half, c.z),
-      Matrix.Identity(),
+    // Scratch vectors: the plates ask every frame the camera moves.
+    const at = this.#spotAt.set(c.x, c.y, c.z);
+    const mid = Vector3.ProjectToRef(
+      at,
+      Matrix.IdentityReadOnly,
       transform,
       viewport,
+      this.#spotMid,
     );
-    return { x: box.left + mid.x, y: box.top + mid.y, r: Math.max(24, Math.abs(mid.y - top.y)) };
+    at.y += half;
+    const top = Vector3.ProjectToRef(
+      at,
+      Matrix.IdentityReadOnly,
+      transform,
+      viewport,
+      this.#spotTop,
+    );
+    const spot = out ?? { x: 0, y: 0, r: 0 };
+    spot.x = box.left + mid.x;
+    spot.y = box.top + mid.y;
+    spot.r = Math.max(24, Math.abs(mid.y - top.y));
+    return spot;
+  }
+
+  /**
+   * The canvas's page box, read once a frame: several plates asked for in the
+   * same frame share one layout read. The engine's `frameId` moves on every
+   * render-loop frame, drawn or not, so the box is never more than a frame old.
+   */
+  #canvasBox(canvas: HTMLCanvasElement): DOMRect {
+    const frame = this.#scene.getEngine().frameId;
+    if (!this.#box || this.#boxFrame !== frame) {
+      this.#box = canvas.getBoundingClientRect();
+      this.#boxFrame = frame;
+    }
+    return this.#box;
+  }
+
+  /**
+   * Calls `watcher` after each render in which the camera moved (a lean, a
+   * cue, a shake, a resize), never while it holds still. Returns the stop.
+   */
+  onCameraMoved(watcher: () => void): () => void {
+    this.#cameraWatchers.add(watcher);
+    return () => {
+      this.#cameraWatchers.delete(watcher);
+    };
+  }
+
+  #noteShot(shot: CameraShot): void {
+    // No array or closure per frame: each value is checked and kept in place.
+    let moved = this.#keep(0, shot.position.x);
+    moved = this.#keep(1, shot.position.y) || moved;
+    moved = this.#keep(2, shot.position.z) || moved;
+    moved = this.#keep(3, shot.target.x) || moved;
+    moved = this.#keep(4, shot.target.y) || moved;
+    moved = this.#keep(5, shot.target.z) || moved;
+    moved = this.#keep(6, shot.fov) || moved;
+    moved = this.#keep(7, shot.shift) || moved;
+    moved = this.#keep(8, shot.up.x) || moved;
+    moved = this.#keep(9, shot.up.y) || moved;
+    moved = this.#keep(10, shot.up.z) || moved;
+    if (moved) this.#cameraMoved = true;
+  }
+
+  /** Keeps shot value `i`; true if it moved more than a thousandth (well under a screen point). */
+  #keep(i: number, v: number): boolean {
+    const last = this.#lastShot[i] ?? Number.NaN;
+    if (Math.abs(v - last) < 1e-3) return false;
+    this.#lastShot[i] = v;
+    return true;
   }
 
   #placeBubbles(): void {
@@ -932,6 +1023,7 @@ export class BattleScene {
   dispose(): void {
     this.#scene.onBeforeRenderObservable.remove(this.#beforeRender);
     this.#scene.onAfterRenderObservable.remove(this.#afterRender);
+    this.#cameraWatchers.clear();
     this.#effects.dispose();
     for (const rig of this.#all) rig.bubble?.dispose();
     this.#bubbleMaterial.dispose();
@@ -1150,6 +1242,7 @@ export class BattleScene {
       }
     }
     const shot = this.#camera.shot(this.#now, aspect, this.#framed(), this.#fit);
+    this.#noteShot(shot);
     camera.fov = shot.fov;
     camera.minZ = BATTLE_CAMERA.minZ;
     camera.maxZ = BATTLE_CAMERA.maxZ;

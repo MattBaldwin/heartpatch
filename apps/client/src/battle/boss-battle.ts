@@ -13,6 +13,7 @@ import type { BattleHud } from './battle-hud.js';
 import type { PlaybackStep, ShownState } from './battle-playback.js';
 import type { BattleScene } from './battle-scene.js';
 import { otherSide, type BattleContent } from './battle-view.js';
+import { oncePerFrame } from './once-per-frame.js';
 import { befriendPanel, mountBossHud, type OrderMover, type PickerMove } from './boss-hud.js';
 import {
   befriendView,
@@ -125,6 +126,24 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
   /** Frames left to wait for the arena's first picture before the plates line up. */
   let placing = 0;
   let placeFrame = 0;
+  /** The battle the plates were last lined up for, and the arena told when its camera moves. */
+  let placed: PlayerBattle | null = null;
+  let watching: BattleScene | null = null;
+  let unwatch: (() => void) | null = null;
+  /** Each friend's spot, reused every pass (`place`), and the slots they were found for. */
+  const spotBuf = new Map<number, { x: number; feet: number; y: number; r: number }>();
+  let placedSlots: readonly number[] = [];
+  let placedSlotsFor: PlayerBattle | null = null;
+  /** The camera moved: one pass on the next frame, however often it says so before then. */
+  const follow = oncePerFrame(() => {
+    if (placed && battleId === placed.id) place(placed);
+  });
+  const stopWatching = () => {
+    follow.cancel();
+    unwatch?.();
+    unwatch = null;
+    watching = null;
+  };
   /** One key per ask number, so a retried ask is the same ask. */
   const keys = new Map<number, string>();
 
@@ -210,17 +229,44 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     deps.invalidate();
   };
 
-  /** Lines each friend's plate up under its body, once the arena has drawn it. */
+  /**
+   * Lines each friend's plate up under its body, once the arena has drawn it.
+   * The spots are kept in `spotBuf` and reused pass after pass: the camera can
+   * move every frame while a round plays, so a pass allocates nothing.
+   */
   const place = (b: PlayerBattle) => {
     const scene = deps.scene();
-    const xs = new Map<number, number>();
-    for (const slot of slotsOut(b, b.mySide)) {
-      const spot = scene?.screenSpot(b.mySide, slot, true);
-      if (spot) xs.set(slot, spot.x);
+    if (placedSlotsFor !== b) {
+      placedSlotsFor = b;
+      placedSlots = slotsOut(b, b.mySide);
+      spotBuf.clear();
     }
-    if (xs.size > 0) {
-      ui.placeFriends(xs);
+    let found = 0;
+    for (const slot of placedSlots) {
+      let spot = spotBuf.get(slot);
+      if (!spot) {
+        spot = { x: 0, feet: 0, y: 0, r: 0 };
+        spotBuf.set(slot, spot);
+      }
+      if (scene?.screenSpot(b.mySide, slot, true, spot)) {
+        // `r` is half the body's height on screen, so its feet are `r` below its middle.
+        spot.feet = spot.y + spot.r;
+        found += 1;
+      } else {
+        spotBuf.delete(slot);
+      }
+    }
+    if (found > 0) {
+      ui.placeFriends(spotBuf);
       placing = 0;
+      placed = b;
+      // The camera leans and pushes in as steps play: line them up again when
+      // it moves, at most once a frame, so a plate stays under its body (#190).
+      if (scene && watching !== scene) {
+        stopWatching();
+        watching = scene;
+        unwatch = scene.onCameraMoved(follow.mark);
+      }
       return;
     }
     if (placing <= 0) return;
@@ -302,6 +348,9 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     close: () => {
       cancelAnimationFrame(placeFrame);
       placing = 0;
+      placed = null;
+      placedSlotsFor = null;
+      stopWatching();
       deps.hud.setTeam(null);
       ui.hidePicker();
       drawn = null;

@@ -101,6 +101,15 @@ export const PLAYBACK = {
  */
 export const BREATHING_FRAME_MS = 29; // TUNE: 30 fps is plenty for a slow breath
 
+/**
+ * From this page width (an iPad, never an upright phone) a boss fight's HUD
+ * treats the screen as wide: the friends stand well apart, so their plates
+ * lift to just under their feet (`boss-hud.ts`) and the result card leaves
+ * them more room (`battle-hud.ts`). The sheet itself only turns into a card
+ * later, at `BATTLE_CAMERA.narrowSheetFrom` (900 px).
+ */
+export const WIDE_MIN = 600; // TUNE:
+
 /** A submit that never reached the server is sent once more, with the same key, after this long. */
 export const RETRY_AFTER_MS = 1200; // TUNE: a phone's radio often comes back within a second
 

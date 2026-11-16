@@ -4,6 +4,7 @@ import { evolvingMeterEl } from '../care/evolving-meter.js';
 import { buttonClass, hpClose } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import { dressResult, type BefriendCheer } from './befriend-cheer.js';
+import { WIDE_MIN } from './battle-config.js';
 import { ELEMENT_GLYPH, FEELING_GLYPH } from '../ui/glyphs.js';
 import type { SafeRegion } from './camera-director.js';
 import { charmButton, noCharmsLine } from './heart-charm.js';
@@ -120,9 +121,11 @@ export interface ResultInfo {
   evolving?: readonly ({ before: number; after: number } | null)[];
   /**
    * A team's evolving meters (#205) side by side under its one XP line (the
-   * boss card, #190): short ones, so the card still fits under the boss.
+   * boss card, #190): short ones, each named for its squishy ("Pip 35%"), so
+   * the card still fits under the boss. A null keeps its cell, empty, so the
+   * meters stay in the XP line's order.
    */
-  evolvingRow?: readonly ({ before: number; after: number } | null)[];
+  evolvingRow?: readonly ({ name: string; before: number; after: number } | null)[];
   /**
    * Which XP lines are a benched teammate's cheer (#732), by index: drawn
    * in the card's softer ink, as supporting cast. Missing: none.
@@ -304,12 +307,20 @@ export function createSheetHold(): {
 
 /**
  * One squishy's evolving meter on the result card (#205): the gain this battle
- * striped in. `compact` (a team's row on the boss card) drops the line under
- * the bar: the striped gain shows it.
+ * striped in. `compact` (a team's row on the boss card) is labelled with the
+ * squishy's name instead ("Pip 35%") and drops the line under the bar: the
+ * striped gain shows it.
  */
-function evolvingMeter(gain: { before: number; after: number }, compact: boolean): HTMLElement {
+function evolvingMeter(
+  gain: { before: number; after: number },
+  compact: { name: string } | null,
+): HTMLElement {
   const meter = evolvingMeterEl('battle-evolving');
-  const bar = evolvingBar(gain.after);
+  const full = evolvingBar(gain.after);
+  const bar =
+    compact && full
+      ? { ...full, label: full.ready ? `${compact.name} ✨ ready!` : compact.name }
+      : full;
   meter.update(bar, {
     gainedFrom: gain.before / 100,
     sub: compact
@@ -320,6 +331,45 @@ function evolvingMeter(gain: { before: number; after: number }, compact: boolean
   });
   return meter.root;
 }
+
+/**
+ * Where a team's meter row goes in the XP list (#205): before the first
+ * benched cheer, or last when there is none.
+ */
+export function evolvingRowAt(lines: number, bench: readonly boolean[] | undefined): number {
+  for (let i = 0; i < lines; i++) if (bench?.[i] === true) return i;
+  return lines;
+}
+
+/**
+ * The result card's XP list: each line with its own meter, and a team's
+ * named meter row (#205) right under the team's lines, before any benched
+ * teammate's cheer (#732), so the meters sit under the names they belong to.
+ */
+function xpItems(info: ResultInfo): HTMLElement[] {
+  const items = info.xp.map((line, i) => {
+    const gain = info.evolving?.[i];
+    const attrs: Record<string, string> = info.bench?.[i] ? { class: 'battle-xp-bench' } : {};
+    return gain ? el('li', attrs, line, evolvingMeter(gain, null)) : el('li', attrs, line);
+  });
+  if (info.evolvingRow?.some(Boolean)) {
+    const row = el(
+      'li',
+      { class: 'battle-evolving-row' },
+      // A squishy with no meter keeps an empty cell, so the rest stay in order.
+      ...info.evolvingRow.map((gain) =>
+        gain
+          ? evolvingMeter(gain, gain)
+          : el('div', { class: 'battle-evolving-blank', 'aria-hidden': 'true' }),
+      ),
+    );
+    items.splice(evolvingRowAt(info.xp.length, info.bench), 0, row);
+  }
+  return items;
+}
+
+/** Room above a boss fight's result card on iPad, so the friends' feet clear its corners (#190). */
+const CARD_MARGIN_WIDE = 28; // TUNE:
 
 export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): BattleHud {
   const plate = (side: 'mine' | 'theirs') => {
@@ -953,26 +1003,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       result.replaceChildren(
         el('h1', { class: 'auth-title', id: 'battle-result-title' }, info.title),
         el('p', { class: 'auth-subtitle' }, info.subtitle),
-        el(
-          'ul',
-          { class: 'battle-xp', 'data-testid': 'battle-xp' },
-          ...info.xp.map((line, i) => {
-            const gain = info.evolving?.[i];
-            const attrs: Record<string, string> = info.bench?.[i]
-              ? { class: 'battle-xp-bench' }
-              : {};
-            return gain ? el('li', attrs, line, evolvingMeter(gain, false)) : el('li', attrs, line);
-          }),
-          ...(info.evolvingRow?.some(Boolean)
-            ? [
-                el(
-                  'li',
-                  { class: 'battle-evolving-row' },
-                  ...info.evolvingRow.flatMap((gain) => (gain ? [evolvingMeter(gain, true)] : [])),
-                ),
-              ]
-            : []),
-        ),
+        el('ul', { class: 'battle-xp', 'data-testid': 'battle-xp' }, ...xpItems(info)),
         ...(info.nudge
           ? [el('p', { class: 'battle-hint', 'data-testid': 'battle-nudge' }, info.nudge)]
           : []),
@@ -1034,7 +1065,10 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         const close = leave.getBoundingClientRect().bottom;
         const card = result.getBoundingClientRect().top;
         const top = Math.min(0.3, close > 0 ? (close + 8) / h : 0.12);
-        safe = { top, bottom: Math.max(top + 0.2, card > 0 ? (card - 8) / h : 0.5) };
+        // On iPad the card is narrower than the arena, so the friends either
+        // side stand near its top corners: a little more room keeps their feet clear.
+        const margin = window.innerWidth >= WIDE_MIN ? CARD_MARGIN_WIDE : 8;
+        safe = { top, bottom: Math.max(top + 0.2, card > 0 ? (card - margin) / h : 0.5) };
         return safe;
       }
       if (team) {
