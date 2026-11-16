@@ -2501,3 +2501,19 @@ Merged: #854 (supervisor 45 handoff docs). Open at handoff: #844 (owner SHIP-OK 
 - **Re-shot captures are re-checked.** A render-check PASS covers the frames it saw; a reviewer-driven UI change (here the ⏳ chip moving in its row) sends the new frames through a fresh Opus render-check before the owner sees them.
 
 **Owner decisions (2026-11-16, supervisor 46 shift):** none received. Pending: #844 SHIP-OK (asked a fifth time); boss enable (`testers` first, recommended).
+
+## Supervisor 47 (2026-11-16 ~15:24 → in progress)
+
+Merged: #856 (supervisor 46 handoff docs), #855 (Chore: #234 boss follow-ups: reviewer non-blockers, windup framing fix, real-boss captures). Open: #844 (owner SHIP-OK pending since 05:40 UTC).
+
+**Boss battle UI (from PR #855, coordinator-recorded)**
+- A hidden boss Order strip keeps its layout room (`visibility: hidden`, not `display: none`), so the camera's safe region, measured once from `.boss-head`'s bottom edge, does not change when the strip appears mid-round.
+- Likewise a hidden ⏳ "Winding up…" chip keeps its slot, last in the boss plate's chip row (`order: 1`). Rule: nothing inside the boss head may change height mid-round. Measured result on iPhone 393×852: the boss head clears the strip by 28 CSS px at the power-up peak (was ~5), eyes 45; iPad 52.
+- Known carry-overs, not fixed: the empty reserved ⏳ row at rest on iPhone (the arena sits one chip-row lower); the flat saturated green power-up puff under the boss; `ipad-02-windup-chip` is absent from the capture set.
+
+**Process**
+- **Captures never ride the PR branch.** Screenshots for the owner's look go on a sibling `captures-<issue>-<slug>` branch (here `captures-234-boss-followups`, head `c85eaf2`), with the README and the capture spec as `.txt`. The PR branch carries no PNGs, so a squash merge puts none on main. The reviewer may treat PNGs on a PR branch as blocking.
+- **Re-shot captures get a fresh Opus render-check** before the owner sees them (restated from Supervisor 46; applied to #855's 8 re-shot frames: PASS).
+- #784 WebKit tap-stall tally: sup47 +1 (`e2e (ipad-webkit, 5)`, `far-hollow-house.spec.ts:260`, on #855 `e9f166d`). Running: sup41 +14, sup42 +6, sup43 +2, sup44 +1, sup45 +0, sup46 +3, sup47 +1.
+
+**Owner decisions (2026-11-16, supervisor 47 shift):** none received yet. Pending: #844 SHIP-OK; boss enable (`HP_MINI_BOSSES=testers` first, recommended).
