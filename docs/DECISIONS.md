@@ -2475,3 +2475,17 @@ Merged: #850 (#234 PR 3: client cues and copy for the new move effects; squash `
 - **Sweep APPROVE counter caveat:** a single lane comment that holds both "REQUEST CHANGES" (an earlier round) and the final APPROVE is excluded by the `test("REQUEST CHANGES")|not` filter. Read the comment.
 
 **Owner decisions (2026-11-16, supervisor 44 shift):** none received. Pending: #844 SHIP-OK; boss enable (`testers` first, recommended).
+
+## Supervisor 45 (2026-11-16 ~12:26 → handoff)
+
+Merged: #852 (supervisor 44 handoff docs), #853 (Docs: GAME_DESIGN §27 signature moves; reviewer round 2 APPROVE at `5e6d539`). Open at handoff: #844 (owner SHIP-OK pending), the #234 chore lane (no PR yet).
+
+**#853 (GAME_DESIGN §27) rulings**
+- **Boss move values belong in the design doc.** The design doc is the source of truth for rules (CLAUDE.md), so §27 now lists every boss move with its element, power, accuracy and effect, copied from `boss-species.ts` and marked server-only / `// TUNE:`. CLAUDE.md rule 6 (secrets stay server-side) is about what the *client* receives, not about the repo's own docs.
+- **Non-blocking wording notes on an approved head are carried, not re-spun.** Same rule as the Supervisor 44 "merge around non-blockers" entry, applied to docs.
+
+**Process**
+- **Stale local `main` in the coordinator container.** The session clone's `main` diverged from origin (shallow clone artefact). Run anything that must reflect `main` from `git checkout --detach origin/main`; never `reset --hard` (the classifier refuses it anyway).
+- **Pre-compute owner-question data while the queue is blocked.** `pnpm sim:boss` was run on `main` in the background while #844 waited, so the boss-enable question can be asked the moment #844 clears.
+
+**Owner decisions (2026-11-16, supervisor 45 shift):** none received. Pending: #844 SHIP-OK (asked a fourth time); boss enable (`testers` first, recommended; `pnpm sim:boss` on `d65e5d9` passes all five gates, thin 1-point margins noted in COORDINATOR §9).
