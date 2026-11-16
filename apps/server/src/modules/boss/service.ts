@@ -32,7 +32,7 @@ export interface BossServiceOptions {
   clock?: Clock;
   /** Live sync (`wsHub.publish`), called after a visit opens or a boss joins. Never rejects. */
   publish?: (mapId: string) => Promise<void>;
-  /** The schedule and bag; tests pass a stand-in boss (production's bag is empty). */
+  /** The schedule and bag; tests pass a stand-in boss. */
   rules?: BossEventRules;
 }
 

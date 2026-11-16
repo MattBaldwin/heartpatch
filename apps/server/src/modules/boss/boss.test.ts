@@ -223,7 +223,7 @@ describe.skipIf(!url)('mini-boss visits and fights (#190b, needs DATABASE_URL)',
     ).length;
 
   it('stays away with an empty bag, and until some Partner is grown enough', async () => {
-    const { server, sweep } = await start(BOSS_EVENTS);
+    const { server, sweep } = await start({ ...BOSS_EVENTS, bag: [] });
     const owner = await player();
     const mapId = await patch(server, owner);
     await grow(mapId, owner, 30);
