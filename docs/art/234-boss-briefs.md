@@ -2,7 +2,7 @@
 
 Four lines, three stages each: a **base** form and a **middle** form (both legendary) and the **boss** form (mythic), per the owner decision on #190 (#issuecomment-6886527914). Everything here is a draft until the owner approves the renders. Names, Rickeyride's look and the three move redrafts are settled at this step.
 
-The draft data lives in `apps/client/src/procedural/gallery/boss-drafts.ts`. It is dev-gallery-only (`/gallery.html?drafts`), it is not in `GAME_DATA`, and no roster, spawn table or server code imports it. Lane 234b moves the approved bodies, parts and lines into `packages/shared/src/data`.
+The approved data shipped in 234b: the bodies and parts are public in `packages/shared/src/data/boss-parts.ts` (the `draft-` prefix dropped; the mouth cavities became `rake-cavity*` and the belly patch `dad-belly-patch`), and the twelve species, their moves and evolutions are server-only in `packages/shared/src/data/server/boss-species.ts`. The draft file `boss-drafts.ts` and `?drafts` are gone.
 
 ## Body style without a contract change (plan §8)
 

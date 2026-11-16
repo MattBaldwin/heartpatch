@@ -58,9 +58,9 @@ const params = new URLSearchParams(window.location.search);
 const pinTier = isQualityTier(params.get('tier'));
 const tier = pickInitialTier(params.get('tier'), params.get('quality'));
 const view: SquishyView = params.get('view') === 'closeup' ? 'closeUp' : 'map';
-// `?drafts` is gone (#234 234b-1): the boss kit is public data now and the
-// species are server-only, so the gallery can't name them; 234b-3 brings
-// them back as `?bosses`, fetched from a dev-only server route.
+// `?drafts` is gone with the drafts file (#234 234b-1): the boss kit is
+// public data now (shown in the showcase looks) and the species are
+// server-only; 234b-3 brings the looks back as `?bosses`.
 const registry = visualRegistry(GAME_DATA);
 const allLooks = galleryLooks(GAME_DATA.species, GAME_DATA.bodies, GAME_DATA.parts);
 /** `?keeper=pip` puts one Keeper at the end of the row, for scale (#234). */
