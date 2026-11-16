@@ -193,24 +193,23 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 41, 2026-11-15): read this first; the supervisor 40 and 39 blocks below are history.** Decisions are in DECISIONS "Supervisor 41"; the mini-boss rules are in GAME_DESIGN §27.
-  - **Merged under supervisor 41:** #817, #814, #818, #819, #821, #824, #820, #826, #823, #825, #816, #822, #815, #828. Owner SHIP-OK on #816, #822, #815 and #828.
-  - **Open PRs:**
-    - **#827 (190e arena client):** captures v3 and a delta review in progress. Device frame-time capture is deferred to before 234b.
-    - **#829 (386f mates client):** round 1 fixed (`af757fca`), round 2 APPROVE (two reviewers), delta review of `af757fca..824673f` posted. Remaining gates: captures page, render-check, owner SHIP-OK, CI green (known #784 WebKit tap-stall reds accepted).
-    - **#810 (234a boss art, draft):** Rakelet v15 awaits an owner decision after 9 render-check rounds. 234b waits on it and on the names and move redrafts listed in the PR's "What 234b needs".
-    - **#830 (chore, deflake `works.test.ts`):** awaiting CI.
-  - **Pending owner items:**
-    - Is the duplicate boss ask's "team treat" a real grant, and what is it? (#820; today it is refused with no spend.)
-    - The mate allowlist and the online-only and fences vetoes check (#819, #823).
+- **State (supervisor 41, 2026-11-16 night): read this first; the supervisor 40 and 39 blocks below are history.** Decisions are in DECISIONS "Supervisor 41", sub-block "2026-11-16 (night)"; the mini-boss rules are in GAME_DESIGN §27.
+  - **Main** is `39f9175` (#837, the `HP_MINI_BOSSES` switch). Merged under supervisor 41: #817, #814, #818, #819, #821, #824, #820, #826, #823, #825, #816, #822, #815, #828, #827, #829, #830, #832, #833, #834, #835, #836, #810, #837. Owner SHIP-OK on #816, #822, #815, #828, #827 and #829.
+  - **Open PRs** (no other feature lanes are running):
+    - **#838 (234b-1 boss species, parts and bag, shared data):** head `c6544ed`. Round 1 REQUEST CHANGES (balance, merge order) fixed; round 2 APPROVE on `c403be67`; the approval carries to `c6544ed` (test-only leak-walker delta, coordinator note). CI green on `c6544ed` (known #784 reds accepted). Gate: merges **after** #837, which is now in. Merge it, then confirm main CI.
+    - **#839 (234b-3 boss client, gallery `?bosses`):** head `e9b0f17`, stacked on #838. Reviewer APPROVE. Its `fast` red is #838's `leak.test.ts` `chance` finding, fixed on #838 at `c6544ed`. Gate: merge `main` into it once #838 lands, then CI green. Two non-blocking notes (`rarity` validation, `boss-stub.ts` throw) can ride that push.
+  - **Owner queue:** empty.
+  - **Bosses stay dark.** Production leaves `HP_MINI_BOSSES` unset (`off`); `HP_COMPUTER_MATES` also stays off until the owner turns it on.
   - **Follow-ups:**
-    - `Raid.attackerComputer?` (additive server change, set from `users.kind` at raid creation; #829).
-    - Per-package lint.
-    - Device frame-time capture before 234b enables bosses.
-    - `species_seen` write at boss battle start (190c/190f).
-    - Rivet collars on Rakelet need two-tone parts (kit follow-up).
-    - 386f's non-blocking items (listed in DECISIONS) and 190e's `battle.kind` check on `POST …/boss/battle`.
-    - HP_COMPUTER_MATES stays off until 386b (#815) and 386f (#829) are both merged and the owner agrees.
+    - **On-device frame-time capture before `HP_MINI_BOSSES=testers`** (the owner's patch), then `on` plus a `changes/234-big-friends.md` PR.
+    - **Engine lane** for windup (Count to Three), flinch, low-health power (Mama Bear) and ally swap (Ask Your Mother).
+    - **Papa Brrr is on the round-gate edge** (median 10): Ask Your Mother `chance` or `stages` in a later tune.
+    - **Captures-page tidy for #829** (two iPad frames at iPhone size, iPad map claim under a side button, a stub result card naming a test player, the ipad-07 caption).
+    - **One `HexColorSchema`** in `schemas/data/common.ts`.
+    - **`boss-stub.ts` and the "Stomp again!" copy** on the one-action rule (#839 covers the stub).
+    - **#784 tally:** DECISIONS "2026-11-16 (night)" counts +14 from the verdicts on #810, #827, #829, #830, #832, #833, #834 and #835; add it to the running count. Watch whether the shards stay red on `main`.
+    - Smaller items are listed in DECISIONS under that sub-block.
+  - **Next supervisor starts with this handoff block and §8**: re-route any lane that still reports to the old supervisor, then merge #838 and #839 in that order.
 - **Update (supervisor 40, 2026-11-14 ~22:00 UTC): this supersedes the OWNER QUESTION and #797 lines in the block below.**
   - The owner merged **#797 (728b)** himself (`6fe4bf6`, merge commit of `c118829`).
   - The owner approved #794, and supervisor 40 merged it as `1bddfb2`.
