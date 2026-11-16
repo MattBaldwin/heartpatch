@@ -31,6 +31,10 @@ export const BOSS_TEXT = {
   everyone: 'Everyone!',
   /** A move that hits every foe (`targets: 'all-foes'`). */
   areaTag: '🌀 Hits all',
+  /** A move that takes a round to wind up (#234). */
+  windupTag: '⏳ Winds up',
+  /** The boss plate's chip while it winds up (#234): brace! */
+  windingUp: '⏳ Winding up…',
   pickHeader: (name: string) => `What should ${name} do?`,
   picking: 'Picking…',
   next: 'Next',
@@ -120,6 +124,8 @@ export interface BossPlates {
     readonly energyText: string;
     /** The "👣 Stomps twice" chip: only when the rule has the boss act more than once a round (shipped: once, so never). */
     readonly stomps: boolean;
+    /** Winding up a big move (#234), as far as the log has played. */
+    readonly windup: boolean;
   };
   readonly friends: readonly FriendPlate[];
 }
@@ -153,6 +159,7 @@ export function bossPlates(
       percent: boss ? energyPercent({ energy: bossEnergy, stats: boss.stats }) : 0,
       energyText: boss ? `${String(bossEnergy)}/${String(boss.stats.hp)}` : '',
       stomps: stompsChip(),
+      windup: shown[theirs].chips[slot]?.windup ?? boss?.windup !== undefined,
     },
     friends: slotsOut(b, b.mySide).flatMap((s) => {
       const squishy = b.view.sides[b.mySide].squishies[s];
@@ -178,6 +185,8 @@ export interface PickerStep {
   readonly slot: number;
   readonly name: string;
   readonly moves: readonly string[];
+  /** Winding up (#234): `moves` is just the pending one, which it must pick again. */
+  readonly windingUp?: boolean;
 }
 
 /**
@@ -200,6 +209,12 @@ export function pickerFor(
   const steps = slotsOut(b, b.mySide).flatMap((slot): PickerStep[] => {
     const squishy = mine.squishies[slot];
     if (!squishy || squishy.energy <= 0 || squishy.befriended === true) return [];
+    // A windup (#234) lands with the move it started: the server takes no other.
+    if (squishy.windup) {
+      return [
+        { slot, name: nameOf(b.mySide, slot), moves: [squishy.windup.move], windingUp: true },
+      ];
+    }
     return [{ slot, name: nameOf(b.mySide, slot), moves: squishy.moves }];
   });
   return { steps, picks: {}, at: 0 };
@@ -264,6 +279,11 @@ export function teamAction(state: PickerState): PlayerBattleAction | null {
   };
 }
 
+/** A move that takes a round to wind up, then lands (#234). */
+export function isWindupMove(move: Pick<Move, 'effects'> | undefined | null): boolean {
+  return move?.effects?.some((e) => e.type === 'windup') === true;
+}
+
 /** A move that lands on every foe at once (an area move, #190). */
 export function isAreaMove(move: Pick<Move, 'targets'> | undefined | null): boolean {
   return move?.targets === 'all-foes';
@@ -274,17 +294,31 @@ export function isAreaMove(move: Pick<Move, 'targets'> | undefined | null): bool
 /**
  * The callout for a log step in a boss fight: "Stomp again!" on the boss's
  * second (or later) move in a round, "Everyone!" on an area move. `bossMoves`
- * counts the boss's moves played so far this round.
+ * counts the boss's own moves played so far this round (`isOwnMove`).
+ * A move an assist called in (#234) is not the boss's own, and a landing
+ * windup keeps its "Here it comes!".
  */
 export function bossCallout(
-  step: { kind: string; side: BattleSideId; move: string | null },
+  step: {
+    kind: string;
+    side: BattleSideId;
+    move: string | null;
+    backup?: boolean;
+    landing?: boolean;
+  },
   mySide: BattleSideId,
   bossMoves: number,
   moves: ReadonlyMap<string, Move>,
 ): string | null {
   if (step.kind !== 'move' || step.side === mySide) return null;
+  if (step.backup === true || step.landing === true) return null;
   if (bossMoves >= 1) return BOSS_TEXT.stompAgain;
   return isAreaMove(step.move ? moves.get(step.move) : null) ? BOSS_TEXT.everyone : null;
+}
+
+/** A `move` step that is a squishy's own action this round: not one an assist called in (#234). */
+export function isOwnMove(step: { kind: string; backup?: boolean }): boolean {
+  return step.kind === 'move' && step.backup !== true;
 }
 
 // ── The visit's chips ───────────────────────────────────────────────────

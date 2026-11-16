@@ -391,6 +391,7 @@ describe('view helpers', () => {
       shield: false,
       guard: false,
       open: false,
+      windup: false,
     });
     shown = applyStep(shown, steps[0]!);
     expect(shown.a.chips[0]).toEqual({
@@ -399,6 +400,7 @@ describe('view helpers', () => {
       shield: true,
       guard: false,
       open: false,
+      windup: false,
     });
     // The bench squishy and the other side are untouched.
     expect(shown.a.chips[1]).toEqual({
@@ -407,6 +409,7 @@ describe('view helpers', () => {
       shield: false,
       guard: false,
       open: false,
+      windup: false,
     });
     expect(shown.b.chips[0]).toEqual({
       attack: false,
@@ -414,6 +417,7 @@ describe('view helpers', () => {
       shield: false,
       guard: false,
       open: false,
+      windup: false,
     });
     shown = applyStep(shown, steps[1]!);
     shown = applyStep(shown, steps[2]!);
@@ -423,6 +427,7 @@ describe('view helpers', () => {
       shield: false,
       guard: false,
       open: false,
+      windup: false,
     });
     for (const step of steps) expect(findAvoidedWords(step.text)).toEqual([]);
   });
@@ -508,6 +513,7 @@ describe('view helpers', () => {
       shield: true,
       guard: false,
       open: false,
+      windup: false,
     });
   });
 
@@ -579,5 +585,151 @@ describe('the #234 move effects', () => {
     ]) {
       expect(findAvoidedWords(text)).toEqual([]);
     }
+  });
+});
+
+describe('the #234 cues', () => {
+  /** The battle with a low-energy move the test species can use. */
+  const withMoves = (log: BattleEventView[]): PlayerBattle => {
+    const b = battle(log);
+    return {
+      ...b,
+      moveDefs: [
+        ...b.moveDefs,
+        {
+          id: 'test-mama-charge',
+          name: 'Mama Charge',
+          description: 'A charge.',
+          element: 'shadow',
+          power: 40,
+          accuracy: 100,
+          effects: [{ type: 'low-energy', extraPercent: 100 }],
+        },
+      ],
+    };
+  };
+  const play = (b: PlayerBattle, from = 0) => {
+    const steps = playbackSteps(b, new BattleContent(b), from);
+    let shown = shownFrom({
+      ...b,
+      view: {
+        ...b.view,
+        sides: {
+          a: b.view.sides.a,
+          b: {
+            ...b.view.sides.b,
+            squishies: b.view.sides.b.squishies.map((s) => ({ ...s, windup: undefined })),
+          },
+        },
+      },
+    });
+    const chips: boolean[] = [];
+    for (const s of steps) {
+      shown = applyStep(shown, s);
+      chips.push(shown.b.chips[0]?.windup ?? false);
+    }
+    return { steps, chips };
+  };
+
+  it('a windup shows the chip until the move lands or is lost', () => {
+    const landed = withMoves([
+      { ...at('b'), type: 'move', move: 'test-hush-hum' },
+      { ...at('b'), type: 'windup', move: 'test-hush-hum' },
+      { ...at('a'), type: 'move', move: 'test-moon-blink' },
+      { turn: 2, side: 'b', slot: 0, type: 'move', move: 'test-hush-hum' },
+      { turn: 2, side: 'a', slot: 0, type: 'hit', amount: 20, energy: 20, effectiveness: 'normal' },
+    ]);
+    const { steps, chips } = play(landed);
+    expect(chips).toEqual([false, true, true, false, false]);
+    // The charge round is no strike; the landing says so.
+    expect(steps[0]).toMatchObject({ kind: 'move', charge: true, callout: null });
+    expect(steps[3]).toMatchObject({ landing: true, callout: EFFECT_WORDS.windupLanding });
+    expect(steps[3]!.charge).toBeUndefined();
+    // Played from the second round on, the landing still knows.
+    expect(playbackSteps(landed, new BattleContent(landed), 3)[0]!.callout).toBe(
+      EFFECT_WORDS.windupLanding,
+    );
+
+    for (const lost of [
+      { ...at('b'), type: 'windup-lost', move: 'test-hush-hum' },
+      { ...at('b'), type: 'swap', to: 0 },
+      { ...at('b'), type: 'tuckered-out' },
+    ] as BattleEventView[]) {
+      const { chips: c } = play(
+        withMoves([
+          { ...at('b'), type: 'move', move: 'test-hush-hum' },
+          { ...at('b'), type: 'windup', move: 'test-hush-hum' },
+          lost,
+        ]),
+      );
+      expect(c).toEqual([false, true, false]);
+    }
+  });
+
+  it('says a lost count kindly for your own squishy', () => {
+    const b = withMoves([
+      { ...at('a'), type: 'windup-lost', move: 'test-hush-hum' },
+      { ...at('b'), type: 'windup-lost', move: 'test-hush-hum' },
+    ]);
+    expect(playbackSteps(b, new BattleContent(b), 0).map((s) => s.text)).toEqual([
+      EFFECT_WORDS.windupLostMine('Puff'),
+      EFFECT_WORDS.windupLost('Wild Mallow'),
+    ]);
+    expect(findAvoidedWords(EFFECT_WORDS.windupLostMine('Puff'))).toEqual([]);
+  });
+
+  it('a flinch wobbles and says no move this round', () => {
+    const b = withMoves([{ ...at('b'), type: 'flinch' }]);
+    expect(playbackSteps(b, new BattleContent(b), 0)[0]).toMatchObject({
+      kind: 'effect',
+      squish: 'wobble',
+      callout: EFFECT_WORDS.flinchCallout,
+      text: 'Wild Mallow flinched! No move this round.',
+    });
+  });
+
+  it('the move after an assist reads as backup', () => {
+    const b = withMoves([
+      { ...at('b'), type: 'move', move: 'test-moon-blink' },
+      { ...at('b'), type: 'assist', move: 'test-hush-hum' },
+      { ...at('b'), type: 'move', move: 'test-hush-hum' },
+      { ...at('a'), type: 'move', move: 'test-hush-hum' },
+    ]);
+    const steps = playbackSteps(b, new BattleContent(b), 0);
+    expect(steps.map((s) => [s.text, s.backup === true])).toEqual([
+      ['Wild Mallow used Moon Blink!', false],
+      ['Wild Mallow called for backup! 📣', false],
+      ['Backup! Hush Hum!', true],
+      ['Puff used Hush Hum!', false],
+    ]);
+  });
+
+  it('Fired up! shows only when the user is low', () => {
+    // Puff ends on 40/40; the log rebuilds what its bar showed at each move.
+    const b = withMoves([
+      { ...at('a'), type: 'move', move: 'test-mama-charge' },
+      { ...at('a'), type: 'hit', amount: 21, energy: 19, effectiveness: 'normal' },
+      { ...at('a'), type: 'move', move: 'test-mama-charge' },
+      { ...at('a'), type: 'move', move: 'test-hush-hum' },
+      { ...at('a'), type: 'heal', amount: 21, energy: 40 },
+      { ...at('a'), type: 'move', move: 'test-mama-charge' },
+    ]);
+    const callouts = playbackSteps(b, new BattleContent(b), 0)
+      .filter((s) => s.kind === 'move')
+      .map((s) => s.callout);
+    expect(callouts).toEqual([null, EFFECT_WORDS.firedUp, null, null]);
+  });
+
+  it('Fired up! trusts the energy a hit reports over the end-of-log bar', () => {
+    // Puff ends on 40/40 by some way the log doesn't spell out as a heal; the
+    // hit's own `energy` (15) is what its bar showed when it charged.
+    const b = withMoves([
+      { ...at('a'), type: 'hit', amount: 25, energy: 15, effectiveness: 'normal' },
+      { ...at('a'), type: 'move', move: 'test-mama-charge' },
+    ]);
+    const callouts = playbackSteps(b, new BattleContent(b), 0)
+      .filter((s) => s.kind === 'move')
+      .map((s) => s.callout);
+    expect(callouts).toEqual([EFFECT_WORDS.firedUp]);
   });
 });

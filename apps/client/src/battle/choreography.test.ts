@@ -227,6 +227,15 @@ describe('planStep', () => {
     }
   });
 
+  it('a charge round (#234) gathers itself: no dash, no cast; its windup powers up', () => {
+    const charge = planStep({ ...step('move', 'a', { move: strike.id }), charge: true }, ctx());
+    expect(charge.acts).toEqual([]);
+    expect(charge.effects.map((e) => e.kind)).toEqual(['charge']);
+    const windup = planStep({ ...step('effect', 'a', { squish: 'jiggle' }), windup: true }, ctx());
+    expect(windup.acts.map((a) => a.kind)).toEqual(['power-up']);
+    expect(windup.squish.map((q) => q.move)).toEqual(['jiggle']);
+  });
+
   it('acts out a strike: wind-up charge, trail, dash; then hit-stop, impact, knockback and follow-through', () => {
     const move = planStep(step('move', 'a', { move: strike.id }), ctx());
     expect(move.acts.map((a) => a.kind)).toEqual(['dash']);

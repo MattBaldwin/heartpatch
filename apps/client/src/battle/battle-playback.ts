@@ -74,6 +74,17 @@ export interface PlaybackStep {
    * next round. Optional so steps built elsewhere needn't say false.
    */
   readonly windup?: boolean;
+  /** A `windup-lost` step (#234): its squishy's ⏳ chip goes. */
+  readonly windupLost?: boolean;
+  /**
+   * A charge-round `move` (#234): a `windup` step follows, so the arena plays
+   * the wind-up, not a strike that never lands.
+   */
+  readonly charge?: boolean;
+  /** The `move` an `assist` called in (#234): not its user's own action. */
+  readonly backup?: boolean;
+  /** The `move` a windup lands with (#234): its callout is "Here it comes!". */
+  readonly landing?: boolean;
   readonly ms: number;
 }
 
@@ -104,7 +115,10 @@ export const EFFECT_WORDS = {
   windupCallout: 'Winding up!',
   /** Callout on the `move` step when that squishy's windup lands. */
   windupLanding: 'Here it comes!',
+  /** A foe's windup that fizzled. */
   windupLost: (who: string) => `${who} lost count! Phew.`,
+  /** The player's own squishy lost its windup (a flinch, a swap, a bare potion). */
+  windupLostMine: (who: string) => `${who} lost count. Wind up again next time!`,
   flinch: (who: string) => `${who} flinched! No move this round.`,
   flinchCallout: 'Flinched!',
   /** Callout on a low-energy move when its user is at half energy or less. */
@@ -134,7 +148,19 @@ export function applyStep(shown: ShownState, step: PlaybackStep): ShownState {
   const { item, stance } = step;
   // A hit uses up a stance (#587); a swap drops it; a steady or big move takes one.
   const clears = step.kind === 'hit' || step.kind === 'swap';
-  if ((item !== null && step.kind === 'item') || step.shielded || clears || stance !== null) {
+  // A windup (#234): on at its `windup` step; off at that squishy's next
+  // move (it lands), when it's lost, at a swap or when it tuckers out.
+  const windupOff =
+    step.kind === 'move' || step.kind === 'swap' || step.windupLost === true || energy === 0;
+  const windupOn = step.windup === true;
+  if (
+    (item !== null && step.kind === 'item') ||
+    step.shielded ||
+    clears ||
+    stance !== null ||
+    windupOn ||
+    windupOff
+  ) {
     side = {
       ...side,
       chips: side.chips.map((c, i) => {
@@ -143,6 +169,8 @@ export function applyStep(shown: ShownState, step: PlaybackStep): ShownState {
         let next = step.shielded ? { ...c, shield: false } : c;
         if (clears) next = { ...next, guard: false, open: false };
         if (stance !== null) next = { ...next, guard: stance === 'guard', open: stance === 'open' };
+        if (windupOn) next = { ...next, windup: true };
+        else if (windupOff && next.windup) next = { ...next, windup: false };
         return next;
       }),
     };
@@ -170,6 +198,10 @@ function step(
       | 'shielded'
       | 'stance'
       | 'windup'
+      | 'windupLost'
+      | 'charge'
+      | 'backup'
+      | 'landing'
     >
   > = {},
 ): PlaybackStep {
@@ -190,6 +222,10 @@ function step(
     shielded: extra.shielded ?? false,
     stance: extra.stance ?? null,
     windup: extra.windup ?? false,
+    ...(extra.windupLost === true && { windupLost: true }),
+    ...(extra.charge === true && { charge: true }),
+    ...(extra.backup === true && { backup: true }),
+    ...(extra.landing === true && { landing: true }),
   };
 }
 
@@ -226,6 +262,85 @@ function fenceEndLine(won: boolean | 'draw', reason: string): string {
   return reason === 'forfeit' ? FENCE_LINES.stopped : FENCE_LINES.held;
 }
 
+/** What a `move` step says beyond "used X!" (#234), from where it sits in the log. */
+interface MoveCue {
+  /** A `windup` follows: the charge round. */
+  readonly charge: boolean;
+  /** Its user was winding this up: it lands now. */
+  readonly landing: boolean;
+  /** An `assist` just called it in. */
+  readonly backup: boolean;
+  /** A low-energy move, and its user is at half energy or less. */
+  readonly firedUp: boolean;
+}
+
+/**
+ * The #234 cues for every `move` in the log, by log index. The whole log is
+ * read, so a windup started in an earlier round still lands with its callout.
+ * "Fired up!" reads the mover's energy at that moment from the nearest event
+ * that reports it: the last earlier `hit`/`heal` on that slot (its `energy`),
+ * else the next later one (its `energy` before the `amount` moved), else the
+ * view. No running sum, so an event that changes energy some other way can't
+ * skew it.
+ */
+function moveCues(battle: PlayerBattle, content: BattleContent): Map<number, MoveCue> {
+  const { log, sides } = battle.view;
+  const key = (side: BattleSideId, slot: number) => `${side}:${String(slot)}`;
+  /** Each low-energy `move` (by log index) and its user's full energy. */
+  const lowMoves = new Map<number, number>();
+  const energyAt = new Map<number, number>();
+  const last = new Map<string, number>();
+  log.forEach((event, i) => {
+    if (event.type === 'forfeit' || event.type === 'battle-end') return;
+    const at = key(event.side, event.slot);
+    if (event.type === 'hit' || event.type === 'heal') last.set(at, event.energy);
+    else if (event.type === 'move') {
+      const low = content.moves.get(event.move)?.effects?.some((e) => e.type === 'low-energy');
+      const hp = sides[event.side].squishies[event.slot]?.stats.hp ?? 0;
+      if (low !== true || hp <= 0) return;
+      lowMoves.set(i, hp);
+      const known = last.get(at);
+      if (known !== undefined) energyAt.set(i, known);
+    }
+  });
+  const next = new Map<string, number>();
+  for (const side of ['a', 'b'] as const) {
+    sides[side].squishies.forEach((s, slot) => next.set(key(side, slot), s.energy));
+  }
+  for (let i = log.length - 1; i >= 0; i--) {
+    const event = log[i];
+    if (!event || event.type === 'forfeit' || event.type === 'battle-end') continue;
+    const at = key(event.side, event.slot);
+    if (event.type === 'hit') next.set(at, event.energy + event.amount);
+    else if (event.type === 'heal') next.set(at, event.energy - event.amount);
+    else if (lowMoves.has(i) && !energyAt.has(i)) energyAt.set(i, next.get(at) ?? 0);
+  }
+  const firedUp = new Set<number>();
+  lowMoves.forEach((hp, i) => {
+    if ((energyAt.get(i) ?? hp) * 2 <= hp) firedUp.add(i);
+  });
+  const cues = new Map<number, MoveCue>();
+  const winding = new Set<string>();
+  log.forEach((event, i) => {
+    if (event.type === 'forfeit' || event.type === 'battle-end') return;
+    const at = key(event.side, event.slot);
+    if (event.type === 'move') {
+      const next = log[i + 1];
+      const prev = log[i - 1];
+      cues.set(i, {
+        charge: next?.type === 'windup' && next.side === event.side && next.slot === event.slot,
+        landing: winding.has(at),
+        backup: prev?.type === 'assist' && prev.side === event.side && prev.slot === event.slot,
+        firedUp: firedUp.has(i),
+      });
+      winding.delete(at);
+    } else if (event.type === 'windup') winding.add(at);
+    else if (event.type === 'windup-lost' || event.type === 'swap' || event.type === 'tuckered-out')
+      winding.delete(at);
+  });
+  return cues;
+}
+
 /**
  * The steps for the log entries after `fromIndex` (what the client hasn't
  * shown yet). Names come from the battle's own content, so a secret squishy
@@ -254,17 +369,35 @@ export function playbackSteps(
   const isFence = (side: BattleSideId, slot: number): boolean =>
     battle.view.sides[side].squishies[slot]?.fence !== undefined;
 
-  return battle.view.log.slice(fromIndex).map((event: BattleEventView): PlaybackStep => {
+  const cues = moveCues(battle, content);
+
+  return battle.view.log.slice(fromIndex).map((event: BattleEventView, i): PlaybackStep => {
     switch (event.type) {
-      case 'move':
+      case 'move': {
+        const cue = cues.get(fromIndex + i);
+        const move = content.moveName(event.move);
         return step(
           'move',
           event.side,
           event.slot,
-          `${name(event.side, event.slot)} used ${content.moveName(event.move)}!`,
+          cue?.backup === true
+            ? EFFECT_WORDS.backup(move)
+            : `${name(event.side, event.slot)} used ${move}!`,
           PLAYBACK.moveMs,
-          { squish: 'jiggle', move: event.move },
+          {
+            squish: 'jiggle',
+            move: event.move,
+            callout: cue?.landing
+              ? EFFECT_WORDS.windupLanding
+              : cue?.firedUp
+                ? EFFECT_WORDS.firedUp
+                : null,
+            charge: cue?.charge === true,
+            backup: cue?.backup === true,
+            landing: cue?.landing === true,
+          },
         );
+      }
       case 'miss':
         return step(
           'miss',
@@ -386,9 +519,11 @@ export function playbackSteps(
           'effect',
           event.side,
           event.slot,
-          EFFECT_WORDS.windupLost(name(event.side, event.slot)),
+          (isMine(battle, event.side) ? EFFECT_WORDS.windupLostMine : EFFECT_WORDS.windupLost)(
+            name(event.side, event.slot),
+          ),
           PLAYBACK.effectMs,
-          { move: event.move },
+          { move: event.move, windupLost: true },
         );
       case 'flinch':
         return step(

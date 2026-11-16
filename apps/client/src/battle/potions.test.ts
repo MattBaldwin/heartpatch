@@ -74,6 +74,12 @@ describe('battle potions in the HUD (#214)', () => {
     });
   });
 
+  it('chipsOf shows the winding-up chip (#234)', () => {
+    const winding = { boosts: { attack: 0, defense: 0 }, shield: 0, windup: { move: 'x' } };
+    expect(chipsOf(winding)).toEqual({ ...NO_CHIPS, windup: true });
+    expect(CHIP_LOOKS.windup).toEqual({ text: '⏳', label: 'Winding up' });
+  });
+
   it('adds a potion’s chips and puts the shield up, keeping earlier boosts', () => {
     const brew = chipsAfterDrinking(NO_CHIPS, 'brave-brew');
     expect(brew).toEqual({ ...NO_CHIPS, attack: true, shield: true });

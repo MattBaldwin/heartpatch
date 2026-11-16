@@ -51,6 +51,26 @@ export const STYLE_MORE: Readonly<Record<MoveStyle, string>> = {
 /** The gentle hint (#587), when a Heart Charm is in reach. */
 export const GENTLE_HINT = 'Gentle! Leaves a sliver for a Heart Charm';
 
+/** The pending move's hint while its squishy winds up (#234); the others wait. */
+export const WINDUP_HINT = 'Keep winding up!';
+/** Read out on a locked move (#234): why the button is dimmed. */
+export const WINDUP_LOCKED = 'Busy winding up another move';
+
+/**
+ * The move buttons while a squishy winds up (#234): the pending move carries
+ * "Keep winding up!", every other one is locked for the round (the server
+ * would refuse it). Not winding up: the buttons as they are.
+ */
+export function lockForWindup<T extends { readonly id: string; readonly info: MoveInfo }>(
+  buttons: readonly T[],
+  pending: string | null,
+): (T & { locked?: boolean })[] {
+  if (pending === null) return [...buttons];
+  return buttons.map((b) =>
+    b.id === pending ? { ...b, info: { ...b.info, hint: WINDUP_HINT } } : { ...b, locked: true },
+  );
+}
+
 /** The gentle hint shows once they are below this % of their energy. */
 export const GENTLE_HINT_BELOW = 50; // TUNE: "in reach of a Heart Charm"
 
@@ -122,7 +142,10 @@ function statLine(effects: Extract<MoveEffect, { type: 'stat' }>[]): string {
 }
 
 /** The effect as a plain sentence for the "More" view, with its chance when it's not sure. */
-function effectSentence(effect: MoveEffect): string {
+function effectSentence(
+  effect: MoveEffect,
+  moveName: ((id: string) => string | undefined) | undefined,
+): string {
   switch (effect.type) {
     case 'heal':
       return `Heals you ${String(effect.percent)}%.`;
@@ -138,19 +161,21 @@ function effectSentence(effect: MoveEffect): string {
       const line = `${who.charAt(0).toUpperCase()}${who.slice(1)} ${STAT_WORDS[effect.stat]} goes ${stagesWord(effect.stages)}${way}.`;
       return effect.chance >= 100 ? line : `${String(effect.chance)}% chance: ${line}`;
     }
-    // #234 effects: the minimal sentences so this switch stays exhaustive;
-    // PR 3 polishes them (and names the assist's move).
+    // The #234 effects.
     case 'windup':
       return 'Takes a round to wind up, then hits next round.';
     // "Might": a flinch only works on a foe that hasn't moved yet this round.
     case 'flinch':
       return effect.chance >= 100
-        ? 'Might make them flinch and miss their move.'
-        : `Might make them flinch and miss their move (${String(effect.chance)}% chance).`;
+        ? 'They might flinch and skip their move this round.'
+        : `They might flinch and skip their move this round (${String(effect.chance)}% chance).`;
     case 'low-energy':
       return `Hits harder the lower your energy: up to ${String(effect.extraPercent)}% harder.`;
-    case 'assist':
-      return 'Calls in a friend to help!';
+    case 'assist': {
+      // The called-in move's name comes from the battle's move defs.
+      const name = moveName?.(effect.move);
+      return name ? `Calls in a friend's ${name}!` : 'Calls in a friend to help!';
+    }
   }
 }
 
@@ -232,6 +257,8 @@ export interface MoveContext {
   readonly style?: MoveStyle | undefined;
   /** The battle is gentle and a Heart Charm is in reach: say so on a steady boop. */
   readonly gentleHint?: boolean;
+  /** A move's name by id (#234): an assist names the friend's move it calls in. */
+  readonly moveName?: (id: string) => string | undefined;
 }
 
 export function describeMove(
@@ -250,7 +277,7 @@ export function describeMove(
   const line = style ? STYLE_LINES[style] : lineOf(move, kind);
   if (style) more.push(STYLE_MORE[style]);
   for (const effect of move.effects ?? []) {
-    const sentence = effectSentence(effect);
+    const sentence = effectSentence(effect, context.moveName);
     // The button's own line already says it; the card adds only what is new.
     if (sentence !== `${line}.`) more.push(sentence);
   }
@@ -274,11 +301,12 @@ export function describeMove(
 }
 
 /** The words a screen reader gets for the whole button. */
-export function moveLabel(name: string, info: MoveInfo): string {
+export function moveLabel(name: string, info: MoveInfo, locked = false): string {
   const parts = [name, info.look.label, info.line];
   if (info.number) parts.push(`Power ${info.number}`);
   if (info.hits) parts.push(info.hits);
   if (info.edge) parts.push(`${EDGE_WORDS[info.edge].label} against them`);
   if (info.hint) parts.push(info.hint);
+  if (locked) parts.push(WINDUP_LOCKED);
   return parts.join('. ');
 }

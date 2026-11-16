@@ -100,6 +100,8 @@ export interface PlateChips {
   readonly shield: boolean;
   readonly guard: boolean;
   readonly open: boolean;
+  /** Winding up a move that lands next round (#234). */
+  readonly windup: boolean;
 }
 
 export const NO_CHIPS: PlateChips = {
@@ -108,12 +110,14 @@ export const NO_CHIPS: PlateChips = {
   shield: false,
   guard: false,
   open: false,
+  windup: false,
 };
 
 export function chipsOf(squishy: {
   readonly boosts: { readonly attack: number; readonly defense: number };
   readonly shield: number;
   readonly guard?: number | undefined;
+  readonly windup?: { readonly move: string } | undefined;
 }): PlateChips {
   const guard = squishy.guard ?? 0;
   return {
@@ -122,6 +126,7 @@ export function chipsOf(squishy: {
     shield: squishy.shield > 0,
     guard: guard > 0,
     open: guard < 0,
+    windup: squishy.windup !== undefined,
   };
 }
 
@@ -145,6 +150,8 @@ export const CHIP_LOOKS = {
   // Steady and Big (#587): until the next bump lands.
   guard: { text: '🛡️', label: 'On guard' },
   open: { text: '🎯', label: 'Wide open' },
+  // A windup (#234): until it lands or is lost.
+  windup: { text: '⏳', label: 'Winding up' },
 } as const;
 
 /** The caption for a sip: "Emberbun sipped Brave Brew! Feeling bold!" */

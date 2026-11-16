@@ -47,7 +47,8 @@ export type ControlMode =
   | {
       type: 'choose';
       /** Each move with what its button says about it (#565, `describeMove`). */
-      moves: { id: string; name: string; info: MoveInfo }[];
+      /** `locked`: winding up another move (#234), so this one can't go this round. */
+      moves: { id: string; name: string; info: MoveInfo; locked?: boolean }[];
       bench: { slot: number; name: string }[];
       /**
        * A wild squishy: the "Use Heart Charm" button (befriend, style guide §9),
@@ -405,6 +406,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       shield: chip('shield'),
       guard: chip('guard'),
       open: chip('open'),
+      windup: chip('windup'),
     };
     const callout = el('span', { class: 'battle-callout', role: 'status' });
     const node = el(
@@ -428,6 +430,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         chips.shield,
         chips.guard,
         chips.open,
+        chips.windup,
       ),
       callout,
     );
@@ -704,7 +707,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
               'data-testid': 'battle-move',
               'data-kind': info.kind,
               ...(info.style && { 'data-style': info.style }),
-              'aria-label': moveLabel(move.name, info),
+              'aria-label': moveLabel(move.name, info, move.locked === true),
             },
             el('span', { class: 'battle-move-name' }, move.name),
             el(
@@ -743,6 +746,10 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
               : []),
             el('span', { class: 'battle-move-more' }, ...info.more.map((t) => el('span', {}, t))),
           );
+          if (move.locked === true) {
+            node.disabled = true;
+            node.classList.add('battle-move-locked');
+          }
           node.addEventListener('click', () => {
             // A sipped potion goes out with the move (a free sip, #403).
             act(
@@ -957,6 +964,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       p.chips.shield.hidden = !chips.shield;
       p.chips.guard.hidden = !chips.guard;
       p.chips.open.hidden = !chips.open;
+      p.chips.windup.hidden = !chips.windup;
       p.node.classList.toggle('battle-plate-tuckered', info.percent === 0);
       // A longer name or a status chip can grow the pill: measure again.
       forget();

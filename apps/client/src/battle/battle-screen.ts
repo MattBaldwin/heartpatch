@@ -46,7 +46,7 @@ import {
 } from './battle-playback.js';
 import { BattleScene, type BattleSceneStats } from './battle-scene.js';
 import { sendAction, type SubmitDeps } from './battle-submit.js';
-import { describeMove, gentleHintShows, UNKNOWN_MOVE_INFO } from './move-info.js';
+import { describeMove, gentleHintShows, lockForWindup, UNKNOWN_MOVE_INFO } from './move-info.js';
 import {
   activeOf,
   BattleContent,
@@ -732,16 +732,19 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     // The gentle hint: a wild squishy (or a befriendable guardian) low enough
     // for a Heart Charm, with one in the bag.
     const gentleHint = gentleHintShows(b.view, them, charms);
-    return me.moves.map((id) => {
+    const moveName = (id: string) => names.moves.get(id)?.name;
+    const buttons = me.moves.map((id) => {
       const move = names.moves.get(id);
       return {
         id,
         name: names.moveName(id),
         info: move
-          ? describeMove(move, me, them, { style: styles.get(id), gentleHint })
+          ? describeMove(move, me, them, { style: styles.get(id), gentleHint, moveName })
           : UNKNOWN_MOVE_INFO,
       };
     });
+    // Winding up (#234): only the pending move goes; the server takes no other.
+    return lockForWindup(buttons, me.windup?.move ?? null);
   };
 
   const controlsFor = (b: PlayerBattle): ControlMode => {

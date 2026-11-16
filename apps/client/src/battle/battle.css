@@ -199,6 +199,12 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   color: #8a3a12;
 }
 
+/* Winding up (#234): ⏳ until the move lands or the count is lost. */
+.battle-chip-windup {
+  background: #fff3c4;
+  color: #7a5a00;
+}
+
 /* Saturday Morning Smackdown's comic callout: bold, outlined, a little tilted. */
 .battle-callout {
   position: absolute;
@@ -889,6 +895,13 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   --move-edge: #a3d4b9;
 }
 
+/* Winding up (#234): the other moves wait a round, dimmed (the pending one
+   carries "Keep winding up!"). */
+.battle-move-locked {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .battle-move-hint {
   font-size: 12px;
   font-weight: 800;
@@ -1132,6 +1145,12 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   min-width: 0;
 }
 
+/* Three chips (⏳, tries, here until) don't fit one 375 px row: wrap (#234). */
+.boss-plate-chips {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
 .boss-plate-chips:empty,
 .boss-plate-chips:not(:has(:not([hidden]))) {
   display: none;
@@ -1154,6 +1173,12 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   height: 14px;
 }
 
+/* A chip the plate hides (the stomps and ⏳ chips) stays hidden: the
+   display below would beat the attribute. */
+.boss-chip[hidden] {
+  display: none;
+}
+
 .boss-chip {
   display: inline-flex;
   align-items: center;
@@ -1168,6 +1193,14 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   margin-left: auto;
   background: #ffe9a8;
   color: #6b4a06;
+}
+
+/* The boss is winding up a big move (#234): the same ⏳ tint as the plate
+   chip. Scoped to the plate: map/boss.css's own `.boss-chip` (the map card's
+   blue pill) loads later and would win a tie. */
+.boss-plate .boss-chip-windup {
+  background: #fff3c4;
+  color: #7a5a00;
 }
 
 .boss-chip-try {
@@ -1443,6 +1476,11 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 .boss-tag-area {
   background: #ffe9a8;
   color: #6b4a06;
+}
+
+.boss-tag-windup {
+  background: #fff3c4;
+  color: #7a5a00;
 }
 
 .boss-picker-row {
