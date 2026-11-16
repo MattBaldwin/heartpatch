@@ -13,7 +13,6 @@ import {
   type SellBasketRequest,
   type SellBasketResponse,
   type SellLine,
-  type SellRequest,
   type SellRules,
   type SellView,
 } from '@heartpatch/shared';
@@ -100,16 +99,6 @@ function priceOf(rules: SellRules, line: SellLine): PricedLine {
   const price = bought ? linePrice(rules, rarityOf, line) : null;
   if (!price || price.coins < 1) throw new AppError('VALIDATION_FAILED', MESSAGES.notBought);
   return { ...line, ...price };
-}
-
-/** A legacy one-line sale (#655, accepted for one release) as a one-line basket. */
-export function legacyBasket(request: SellRequest): SellBasketRequest {
-  const { q, r, itemId } = request;
-  const line: SellLine =
-    request.kind === 'item'
-      ? { kind: 'item', itemId, lots: request.lots }
-      : { kind: 'clothing', itemId, count: 1 };
-  return { kind: 'basket', q, r, lines: [line] };
 }
 
 export function createPostSellService(options: PostSellServiceOptions): PostSellService {
