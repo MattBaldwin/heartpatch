@@ -24,6 +24,15 @@ describe('loadBossLooks', () => {
     expect(got.problem).toMatch(/Could not read/);
   });
 
+  it('refuses a look whose rarity is not a known rarity', async () => {
+    for (const rarity of ['shiny', undefined, 3]) {
+      const reply = { looks: [{ id: 'x', name: 'X', rarity, visual: body?.visual }] };
+      const got = await loadBossLooks(json(200, reply));
+      expect(got.looks, String(rarity)).toEqual([]);
+      expect(got.problem, String(rarity)).toMatch(/Could not read/);
+    }
+  });
+
   it('says to sign in on a 401 and to enable the dev flag on a 404', async () => {
     const err = (code: string) => ({ error: { code, message: 'no' } });
     const signedOut = await loadBossLooks(json(401, err('UNAUTHENTICATED')));
