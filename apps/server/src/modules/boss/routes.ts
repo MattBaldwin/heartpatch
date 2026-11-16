@@ -4,9 +4,15 @@ import {
   BossBefriendRequestSchema,
   BossBefriendResponseSchema,
   BossVisitResponseSchema,
+  ContentIdSchema,
+  DisplayNameSchema,
   MapIdParamsSchema,
+  RaritySchema,
+  SpeciesVisualSchema,
 } from '@heartpatch/shared';
+import { SECRET_SPECIES } from '@heartpatch/shared/server';
 import type { FastifyPluginCallback } from 'fastify';
+import { z } from 'zod';
 import type { Idempotency } from '../../lib/idempotency.js';
 import { playerRateLimit } from '../../lib/rate-limit.js';
 import type { ZodTypeProvider } from '../../lib/zod.js';
@@ -18,7 +24,33 @@ export interface BossRoutesOptions {
   hooks: AuthHooks;
   /** `Idempotency-Key` support (`registerIdempotency`). */
   idempotency: (fastify: Parameters<FastifyPluginCallback>[0]) => Idempotency;
+  /**
+   * `HP_DEV_SQUISHY_GRANTS`: also registers `GET /dev/boss-looks`, every
+   * mini-boss's look for the dev gallery (#234). Never in production
+   * (`config.ts` refuses it there).
+   */
+  devTools?: boolean;
 }
+
+/**
+ * One mini-boss's look (`GET /dev/boss-looks`, dev only): what the dev
+ * gallery draws. Server-local, not a shared contract: the client parses each
+ * `visual` with the public `SpeciesVisualSchema` it already has.
+ */
+const BossLookSchema = z.strictObject({
+  id: ContentIdSchema,
+  name: DisplayNameSchema,
+  rarity: RaritySchema,
+  visual: SpeciesVisualSchema,
+});
+export const BossLooksResponseSchema = z.strictObject({ looks: z.array(BossLookSchema) });
+
+/** Every server-only species on the boss line, its look checked by the public schema. */
+export const bossLooks = (): z.infer<typeof BossLooksResponseSchema> => ({
+  looks: SECRET_SPECIES.filter((s) => s.line === 'boss').map((s) =>
+    BossLookSchema.parse({ id: s.id, name: s.name, rarity: s.rarity, visual: s.visual }),
+  ),
+});
 
 export const bossRoutes =
   (service: BossService, options: BossRoutesOptions): FastifyPluginCallback =>
@@ -75,6 +107,21 @@ export const bossRoutes =
       async (request) =>
         service.befriend(requireUser(request), request.params.battleId, request.body.ask),
     );
+
+    // The dev gallery's mini-boss looks (#234, `?bosses`): the client can't
+    // import server data, so it fetches them. Signed in and rate-limited like
+    // every dev route (the gallery capture logs in first); it only exists
+    // with dev tools, never in production.
+    if (options.devTools) {
+      app.get(
+        '/dev/boss-looks',
+        {
+          schema: { response: { 200: BossLooksResponseSchema } },
+          preHandler: [requireAuth, rateLimit('dev')],
+        },
+        () => bossLooks(),
+      );
+    }
 
     done();
   };

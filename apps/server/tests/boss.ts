@@ -1,5 +1,6 @@
 // A mini-boss test harness (#190): an app with a stand-in boss, Keepers,
 // a patch, a grown team, the clock at the visit and a fight played out.
+// The mini-boss switch (#234) is `on` unless a test says otherwise.
 import {
   BattleResponseSchema,
   GAME_DATA,
@@ -36,6 +37,32 @@ export const BOSS_RULES: BossEventRules = {
   ...BOSS_EVENTS,
   bag: [{ speciesId: STAND_IN_BOSS.id, terrains: [GAME_DATA.terrains[0]!.id] }],
 };
+/**
+ * The real bag (#234): production's rules once the bosses are in it
+ * (lane 234b-1), and until then four stand-ins in a bag of the same size, so
+ * the real-bag tests run today and unchanged against the real bosses.
+ */
+export const REAL_BAG_RULES: BossEventRules =
+  BOSS_EVENTS.bag.length > 0
+    ? BOSS_EVENTS
+    : {
+        ...BOSS_EVENTS,
+        bag: GAME_DATA.species
+          .filter((s) => s.id !== BOSS_TEAM.id)
+          .slice(0, 4)
+          .map((s) => ({ speciesId: s.id, terrains: [GAME_DATA.terrains[0]!.id] })),
+      };
+/** Whether `REAL_BAG_RULES` is production's bag rather than the stand-ins. */
+export const REAL_BAG_IS_REAL = BOSS_EVENTS.bag.length > 0;
+
+export interface BossStartOptions {
+  /** `HP_MINI_BOSSES` (#234); the harness opens it everywhere unless told otherwise. */
+  miniBosses?: 'off' | 'testers' | 'on';
+  /** `HP_MINI_BOSSES_TESTERS`. */
+  testers?: readonly string[];
+  /** `HP_DEV_SQUISHY_GRANTS`. */
+  devTools?: boolean;
+}
 const TEST_KEEPER = {
   base: 'pip',
   hairColor: 'honey',
@@ -58,6 +85,7 @@ export interface BossPlayer extends PublicUser {
 export function bossHarness(db: Database, url: string, prefix: string) {
   const clock = new Date(BOSS_START);
   let app: FastifyInstance | undefined;
+  let sweep: ((only?: readonly string[]) => Promise<number>) | undefined;
   let counter = 0;
 
   const call = (
@@ -88,19 +116,34 @@ export function bossHarness(db: Database, url: string, prefix: string) {
   return {
     clock,
     call,
-    async start(rules: BossEventRules = BOSS_RULES) {
+    async start(rules: BossEventRules = BOSS_RULES, options: BossStartOptions = {}) {
       app = await buildApp({
-        config: loadConfig({ NODE_ENV: 'test', DATABASE_URL: url }),
+        config: loadConfig({
+          NODE_ENV: 'test',
+          DATABASE_URL: url,
+          HP_MINI_BOSSES: options.miniBosses ?? 'on',
+          HP_MINI_BOSSES_TESTERS: (options.testers ?? []).join(','),
+          HP_DEV_SQUISHY_GRANTS: options.devTools ? 'true' : 'false',
+        }),
         db,
         clock: () => clock,
         logger: false,
         bossRules: rules,
+        onBoss: (service) => {
+          sweep = service.sweep;
+        },
       });
       return app;
+    },
+    /** The started app's sweep job (narrowed to `only`, the database is shared). */
+    sweep: (only?: readonly string[]) => {
+      if (!sweep) throw new Error('bossHarness: call start() first');
+      return sweep(only);
     },
     async close() {
       await app?.close();
       app = undefined;
+      sweep = undefined;
       clock.setTime(Date.parse(BOSS_START));
     },
     async player(): Promise<BossPlayer> {

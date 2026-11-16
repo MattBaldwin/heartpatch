@@ -137,6 +137,12 @@ app.log.info(
   { wildIsle: config.HP_WILD_ISLE, wildIsleTesters: config.HP_WILD_ISLE_TESTERS.length },
   'the Wild Isle switch',
 );
+// The mini-boss switch (#234), logged like the house's: the mode and how
+// many testers, never their names.
+app.log.info(
+  { miniBosses: config.HP_MINI_BOSSES, miniBossesTesters: config.HP_MINI_BOSSES_TESTERS.length },
+  'the mini-boss switch',
+);
 // The First Patch for accounts that finished the tutorial before milestones
 // existed (#44). Idempotent, so every boot can run it; it never blocks start.
 createMilestonesService({ db: db.db, clock })

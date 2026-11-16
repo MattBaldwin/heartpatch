@@ -101,6 +101,16 @@ const ConfigSchema = z.object({
   // Patch owners who get the switch while `HP_COMPUTER_MATES=testers`,
   // comma-separated (case doesn't matter), as `HP_HOUSE_TESTERS`.
   HP_COMPUTER_MATES_TESTERS: usernameList(),
+  // Mini-bosses (#234) feature switch: `off` makes every patch's visit
+  // behave as an empty bag (no visit opens, `GET /maps/:mapId/boss` is null,
+  // a fight start is NOT_FOUND, the sweep opens none), `testers` opens it on
+  // patches owned by an `HP_MINI_BOSSES_TESTERS` account, `on` everywhere. A
+  // fight already going still finishes. Off by default; the prod compose
+  // file keeps it off until the owner's on-device frame-time capture.
+  HP_MINI_BOSSES: z.enum(['off', 'testers', 'on']).default('off'),
+  // Patch owners who get mini-bosses while `HP_MINI_BOSSES=testers`,
+  // comma-separated (case doesn't matter), as `HP_HOUSE_TESTERS`.
+  HP_MINI_BOSSES_TESTERS: usernameList(),
   HP_PUSH: z.enum(['off', 'testers', 'on']).default('off'),
   // Usernames who get nudges while `HP_PUSH=testers`, comma-separated (case
   // doesn't matter), as `HP_HOUSE_TESTERS`.

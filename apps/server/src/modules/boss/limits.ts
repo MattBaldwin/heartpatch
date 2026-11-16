@@ -19,6 +19,11 @@ export const BOSS_RATE_LIMITS = {
     perIp: { max: 60, windowMs: MINUTE_MS }, // TUNE: guess
     perUser: { max: 20, windowMs: MINUTE_MS }, // TUNE: guess
   },
+  // The dev gallery's boss looks (#234, dev tools only), as the other dev routes.
+  dev: {
+    perIp: { max: 600, windowMs: MINUTE_MS }, // TUNE: a capture run loads every look from one IP
+    perUser: { max: 120, windowMs: MINUTE_MS }, // TUNE: guess
+  },
 } as const satisfies RateLimitTable;
 
 export type BossAction = keyof typeof BOSS_RATE_LIMITS;
