@@ -83,10 +83,12 @@ describe('mini-boss species (#234)', () => {
     for (const [base, middle, boss] of LINES) {
       expect(total(base), base).toBeGreaterThanOrEqual(260);
       expect(total(base), base).toBeLessThanOrEqual(290);
-      // A kid is about ×1.18 its base (#443), the boss about ×1.4 one rarity up.
+      // A kid is about ×1.15–1.18 its base (#443); the boss forms are tuned
+      // in sim:boss (#234 ruling (A)), well above the middle form.
       expect(total(middle) / total(base), middle).toBeCloseTo(1.18, 1);
-      expect(total(boss), boss).toBeGreaterThanOrEqual(370);
-      expect(total(boss), boss).toBeLessThanOrEqual(400);
+      expect(total(boss), boss).toBeGreaterThanOrEqual(340);
+      expect(total(boss), boss).toBeLessThanOrEqual(440);
+      expect(total(boss) - total(middle), boss).toBeGreaterThanOrEqual(25);
       const stats = ['hp', 'attack', 'defense', 'speed'] as const;
       for (const stat of stats) {
         expect(get(middle).baseStats[stat]).toBeGreaterThan(get(base).baseStats[stat]);

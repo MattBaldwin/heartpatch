@@ -144,10 +144,14 @@ export const BATTLE_RULES: BattleRules = {
     },
   },
   boss: {
-    actionsPerRound: 2, // TUNE: but never more than the foes still standing
+    // TUNE: one action a round (#234 coordinator ruling (A), 2026-11-16). Two
+    // a round with the real bosses' moves needed boss forms no stronger than
+    // their own babies to give a team of 3 a fair fight (`pnpm sim:boss`).
+    actionsPerRound: 1, // TUNE: but never more than the foes still standing
     statusSkipsPerRound: 1, // TUNE: dizzy or sleepy costs it one action a round at most
-    // TUNE: a boss is a grown-up with 3× energy and a bit tougher (pnpm sim:boss).
-    stats: { hp: 300, attack: 100, defense: 110, speed: 100 },
+    // TUNE: a boss is a grown-up with 1.5× energy and a bit tougher (#234: was
+    // 3×, a guess before real boss stats; `pnpm sim:boss`).
+    stats: { hp: 150, attack: 100, defense: 110, speed: 100 },
     // TUNE: plays to win like a guardian, a little greedier.
     ai: {
       focus: 3,

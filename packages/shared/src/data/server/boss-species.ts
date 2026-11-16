@@ -16,10 +16,12 @@ import type { Species } from '../../schemas/data/species.js';
  * (`ART_RULES.finishByRarity`: iridescent, iridescent, shimmer). Sizes step
  * inside `ART_RULES.evolutionScale`.
  *
- * Base stats (#234 plan): totals about 275 / 325 / 385, the legendary band
- * from `species.ts`, ×1.18 for the middle form like the #443 kids, and about
- * ×1.4 for the boss (one rarity up). The battle engine then scales a boss
- * fighter by `rules.boss.stats`. All `// TUNE:` (`pnpm sim:boss`).
+ * Base stats: base forms in the legendary band (~275, `species.ts`), middle
+ * forms about ×1.15–1.18 like the #443 kids. Boss forms are tuned in
+ * `pnpm sim:boss` (#234 ruling (A)) so a team of 3 at level wins 55–65%
+ * against each, with `rules.boss` at 1.5× energy and one action a round:
+ * totals 348–430, shaped by each line (the kart line fast, the dad line a
+ * tank). All `// TUNE:`.
  *
  * Signature moves are drafted to the move effects the engine has today
  * (stat, heal, dizzy/sleepy, `all-foes`); the owner's briefs that need a
@@ -252,7 +254,7 @@ export const BOSS_SPECIES: Species[] = [
     feeling: 'silly',
     rarity: 'mythic',
     line: 'boss',
-    baseStats: { hp: 90, attack: 105, defense: 75, speed: 115 }, // TUNE: total 385
+    baseStats: { hp: 100, attack: 95, defense: 85, speed: 105 }, // TUNE: total 385 (sim:boss)
     moves: ['rake-mouth', 'stink-bomb', 'leaf-pile-pounce', 'mossy-nap'],
     evolutions: [],
     visual: {
@@ -323,7 +325,7 @@ export const BOSS_SPECIES: Species[] = [
     feeling: 'brave',
     rarity: 'legendary',
     line: 'boss',
-    baseStats: { hp: 83, attack: 94, defense: 71, speed: 77 }, // TUNE: total 325
+    baseStats: { hp: 84, attack: 89, defense: 74, speed: 68 }, // TUNE: total 315, a little under ×1.18 so the boss still grows from it
     moves: ['toasty-tumble', 'wiggle-wick', 'cozy-crackle', 'the-look'],
     evolutions: [],
     visual: {
@@ -360,7 +362,7 @@ export const BOSS_SPECIES: Species[] = [
     feeling: 'brave',
     rarity: 'mythic',
     line: 'boss',
-    baseStats: { hp: 100, attack: 115, defense: 85, speed: 85 }, // TUNE: total 385
+    baseStats: { hp: 100, attack: 92, defense: 86, speed: 70 }, // TUNE: total 348 (sim:boss)
     moves: ['full-name-shout', 'mama-bear-charge', 'the-look', 'bonfire-hug'],
     evolutions: [],
     visual: {
@@ -469,7 +471,7 @@ export const BOSS_SPECIES: Species[] = [
     feeling: 'cozy',
     rarity: 'mythic',
     line: 'boss',
-    baseStats: { hp: 120, attack: 80, defense: 120, speed: 65 }, // TUNE: total 385
+    baseStats: { hp: 120, attack: 80, defense: 120, speed: 65 }, // TUNE: total 385 (sim:boss)
     moves: ['lawnmower-rumble', 'thermostat-lock', 'dad-joke', 'ask-your-mother'],
     evolutions: [],
     visual: {
@@ -574,8 +576,10 @@ export const BOSS_SPECIES: Species[] = [
     feeling: 'silly',
     rarity: 'mythic',
     line: 'boss',
-    baseStats: { hp: 80, attack: 95, defense: 70, speed: 140 }, // TUNE: total 385
-    moves: ['drift-spin', 'speed-bump', 'zoomies', 'pit-stop'],
+    baseStats: { hp: 105, attack: 100, defense: 95, speed: 130 }, // TUNE: total 430 (sim:boss)
+    // Fizzy Pop, not Zoomies (sim:boss): two non-hitting moves left it easy
+    // for one squishy on its own.
+    moves: ['drift-spin', 'speed-bump', 'fizzy-pop', 'pit-stop'],
     evolutions: [],
     visual: {
       body: 'kart',
