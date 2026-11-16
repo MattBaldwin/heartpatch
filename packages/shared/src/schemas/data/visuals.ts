@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ContentIdSchema } from './common.js';
+import { ContentIdSchema, HexColorSchema } from './common.js';
 import type { Path, Report } from './issues.js';
 
 /**
@@ -274,8 +274,7 @@ export const PartSchema = z
     accent: z
       .strictObject({
         mesh: PartAccentMeshSchema,
-        // The same rule as the species `HexColorSchema` (species.ts imports this file).
-        color: z.string().regex(/^#[0-9a-f]{6}$/, 'Expected a colour like "#ffaa00"'),
+        color: HexColorSchema,
       })
       .optional(),
   })

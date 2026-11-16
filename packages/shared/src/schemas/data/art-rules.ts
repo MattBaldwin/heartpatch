@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { ContentIdSchema, RaritySchema, type Rarity } from './common.js';
+import { ContentIdSchema, HexColorSchema, RaritySchema, type Rarity } from './common.js';
 import { ElementIdSchema, FeelingIdSchema, type ElementId, type FeelingId } from './elements.js';
 import type { Path, Report } from './issues.js';
-import { FinishSchema, GlowSchema, HexColorSchema, type SpeciesVisual } from './species.js';
+import { FinishSchema, GlowSchema, type SpeciesVisual } from './species.js';
 import { SURFACE_SLOTS, type Part, type VisualRegistry } from './visuals.js';
 
 /**

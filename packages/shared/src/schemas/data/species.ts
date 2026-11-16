@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { ContentIdSchema, DescriptionSchema, DisplayNameSchema, RaritySchema } from './common.js';
+import {
+  ContentIdSchema,
+  DescriptionSchema,
+  DisplayNameSchema,
+  HexColorSchema,
+  RaritySchema,
+} from './common.js';
 import { ElementIdSchema, FeelingIdSchema } from './elements.js';
 import { PaletteRoleSchema, PartSlotSchema } from './visuals.js';
 
@@ -64,10 +70,6 @@ export const FloaterSchema = z.strictObject({
   }),
 });
 export type Floater = z.infer<typeof FloaterSchema>;
-
-export const HexColorSchema = z
-  .string()
-  .regex(/^#[0-9a-f]{6}$/, 'Expected a colour like "#ffaa00"');
 
 /**
  * Procedural vinyl-toy parameters (design doc §19). `body` and `parts` are

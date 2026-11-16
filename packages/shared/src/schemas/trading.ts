@@ -212,40 +212,6 @@ export const SellViewResponseSchema = z.object({ sell: SellViewSchema });
 export type SellViewResponse = z.infer<typeof SellViewResponseSchema>;
 
 /**
- * `POST /maps/:mapId/posts/sell` at the post at (q, r): `lots` lots of an
- * item from my bag, or one spare piece of a clothing item (never the last
- * copy). The client confirms first; there's no undo. Send an `Idempotency-Key`.
- */
-export const SellRequestSchema = z.discriminatedUnion('kind', [
-  z.strictObject({
-    kind: z.literal('item'),
-    q: HexSchema.shape.q,
-    r: HexSchema.shape.r,
-    itemId: ContentIdSchema,
-    lots: z.number().int().min(1).max(100),
-  }),
-  z.strictObject({
-    kind: z.literal('clothing'),
-    q: HexSchema.shape.q,
-    r: HexSchema.shape.r,
-    itemId: ContentIdSchema,
-  }),
-]);
-export type SellRequest = z.infer<typeof SellRequestSchema>;
-
-/** What a sale took and paid, and the Sell tab after it. */
-export const SellResponseSchema = z.object({
-  sold: z.object({
-    kind: z.enum(['item', 'clothing']),
-    itemId: ContentIdSchema,
-    quantity: z.number().int().min(1),
-    coins: z.number().int().min(1),
-  }),
-  sell: SellViewSchema,
-});
-export type SellResponse = z.infer<typeof SellResponseSchema>;
-
-/**
  * One line of a sell basket (#655): `lots` lots of an item from my bag, or
  * `count` spare pieces of a clothing item (never the last free copy).
  */
@@ -301,14 +267,3 @@ export const SellBasketResponseSchema = z.object({
   sell: SellViewSchema,
 });
 export type SellBasketResponse = z.infer<typeof SellBasketResponseSchema>;
-
-/**
- * The sell route's body while the one-line request is still accepted (#655,
- * one release): a basket or a legacy one-line sale. A legacy request gets the
- * legacy `SellResponse`, a basket gets `SellBasketResponse`.
- */
-export const AnySellRequestSchema = z.union([SellRequestSchema, SellBasketRequestSchema]);
-export type AnySellRequest = z.infer<typeof AnySellRequestSchema>;
-
-export const AnySellResponseSchema = z.union([SellResponseSchema, SellBasketResponseSchema]);
-export type AnySellResponse = z.infer<typeof AnySellResponseSchema>;

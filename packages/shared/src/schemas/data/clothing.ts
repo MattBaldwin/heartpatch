@@ -1,8 +1,13 @@
 import { z } from 'zod';
-import { ContentIdSchema, DescriptionSchema, DisplayNameSchema, RaritySchema } from './common.js';
+import {
+  ContentIdSchema,
+  DescriptionSchema,
+  DisplayNameSchema,
+  HexColorSchema,
+  RaritySchema,
+} from './common.js';
 import { checkRef, checkUniqueIds, formatDataIssues, type Report } from './issues.js';
 import { WARDROBE_SLOTS, type WardrobeSlot } from './keepers.js';
-import { HexColorSchema } from './species.js';
 import { PartShapeSchema } from './visuals.js';
 
 // Clothing (design doc §23; issue #43): one catalog for Keeper clothing and

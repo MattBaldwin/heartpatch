@@ -26,6 +26,7 @@ import {
   sameAgain,
   slotsOut,
   teamAction,
+  stompsChip,
 } from './boss-view.js';
 
 const NOW = Date.parse('2026-11-14T12:00:00.000Z');
@@ -130,6 +131,13 @@ describe('a mini-boss fight on screen (#190)', () => {
     const plates = bossPlates(b, shownFrom(b), new BattleContent(b), nameOf(b));
     expect(BATTLE_RULES.boss?.actionsPerRound).toBe(1);
     expect(plates.boss.stomps).toBe(false);
+  });
+
+  it('shows the "Stomps twice" chip only when the rule has the boss act more than once (#234)', () => {
+    expect(stompsChip(1)).toBe(false);
+    expect(stompsChip(2)).toBe(true);
+    expect(stompsChip(3)).toBe(true);
+    expect(stompsChip()).toBe(stompsChip(BATTLE_RULES.boss?.actionsPerRound ?? 1));
   });
 
   it('plates follow the energy shown, not the final view', () => {
