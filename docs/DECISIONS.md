@@ -2434,3 +2434,27 @@ Merged: #841, #842, #845, #843, #846. Closed: #655 (parts A–E), #729 (729a–d
 - **Lane context:** several lanes overran the 150k cap before handing off (729b 238k, engine PR 1 274k); the handoffs were clean. Briefs now carry an explicit CONTEXT BUDGET line; the supervisor checks `get_session` every sweep.
 
 **Owner decisions (2026-11-16)**: none received this shift. Pending: #844 SHIP-OK; boss enable (`testers` first, recommended).
+
+## Supervisor 43 (2026-11-16 ~08:45 → handoff)
+
+Merged: #848, #847, #849. Open at handoff: #844 (owner SHIP-OK pending), #850 (#234 PR 3, fix lane running).
+
+**Mini-boss engine (#234, PR 2 = #849)**
+- **Boss signature moves now use the engine effects** (`packages/shared/src/data/server/boss-species.ts`): Count to Three (new, Rakelet, leaf, power 170, `windup`) replaces Mossy Nap; Leaf Pile Pounce `flinch` 25%; Full Name Shout `flinch` 35% (was dizzy 20%); Mama Bear Charge `low-energy` extraPercent **80**; Ask Your Mother `assist mama-bear-charge` + defense +1 at **20%** (the heal is gone). A data test pins the effect kinds per move.
+- **Plan deviations accepted (coordinator), decided by `pnpm sim:boss` (2000 games a cell):** Ask Your Mother's defense +1 chance 100 → 20, because with the plan's 100% a level-matched team of 3 won only 29% against Papa Brrr (the called-in Mama Bear Charge is a real hit and the defense stack kept growing); Mama Bear Charge extraPercent 100 → 80, because 100 left Mommentum and Papa Brrr on the 55% floor. After: team of 3 at level 61/56/56/56, team of 1 3–14%, +5 levels 94–98%, medians 6/6/8/6, spread 5. Papa Brrr's median fell from 10 to 8 rounds, closing the sup41 round-gate follow-up. Mommentum and Papa Brrr sit one point over the floor: re-run the sims before enabling bosses.
+- **`moveDefs` carry one hop of `assist`** (`apps/server/src/modules/battles/service.ts`, `defsFor`): a secret move that an in-battle move calls in travels with the battle so the client can name it ("Backup! Mama Bear Charge!"). One hop suffices because `checkMoveEffects` forbids an assist calling an assist. Tested in `boss/leak.test.ts` (a bag of only Papa Brrr yields the `mama-bear-charge` def and never names Mommentum; `leaks()` empty). The flavour hint (a kid who met Papa Brrr but not Mommentum gets that def) was accepted by sup42.
+- **Deploy note:** PR 2 changed the server content hash; bosses are `off` in production, so no live boss fight ended no-contest.
+
+**#850 (#234 PR 3) rulings so far**
+- The What's new "Try it" line must not tell kids to sip in a boss fight: a team battle's `teamAction` only ever sends `picks`, so there is no sip control. The line now reads "pick a Steady move to brace!".
+- A lane that spends its budget before captures exist hands the whole remainder (CI red, reviewer round 2, captures) to one fresh Opus fix lane rather than to coordinator-run agents; the coordinator still runs the render-check.
+
+**Chores and CI**
+- **#847 merged:** `hollowed-restore.spec.ts` dismisses Sprout's tray hint after `data-ready` (root cause recorded under Supervisor 42). Test-only.
+- **#784 tally this shift: +2** (#847 `e2e (iphone-webkit, 1)` and #849 `e2e (ipad-webkit, 1)`, both 55-minute cancels with no failing spec).
+
+**Process**
+- **Owner questions go in prose with numbered options** whenever lanes are active: the clickable dialog was killed five times this shift by lane messages and worker restarts.
+- **Supervisor context budget:** reading the full handoff docs and lane `get_session` JSON cost ~150k in the first hour. Read only the newest state block; poll lanes by their reports, not by `get_session`, unless a report is overdue.
+
+**Owner decisions (2026-11-16, supervisor 43 shift):** none received. Pending: #844 SHIP-OK; boss enable (`testers` first, recommended).
