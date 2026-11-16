@@ -82,6 +82,9 @@ test('restores a grey village tile by tile, wins it and names it (#306 PR 3)', a
   await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  // Sprout's hint is a dialog and hides covered flags; dismiss it or a village under it never shows.
+  await page.getByTestId('tray-hint-ok').tap();
+  await expect(page.getByTestId('tray-hint')).toBeHidden();
   const restoreButton = page.getByTestId('community-restore');
   const sheet = page.getByTestId('restore-sheet');
 
