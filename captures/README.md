@@ -5,7 +5,7 @@ Fights against real mini-bosses from `packages/shared/src/data/server/boss-speci
 | File | Device | Shows | Boss |
 | --- | --- | --- | --- |
 | `iphone-01-rest.png` | iPhone | Arena at rest, round 1, picking | Rakelet |
-| `iphone-02-windup-chip.png` | iPhone | Boss plate's "⏳ Winding up…" chip while picking (round 6) | Rakelet |
+| `iphone-02-windup-chip.png` | iPhone | Boss plate's "⏳ Winding up…" chip while picking (round 5), last in the chip row | Rakelet |
 | `iphone-03-windup.png` | iPhone | "Winding up!" sticker, power-up near its top, face showing | Rakelet |
 | `iphone-03b-windup-peak.png` | iPhone | Same power-up at its highest point (boss turned away mid-jiggle) | Rakelet |
 | `iphone-03c-windup-start.png` | iPhone | Same power-up, first frame (sticker popping in) | Rakelet |
@@ -14,12 +14,20 @@ Fights against real mini-bosses from `packages/shared/src/data/server/boss-speci
 | `iphone-06-backup.png` | iPhone | Log line "Backup! Mama Bear Charge!" (Ask Your Mother's assist) | Papa Brrr |
 | `iphone-07-fired-up.png` | iPhone | "Fired up! 🔥" (Mama Bear Charge, Mommentum at low energy) | Mommentum |
 | `ipad-01-rest.png` | iPad | Arena at rest, round 1, picking | Rakelet |
-| `ipad-02-windup-chip.png` | iPad | Boss plate's "⏳ Winding up…" chip while picking | Rakelet |
 | `ipad-03-windup.png` | iPad | "Winding up!" sticker, power-up near its top, face showing | Rakelet |
 | `ipad-03b-windup-peak.png` | iPad | Same power-up at its highest point (boss turned away) | Rakelet |
 | `ipad-04-landing.png` | iPad | "Here it comes!" (Count to Three lands) | Rakelet |
 
-Windup framing: in every windup frame (16 frames on each device), the top of the boss's head stays below the turn-order strip (`[data-testid=boss-order]`, CSS box y 231 to 265 on iPhone). On iPhone the margin at the highest point is about 5 CSS px (hair tips). The face is well clear on both devices.
+Windup framing: re-shot on `6ce0e62` (the ⏳ chip now keeps its slot and sits last in the plate's chip row, so the boss head is one height at rest and mid-round). The rest and windup frames (`*-01-rest`, `iphone-02-windup-chip`, `*-03-windup`, `*-03b-windup-peak`, `iphone-03c-windup-start`) are from this re-shoot; the other five are unchanged. `ipad-02-windup-chip.png` is removed rather than left stale: its re-shoot needs a second fight, and the spec stalled twice on the reload between fights (waiting on the lobby's "Visit patch"). `ipad-03-windup.png` and `ipad-03b-windup-peak.png` show the iPad plate with the ⏳ chip last in its one chip row. In every windup frame (16 on each device) the boss's head stays below the turn-order strip (`[data-testid=boss-order]`).
+
+Clearance at the highest point of the power-up, CSS px from the strip's bottom edge:
+
+| Device | Strip box (CSS y) | Head top (hair tips) | Eyes (top) |
+| --- | --- | --- | --- |
+| iPhone 393×852 | 231 to 265 | 293, **28 px** clear | 310, **45 px** clear |
+| iPad 820×1180 | 207 to 241 | 293.5, **52 px** clear | the face is well clear |
+
+Before `6ce0e62` the iPhone head cleared the strip by about 5 px (the ⏳ chip wrapped the chip row mid-round and grew the head). Measured from the PNGs: the topmost boss pixel row (differs from that row's background) and the topmost dark (eye) pixel row inside the boss's columns, at DPR 2. At rest the plate keeps an empty row for the hidden ⏳ chip on iPhone (round-1 non-blocker 3, a coordinator carry-over).
 
 ## How they were shot
 
