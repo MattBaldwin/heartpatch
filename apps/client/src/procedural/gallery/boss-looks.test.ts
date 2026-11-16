@@ -2,8 +2,10 @@ import { GAME_DATA } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { bossLooksProblem, loadBossLooks } from './boss-looks.js';
 
-const json = (status: number, body: unknown): typeof fetch =>
-  (() => Promise.resolve(new Response(JSON.stringify(body), { status }))) as typeof fetch;
+const json =
+  (status: number, body: unknown): typeof fetch =>
+  () =>
+    Promise.resolve(new Response(JSON.stringify(body), { status }));
 
 describe('loadBossLooks', () => {
   const body = GAME_DATA.species[0];

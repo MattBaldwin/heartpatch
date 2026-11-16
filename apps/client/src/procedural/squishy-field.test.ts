@@ -862,7 +862,7 @@ describe('SquishyField rare finds glow (#391)', () => {
   it.each(['low', 'high', 'hero'] as const)(
     'a bent + accent squishy adds at most the bent and bent-toe batches at %s detail',
     (lod) => {
-      const meshesOf = (parts: readonly string[]): Set<string> => {
+      const meshesOf = (parts: string[]): Set<string> => {
         const scene = new Scene(engine);
         const f = new SquishyField<SquishyDetail>(scene, { registry, lod, shadows: false });
         f.add({ ...species, visual: { ...species.visual, parts } }, 'p', { x: 0, z: 0 });
