@@ -229,7 +229,9 @@ export function checkServerGameData(input: unknown, gameData: GameData): string[
       report,
     );
 
-    // #234: a secret move may call in a public one, and the other way round.
+    // #234: a secret move may call in a public or secret one. A public move that
+    // calls in a secret one is refused by `checkGameData` as an unknown move, so
+    // a secret move's id never ships to the client.
     const moveById = new Map([...gameData.moves, ...data.secretMoves].map((m) => [m.id, m]));
     data.secretMoves.forEach((m, i) => {
       for (const problem of moveEffectProblems(m, moveById)) {

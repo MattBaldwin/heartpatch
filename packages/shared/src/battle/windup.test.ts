@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ai, battleSetup, PLAYER, squishy } from '../../tests/fixtures/battle.js';
+import { ai, battleSetup, FIXTURE_POTIONS, PLAYER, squishy } from '../../tests/fixtures/battle.js';
 import {
   FIXTURE_COUNTDOWN as countdown,
   FIXTURE_EFFECT_CONTENT as content,
@@ -44,6 +44,15 @@ const move = (id: string, item?: string): BattleChoice => ({
   move: id,
   ...(item && { item }),
 });
+
+/** The effect fixtures plus the fixture potions (#214). */
+const potions = createBattleContent(
+  { ...FIXTURE_EFFECT_DATA, resources: FIXTURE_POTIONS },
+  FIXTURE_EFFECT_RULES,
+);
+const BREW = 'fixture-brave-brew';
+const COCOA = 'fixture-cozy-cocoa';
+const SOUP = 'fixture-hearty-soup';
 
 const counterbun = (speed: number) => squishy('fixture-counterbun', { stats: sturdy(speed) });
 const bonkbun = (speed: number) => squishy('fixture-bonkbun', { stats: sturdy(speed) });
@@ -159,6 +168,16 @@ describe('windup (#234)', () => {
       expect(state.sides.a.squishies[0]!.windup).toBeUndefined();
     });
 
+    it('on a bare potion, before the sip', () => {
+      let state = startBattle(potions, duel('bare', [counterbun(80)], [bonkbun(50)]));
+      state = patchSlot(state, 'a', 0, winding);
+      state = act(state, { a: { type: 'item', item: SOUP }, b: move('fixture-bonk') }, potions);
+      expect(turnLog(state, 1).slice(0, 2)).toEqual([`windup-lost a0 ${COUNT}`, 'item a0']);
+      expect(turnLog(state, 1)).not.toContain(`move a0 ${COUNT}`);
+      expect(state.sides.a.squishies[0]!.windup).toBeUndefined();
+      expect(state.sides.a.itemsUsed).toEqual([SOUP]);
+    });
+
     it('on a Heart Charm', () => {
       let state = startBattle(content, duel('charm', [counterbun(80)], [bonkbun(50)], ai('wild')));
       state = patchSlot(state, 'a', 0, winding);
@@ -166,6 +185,36 @@ describe('windup (#234)', () => {
       expect(turnLog(state, 1).slice(0, 2)).toEqual([`windup-lost a0 ${COUNT}`, 'capture b0']);
       expect(state.sides.a.squishies[0]!.windup).toBeUndefined();
     });
+  });
+
+  it('a sip with the pending move keeps the count and lands it', () => {
+    let state = startBattle(potions, duel('sip', [counterbun(80)], [bonkbun(50)]));
+    state = patchSlot(state, 'a', 0, winding);
+    state = act(state, { a: move(COUNT, COCOA), b: move('fixture-bonk') }, potions);
+    const log = turnLog(state, 1);
+    expect(log.slice(0, 3)).toEqual(['item a0', `move a0 ${COUNT}`, 'hit b0']);
+    expect(log).not.toContain(`windup-lost a0 ${COUNT}`);
+    expect(state.sides.a.squishies[0]!.windup).toBeUndefined();
+    expect(state.sides.a.itemsUsed).toEqual([COCOA]);
+  });
+
+  it('legal choices while winding up: the pending move, bare and with each potion, a swap, a Heart Charm and the bare potions', () => {
+    let state = startBattle(
+      potions,
+      duel('legal', [counterbun(80), bonkbun(80)], [bonkbun(50)], ai('wild')),
+    );
+    state = patchSlot(state, 'a', 0, winding);
+    expect(legalChoices(state, 'a', potions)).toEqual([
+      move(COUNT),
+      move(COUNT, BREW),
+      move(COUNT, COCOA),
+      move(COUNT, SOUP),
+      { type: 'swap', slot: 1 },
+      { type: 'capture' },
+      { type: 'item', item: BREW },
+      { type: 'item', item: COCOA },
+      { type: 'item', item: SOUP },
+    ]);
   });
 
   it('being hit never interrupts it', () => {

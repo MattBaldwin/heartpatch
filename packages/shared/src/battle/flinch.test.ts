@@ -131,4 +131,48 @@ describe('flinch (#234)', () => {
     expect(turnLog(next, 1)).toEqual(['move a0 fixture-shout', 'hit b0', 'flinch b0']);
     expect(next.sides.b.squishies[0]!.status).toEqual({ id: 'dizzy', turnsLeft: 2 });
   });
+
+  it('a boss with two actions that flinches loses only its first', () => {
+    expect(content.rules.boss?.actionsPerRound).toBe(2);
+    const state = startBattle(
+      content,
+      teamSetup(
+        'boss-two',
+        [
+          member(0, 'fixture-shoutbun', { stats: sturdy(999) }),
+          member(1, 'fixture-bonkbun', { stats: sturdy(1) }),
+          member(2, 'fixture-bonkbun', { stats: sturdy(1) }),
+        ],
+        { speciesId: 'fixture-trickgourd' },
+      ),
+    );
+    const next = act(state, {
+      a: {
+        type: 'team',
+        picks: [
+          { slot: 0, move: 'fixture-shout' },
+          { slot: 1, move: 'fixture-bonk' },
+          { slot: 2, move: 'fixture-bonk' },
+        ],
+      },
+    });
+    const log = turnLog(next, 1);
+    expect(log.slice(0, 3)).toEqual(['move a0 fixture-shout', 'hit b0', 'flinch b0']);
+    expect(log.filter((e) => e === 'flinch b0')).toHaveLength(1);
+    expect(log.filter((e) => e.startsWith('move b0'))).toHaveLength(1);
+
+    // Control: with no flinch the same boss takes both actions.
+    const calm = startBattle(
+      content,
+      teamSetup(
+        'boss-two',
+        [0, 1, 2].map((slot) => member(slot, 'fixture-bonkbun', { stats: sturdy(slot ? 1 : 999) })),
+        { speciesId: 'fixture-trickgourd' },
+      ),
+    );
+    const both = act(calm, {
+      a: { type: 'team', picks: [0, 1, 2].map((slot) => ({ slot, move: 'fixture-bonk' })) },
+    });
+    expect(turnLog(both, 1).filter((e) => e.startsWith('move b0'))).toHaveLength(2);
+  });
 });

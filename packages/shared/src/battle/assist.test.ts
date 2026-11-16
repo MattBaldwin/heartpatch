@@ -8,6 +8,7 @@ import {
   FIXTURE_FLAT_EFFECT_CONTENT as flat,
   FIXTURE_SPARK_SHOWER,
   member,
+  patchSlot,
   sturdy,
   teamSetup,
   turnLog,
@@ -20,8 +21,11 @@ import { applyBattleAction, startBattle } from './engine.js';
 import { damageBeforeVariance } from './formulas.js';
 import type { BattleState } from './state.js';
 
-const act = (using: BattleContent, state: BattleState, choices: { a?: BattleChoice }) =>
-  applyBattleAction(using, state, { type: 'turn', choices });
+const act = (
+  using: BattleContent,
+  state: BattleState,
+  choices: { a?: BattleChoice; b?: BattleChoice },
+) => applyBattleAction(using, state, { type: 'turn', choices });
 
 const trickgourd = FIXTURE_EFFECT_DATA.species.find((s) => s.id === 'fixture-trickgourd')!;
 
@@ -72,7 +76,7 @@ describe('assist (#234)', () => {
     const next = act(flat, state, {
       a: { type: 'move', move: backup.id },
       b: { type: 'move', move: 'fixture-bonk' },
-    } as never);
+    });
     const log = turnLog(next, 1);
     // Backup's effects in order: the assist, then its own defense +1.
     expect(log.slice(0, 5)).toEqual([
@@ -111,6 +115,30 @@ describe('assist (#234)', () => {
     expect(one[at + 1]).toBe(`move b0 ${bonk.id}`);
     expect(one[at + 2]).toMatch(/^hit a[012]$/);
     expect(one[at + 3]).not.toMatch(/^hit/);
+  });
+
+  it('calls nobody in when the parent already tuckered out every foe', () => {
+    const bonkThenCall: Move = {
+      ...bonk,
+      id: 'fixture-bonk-backup',
+      accuracy: 100,
+      effects: [{ type: 'assist', move: bonk.id }],
+    };
+    const using = withBoss([bonkThenCall.id], [bonkThenCall]);
+    let state = startBattle(
+      using,
+      teamSetup('tuckered', [member(0, 'fixture-bonkbun', { stats: sturdy(1) })], {
+        speciesId: 'fixture-askgourd',
+      }),
+    );
+    state = patchSlot(state, 'a', 0, { energy: 1 });
+    const next = act(using, state, {
+      a: { type: 'team', picks: [{ slot: 0, move: 'fixture-bonk' }] },
+    });
+    const log = turnLog(next, 1);
+    expect(log.slice(0, 2)).toEqual([`move b0 ${bonkThenCall.id}`, 'hit a0']);
+    expect(next.sides.a.squishies[0]!.energy).toBe(0);
+    expect(log.filter((e) => e.startsWith('assist') || e === `move b0 ${bonk.id}`)).toEqual([]);
   });
 
   it('never nests (data check refuses)', () => {

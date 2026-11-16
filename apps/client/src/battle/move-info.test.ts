@@ -4,6 +4,7 @@ import {
   GAME_DATA,
   speciesMoveKinds,
   type Move,
+  type MoveEffect,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import {
@@ -71,6 +72,43 @@ describe('describeMove', () => {
   it('labels the whole button for a screen reader', () => {
     const info = describeMove(move('ember-boop'), me, plain);
     expect(moveLabel('Ember Boop', info)).toBe('Ember Boop. Boop. Takes their energy. Power 40');
+  });
+});
+
+describe('the #234 effect sentences', () => {
+  const withEffect = (effect: MoveEffect): string[] =>
+    describeMove({ ...move('ember-boop'), effects: [effect] }, me, plain).more.slice(2);
+
+  it('reads windup, flinch, low-energy and assist in the "More" view', () => {
+    expect(withEffect({ type: 'windup' })).toEqual([
+      'Takes a round to wind up, then hits next round.',
+    ]);
+    expect(withEffect({ type: 'flinch', chance: 100 })).toEqual([
+      'Might make them flinch and miss their move.',
+    ]);
+    expect(withEffect({ type: 'flinch', chance: 30 })).toEqual([
+      'Might make them flinch and miss their move (30% chance).',
+    ]);
+    expect(withEffect({ type: 'low-energy', extraPercent: 50 })).toEqual([
+      'Hits harder the lower your energy: up to 50% harder.',
+    ]);
+    expect(withEffect({ type: 'assist', move: 'ember-boop' })).toEqual([
+      'Calls in a friend to help!',
+    ]);
+  });
+
+  it('uses no avoided words', () => {
+    const effects: MoveEffect[] = [
+      { type: 'windup' },
+      { type: 'flinch', chance: 100 },
+      { type: 'flinch', chance: 30 },
+      { type: 'low-energy', extraPercent: 50 },
+      { type: 'assist', move: 'ember-boop' },
+    ];
+    for (const effect of effects) {
+      const text = withEffect(effect).join(' ');
+      expect(findAvoidedWords(text), text).toEqual([]);
+    }
   });
 });
 
