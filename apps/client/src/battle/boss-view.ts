@@ -33,7 +33,7 @@ export const BOSS_TEXT = {
   areaTag: '🌀 Hits all',
   /** A move that takes a round to wind up (#234). */
   windupTag: '⏳ Winds up',
-  /** The boss plate's chip while it winds up (#234): brace! */
+  /** The boss plate's chip while it winds up (#234). */
   windingUp: '⏳ Winding up…',
   pickHeader: (name: string) => `What should ${name} do?`,
   picking: 'Picking…',

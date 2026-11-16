@@ -1356,9 +1356,18 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   font-weight: 800;
 }
 
-.boss-round[hidden],
-.boss-order[hidden] {
+.boss-round[hidden] {
   display: none;
+}
+
+/*
+ * A hidden order strip keeps its room (#234): the camera frames the boss under
+ * the boss head, measured once per layout change, so a strip that took no room
+ * at rest would cover the boss's face when it shows mid-round (a windup's
+ * power-up lifts it right up to that edge).
+ */
+.boss-order[hidden] {
+  visibility: hidden;
 }
 
 .boss-order-dots {

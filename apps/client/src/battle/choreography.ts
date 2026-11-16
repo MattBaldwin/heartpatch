@@ -764,7 +764,7 @@ export function planStep(step: PlaybackStep, ctx: PlanContext): StepPlan {
       cam = camera({ focus: step.side });
       break;
     case 'effect': {
-      // A windup (#234) powers up like a boost, and jiggles: brace!
+      // A windup (#234) powers up like a boost, and jiggles.
       const up = step.squish === 'bounce' || step.windup === true;
       const status: EffectKind = step.status ?? 'droop';
       if (up) {

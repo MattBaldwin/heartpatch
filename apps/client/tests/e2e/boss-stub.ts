@@ -46,14 +46,13 @@ export interface BossStubOptions {
   readonly openRounds?: number;
   /**
    * The boss's #234 trick in each open round, in order (a plain stomp past
-   * the end): `windup` charges Count to Three (no hits), `land` lands it,
-   * `flinch` stomps and makes the first friend flinch (no move for it), and
+   * the end): `windup` charges Count to Three (no hits), `land` lands it, and
    * `assist` calls in a friend whose stomp hits everyone.
    */
   readonly tricks?: readonly BossTrick[];
 }
 
-export type BossTrick = 'windup' | 'land' | 'flinch' | 'assist';
+export type BossTrick = 'windup' | 'land' | 'assist';
 
 export interface BossStub {
   /** The `team` actions the client sent. */
@@ -74,12 +73,11 @@ const DAY = 24 * 60 * 60 * 1000;
 const STOMP = 'big-stomp';
 /**
  * The #234 trick moves' ids: stub copies shaped like the real boss moves (Count
- * to Three, Full Name Shout, Ask Your Mother), each spread from the area stomp, so
+ * to Three, Ask Your Mother), each spread from the area stomp, so
  * unlike the real one-foe Count to Three, the stub's hits everyone.
  */
 const TRICK = {
   windup: 'stub-count-to-three',
-  flinch: 'stub-full-name-shout',
   assist: 'stub-ask-your-mother',
 } as const;
 /** The shipped boss hp rule; a stub with no boss rule would test a fight that can't happen. */
@@ -109,12 +107,6 @@ function toBoss(b: Battle, options: BossStubOptions): Battle {
       name: 'Count to Three',
       power: base.power * 2,
       effects: [{ type: 'windup' }],
-    },
-    {
-      ...stomp,
-      id: TRICK.flinch,
-      name: 'Full Name Shout',
-      effects: [{ type: 'flinch', chance: 35 }],
     },
     {
       ...stomp,
@@ -202,14 +194,11 @@ function openRound(
     log.push({ ...at('b', 0), type: 'move', move: STOMP });
     stompAll();
   } else {
-    const move = trick === 'land' ? TRICK.windup : trick === 'flinch' ? TRICK.flinch : bossMove;
-    log.push({ ...at('b', 0), type: 'move', move });
+    log.push({ ...at('b', 0), type: 'move', move: trick === 'land' ? TRICK.windup : bossMove });
     stompAll();
-    if (trick === 'flinch') log.push({ ...at('a', out[0] ?? 0), type: 'flinch' });
   }
-  const flinched = trick === 'flinch' ? (out[0] ?? 0) : null;
   let left = (boss['energy'] as number | undefined) ?? boss.stats.hp;
-  for (const pick of picks.filter((p) => p.slot !== flinched)) {
+  for (const pick of picks) {
     left = Math.max(1, Math.round(left * 0.85));
     log.push({ ...at('a', pick.slot), type: 'move', move: pick.move });
     log.push({ ...at('b', 0), type: 'hit', amount: 10, energy: left, effectiveness: 'normal' });

@@ -270,9 +270,12 @@ interface MoveCue {
   readonly landing: boolean;
   /** An `assist` just called it in. */
   readonly backup: boolean;
-  /** A low-energy move, and its user is at half energy or less. */
+  /** A low-energy move, and its user is at `FIRED_UP_AT_OR_BELOW`% energy or less. */
   readonly firedUp: boolean;
 }
+
+/** "Fired up!" shows once a low-energy move's user is at or below this % of its energy. */
+const FIRED_UP_AT_OR_BELOW = 50; // TUNE: the cue only; the engine's low-energy bonus scales smoothly
 
 /**
  * The #234 cues for every `move` in the log, by log index. The whole log is
@@ -317,7 +320,7 @@ function moveCues(battle: PlayerBattle, content: BattleContent): Map<number, Mov
   }
   const firedUp = new Set<number>();
   lowMoves.forEach((hp, i) => {
-    if ((energyAt.get(i) ?? hp) * 2 <= hp) firedUp.add(i);
+    if ((energyAt.get(i) ?? hp) * 100 <= hp * FIRED_UP_AT_OR_BELOW) firedUp.add(i);
   });
   const cues = new Map<number, MoveCue>();
   const winding = new Set<string>();

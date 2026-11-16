@@ -178,13 +178,14 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
       : new Map<string, MoveKind>();
     // Winding up (#234): only the pending move, as `pickerFor` steps it.
     const ids = me.windup ? [me.windup.move] : me.moves;
+    const moveName = (id: string) => names.moves.get(id)?.name;
     return ids.map((id) => {
       const move = names.moves.get(id);
       const tags: string[] = [];
       if (move) {
         const element = ELEMENT_NAMES.get(move.element);
         if (element) tags.push(element);
-        const info = describeMove(move, me, them, { style: styles.get(id) });
+        const info = describeMove(move, me, them, { style: styles.get(id), moveName });
         tags.push(`${info.look.icon} ${info.look.label}`);
       }
       return {
