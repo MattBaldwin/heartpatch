@@ -12,7 +12,7 @@ import type { Body, Part } from '../schemas/data/visuals.js';
  * comments, may name a boss species. The client bundle check bans every
  * secret species id and name as a substring, source maps included, so the
  * lines are "the rake line", "the mom line", "the dad line" and "the kart
- * line" here (`boss-species.test.ts` reads this file to check).
+ * line" here (a shared boundary test reads this file to check).
  *
  * Hair sits in `crown` and `mane`, a moustache or rake tines in `fangs`, a
  * cap brim, goggles or rivets in `horns`, and a cardigan's buttons in
@@ -20,7 +20,7 @@ import type { Body, Part } from '../schemas/data/visuals.js';
  * primitives. The rake line uses the #234 kit extension (ART_BIBLE §1.9):
  * `box` and `bent` shapes, the `metal` colour, ring `splay`, `anchor:
  * 'front'` with `standoff`, `replaces: 'mouth'`, and the two-tone `accent`.
- * Every body and part here is used by some boss form (`boss-species.test.ts`).
+ * Every body and part here is used by some boss form (checked by a shared boundary test).
  */
 
 /**

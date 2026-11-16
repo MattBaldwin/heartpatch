@@ -40,7 +40,7 @@ export const BOSS_MOVES: Move[] = [
   {
     id: 'rake-mouth',
     name: 'Rake Mouth',
-    description: 'A big, scritchy rake-chomp. It might leave you a bit dizzy.',
+    description: 'A big, scritchy rake-scoop. It might leave you a bit dizzy.',
     element: 'leaf',
     power: 90, // TUNE:
     accuracy: 95, // TUNE:
