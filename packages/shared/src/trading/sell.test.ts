@@ -6,13 +6,7 @@ import { recipeBookPages, recipePageKey } from '../recipe-book/index.js';
 import type { ClothingRarity } from '../schemas/data/clothing.js';
 import type { SellRules } from '../schemas/data/trading.js';
 import { checkSellRules } from '../schemas/data/trading.js';
-import {
-  AnySellRequestSchema,
-  SellBasketRequestSchema,
-  SellRequestSchema,
-  type SellLine,
-  type SellView,
-} from '../schemas/trading.js';
+import { SellBasketRequestSchema, type SellLine, type SellView } from '../schemas/trading.js';
 import {
   basketProblem,
   basketTotal,
@@ -302,17 +296,19 @@ describe('selling a basket (#655)', () => {
     ).toBe(true);
   });
 
-  it('the sell route still takes the one-line request alongside the basket', () => {
-    const legacy = { kind: 'clothing', q: 0, r: 0, itemId: 'ghost-cape' };
-    expect(SellRequestSchema.parse(legacy)).toEqual(legacy);
-    expect(AnySellRequestSchema.parse(legacy)).toEqual(legacy);
+  it('takes only a basket: the old one-line sale shape is refused (#655 E)', () => {
+    for (const legacy of [
+      { kind: 'clothing', q: 0, r: 0, itemId: 'ghost-cape' },
+      { kind: 'item', q: 0, r: 0, itemId: 'timber', lots: 2 },
+    ]) {
+      expect(SellBasketRequestSchema.safeParse(legacy).success).toBe(false);
+    }
     const basket = {
       kind: 'basket',
       q: 0,
       r: 0,
       lines: [{ kind: 'item', itemId: 'timber', lots: 2 }],
     };
-    expect(AnySellRequestSchema.parse(basket)).toEqual(basket);
-    expect(SellRequestSchema.safeParse(basket).success).toBe(false);
+    expect(SellBasketRequestSchema.parse(basket)).toEqual(basket);
   });
 });

@@ -8,7 +8,6 @@ import {
   MapResponseSchema,
   SELL_RULES,
   SellBasketResponseSchema,
-  SellResponseSchema,
   SellViewResponseSchema,
   type PublicUser,
   type SellLine,
@@ -184,6 +183,7 @@ describe.skipIf(!url)('selling to the trading post (#601 PR 3, needs DATABASE_UR
     body: object,
     headers: Record<string, string> = {},
   ) => call(server, 'POST', `/maps/${mapId}/posts/sell`, kid, body, headers);
+  /** A one-line basket of `lots` lots of an item. */
   const sellLots = (
     server: FastifyInstance,
     kid: Player,
@@ -191,13 +191,26 @@ describe.skipIf(!url)('selling to the trading post (#601 PR 3, needs DATABASE_UR
     itemId: string,
     lots: number,
     headers: Record<string, string> = {},
-  ) => sell(server, kid, at.mapId, { ...at.post, kind: 'item', itemId, lots }, headers);
+  ) =>
+    sell(
+      server,
+      kid,
+      at.mapId,
+      { ...at.post, kind: 'basket', lines: [{ kind: 'item', itemId, lots }] },
+      headers,
+    );
+  /** A one-line basket of one spare piece. */
   const sellPiece = (
     server: FastifyInstance,
     kid: Player,
     at: { mapId: string; post: { q: number; r: number } },
     itemId: string,
-  ) => sell(server, kid, at.mapId, { ...at.post, kind: 'clothing', itemId });
+  ) =>
+    sell(server, kid, at.mapId, {
+      ...at.post,
+      kind: 'basket',
+      lines: [{ kind: 'clothing', itemId, count: 1 }],
+    });
 
   const bag = async (mapId: string, kid: PublicUser) => {
     const rows = await db.query.inventories.findMany({
@@ -293,11 +306,11 @@ describe.skipIf(!url)('selling to the trading post (#601 PR 3, needs DATABASE_UR
 
     const res = await sellLots(server, kid, at, 'timber', 3);
     expect(res.statusCode, res.body).toBe(200);
-    const sold = SellResponseSchema.parse(res.json());
-    // A legacy one-line request (#655) answers in the legacy shape, not a basket's.
-    expect(res.json<{ sold: object }>().sold).toEqual({
-      kind: 'item',
-      itemId: 'timber',
+    const sold = SellBasketResponseSchema.parse(res.json());
+    expect(sold.sold).toEqual({
+      lines: [
+        { kind: 'item', itemId: 'timber', quantity: 3 * TIMBER.lot, coins: 3 * TIMBER.coins },
+      ],
       quantity: 3 * TIMBER.lot,
       coins: 3 * TIMBER.coins,
     });
@@ -389,9 +402,8 @@ describe.skipIf(!url)('selling to the trading post (#601 PR 3, needs DATABASE_UR
     const coins = SELL_RULES.clothing[CLOTHING_BY_ID.get(BEANIE)!.rarity];
     const res = await sellPiece(server, kid, at, BEANIE);
     expect(res.statusCode, res.body).toBe(200);
-    expect(SellResponseSchema.parse(res.json()).sold).toEqual({
-      kind: 'clothing',
-      itemId: BEANIE,
+    expect(SellBasketResponseSchema.parse(res.json()).sold).toEqual({
+      lines: [{ kind: 'clothing', itemId: BEANIE, quantity: 1, coins }],
       quantity: 1,
       coins,
     });
@@ -455,6 +467,24 @@ describe.skipIf(!url)('selling to the trading post (#601 PR 3, needs DATABASE_UR
       'A patch-mate asked for that one in a trade! Answer their offer first.',
     );
     expect((await pieces(kid, BEANIE)).length).toBe(2);
+  });
+
+  it('refuses the old one-line sale shape with a 400 and moves nothing (#655 E)', async () => {
+    const server = await start();
+    const kid = await player();
+    const at = await patch(server, kid, { timber: 30 });
+    await givePieces(kid, BEANIE, 2);
+    for (const legacy of [
+      { ...at.post, kind: 'item', itemId: 'timber', lots: 1 },
+      { ...at.post, kind: 'clothing', itemId: BEANIE },
+    ]) {
+      const res = await sell(server, kid, at.mapId, legacy);
+      expect(res.statusCode, res.body).toBe(400);
+      expect(errorOf(res).code).toBe('VALIDATION_FAILED');
+    }
+    expect(await bag(at.mapId, kid)).toEqual({ timber: 30 });
+    expect(await pieces(kid, BEANIE)).toHaveLength(2);
+    expect(await heartRows(at.mapId, kid)).toEqual([]);
   });
 
   it('needs a post the kid can use, a member of the patch, and not the Glade', async () => {
