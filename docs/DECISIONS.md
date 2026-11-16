@@ -2458,3 +2458,20 @@ Merged: #848, #847, #849. Open at handoff: #844 (owner SHIP-OK pending), #850 (#
 - **Supervisor context budget:** reading the full handoff docs and lane `get_session` JSON cost ~150k in the first hour. Read only the newest state block; poll lanes by their reports, not by `get_session`, unless a report is overdue.
 
 **Owner decisions (2026-11-16, supervisor 43 shift):** none received. Pending: #844 SHIP-OK; boss enable (`testers` first, recommended).
+
+## Supervisor 44 (2026-11-16 ~10:45 → handoff)
+
+Merged: #850 (#234 PR 3: client cues and copy for the new move effects; squash `cf7cdad` → `2ef2fa6`, reviewer round 3 APPROVE, one #784 cancel accepted). Open at handoff: #844 (owner SHIP-OK pending).
+
+**#850 (#234 PR 3) rulings**
+- **Merged on the code gates with the captures held back.** Reviewer round 3 APPROVE at the head, CI green except a known flake, merge-tree clean. The captures failed the coordinator's render-check for reasons that are about the capture setup (stub names and stand-in moves, a transient sticker missed on iPad, a missing low-energy frame) plus one polish concern (the boss's windup power-up pushes its face behind the Order strip on iPhone). None of those is a defect in the merged code, so they go to a follow-up chore with real-boss re-captures rather than holding a reviewed PR. The owner sees captures only after a PASS.
+- **"Backup! Big Stomp!" in a stub capture is correct.** The e2e stub sends stand-in move defs; a real Papa Brrr reads "Backup! Mama Bear Charge!" (unit-tested in the PR, confirmed by the fix lane).
+- **The boss callout stays silent for a backup or landing move** (carried from PR 1's round-1 note): the caption carries "Backup! <move>!" and "Here it comes!" is the landing sticker. A render-checker flagged the missing on-stage cue for backup; this is the recorded design, not a gap.
+- **Recorded from the PR body:** `.boss-chip[hidden] { display: none }`. `.boss-chip`'s `display: inline-flex` beat the `hidden` attribute, so the Supervisor 41 "hide the stomps chip at one action" ruling did not hold until this fix.
+- **Reviewer round-3 non-blockers may be merged around** when the reviewer marks them non-blocking and the lane is out of budget: they go to one small `Chore:` lane rather than a fourth round on the same PR.
+
+**Process**
+- **Supervisor context is inflated by MCP reconnects.** Each `claude-code-remote` reconnect re-sends the tool schema (~30k tokens). Six reconnects in 70 minutes put supervisor 44 at 280k with under 60k of real work. Until that changes, a supervisor shift is about 90 minutes; start the handoff docs at ~220k.
+- **Sweep APPROVE counter caveat:** a single lane comment that holds both "REQUEST CHANGES" (an earlier round) and the final APPROVE is excluded by the `test("REQUEST CHANGES")|not` filter. Read the comment.
+
+**Owner decisions (2026-11-16, supervisor 44 shift):** none received. Pending: #844 SHIP-OK; boss enable (`testers` first, recommended).
