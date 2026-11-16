@@ -1712,21 +1712,28 @@ const MILESTONE: ClothingItem[] = [
     sources: ['milestone'],
     tradable: false,
     visual: {
+      // A deep berry wrap: darker than every default top (pink to sunflower), so it reads
+      // against any outfit. A fat roll sits proud of the chin, with a knot and two uneven
+      // tails hanging free; the end patches are tail-wide squares, not buttons. TUNE: by eye.
       pieces: [
-        { shape: 'ellipsoid', at: [0, 0.46, 0], size: [1.14, 0.3, 1.14], color: '#ff7f6e' },
-        { shape: 'ellipsoid', at: [-0.32, 0.46, -0.46], size: [0.4, 0.28, 0.26], color: '#5aa0e8' },
-        { shape: 'ellipsoid', at: [0, 0.46, -0.52], size: [0.4, 0.28, 0.26], color: '#62c9a0' },
-        { shape: 'ellipsoid', at: [0.32, 0.46, -0.46], size: [0.4, 0.28, 0.26], color: '#b48be0' },
-        { shape: 'ellipsoid', at: [-0.54, 0.46, 0], size: [0.26, 0.28, 0.4], color: '#62c9a0' },
-        { shape: 'ellipsoid', at: [0.54, 0.46, 0], size: [0.26, 0.28, 0.4], color: '#5aa0e8' },
-        { shape: 'capsule', at: [0.24, 0.1, -0.5], size: [0.22, 0.5, 0.1], color: '#ff7f6e' },
-        { shape: 'capsule', at: [0.38, 0.06, -0.48], size: [0.2, 0.44, 0.1], color: '#b48be0' },
+        { shape: 'ellipsoid', at: [0, 0.4, -0.04], size: [1.2, 0.42, 1.2], color: '#8f2d5b' },
         {
           shape: 'ellipsoid',
-          at: [0.24, -0.06, -0.56],
-          size: [0.14, 0.14, 0.06],
+          at: [-0.36, 0.44, -0.52],
+          size: [0.34, 0.26, 0.24],
           color: '#fff3d6',
         },
+        { shape: 'ellipsoid', at: [-0.6, 0.42, -0.04], size: [0.24, 0.26, 0.34], color: '#ff8a5c' },
+        { shape: 'ellipsoid', at: [0.6, 0.42, -0.04], size: [0.24, 0.26, 0.34], color: '#fff3d6' },
+        // The knot, off-centre, with a cream stitch.
+        { shape: 'ellipsoid', at: [0.22, 0.26, -0.62], size: [0.3, 0.28, 0.2], color: '#a8386a' },
+        { shape: 'ellipsoid', at: [0.22, 0.26, -0.72], size: [0.14, 0.12, 0.06], color: '#fff3d6' },
+        // Left tail: the long one, down to the thigh, ending in a gold patch.
+        { shape: 'capsule', at: [0.12, -0.12, -0.56], size: [0.24, 1.0, 0.1], color: '#8f2d5b' },
+        { shape: 'capsule', at: [0.12, -0.6, -0.57], size: [0.24, 0.2, 0.1], color: '#ffc94d' },
+        // Right tail: shorter, ending in an orange patch.
+        { shape: 'capsule', at: [0.4, -0.04, -0.54], size: [0.24, 0.78, 0.1], color: '#a8386a' },
+        { shape: 'capsule', at: [0.4, -0.4, -0.55], size: [0.24, 0.18, 0.1], color: '#ff8a5c' },
       ],
     },
   },
