@@ -1,7 +1,6 @@
 import { z } from 'zod';
-import { ContentIdSchema, DisplayNameSchema } from './common.js';
+import { ContentIdSchema, DisplayNameSchema, HexColorSchema } from './common.js';
 import { checkRef, checkUniqueIds, formatDataIssues, type Report } from './issues.js';
-import { HexColorSchema } from './species.js';
 import { PartShapeSchema } from './visuals.js';
 
 // Keepers: the character each player shows up as (design doc §23), in the

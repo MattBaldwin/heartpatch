@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ContentIdSchema, DisplayNameSchema } from './common.js';
+import { ContentIdSchema, DisplayNameSchema, HexColorSchema } from './common.js';
 import { ElementIdSchema } from './elements.js';
 
 /*
@@ -69,11 +69,8 @@ export const CrookedRoomSchema = z.strictObject({
   }),
   /** Wallpaper and floor colours once it's lit (it's grey until then). */
   look: z.strictObject({
-    paper: z.string().regex(/^#[0-9a-f]{6}$/),
-    floor: z
-      .string()
-      .regex(/^#[0-9a-f]{6}$/)
-      .optional(),
+    paper: HexColorSchema,
+    floor: HexColorSchema.optional(),
   }),
   /** Its crooked things, in bit order (`far_hollow_rooms.fixed`). */
   things: z.array(CrookedThingSchema).max(CROOKED_HOUSE_MAX_BITS),

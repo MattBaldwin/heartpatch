@@ -14,11 +14,14 @@ import { bentProportions, bentTip, partArrays } from './part-shapes.js';
 import { partMatrix } from './placement.js';
 
 /**
- * Byte-identity guard for the procedural kit (#234 kit extension): adding
- * new opt-in options (the `box` shape, `replaces`) must
- * not move a single vertex or matrix of any shipped species. The hashes were
- * taken on the code before the extension; if one changes, an existing
- * species renders differently.
+ * Byte-identity guard for the procedural kit (#234 kit extension, #810, #838):
+ * every opt-in option the boss kit added must not move a single vertex or
+ * matrix of any shipped species. That covers the `box` and `bent` shapes, the
+ * `metal` role, ring `splay`, `anchor: 'front'` with `standoff`,
+ * `replaces: 'mouth'` and the two-tone `accent` (each unset on every shipped
+ * part). Shapes are pinned at the `low`, `high` and `hero` detail levels and
+ * every shipped placement once. The hashes were taken on the code before the
+ * extension; if one changes, an existing species renders differently.
  */
 
 const registry = visualRegistry(GAME_DATA);
