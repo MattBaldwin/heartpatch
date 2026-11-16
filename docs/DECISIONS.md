@@ -2336,3 +2336,59 @@ Merged: #817, #814, #818, #819, #821, #824, #820, #826, #823, #825, #816, #822, 
 - Rakelet v15 (#810), after 9 render-check rounds.
 
 **Pending merge** (decisions above come from verdicts on open PRs): #827 (190e arena client), #829 (386f mates client), #810 (234a boss art), #830 (chore: deflake).
+
+### 2026-11-16 (night)
+
+This block supersedes the "Pending owner decisions" and "Pending merge" lists above. Merged since: #827, #829, #830, #832, #833, #834, #835, #836, #810, #837. **Pending merge:** #838 (234b-1 boss shared data, head `b128e68`; approval carries from `c403be67` through `c6544ed` to `b128e68`, whose delta is the gallery hook's accent-instance count; CI on `b128e68` was pending when written) and #839 (234b-3 boss client, head `e9b0f17`, approved; its `fast` is red only because it is stacked on #838's old base and needs the leak-test fix that landed on #838 at `c6544ed`). #837 merges before #838, then #839 follows.
+
+**Mini-boss (#190, #234)**
+- **Boss balance rule change** (#838, coordinator ruling (A); owner KEPT): `rules.boss.stats.hp` ×3 → **×1.5** and `actionsPerRound` 2 → **1**. Both were `// TUNE:` guesses that predate real boss stats. The ×1.1 defence and the other boss rules are unchanged. Uniform scaling of the plan's stats could not pass the gates, and keeping two actions needed boss totals barely above the base forms.
+  - **Boss stat totals:** Rakelet 385 (100/95/85/105), Mommentum 348 (100/92/86/70), Papa Brrr 385 (120/80/120/65), Rickeyride 430 (105/100/95/130). Mamarama eased to 315 (84/89/74/68) so Mommentum still grows from it stat by stat. Base forms stay at 275, the legendary band.
+  - **Sim gates, all pass** (`pnpm sim:boss`, 2000 seeded games a cell): a team of 3 at level wins 56/57/59/56%; +5 levels wins 94–97%; a team of 1 wins 4–14% (under 15%); medians 6/6/10/6 rounds; bosses within 3 points. Before the tune, 3 of 5 gates failed, with Papa Brrr's fights running 43–50 rounds because Ask Your Mother's 100% `defense +2` stacked.
+  - **Client effect:** the "👣 Stomps twice" chip reads the rule, so it is now hidden. Rickeyride's Zoomies became Fizzy Pop, because with one action and two non-hitting moves a lone squishy beat it 17–20% of the time.
+- **Boss defaults KEPT** (owner): base and middle names Pileup/Rakeling, Momo/Mamarama, Snowpop/Frostpop, Zoomlet/Revvy. Evolution at level **30** then **50**. Stage rarities legendary → legendary → mythic. The bag holds the four boss forms with liked terrains (`// TUNE:`).
+- **Signature moves are redrafted to existing effect kinds** (#838; owner KEPT). Count to Three (windup), Full Name Shout's flinch (now dizzy 20%), Mama Bear Charge's low-health power (now self attack +1 30%) and Ask Your Mother's ally swap all need engine support that does not exist. The first two wait for an engine lane (see Follow-ups); Count to Three is dropped until then.
+- **Duplicate boss ask: no treat, keep the refusal** (owner, closes the #820 question): "You already have a [base name]! 💗", nothing spent. The mockup's "team treat" is not granted.
+- **Enabling bosses** (owner; coordinator ruling in #837): production leaves `HP_MINI_BOSSES` unset (`off`). Set `HP_MINI_BOSSES=testers` with `HP_MINI_BOSSES_TESTERS=<owner's username>` on the owner's patch for the on-device frame-time capture, then `on`. That is a compose env change plus a `changes/` PR (`changes/234-big-friends.md`, area `battles`).
+- **The mini-boss switch** (#837) mirrors the Computer friends switch: `off | testers | on`, default `off`, the same case-blind username list, and an unknown value fails boot. A closed switch behaves exactly as an empty bag at `openVisit`, `current`, `start` and `sweep` (`start` is NOT_FOUND "gone"). A fight already running still finishes, and a beaten boss can still be befriended, because `befriend` is not gated. The owner join ignores member `status` on purpose; a patch with no owner seat opens only under `on`.
+- **Dev routes always carry `preHandler: [requireAuth, rateLimit('dev')]`** (#837, coordinator ruling): `GET /api/v1/dev/boss-looks` first lacked it, and a second way of doing dev routes is drift. It is registered only with `HP_DEV_SQUISHY_GRANTS` (which config refuses in production), so the gallery `?bosses` fetch must sign in first.
+- **Merge order #837 before #838** (coordinator, hard gate): GitHub Actions deploys on merge to `main`, and #838 fills the bag, so alone it would open real visits in production.
+- **A met boss's signature moves are public move data** (#838, coordinator note on `c6544ed`): the boss's `moveDefs` reach the client once it is met (the `hiddenUntilSeen` pattern), and 45 of the 78 public moves already carry an effect `chance`. The leak guard bans odds keys everywhere except `moveDefs[].effects[].chance`, and a test pins both sides. No odds number reaches the client.
+- **`PartSchema.accent`** (#838, additive, pre-approved in #810): `{ mesh: 'bent-toe', color }`, optional, refused on any part that is not `shape: 'bent'`. Only the three rake tine parts set it. The colour regex is inline in `visuals.ts` because `species.ts` imports `visuals.ts` and importing `HexColorSchema` back would be an import cycle.
+- **Boss kit in public data** (#838): `boss-parts.ts` holds 5 bodies and 42 parts, with no id or comment naming a boss. Four ids changed from the drafts so the bundle check cannot trip: `rake-mouth*` → `rake-cavity*` (`rake-mouth` is Rakelet's secret move id) and `belly-patch` → `dad-belly-patch` (already a public part).
+- **Client drafts removed in #838**, not in a client PR (coordinator ruling (a)): with the real ids secret, `boss-drafts.ts` failed the shared boundary test (via `gallery.html`) and the client-bundle check. `?drafts` goes with it; `?bosses` (#839) reads the dev route instead. The gallery's "draw calls stay flat" mesh ceiling (`squishy-gallery.spec.ts`) now counts `GAME_DATA.bodies` plus the accent mesh kinds (`PartAccentMeshSchema.options`), because the accent thin instances add batches, and the `expectedInstances()` hook counts two instances for a two-tone placement (`placements.length * (part.accent ? 2 : 1)`, 234b-1d, #838).
+- **#810 kit rulings** (merged): shared kit options `box`, `bent`, `metal`, ring `splay`, `anchor: 'front'` + `standoff`, `replaces: 'mouth'` are additive and unset on every shipped part. `anchor: 'behind'` and ring `grow` were **dropped** as unused; ring `splay` was kept (the tine parts set `splay: 22`). `KitPart.accent` stayed client-only in #810. Shipped-shape byte identity is pinned at low, high and hero (the `arc` cap rings had changed at low in v16 and were reverted). Boss species live in `SECRET_SPECIES`; bodies and parts may live in public shared data.
+- **`species_seen` is already written by `startWith`** (#833): the boss species is recorded in the battle-start transaction (step 11, once per Keeper and species, `ON CONFLICT DO NOTHING`). The #818/#828 follow-up is retired. A too-small Keeper is refused ("Too big for now!"), gets no row, and still sees the species display-only.
+- **iPad arena follow-ups** (#836): friend plates are re-placed when the camera moves, coalesced to one pass per frame with reused buffers and no style writes when nothing changed (the plates trail the body by one frame while it moves). Compact evolving meters are named per squishy in XP-line order, with a placeholder cell for a fighter with no meter. A benched squishy's meter is restored (#205). `screenSpot` projects into a scratch viewport (Babylon's `toGlobalToRef` returns the camera's own viewport, not the ref).
+
+**Computer mates (#386)**
+- **`Raid.attackerComputer?` is stored at raid creation** (#832): set from the attacker's `users.kind` and backfilled for older rows (migration 0069, `raids.attacker_computer boolean not null default false`). The client trusts it over the member list; `MapMember.computer` is only the fallback when the field is absent. The "Defend now?" card keeps the member-list check, because a mate is on the patch for the whole prompt window.
+- **Mates client follow-ups** (#835): the unused `mateWouldLikeToTrade` text is gone, a mate missing from `view.online` no longer borrows the kid's team level, `joined` is cleared when `battles.get` throws, `expired` and `cancelled` replies read like `declined`, and an accepted-reply e2e exists.
+- **Mate rows reuse the kid ask flow and card** (#829). The `computer-cap` line reads "You've won your coins from Computer friends today. XP still counts!"
+- **Computer friend rules KEPT** (owner): everyday gathered-resources allowlist, mates challenge only kids who are online, and fences hold mates off. `HP_COMPUTER_MATES` stays off until the owner turns it on. #386 stays open.
+
+**Chores and CI**
+- **`works.test.ts` weather-knock flake** (#830): the test stored no weather plan, so settle generated one seeded from the random map seed, and a Halloween storm front can knock the salt pans (reproduced 4 in 300). It now stores a clear plan (`clearSkies`). Tests only.
+- **`maps.test.ts` racing-approvals timeout and one-shot e2e map-hook reads** (#834): the test runs 5 full rounds (2.8–4.4 s on CI) so it gets an explicit 30 s timeout. Specs that read the `map` dev hook once after `data-ready` (set on first render, before the patch loads) now poll with `liveMapId`. Tests only.
+
+**Follow-ups**
+- **Device frame-time capture** before `HP_MINI_BOSSES=testers`, then `on`. The #827 CI numbers are a relative check only.
+- **Engine lane** for the effects the boss moves were redrafted away from: windup (Count to Three), flinch, low-health power (Mama Bear) and ally swap (Ask Your Mother).
+- **Papa Brrr is on the round-gate edge** (median 10 rounds): consider `chance < 100` or `stages: 1` on Ask Your Mother in a later tune.
+- **One-action rule in the client:** `boss-stub.ts` and the "Stomp again!" copy still model the old two-action rule (#839 handles the stub; the copy is rule-driven).
+- **Captures-page tidy for #829:** two iPad frames shot at iPhone size, the iPad map claim under a side button, a stub result card naming a test player, the ipad-07 caption. No code change.
+- **One `HexColorSchema`** in `schemas/data/common.ts`, to replace the inline copy in `visuals.ts`.
+- **#839 non-blocking:** validate `rarity` with `RaritySchema` in `bossLooksReply.parse`, and make `boss-stub.ts` throw instead of falling back to 100% hp.
+- **#810 non-blocking:** refresh the PR-body checks line, mark the dropped `grow` in the round-history comments, widen the `kit-identity.test.ts` docblock.
+- **Later e2e pass:** `territory.spec.ts` and the local poll copies in `accessory-everywhere`, `capture` and `push` could adopt `liveMapId`.
+- **#784 tally:** these verdicts add **+14** (#810 +2, #827 +3, #829 +1, #830 +1, #832 +2, #833 +2, #834 +1, #835 +2). No running total is recorded in the repo, so the coordinator adds this to its own count. Runner shutdowns, job timeouts and tap-stalls on untouched specs were all accepted.
+
+**Owner decisions (2026-11-15/16)**
+- **#827 mini-boss arena client: SHIP-OK.**
+- **#829 Computer friends client: SHIP-OK** (render-check PASS on captures v3).
+- **Rakelet:** one final round with the two-tone kit, then ship as-is (v16 shipped in #810). "Rakelet should never have a handle. His mouth is the rake."
+- **Duplicate boss ask:** no treat; keep the refusal.
+- **Computer friend rules kept:** the allowlist, online-only challenges, fences.
+- **Boss rule change kept:** `rules.boss` hp ×3 → ×1.5, `actionsPerRound` 2 → 1, with the stat totals and sim results above.
+- **Boss defaults kept:** names, evolution at 30 then 50, moves redrafted to existing effect kinds.
+- **Enabling:** `HP_MINI_BOSSES=testers` on the owner's patch for the frame-time capture, then `on`.

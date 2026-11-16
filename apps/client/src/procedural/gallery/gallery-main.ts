@@ -262,17 +262,19 @@ window.__heartpatch = {
 
 window.__heartpatchGallery = {
   stats: () => (stage && stage.draws > 0 ? (field?.stats ?? null) : null),
-  // Each squishy's own params: its body, head and every part piece, plus its
-  // contact shadow and what it wears, less the parts a hat or hood tucks
-  // away. A scatter can leave out a crowded piece, so squishies of one
-  // species can differ by a piece or two.
+  // Each squishy's own params: its body, head and every part piece (two per
+  // piece for a two-tone part: its accent mesh rides the same placement in
+  // its own `accent:` batch, #234 v16), plus its contact shadow and what it
+  // wears, less the parts a hat or hood tucks away (accents included). A
+  // scatter can leave out a crowded piece, so squishies of one species can
+  // differ by a piece or two.
   expectedInstances: () =>
     handles().reduce(
       (sum, h) =>
         sum +
         2 +
         (h.params.head ? 1 : 0) +
-        h.params.parts.reduce((n, part) => n + part.placements.length, 0) +
+        h.params.parts.reduce((n, part) => n + part.placements.length * (part.accent ? 2 : 1), 0) +
         (CLOTHING_BY_ID.get(field?.accessoryOf(h) ?? '')?.visual.pieces.length ?? 0) -
         (field?.tuckedOf(h) ?? 0),
       0,

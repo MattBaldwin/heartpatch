@@ -176,7 +176,9 @@ test('draw calls stay flat as squishies multiply (shared geometry, thin instance
   );
   // Every piece of every squishy is a thin instance, and nothing else is: the
   // count is exactly what the squishies' own params call for. (Not exactly
-  // twice: a scatter can leave out a crowded piece, per instance id.)
+  // twice: a scatter can leave out a crowded piece, per instance id.) A
+  // two-tone part (the rake tines' `bent-toe`, #234) is two instances per
+  // piece in two batches: instances grow with squishies, draw calls don't.
   const expected = await page.evaluate(() =>
     (window as Hooks).__heartpatchGallery!.expectedInstances(),
   );
