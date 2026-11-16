@@ -1,0 +1,95 @@
+// THROWAWAY (#234 PR 3 captures). Not committed.
+import { mkdirSync } from 'node:fs';
+import { expect, test, type Page } from '@playwright/test';
+import { stubBossFight } from './boss-stub.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { realTap } from './touch.js';
+import { trayButton } from './trays.js';
+
+const OUT = process.env['CAPTURE_OUT'] ?? '/tmp/captures-234';
+const SIZES = {
+  iphone: { viewport: { width: 393, height: 852 }, label: 'iphone-786x1704' },
+  ipad: { viewport: { width: 820, height: 1180 }, label: 'ipad-1640x2360' },
+} as const;
+
+test.use({
+  launchOptions: {
+    executablePath: process.env['PW_CHROMIUM_EXECUTABLE'] ?? '/opt/pw-browsers/chromium',
+    args: (process.env['CAPTURE_GL_ARGS'] ?? '').split(' ').filter(Boolean),
+  },
+});
+
+/** Slows the battle's step timers 5x so captions stay up for a screenshot. */
+const SLOW = `(() => {
+  const st = window.setTimeout.bind(window);
+  window.setTimeout = (fn, ms, ...a) => st(fn, typeof ms === 'number' && ms >= 250 ? ms * 5 : ms, ...a);
+})();`;
+
+async function shot(page: Page, size: string, name: string) {
+  mkdirSync(OUT, { recursive: true });
+  await page.screenshot({ path: `${OUT}/${size}-${name}.png` });
+}
+
+async function pickAll(page: Page) {
+  const picker = page.getByTestId('boss-picker');
+  await expect(picker).toBeVisible({ timeout: 60_000 });
+  for (let i = 0; i < 3; i++) {
+    await expect(page.getByTestId('boss-pick-header')).toBeVisible();
+    await realTap(picker.getByTestId('boss-move').first());
+  }
+  await realTap(page.getByTestId('boss-go'));
+}
+
+for (const [size, conf] of Object.entries(SIZES)) {
+  test(`captures ${size}`, async ({ browser }) => {
+    test.setTimeout(600_000);
+    Object.assign(test.info().project.use, { deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const page = await newPlayer(browser, uniqueName('cap'));
+    await page.goto('/?tier=high');
+    const lobby = page.getByTestId('lobby');
+    await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+    await lobby.getByLabel('Patch name').fill('Stomp Patch');
+    await lobby.getByRole('button', { name: 'Make it!' }).tap();
+    await visitPatch(lobby);
+    for (let i = 0; i < 2; i++) {
+      for (let tryNo = 0; ; tryNo++) {
+        await realTap(await trayButton(page, 'battle-dev-grant'));
+        try {
+          await expect(page.locator('.battle-entry-note')).toContainText('joined you', { timeout: 15_000 });
+          break;
+        } catch (e) {
+          if (tryNo >= 3) throw e;
+        }
+      }
+    }
+    await page.setViewportSize(conf.viewport);
+    await page.waitForTimeout(1000);
+    await stubBossFight(page, { openRounds: 4, tricks: ['windup', 'land', 'flinch', 'assist'] });
+    await realTap(await trayButton(page, 'battle-dev-fight'));
+    await expect(page.getByTestId('boss-plate')).toBeVisible({ timeout: 60_000 });
+    await page.evaluate(SLOW);
+    await page.addStyleTag({ content: '.dev-status { display: none !important; }' });
+    const caption = page.locator('.boss-caption, [data-testid="boss-caption"]');
+    const grab = async (re: RegExp, name: string) => {
+      await expect(page.locator('body')).toContainText(re, { timeout: 90_000 });
+      await shot(page, conf.label, name);
+    };
+    void caption;
+    await page.waitForTimeout(2500);
+    await shot(page, conf.label, '0-start');
+    await pickAll(page);
+    await grab(/winding up Count to Three/, '1-windup');
+    await expect(page.getByTestId('boss-windup')).toBeVisible();
+    await expect(page.getByTestId('boss-picker')).toBeVisible({ timeout: 120_000 });
+    await page.waitForTimeout(1500);
+    await shot(page, conf.label, '2-picking-winding');
+    await pickAll(page);
+    await grab(/Here it comes!/, '3-landing');
+    await expect(page.getByTestId('boss-picker')).toBeVisible({ timeout: 120_000 });
+    await pickAll(page);
+    await grab(/flinched/, '4-flinch');
+    await expect(page.getByTestId('boss-picker')).toBeVisible({ timeout: 120_000 });
+    await pickAll(page);
+    await grab(/Backup!/, '5-backup');
+  });
+}
