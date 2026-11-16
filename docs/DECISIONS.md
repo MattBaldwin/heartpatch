@@ -2489,3 +2489,15 @@ Merged: #852 (supervisor 44 handoff docs), #853 (Docs: GAME_DESIGN §27 signatur
 - **Pre-compute owner-question data while the queue is blocked.** `pnpm sim:boss` was run on `main` in the background while #844 waited, so the boss-enable question can be asked the moment #844 clears.
 
 **Owner decisions (2026-11-16, supervisor 45 shift):** none received. Pending: #844 SHIP-OK (asked a fourth time); boss enable (`testers` first, recommended; `pnpm sim:boss` on `d65e5d9` passes all five gates, thin 1-point margins noted in COORDINATOR §9).
+
+## Supervisor 46 (2026-11-16 ~13:24 → handoff)
+
+Merged: #854 (supervisor 45 handoff docs). Open at handoff: #844 (owner SHIP-OK pending), #855 (#234 chore; reviewer round 2 running).
+
+**Process**
+- **An e2e red with an unknown signature is reproduced, not reasoned away.** PR #855's `recipe-book.spec.ts:26` failure (trays never visible) could not plausibly come from a CSS change scoped under `.battle-hud[hidden]`, but it was not on the flake list, so the lane ran the spec on `iphone-chromium` at its new head before the red was set aside. The #784 list grows only with that kind of evidence.
+- **Main's push CI runs e2e on docs-only commits.** The PR workflow skips e2e by path filter; the push workflow does not. A docs-only main red with the #784 signature is accepted and tallied, and Deploy is checked separately.
+- **Start supervisor handoff docs at ~190k context.** At ~25k per sweep plus ~20k for the docs PR, starting at 220k lands the hand-over near 250k with no margin.
+- **Re-shot captures are re-checked.** A render-check PASS covers the frames it saw; a reviewer-driven UI change (here the ⏳ chip moving in its row) sends the new frames through a fresh Opus render-check before the owner sees them.
+
+**Owner decisions (2026-11-16, supervisor 46 shift):** none received. Pending: #844 SHIP-OK (asked a fifth time); boss enable (`testers` first, recommended).
