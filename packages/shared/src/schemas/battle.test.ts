@@ -7,6 +7,7 @@ import {
   squishy,
 } from '../../tests/fixtures/battle.js';
 import { FIXTURE_SPECIES } from '../../tests/fixtures/sample-content.js';
+import { FIXTURE_EFFECT_CONTENT, member, teamSetup } from '../../tests/fixtures/team-battle.js';
 import {
   applyBattleAction,
   autoplayBattle,
@@ -95,6 +96,38 @@ describe('ClientBattleViewSchema (the public view, DECISIONS "Battle engine (#11
           expect(BattleSquishyViewSchema.parse(s)).toEqual(s);
         }
       }
+    }
+  });
+
+  it('accepts a view with a pending windup and the four new events (#234)', () => {
+    const setup = teamSetup(
+      'golden-effects-8',
+      [
+        member(0, 'fixture-counterbun'),
+        member(1, 'fixture-shoutbun'),
+        member(2, 'fixture-helperbun', { level: 18 }),
+      ],
+      { speciesId: 'fixture-trickgourd', level: 22 },
+      ai('balanced'),
+    );
+    const { actions } = autoplayBattle(FIXTURE_EFFECT_CONTENT, setup);
+    let current = startBattle(FIXTURE_EFFECT_CONTENT, setup);
+    let windups = 0;
+    for (const action of actions) {
+      current = applyBattleAction(FIXTURE_EFFECT_CONTENT, current, action);
+      const view = clientBattleView(current);
+      expect(ClientBattleViewSchema.parse(JSON.parse(JSON.stringify(view)))).toEqual(view);
+      if (view.sides.b.squishies.some((s) => s.windup)) windups += 1;
+    }
+    expect(windups).toBeGreaterThan(0);
+    const at = { turn: 1, side: 'a', slot: 0 } as const;
+    for (const event of [
+      { ...at, type: 'windup', move: 'fixture-countdown' },
+      { ...at, type: 'windup-lost', move: 'fixture-countdown' },
+      { ...at, type: 'flinch' },
+      { ...at, type: 'assist', move: 'fixture-bonk' },
+    ] as const) {
+      expect(BattleEventSchema.parse(event)).toEqual(event);
     }
   });
 

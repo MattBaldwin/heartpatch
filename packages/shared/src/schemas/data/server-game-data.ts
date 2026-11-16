@@ -7,7 +7,7 @@ import {
 } from './evolution-odds.js';
 import type { GameData } from './game-data.js';
 import { checkRef, checkUniqueIds, formatDataIssues, type Report } from './issues.js';
-import { MoveSchema } from './moves.js';
+import { moveEffectProblems, MoveSchema } from './moves.js';
 import { SpawnTableSchema } from './spawn-tables.js';
 import { SpeciesSchema } from './species.js';
 import { checkRosterArt, checkSpeciesArt } from './art-rules.js';
@@ -228,6 +228,16 @@ export function checkServerGameData(input: unknown, gameData: GameData): string[
       'move',
       report,
     );
+
+    // #234: a secret move may call in a public or secret one. A public move that
+    // calls in a secret one is refused by `checkGameData` as an unknown move, so
+    // a secret move's id never ships to the client.
+    const moveById = new Map([...gameData.moves, ...data.secretMoves].map((m) => [m.id, m]));
+    data.secretMoves.forEach((m, i) => {
+      for (const problem of moveEffectProblems(m, moveById)) {
+        report(['secretMoves', i, 'effects'], problem);
+      }
+    });
 
     data.secretSpecies.forEach((s, i) => {
       checkSpeciesVisual(s.visual, visuals, ['secretSpecies', i, 'visual'], report);

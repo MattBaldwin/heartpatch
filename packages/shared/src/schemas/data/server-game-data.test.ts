@@ -110,6 +110,43 @@ describe('checkServerGameData', () => {
     expect(problems).toEqual([]);
   });
 
+  it('checks a secret move’s #234 effects against public and secret moves', () => {
+    const problems = problemsAfter((d) => {
+      const base = d.secretMoves[0]!;
+      d.secretMoves.push(
+        {
+          ...base,
+          id: 'fixture-call-public',
+          power: 0,
+          effects: [{ type: 'assist', move: 'fixture-giggle-drizzle' }],
+        },
+        {
+          ...base,
+          id: 'fixture-call-secret',
+          power: 0,
+          effects: [{ type: 'assist', move: base.id }],
+        },
+        {
+          ...base,
+          id: 'fixture-call-nobody',
+          power: 0,
+          effects: [{ type: 'assist', move: 'nobody' }],
+        },
+        {
+          ...base,
+          id: 'fixture-call-call',
+          effects: [{ type: 'assist', move: 'fixture-call-secret' }],
+        },
+        { ...base, id: 'fixture-empty-wind', power: 0, effects: [{ type: 'windup' }] },
+      );
+    });
+    expect(problems).toEqual([
+      'secretMoves["fixture-call-nobody"].effects: assist calls in unknown move "nobody"',
+      'secretMoves["fixture-call-call"].effects: assist can\'t call in "fixture-call-secret": it assists or winds up itself',
+      'secretMoves["fixture-empty-wind"].effects: a "windup" move needs power',
+    ]);
+  });
+
   it('requires secret ids to be unique across public and secret rows', () => {
     const problems = problemsAfter((d) => {
       d.secretSpecies.push({ ...moonpuff() });

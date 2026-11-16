@@ -197,6 +197,8 @@ function draftOf(state: BattleState): Draft<BattleState> {
       stages: { ...s.stages },
       status: s.status && { ...s.status },
       boosts: { ...s.boosts },
+      // Copied only when present, so a draft never gains `windup: undefined`.
+      ...(s.windup && { windup: { ...s.windup } }),
     })),
     itemsUsed: [...side.itemsUsed],
   });
@@ -235,6 +237,15 @@ class Step {
   readonly rng: Rng;
   /** Actions the boss lost to dizzy or sleepy this round (#190). */
   private bossSkips = 0;
+  /*
+   * Round-local bookkeeping for #234, keyed `side:slot` and never stored:
+   * who has had its action this round (a flinch only bites before it), who
+   * flinched (it loses its next action this round) and who started winding
+   * up this round (it can't land the same round).
+   */
+  private readonly acted = new Set<string>();
+  private readonly flinched = new Set<string>();
+  private readonly charged = new Set<string>();
 
   constructor(content: BattleContent, state: BattleState) {
     this.content = content;
@@ -266,6 +277,10 @@ class Step {
     return squishy;
   }
 
+  private key(side: BattleSideId, slot: number): string {
+    return `${side}:${slot}`;
+  }
+
   get over(): boolean {
     return this.state.phase.type === 'over';
   }
@@ -277,6 +292,13 @@ class Step {
     const picked = { a: this.choiceFor('a', choices.a), b: this.choiceFor('b', choices.b) };
 
     this.state.turn += 1;
+
+    // A side that isn't moving (a swap, Heart Charm or bare potion, or a
+    // fence) has had its whole turn: nobody on it can flinch (#234).
+    for (const side of SIDES) {
+      if (picked[side]?.type === 'move') continue;
+      this.state.sides[side].squishies.forEach((_, slot) => this.acted.add(this.key(side, slot)));
+    }
 
     // Swaps happen before moves; a swap is the side's whole turn.
     for (const side of SIDES) {
@@ -290,7 +312,10 @@ class Step {
     // whole turn, as it always was.
     for (const side of SIDES) {
       const sip = sipOf(picked[side]);
-      if (sip !== undefined) this.useItem(side, sip);
+      if (sip === undefined) continue;
+      // A bare potion is the whole turn, so a count being wound up is lost (#234).
+      if (picked[side]?.type === 'item') this.loseWindup(side);
+      this.useItem(side, sip);
     }
 
     // Heart Charms next; a squishy that says yes leaves the fight (#279), and
@@ -298,6 +323,7 @@ class Step {
     for (const side of SIDES) {
       const choice = picked[side];
       if (choice?.type !== 'capture') continue;
+      this.loseWindup(side);
       this.capture(side, choice.sure === true);
       if (this.over) return;
     }
@@ -306,7 +332,9 @@ class Step {
     for (const side of this.speedOrder(movers)) {
       const choice = picked[side];
       if (choice?.type !== 'move') continue;
+      const slot = this.state.sides[side].active;
       this.useMove(side, getMove(this.content, choice.move));
+      this.acted.add(this.key(side, slot));
       this.checkForWinner();
       if (this.over) return;
     }
@@ -346,30 +374,46 @@ class Step {
     let bossActions = 0;
     for (const { side, slot } of order) {
       const user = this.squishyAt(side, slot);
+      const key = this.key(side, slot);
+      // Its slot in the order has come: a flinch can't reach it now (#234),
+      // and a boss is "acted" after its first action.
+      this.acted.add(key);
       if (!inPlay(user)) continue;
+      // A count started this round lands next round, not on a later action
+      // of this one (only a boss with `actionsPerRound` > 1 gets one, #234).
+      if (this.charged.has(key)) continue;
       const foes = standingOut(this.state, otherSide(side));
       if (user.boss) {
         // Never more actions than foes still standing.
         if (bossActions >= foes.length) continue;
         bossActions += 1;
       }
-      const key = `${side}:${slot}`;
       const already = hit.get(key) ?? new Set<number>();
       hit.set(key, already);
       const pick = picks[side]?.get(slot);
-      const { move, targets } = pick
-        ? { move: pick.move, targets: this.pickTargets(side, pick) }
-        : chooseTeamMove(
-            this.content,
-            this.state,
-            side,
-            slot,
-            this.aiPolicy(side, user),
-            already,
-            this.rng,
-          );
+      // A squishy winding up (#234) lands its pending move: no AI pick, so
+      // no draw, and a player's pick for it named that move (its target is
+      // ignored: the stored one is used).
+      const { move, targets } = user.windup
+        ? {
+            move: user.windup.move,
+            targets: this.aimAt(side, user.windup.move, user.windup.target),
+          }
+        : pick
+          ? { move: pick.move, targets: this.pickTargets(side, pick) }
+          : chooseTeamMove(
+              this.content,
+              this.state,
+              side,
+              slot,
+              this.aiPolicy(side, user),
+              already,
+              this.rng,
+            );
       this.useMove(side, getMove(this.content, move), slot, targets);
-      for (const target of targets) already.add(target);
+      // Only a move that went off (or was skipped) counts as having hit; a
+      // count being wound up hits nobody yet (#234).
+      if (!this.charged.has(key)) for (const target of targets) already.add(target);
       this.syncActive();
       this.checkForWinner();
       if (this.over) return;
@@ -404,6 +448,12 @@ class Step {
       if (!out.squishy.moves.includes(pick.move)) {
         throw new BattleRuleError(`side ${side}'s slot ${pick.slot} doesn't know "${pick.move}"`);
       }
+      const pending = out.squishy.windup;
+      if (pending && pick.move !== pending.move) {
+        throw new BattleRuleError(
+          `slot ${pick.slot} is winding up "${pending.move}"; pick it again`,
+        );
+      }
       if (
         pick.target !== undefined &&
         !standingOut(this.state, otherSide(side)).some((f) => f.slot === pick.target)
@@ -437,9 +487,18 @@ class Step {
    * its target if still standing, or the first foe standing.
    */
   private pickTargets(side: BattleSideId, pick: TeamPick): number[] {
+    return this.aimAt(side, pick.move, pick.target);
+  }
+
+  /**
+   * Who `moveId` from `side` hits now: every standing foe for an `all-foes`
+   * move, else `target` if still standing, or the first foe standing. A
+   * player's pick, a landing windup and an assist (#234) all aim this way.
+   */
+  private aimAt(side: BattleSideId, moveId: string, target: number | undefined): number[] {
     const foes = standingOut(this.state, otherSide(side)).map((f) => f.slot);
-    if (getMove(this.content, pick.move).targets === 'all-foes') return foes;
-    if (pick.target !== undefined && foes.includes(pick.target)) return [pick.target];
+    if (getMove(this.content, moveId).targets === 'all-foes') return foes;
+    if (target !== undefined && foes.includes(target)) return [target];
     return foes.slice(0, 1);
   }
 
@@ -518,6 +577,12 @@ class Step {
       if (!this.active(side).moves.includes(given.move)) {
         throw new BattleRuleError(`side ${side}'s squishy doesn't know "${given.move}"`);
       }
+      const pending = this.active(side).windup;
+      if (pending && given.move !== pending.move) {
+        throw new BattleRuleError(
+          `slot ${this.state.sides[side].active} is winding up "${pending.move}"; pick it again`,
+        );
+      }
       if (given.item !== undefined) this.checkItem(side, given.item);
     } else {
       this.checkBenchSlot(side, given.slot);
@@ -586,6 +651,7 @@ class Step {
     const leaving = this.active(side);
     leaving.stages = freshStages();
     delete leaving.guard;
+    this.loseWindup(side);
     if (leaving.status && this.content.rules.status[leaving.status.id].clearsOnSwap) {
       leaving.status = null;
     }
@@ -618,14 +684,21 @@ class Step {
     // wild befriends always have (so their stored bytes are unchanged); only
     // one that leaves mid-battle is marked.
     const others = this.state.sides[foeSide].squishies.some((s) => s !== target && inPlay(s));
+    // It has left: a count it was winding up goes with it, quietly (#234).
+    delete target.windup;
     if (others) target.befriended = true;
     else this.end(side, 'captured');
   }
 
   // ── Moves ────────────────────────────────────────────────────────────
 
-  /** Sleepy and dizzy squishies may miss their turn. Returns true if it can act. */
+  /**
+   * Sleepy and dizzy squishies may miss their turn. Returns true if it can
+   * act. A flinched squishy (#234) just loses this action: no status roll and
+   * its status doesn't tick (the `flinch` event already said so).
+   */
   private canAct(side: BattleSideId, slot = this.state.sides[side].active): boolean {
+    if (this.flinched.delete(this.key(side, slot))) return false;
     const user = this.squishyAt(side, slot);
     const status = user.status;
     if (!status) return true;
@@ -657,6 +730,11 @@ class Step {
    * default). Each target is rolled on its own, in the order given: accuracy,
    * then damage, at `rules.team.spreadPercent` when there's more than one
    * (#190). The stance follows, then the move's effects on each target hit.
+   *
+   * A `windup` move (#234) first only winds up: no roll, no stance, no
+   * effects. On the user's next action it lands as a fresh use of the move
+   * (callers pass the pending move and re-aimed targets). Losing the action
+   * loses the count.
    */
   private useMove(
     side: BattleSideId,
@@ -665,11 +743,41 @@ class Step {
     targetSlots: readonly number[] = [this.state.sides[otherSide(side)].active],
   ): void {
     const user = this.squishyAt(side, userSlot);
-    if (!inPlay(user) || !this.canAct(side, userSlot)) return;
-    const foeSide = otherSide(side);
+    if (!inPlay(user)) return;
+    if (!this.canAct(side, userSlot)) {
+      this.loseWindup(side, userSlot);
+      return;
+    }
+    if (user.windup) {
+      if (user.windup.move !== move.id) {
+        throw new BattleRuleError(
+          `side ${side}'s slot ${userSlot} is winding up "${user.windup.move}"`,
+        );
+      }
+      delete user.windup;
+    } else if (move.effects?.some((e) => e.type === 'windup')) {
+      this.windUp(side, userSlot, move, targetSlots);
+      return;
+    }
     const kind = moveKindOf(this.content, user.speciesId, move.id);
-    const spread = targetSlots.length > 1 ? (this.content.rules.team?.spreadPercent ?? 100) : 100;
+    const landed = this.rollHits(side, userSlot, move, kind, targetSlots);
+    this.takeStance(side, kind, userSlot);
+    if (landed.length === 0) return;
+    this.applyEffects(side, userSlot, move, landed, targetSlots);
+  }
 
+  /**
+   * Emits the `move`, then rolls accuracy on each target in order and damage
+   * on each one it lands on. Returns the slots it landed on.
+   */
+  private rollHits(
+    side: BattleSideId,
+    userSlot: number,
+    move: Move,
+    kind: MoveKind | undefined,
+    targetSlots: readonly number[],
+  ): number[] {
+    const spread = targetSlots.length > 1 ? (this.content.rules.team?.spreadPercent ?? 100) : 100;
     this.emit({ ...this.at(side, userSlot), type: 'move', move: move.id });
     const landed: number[] = [];
     for (const slot of targetSlots) {
@@ -680,9 +788,23 @@ class Step {
       landed.push(slot);
       if (move.power > 0) this.hit(side, userSlot, slot, move, kind, spread);
     }
-    this.takeStance(side, kind, userSlot);
-    if (landed.length === 0) return;
+    return landed;
+  }
 
+  /**
+   * `move`'s effects, in list order, after it landed on `landed` (aimed at
+   * `targetSlots`). An assisted move (`nested`, #234) can't call in or wind
+   * up anything itself (the data check refuses it too).
+   */
+  private applyEffects(
+    side: BattleSideId,
+    userSlot: number,
+    move: Move,
+    landed: readonly number[],
+    targetSlots: readonly number[],
+    nested = false,
+  ): void {
+    const foeSide = otherSide(side);
     for (const effect of move.effects ?? []) {
       switch (effect.type) {
         case 'heal':
@@ -723,8 +845,78 @@ class Step {
           }
           break;
         }
+        case 'flinch': {
+          // One roll per target that is still in and hasn't had its action
+          // yet this round; anyone else draws nothing and shows nothing.
+          // A boss's flinch doesn't count toward `statusSkipsPerRound`: with
+          // one action a round the cap is implicit (count it there if
+          // `actionsPerRound` goes back above 1).
+          for (const slot of landed) {
+            const target = this.squishyAt(foeSide, slot);
+            const key = this.key(foeSide, slot);
+            if (!inPlay(target) || this.acted.has(key) || this.flinched.has(key)) continue;
+            if (!this.rng.chance(effect.chance)) continue;
+            this.flinched.add(key);
+            this.emit({ ...this.at(foeSide, slot), type: 'flinch' });
+          }
+          break;
+        }
+        case 'assist':
+          if (!nested) this.assist(side, userSlot, getMove(this.content, effect.move), targetSlots);
+          break;
+        case 'low-energy': // Read by `movePower` in the damage maths.
+        case 'windup': // Handled before the move resolves (`useMove`).
+          break;
       }
     }
+  }
+
+  /**
+   * The user starts winding up `move` (#234): it announces itself and the
+   * move lands on the user's next action. In a team battle a one-foe move
+   * keeps its target, re-checked when it lands. No roll.
+   */
+  private windUp(
+    side: BattleSideId,
+    userSlot: number,
+    move: Move,
+    targetSlots: readonly number[],
+  ): void {
+    const user = this.squishyAt(side, userSlot);
+    const [target] = targetSlots;
+    const aimed = this.state.format !== undefined && move.targets !== 'all-foes';
+    user.windup = { move: move.id, ...(aimed && target !== undefined && { target }) };
+    this.charged.add(this.key(side, userSlot));
+    this.emit({ ...this.at(side, userSlot), type: 'move', move: move.id });
+    this.emit({ ...this.at(side, userSlot), type: 'windup', move: move.id });
+  }
+
+  /** `side`'s squishy in `slot` loses the count it was winding up, if any (#234). */
+  private loseWindup(side: BattleSideId, slot = this.state.sides[side].active): void {
+    const user = this.squishyAt(side, slot);
+    if (!user.windup) return;
+    this.emit({ ...this.at(side, slot), type: 'windup-lost', move: user.windup.move });
+    delete user.windup;
+  }
+
+  /**
+   * An `assist` effect (#234): the user calls in a friend's `move`, resolved
+   * at once with the user's stats on the foes the parent move aimed at (re-
+   * aimed if they're out): accuracy, damage, then its effects. No status
+   * roll, no stance and no further assist or windup.
+   */
+  private assist(
+    side: BattleSideId,
+    userSlot: number,
+    move: Move,
+    parentTargets: readonly number[],
+  ): void {
+    const targets = this.aimAt(side, move.id, parentTargets[0]);
+    if (targets.length === 0) return;
+    this.emit({ ...this.at(side, userSlot), type: 'assist', move: move.id });
+    const landed = this.rollHits(side, userSlot, move, undefined, targets);
+    if (landed.length === 0) return;
+    this.applyEffects(side, userSlot, move, landed, targets, true);
   }
 
   /** One landed damaging move into the foe in `slot`, at `spread`% (#190; 100 is full). */
@@ -776,7 +968,11 @@ class Step {
       ...(guard < 0 && { opened: true as const }),
       ...(gentle && { gentle: true as const }),
     });
-    if (target.energy === 0) this.emit({ ...this.at(foeSide, slot), type: 'tuckered-out' });
+    if (target.energy === 0) {
+      // A count it was winding up never lands (#234); no event, it's out.
+      delete target.windup;
+      this.emit({ ...this.at(foeSide, slot), type: 'tuckered-out' });
+    }
   }
 
   /**
@@ -1118,7 +1314,10 @@ export function legalChoices(
     content && state.sides[side].controller.type === 'player'
       ? [...content.items.keys()].filter((item) => !itemRefusal(content, state, side, item))
       : [];
-  const moves = activeSquishy(state, side).moves;
+  // A squishy winding up (#234) can only land its pending move (or give up
+  // the count with a swap, a Heart Charm or a bare potion).
+  const active = activeSquishy(state, side);
+  const moves = active.windup ? [active.windup.move] : active.moves;
   return [
     ...moves.map((move): BattleChoice => ({ type: 'move', move })),
     ...items.flatMap((item) => moves.map((move): BattleChoice => ({ type: 'move', move, item }))),
@@ -1144,7 +1343,8 @@ export function teamPickOptions(
   const targets = standingOut(state, otherSide(side)).map((f) => f.slot);
   return standingOut(state, side).map(({ slot, squishy }) => ({
     slot,
-    moves: squishy.moves,
+    // A squishy winding up (#234) can only pick its pending move.
+    moves: squishy.windup ? [squishy.windup.move] : squishy.moves,
     targets,
   }));
 }

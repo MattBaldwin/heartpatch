@@ -4,7 +4,7 @@ import { CareActionSchema } from './care-actions.js';
 import { ElementIdSchema, ElementSchema, FeelingIdSchema, FeelingSchema } from './elements.js';
 import { MapGenSettingsSchema } from './map-gen.js';
 import { ElementMatrixSchema, FeelingMatrixSchema, SynergyTableSchema } from './matrices.js';
-import { MoveSchema } from './moves.js';
+import { moveEffectProblems, MoveSchema } from './moves.js';
 import { RecipeSchema } from './recipes.js';
 import { ResourceSchema } from './resources.js';
 import { SeasonSchema } from './seasons.js';
@@ -125,6 +125,13 @@ export const GameDataSchema = z
           report(['species', i, 'evolutions', j, 'into'], 'a species cannot evolve into itself');
         }
       });
+    });
+
+    const moveById = new Map(data.moves.map((m) => [m.id, m]));
+    data.moves.forEach((m, i) => {
+      for (const problem of moveEffectProblems(m, moveById)) {
+        report(['moves', i, 'effects'], problem);
+      }
     });
 
     checkArtRules(data.artRules, visuals, report);

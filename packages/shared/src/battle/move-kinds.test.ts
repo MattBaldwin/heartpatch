@@ -99,6 +99,28 @@ describe('sorting moves into kinds', () => {
     expect(Object.fromEntries(fixed)).toEqual({ wild: 'steady', sure: 'big', also: 'big' });
   });
 
+  it('a windup boop sorts by its base power (#234)', () => {
+    const at = (id: string, power: number, extra: Partial<Move> = {}): Move => ({
+      id,
+      name: id,
+      description: id,
+      element: 'stone',
+      power,
+      accuracy: 100,
+      ...extra,
+    });
+    const moves = new Map([
+      ['count', at('count', 120, { effects: [{ type: 'windup' }] })],
+      ['tap', at('tap', 40)],
+      // Low-energy can push it past 120 at runtime; kinds read base power only.
+      ['stand', at('stand', 30, { effects: [{ type: 'low-energy', extraPercent: 300 }] })],
+    ]);
+    const kinds = speciesMoveKinds({ id: 'x', moves: ['count', 'tap', 'stand'] }, moves, {
+      overrides: {},
+    });
+    expect(Object.fromEntries(kinds)).toEqual({ count: 'big', tap: 'big', stand: 'steady' });
+  });
+
   it('reports a species with no big or no steady move, and stray overrides', () => {
     const species = [{ id: 'fixture-puddlepuff', moves: [DRIZZLE, FLOP] }];
     expect(moveKindProblems(species, moves, { overrides: {} })).toEqual([]);

@@ -85,7 +85,11 @@ const battleItems = (data: BattleData) =>
     battleEffect ? [{ id, battleEffect }] : [],
   );
 
-/** Hashes only the battle-relevant fields, so rewording a move changes nothing. */
+/**
+ * Hashes only the battle-relevant fields, so rewording a move changes nothing.
+ * The #234 effect kinds (windup, flinch, low-energy, assist) ride in
+ * `moves[].effects`, so they are hashed with no change here.
+ */
 export function battleContentHash(data: BattleData, rules: BattleRules): string {
   // Steady and Big (#587): the kinds each species plays, so a change to the
   // sorting rule re-hashes too. Left out entirely before #587, so older

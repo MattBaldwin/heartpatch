@@ -89,6 +89,23 @@ export function effectivenessTier(multiplier: number, rules: BattleRules): strin
 }
 
 /**
+ * A move's power for this attacker (#234): its `power`, plus a `low-energy`
+ * effect's bonus of `extraPercent`% × the share of energy the attacker has
+ * lost, rounded down. Integer maths, no roll; at full energy it is exactly
+ * `move.power`, so moves without the effect are untouched.
+ */
+export function movePower(
+  move: Move,
+  attacker: { readonly energy: number; readonly stats: { readonly hp: number } },
+): number {
+  const effect = move.effects?.find((e) => e.type === 'low-energy');
+  if (!effect) return move.power;
+  const full = attacker.stats.hp;
+  const lost = Math.max(0, full - attacker.energy);
+  return move.power + Math.floor((move.power * effect.extraPercent * lost) / (100 * full));
+}
+
+/**
  * Damage before the variance roll: `base(power, attack, defense, level)` ×
  * element × feeling × the attacker's synergy.
  */
@@ -103,7 +120,7 @@ export function damageBeforeVariance(
   const attack = effectiveStat(attacker, 'attack', rules);
   const defense = effectiveStat(defender, 'defense', rules);
   const base =
-    ((attacker.level / d.levelDivisor + d.levelOffset) * move.power * attack) /
+    ((attacker.level / d.levelDivisor + d.levelOffset) * movePower(move, attacker) * attack) /
       defense /
       d.powerDivisor +
     d.flat;
