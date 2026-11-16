@@ -21,12 +21,16 @@ import type { Species } from '../../schemas/data/species.js';
  * `pnpm sim:boss` (#234 ruling (A)) so a team of 3 at level wins 55–65%
  * against each, with `rules.boss` at 1.5× energy and one action a round:
  * totals 348–430, shaped by each line (the kart line fast, the dad line a
- * tank). All `// TUNE:`.
+ * tank). All `// TUNE:`. Last run (#234 PR 2, 2000 games a cell): team of 3
+ * at level wins 61/56/56/56% (Rakelet, Mommentum, Papa Brrr, Rickeyride),
+ * 5 levels over 94–98%, a team of 1 3–14%, medians 6/6/8/6 rounds.
  *
- * Signature moves are drafted to the move effects the engine has today
- * (stat, heal, dizzy/sleepy, `all-foes`); the owner's briefs that need a
- * new effect (wind-up, flinch, power when low, ally swap) are redrafted
- * (#234 plan, open question 3).
+ * Signature moves use the #234 engine effects (#846): Count to Three winds
+ * up a round then lands (`windup`), Leaf Pile Pounce and Full Name Shout
+ * can make a foe that hasn't moved yet lose its turn (`flinch`), Mama Bear
+ * Charge hits harder the lower her energy (`low-energy`), and Ask Your
+ * Mother calls in Mama Bear Charge (`assist`; the server sends its def with
+ * the battle, so a kid who met Papa Brrr can read its name).
  */
 
 const RAKE_PALETTE = ['#9fd46e', '#fff6dc', '#f08a3c', '#b07a48']; // #810 round 8: wood-brown crossbar, not orange
@@ -57,14 +61,22 @@ export const BOSS_MOVES: Move[] = [
     effects: [{ type: 'status', status: 'dizzy', chance: 20 }], // TUNE:
   },
   {
-    // Redraft (#234 plan): the brief's flinch is a dizzy chance.
     id: 'leaf-pile-pounce',
     name: 'Leaf Pile Pounce',
-    description: 'Leaps out of a leaf pile with a WHOOSH! It might get dizzy.',
+    description: 'Leaps out of a leaf pile with a WHOOSH! You might flinch.',
     element: 'leaf',
     power: 75, // TUNE:
     accuracy: 100,
-    effects: [{ type: 'status', status: 'dizzy', chance: 25 }], // TUNE:
+    effects: [{ type: 'flinch', chance: 25 }], // TUNE:
+  },
+  {
+    id: 'count-to-three',
+    name: 'Count to Three',
+    description: 'One… two… THREE! A giant rake-swipe. It takes a round to wind up, so brace!',
+    element: 'leaf',
+    power: 170, // TUNE: about two Rake Mouths in one blow
+    accuracy: 100,
+    effects: [{ type: 'windup' }],
   },
   // ── The mom line ──
   {
@@ -77,24 +89,22 @@ export const BOSS_MOVES: Move[] = [
     effects: [{ type: 'stat', target: 'opponent', stat: 'attack', stages: -1, chance: 100 }], // TUNE:
   },
   {
-    // Redraft (#234 plan): the brief's flinch is a dizzy chance.
     id: 'full-name-shout',
     name: 'Full Name Shout',
-    description: 'Shouts your WHOLE name, middle name and all. It might leave you dizzy.',
+    description: 'Shouts your WHOLE name, middle name and all. You might flinch!',
     element: 'fire',
     power: 85, // TUNE:
     accuracy: 100,
-    effects: [{ type: 'status', status: 'dizzy', chance: 20 }], // TUNE:
+    effects: [{ type: 'flinch', chance: 35 }], // TUNE: she is slow, so it bites less often
   },
   {
-    // Redraft (#234 plan): no power-when-low effect yet, so she gets fiercer instead.
     id: 'mama-bear-charge',
     name: 'Mama Bear Charge',
-    description: 'A big protective charge. It might fire her up even more.',
+    description: 'A big protective charge. The lower her energy, the harder it hits.',
     element: 'fire',
     power: 80, // TUNE:
     accuracy: 100,
-    effects: [{ type: 'stat', target: 'self', stat: 'attack', stages: 1, chance: 30 }], // TUNE:
+    effects: [{ type: 'low-energy', extraPercent: 80 }], // TUNE: up to ×1.8 when nearly out (sim:boss; the plan drafted 100)
   },
   // ── The dad line ──
   {
@@ -126,16 +136,16 @@ export const BOSS_MOVES: Move[] = [
     effects: [{ type: 'stat', target: 'opponent', stat: 'speed', stages: -1, chance: 50 }], // TUNE:
   },
   {
-    // Redraft (#810): no ally swap yet, so he digs in and feels better.
     id: 'ask-your-mother',
     name: 'Ask Your Mother',
-    description: 'Crosses his arms and waits. He gets much sturdier and feels a bit better.',
+    description:
+      'Crosses his arms and calls for Mom. She charges in, and he might feel a bit sturdier.',
     element: 'frost',
     power: 0,
     accuracy: 100,
     effects: [
-      { type: 'stat', target: 'self', stat: 'defense', stages: 2, chance: 100 }, // TUNE:
-      { type: 'heal', percent: 20 }, // TUNE:
+      { type: 'assist', move: 'mama-bear-charge' }, // TUNE: #234 ruling 2
+      { type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 20 }, // TUNE: was +2 at 100% with a heal; sim:boss
     ],
   },
   // ── The kart line ──
@@ -255,7 +265,7 @@ export const BOSS_SPECIES: Species[] = [
     rarity: 'mythic',
     line: 'boss',
     baseStats: { hp: 100, attack: 95, defense: 85, speed: 105 }, // TUNE: total 385 (sim:boss)
-    moves: ['rake-mouth', 'stink-bomb', 'leaf-pile-pounce', 'mossy-nap'],
+    moves: ['rake-mouth', 'stink-bomb', 'leaf-pile-pounce', 'count-to-three'], // TUNE: lever A
     evolutions: [],
     visual: {
       body: 'upright',
