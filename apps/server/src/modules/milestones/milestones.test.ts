@@ -368,6 +368,7 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
       'first-patch': 0,
       territory: 10,
       collector: 3, // three kinds; the second Puddlepuff is the same kind
+      commons: 2, // Puddlepuff and Emberbun are everyday commons; Thistlepip isn't (#732 B2)
       evolution: 1,
       caretaker: 1,
       defender: 1,
