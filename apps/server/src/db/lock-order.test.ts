@@ -690,7 +690,14 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
       clock: () => clock,
       minibosses: createMinibossBattlePort(rules),
     });
-    const bosses = createBossService({ db, battles: fights, rules, clock: () => clock });
+    const bosses = createBossService({
+      db,
+      battles: fights,
+      rules,
+      clock: () => clock,
+      // The mini-boss switch (#234) open: these tests are about the locks.
+      miniBosses: { mode: 'on', testers: [] },
+    });
     const { battle } = await bosses.start(kid, mapId);
     let finishing: { action: PlayerBattleAction; turn: number } | null = null;
     for (let i = 0; i < content.rules.maxTurns + 5 && !finishing; i++) {
