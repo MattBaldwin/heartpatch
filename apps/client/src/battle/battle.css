@@ -1145,6 +1145,12 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   min-width: 0;
 }
 
+/* Three chips (⏳, tries, here until) don't fit one 375 px row: wrap (#234). */
+.boss-plate-chips {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
 .boss-plate-chips:empty,
 .boss-plate-chips:not(:has(:not([hidden]))) {
   display: none;

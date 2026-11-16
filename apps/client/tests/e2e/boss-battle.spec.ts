@@ -135,9 +135,7 @@ test.describe('a mini-boss fight (#190)', () => {
     await expect(page.getByTestId('battle-result')).toBeHidden();
   });
 
-  test('the boss winds up, lands it and calls for backup (#234)', async ({
-    browser,
-  }) => {
+  test('the boss winds up, lands it and calls for backup (#234)', async ({ browser }) => {
     const page = await newPlayer(browser, uniqueName('stomp'));
     const stub = await bossFight(page, {
       openRounds: 3,
