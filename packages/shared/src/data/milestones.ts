@@ -29,6 +29,17 @@ const THANKSGIVING_CLOTHING = CLOTHING.filter(
   (c) => c.season === 'thanksgiving' && c.sources.includes('found'),
 ).map((c) => c.id);
 
+/**
+ * Every everyday common (#732 B2): the all-year, common-rarity base forms, the
+ * ones a kid can actually befriend. Evolved forms never spawn wild (only base
+ * forms do, `data/server/spawn-tables.ts`), so a kid form would make the track
+ * unreachable; seasonal ones would too, off-season. Derived, never hand-copied.
+ */
+const EVOLVED_INTO = new Set(SPECIES.flatMap((s) => s.evolutions.map((e) => e.into)));
+export const EVERYDAY_COMMON_SPECIES: string[] = SPECIES.filter(
+  (s) => s.rarity === 'common' && s.season === undefined && !EVOLVED_INTO.has(s.id),
+).map((s) => s.id);
+
 /** A found set's milestone track id: its counted keys are the pieces found (#306 PR 5). */
 export function foundSetTrackId(set: Pick<FoundSet, 'id'>): string {
   return `set-${set.id}`;
@@ -153,6 +164,34 @@ export const MILESTONE_TRACKS: MilestoneTrack[] = [
         title: { id: 'friend-to-all', name: 'Friend to All Squishies' },
         coins: 100,
         clothing: 'rainbow-jacket',
+      },
+    ],
+  },
+  {
+    // Every everyday common (#732 B2): its own track, because a track's tiers
+    // share one counter and `collector` counts every kind. One tier, as big
+    // as the list, so a new everyday common raises the goal by itself.
+    id: 'commons',
+    name: 'Every Common',
+    secret: false,
+    progress: {
+      from: 'events',
+      sources: [
+        {
+          eventType: 'squishy.captured',
+          where: [{ op: 'oneOf', field: 'speciesId', values: EVERYDAY_COMMON_SPECIES }],
+          player: 'userId',
+          distinct: 'speciesId',
+        },
+      ],
+    },
+    tiers: [
+      {
+        threshold: EVERYDAY_COMMON_SPECIES.length,
+        goal: 'Befriend every everyday common squishy.',
+        title: { id: 'everyday-friend', name: 'Everyday Friend' }, // TUNE:
+        coins: 75, // TUNE:
+        clothing: 'patchwork-pal-scarf',
       },
     ],
   },

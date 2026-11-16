@@ -635,6 +635,7 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
       'golden-baker-jacket',
       'lookout-boots',
       'lantern-keepers-cloak',
+      'patchwork-pal-scarf',
     ]);
     const lines: string[] = [];
     for (const id of ['pip', 'bramble']) {

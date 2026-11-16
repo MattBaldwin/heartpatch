@@ -1702,6 +1702,34 @@ const MILESTONE: ClothingItem[] = [
       ],
     },
   },
+  // Every Common (#732 B2): a scrap from each everyday friend.
+  {
+    id: 'patchwork-pal-scarf',
+    name: 'Patchwork Pal Scarf',
+    description: 'Stitched from a scrap of every everyday friend. Mind the loose threads.',
+    slot: 'top',
+    rarity: 'rare',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, 0.46, 0], size: [1.14, 0.3, 1.14], color: '#ff7f6e' },
+        { shape: 'ellipsoid', at: [-0.32, 0.46, -0.46], size: [0.4, 0.28, 0.26], color: '#5aa0e8' },
+        { shape: 'ellipsoid', at: [0, 0.46, -0.52], size: [0.4, 0.28, 0.26], color: '#62c9a0' },
+        { shape: 'ellipsoid', at: [0.32, 0.46, -0.46], size: [0.4, 0.28, 0.26], color: '#b48be0' },
+        { shape: 'ellipsoid', at: [-0.54, 0.46, 0], size: [0.26, 0.28, 0.4], color: '#62c9a0' },
+        { shape: 'ellipsoid', at: [0.54, 0.46, 0], size: [0.26, 0.28, 0.4], color: '#5aa0e8' },
+        { shape: 'capsule', at: [0.24, 0.1, -0.5], size: [0.22, 0.5, 0.1], color: '#ff7f6e' },
+        { shape: 'capsule', at: [0.38, 0.06, -0.48], size: [0.2, 0.44, 0.1], color: '#b48be0' },
+        {
+          shape: 'ellipsoid',
+          at: [0.24, -0.06, -0.56],
+          size: [0.14, 0.14, 0.06],
+          color: '#fff3d6',
+        },
+      ],
+    },
+  },
   // Seeker (#199): exploring your land, search spot by search spot.
   {
     id: 'seekers-bandana',
