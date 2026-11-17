@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { findAvoidedWords } from '../data/avoided-words.js';
 import { CLOTHING, CLOTHING_BY_ID } from '../data/clothing.js';
-import { MILESTONE_RULES, MILESTONE_TRACKS } from '../data/milestones.js';
+import { EVERYDAY_COMMON_SPECIES, MILESTONE_RULES, MILESTONE_TRACKS } from '../data/milestones.js';
 import { SEASONS } from '../data/seasons.js';
+import { SPAWN_TABLES } from '../data/server/spawn-tables.js';
+import { SECRET_SPECIES } from '../data/server/secret-species.js';
+import { SPECIES } from '../data/species.js';
 import { SECRET_MILESTONES } from '../data/server/secret-milestones.js';
 import {
   checkMilestoneData,
@@ -21,6 +24,39 @@ const track = (id: string): MilestoneTrack => {
   return found;
 };
 
+describe('Every Common list (#732 B2)', () => {
+  it('is every public, all-year common base form, and nothing seasonal or secret', () => {
+    const evolved = new Set(SPECIES.flatMap((s) => s.evolutions.map((e) => e.into)));
+    expect(EVERYDAY_COMMON_SPECIES).toEqual(
+      SPECIES.filter(
+        (s) => s.rarity === 'common' && s.season === undefined && !evolved.has(s.id),
+      ).map((s) => s.id),
+    );
+    expect(EVERYDAY_COMMON_SPECIES.length).toBeGreaterThan(0);
+    const secret = new Set(SECRET_SPECIES.map((s) => s.id));
+    for (const id of EVERYDAY_COMMON_SPECIES) {
+      const species = SPECIES.find((s) => s.id === id)!;
+      expect(species.season, id).toBeUndefined();
+      expect(species.rarity, id).toBe('common');
+      expect(secret.has(id), id).toBe(false);
+    }
+    const tier = track('commons').tiers[0]!;
+    expect(track('commons').tiers).toHaveLength(1);
+    expect(tier.threshold).toBe(EVERYDAY_COMMON_SPECIES.length);
+  });
+
+  it('only lists kinds that spawn wild all year, so the goal can be reached', () => {
+    // A kind that spawns only in a season's window (or never) would make the track unreachable.
+    for (const id of EVERYDAY_COMMON_SPECIES) {
+      const tables = SPAWN_TABLES.filter((t) => t.entries.some((e) => e.species === id));
+      expect(
+        tables.some((t) => t.season === undefined),
+        id,
+      ).toBe(true);
+    }
+  });
+});
+
 describe('milestone data', () => {
   it('is valid, public and secret together', () => {
     expect(
@@ -34,6 +70,7 @@ describe('milestone data', () => {
       'first-patch',
       'territory',
       'collector',
+      'commons',
       'evolution',
       'caretaker',
       'defender',
@@ -156,10 +193,29 @@ describe('milestoneCredits', () => {
   it('counts kinds of squishy by species, and the secret one', () => {
     expect(credits('squishy.captured', { userId: KID, speciesId: 'puddlepuff' })).toEqual([
       { trackId: 'collector', userId: KID, amount: MILESTONE_UNIT, key: 'puddlepuff' },
+      { trackId: 'commons', userId: KID, amount: MILESTONE_UNIT, key: 'puddlepuff' },
     ]);
     expect(
       credits('squishy.captured', { userId: KID, speciesId: 'heartlet' }).map((c) => c.trackId),
     ).toEqual(['collector', 'heart-whisperer']);
+  });
+
+  it('counts Every Common (#732 B2) for everyday commons only, one step per kind', () => {
+    const commons = track('commons');
+    const ids = (speciesId: string) =>
+      credits('squishy.captured', { userId: KID, speciesId })
+        .filter((c) => c.trackId === 'commons')
+        .map((c) => c.key);
+    // An uncommon, a seasonal common, a kid form (never wild) and a secret don't count.
+    for (const other of ['mossmuffin', 'gourdon', 'rippletad', 'heartlet']) {
+      expect(ids(other), other).toEqual([]);
+    }
+    // Befriending the same kind again is the same key, so the runner counts it once.
+    expect(ids('quackle')).toEqual(['quackle']);
+    expect(ids('quackle')).toEqual(['quackle']);
+    const all = EVERYDAY_COMMON_SPECIES.length * MILESTONE_UNIT;
+    expect(tiersReached(commons, all - MILESTONE_UNIT)).toEqual([]);
+    expect(tiersReached(commons, all)).toEqual([1]);
   });
 
   it('counts Halloween things only in the Halloween window', () => {

@@ -1702,6 +1702,40 @@ const MILESTONE: ClothingItem[] = [
       ],
     },
   },
+  // Every Common (#732 B2): a scrap from each everyday friend.
+  {
+    id: 'patchwork-pal-scarf',
+    name: 'Patchwork Pal Scarf',
+    description: 'Stitched from a scrap of every everyday friend. Mind the loose threads.',
+    slot: 'top',
+    rarity: 'rare',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      // A deep berry wrap: darker than every default top (pink to sunflower), so it reads
+      // against any outfit. A fat roll sits proud of the chin, with a knot and two uneven
+      // tails hanging free; the end patches are tail-wide squares, not buttons. TUNE: by eye.
+      pieces: [
+        { shape: 'ellipsoid', at: [0, 0.4, -0.08], size: [1.2, 0.46, 1.3], color: '#8f2d5b' },
+        {
+          shape: 'ellipsoid',
+          at: [-0.36, 0.44, -0.56],
+          size: [0.22, 0.18, 0.16],
+          color: '#fff3d6',
+        },
+        { shape: 'ellipsoid', at: [-0.6, 0.42, -0.04], size: [0.24, 0.26, 0.34], color: '#ff8a5c' },
+        { shape: 'ellipsoid', at: [0.6, 0.42, -0.04], size: [0.24, 0.26, 0.34], color: '#fff3d6' },
+        // The knot: a squashed, darker lump, off-centre.
+        { shape: 'ellipsoid', at: [0.22, 0.27, -0.62], size: [0.34, 0.24, 0.2], color: '#7a2350' },
+        // Left tail: the long one, down to the thigh, ending in a gold patch.
+        { shape: 'capsule', at: [0.08, -0.12, -0.56], size: [0.24, 1.0, 0.1], color: '#8f2d5b' },
+        { shape: 'capsule', at: [0.08, -0.6, -0.57], size: [0.24, 0.2, 0.1], color: '#ffc94d' },
+        // Right tail: shorter, ending in an orange patch.
+        { shape: 'capsule', at: [0.44, -0.04, -0.54], size: [0.24, 0.78, 0.1], color: '#a8386a' },
+        { shape: 'capsule', at: [0.44, -0.4, -0.55], size: [0.24, 0.18, 0.1], color: '#ff8a5c' },
+      ],
+    },
+  },
   // Seeker (#199): exploring your land, search spot by search spot.
   {
     id: 'seekers-bandana',
