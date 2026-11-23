@@ -3,5 +3,5 @@ title: BIG squishies now visit every patch
 area: battles
 ---
 
-BIG squishies are stomping into every patch! Once someone's Partner is all grown up, a giant one wanders onto your land for a couple of days.
-**Try it:** when a wobbly BIG marker pops up on your map, tap it, bring your team of three and tap Let's go! Win and it might ask to be your friend!
+A BIG squishy can stomp onto your map and hang around for a couple of days! Tap it, bring your team and hit Let's go! Win and it might even become your friend.
+**Try it:** tap the wobbly BIG marker on your map, then tap Let's go! If it says "Too big for now!", grow your team and come back.
