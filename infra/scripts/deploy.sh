@@ -94,6 +94,14 @@ if [[ -n $long_night && $long_night != on ]]; then
 fi
 unset long_night
 
+# Same for HP_MINI_BOSSES (owner decision 2026-11-23: on for everyone). Warn
+# only; `off` here is the no-release off switch. Empty counts as unset.
+mini_bosses=$(env_value HP_MINI_BOSSES)
+if [[ -n $mini_bosses && $mini_bosses != on ]]; then
+  log "WARNING: $HP_DIR/.env sets HP_MINI_BOSSES=$mini_bosses, so mini bosses are not on for everyone in production. The compose default is on; delete that line from $HP_DIR/.env to use it."
+fi
+unset mini_bosses
+
 previous_tag=$(env_value HEARTPATCH_TAG)
 site=$(env_value HP_SITE_ADDRESS)
 site=${site:-play.pumpkinpatchgames.com}
