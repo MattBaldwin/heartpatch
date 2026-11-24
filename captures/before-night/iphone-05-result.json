@@ -1,0 +1,59 @@
+{
+ "file": "iphone-05-result.png",
+ "device": "iphone",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-24T05:55:57.092Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 44.685297291429784,
+   "fogEnd": 85,
+   "band": {
+    "top": 0.1983568075117371,
+    "bottom": 0.6326474471830986
+   },
+   "face": {
+    "top": 0.32606881201337556,
+    "bottom": 0.34228690684268664
+   }
+  },
+  "playing": null
+ },
+ "caption": "",
+ "rects": {
+  "bossHead": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "plate": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "order": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "friends": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "result": {
+   "top": 547.015625,
+   "bottom": 806,
+   "left": 16.5,
+   "right": 376.5
+  }
+ }
+}

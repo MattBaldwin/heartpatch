@@ -1,0 +1,59 @@
+{
+ "file": "ipad-01-rest.png",
+ "device": "ipad",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-24T06:47:08.087Z",
+ "inner": {
+  "w": 820,
+  "h": 1180,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 50.838684623463294,
+   "fogEnd": 90.8386846234633,
+   "band": {
+    "top": 0.20254237288135593,
+    "bottom": 0.5859375
+   },
+   "face": {
+    "top": 0.30094426293388166,
+    "bottom": 0.31486188270933263
+   }
+  },
+  "playing": null
+ },
+ "caption": "A BIG Rakelet wants to play!",
+ "rects": {
+  "bossHead": {
+   "top": 112,
+   "bottom": 229,
+   "left": 130,
+   "right": 690
+  },
+  "plate": {
+   "top": 112,
+   "bottom": 199,
+   "left": 130,
+   "right": 690
+  },
+  "order": {
+   "top": 207,
+   "bottom": 229,
+   "left": 381.46875,
+   "right": 438.53125
+  },
+  "friends": {
+   "top": 691.40625,
+   "bottom": 735.40625,
+   "left": 130,
+   "right": 690
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  }
+ }
+}

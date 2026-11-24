@@ -1,0 +1,62 @@
+{
+ "file": "ipad-03-hit.png",
+ "device": "ipad",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-24T06:07:39.571Z",
+ "inner": {
+  "w": 820,
+  "h": 1180,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 50.99576491133694,
+   "fogEnd": 90.99576491133695,
+   "band": {
+    "top": 0.20254237288135593,
+    "bottom": 0.5859375
+   },
+   "face": {
+    "top": 0.3012861136487267,
+    "bottom": 0.31525922296747566
+   }
+  },
+  "playing": {
+   "kind": "effect",
+   "at": 2251.819999999978
+  }
+ },
+ "caption": null,
+ "rects": {
+  "bossHead": {
+   "top": 112,
+   "bottom": 241,
+   "left": 130,
+   "right": 690
+  },
+  "plate": {
+   "top": 112,
+   "bottom": 199,
+   "left": 130,
+   "right": 690
+  },
+  "order": {
+   "top": 207,
+   "bottom": 241,
+   "left": 338.46875,
+   "right": 481.53125
+  },
+  "friends": {
+   "top": 691.40625,
+   "bottom": 735.40625,
+   "left": 130,
+   "right": 690
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  }
+ }
+}
