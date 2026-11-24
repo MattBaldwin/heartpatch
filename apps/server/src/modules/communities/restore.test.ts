@@ -24,7 +24,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { buildings, keepers, sessions, users } from '../../db/schema.js';
+import { buildings, keepers, sessions, tileRoads, users } from '../../db/schema.js';
+import { cutOffFromVillage } from '../../../tests/road-join.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { createInventoryRepo } from '../inventory/repo.js';
@@ -246,6 +247,29 @@ describe.skipIf(!url)('restoring grey villages (#306 PR 3, needs DATABASE_URL)',
     const night = await restore(server, me, mapId, communityId, square, 0);
     expect(night.statusCode).toBe(403);
     expect(errorOf(night).message).toBe('Too spooky after dark! Come back in the morning 🌙');
+  });
+
+  it('lets land a road joins to home restore on a Wild Isle, never land cut off (#863)', async () => {
+    const server = await start();
+    const me = await player();
+    const mapId = await patch(server, me);
+    const { communityId, square, village } = await reachVillage(server, me, mapId);
+    await give(mapId, me, plenty(1));
+    const { road } = await cutOffFromVillage(
+      db,
+      mapId,
+      await tilesOf(mapId),
+      me.id,
+      village.map((v) => v.tile),
+    );
+    expect((await sheetOf(server, me, mapId, communityId, square)).problem).toBe('away');
+    const cut = await restore(server, me, mapId, communityId, square, 0);
+    expect(cut.statusCode).toBe(403);
+    await db.insert(tileRoads).values({ tileId: road.id, mapId, ownerUserId: me.id, level: 3 });
+    expect((await sheetOf(server, me, mapId, communityId, square)).problem).toBeNull();
+    const res = await restore(server, me, mapId, communityId, square, 0);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(RestoreTileResponseSchema.parse(res.json()).outcome).toBe('piece');
   });
 
   it('pays one piece in one go, thanks the helper, and a retried tap pays nothing', async () => {

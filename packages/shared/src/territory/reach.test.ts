@@ -291,3 +291,39 @@ describe('a Cozy Patch is unchanged (#621 §10)', () => {
     }
   });
 });
+
+describe('postReach on a Wild Isle follows the supply line (#863)', () => {
+  // My home at (0,0), mine at (1,0), a rival's gap at (2,0), mine again at
+  // (3,0), and a post at (4,0) next to it. A Path from (1,0) joins (3,0) up.
+  const gap: SupplyTile[] = [
+    homeOf(0, 0, ME),
+    land(1, 0, ME),
+    land(2, 0, 'rival'),
+    land(3, 0, ME),
+    land(4, 0, null, 'trading-post'),
+  ];
+  const post = { q: 4, r: 0 };
+  const road = { q: 1, r: 0, ownerUserId: ME, level: 2 };
+
+  it('is connected when road-joined land of mine touches the post', () => {
+    const { supplied } = supplyMap(gap, [road], [], ME, RULES);
+    expect(postReach(post, gap, ME, supplied)).toEqual({ kind: 'connected' });
+    // Without the supply line (a Cozy Patch's rule) the gap cuts it off.
+    expect(postReach(post, gap, ME)).toEqual({ kind: 'journey', distance: 1 });
+  });
+
+  it('is a journey at 1 tile when the land next to it is severed', () => {
+    const { supplied } = supplyMap(gap, [], [], ME, RULES);
+    expect(postReach(post, gap, ME, supplied)).toEqual({ kind: 'journey', distance: 1 });
+  });
+
+  it('never counts a bridge, only my own land, as reaching the post', () => {
+    const tiles = [homeOf(0, 0, ME), land(1, 0, null, 'river'), land(2, 0, null, 'trading-post')];
+    const { supplied } = supplyMap(tiles, [], [{ q: 1, r: 0, ownerUserId: ME }], ME, RULES);
+    expect(supplied.has('1,0')).toBe(true);
+    expect(postReach({ q: 2, r: 0 }, tiles, ME, supplied)).toEqual({
+      kind: 'journey',
+      distance: 2,
+    });
+  });
+});

@@ -11,6 +11,7 @@ import {
   postReach,
   tradingPostLabels,
   type Hex,
+  type HexKey,
   type JourneyRules,
   type PostView,
   type PublicUser,
@@ -25,6 +26,7 @@ import type { BattlesService, JourneyBattlePort, StartResult } from '../battles/
 import { arriveInFarHollow, farHollowSeasonAt } from '../far-hollow/service.js';
 import { createFarHollowRepo } from '../far-hollow/repo.js';
 import { createTerritoryRepo } from '../territory/repo.js';
+import { suppliedFor } from '../territory/supply.js';
 import { createJourneysRepo } from './repo.js';
 
 /*
@@ -86,7 +88,7 @@ export function createJourneysService(options: JourneysServiceOptions): Journeys
         const tiles = await territory.listTiles(mapId);
         const post = tiles.find((t) => t.q === request.q && t.r === request.r);
         if (!post || !isTradingPost(post)) throw new AppError('NOT_FOUND', MESSAGES.notAPost);
-        const reach = postReach(post, tiles, user.id);
+        const reach = postReach(post, tiles, user.id, await suppliedFor(tx, mapId, user.id));
         if (!reach) throw new AppError('CONFLICT', MESSAGES.noLand);
         if (reach.kind === 'connected') throw new AppError('CONFLICT', MESSAGES.connected);
         const passes = await repo.visitPasses(mapId, user.id, at);
@@ -275,11 +277,18 @@ export async function listPostViews(
     tiles: readonly (ReachTile & { readonly terrain: string })[];
     at: Date;
     rules?: JourneyRules;
+    /** The viewer's supply line (`suppliedFor`), when the caller has it already. */
+    supplied?: ReadonlySet<HexKey> | null;
   },
 ): Promise<PostView[]> {
   const rules = input.rules ?? JOURNEY_RULES;
   const labels = tradingPostLabels(input.tiles, GAME_DATA.mapGen.tradingPosts);
   if (labels.size === 0) return [];
+  // On a Wild Isle, land a road, bridge or ferry joins to home counts (#863).
+  const supplied =
+    input.supplied !== undefined
+      ? input.supplied
+      : await suppliedFor(tx, input.mapId, input.userId);
   const passes = await createJourneysRepo(tx).visitPasses(input.mapId, input.userId, input.at);
   const passAt = new Map(passes.map((p) => [hexKey(p), p.visitUntil]));
   return input.tiles
@@ -287,7 +296,7 @@ export async function listPostViews(
     .flatMap((post) => {
       const label = labels.get(hexKey(post));
       if (!label) return [];
-      const reach = postReach(post, input.tiles, input.userId);
+      const reach = postReach(post, input.tiles, input.userId, supplied);
       const journey =
         reach?.kind === 'journey' ? journeyFor(reach.distance, rules, GROWTH_RULES.maxLevel) : null;
       return [
@@ -320,7 +329,8 @@ export async function requirePostAccess(
   const tiles = await createTerritoryRepo(tx).listTiles(input.mapId);
   const post = tiles.find((t) => t.q === input.post.q && t.r === input.post.r);
   if (!post || !isTradingPost(post)) throw new AppError('NOT_FOUND', MESSAGES.notAPost);
-  if (postReach(post, tiles, input.userId)?.kind === 'connected') return;
+  const supplied = await suppliedFor(tx, input.mapId, input.userId);
+  if (postReach(post, tiles, input.userId, supplied)?.kind === 'connected') return;
   const passes = await createJourneysRepo(tx).visitPasses(input.mapId, input.userId, input.at);
   if (passes.some((p) => p.postTileId === post.id)) return;
   throw new AppError('FORBIDDEN', MESSAGES.needJourney);

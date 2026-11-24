@@ -54,7 +54,8 @@ import {
   type DbClient,
   type Executor,
 } from '../../db/client.js';
-import { keepers, loreFound, sessions, tileExplore, users } from '../../db/schema.js';
+import { keepers, loreFound, sessions, tileExplore, tileRoads, users } from '../../db/schema.js';
+import { cutOffFromVillage } from '../../../tests/road-join.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
@@ -1218,6 +1219,29 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         );
       }
       expect(communityReach(village, tiles, me.id).reach).toBe('touching');
+    });
+
+    it('opens to land a road joins to home on a Wild Isle, never to land cut off (#863)', async () => {
+      const server = await start();
+      const me = await player();
+      const mapId = await patch(server, me);
+      const square = await reachVillage(server, me, mapId);
+      const village = (await tilesOf(mapId)).filter((t) => t.communityId === square.communityId);
+      const url = `/maps/${mapId}/explore?q=${String(square.q)}&r=${String(square.r)}`;
+      // Cut off from home, with no road: still refused.
+      const { road } = await cutOffFromVillage(db, mapId, await tilesOf(mapId), me.id, village);
+      const cut = await call(server, 'GET', url, me);
+      expect(cut.statusCode).toBe(403);
+      // A Paved road joins it up: the supply line counts, as it does for stranding.
+      await db.insert(tileRoads).values({ tileId: road.id, mapId, ownerUserId: me.id, level: 3 });
+      const joined = await call(server, 'GET', url, me);
+      expect(joined.statusCode, joined.body).toBe(200);
+      // The map view says so too: the same rule, the same inputs.
+      const res = await call(server, 'GET', `/maps/${mapId}/view`, me);
+      const mine = MapViewSchema.parse(res.json()).communities?.find(
+        (c) => c.id === square.communityId,
+      );
+      expect(mine?.reach).toBe('touching');
     });
 
     it('never finishes: every spot searched is still no ✨ and no homestead', async () => {

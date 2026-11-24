@@ -33,6 +33,7 @@ import { consumeItems, grantItems, lockGrantRows } from '../inventory/service.js
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { createTendingRepo, createTerritoryRepo } from '../territory/repo.js';
+import { suppliedFor } from '../territory/supply.js';
 import {
   communitiesTransaction,
   createCommunitiesRepo,
@@ -252,6 +253,7 @@ export function createRestoreService(options: RestoreServiceOptions): RestoreSer
           village.map((t) => ({ q: t.q, r: t.r })),
           mapTiles,
           user.id,
+          await suppliedFor(tx, mapId, user.id),
         );
         const problem = restoreProblem({
           won: community.ownerUserId !== null,

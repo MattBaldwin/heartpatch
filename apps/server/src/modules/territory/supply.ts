@@ -5,6 +5,7 @@ import {
   patchRules,
   supplyMap,
   type Hex,
+  type HexKey,
   type PatchRules,
   type Supply,
   type TravelRules,
@@ -76,6 +77,21 @@ export async function supplyFor(
   travel: TravelRules,
 ): Promise<Supply> {
   return lineOf(await supplyInputs(tx, mapId), userId, travel);
+}
+
+/**
+ * The land joined to home for reaching Hollowed villages and trading posts
+ * (#863): the player's supply line on a Wild Isle, null on a Cozy Patch
+ * (where the shared reach rules fall back to `connectedLand`). Pass it to
+ * `communityReach` / `postReach` so the view and the permission agree.
+ */
+export async function suppliedFor(
+  tx: Executor,
+  mapId: string,
+  userId: string,
+): Promise<ReadonlySet<HexKey> | null> {
+  const travel = (await mapPatchRules(tx, mapId))?.travel ?? null;
+  return travel ? (await supplyFor(tx, mapId, userId, travel)).supplied : null;
 }
 
 /**

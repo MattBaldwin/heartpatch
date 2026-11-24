@@ -9,6 +9,7 @@ import {
   type PublicTile,
   type WsEventMessage,
 } from '@heartpatch/shared';
+import { BRIDGE_ID, DOCK_ID } from '../roads/travel-model.js';
 
 // The client's copy of one map (tech spec §6 "State"): exactly what the
 // server sent, plus live events applied in seq order. The server is the
@@ -28,6 +29,9 @@ import {
  *   owner's homestead and exploring, #242; a gatherer arriving: its look,
  *   masked for me, #602).
  */
+/** Bridges and ferry docks: they carry a Wild Isle supply line (#621). */
+const CROSSINGS: ReadonlySet<string> = new Set([BRIDGE_ID, DOCK_ID]);
+
 export type LiveEventEffect = 'none' | 'redraw' | 'resync' | 'refresh';
 
 export class MapState {
@@ -83,6 +87,8 @@ export class MapState {
       // Its Keeper collected its morning gift (PR 3b): the view says it's taken.
       // Its Keeper dug its cellar key up or opened the cellar (PR 2c, only
       // they hear it): the view's key hunt moves on.
+      // A road laid, raised or taken up moves a Wild Isle supply line, and
+      // with it my reach to Hollows that the view's villages carry (#863).
       case 'community.mended':
       case 'tile.restored':
       case 'community.restored':
@@ -97,6 +103,9 @@ export class MapState {
       case 'post.placed':
       case 'community.placed':
       case 'tile.cleared':
+      case 'road.built':
+      case 'road.upgraded':
+      case 'road.removed':
         return 'resync';
       case 'clearing.started': {
         // "Clearing, ready at …" on the tile panel (#242).
@@ -249,7 +258,10 @@ export class MapState {
         if (!parsed.success) return 'resync';
         // Fires on land are built and fuelled from the map itself (#202), so
         // the map redraws them (and their glow) at once.
-        return this.putBuilding(parsed.data.building) ? 'redraw' : 'none';
+        const put = this.putBuilding(parsed.data.building);
+        // A bridge or ferry dock moves the supply line, so Hollow reach (#863).
+        if (CROSSINGS.has(parsed.data.building.buildingId)) return 'resync';
+        return put ? 'redraw' : 'none';
       }
       case 'building.paused':
       case 'building.resumed': {
@@ -286,9 +298,12 @@ export class MapState {
       case 'building.removed': {
         const parsed = GAME_EVENTS['building.removed'].public.safeParse(event.data);
         if (!parsed.success) return 'resync';
-        return this.dropBuilding(hexKey(parsed.data), parsed.data.buildingRowId)
-          ? 'redraw'
-          : 'none';
+        const key = hexKey(parsed.data);
+        const gone = this.byHex.get(key)?.buildings.find((b) => b.id === parsed.data.buildingRowId);
+        const dropped = this.dropBuilding(key, parsed.data.buildingRowId);
+        // A bridge or ferry dock taken down moves the supply line, so Hollow reach (#863).
+        if (gone && CROSSINGS.has(gone.buildingId)) return 'resync';
+        return dropped ? 'redraw' : 'none';
       }
       case 'fence.built':
       case 'fence.upgraded':

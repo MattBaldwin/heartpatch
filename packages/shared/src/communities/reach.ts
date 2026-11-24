@@ -1,5 +1,5 @@
-import { hexDistance, hexKey, hexNeighbors, type Hex } from '../hex/index.js';
-import { connectedLand, type ReachTile } from '../territory/reach.js';
+import { hexDistance, hexKey, hexNeighbors, type Hex, type HexKey } from '../hex/index.js';
+import { joinedLand, type ReachTile } from '../territory/reach.js';
 
 // How a player reaches a Hollowed Community (#306). Pure, the trading posts'
 // `postReach` shape: the server fills `CommunityView.reach` with it and the
@@ -13,16 +13,19 @@ export interface CommunityReach {
 
 /**
  * - `touching`: a village tile is in, or next to, the player's land joined to
- *   home (`connectedLand`), so they may explore it by day;
+ *   home (`joinedLand`: their supply line on a Wild Isle when `supplied` is
+ *   passed, #863, else `connectedLand`), so they may explore it by day;
  * - `away`: it isn't, `distance` steps from their nearest owned tile to the
  *   nearest village tile (cut-off land counts, as for posts; at least 1).
+ *   `away` at 1 always means land of theirs in or next to it is cut off.
  */
 export function communityReach(
   villageTiles: readonly Hex[],
   tiles: readonly ReachTile[],
   userId: string,
+  supplied?: ReadonlySet<HexKey> | null,
 ): CommunityReach {
-  const connected = connectedLand(tiles, userId);
+  const connected = joinedLand(tiles, userId, supplied);
   const touching = villageTiles.some(
     (v) => connected.has(hexKey(v)) || hexNeighbors(v).some((n) => connected.has(hexKey(n))),
   );

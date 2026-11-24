@@ -51,8 +51,8 @@ describe('communityFlagLabel', () => {
     expect(communityFlagLabel(village({ reach: 'away', distance: 3 }))).toBe(
       '🕯️ Bramble Hollow · 3 tiles away',
     );
-    expect(communityFlagLabel(village({ reach: 'away', distance: 1 }))).toBe(
-      '🕯️ Bramble Hollow · 1 tile away',
+    expect(communityFlagLabel(village({ reach: 'away', distance: 2 }))).toBe(
+      '🕯️ Bramble Hollow · 2 tiles away',
     );
   });
 
@@ -87,13 +87,22 @@ describe('communityPanel', () => {
     expect(communityPanel(village(), 'old-forest', true, true).note).toBeNull();
   });
 
+  it('says my land by it is cut off from home at 1 tile, not "claim land" (#863)', () => {
+    expect(communityFlagLabel(village({ reach: 'away', distance: 1 }))).toBe(
+      '🕯️ Bramble Hollow · cut off',
+    );
+    const cut = communityPanel(village({ reach: 'away', distance: 1 }), 'hills', false, true);
+    expect(cut.lines[0]).toBe('🧭 Your nearby land is cut off. Join it up to explore!');
+    expect(cut.open).toBe(false);
+  });
+
   it('says how to get there when it is away', () => {
     const far = communityPanel(village({ reach: 'away', distance: 4 }), 'meadow', false);
     expect(far.lines[0]).toBe('🧭 4 tiles from your land. Claim land toward it to explore!');
     expect(far.open).toBe(false);
     expect(far.note).toBeNull();
-    const near = communityPanel(village({ reach: 'away', distance: 1 }), 'meadow', false);
-    expect(near.lines[0]).toBe('🧭 1 tile from your land. Claim land toward it to explore!');
+    const near = communityPanel(village({ reach: 'away', distance: 2 }), 'meadow', false);
+    expect(near.lines[0]).toBe('🧭 2 tiles from your land. Claim land toward it to explore!');
     expect(communityPanel(village({ reach: null }), 'meadow', false).lines[0]).toBe(
       COMMUNITY_TEXT.noLand,
     );

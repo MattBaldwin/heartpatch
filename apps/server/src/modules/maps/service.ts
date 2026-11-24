@@ -62,6 +62,7 @@ import { requireMember } from './members.js';
 import { homesteadOf } from '../explore/homesteads.js';
 import { createExploreRepo } from '../explore/repo.js';
 import { listPostViews } from '../journeys/service.js';
+import { suppliedFor } from '../territory/supply.js';
 import { settleKeys } from '../communities/key-moves.js';
 import { communitiesView, storeCommunities, villageMorning } from '../communities/service.js';
 import { createTerritoryRepo } from '../territory/repo.js';
@@ -519,6 +520,8 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         const met = new Set(seen.map((row) => row.speciesId));
         // Trading posts (#269), named by their place in (q, r) order.
         const posts = tradingPostLabels(tiles, GAME_DATA.mapGen.tradingPosts);
+        // My supply line on a Wild Isle, read once for posts' and villages' reach (#863).
+        const supplied = await suppliedFor(tx, mapId, user.id);
         const exploredAt = new Map(
           explored.map((row) => [
             `${String(row.q)},${String(row.r)}`,
@@ -560,13 +563,14 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
             ),
           ),
           // How this viewer reaches each trading post (#270).
-          posts: await listPostViews(tx, { mapId, userId: user.id, tiles, at }),
+          posts: await listPostViews(tx, { mapId, userId: user.id, tiles, at, supplied }),
           // The grey villages (#306), and how this viewer reaches each.
           communities: await communitiesView(tx, {
             mapId,
             userId: user.id,
             tiles,
             morning: villageMorning(at, map.timeZone),
+            supplied,
           }),
           // My Home's gift dot (#731c): a plain read that rolls nothing.
           giftWaiting:

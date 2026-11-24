@@ -9,6 +9,7 @@ import {
   morningGiftOf,
   villageLights,
   type CommunityView,
+  type HexKey,
   type PlacedCommunity,
   type ReachTile,
   type SafeFire,
@@ -16,6 +17,7 @@ import {
 } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import { latestLocalMinute } from '../../lib/time.js';
+import { suppliedFor } from '../territory/supply.js';
 import { createCommunitiesRepo, type CommunityViewRow } from './repo.js';
 
 /*
@@ -100,10 +102,22 @@ export async function storeCommunities(
  */
 export async function communitiesView(
   tx: Executor,
-  input: { mapId: string; userId: string; tiles: readonly ReachTile[]; morning: Date },
+  input: {
+    mapId: string;
+    userId: string;
+    tiles: readonly ReachTile[];
+    morning: Date;
+    /** The viewer's supply line (`suppliedFor`), when the caller has it already. */
+    supplied?: ReadonlySet<HexKey> | null;
+  },
 ): Promise<CommunityView[]> {
   const repo = createCommunitiesRepo(tx);
   const rows = await repo.listForView(input.mapId);
+  // On a Wild Isle, land a road, bridge or ferry joins to home counts (#863).
+  let supplied = input.supplied ?? null;
+  if (input.supplied === undefined && rows.length > 0) {
+    supplied = await suppliedFor(tx, input.mapId, input.userId);
+  }
   // The viewer's own gift villages (PR 3b), and which of them they've collected this morning.
   const gifts = rows.filter(
     (c) => c.ownerUserId === input.userId && morningGiftOf(c.kind, COMMUNITY_RULES) !== null,
@@ -116,7 +130,7 @@ export async function communitiesView(
   );
   return rows.map((c) => {
     const village = c.tiles.map((t) => ({ q: t.q, r: t.r }));
-    const { reach, distance } = communityReach(village, input.tiles, input.userId);
+    const { reach, distance } = communityReach(village, input.tiles, input.userId, supplied);
     const items = c.ownerUserId === input.userId ? morningGiftOf(c.kind, COMMUNITY_RULES) : null;
     return {
       id: c.id,

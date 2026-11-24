@@ -7,6 +7,7 @@ import {
   type HexKey,
   type HighlightTarget,
   type MapView,
+  type Supply,
   type PublicTile,
   type PublicUser,
   type WsEventMessage,
@@ -53,6 +54,8 @@ import './map.css';
 
 export interface MapScreenOptions {
   root: HTMLElement;
+  /** My supply line on a Wild Isle (#621): land it joins to home reaches a post (#863). */
+  supply?: (view: MapView) => Supply | undefined;
   /** Puts a scene on screen: the map's, or the default one (null). */
   showScene: (build: SceneBuilder | null) => void;
   /** Draws a few frames after a change (`Stage.invalidate`). */
@@ -413,7 +416,9 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
         (id) => state.member(id),
         user?.id ?? null,
         seasonsOn(state.view.map.timeZone, options.now?.() ?? new Date()),
-        isTradingPost(tile) && user ? postReach(tile, state.view.tiles, user.id) : null,
+        isTradingPost(tile) && user
+          ? postReach(tile, state.view.tiles, user.id, options.supply?.(state.view)?.supplied)
+          : null,
         seedName(state.view, tile),
       ),
     );

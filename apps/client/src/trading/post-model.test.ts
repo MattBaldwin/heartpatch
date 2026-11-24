@@ -1,7 +1,7 @@
-import { hexKey, hexNeighbors, isTradingPost, type MapView } from '@heartpatch/shared';
+import { hexKey, hexNeighbors, isTradingPost, type HexKey, type MapView } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { testView, userId } from '../map/test-view.js';
-import { VISIT_POST, postFlagLabel, postFlags, postReachLine } from './post-model.js';
+import { POST_CUT_OFF, VISIT_POST, postFlagLabel, postFlags, postReachLine } from './post-model.js';
 
 /** A view where player 1 owns the tile next to the first post, joined to home by a strip. */
 function connectedView(): MapView {
@@ -57,6 +57,33 @@ describe('postFlags', () => {
     expect(later.some((f) => f.reach?.kind === 'connected')).toBe(true);
   });
 
+  it('follows my supply line on a Wild Isle: road-joined land reaches a post (#863)', () => {
+    const view = connectedView();
+    const me = userId(1);
+    // Free one tile of the strip that isn't home and doesn't touch the post: cut off.
+    const post = view.tiles.find(
+      (t) =>
+        isTradingPost(t) &&
+        postFlags(view, me).find((f) => f.tile === t)?.reach?.kind === 'connected',
+    )!;
+    const touchesPost = (t: { q: number; r: number }) =>
+      hexNeighbors(t).some((n) => n.q === post.q && n.r === post.r);
+    const gap = view.tiles.find(
+      (t) => t.ownerUserId === me && t.homeSlot === null && !touchesPost(t),
+    )!;
+    const cut: MapView = {
+      ...view,
+      tiles: view.tiles.map((t) => (t === gap ? { ...t, ownerUserId: null } : t)),
+    };
+    const reachOf = (supplied?: ReadonlySet<HexKey>) =>
+      postFlags(cut, me, supplied).find((f) => f.tile.q === post.q && f.tile.r === post.r)?.reach;
+    // Adjacency alone (a Cozy Patch): the land by it is cut off, 1 tile.
+    expect(reachOf()).toEqual({ kind: 'journey', distance: 1 });
+    // A road carries the supply line across the gap: all my land is supplied.
+    const supplied = new Set(cut.tiles.filter((t) => t.ownerUserId === me).map(hexKey));
+    expect(reachOf(supplied)).toEqual({ kind: 'connected' });
+  });
+
   it('knows nothing about reach for someone signed out', () => {
     expect(postFlags(testView(2), null).every((f) => f.reach === null)).toBe(true);
   });
@@ -80,6 +107,9 @@ describe('post words', () => {
     expect(postReachLine({ kind: 'connected' })).toMatch(/Your land reaches it/);
     expect(postReachLine({ kind: 'journey', distance: 3 })).toMatch(/^🧭 3 tiles from your land/);
     expect(postReachLine(null)).toBeNull();
+    // 1 tile: land of mine next to it is cut off from home (#863).
+    expect(postReachLine({ kind: 'journey', distance: 1 })).toBe(POST_CUT_OFF);
+    expect(POST_CUT_OFF).toBe('🧭 Your nearby land is cut off. Join it up or journey!');
     expect(VISIT_POST).toBe('Visit post');
   });
 });

@@ -32,6 +32,13 @@ export const COMMUNITY_TEXT = {
   touching: '🔗 Your land touches it. Explore by day, restore with Heartdust!',
   away: (n: number) => `🧭 ${tiles(n)} from your land. Claim land toward it to explore!`,
   noLand: '🧭 Claim land toward it to explore!',
+  /**
+   * `away` at 1 tile (#863): land of mine is in or next to it, but cut off
+   * from home, so claiming toward it can't help. Joining it back up can.
+   */
+  cutOff: '🧭 Your nearby land is cut off. Join it up to explore!',
+  /** The flag's tail for that case: "🕯️ Marrow Hollow · cut off". */
+  cutOffFlag: 'cut off',
   night: 'Open by day only. Too spooky after dark!',
   /** The touching line until later PRs wire Explore and Restore in. */
   soon: '🔗 Your land touches it! Exploring and restoring open soon 🕯️',
@@ -118,8 +125,9 @@ export function communityOf(
 
 /**
  * The flag over a village: "🕯️ Bramble Hollow · 1/5 restored" when my land
- * touches it, "🕯️ Bramble Hollow · 3 tiles away" when it doesn't, and just
- * its name when I have no land here.
+ * touches it, "🕯️ Bramble Hollow · 3 tiles away" when it doesn't ("· cut off"
+ * at 1 tile: my land by it is cut off from home, #863), and just its name
+ * when I have no land here.
  */
 export function communityFlagLabel(
   c: Pick<CommunityView, 'name' | 'tiles' | 'restored' | 'reach' | 'distance'> &
@@ -131,6 +139,7 @@ export function communityFlagLabel(
   if (c.reach === 'touching') {
     return `${name} · ${String(c.restored)}/${String(c.tiles.length)} restored`;
   }
+  if (c.reach === 'away' && c.distance === 1) return `${name} · ${COMMUNITY_TEXT.cutOffFlag}`;
   if (c.reach === 'away' && c.distance !== null) return `${name} · ${tiles(c.distance)} away`;
   return name;
 }
@@ -182,9 +191,11 @@ export function communityPanel(
       ? wired
         ? COMMUNITY_TEXT.touching
         : COMMUNITY_TEXT.soon
-      : c.reach === 'away' && c.distance !== null
-        ? COMMUNITY_TEXT.away(c.distance)
-        : COMMUNITY_TEXT.noLand;
+      : c.reach === 'away' && c.distance === 1
+        ? COMMUNITY_TEXT.cutOff
+        : c.reach === 'away' && c.distance !== null
+          ? COMMUNITY_TEXT.away(c.distance)
+          : COMMUNITY_TEXT.noLand;
   const open = !night && c.reach === 'touching';
   return {
     title: `${name}${COMMUNITY_TEXT.tag}`,

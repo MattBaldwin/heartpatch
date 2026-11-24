@@ -36,11 +36,31 @@ export function connectedLand(tiles: readonly ReachTile[], userId: string): Set<
 }
 
 /**
+ * The player's land joined to home, for reaching villages and posts (#863).
+ * On a Wild Isle pass their supply line (`supplyMap(...).supplied`): land a
+ * road, bridge or ferry joins up counts, as it does for stranding. Only
+ * their own land in it counts (a bridge is a crossing, not land). Without
+ * one (a Cozy Patch) it is `connectedLand`.
+ */
+export function joinedLand(
+  tiles: readonly ReachTile[],
+  userId: string,
+  supplied?: ReadonlySet<HexKey> | null,
+): Set<HexKey> {
+  if (!supplied) return connectedLand(tiles, userId);
+  return new Set(
+    tiles.filter((t) => t.ownerUserId === userId && supplied.has(hexKey(t))).map(hexKey),
+  );
+}
+
+/**
  * How a player reaches a trading post (owner decisions 1–3 on #30):
- * - `connected`: their land joined to home touches it, so no journey is needed;
+ * - `connected`: their land joined to home (`joinedLand`: the supply line on
+ *   a Wild Isle, #863) touches it, so no journey is needed;
  * - `journey`: it doesn't, and a journey's difficulty grows with `distance`,
  *   the steps from the post to their nearest owned tile (home ring included,
- *   cut-off land too, so a cut-off tile next to it is distance 1).
+ *   cut-off land too, so a cut-off tile next to it is distance 1: a journey
+ *   at distance 1 always means land of theirs next to it is cut off).
  * Null when they own no land on the map.
  */
 export type PostReach =
@@ -50,8 +70,9 @@ export function postReach(
   post: Hex,
   tiles: readonly ReachTile[],
   userId: string,
+  supplied?: ReadonlySet<HexKey> | null,
 ): PostReach | null {
-  const connected = connectedLand(tiles, userId);
+  const connected = joinedLand(tiles, userId, supplied);
   if (hexNeighbors(post).some((n) => connected.has(hexKey(n)))) return { kind: 'connected' };
   let distance = Infinity;
   for (const t of tiles) {
