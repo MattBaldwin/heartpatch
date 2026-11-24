@@ -668,8 +668,8 @@ describe('a boss fight frames the boss face first (#868)', () => {
     for (const p of posts) {
       // A friend's head (its drawn height, without the fit margin) is in the band.
       const head = project(shot, band.aspect, { x: p.x, y: (4.2 - 0.3) / 1.25, z: p.z }).y;
-      expect(head, `${String(p.x)}`).toBeGreaterThan(band.safe.top);
-      expect(head, `${String(p.x)}`).toBeLessThan(band.safe.bottom);
+      expect(head, String(p.x)).toBeGreaterThan(band.safe.top);
+      expect(head, String(p.x)).toBeLessThan(band.safe.bottom);
     }
   });
 
