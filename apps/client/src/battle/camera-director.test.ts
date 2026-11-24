@@ -1,7 +1,7 @@
 import { GAME_DATA, visualRegistry } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { squishyParams } from '../procedural/params.js';
-import { ARENA_STAGE } from './arena-config.js';
+import { ARENA_MOODS, ARENA_STAGE } from './arena-config.js';
 import battleCss from './battle.css?raw';
 import { BATTLE_CAMERA, FIGHTER, HOMES, TEAM_ARENA } from './battle-config.js';
 import {
@@ -82,10 +82,10 @@ describe('a boss fight on a notched iPhone (#234)', () => {
       expect(distance).toBeLessThanOrEqual(team.maxFitDistance);
       // The camera to the fight's far side (the boss) stays under the dome's radius.
       expect(distance + 10).toBeLessThan(ARENA_STAGE.skyRadius);
-      for (const fogEnd of [85, 90]) {
-        const [, end] = fogFor([25, fogEnd], distance, [0, 0], team);
+      for (const [mood, { fog }] of Object.entries(ARENA_MOODS)) {
+        const [, end] = fogFor(fog, distance, [0, 0], team);
         // The ground under the boss, behind the aim, is well short of the fog's end.
-        expect(distance + 10, `fog ${String(fogEnd)}`).toBeLessThan(end - 20);
+        expect(distance + 10, mood).toBeLessThan(end - 20);
       }
     });
   }
@@ -96,6 +96,34 @@ describe('a boss fight on a notched iPhone (#234)', () => {
     const free = frameDistance(aspect, result, bossFit, uncapped).distance;
     expect(free).toBeLessThan(team.maxFitDistance);
     expect(capped).toBeCloseTo(free, 9);
+  });
+
+  it('shows the team and the ground in the band; the boss tucks its head under the plate (the allowance)', () => {
+    // The agreed trade-off (#234 hotfix): at the cap the team stands whole in
+    // the stage band, but only the boss's feet and legs show; its head sits
+    // under the plate. Measured: head ≈ 0.253, feet ≈ 0.397 of the screen
+    // height, band 0.378–0.529. A follow-up gives the stage more room; until
+    // then this pins the allowance so a change either way is seen.
+    const shot = new CameraDirector({ a: HOMES.mine, b: HOMES.theirs }, true, team).shot(
+      0,
+      aspect,
+      fighting,
+      bossFit,
+    );
+    const [boss, ...friends] = [bossFit[3]!, ...bossFit.slice(0, 3)];
+    for (const f of friends) {
+      const head = project(shot, aspect, { x: f.x, y: f.h, z: f.z });
+      const feet = project(shot, aspect, { x: f.x, y: 0, z: f.z });
+      expect(head.y, `head ${String(f.x)}`).toBeGreaterThan(fighting.top);
+      expect(feet.y, `feet ${String(f.x)}`).toBeLessThan(fighting.bottom);
+    }
+    const bossHead = project(shot, aspect, { x: boss.x, y: boss.h, z: boss.z });
+    const bossFeet = project(shot, aspect, { x: boss.x, y: 0, z: boss.z });
+    expect(bossHead.y).toBeCloseTo(0.253, 2);
+    expect(bossFeet.y).toBeCloseTo(0.397, 2);
+    // Its feet stand inside the band: the boss is there, not lost in the sky.
+    expect(bossFeet.y).toBeGreaterThan(fighting.top);
+    expect(bossFeet.y).toBeLessThan(fighting.bottom);
   });
 
   it('keeps every fighter on screen sideways at the cap', () => {

@@ -72,8 +72,10 @@ export function battleScale(
  * the safe region: sideways within the screen (with a margin), upwards within
  * the headroom under the pills, each judged at its own depth along the view.
  * The fight's box backs off no further than the arena reaches (`arenaReach`,
- * #652), but the fighters always fit: nothing covers them on any screen
- * (#142). On a portrait phone the reach is far beyond what any fight needs;
+ * #652), but the fighters fit (#142) up to `maxFitDistance`: past that the
+ * camera stops, inside the sky dome (#234), and on the thinnest stage bands
+ * (a notched iPhone's boss fight) a tall boss's head tucks under the plate.
+ * On a portrait phone the reach is far beyond what any fight needs;
  * there `battleScale` and the ground's size keep the camera over the arena
  * (camera-director.test.ts), and the reach binds only where the ground shows
  * to the screen's bottom (a wide iPad).

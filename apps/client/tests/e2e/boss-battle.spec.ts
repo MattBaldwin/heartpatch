@@ -209,11 +209,11 @@ test.describe('a mini-boss fight (#190)', () => {
       .poll(async () => (await battleState(page))?.scene?.framing?.distance ?? Infinity, {
         timeout: 15_000,
       })
-      .toBeLessThanOrEqual(70);
+      .toBeLessThanOrEqual(70); // BATTLE_CAMERA.maxFitDistance (e2e specs don't import src)
     const framing = (await battleState(page))?.scene?.framing;
     // The boss stands about 10 past the aim: it and its ground stay inside the
     // dome and short of the fog's end.
-    expect(framing!.distance + 10).toBeLessThan(95);
+    expect(framing!.distance + 10).toBeLessThan(95); // ARENA_STAGE.skyRadius
     expect(framing!.distance + 10).toBeLessThan(framing!.fogEnd);
     // And the stage between the plate and the team cards draws a scene, not one
     // flat colour. Chromium only: headless WebKit screenshots of the WebGL
@@ -222,8 +222,10 @@ test.describe('a mini-boss fight (#190)', () => {
     const top = await page
       .getByTestId('boss-plate')
       .evaluate((e) => e.getBoundingClientRect().bottom);
+    // The lower part of the stage band (it ends ~140 px under the plate, at the
+    // team cards), so no HUD is counted: the ground and the fighters' feet.
     const shot = await page.screenshot({
-      clip: { x: 0, y: top + 70, width: 393, height: 80 },
+      clip: { x: 0, y: top + 60, width: 393, height: 60 },
       animations: 'disabled',
     });
     const colours = await page.evaluate(async (b64) => {

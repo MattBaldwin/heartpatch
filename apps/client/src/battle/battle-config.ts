@@ -212,8 +212,10 @@ export const BATTLE_CAMERA: Readonly<BattleCameraConfig> = {
    * The furthest the camera ever sits, even when the fighters ask for more
    * (#234): a big boss in a notched iPhone's thin stage band asked for 160,
    * past the sky dome (`ARENA_STAGE.skyRadius`, 95), which then hid the whole
-   * fight, and past both fog ends (85 / 90). A boss's head may tuck under the
-   * plate on the narrowest phones; an empty screen is worse.
+   * fight, and past both fog ends (85 / 90). The cost: in that band a 7-unit
+   * boss's head and most of its body sit under the plate (measured: head at
+   * 0.25 of the screen, feet at 0.40, band from 0.38). An empty screen is
+   * worse; giving the stage more room is the follow-up.
    */
   maxFitDistance: 70, // TUNE: under the sky dome (the boss stands ~10 past the aim); the result screen's 65 still fits
   /**
