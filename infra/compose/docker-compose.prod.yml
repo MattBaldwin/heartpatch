@@ -66,6 +66,10 @@ services:
       # shipped the same way. A value in .env still wins (`off`, or `testers`
       # with HP_LONG_NIGHT_TESTERS).
       HP_LONG_NIGHT: ${HP_LONG_NIGHT:-on}
+      # Mini bosses are on for every patch (owner decision 2026-11-23), shipped
+      # the same way. A value in .env still wins (`off`, or `testers` with
+      # HP_MINI_BOSSES_TESTERS).
+      HP_MINI_BOSSES: ${HP_MINI_BOSSES:-on}
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
