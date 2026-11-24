@@ -126,6 +126,10 @@ export interface BattleSceneStats {
     band: { top: number; bottom: number };
     /** The boss's eyes-and-mouth box on screen (#868), fractions of the height from the top. */
     face: { top: number; bottom: number } | null;
+    /** The player's row's eyes-and-mouth boxes (#868), the same way; empty outside a boss fight. */
+    team: { top: number; bottom: number }[];
+    /** How squarely the boss faces the camera (1 straight on, 0 side-on, below 0 away), or null. */
+    bossFacing: number | null;
   } | null;
   /** The current step's clock: what is playing and how far in, ms (the dev hook). */
   readonly playing: { kind: PlaybackStep['kind']; at: number } | null;
@@ -163,6 +167,7 @@ export interface BattleSceneOptions {
   readonly team?: { readonly slots: readonly number[] };
 }
 
+const NO_FACES: readonly FacePoint[] = [];
 /** A squishy that may come out for a side (or a fence, #203: its building id). */
 export interface TeamMember {
   readonly speciesId: string;
@@ -282,6 +287,9 @@ export class BattleScene {
   readonly #fit: FitPoint[];
   /** The HUD's safe region plus the lowest row the stage shows (#652), reused every frame. */
   readonly #framing = { top: 0, bottom: 1, floor: 1 };
+  /** The team's faces, reused every frame (#868). */
+  readonly #teamFacePoints: FacePoint[] = [];
+  readonly #teamFacePool: FacePoint[] = [];
   /** The boss's face, reused every frame (#868). */
   readonly #bossFacePoint: FacePoint = { x: 0, z: 0, low: 0, high: 0 };
   readonly #instrumentation: SceneInstrumentation;
@@ -1037,6 +1045,10 @@ export class BattleScene {
             face: Number.isNaN(this.#camera.face.high)
               ? null
               : { top: this.#camera.face.high, bottom: this.#camera.face.low },
+            team: Number.isNaN(this.#camera.face.high)
+              ? []
+              : this.#camera.team.map((t) => ({ top: t.high, bottom: t.low })),
+            bossFacing: this.#bossFacing(),
           },
       playing: this.#playing
         ? { kind: this.#playing.kind, at: this.#now - this.#playing.start }
@@ -1277,7 +1289,15 @@ export class BattleScene {
         here.h = h + Math.max(0, rig.pose.lift);
       }
     }
-    const shot = this.#camera.shot(this.#now, aspect, this.#framed(), this.#fit, this.#bossFace());
+    const boss = this.#bossFace();
+    const shot = this.#camera.shot(
+      this.#now,
+      aspect,
+      this.#framed(),
+      this.#fit,
+      boss,
+      boss ? this.#teamFaces() : NO_FACES,
+    );
     this.#noteShot(shot);
     // A shot further back than usual pushes the fog back with it (#234).
     this.#lastDistance = shot.distance;
@@ -1321,6 +1341,38 @@ export class BattleScene {
     const face = rig.out?.face;
     if (!face || rig.down || rig.pose.scale < 0.2) return null;
     return posedFace(this.#bossFacePoint, rig.home, rig.fx, rig.fz, rig.pose, face);
+  }
+
+  /** The player's row's faces as drawn this frame (#868): their eyes stay above the team cards. */
+  #teamFaces(): readonly FacePoint[] {
+    const faces = this.#teamFacePoints;
+    faces.length = 0;
+    const row = this.#posts[this.#options.mySide];
+    for (const [i, rig] of row.entries()) {
+      const face = rig.out?.face;
+      if (!face || rig.down || rig.pose.scale < 0.2) continue;
+      const point = (this.#teamFacePool[i] ??= { x: 0, z: 0, low: 0, high: 0 });
+      faces.push(posedFace(point, rig.home, rig.fx, rig.fz, rig.pose, face));
+    }
+    return faces;
+  }
+
+  /**
+   * How squarely the boss faces the camera (#868, the dev hook): the cosine
+   * between where its face looks (its turn, `faceYaw`'s convention, plus a
+   * twirl) and the camera, on the ground; 1 looks straight at it, 0 side-on.
+   */
+  #bossFacing(): number | null {
+    if (this.#options.team === undefined) return null;
+    const rig = this.#rigs[this.#options.mySide === 'a' ? 'b' : 'a'];
+    const camera = this.#scene.activeCamera;
+    if (!rig.out || !camera) return null;
+    // The root turns to the other fighter, the turn node adds the three-quarter swing and a twirl.
+    const yaw = rig.root.rotation.y + rig.turn.rotation.y;
+    const cx = camera.position.x - rig.root.position.x;
+    const cz = camera.position.z - rig.root.position.z;
+    const len = Math.hypot(cx, cz) || 1;
+    return (-Math.sin(yaw) * cx - Math.cos(yaw) * cz) / len;
   }
 
   /**

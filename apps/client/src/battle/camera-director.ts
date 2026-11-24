@@ -237,6 +237,8 @@ export class CameraDirector {
    * screen height from the top (NaN with no face): the dev hook's check.
    */
   readonly face = { high: Number.NaN, low: Number.NaN };
+  /** Where the last shot put the near team's faces (#868), like `face`. */
+  readonly team: { high: number; low: number }[] = [];
   /** Reused every frame, so following the fight allocates nothing. */
   readonly #shot = {
     position: { x: 0, y: 0, z: 0 },
@@ -309,8 +311,10 @@ export class CameraDirector {
    * `fit` inside `safe`; in a boss fight the boss's `face` comes first
    * (#868): the picture slides down (lens shift, so the distance, the dome
    * cap and the fog stay as they were) until its eyes and mouth are inside
-   * the band, and the near team may tuck its feet under the team cards. The
-   * result is reused next call.
+   * the band. The near `team`'s faces cap the slide: their eyes stay above
+   * the team cards (only feet and bodies tuck under), and when both can't
+   * have the margin the boss gives up its own, never its eyes. The result is
+   * reused next call.
    */
   shot(
     now: number,
@@ -318,6 +322,7 @@ export class CameraDirector {
     safe: SafeRegion,
     fit: readonly FitPoint[],
     face: FacePoint | null = null,
+    team: readonly FacePoint[] = [],
   ): CameraShot {
     const dt = this.#last === null ? 1 : Math.min(0.1, Math.max(0, (now - this.#last) / 1000));
     this.#last = now;
@@ -360,10 +365,28 @@ export class CameraDirector {
     let want = 0;
     let high = Number.NaN;
     let low = Number.NaN;
-    if (face) {
+    // A face behind the camera can't be framed (and would poison the easing).
+    const seen =
+      face !== null &&
+      Number.isFinite(screenY(shot, face.x, face.high, face.z)) &&
+      Number.isFinite(screenY(shot, face.x, face.low, face.z));
+    if (face && seen) {
       high = screenY(shot, face.x, face.high, face.z);
       low = screenY(shot, face.x, face.low, face.z);
       want = faceDrop(high, low, safe, this.#config.faceMargin);
+      if (want > 0) {
+        // The team's eyes stay above the cards: the slide stops at their line…
+        let room = Infinity;
+        for (const t of team) {
+          room = Math.min(
+            room,
+            safe.bottom - this.#config.faceMargin - screenY(shot, t.x, t.low, t.z),
+          );
+        }
+        want = Math.min(want, Math.max(0, room));
+        // …unless that would leave the boss's eyes under the plate (they win, margin given up).
+        want = Math.max(want, safe.top - high);
+      }
     }
     // Snappy when the face rises out of the band (a windup's lift), gentle back.
     const ease = want > this.#drop ? Math.min(1, k * 3) : k;
@@ -371,12 +394,19 @@ export class CameraDirector {
     this.#drop += (want - this.#drop) * ease;
     // Easing never lets the eyes slip under the plate: a rising face (a windup's
     // power-up) is held at least at the band's top, whatever the lag.
-    if (face && high < safe.top) this.#drop = Math.max(this.#drop, safe.top - high);
+    if (seen && high < safe.top) this.#drop = Math.max(this.#drop, safe.top - high);
     if (Math.abs(this.#drop) < 1e-5) this.#drop = 0;
     // y = (1 − (v + shift)) / 2: sliding the picture down by `drop` lowers the shift by twice it.
     shot.shift = frame.shift - 2 * this.#drop;
     this.face.high = high + this.#drop;
     this.face.low = low + this.#drop;
+    // The team's faces where the shot put them (the dev hook's check), reused.
+    this.team.length = Math.min(this.team.length, team.length);
+    for (const [i, t] of team.entries()) {
+      const box = (this.team[i] ??= { high: 0, low: 0 });
+      box.high = screenY(shot, t.x, t.high, t.z);
+      box.low = screenY(shot, t.x, t.low, t.z);
+    }
     return shot;
   }
 }

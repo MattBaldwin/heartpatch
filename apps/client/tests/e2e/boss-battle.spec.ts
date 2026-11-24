@@ -25,6 +25,8 @@ interface BattleDebug {
       fogEnd: number;
       band: { top: number; bottom: number };
       face: { top: number; bottom: number } | null;
+      team: { top: number; bottom: number }[];
+      bossFacing: number | null;
     } | null;
   } | null;
   boss: {
@@ -231,6 +233,11 @@ test.describe('a mini-boss fight (#190)', () => {
     expect(face).not.toBeNull();
     expect(face!.top).toBeGreaterThanOrEqual(band.top);
     expect(face!.bottom).toBeLessThanOrEqual(band.bottom);
+    // The team's eyes stay above the team cards (only their feet tuck under),
+    // and the framed boss looks at the camera.
+    expect(framing!.team.length).toBeGreaterThan(0);
+    for (const friend of framing!.team) expect(friend.bottom).toBeLessThanOrEqual(band.bottom);
+    expect(framing!.bossFacing).toBeGreaterThan(0.5);
     // The band is the HUD's own: it starts under the boss head (plate + Order strip).
     const headBottom = await page
       .locator('.boss-head')

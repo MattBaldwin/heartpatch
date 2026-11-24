@@ -733,6 +733,61 @@ describe('a boss fight frames the boss face first (#868)', () => {
   });
 });
 
+describe("a boss fight keeps the team's eyes above the team cards (#868)", () => {
+  const aspect = 393 / 852;
+  const team = { ...BATTLE_CAMERA, pitch: TEAM_ARENA.pitch };
+  const posts = TEAM_ARENA.posts[3];
+  const boss = TEAM_ARENA.boss;
+  const fit: FitPoint[] = [
+    ...posts.map((p) => ({ x: p.x, z: p.z, r: 2.4, h: 4.2 })),
+    { x: boss.x, z: boss.z, r: 2.57, h: 8.88 },
+  ];
+  const band = { top: 0.378, bottom: 0.529 };
+  const bossFace = (low: number, high: number): FacePoint => ({ x: boss.x, z: boss.z, low, high });
+  const row = (low: number, high: number): FacePoint[] =>
+    posts.map((p) => ({ x: p.x, z: p.z, low, high }));
+  const at = (shot: CameraShot, p: FacePoint) => ({
+    top: project(shot, aspect, { x: p.x, y: p.high, z: p.z }).y,
+    bottom: project(shot, aspect, { x: p.x, y: p.low, z: p.z }).y,
+  });
+
+  it("stops the slide at the team's eye line, the boss keeping its eyes in the band", () => {
+    // A small team (faces 2.2–2.9 up) and Rakelet's face (0.64–0.90 of 6.86).
+    const friends = row(2.2, 2.9);
+    const face = bossFace(4.4, 6.18);
+    const free = new CameraDirector(homes, true, team).shot(0, aspect, band, fit, face);
+    const freeLow = Math.max(...friends.map((f) => at(free, f).bottom));
+    // Without the team the slide would push their eyes under the cards.
+    expect(freeLow).toBeGreaterThan(band.bottom - team.faceMargin);
+    const director = new CameraDirector(homes, true, team);
+    const shot = director.shot(0, aspect, band, fit, face, friends);
+    for (const f of friends) {
+      expect(at(shot, f).bottom).toBeLessThanOrEqual(band.bottom - team.faceMargin + 1e-9);
+    }
+    expect(at(shot, face).top).toBeGreaterThanOrEqual(band.top - 1e-9);
+    expect(director.team).toHaveLength(3);
+    expect(director.team[0]!.low).toBeCloseTo(at(shot, friends[0]!).bottom, 9);
+  });
+
+  it("gives up the boss's margin, never its eyes, when both can't fit", () => {
+    // A team so low on screen that any slide hides it: the boss still gets its eyes in.
+    const friends = row(0.05, 0.1);
+    const face = bossFace(5.6, 6.6);
+    const shot = new CameraDirector(homes, true, team).shot(0, aspect, band, fit, face, friends);
+    expect(at(shot, face).top).toBeCloseTo(band.top, 9);
+  });
+
+  it('leaves a team the slide does not reach alone, and a face behind the camera unframed', () => {
+    const plain = new CameraDirector(homes, true, team).shot(0, aspect, band, fit);
+    const shift = plain.shift;
+    const behind = { x: 0, z: -500, low: 1, high: 2 };
+    const director = new CameraDirector(homes, true, team);
+    const shot = director.shot(0, aspect, band, fit, behind, row(2.2, 2.9));
+    expect(shot.shift).toBeCloseTo(shift, 9);
+    expect(Number.isFinite(shot.shift)).toBe(true);
+  });
+});
+
 describe('faceDrop', () => {
   const band = { top: 0.4, bottom: 0.5 };
   it('needs nothing when the face is inside the band', () => {
