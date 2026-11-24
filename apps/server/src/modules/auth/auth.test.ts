@@ -321,6 +321,25 @@ describe.skipIf(!url)('auth endpoints (needs DATABASE_URL)', () => {
       expect((await me(server, token)).user).toBeNull();
     });
 
+    it('gives the cookie a relative lifetime, so a game clock off the real one keeps it (#861)', async () => {
+      // An e2e server's game clock (HP_DEV_NOW) runs weeks behind the device's.
+      // An absolute Expires from it would reach the browser already past.
+      clock = new Date(Date.now() - 60 * DAY_MS);
+      const server = await start();
+      const res = await post(server, '/auth/signup', signupBody());
+      expect(res.statusCode).toBe(201);
+      const cookie = sessionCookie(res)!;
+      expect(cookie.maxAge).toBe(SESSION_TTL_MS / 1000);
+      expect(cookie.expires).toBeUndefined();
+
+      // A renewal sends the same full relative lifetime.
+      clock = new Date(clock.getTime() + 2 * DAY_MS);
+      const renewed = sessionCookie((await me(server, cookie.value)).res)!;
+      expect(renewed.value).toBe(cookie.value);
+      expect(renewed.maxAge).toBe(SESSION_TTL_MS / 1000);
+      expect(renewed.expires).toBeUndefined();
+    });
+
     it('ignores unknown tokens and clears the dead cookie', async () => {
       const server = await start();
       const dead = await me(server, 'made-up-token');

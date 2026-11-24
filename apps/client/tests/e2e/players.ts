@@ -243,7 +243,8 @@ export async function skipCinematic(page: Page): Promise<void> {
   const res = await page.request.post('/api/v1/cinematic/seen', {
     headers: { 'x-requested-with': 'heartpatch' },
   });
-  expect(res.ok()).toBe(true);
+  // The status and body say why (a 401 was a dropped session cookie, #861).
+  expect(res.ok(), `cinematic/seen: ${res.status()} ${await res.text()}`).toBe(true);
 }
 
 /**

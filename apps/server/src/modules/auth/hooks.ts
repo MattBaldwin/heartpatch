@@ -6,7 +6,7 @@ import type {
   preHandlerAsyncHookHandler,
 } from 'fastify';
 import { AppError } from '../../lib/errors.js';
-import { SESSION_COOKIE } from './limits.js';
+import { SESSION_COOKIE, SESSION_TTL_MS } from './limits.js';
 import type { AuthService, IssuedSession } from './service.js';
 
 // The auth contract later modules reuse (apps/server/README.md, "Auth").
@@ -31,6 +31,14 @@ export function requireUser(request: FastifyRequest): PublicUser {
   return request.user;
 }
 
+/**
+ * Sets `hp_session` for a fresh or renewed session. Its lifetime goes out as
+ * a relative Max-Age, never an absolute Expires: the date comes from the
+ * game clock, which a dev or e2e server (`HP_DEV_NOW`) runs weeks off the
+ * device's, and a device clock can be wrong too. Either way an absolute date
+ * can reach the browser already past, and it drops the cookie at once (#861).
+ * The server still ends the session by its own clock (`sessions.expires_at`).
+ */
 export function setSessionCookie(
   reply: FastifyReply,
   session: IssuedSession,
@@ -41,7 +49,7 @@ export function setSessionCookie(
     httpOnly: true,
     sameSite: 'lax',
     secure,
-    expires: session.expiresAt,
+    maxAge: SESSION_TTL_MS / 1000,
   });
 }
 

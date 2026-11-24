@@ -27,7 +27,6 @@ import {
 /** A logged-in device: the raw token goes in the `hp_session` cookie. */
 export interface IssuedSession {
   token: string;
-  expiresAt: Date;
 }
 
 export interface AuthResult {
@@ -95,7 +94,7 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
   const issueSession = (): { issued: IssuedSession; stored: NewSession } => {
     const { token, tokenHash } = newSessionToken();
     const expiresAt = new Date(now().getTime() + SESSION_TTL_MS);
-    return { issued: { token, expiresAt }, stored: { tokenHash, expiresAt } };
+    return { issued: { token }, stored: { tokenHash, expiresAt } };
   };
 
   return {
@@ -212,7 +211,7 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
       if (!renewDue) return { user: found.user, renewed: null };
       const expiresAt = new Date(at.getTime() + SESSION_TTL_MS);
       await repo.extendSession(found.sessionId, expiresAt);
-      return { user: found.user, renewed: { token, expiresAt } };
+      return { user: found.user, renewed: { token } };
     },
 
     operatorReset: async (username) => {
