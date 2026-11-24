@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { ReachTile } from '../territory/reach.js';
+import { TRAVEL_RULES } from '../data/travel.js';
+import { supplyMap, type ReachTile, type SupplyTile } from '../territory/reach.js';
 import { communityReach } from './reach.js';
 
 const ME = 'me';
@@ -69,5 +70,37 @@ describe('communityReach (#306)', () => {
       reach: null,
       distance: null,
     });
+  });
+});
+
+describe('communityReach on a Wild Isle follows the supply line (#863)', () => {
+  const land = (
+    q: number,
+    r: number,
+    ownerUserId: string | null = null,
+    homeSlot: number | null = null,
+  ) => ({ q, r, ownerUserId, homeSlot, terrain: 'meadow' }) satisfies SupplyTile;
+  // My home at (0,0), mine at (1,0), a rival's gap at (2,0), mine again at
+  // (3,0) by a village at (4,0). A Path from (1,0) joins (3,0) up.
+  const gap = [land(0, 0, ME, 0), land(1, 0, ME), land(2, 0, 'rival'), land(3, 0, ME), land(4, 0)];
+  const village = [{ q: 4, r: 0 }];
+  const road = { q: 1, r: 0, ownerUserId: ME, level: 2 };
+
+  it('is touching when road-joined land of mine is next to the village', () => {
+    const { supplied } = supplyMap(gap, [road], [], ME, TRAVEL_RULES);
+    expect(communityReach(village, gap, ME, supplied)).toEqual({
+      reach: 'touching',
+      distance: null,
+    });
+  });
+
+  it('is away at 1 tile when the land next to it is severed', () => {
+    const { supplied } = supplyMap(gap, [], [], ME, TRAVEL_RULES);
+    expect(communityReach(village, gap, ME, supplied)).toEqual({ reach: 'away', distance: 1 });
+  });
+
+  it('keeps adjacency on a Cozy Patch (no supply line)', () => {
+    expect(communityReach(village, gap, ME)).toEqual({ reach: 'away', distance: 1 });
+    expect(communityReach(village, gap, ME, null)).toEqual({ reach: 'away', distance: 1 });
   });
 });

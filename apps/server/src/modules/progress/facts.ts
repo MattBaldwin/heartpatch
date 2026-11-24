@@ -1,6 +1,6 @@
 import {
   canFade,
-  connectedLand,
+  joinedLand,
   EMPTY_PROGRESS_FACTS,
   hexDistance,
   firstHomeTiles,
@@ -19,6 +19,7 @@ import { createBuildingsRepo } from '../buildings/repo.js';
 import { createHouseRepo } from '../house/repo.js';
 import { contentmentsOf } from '../jobs/contentment.js';
 import { createTendingRepo, createTerritoryRepo } from '../territory/repo.js';
+import { suppliedFor } from '../territory/supply.js';
 import { createProgressRepo } from './repo.js';
 
 /*
@@ -94,9 +95,10 @@ export async function gatherProgressFacts(tx: Executor, input: FactsInput): Prom
   ).length;
 
   // A post is used once my land reaches it (`postReach`'s "connected"), or
-  // once I won a journey to it. Connected land is worked out once, not per post.
+  // once I won a journey to it. Connected land is worked out once, not per post
+  // (`joinedLand`: on a Wild Isle, my supply line, #863).
   const posts = new Set(wonPosts);
-  const connected = connectedLand(mapTiles, userId);
+  const connected = joinedLand(mapTiles, userId, await suppliedFor(tx, mapId, userId));
   for (const tile of mapTiles) {
     if (isTradingPost(tile) && hexNeighbors(tile).some((n) => connected.has(hexKey(n)))) {
       posts.add(tile.id);

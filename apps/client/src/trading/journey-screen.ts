@@ -6,6 +6,7 @@ import {
   postReach,
   type HexKey,
   type MapView,
+  type Supply,
   type PlayerBattle,
   type PublicTile,
   type PublicUser,
@@ -52,6 +53,8 @@ export interface JourneyScreenOptions {
    * visit pass's `visitUntil` is server time (#561). Tests pass a fake.
    */
   now?: () => number;
+  /** My supply line on a Wild Isle (#621): land it joins to home reaches a post (#863). */
+  supply?: (view: MapView) => Supply | undefined;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -227,7 +230,7 @@ export function createJourneyScreen(options: JourneyScreenOptions): JourneyScree
       return;
     }
     syncTicker(false);
-    const reach = postReach(tile, view.tiles, me);
+    const reach = postReach(tile, view.tiles, me, options.supply?.(view)?.supplied);
     if (reach?.kind === 'connected') {
       container.replaceChildren(visitButton(tile, view, null), ...farButton(tile));
       return;

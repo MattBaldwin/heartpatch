@@ -3,7 +3,14 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { CreateTorus } from '@babylonjs/core/Meshes/Builders/torusBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
-import { hexKey, hexToWorld, type HexKey, type MapView, type PublicTile } from '@heartpatch/shared';
+import {
+  hexKey,
+  hexToWorld,
+  type HexKey,
+  type MapView,
+  type PublicTile,
+  type Supply,
+} from '@heartpatch/shared';
 import { computerBadge } from '../computer-mates/computer-badge.js';
 import { homeFlags, type HomeFlag } from '../home/home-name-view.js';
 import { HEX_SIZE } from '../map/map-config.js';
@@ -130,7 +137,15 @@ const NEXT_UP_MOVES = '.next-up-chip, .next-up-sprout';
 /** The ring: just inside the tile's rim, lifted clear of the dome. TUNE. */
 const RING = { diameter: TILE_RADIUS * 1.84, thickness: 0.045, lift: 0.012, color: '#ffc94d' };
 
-export function createPostFlags(root: HTMLElement, me: () => string | null): PostFlags {
+/**
+ * `supply` is my supply line on a Wild Isle (#621, main passes the roads'),
+ * so land a road, bridge or ferry joins to home reaches a post (#863).
+ */
+export function createPostFlags(
+  root: HTMLElement,
+  me: () => string | null,
+  supply?: (view: MapView) => Supply | undefined,
+): PostFlags {
   let scene: Scene | null = null;
   const flags = new Map<HexKey, Flag & { post: PostFlag }>();
   /** Named homes' flags (#306), by member; placed after the posts'. */
@@ -225,7 +240,9 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
       mine === null
         ? null
         : (findHomeBases(view.tiles).find((h) => h.seed.ownerUserId === mine)?.seed ?? null);
-    const wanted = new Map(postFlags(view, mine).map((p) => [hexKey(p.tile), p] as const));
+    const wanted = new Map(
+      postFlags(view, mine, supply?.(view)?.supplied).map((p) => [hexKey(p.tile), p] as const),
+    );
     const named = new Map(homeFlags(view).map((h) => [h.userId, h] as const));
     for (const [id, flag] of homes) {
       if (!named.has(id)) {

@@ -84,6 +84,7 @@ import { consumeItems, grantItems, lockGrantRows } from '../inventory/service.js
 import { createLoreRepo } from '../lore/repo.js';
 import { requireMember } from '../maps/members.js';
 import { createTerritoryRepo } from '../territory/repo.js';
+import { suppliedFor } from '../territory/supply.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
 import { grantRekindledPiece, rekindledDrop } from '../wardrobe/rekindled.js';
 import { homesteadOf, refreshHomesteads } from './homesteads.js';
@@ -164,6 +165,7 @@ interface Grey {
  * other tile (mine, or someone's land, which the owner check refuses).
  */
 async function greyVillage(
+  tx: Executor,
   repo: ExploreRepo,
   mapId: string,
   tile: ExploreTileRow | null,
@@ -173,7 +175,9 @@ async function greyVillage(
   if (!tile?.communityId || tile.ownerUserId !== null) return null;
   const village = await repo.findVillage(tile.id);
   if (!village) return null;
-  const { reach } = communityReach(village.tiles, await repo.listTiles(mapId), userId);
+  // On a Wild Isle, land a road, bridge or ferry joins to home counts (#863).
+  const supplied = await suppliedFor(tx, mapId, userId);
+  const { reach } = communityReach(village.tiles, await repo.listTiles(mapId), userId, supplied);
   if (reach !== 'touching') throw new AppError('FORBIDDEN', MESSAGES.villageAway);
   const zone = await repo.mapTimeZone(mapId);
   const rules = { ...HOME_BASE_RULES, ...HOLLOW_RULES };
@@ -513,6 +517,7 @@ async function findKey(
  * tile has a puzzle.
  */
 async function lockPuzzleRow(
+  tx: Executor,
   repo: ExploreRepo,
   seed: string,
   mapId: string,
@@ -523,7 +528,7 @@ async function lockPuzzleRow(
   // The tile, so its owner can't change mid-try (restoring takes it first too).
   const locked = await repo.lockTileAt(mapId, at.q, at.r);
   if (!locked) throw new AppError('NOT_FOUND', MESSAGES.noTile);
-  const grey = await greyVillage(repo, mapId, locked, userId, now);
+  const grey = await greyVillage(tx, repo, mapId, locked, userId, now);
   if (!grey) throw new AppError('CONFLICT', MESSAGES.noPuzzle);
   const { tile, spots } = tileSpots(seed, await withKit(repo, mapId, locked), userId, grey);
   // An old finished row (from before the tile was a village) is one of my
@@ -686,7 +691,7 @@ export function createExploreService(options: ExploreServiceOptions) {
       await settleKeys(db, mapId, user.id);
       const repo = createExploreRepo(db);
       const found = await withKit(repo, mapId, await repo.findTileAt(mapId, at.q, at.r));
-      const grey = await greyVillage(repo, mapId, found, user.id, now());
+      const grey = await greyVillage(db, repo, mapId, found, user.id, now());
       const seed = await seedOf(db, mapId);
       // My own land no one can explore (cleared land): only the cellar key's glint, if it hides there.
       const bare = keyOnly(found, user.id, grey);
@@ -738,7 +743,7 @@ export function createExploreService(options: ExploreServiceOptions) {
           mapId,
           await repo.lockTileAt(mapId, request.q, request.r),
         );
-        const grey = await greyVillage(repo, mapId, locked, user.id, at);
+        const grey = await greyVillage(tx, repo, mapId, locked, user.id, at);
         const bare = keyOnly(locked, user.id, grey);
         if (bare && request.spot === KEY_SPOT.index) {
           return findKey(repo, tx, { mapId, userId: user.id, tile: bare, spots: [], at });
@@ -947,6 +952,7 @@ export function createExploreService(options: ExploreServiceOptions) {
         await requireMember(tx, user, mapId, ['multiplayer']);
         const seed = await seedOf(tx, mapId);
         const { grey, tile, spots, row } = await lockPuzzleRow(
+          tx,
           repo,
           seed,
           mapId,
@@ -988,7 +994,7 @@ export function createExploreService(options: ExploreServiceOptions) {
       await requireMember(db, user, mapId, ['multiplayer']);
       const repo = createExploreRepo(db);
       const found = await repo.findTileAt(mapId, request.q, request.r);
-      const grey = await greyVillage(repo, mapId, found, user.id, now());
+      const grey = await greyVillage(db, repo, mapId, found, user.id, now());
       if (!grey) throw new AppError('CONFLICT', MESSAGES.noPuzzle);
       const { tile, spots } = tileSpots(
         await seedOf(db, mapId),
@@ -1018,7 +1024,7 @@ export function createExploreService(options: ExploreServiceOptions) {
       await requireMember(db, user, mapId, ['multiplayer']);
       const repo = createExploreRepo(db);
       const found = await repo.findTileAt(mapId, request.q, request.r);
-      const grey = await greyVillage(repo, mapId, found, user.id, now());
+      const grey = await greyVillage(db, repo, mapId, found, user.id, now());
       if (!grey) throw new AppError('CONFLICT', MESSAGES.noPuzzle);
       const { tile, spots } = tileSpots(
         await seedOf(db, mapId),
@@ -1050,7 +1056,7 @@ export function createExploreService(options: ExploreServiceOptions) {
         await requireMember(tx, user, mapId, ['multiplayer']);
         const seed = await seedOf(tx, mapId);
         const first = await repo.findTileAt(mapId, request.q, request.r);
-        const grey = await greyVillage(repo, mapId, first, user.id, at);
+        const grey = await greyVillage(tx, repo, mapId, first, user.id, at);
         if (!grey) throw new AppError('CONFLICT', MESSAGES.noPuzzle);
         const { square } = grey.village;
         // The heart tile last, so `leave` leaves its page and the ones before it.
@@ -1061,7 +1067,7 @@ export function createExploreService(options: ExploreServiceOptions) {
         // Tile by tile in (q, r) order, each tile then my row for it (dev only:
         // lockPuzzleRow's order, repeated, not one statement's tiles-then-rows).
         for (const hex of take.sort((a, b) => a.q - b.q || a.r - b.r)) {
-          const { row, tile } = await lockPuzzleRow(repo, seed, mapId, hex, user.id, at);
+          const { row, tile } = await lockPuzzleRow(tx, repo, seed, mapId, hex, user.id, at);
           if (row.fragmentFoundAt === null) {
             await repo.setPuzzle(user.id, tile.id, { fragmentFoundAt: at });
           }
@@ -1088,6 +1094,7 @@ export function createExploreService(options: ExploreServiceOptions) {
         await requireMember(tx, user, mapId, ['multiplayer']);
         const seed = await seedOf(tx, mapId);
         const { grey, tile, spots, row } = await lockPuzzleRow(
+          tx,
           repo,
           seed,
           mapId,
@@ -1143,6 +1150,7 @@ export function createExploreService(options: ExploreServiceOptions) {
         await requireMember(tx, user, mapId, ['multiplayer']);
         const seed = await seedOf(tx, mapId);
         const { grey, tile, spots, row } = await lockPuzzleRow(
+          tx,
           repo,
           seed,
           mapId,

@@ -3,6 +3,8 @@ import {
   BATTLE_RULES,
   BattleResponseSchema,
   communityReach,
+  supplyMap,
+  TRAVEL_RULES,
   CLEARED_TERRAIN,
   GAME_DATA,
   GatherResponseSchema,
@@ -39,6 +41,7 @@ import {
   storySeed,
   TellStoryResponseSchema,
   type RelightMove,
+  type Hex,
   type HexKey,
   type MapDetail,
   type PublicUser,
@@ -54,7 +57,7 @@ import {
   type DbClient,
   type Executor,
 } from '../../db/client.js';
-import { keepers, loreFound, sessions, tileExplore, users } from '../../db/schema.js';
+import { keepers, loreFound, sessions, tileExplore, tileRoads, users } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
@@ -1144,6 +1147,34 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
   });
 
   describe('grey village tiles (#306 2a)', () => {
+    /**
+     * Wild Isle reach (#863): frees one tile of my path to the village so my
+     * land no longer touches it through my own land, and finds a tile of mine
+     * where a Paved road joins the land by the village back up to home (the
+     * supply line). Worked out with the shared rules; the test writes it.
+     */
+    function cutAndRoad(tiles: readonly Tile[], userId: string, village: readonly Hex[]) {
+      for (const cut of tiles.filter((t) => t.ownerUserId === userId && t.homeSlot === null)) {
+        const after = tiles.map((t) => (t.id === cut.id ? { ...t, ownerUserId: null } : t));
+        if (communityReach(village, after, userId).reach === 'touching') continue;
+        for (const road of after.filter((t) => t.ownerUserId === userId)) {
+          const roads = [{ q: road.q, r: road.r, ownerUserId: userId, level: 3 }];
+          const { supplied } = supplyMap(after, roads, [], userId, TRAVEL_RULES);
+          if (communityReach(village, after, userId, supplied).reach === 'touching') {
+            return { cut, road };
+          }
+        }
+      }
+      throw new Error('no tile to cut and road round');
+    }
+
+    /** Makes the patch a Wild Isle and cuts my path; the road to lay is the test's to lay. */
+    async function roadJoined(mapId: string, who: Player, village: readonly Hex[]) {
+      await db.execute(`update maps set patch_type = 'wild-isle' where id = '${mapId}'`);
+      const found = cutAndRoad(await tilesOf(mapId), who.id, village);
+      await db.execute(`update tiles set owner_user_id = null where id = '${found.cut.id}'`);
+      return found;
+    }
     /** My land reaches my nearest grey village (the dev route); its square. */
     async function reachVillage(server: FastifyInstance, who: Player, mapId: string) {
       const res = await call(server, 'POST', `/maps/${mapId}/dev/hollowed-reach`, who);
@@ -1218,6 +1249,29 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
         );
       }
       expect(communityReach(village, tiles, me.id).reach).toBe('touching');
+    });
+
+    it('opens to land a road joins to home on a Wild Isle, never to land cut off (#863)', async () => {
+      const server = await start();
+      const me = await player();
+      const mapId = await patch(server, me);
+      const square = await reachVillage(server, me, mapId);
+      const village = (await tilesOf(mapId)).filter((t) => t.communityId === square.communityId);
+      const url = `/maps/${mapId}/explore?q=${String(square.q)}&r=${String(square.r)}`;
+      // Cut off from home, with no road: still refused.
+      const { road } = await roadJoined(mapId, me, village);
+      const cut = await call(server, 'GET', url, me);
+      expect(cut.statusCode).toBe(403);
+      // A Paved road joins it up: the supply line counts, as it does for stranding.
+      await db.insert(tileRoads).values({ tileId: road.id, mapId, ownerUserId: me.id, level: 3 });
+      const joined = await call(server, 'GET', url, me);
+      expect(joined.statusCode, joined.body).toBe(200);
+      // The map view says so too: the same rule, the same inputs.
+      const res = await call(server, 'GET', `/maps/${mapId}/view`, me);
+      const mine = MapViewSchema.parse(res.json()).communities?.find(
+        (c) => c.id === square.communityId,
+      );
+      expect(mine?.reach).toBe('touching');
     });
 
     it('never finishes: every spot searched is still no ✨ and no homestead', async () => {

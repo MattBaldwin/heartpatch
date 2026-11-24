@@ -1,6 +1,7 @@
 import {
   isTradingPost,
   postReach,
+  type HexKey,
   type MapView,
   type PostReach,
   type PublicTile,
@@ -18,14 +19,22 @@ export interface PostFlag {
   readonly reach: PostReach | null;
 }
 
-/** Every trading post on the map, in index order, as this player reaches it. */
-export function postFlags(view: Pick<MapView, 'tiles'>, me: string | null): PostFlag[] {
+/**
+ * Every trading post on the map, in index order, as this player reaches it.
+ * `supplied` is my supply line on a Wild Isle (#863): land a road, bridge or
+ * ferry joins to home reaches a post too, as the server counts it.
+ */
+export function postFlags(
+  view: Pick<MapView, 'tiles'>,
+  me: string | null,
+  supplied?: ReadonlySet<HexKey> | null,
+): PostFlag[] {
   return view.tiles
     .filter(isTradingPost)
     .map((tile) => ({
       tile,
       name: tile.post?.name ?? 'Trading Post',
-      reach: me === null ? null : postReach(tile, view.tiles, me),
+      reach: me === null ? null : postReach(tile, view.tiles, me, supplied),
     }))
     .sort((a, b) => (a.tile.post?.index ?? 0) - (b.tile.post?.index ?? 0));
 }
@@ -40,10 +49,16 @@ export function postFlagLabel(flag: PostFlag): string {
   return `🏮 ${flag.name}`;
 }
 
+/** The reach line when my land next to the post is cut off from home (#863). */
+export const POST_CUT_OFF =
+  '🧭 Your nearby land is cut off. Join it up to trade, or go on a journey!';
+
 /** The tile panel's line about reaching it. */
 export function postReachLine(reach: PostReach | null): string | null {
   if (reach === null) return null;
   if (reach.kind === 'connected') return '🔗 Your land reaches it!';
+  // A journey at 1 tile: my land next to it is cut off from home (#863).
+  if (reach.distance === 1) return POST_CUT_OFF;
   return `🧭 ${tiles(reach.distance)} from your land. Claim land toward it to get closer!`;
 }
 

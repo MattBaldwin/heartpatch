@@ -680,7 +680,12 @@ const roads = createRoads({
   invalidate: () => stage?.invalidate(),
 });
 // Trading posts' flags and rings on the map (#269), for whoever is signed in.
-const postFlags = createPostFlags(document.body, () => signedIn?.id ?? null);
+// A Wild Isle's posts follow my supply line (#863).
+const postFlags = createPostFlags(
+  document.body,
+  () => signedIn?.id ?? null,
+  (view) => roads.supply(view),
+);
 // Hollowed villages (#306): a flag over each (after the posts', so it keeps
 // clear of theirs), and the village's block in a tile's panel.
 const communityFlags = createCommunityFlags(document.body, () => signedIn?.id ?? null);
@@ -707,6 +712,8 @@ const postScreen = createPostScreen({
 });
 const journeys = createJourneyScreen({
   now: () => inventory.gameNow(),
+  // A Wild Isle's posts follow my supply line (#863).
+  supply: (view) => roads.supply(view),
   openBattle: (battle) => {
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
   },
@@ -1448,6 +1455,8 @@ const computerMatesNotes = createComputerMatesNotes({
 });
 const maps = createMapScreen({
   root: document.body,
+  // A Wild Isle's posts follow my supply line (#863).
+  supply: (view) => roads.supply(view),
   // Every view read (open, resync) also says whether a House gift waits (#731c).
   api: {
     view: (mapId) =>
