@@ -1,4 +1,4 @@
-import type { Body } from '@heartpatch/shared';
+import type { VisualRegistry } from '@heartpatch/shared';
 import { surfacePoint } from '../procedural/body-shape.js';
 import type { SquishyParams } from '../procedural/params.js';
 import type { FacePoint } from './camera-director.js';
@@ -6,15 +6,17 @@ import type { Pose } from './choreography.js';
 
 /**
  * Where a squishy's face sits (#868): the lowest and highest edge of its eyes
- * and mouth, as fractions of its height (`params.height`, hat left out), so a
+ * and mouth (or the part that stands in for the mouth, like the rake line's
+ * rake bar, `replaces: 'mouth'`), as fractions of its height (`params.height`, hat left out), so a
  * boss fight can keep the face in frame. The face rides the head when the
  * kind has one, else the one-piece body. Null when it has no eyes or mouth
  * (or its body is unknown).
  */
 export function faceSpan(
   params: SquishyParams,
-  bodies: ReadonlyMap<string, Body>,
+  registry: VisualRegistry,
 ): { low: number; high: number } | null {
+  const bodies = registry.bodies;
   const headBody = params.head ? bodies.get(params.head.id) : undefined;
   const body = headBody ?? bodies.get(params.body.id);
   if (!body || !(params.height > 0)) return null;
@@ -23,7 +25,8 @@ export function faceSpan(
   let low = Infinity;
   let high = -Infinity;
   for (const part of params.parts) {
-    if (part.slot !== 'eyes' && part.slot !== 'mouth') continue;
+    const mouthLike = registry.parts.get(part.id)?.replaces === 'mouth';
+    if (part.slot !== 'eyes' && part.slot !== 'mouth' && !mouthLike) continue;
     for (const p of part.placements) {
       const y = base + surfacePoint(body, p.around, p.up)[1] * scale[1];
       const half = (p.size[1] * scale[1]) / 2;
@@ -64,10 +67,10 @@ export function posedFace(
 /** `faceSpan` in world units above the feet for a squishy drawn at `scale`, or null with no face. */
 export function faceAt(
   params: SquishyParams,
-  bodies: ReadonlyMap<string, Body>,
+  registry: VisualRegistry,
   scale: number,
 ): { low: number; high: number } | null {
-  const span = faceSpan(params, bodies);
+  const span = faceSpan(params, registry);
   if (!span) return null;
   const k = params.height * scale;
   return { low: span.low * k, high: span.high * k };

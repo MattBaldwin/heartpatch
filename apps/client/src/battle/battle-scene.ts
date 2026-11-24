@@ -597,7 +597,7 @@ export class BattleScene {
       scale,
       height: tall * scale,
       radius: (Math.max((body?.width ?? 1) * sx, (body?.depth ?? 1) * sz) * scale) / 2,
-      face: faceAt(handle.params, this.#options.registry.bodies, scale),
+      face: faceAt(handle.params, this.#options.registry, scale),
     };
     rig.bench.set(instanceId, fighter);
     return fighter;

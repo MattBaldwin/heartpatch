@@ -575,7 +575,7 @@ describe('a boss fight frames the boss face first (#868)', () => {
 
   // Every kind's eyes and mouth (the boss's species is server data, so all of them stand in).
   const faces = GAME_DATA.species.flatMap((species) => {
-    const span = faceSpan(squishyParams(species, `${species.id}-1`, registry), registry.bodies);
+    const span = faceSpan(squishyParams(species, `${species.id}-1`, registry), registry);
     return span
       ? [{ id: species.id, low: span.low * bossHeight, high: span.high * bossHeight }]
       : [];
@@ -622,22 +622,28 @@ describe('a boss fight frames the boss face first (#868)', () => {
   for (const band of BANDS) {
     it(`keeps every kind's eyes and mouth inside the ${band.name} band, in every pose`, () => {
       const face: FacePoint = { x: 0, z: 0, low: 0, high: 0 };
-      let worst = { top: 1, bottom: 0 };
+      // Reduced motion: no easing, push or shake, so each shot stands on its own frame.
+      const director = new CameraDirector(homes, true, team);
       for (const f of faces) {
+        // The worst pose for this face, asserted once (the pose sweep is ~850 frames).
+        let top = { y: Infinity, name: '' };
+        let bottom = { y: -Infinity, name: '' };
         for (const { name, pose } of poses) {
-          // Reduced motion: no easing, so each pose is judged on its own frame.
-          const director = new CameraDirector(homes, true, team);
           posedFace(face, bossHome, fx, fz, pose, f);
           const shot = director.shot(0, band.aspect, band.safe, fit, face);
-          const top = project(shot, band.aspect, { x: face.x, y: face.high, z: face.z }).y;
-          const bottom = project(shot, band.aspect, { x: face.x, y: face.low, z: face.z }).y;
-          expect(top, `${f.id} ${name}`).toBeGreaterThanOrEqual(band.safe.top - 1e-9);
-          expect(bottom, `${f.id} ${name}`).toBeLessThanOrEqual(band.safe.bottom + 1e-9);
-          expect(director.face.high).toBeCloseTo(top, 9);
-          worst = { top: Math.min(worst.top, top), bottom: Math.max(worst.bottom, bottom) };
+          const t = project(shot, band.aspect, { x: face.x, y: face.high, z: face.z }).y;
+          const b = project(shot, band.aspect, { x: face.x, y: face.low, z: face.z }).y;
+          if (t < top.y) top = { y: t, name };
+          if (b > bottom.y) bottom = { y: b, name };
         }
+        expect(top.y, `${f.id} ${top.name}`).toBeGreaterThanOrEqual(band.safe.top - 1e-9);
+        expect(bottom.y, `${f.id} ${bottom.name}`).toBeLessThanOrEqual(band.safe.bottom + 1e-9);
       }
-      expect(worst.top).toBeGreaterThanOrEqual(band.safe.top);
+      // The dev hook reports the face where the shot put it.
+      posedFace(face, bossHome, fx, fz, REST, faces[0]!);
+      const shot = director.shot(0, band.aspect, band.safe, fit, face);
+      const t = project(shot, band.aspect, { x: face.x, y: face.high, z: face.z }).y;
+      expect(director.face.high).toBeCloseTo(t, 9);
     });
   }
 
@@ -689,32 +695,39 @@ describe('a boss fight frames the boss face first (#868)', () => {
     }
   });
 
-  it('eases the slide at full motion, snappy enough that a windup never lifts the eyes out of the band', () => {
+  it('eases the slide at full motion, and no act lifts the eyes under the plate', () => {
     const band = BANDS[0]!;
     const face: FacePoint = { x: 0, z: 0, low: 0, high: 0 };
-    const tallest = faces.reduce((a, b) => (b.high > a.high ? b : a));
-    for (const feeling of feelings) {
-      const director = new CameraDirector(homes, false, team);
-      const dash: Act = {
-        kind: 'dash',
-        start: 1000,
-        ms: 900,
-        from: REST,
-        reach: 6,
-        strength: 1.4,
-        feeling,
-        reduced: false,
-      };
-      // Settle at rest for a second, then the dash at 60 fps.
-      for (let now = 0; now <= 2200; now += 1000 / 60) {
-        posedFace(face, bossHome, fx, fz, actPose(now < 1000 ? null : dash, now), tallest);
-        const shot = director.shot(now, band.aspect, band.safe, fit, face);
-        if (now < 900) continue;
-        const top = project(shot, band.aspect, { x: face.x, y: face.high, z: face.z }).y;
-        // Within the margin of the band's top: the plate's edge, never under it.
-        expect(top, `${feeling} ${now.toFixed(0)}`).toBeGreaterThan(
-          band.safe.top - team.faceMargin,
-        );
+    // The highest-set faces rise out of the band first.
+    const high = [...faces].sort((a, b) => b.high - a.high).slice(0, 3);
+    for (const f of high) {
+      for (const feeling of feelings) {
+        for (const kind of ACTS) {
+          for (const ms of [500, 1000, 1600]) {
+            const director = new CameraDirector(homes, false, team);
+            const act: Act = {
+              kind,
+              start: 1000,
+              ms,
+              from: REST,
+              reach: 6,
+              strength: 1,
+              feeling,
+              reduced: false,
+            };
+            // Settle at rest for a second, then the act at 60 fps, and a beat after.
+            for (let now = 0; now <= 1000 + ms + 500; now += 1000 / 60) {
+              posedFace(face, bossHome, fx, fz, actPose(now < 1000 ? null : act, now), f);
+              const shot = director.shot(now, band.aspect, band.safe, fit, face);
+              if (now < 900) continue;
+              const top = project(shot, band.aspect, { x: face.x, y: face.high, z: face.z }).y;
+              expect(
+                top,
+                `${f.id} ${kind} ${feeling} ${String(ms)} @${now.toFixed(0)}`,
+              ).toBeGreaterThanOrEqual(band.safe.top - 1e-9);
+            }
+          }
+        }
       }
     }
   });

@@ -369,6 +369,9 @@ export class CameraDirector {
     const ease = want > this.#drop ? Math.min(1, k * 3) : k;
     this.#dropWant = want;
     this.#drop += (want - this.#drop) * ease;
+    // Easing never lets the eyes slip under the plate: a rising face (a windup's
+    // power-up) is held at least at the band's top, whatever the lag.
+    if (face && high < safe.top) this.#drop = Math.max(this.#drop, safe.top - high);
     if (Math.abs(this.#drop) < 1e-5) this.#drop = 0;
     // y = (1 − (v + shift)) / 2: sliding the picture down by `drop` lowers the shift by twice it.
     shot.shift = frame.shift - 2 * this.#drop;
@@ -384,26 +387,29 @@ export class CameraDirector {
  * the camera reads as far off the top.
  */
 function screenY(shot: CameraShot, x: number, y: number, z: number): number {
-  const fx = shot.target.x - shot.position.x;
-  const fy = shot.target.y - shot.position.y;
-  const fz = shot.target.z - shot.position.z;
+  // Scalars only: this runs every frame of a boss fight.
+  let fx = shot.target.x - shot.position.x;
+  let fy = shot.target.y - shot.position.y;
+  let fz = shot.target.z - shot.position.z;
   const fl = Math.hypot(fx, fy, fz) || 1;
-  const f = { x: fx / fl, y: fy / fl, z: fz / fl };
+  fx /= fl;
+  fy /= fl;
+  fz /= fl;
   // right = up × forward, then the true up = forward × right.
-  let rx = shot.up.y * f.z - shot.up.z * f.y;
-  let ry = shot.up.z * f.x - shot.up.x * f.z;
-  let rz = shot.up.x * f.y - shot.up.y * f.x;
+  let rx = shot.up.y * fz - shot.up.z * fy;
+  let ry = shot.up.z * fx - shot.up.x * fz;
+  let rz = shot.up.x * fy - shot.up.y * fx;
   const rl = Math.hypot(rx, ry, rz) || 1;
   rx /= rl;
   ry /= rl;
   rz /= rl;
-  const ux = f.y * rz - f.z * ry;
-  const uy = f.z * rx - f.x * rz;
-  const uz = f.x * ry - f.y * rx;
+  const ux = fy * rz - fz * ry;
+  const uy = fz * rx - fx * rz;
+  const uz = fx * ry - fy * rx;
   const dx = x - shot.position.x;
   const dy = y - shot.position.y;
   const dz = z - shot.position.z;
-  const depth = dx * f.x + dy * f.y + dz * f.z;
+  const depth = dx * fx + dy * fy + dz * fz;
   if (depth <= 1e-6) return -Infinity;
   const v = (dx * ux + dy * uy + dz * uz) / (depth * Math.tan(shot.fov / 2));
   return (1 - (v + shot.shift)) / 2;
