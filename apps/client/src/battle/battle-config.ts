@@ -164,6 +164,8 @@ export interface BattleCameraConfig {
   rimMargin: number;
   minDistance: number;
   maxDistance: number;
+  maxFitDistance: number;
+  fogReference: number;
   narrowSheetFrom: number;
   hitPush: number;
   followPush: number;
@@ -206,6 +208,22 @@ export const BATTLE_CAMERA: Readonly<BattleCameraConfig> = {
   rimMargin: 2, // TUNE
   minDistance: 10, // TUNE
   maxDistance: 90, // TUNE
+  /**
+   * The furthest the camera ever sits, even when the fighters ask for more
+   * (#234): a big boss in a notched iPhone's thin stage band asked for 160,
+   * past the sky dome (`ARENA_STAGE.skyRadius`, 95), which then hid the whole
+   * fight, and past both fog ends (85 / 90). The cost: in that band a 7-unit
+   * boss's head and most of its body sit under the plate (measured: head at
+   * 0.25 of the screen, feet at 0.40, band from 0.38). An empty screen is
+   * worse; giving the stage more room is the follow-up.
+   */
+  maxFitDistance: 70, // TUNE: under the sky dome (the boss stands ~10 past the aim); the result screen's 65 still fits
+  /**
+   * The usual framing distance the arena fog was tuned at: a shot further
+   * back than this pushes the fog back by the difference (`fogFor`), so the
+   * ground round the fighters never fades into the haze.
+   */
+  fogReference: 45, // TUNE
   /** From this window width (CSS px) the sheet is a centred card (battle.css), so the screen's bottom shows. */
   narrowSheetFrom: 900,
   /** Camera beats (B): push-in on a hit (fraction of distance), shake (world units), dutch roll (radians). */

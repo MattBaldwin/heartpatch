@@ -72,8 +72,10 @@ export function battleScale(
  * the safe region: sideways within the screen (with a margin), upwards within
  * the headroom under the pills, each judged at its own depth along the view.
  * The fight's box backs off no further than the arena reaches (`arenaReach`,
- * #652), but the fighters always fit: nothing covers them on any screen
- * (#142). On a portrait phone the reach is far beyond what any fight needs;
+ * #652), but the fighters fit (#142) up to `maxFitDistance`: past that the
+ * camera stops, inside the sky dome (#234), and on the thinnest stage bands
+ * (a notched iPhone's boss fight) a tall boss's head tucks under the plate.
+ * On a portrait phone the reach is far beyond what any fight needs;
  * there `battleScale` and the ground's size keep the camera over the arena
  * (camera-director.test.ts), and the reach binds only where the ground shows
  * to the screen's bottom (a wide iPad).
@@ -104,7 +106,29 @@ export function frameDistance(
   }
   const shift = 1 - 2 * feetY;
   const reach = arenaReach(aspect, safe.floor ?? safe.bottom, shift, config);
-  return { distance: Math.max(distance, Math.min(box, reach)), shift };
+  // Capped (#234): past the sky dome the dome hides everything, past the fog the ground goes flat.
+  return {
+    distance: Math.min(config.maxFitDistance, Math.max(distance, Math.min(box, reach))),
+    shift,
+  };
+}
+
+/**
+ * The arena fog for a shot `distance` back (#234): the mood's own fog
+ * (`base`, start and end) at the usual framing distance or closer, pushed back
+ * by however far past `fogReference` the camera sits, so the fighters' ground
+ * keeps the look it was tuned with. Writes into `out` and returns it.
+ */
+export function fogFor(
+  base: readonly [number, number],
+  distance: number,
+  out: [number, number] = [0, 0],
+  config: BattleCameraConfig = BATTLE_CAMERA,
+): [number, number] {
+  const extra = Math.max(0, distance - config.fogReference);
+  out[0] = base[0] + extra;
+  out[1] = base[1] + extra;
+  return out;
 }
 
 /**

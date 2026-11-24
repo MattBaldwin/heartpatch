@@ -18,7 +18,7 @@ interface BattleDebug {
   status: string;
   pending: number;
   waiting: boolean;
-  scene: { squishies: number } | null;
+  scene: { squishies: number; framing: { distance: number; fogEnd: number } | null } | null;
   boss: {
     picking: number | null;
     picks: Record<string, string>;
@@ -172,6 +172,78 @@ test.describe('a mini-boss fight (#190)', () => {
     await expect.poll(captions).toContain('Backup! Big Stomp!');
     expect(await captions()).not.toContain('Stomp again!');
     await expect.poll(() => stub.rounds.length).toBe(3);
+  });
+
+  test('on a notched iPhone the fight stays inside the sky (#234)', async ({
+    browser,
+    browserName,
+  }) => {
+    // An iPhone 15's full screen as an installed app (393×852). Chromium also
+    // gets the notch's safe-area insets (only it can emulate them, over CDP):
+    // with them the boss's stage band was 15% of the screen and the camera
+    // backed out past the sky dome (radius 95), so the fight drew as empty
+    // sky (#234). Even without them the camera sat at 85, all but lost in the fog.
+    const page = await newPlayer(browser, uniqueName('notch'));
+    if (browserName === 'chromium') {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send(
+        'Emulation.setSafeAreaInsetsOverride' as never,
+        {
+          insets: {
+            top: 59,
+            topMax: 59,
+            bottom: 34,
+            bottomMax: 34,
+            left: 0,
+            leftMax: 0,
+            right: 0,
+            rightMax: 0,
+          },
+        } as never,
+      );
+    }
+    await page.setViewportSize({ width: 393, height: 852 });
+    await bossFight(page);
+    await expect(page.getByTestId('boss-picker')).toBeVisible();
+    await expect
+      .poll(async () => (await battleState(page))?.scene?.framing?.distance ?? Infinity, {
+        timeout: 15_000,
+      })
+      .toBeLessThanOrEqual(70); // BATTLE_CAMERA.maxFitDistance (e2e specs don't import src)
+    const framing = (await battleState(page))?.scene?.framing;
+    // The boss stands about 10 past the aim: it and its ground stay inside the
+    // dome and short of the fog's end.
+    expect(framing!.distance + 10).toBeLessThan(95); // ARENA_STAGE.skyRadius
+    expect(framing!.distance + 10).toBeLessThan(framing!.fogEnd);
+    // And the stage between the plate and the team cards draws a scene, not one
+    // flat colour. Chromium only: headless WebKit screenshots of the WebGL
+    // canvas come out flat (one colour) whatever it draws.
+    if (browserName !== 'chromium') return;
+    const top = await page
+      .getByTestId('boss-plate')
+      .evaluate((e) => e.getBoundingClientRect().bottom);
+    // The lower part of the stage band (it ends ~140 px under the plate, at the
+    // team cards), so no HUD is counted: the ground and the fighters' feet.
+    const shot = await page.screenshot({
+      clip: { x: 0, y: top + 60, width: 393, height: 60 },
+      animations: 'disabled',
+    });
+    const colours = await page.evaluate(async (b64) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${b64}`;
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      const g = c.getContext('2d')!;
+      g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      const seen = new Set<number>();
+      for (let i = 0; i < d.length; i += 4)
+        seen.add(((d[i]! >> 4) << 8) | ((d[i + 1]! >> 4) << 4) | (d[i + 2]! >> 4));
+      return seen.size;
+    }, shot.toString('base64'));
+    expect(colours).toBeGreaterThan(20);
   });
 
   test('a duplicate never joins: no ask, no charms', async ({ browser }) => {
