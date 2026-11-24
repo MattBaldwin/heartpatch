@@ -206,11 +206,11 @@ test.describe('a mini-boss fight (#190)', () => {
     await bossFight(page);
     await expect(page.getByTestId('boss-picker')).toBeVisible();
     await expect
-      .poll(async () => (await battleState(page)).scene?.framing?.distance ?? Infinity, {
+      .poll(async () => (await battleState(page))?.scene?.framing?.distance ?? Infinity, {
         timeout: 15_000,
       })
       .toBeLessThanOrEqual(70);
-    const framing = (await battleState(page)).scene?.framing;
+    const framing = (await battleState(page))?.scene?.framing;
     // The boss stands about 10 past the aim: it and its ground stay inside the
     // dome and short of the fog's end.
     expect(framing!.distance + 10).toBeLessThan(95);
