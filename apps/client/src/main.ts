@@ -678,6 +678,11 @@ const roads = createRoads({
   me: () => signedIn?.id ?? null,
   pan: panToTile,
   invalidate: () => stage?.invalidate(),
+  // New roads move my supply line: the posts' flags look again (#863).
+  onRoadsChange: () => {
+    const view = maps.view;
+    if (view) postFlags.update?.(view);
+  },
 });
 // Trading posts' flags and rings on the map (#269), for whoever is signed in.
 // A Wild Isle's posts follow my supply line (#863).

@@ -114,10 +114,10 @@ export async function communitiesView(
   const repo = createCommunitiesRepo(tx);
   const rows = await repo.listForView(input.mapId);
   // On a Wild Isle, land a road, bridge or ferry joins to home counts (#863).
-  const supplied =
-    input.supplied !== undefined || rows.length === 0
-      ? (input.supplied ?? null)
-      : await suppliedFor(tx, input.mapId, input.userId);
+  let supplied = input.supplied ?? null;
+  if (input.supplied === undefined && rows.length > 0) {
+    supplied = await suppliedFor(tx, input.mapId, input.userId);
+  }
   // The viewer's own gift villages (PR 3b), and which of them they've collected this morning.
   const gifts = rows.filter(
     (c) => c.ownerUserId === input.userId && morningGiftOf(c.kind, COMMUNITY_RULES) !== null,

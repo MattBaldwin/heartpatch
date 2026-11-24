@@ -329,6 +329,34 @@ describe('MapState', () => {
     expect(state.apply(event('building.placed', { userId: userId(1) }, 7))).toBe('resync');
   });
 
+  it('reads the view again when a road or crossing moves the supply line (#863)', () => {
+    const state = new MapState(testView(1));
+    const tile = state.view.tiles.find((t) => t.homeSlot === null)!;
+    const at = { userId: userId(1), q: tile.q, r: tile.r };
+    // Hollow reach comes with the view's villages, worked out by the server.
+    expect(state.apply(event('road.built', { ...at, level: 1 }))).toBe('resync');
+    expect(state.apply(event('road.upgraded', { ...at, level: 2 }, 3))).toBe('resync');
+    expect(state.apply(event('road.removed', at, 4))).toBe('resync');
+    const bridge = {
+      id: '0190a8c4-0000-7000-8000-0000000000b1',
+      buildingId: 'bridge',
+      kind: 'travel',
+      level: 1,
+      spot: 1,
+      lit: null,
+      safeRadius: null,
+      q: tile.q,
+      r: tile.r,
+    };
+    expect(state.apply(event('building.placed', { userId: userId(1), building: bridge }, 5))).toBe(
+      'resync',
+    );
+    expect(state.tileAt(hexKey(tile))?.buildings.map((b) => b.buildingId)).toEqual(['bridge']);
+    const removed = { userId: userId(1), buildingRowId: bridge.id, q: tile.q, r: tile.r };
+    expect(state.apply(event('building.removed', removed, 6))).toBe('resync');
+    expect(state.tileAt(hexKey(tile))?.buildings).toEqual([]);
+  });
+
   it('naps and wakes a resource building on its tile (#601)', () => {
     const state = new MapState(testView(1));
     const tile = state.view.tiles.find((t) => t.homeSlot === null)!;

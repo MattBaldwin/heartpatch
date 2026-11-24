@@ -59,6 +59,8 @@ export interface RoadsOptions {
   invalidate: () => void;
   api?: RoadApi;
   homeApi?: Pick<typeof realHomeApi, 'place'>;
+  /** The roads were read again: my supply line moved, so posts' reach may have (#863). */
+  onRoadsChange?: () => void;
 }
 
 export interface RoadsDebug {
@@ -123,6 +125,7 @@ export function createRoads(options: RoadsOptions): Roads {
       draw();
       render();
       tell();
+      options.onRoadsChange?.();
     },
   );
 
