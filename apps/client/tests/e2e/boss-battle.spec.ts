@@ -215,7 +215,10 @@ test.describe('a mini-boss fight (#190)', () => {
     // dome and short of the fog's end.
     expect(framing!.distance + 10).toBeLessThan(95);
     expect(framing!.distance + 10).toBeLessThan(framing!.fogEnd);
-    // And the stage between the plate and the team cards draws a scene, not one flat colour.
+    // And the stage between the plate and the team cards draws a scene, not one
+    // flat colour. Chromium only: headless WebKit screenshots of the WebGL
+    // canvas come out flat (one colour) whatever it draws.
+    if (browserName !== 'chromium') return;
     const top = await page
       .getByTestId('boss-plate')
       .evaluate((e) => e.getBoundingClientRect().bottom);
