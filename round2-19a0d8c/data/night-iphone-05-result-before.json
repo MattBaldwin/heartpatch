@@ -1,0 +1,62 @@
+{
+ "file": "iphone-05-result-before.png",
+ "device": "iphone",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-24T08:25:49.784Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 65.38397135864209,
+   "fogEnd": 105.38397135864209,
+   "band": {
+    "top": 0.1983568075117371,
+    "bottom": 0.5089678697183099
+   },
+   "face": null,
+   "team": [],
+   "bossFacing": 0.9871715205232046
+  },
+  "playing": null,
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "rects": {
+  "bossHead": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "plate": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "order": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "friends": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "result": {
+   "top": 441.640625,
+   "bottom": 806,
+   "left": 16.5,
+   "right": 376.5
+  }
+ }
+}

@@ -1,0 +1,81 @@
+{
+ "file": "iphone-03-hit-after.png",
+ "device": "iphone",
+ "tz": "Asia/Bangkok",
+ "at": "2026-11-24T08:33:23.191Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 67.31032292339658,
+   "fogEnd": 112.31032292339658,
+   "band": {
+    "top": 0.3779342723004695,
+    "bottom": 0.5290676349765259
+   },
+   "face": {
+    "top": 0.38552882967046004,
+    "bottom": 0.41655058623422453
+   },
+   "team": [
+    {
+     "top": 0.5253207035011093,
+     "bottom": 0.5472442722532964
+    },
+    {
+     "top": 0.5257259604647897,
+     "bottom": 0.5433489524026656
+    },
+    {
+     "top": 0.526060943591355,
+     "bottom": 0.5481151278106544
+    }
+   ],
+   "bossFacing": 0.8468510037633481
+  },
+  "playing": {
+   "kind": "hit",
+   "at": 1143.4700000000885
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "rects": {
+  "bossHead": {
+   "top": 171,
+   "bottom": 324,
+   "left": 12,
+   "right": 381
+  },
+  "plate": {
+   "top": 171,
+   "bottom": 282,
+   "left": 12,
+   "right": 381
+  },
+  "order": {
+   "top": 290,
+   "bottom": 324,
+   "left": 109.96875,
+   "right": 283.03125
+  },
+  "friends": {
+   "top": 450.765625,
+   "bottom": 494.765625,
+   "left": 16,
+   "right": 377
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  }
+ }
+}

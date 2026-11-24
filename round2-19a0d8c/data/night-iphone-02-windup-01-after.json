@@ -1,0 +1,77 @@
+{
+ "file": "iphone-02-windup-01-after.png",
+ "device": "iphone",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-24T08:24:54.435Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 70,
+   "fogEnd": 110,
+   "band": {
+    "top": 0.3779342723004695,
+    "bottom": 0.5290676349765259
+   },
+   "face": {
+    "top": 0.3817507343248451,
+    "bottom": 0.4167474683519191
+   },
+   "team": [
+    {
+     "top": 0.5524793231419557,
+     "bottom": 0.5696912994322471
+    },
+    {
+     "top": 0.5574846235543507,
+     "bottom": 0.5774826616993882
+    }
+   ],
+   "bossFacing": 0.6547139353723401
+  },
+  "playing": {
+   "kind": "effect",
+   "at": 364.179999999993
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": "Rakelet is winding up Count to Three… watch out next round!",
+ "rects": {
+  "bossHead": {
+   "top": 171,
+   "bottom": 324,
+   "left": 12,
+   "right": 381
+  },
+  "plate": {
+   "top": 171,
+   "bottom": 282,
+   "left": 12,
+   "right": 381
+  },
+  "order": {
+   "top": 290,
+   "bottom": 324,
+   "left": 139.96875,
+   "right": 253.03125
+  },
+  "friends": {
+   "top": 450.765625,
+   "bottom": 494.765625,
+   "left": 16,
+   "right": 377
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  }
+ }
+}

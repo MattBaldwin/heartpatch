@@ -1,0 +1,12 @@
+diff --git a/apps/client/src/battle/camera-director.ts b/apps/client/src/battle/camera-director.ts
+index 204ad94b..9860a470 100644
+--- a/apps/client/src/battle/camera-director.ts
++++ b/apps/client/src/battle/camera-director.ts
+@@ -395,6 +395,7 @@ export class CameraDirector {
+     // Easing never lets the eyes slip under the plate: a rising face (a windup's
+     // power-up) is held at least at the band's top, whatever the lag.
+     if (seen && high < safe.top) this.#drop = Math.max(this.#drop, safe.top - high);
++    if ((globalThis as { __noSlide?: boolean }).__noSlide) this.#drop = 0; // CAPTURE OVERLAY
+     if (Math.abs(this.#drop) < 1e-5) this.#drop = 0;
+     // y = (1 − (v + shift)) / 2: sliding the picture down by `drop` lowers the shift by twice it.
+     shot.shift = frame.shift - 2 * this.#drop;

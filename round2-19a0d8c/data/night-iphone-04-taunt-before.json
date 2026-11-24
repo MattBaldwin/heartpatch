@@ -1,0 +1,81 @@
+{
+ "file": "iphone-04-taunt-before.png",
+ "device": "iphone",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-24T08:29:38.233Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 68.13715968234466,
+   "fogEnd": 108.13715968234466,
+   "band": {
+    "top": 0.3779342723004695,
+    "bottom": 0.5290676349765259
+   },
+   "face": {
+    "top": 0.2734334799407819,
+    "bottom": 0.30859364685438617
+   },
+   "team": [
+    {
+     "top": 0.3975791678830617,
+     "bottom": 0.42567177869058687
+    },
+    {
+     "top": 0.40434481491482854,
+     "bottom": 0.4275003668720464
+    },
+    {
+     "top": 0.4169532514413045,
+     "bottom": 0.439846572060829
+    }
+   ],
+   "bossFacing": -0.657090803262428
+  },
+  "playing": {
+   "kind": "move",
+   "at": 77.10999999981141
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "rects": {
+  "bossHead": {
+   "top": 171,
+   "bottom": 324,
+   "left": 12,
+   "right": 381
+  },
+  "plate": {
+   "top": 171,
+   "bottom": 282,
+   "left": 12,
+   "right": 381
+  },
+  "order": {
+   "top": 290,
+   "bottom": 324,
+   "left": 109.96875,
+   "right": 283.03125
+  },
+  "friends": {
+   "top": 450.765625,
+   "bottom": 494.765625,
+   "left": 16,
+   "right": 377
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  }
+ }
+}

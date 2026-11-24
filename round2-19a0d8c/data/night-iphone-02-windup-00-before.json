@@ -1,0 +1,77 @@
+{
+ "file": "iphone-02-windup-00-before.png",
+ "device": "iphone",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-24T08:24:41.647Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 70,
+   "fogEnd": 110,
+   "band": {
+    "top": 0.3779342723004695,
+    "bottom": 0.5290676349765259
+   },
+   "face": {
+    "top": 0.3255024097428473,
+    "bottom": 0.351327219353859
+   },
+   "team": [
+    {
+     "top": 0.44788975301284545,
+     "bottom": 0.46501070927318544
+    },
+    {
+     "top": 0.4469913432501435,
+     "bottom": 0.4688505111851561
+    }
+   ],
+   "bossFacing": 0.9920517244889755
+  },
+  "playing": {
+   "kind": "effect",
+   "at": 32.13000000000466
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "rects": {
+  "bossHead": {
+   "top": 171,
+   "bottom": 324,
+   "left": 12,
+   "right": 381
+  },
+  "plate": {
+   "top": 171,
+   "bottom": 282,
+   "left": 12,
+   "right": 381
+  },
+  "order": {
+   "top": 290,
+   "bottom": 324,
+   "left": 139.96875,
+   "right": 253.03125
+  },
+  "friends": {
+   "top": 450.765625,
+   "bottom": 494.765625,
+   "left": 16,
+   "right": 377
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  }
+ }
+}
