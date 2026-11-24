@@ -37,6 +37,18 @@ export interface FitPoint {
   h: number;
 }
 
+/**
+ * The boss's face in a boss fight (#868): the ground point under it and the
+ * heights of its lowest and highest eye or mouth edge, as drawn this frame
+ * (lift, squash and lean included).
+ */
+export interface FacePoint {
+  x: number;
+  z: number;
+  low: number;
+  high: number;
+}
+
 export interface CameraShot {
   readonly position: Point3;
   readonly target: Point3;
@@ -176,6 +188,20 @@ export function arenaReach(
   return Math.max(config.minDistance, reach);
 }
 
+/**
+ * How far (a fraction of the screen height, + is down) the picture must
+ * slide so a face from `high` to `low` (screen fractions from the top) sits
+ * `margin` inside the stage band (#868). The top edge (the eyes) wins when
+ * the face is taller than the band; a face already inside needs nothing.
+ */
+export function faceDrop(high: number, low: number, safe: SafeRegion, margin: number): number {
+  const top = safe.top + margin;
+  const bottom = safe.bottom - margin;
+  if (high < top) return top - high;
+  if (low > bottom) return Math.max(top - high, bottom - low);
+  return 0;
+}
+
 const NO_SHAKE = { x: 0, y: 0 } as const;
 
 /** A shake's offset `age` ms after it started: a quick wobble that dies away. */
@@ -203,6 +229,14 @@ export class CameraDirector {
   #pushAt = 0;
   #shake = { amount: 0, roll: 0, at: 0 };
   #last: number | null = null;
+  /** The face-first slide (#868), eased like the push so a windup never jolts the frame. */
+  #drop = 0;
+  #dropWant = 0;
+  /**
+   * Where the last shot put the boss's face (#868), as fractions of the
+   * screen height from the top (NaN with no face): the dev hook's check.
+   */
+  readonly face = { high: Number.NaN, low: Number.NaN };
   /** Reused every frame, so following the fight allocates nothing. */
   readonly #shot = {
     position: { x: 0, y: 0, z: 0 },
@@ -265,15 +299,26 @@ export class CameraDirector {
       Math.abs(this.#focus.x - this.#want.focusX) > 0.002 ||
       Math.abs(this.#focus.z - this.#want.focusZ) > 0.002 ||
       Math.abs(this.#push - (now >= this.#pushAt ? this.#want.push : this.#push)) > 0.001 ||
-      shaking.x !== 0
+      shaking.x !== 0 ||
+      Math.abs(this.#drop - this.#dropWant) > 0.001
     );
   }
 
   /**
    * The camera at `now` for a screen of `aspect` (width / height), keeping
-   * `fit` inside `safe`. The result is reused next call.
+   * `fit` inside `safe`; in a boss fight the boss's `face` comes first
+   * (#868): the picture slides down (lens shift, so the distance, the dome
+   * cap and the fog stay as they were) until its eyes and mouth are inside
+   * the band, and the near team may tuck its feet under the team cards. The
+   * result is reused next call.
    */
-  shot(now: number, aspect: number, safe: SafeRegion, fit: readonly FitPoint[]): CameraShot {
+  shot(
+    now: number,
+    aspect: number,
+    safe: SafeRegion,
+    fit: readonly FitPoint[],
+    face: FacePoint | null = null,
+  ): CameraShot {
     const dt = this.#last === null ? 1 : Math.min(0.1, Math.max(0, (now - this.#last) / 1000));
     this.#last = now;
     // Smoothly follow (frame-rate independent exponential easing).
@@ -310,8 +355,56 @@ export class CameraDirector {
     shot.up.y = Math.cos(roll);
     shot.up.z = 0;
     shot.fov = fov;
-    shot.shift = frame.shift;
     shot.distance = distance;
+    shot.shift = frame.shift;
+    let want = 0;
+    let high = Number.NaN;
+    let low = Number.NaN;
+    if (face) {
+      high = screenY(shot, face.x, face.high, face.z);
+      low = screenY(shot, face.x, face.low, face.z);
+      want = faceDrop(high, low, safe, this.#config.faceMargin);
+    }
+    // Snappy when the face rises out of the band (a windup's lift), gentle back.
+    const ease = want > this.#drop ? Math.min(1, k * 3) : k;
+    this.#dropWant = want;
+    this.#drop += (want - this.#drop) * ease;
+    if (Math.abs(this.#drop) < 1e-5) this.#drop = 0;
+    // y = (1 − (v + shift)) / 2: sliding the picture down by `drop` lowers the shift by twice it.
+    shot.shift = frame.shift - 2 * this.#drop;
+    this.face.high = high + this.#drop;
+    this.face.low = low + this.#drop;
     return shot;
   }
+}
+
+/**
+ * Where the world point (x, y, z) lands for `shot`, as a fraction of the
+ * screen height from the top, before the shot's lens shift. A point behind
+ * the camera reads as far off the top.
+ */
+function screenY(shot: CameraShot, x: number, y: number, z: number): number {
+  const fx = shot.target.x - shot.position.x;
+  const fy = shot.target.y - shot.position.y;
+  const fz = shot.target.z - shot.position.z;
+  const fl = Math.hypot(fx, fy, fz) || 1;
+  const f = { x: fx / fl, y: fy / fl, z: fz / fl };
+  // right = up × forward, then the true up = forward × right.
+  let rx = shot.up.y * f.z - shot.up.z * f.y;
+  let ry = shot.up.z * f.x - shot.up.x * f.z;
+  let rz = shot.up.x * f.y - shot.up.y * f.x;
+  const rl = Math.hypot(rx, ry, rz) || 1;
+  rx /= rl;
+  ry /= rl;
+  rz /= rl;
+  const ux = f.y * rz - f.z * ry;
+  const uy = f.z * rx - f.x * rz;
+  const uz = f.x * ry - f.y * rx;
+  const dx = x - shot.position.x;
+  const dy = y - shot.position.y;
+  const dz = z - shot.position.z;
+  const depth = dx * f.x + dy * f.y + dz * f.z;
+  if (depth <= 1e-6) return -Infinity;
+  const v = (dx * ux + dy * uy + dz * uz) / (depth * Math.tan(shot.fov / 2));
+  return (1 - (v + shot.shift)) / 2;
 }

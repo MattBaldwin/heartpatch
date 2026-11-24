@@ -166,6 +166,7 @@ export interface BattleCameraConfig {
   maxDistance: number;
   maxFitDistance: number;
   fogReference: number;
+  faceMargin: number;
   narrowSheetFrom: number;
   hitPush: number;
   followPush: number;
@@ -224,6 +225,14 @@ export const BATTLE_CAMERA: Readonly<BattleCameraConfig> = {
    * ground round the fighters never fades into the haze.
    */
   fogReference: 45, // TUNE
+  /**
+   * A boss fight frames the boss's face first (#868): its eyes and mouth stay
+   * this far (a fraction of the screen height) inside the stage band. When
+   * the band is too short for the face and the team at once (a notched
+   * iPhone), the picture slides down and the near team tucks its feet under
+   * the team cards, whose meters show how each is doing.
+   */
+  faceMargin: 0.015, // TUNE: about 13 CSS px on an iPhone
   /** From this window width (CSS px) the sheet is a centred card (battle.css), so the screen's bottom shows. */
   narrowSheetFrom: 900,
   /** Camera beats (B): push-in on a hit (fraction of distance), shake (world units), dutch roll (radians). */

@@ -8,14 +8,18 @@ import {
   arenaReach,
   battleScale,
   CameraDirector,
+  faceDrop,
   fogFor,
   frameDistance,
   shakeOffset,
   type CameraShot,
+  type FacePoint,
   type FitPoint,
   type Point3,
   type SafeRegion,
 } from './camera-director.js';
+import { actPose, FEELING_TRAITS, readyPose, REST, type Act, type Pose } from './choreography.js';
+import { faceSpan, posedFace } from './face-span.js';
 
 const homes = { a: HOMES.mine, b: HOMES.theirs } as const;
 const safe = { top: 0.12, bottom: 0.65 };
@@ -98,12 +102,12 @@ describe('a boss fight on a notched iPhone (#234)', () => {
     expect(capped).toBeCloseTo(free, 9);
   });
 
-  it('shows the team and the ground in the band; the boss tucks its head under the plate (the allowance)', () => {
-    // The agreed trade-off (#234 hotfix): at the cap the team stands whole in
-    // the stage band, but only the boss's feet and legs show; its head sits
-    // under the plate. Measured: head ≈ 0.253, feet ≈ 0.397 of the screen
-    // height, band 0.378–0.529. A follow-up gives the stage more room; until
-    // then this pins the allowance so a change either way is seen.
+  it('without the boss face rule, the boss tucks its head under the plate (the #867 baseline)', () => {
+    // The #234 hotfix's frame, kept as the baseline #868 improves on: with no
+    // face to frame (a 1-v-1, or a boss with no face), at the cap the team
+    // stands whole in the stage band but only the boss's feet and legs show.
+    // Measured: head ≈ 0.253, feet ≈ 0.397 of the screen height, band
+    // 0.378–0.529. The boss-face tests below frame its face first.
     const shot = new CameraDirector({ a: HOMES.mine, b: HOMES.theirs }, true, team).shot(
       0,
       aspect,
@@ -541,5 +545,193 @@ describe('framing every species (#652)', () => {
     };
     expect(at(reach)).toBeCloseTo(ARENA_STAGE.groundRadius - open.rimMargin, 4);
     expect(at(reach + 10)).toBeGreaterThan(ARENA_STAGE.groundRadius - open.rimMargin);
+  });
+});
+
+describe('a boss fight frames the boss face first (#868)', () => {
+  // The #234 fixture: Rakelet (Lv 28) against three, measured at 393×852.
+  const aspect = 393 / 852;
+  const team = { ...BATTLE_CAMERA, pitch: TEAM_ARENA.pitch };
+  const posts = TEAM_ARENA.posts[3];
+  const bossHome = TEAM_ARENA.boss;
+  const bossFit: FitPoint = { x: bossHome.x, z: bossHome.z, r: 2.57, h: 8.88 };
+  const friendsFit: FitPoint[] = posts.map((p) => ({ x: p.x, z: p.z, r: 2.4, h: 4.2 }));
+  const fit = [...friendsFit, bossFit];
+  // The boss's drawn height, back out of its fit point (battle-scene.ts: h = height · 1.25 + 0.3).
+  const bossHeight = (bossFit.h - 0.3) / 1.25;
+  // It faces the row's middle squishy (battle-scene.ts: the boss rig looks at the lead).
+  const lead = posts[1]!;
+  const len = Math.hypot(lead.x - bossHome.x, lead.z - bossHome.z);
+  const fx = (lead.x - bossHome.x) / len;
+  const fz = (lead.z - bossHome.z) / len;
+
+  const BANDS: { name: string; aspect: number; safe: SafeRegion }[] = [
+    // Measured (#867): a notched iPhone's fight and result bands.
+    { name: 'notched iPhone fight', aspect, safe: { top: 0.378, bottom: 0.529 } },
+    { name: 'notched iPhone result', aspect, safe: { top: 0.198, bottom: 0.51 } },
+    // An iPad portrait's fight band (the boss plate and team plates are shorter on a tall screen).
+    { name: 'iPad portrait fight', aspect: 820 / 1180, safe: { top: 0.2, bottom: 0.63 } },
+  ];
+
+  // Every kind's eyes and mouth (the boss's species is server data, so all of them stand in).
+  const faces = GAME_DATA.species.flatMap((species) => {
+    const span = faceSpan(squishyParams(species, `${species.id}-1`, registry), registry.bodies);
+    return span
+      ? [{ id: species.id, low: span.low * bossHeight, high: span.high * bossHeight }]
+      : [];
+  });
+
+  // The boss's poses, every 1/24 of each act a boss plays (a dash's windup, the
+  // power-up, getting bonked, its victory hop as the taunt, a cast), at full motion.
+  const ACTS = ['dash', 'power-up', 'knockback', 'victory', 'cast'] as const;
+  const feelings = Object.keys(FEELING_TRAITS) as (keyof typeof FEELING_TRAITS)[];
+  const poses: { name: string; pose: Pose }[] = [{ name: 'idle', pose: REST }];
+  for (const feeling of feelings) {
+    for (let t = 0; t < 4000; t += 250) {
+      poses.push({ name: `idle ${feeling} ${String(t)}`, pose: readyPose(t, 0, feeling, false) });
+    }
+    for (const kind of ACTS) {
+      const act: Act = {
+        kind,
+        start: 0,
+        ms: 1000,
+        from: REST,
+        reach: 6,
+        strength: 1.4,
+        feeling,
+        reduced: false,
+      };
+      for (let i = 0; i <= 24; i++) {
+        poses.push({
+          name: `${kind} ${feeling} ${String(i)}/24`,
+          pose: actPose(act, (i / 24) * 1000),
+        });
+      }
+    }
+  }
+
+  it('measures where faces sit: between about a third and the top of a squishy', () => {
+    expect(faces.length).toBeGreaterThan(100);
+    for (const f of faces) {
+      expect(f.low, f.id).toBeGreaterThan(0.2 * bossHeight);
+      expect(f.high, f.id).toBeLessThanOrEqual(bossHeight);
+      expect(f.high, f.id).toBeGreaterThan(f.low);
+    }
+  });
+
+  for (const band of BANDS) {
+    it(`keeps every kind's eyes and mouth inside the ${band.name} band, in every pose`, () => {
+      const face: FacePoint = { x: 0, z: 0, low: 0, high: 0 };
+      let worst = { top: 1, bottom: 0 };
+      for (const f of faces) {
+        for (const { name, pose } of poses) {
+          // Reduced motion: no easing, so each pose is judged on its own frame.
+          const director = new CameraDirector(homes, true, team);
+          posedFace(face, bossHome, fx, fz, pose, f);
+          const shot = director.shot(0, band.aspect, band.safe, fit, face);
+          const top = project(shot, band.aspect, { x: face.x, y: face.high, z: face.z }).y;
+          const bottom = project(shot, band.aspect, { x: face.x, y: face.low, z: face.z }).y;
+          expect(top, `${f.id} ${name}`).toBeGreaterThanOrEqual(band.safe.top - 1e-9);
+          expect(bottom, `${f.id} ${name}`).toBeLessThanOrEqual(band.safe.bottom + 1e-9);
+          expect(director.face.high).toBeCloseTo(top, 9);
+          worst = { top: Math.min(worst.top, top), bottom: Math.max(worst.bottom, bottom) };
+        }
+      }
+      expect(worst.top).toBeGreaterThanOrEqual(band.safe.top);
+    });
+  }
+
+  it('keeps the #867 cap and fog: only the lens shift moves', () => {
+    for (const band of BANDS) {
+      const face = posedFace({ x: 0, z: 0, low: 0, high: 0 }, bossHome, fx, fz, REST, faces[0]!);
+      const plain = new CameraDirector(homes, true, team).shot(0, band.aspect, band.safe, fit);
+      const before = { ...plain, position: { ...plain.position } };
+      const framed = new CameraDirector(homes, true, team).shot(
+        0,
+        band.aspect,
+        band.safe,
+        fit,
+        face,
+      );
+      expect(framed.distance).toBeCloseTo(before.distance, 9);
+      expect(framed.distance).toBeLessThanOrEqual(team.maxFitDistance);
+      expect(framed.position.y).toBeCloseTo(before.position.y, 9);
+      expect(framed.shift).toBeLessThanOrEqual(before.shift + 1e-12);
+    }
+  });
+
+  it('on the notched fight band the team still shows: heads in the band, only feet tucked under the cards', () => {
+    const band = BANDS[0]!;
+    const drakeberry = faces.find((f) => f.id === 'drakeberry') ?? faces[0]!;
+    const face = posedFace({ x: 0, z: 0, low: 0, high: 0 }, bossHome, fx, fz, REST, drakeberry);
+    const shot = new CameraDirector(homes, true, team).shot(0, band.aspect, band.safe, fit, face);
+    for (const p of posts) {
+      // A friend's head (its drawn height, without the fit margin) is in the band.
+      const head = project(shot, band.aspect, { x: p.x, y: (4.2 - 0.3) / 1.25, z: p.z }).y;
+      expect(head, `${String(p.x)}`).toBeGreaterThan(band.safe.top);
+      expect(head, `${String(p.x)}`).toBeLessThan(band.safe.bottom);
+    }
+  });
+
+  it('leaves the iPad and the result screen as they were (the face already fits)', () => {
+    for (const band of BANDS.slice(1)) {
+      const face = posedFace({ x: 0, z: 0, low: 0, high: 0 }, bossHome, fx, fz, REST, faces[0]!);
+      const plain = new CameraDirector(homes, true, team).shot(0, band.aspect, band.safe, fit);
+      const plainShift = plain.shift;
+      const framed = new CameraDirector(homes, true, team).shot(
+        0,
+        band.aspect,
+        band.safe,
+        fit,
+        face,
+      );
+      expect(framed.shift, band.name).toBeCloseTo(plainShift, 9);
+    }
+  });
+
+  it('eases the slide at full motion, snappy enough that a windup never lifts the eyes out of the band', () => {
+    const band = BANDS[0]!;
+    const face: FacePoint = { x: 0, z: 0, low: 0, high: 0 };
+    const tallest = faces.reduce((a, b) => (b.high > a.high ? b : a));
+    for (const feeling of feelings) {
+      const director = new CameraDirector(homes, false, team);
+      const dash: Act = {
+        kind: 'dash',
+        start: 1000,
+        ms: 900,
+        from: REST,
+        reach: 6,
+        strength: 1.4,
+        feeling,
+        reduced: false,
+      };
+      // Settle at rest for a second, then the dash at 60 fps.
+      for (let now = 0; now <= 2200; now += 1000 / 60) {
+        posedFace(face, bossHome, fx, fz, actPose(now < 1000 ? null : dash, now), tallest);
+        const shot = director.shot(now, band.aspect, band.safe, fit, face);
+        if (now < 900) continue;
+        const top = project(shot, band.aspect, { x: face.x, y: face.high, z: face.z }).y;
+        // Within the margin of the band's top: the plate's edge, never under it.
+        expect(top, `${feeling} ${now.toFixed(0)}`).toBeGreaterThan(
+          band.safe.top - team.faceMargin,
+        );
+      }
+    }
+  });
+});
+
+describe('faceDrop', () => {
+  const band = { top: 0.4, bottom: 0.5 };
+  it('needs nothing when the face is inside the band', () => {
+    expect(faceDrop(0.42, 0.47, band, 0.01)).toBe(0);
+  });
+  it('slides down until the top of the face is the margin under the band top', () => {
+    expect(faceDrop(0.3, 0.35, band, 0.01)).toBeCloseTo(0.11, 9);
+  });
+  it('keeps the eyes (the top) when the face is taller than the band', () => {
+    expect(faceDrop(0.3, 0.55, band, 0.01)).toBeCloseTo(0.11, 9);
+  });
+  it('slides up when the face sits under the band', () => {
+    expect(faceDrop(0.47, 0.53, band, 0.01)).toBeCloseTo(-0.04, 9);
   });
 });

@@ -55,6 +55,7 @@ import {
   CameraDirector,
   fogFor,
   type CameraShot,
+  type FacePoint,
   type FitPoint,
   type SafeRegion,
 } from './camera-director.js';
@@ -71,6 +72,7 @@ import {
   type Pose,
   type SquishCue,
 } from './choreography.js';
+import { faceAt, posedFace } from './face-span.js';
 import { EffectPool, type EffectStats } from './effects.js';
 import { emit, type Point } from './element-fx.js';
 
@@ -117,7 +119,14 @@ export interface BattleSceneStats {
    * How far back the camera sits and where this frame's fog ends (the dev
    * hook, #234: a notched iPhone's boss fight must stay inside the sky dome).
    */
-  readonly framing: { distance: number; fogEnd: number } | null;
+  readonly framing: {
+    distance: number;
+    fogEnd: number;
+    /** The stage band the camera framed into (the HUD's safe region), fractions of the height. */
+    band: { top: number; bottom: number };
+    /** The boss's eyes-and-mouth box on screen (#868), fractions of the height from the top. */
+    face: { top: number; bottom: number } | null;
+  } | null;
   /** The current step's clock: what is playing and how far in, ms (the dev hook). */
   readonly playing: { kind: PlaybackStep['kind']; at: number } | null;
   /** Each side's sparkle shield bubble is showing (#214; a sip before its move, #403). */
@@ -174,6 +183,8 @@ interface Fighter {
   readonly scale: number;
   readonly height: number;
   readonly radius: number;
+  /** Its eyes and mouth (#868): world heights above its feet at rest, or null with no face. */
+  readonly face: { readonly low: number; readonly high: number } | null;
 }
 
 /**
@@ -271,6 +282,8 @@ export class BattleScene {
   readonly #fit: FitPoint[];
   /** The HUD's safe region plus the lowest row the stage shows (#652), reused every frame. */
   readonly #framing = { top: 0, bottom: 1, floor: 1 };
+  /** The boss's face, reused every frame (#868). */
+  readonly #bossFacePoint: FacePoint = { x: 0, z: 0, low: 0, high: 0 };
   readonly #instrumentation: SceneInstrumentation;
   readonly #beforeRender: Observer<Scene>;
   readonly #afterRender: Observer<Scene>;
@@ -584,6 +597,7 @@ export class BattleScene {
       scale,
       height: tall * scale,
       radius: (Math.max((body?.width ?? 1) * sx, (body?.depth ?? 1) * sz) * scale) / 2,
+      face: faceAt(handle.params, this.#options.registry.bodies, scale),
     };
     rig.bench.set(instanceId, fighter);
     return fighter;
@@ -1016,7 +1030,14 @@ export class BattleScene {
       camera: this.#cameraStat(),
       framing: Number.isNaN(this.#lastDistance)
         ? null
-        : { distance: this.#lastDistance, fogEnd: this.#fog[1] },
+        : {
+            distance: this.#lastDistance,
+            fogEnd: this.#fog[1],
+            band: { top: this.#framing.top, bottom: this.#framing.bottom },
+            face: Number.isNaN(this.#camera.face.high)
+              ? null
+              : { top: this.#camera.face.high, bottom: this.#camera.face.low },
+          },
       playing: this.#playing
         ? { kind: this.#playing.kind, at: this.#now - this.#playing.start }
         : null,
@@ -1256,7 +1277,7 @@ export class BattleScene {
         here.h = h + Math.max(0, rig.pose.lift);
       }
     }
-    const shot = this.#camera.shot(this.#now, aspect, this.#framed(), this.#fit);
+    const shot = this.#camera.shot(this.#now, aspect, this.#framed(), this.#fit, this.#bossFace());
     this.#noteShot(shot);
     // A shot further back than usual pushes the fog back with it (#234).
     this.#lastDistance = shot.distance;
@@ -1287,6 +1308,19 @@ export class BattleScene {
     Vector3.CrossToRef(this.#forward, this.#right, this.#up);
     this.#up.normalize();
     this.#effects.setCamera(this.#right, this.#up, this.#forward);
+  }
+
+  /**
+   * The boss's face as drawn this frame (#868), for the camera to frame
+   * first; null outside a boss fight, or while the boss is out of sight or
+   * lying tuckered out (the result's flop needs no face).
+   */
+  #bossFace(): FacePoint | null {
+    if (this.#options.team === undefined) return null;
+    const rig = this.#rigs[this.#options.mySide === 'a' ? 'b' : 'a'];
+    const face = rig.out?.face;
+    if (!face || rig.down || rig.pose.scale < 0.2) return null;
+    return posedFace(this.#bossFacePoint, rig.home, rig.fx, rig.fz, rig.pose, face);
   }
 
   /**

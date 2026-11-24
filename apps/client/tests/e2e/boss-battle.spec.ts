@@ -18,7 +18,15 @@ interface BattleDebug {
   status: string;
   pending: number;
   waiting: boolean;
-  scene: { squishies: number; framing: { distance: number; fogEnd: number } | null } | null;
+  scene: {
+    squishies: number;
+    framing: {
+      distance: number;
+      fogEnd: number;
+      band: { top: number; bottom: number };
+      face: { top: number; bottom: number } | null;
+    } | null;
+  } | null;
   boss: {
     picking: number | null;
     picks: Record<string, string>;
@@ -174,7 +182,7 @@ test.describe('a mini-boss fight (#190)', () => {
     await expect.poll(() => stub.rounds.length).toBe(3);
   });
 
-  test('on a notched iPhone the fight stays inside the sky (#234)', async ({
+  test('on a notched iPhone the fight stays inside the sky and shows the boss face (#234, #868)', async ({
     browser,
     browserName,
   }) => {
@@ -215,6 +223,19 @@ test.describe('a mini-boss fight (#190)', () => {
     // dome and short of the fog's end.
     expect(framing!.distance + 10).toBeLessThan(95); // ARENA_STAGE.skyRadius
     expect(framing!.distance + 10).toBeLessThan(framing!.fogEnd);
+    // The boss's face comes first (#868): its eyes and mouth sit inside the
+    // stage band, between the boss plate (with its Order strip) and the team
+    // cards, while the team may tuck its feet under the cards.
+    const band = framing!.band;
+    const face = framing!.face;
+    expect(face).not.toBeNull();
+    expect(face!.top).toBeGreaterThanOrEqual(band.top);
+    expect(face!.bottom).toBeLessThanOrEqual(band.bottom);
+    // The band is the HUD's own: it starts under the boss head (plate + Order strip).
+    const headBottom = await page
+      .locator('.boss-head')
+      .evaluate((e) => e.getBoundingClientRect().bottom / window.innerHeight);
+    expect(band.top).toBeGreaterThanOrEqual(headBottom - 0.005);
     // And the stage between the plate and the team cards draws a scene, not one
     // flat colour. Chromium only: headless WebKit screenshots of the WebGL
     // canvas come out flat (one colour) whatever it draws.
