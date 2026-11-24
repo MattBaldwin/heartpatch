@@ -104,7 +104,29 @@ export function frameDistance(
   }
   const shift = 1 - 2 * feetY;
   const reach = arenaReach(aspect, safe.floor ?? safe.bottom, shift, config);
-  return { distance: Math.max(distance, Math.min(box, reach)), shift };
+  // Capped (#234): past the sky dome the dome hides everything, past the fog the ground goes flat.
+  return {
+    distance: Math.min(config.maxFitDistance, Math.max(distance, Math.min(box, reach))),
+    shift,
+  };
+}
+
+/**
+ * The arena fog for a shot `distance` back (#234): the mood's own fog
+ * (`base`, start and end) at the usual framing distance or closer, pushed back
+ * by however far past `fogReference` the camera sits, so the fighters' ground
+ * keeps the look it was tuned with. Writes into `out` and returns it.
+ */
+export function fogFor(
+  base: readonly [number, number],
+  distance: number,
+  out: [number, number] = [0, 0],
+  config: BattleCameraConfig = BATTLE_CAMERA,
+): [number, number] {
+  const extra = Math.max(0, distance - config.fogReference);
+  out[0] = base[0] + extra;
+  out[1] = base[1] + extra;
+  return out;
 }
 
 /**

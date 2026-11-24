@@ -3,11 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { squishyParams } from '../procedural/params.js';
 import { ARENA_STAGE } from './arena-config.js';
 import battleCss from './battle.css?raw';
-import { BATTLE_CAMERA, FIGHTER, HOMES } from './battle-config.js';
+import { BATTLE_CAMERA, FIGHTER, HOMES, TEAM_ARENA } from './battle-config.js';
 import {
   arenaReach,
   battleScale,
   CameraDirector,
+  fogFor,
   frameDistance,
   shakeOffset,
   type CameraShot,
@@ -48,6 +49,84 @@ describe('frameDistance', () => {
       { x: HOMES.theirs.x - 3, z: HOMES.theirs.z, r: 1.6, h: 3.6 },
     ]).distance;
     expect(far).toBeGreaterThanOrEqual(roomy);
+  });
+});
+
+describe('a boss fight on a notched iPhone (#234)', () => {
+  // Measured in Chromium at 393×852 with the iPhone's safe-area insets (top 59,
+  // bottom 34): Rakelet (Lv 28) against a team of three, at rest.
+  const aspect = 393 / 852;
+  const team = { ...BATTLE_CAMERA, pitch: TEAM_ARENA.pitch };
+  const bossFit: FitPoint[] = [
+    { x: -4.3, z: -3.77, r: 2.4, h: 4.27 },
+    { x: 0.4, z: -2.6, r: 2.38, h: 4.25 },
+    { x: 5.1, z: -1.43, r: 2.4, h: 4.08 },
+    { x: -1, z: 9.5, r: 2.57, h: 8.88 },
+  ];
+  const fighting = { top: 0.378, bottom: 0.529 };
+  const result = { top: 0.198, bottom: 0.51 };
+  const uncapped = { ...team, maxFitDistance: Infinity };
+
+  it('would have backed the camera out past the sky dome and the fog', () => {
+    // The bug: 160 units back, the dome (radius 95) hid the whole fight.
+    const before = frameDistance(aspect, fighting, bossFit, uncapped).distance;
+    expect(before).toBeGreaterThan(ARENA_STAGE.skyRadius);
+  });
+
+  for (const [name, band] of [
+    ['fighting', fighting],
+    ['result', result],
+  ] as const) {
+    it(`keeps the camera inside the sky dome and before the fog ends (${name})`, () => {
+      const { distance } = frameDistance(aspect, band, bossFit, team);
+      expect(distance).toBeLessThanOrEqual(team.maxFitDistance);
+      // The camera to the fight's far side (the boss) stays under the dome's radius.
+      expect(distance + 10).toBeLessThan(ARENA_STAGE.skyRadius);
+      for (const fogEnd of [85, 90]) {
+        const [, end] = fogFor([25, fogEnd], distance, [0, 0], team);
+        // The ground under the boss, behind the aim, is well short of the fog's end.
+        expect(distance + 10, `fog ${String(fogEnd)}`).toBeLessThan(end - 20);
+      }
+    });
+  }
+
+  it('still fits a band roomy enough without the cap', () => {
+    // The result screen's band asks for less than the cap: nothing changes there.
+    const capped = frameDistance(aspect, result, bossFit, team).distance;
+    const free = frameDistance(aspect, result, bossFit, uncapped).distance;
+    expect(free).toBeLessThan(team.maxFitDistance);
+    expect(capped).toBeCloseTo(free, 9);
+  });
+
+  it('keeps every fighter on screen sideways at the cap', () => {
+    const { distance, shift } = frameDistance(aspect, fighting, bossFit, team);
+    const shot = new CameraDirector({ a: HOMES.mine, b: HOMES.theirs }, true, team).shot(
+      0,
+      aspect,
+      fighting,
+      bossFit,
+    );
+    expect(shot.distance).toBeCloseTo(distance, 9);
+    for (const f of bossFit) {
+      const feet = project(shot, aspect, { x: f.x, y: 0, z: f.z });
+      expect(Math.abs(feet.x), `${String(f.x)},${String(f.z)}`).toBeLessThan(1);
+      expect(feet.y).toBeGreaterThan(0);
+      expect(feet.y).toBeLessThan(1);
+    }
+    expect(shift).toBeCloseTo(1 - 2 * Math.min(team.feetY, fighting.bottom - 0.08), 9);
+  });
+});
+
+describe('fogFor', () => {
+  it("keeps the mood's own fog at the usual framing distance or closer", () => {
+    expect(fogFor([25, 85], 30)).toEqual([25, 85]);
+    expect(fogFor([25, 85], BATTLE_CAMERA.fogReference)).toEqual([25, 85]);
+  });
+
+  it('pushes the fog back as far as the camera sits past the usual distance', () => {
+    const out: [number, number] = [0, 0];
+    expect(fogFor([28, 90], BATTLE_CAMERA.fogReference + 15, out)).toEqual([43, 105]);
+    expect(fogFor([28, 90], BATTLE_CAMERA.fogReference + 15, out)).toBe(out);
   });
 });
 
@@ -386,10 +465,11 @@ describe('framing every species (#652)', () => {
       // Nobody to fit: the fight's box alone backs off no further than the arena reaches.
       const empty = frameDistance(aspect, safe, []);
       expect(empty.distance).toBeLessThanOrEqual(arenaReach(aspect, floor, empty.shift) + 1e-9);
-      // A giant still fits whole, rim or no rim.
+      // A giant still fits whole, rim or no rim, up to the sky dome's cap (#234).
       const giant = { x: HOMES.mine.x, z: HOMES.mine.z, r: 6, h: 40 };
-      const frame = frameDistance(aspect, safe, [giant]);
-      const shot = new CameraDirector({ a: HOMES.mine, b: HOMES.theirs }, true).shot(
+      const uncapped = { ...BATTLE_CAMERA, maxFitDistance: Infinity };
+      const frame = frameDistance(aspect, safe, [giant], uncapped);
+      const shot = new CameraDirector({ a: HOMES.mine, b: HOMES.theirs }, true, uncapped).shot(
         0,
         aspect,
         safe,
@@ -398,6 +478,10 @@ describe('framing every species (#652)', () => {
       const head = project(shot, aspect, { x: giant.x, y: giant.h, z: giant.z });
       expect(frame.distance).toBeGreaterThan(arenaReach(aspect, floor, frame.shift));
       expect(head.y, screen.name).toBeGreaterThan(safe.top - 1e-6);
+      // Past the cap the camera stops: an empty sky is worse than a tucked-in head.
+      if (frame.distance > BATTLE_CAMERA.maxFitDistance) {
+        expect(frameDistance(aspect, safe, [giant]).distance).toBe(BATTLE_CAMERA.maxFitDistance);
+      }
     }
   });
 

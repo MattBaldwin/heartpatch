@@ -53,6 +53,7 @@ import type { BattleContent } from './battle-view.js';
 import {
   battleScale,
   CameraDirector,
+  fogFor,
   type CameraShot,
   type FitPoint,
   type SafeRegion,
@@ -112,6 +113,11 @@ export interface BattleSceneStats {
   readonly drawCalls: number;
   /** Where the camera is (the dev hook: a gesture on the fight must not move it). */
   readonly camera: { x: number; y: number; z: number } | null;
+  /**
+   * How far back the camera sits and where this frame's fog ends (the dev
+   * hook, #234: a notched iPhone's boss fight must stay inside the sky dome).
+   */
+  readonly framing: { distance: number; fogEnd: number } | null;
   /** The current step's clock: what is playing and how far in, ms (the dev hook). */
   readonly playing: { kind: PlaybackStep['kind']; at: number } | null;
   /** Each side's sparkle shield bubble is showing (#214; a sip before its move, #403). */
@@ -298,6 +304,11 @@ export class BattleScene {
   readonly #cameraWatchers = new Set<() => void>();
   #casterMeshes = -1;
   #imageProcessed = false;
+  /** The mood's own fog (start, end), as the arena set it; `#fog` is this frame's (#234). */
+  readonly #baseFog: [number, number];
+  readonly #fog: [number, number] = [0, 0];
+  /** The last shot's distance back (NaN before the first frame). */
+  #lastDistance = Number.NaN;
 
   constructor(scene: Scene, options: BattleSceneOptions) {
     this.#scene = scene;
@@ -307,6 +318,7 @@ export class BattleScene {
     const plan = arenaPlan(options.terrain, options.timeOfDay, arenaSeed(options.battleId));
     this.#shadowStretch = plan.mood.shadowStretch;
     this.#arena = buildArena(scene, { plan, lowTier, reducedMotion: options.reducedMotion });
+    this.#baseFog = [scene.fogStart, scene.fogEnd];
 
     const mine = options.mySide;
     const team = options.team?.slots.slice(0, 3) ?? [];
@@ -1002,6 +1014,9 @@ export class BattleScene {
       reducedMotion: this.#options.reducedMotion,
       drawCalls: this.#drawCalls,
       camera: this.#cameraStat(),
+      framing: Number.isNaN(this.#lastDistance)
+        ? null
+        : { distance: this.#lastDistance, fogEnd: this.#fog[1] },
       playing: this.#playing
         ? { kind: this.#playing.kind, at: this.#now - this.#playing.start }
         : null,
@@ -1243,6 +1258,11 @@ export class BattleScene {
     }
     const shot = this.#camera.shot(this.#now, aspect, this.#framed(), this.#fit);
     this.#noteShot(shot);
+    // A shot further back than usual pushes the fog back with it (#234).
+    this.#lastDistance = shot.distance;
+    fogFor(this.#baseFog, shot.distance, this.#fog);
+    scene.fogStart = this.#fog[0];
+    scene.fogEnd = this.#fog[1];
     camera.fov = shot.fov;
     camera.minZ = BATTLE_CAMERA.minZ;
     camera.maxZ = BATTLE_CAMERA.maxZ;

@@ -283,7 +283,7 @@ export const BOSS_SPECIES: Species[] = [
         'lanky-legs',
       ],
       size: 1.88,
-      finish: 'shimmer',
+      finish: 'iridescent', // #234: not shimmer, whose bands read as white streaks at boss scale
       head: { body: 'rake-head', size: 0.86, forward: 0.06, up: 0.8 },
       stance: 0.38,
       pose: 'upright',
@@ -391,7 +391,7 @@ export const BOSS_SPECIES: Species[] = [
         'biped-legs',
       ],
       size: 1.88,
-      finish: 'shimmer',
+      finish: 'iridescent', // #234: not shimmer, whose bands read as white streaks at boss scale
       glow: 'accent',
       head: { body: 'orb', size: 0.76, forward: 0.06, up: 0.82 },
       stance: 0.32,
@@ -500,7 +500,7 @@ export const BOSS_SPECIES: Species[] = [
         'sneakers',
       ],
       size: 1.88,
-      finish: 'shimmer',
+      finish: 'iridescent', // #234: not shimmer, whose bands read as white streaks at boss scale
       head: { body: 'orb', size: 0.7, forward: 0.06, up: 0.82 },
       stance: 0.22,
       pose: 'upright',
@@ -607,7 +607,7 @@ export const BOSS_SPECIES: Species[] = [
         'kart-antenna',
       ],
       size: 1.8,
-      finish: 'shimmer',
+      finish: 'iridescent', // #234: not shimmer, whose bands read as white streaks at boss scale
       head: { body: 'orb', size: 0.95, forward: 0.06, up: 0.88 },
       stance: 0.2,
       pose: 'stand',
