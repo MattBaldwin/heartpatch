@@ -50,8 +50,7 @@ export function postFlagLabel(flag: PostFlag): string {
 }
 
 /** The reach line when my land next to the post is cut off from home (#863). */
-export const POST_CUT_OFF =
-  '🧭 Your nearby land is cut off. Join it up to trade, or go on a journey!';
+export const POST_CUT_OFF = '🧭 Your nearby land is cut off. Join it up or journey!';
 
 /** The tile panel's line about reaching it. */
 export function postReachLine(reach: PostReach | null): string | null {

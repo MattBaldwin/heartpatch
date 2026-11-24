@@ -11,6 +11,7 @@ import {
   postReach,
   tradingPostLabels,
   type Hex,
+  type HexKey,
   type JourneyRules,
   type PostView,
   type PublicUser,
@@ -276,13 +277,18 @@ export async function listPostViews(
     tiles: readonly (ReachTile & { readonly terrain: string })[];
     at: Date;
     rules?: JourneyRules;
+    /** The viewer's supply line (`suppliedFor`), when the caller has it already. */
+    supplied?: ReadonlySet<HexKey> | null;
   },
 ): Promise<PostView[]> {
   const rules = input.rules ?? JOURNEY_RULES;
   const labels = tradingPostLabels(input.tiles, GAME_DATA.mapGen.tradingPosts);
   if (labels.size === 0) return [];
   // On a Wild Isle, land a road, bridge or ferry joins to home counts (#863).
-  const supplied = await suppliedFor(tx, input.mapId, input.userId);
+  const supplied =
+    input.supplied !== undefined
+      ? input.supplied
+      : await suppliedFor(tx, input.mapId, input.userId);
   const passes = await createJourneysRepo(tx).visitPasses(input.mapId, input.userId, input.at);
   const passAt = new Map(passes.map((p) => [hexKey(p), p.visitUntil]));
   return input.tiles

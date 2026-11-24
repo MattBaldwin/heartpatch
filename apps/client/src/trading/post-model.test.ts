@@ -1,4 +1,4 @@
-import { hexKey, hexNeighbors, isTradingPost, type MapView } from '@heartpatch/shared';
+import { hexKey, hexNeighbors, isTradingPost, type HexKey, type MapView } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { testView, userId } from '../map/test-view.js';
 import { POST_CUT_OFF, VISIT_POST, postFlagLabel, postFlags, postReachLine } from './post-model.js';
@@ -75,10 +75,8 @@ describe('postFlags', () => {
       ...view,
       tiles: view.tiles.map((t) => (t === gap ? { ...t, ownerUserId: null } : t)),
     };
-    const reachOf = (supplied?: ReadonlySet<string>) =>
-      postFlags(cut, me, supplied as ReadonlySet<never> | undefined).find(
-        (f) => f.tile.q === post.q && f.tile.r === post.r,
-      )?.reach;
+    const reachOf = (supplied?: ReadonlySet<HexKey>) =>
+      postFlags(cut, me, supplied).find((f) => f.tile.q === post.q && f.tile.r === post.r)?.reach;
     // Adjacency alone (a Cozy Patch): the land by it is cut off, 1 tile.
     expect(reachOf()).toEqual({ kind: 'journey', distance: 1 });
     // A road carries the supply line across the gap: all my land is supplied.
@@ -111,9 +109,7 @@ describe('post words', () => {
     expect(postReachLine(null)).toBeNull();
     // 1 tile: land of mine next to it is cut off from home (#863).
     expect(postReachLine({ kind: 'journey', distance: 1 })).toBe(POST_CUT_OFF);
-    expect(POST_CUT_OFF).toBe(
-      '🧭 Your nearby land is cut off. Join it up to trade, or go on a journey!',
-    );
+    expect(POST_CUT_OFF).toBe('🧭 Your nearby land is cut off. Join it up or journey!');
     expect(VISIT_POST).toBe('Visit post');
   });
 });

@@ -9,6 +9,7 @@ import {
   morningGiftOf,
   villageLights,
   type CommunityView,
+  type HexKey,
   type PlacedCommunity,
   type ReachTile,
   type SafeFire,
@@ -101,12 +102,22 @@ export async function storeCommunities(
  */
 export async function communitiesView(
   tx: Executor,
-  input: { mapId: string; userId: string; tiles: readonly ReachTile[]; morning: Date },
+  input: {
+    mapId: string;
+    userId: string;
+    tiles: readonly ReachTile[];
+    morning: Date;
+    /** The viewer's supply line (`suppliedFor`), when the caller has it already. */
+    supplied?: ReadonlySet<HexKey> | null;
+  },
 ): Promise<CommunityView[]> {
   const repo = createCommunitiesRepo(tx);
   const rows = await repo.listForView(input.mapId);
   // On a Wild Isle, land a road, bridge or ferry joins to home counts (#863).
-  const supplied = rows.length === 0 ? null : await suppliedFor(tx, input.mapId, input.userId);
+  const supplied =
+    input.supplied !== undefined || rows.length === 0
+      ? (input.supplied ?? null)
+      : await suppliedFor(tx, input.mapId, input.userId);
   // The viewer's own gift villages (PR 3b), and which of them they've collected this morning.
   const gifts = rows.filter(
     (c) => c.ownerUserId === input.userId && morningGiftOf(c.kind, COMMUNITY_RULES) !== null,
