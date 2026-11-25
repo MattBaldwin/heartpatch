@@ -1,3 +1,4 @@
+import type { PlaybackStep } from './battle-playback.js';
 /**
  * Battle scene and HUD tunables (design doc §6, §19, §20; owner decision
  * 2026-10-05: Lantern Hour's stage, Saturday Morning Smackdown's hits, the
@@ -268,13 +269,25 @@ export const BATTLE_CAMERA: Readonly<BattleCameraConfig> = {
  * (opacity only, so nothing moves) and the camera frames the team's eyes down
  * to the sheet's top instead. On a taller band (iPad) nothing fades.
  */
+/** A list of playback step kinds, checked against `PlaybackStep['kind']` (#868). */
+function stepKinds(kinds: readonly PlaybackStep['kind'][]): readonly PlaybackStep['kind'][] {
+  return kinds;
+}
+
 export const BOSS_CARDS = {
   /** A stage band shorter than this (a fraction of the screen height) is short. */
   shortBand: 0.25, // TUNE: a notched iPhone's is ~0.15, an iPad's ~0.38
   /** The boss's own steps that fade the cards: its taunt (`move`), windup (`effect`), being hit. */
-  beats: ['move', 'effect', 'hit', 'miss'] as readonly string[], // TUNE
+  beats: stepKinds(['move', 'effect', 'hit', 'miss']), // TUNE
   /** Steps on a friend that land a boss's move (its blow arriving). */
-  landings: ['hit', 'miss'] as readonly string[], // TUNE
+  landings: stepKinds(['hit', 'miss']), // TUNE
+  /**
+   * Once a beat has faded the cards, these steps keep them faded until the log
+   * has played out (`restCamera`), so a friend's sparkle or tuckering-out in
+   * the same sequence doesn't flicker them; any other step (a friend's own
+   * move, a swap) ends the boss's turn.
+   */
+  holds: stepKinds(['hit', 'miss', 'effect', 'heal', 'tuckered', 'item']), // TUNE
   /** The cards' opacity while faded (they stay readable, a little). */
   opacity: 0.18, // TUNE
   /** Fade down and back up, ms. */

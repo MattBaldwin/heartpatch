@@ -288,7 +288,8 @@ test.describe('a mini-boss fight (#190)', () => {
       () => (window as unknown as { hpFraming: Sample[] }).hpFraming,
     );
     expect(samples.length).toBeGreaterThan(20);
-    const short = band.bottom - band.top < 0.25; // BOSS_CARDS.shortBand
+    // A 393x852 iPhone's band is short (BOSS_CARDS.shortBand), so the cards must step aside.
+    expect(band.bottom - band.top).toBeLessThan(0.25);
     const FACING_MIN = 0.3; // BATTLE_CAMERA.faceFacingMin
     const EPS = 0.005;
     for (const { framing: f, cardsTop, fadedClass, kind } of samples) {
@@ -303,6 +304,9 @@ test.describe('a mini-boss fight (#190)', () => {
       }
       // A boss turned away is never reported as a framed face.
       if ((f.bossFacing ?? 1) < FACING_MIN - 0.05) expect(f.face, where).toBeNull();
+      // The team's boxes are reported whenever the team is in the shot, the
+      // boss turned away (no face) or not.
+      expect(f.team.length, where).toBeGreaterThan(0);
       if (!f.cardsFaded) {
         for (const friend of f.team)
           expect(friend.bottom, where).toBeLessThanOrEqual(cardsTop + EPS);
@@ -313,10 +317,8 @@ test.describe('a mini-boss fight (#190)', () => {
     const seen = (k: string) => samples.filter((x) => x.kind === k);
     expect(seen('effect').length).toBeGreaterThan(0);
     expect(seen('hit').length).toBeGreaterThan(0);
-    if (short) {
-      expect(seen('effect').some((x) => x.framing.cardsFaded)).toBe(true);
-      expect(seen('hit').some((x) => x.framing.cardsFaded)).toBe(true);
-    }
+    expect(seen('effect').some((x) => x.framing.cardsFaded)).toBe(true);
+    expect(seen('hit').some((x) => x.framing.cardsFaded)).toBe(true);
 
     // And the stage between the plate and the team cards draws a scene, not one
     // flat colour. Chromium only: headless WebKit screenshots of the WebGL

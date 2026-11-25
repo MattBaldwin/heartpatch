@@ -344,8 +344,13 @@ export class BattleScene {
   readonly #fog: [number, number] = [0, 0];
   /** The last shot's distance back (NaN before the first frame). */
   #lastDistance = Number.NaN;
-  /** The current step is one of the boss's beats (`BOSS_CARDS`, #868). */
+  /**
+   * The boss's turn is playing (#868): the current step is one of its beats,
+   * or a `BOSS_CARDS.holds` step after one, until `restCamera`.
+   */
   #bossBeat = false;
+  /** The last shot's band was short (kept while faded if the boss is lost mid-beat). */
+  #short = false;
   /** The team cards are faded (#868), and when the boss's last beat was seen (ms). */
   #cardsFaded = false;
   #beatSeen = 0;
@@ -733,7 +738,9 @@ export class BattleScene {
       ...(extra.captured !== undefined ? { captured: extra.captured } : {}),
     });
     this.#playing = { kind: step.kind, start: now, ms: step.ms };
-    this.#bossBeat = this.#isBossBeat(step.kind, step.side, user ?? null);
+    this.#bossBeat =
+      this.#isBossBeat(step.kind, step.side, user ?? null) ||
+      (this.#bossBeat && BOSS_CARDS.holds.includes(step.kind));
     for (const cue of plan.acts) {
       const rig = rigOf(cue.side);
       if (cue.kind === 'swap-in' && extra.incoming) {
@@ -1072,11 +1079,10 @@ export class BattleScene {
             face: Number.isNaN(this.#camera.face.high)
               ? null
               : { top: this.#camera.face.high, bottom: this.#camera.face.low },
-            team: Number.isNaN(this.#camera.face.high)
-              ? []
-              : this.#camera.team
-                  .filter((t) => Number.isFinite(t.high) && Number.isFinite(t.low))
-                  .map((t) => ({ top: t.high, bottom: t.low })),
+            // Whenever the camera framed the team (a boss fight), even while the boss is turned away.
+            team: this.#camera.team
+              .filter((t) => Number.isFinite(t.high) && Number.isFinite(t.low))
+              .map((t) => ({ top: t.high, bottom: t.low })),
             // The facing the last shot framed with, so it matches `face` (a twirl turns fast).
             bossFacing: Number.isNaN(this.#facingShot) ? this.#bossFacing() : this.#facingShot,
             open: this.#open,
@@ -1328,7 +1334,9 @@ export class BattleScene {
     this.#facingShot = boss?.facing ?? Number.NaN;
     // On a short band the team cards step aside while the boss acts (#868):
     // the team's eyes may then go down to the sheet.
-    const short = boss !== null && shortBand(safe);
+    // A boss lost mid-beat (tuckered out, shrunk) keeps the band's last verdict while faded.
+    const short = boss !== null ? shortBand(safe) : this.#cardsFaded && this.#short;
+    this.#short = short;
     const acting = short && this.#bossBeat && this.#playing !== null;
     this.#open = acting && safe.open !== undefined && Number.isFinite(safe.open) ? safe.open : null;
     const shot = this.#camera.shot(

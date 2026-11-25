@@ -377,7 +377,7 @@ describe('BattleScene', () => {
     let lastScene: Scene | null = null;
     function team(
       slots: number[],
-      frame: { safe?: SafeRegion; cards?: (faded: boolean) => void } = {},
+      frame: { safe?: SafeRegion; cards?: (faded: boolean) => void; reducedMotion?: boolean } = {},
     ) {
       const scene = new Scene(engine);
       lastScene = scene;
@@ -392,7 +392,7 @@ describe('BattleScene', () => {
         terrain: 'meadow',
         timeOfDay: 'day',
         battleId: '01a10948-604f-73db-bbd4-5cad0847932b',
-        reducedMotion: false,
+        reducedMotion: frame.reducedMotion ?? false,
         safe: () => frame.safe ?? { top: 0.2, bottom: 0.6 },
         team: { slots },
         ...(frame.cards ? { cards: frame.cards } : {}),
@@ -475,6 +475,67 @@ describe('BattleScene', () => {
         battle.perform(step('hit', 'a', { slot: 1, effectiveness: 'normal' }), 1400);
         draw(battle, 1420);
         expect(cards).toHaveBeenLastCalledWith(true);
+      });
+
+      it('with reduced motion, come back once nothing plays (the screen keeps drawing while faded)', () => {
+        const cards = vi.fn();
+        const battle = team([0, 1, 2], { safe: notched, cards, reducedMotion: true });
+        battle.perform(step('effect', 'b', { windup: true }), 20);
+        // The battle screen's loop: every frame while something plays, then only
+        // while `update()` asks for another (breathing is off with reduced motion).
+        let now = 40;
+        draw(battle, now);
+        expect(cards).toHaveBeenLastCalledWith(true);
+        while (now < 10_000 && battle.isPlaying(now)) draw(battle, (now += 50));
+        expect(battle.isPlaying(now)).toBe(false);
+        // Nothing plays, but the cards are still faded: keep the frames coming.
+        expect(battle.stats.framing?.cardsFaded).toBe(true);
+        expect(battle.update(now)).toBe(true);
+        battle.restCamera();
+        let more = true;
+        while (now < 20_000 && (more || battle.isPlaying(now))) {
+          now += 50;
+          more = battle.update(now);
+          lastScene!.render();
+          if (battle.stats.framing?.cardsFaded) expect(more).toBe(true);
+        }
+        expect(cards).toHaveBeenLastCalledWith(false);
+        expect(cards).toHaveBeenCalledTimes(2);
+        expect(battle.stats.framing?.cardsFaded).toBe(false);
+        // Back at rest, nothing asks for frames any more.
+        expect(battle.update(now + 50)).toBe(false);
+      });
+
+      it('with reduced motion, dispose() brings faded cards back', () => {
+        const cards = vi.fn();
+        const battle = team([0, 1, 2], { safe: notched, cards, reducedMotion: true });
+        battle.perform(step('effect', 'b', { windup: true }), 20);
+        draw(battle, 40);
+        expect(cards).toHaveBeenLastCalledWith(true);
+        battle.dispose();
+        expect(cards).toHaveBeenLastCalledWith(false);
+      });
+
+      it("stay faded through a friend's steps in the boss's turn, not after a friend's move", () => {
+        const cards = vi.fn();
+        const battle = team([0, 1, 2], { safe: notched, cards });
+        battle.perform(step('move', 'b', { move: GAME_DATA.moves[0]!.id }), 10);
+        draw(battle, 30);
+        expect(cards).toHaveBeenLastCalledWith(true);
+        // The blow lands, a friend sparkles and tuckers out: no flicker.
+        battle.perform(step('hit', 'a', { slot: 1, effectiveness: 'normal' }), 700);
+        battle.perform(step('effect', 'a', { slot: 1 }), 1400);
+        battle.perform(step('tuckered', 'a', { slot: 1 }), 2100);
+        for (let now = 720; now <= 3500; now += 50) {
+          if (now === 1420 || now === 2120) expect(battle.stats.framing?.cardsFaded).toBe(true);
+          draw(battle, now);
+        }
+        expect(cards).toHaveBeenCalledTimes(1);
+        // A friend's own move ends the boss's turn: the cards come back.
+        battle.perform(step('move', 'a', { slot: 0, move: GAME_DATA.moves[0]!.id }), 3600);
+        for (let now = 3620; now <= 7000 + BOSS_CARDS.settleMs; now += 50) draw(battle, now);
+        expect(cards).toHaveBeenLastCalledWith(false);
+        expect(cards).toHaveBeenCalledTimes(2);
       });
 
       it('never fade on a taller band (an iPad)', () => {
