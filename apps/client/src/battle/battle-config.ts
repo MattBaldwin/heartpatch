@@ -270,7 +270,9 @@ export const BATTLE_CAMERA: Readonly<BattleCameraConfig> = {
  */
 export const BOSS_CARDS = {
   /** A stage band shorter than this (a fraction of the screen height) is short. */
-  shortBand: 0.25, // TUNE: a notched iPhone's is ~0.15, an iPad's ~0.38
+  // TUNE: a notched iPhone 15's is ~0.15; 393x852 with no insets (the WebKit
+  // e2e, which can't emulate them) ~0.253; the result band ~0.31; an iPad's ~0.38.
+  shortBand: 0.28,
   /** The boss's own steps that fade the cards: its taunt (`move`), windup (`effect`), being hit. */
   beats: ['move', 'effect', 'hit', 'miss'], // TUNE (step kinds: checked by battle-scene's `isStep`)
   /** Steps on a friend that land a boss's move (its blow arriving). */

@@ -292,11 +292,12 @@ test.describe('a mini-boss fight (#190)', () => {
     expect(samples.length).toBeGreaterThan(20);
     // Copies of battle-config's tunables (the e2e tsconfig can't import src);
     // the asserts below are unconditional, so a TUNE change fails here, loudly.
-    const SHORT_BAND = 0.25; // BOSS_CARDS.shortBand
+    const SHORT_BAND = 0.28; // BOSS_CARDS.shortBand
     const FACING_MIN = 0.3; // BATTLE_CAMERA.faceFacingMin
     const RELEASE_MS = 700 + 280; // BOSS_CARDS.settleMs + fadeInMs
     // A 393x852 iPhone's band is short, so the cards must step aside.
-    expect(band.bottom - band.top).toBeLessThan(SHORT_BAND);
+    // (Chromium emulates the notch's insets, ~0.15; WebKit can't, ~0.253: both are short.)
+    expect(band.bottom - band.top, `band ${JSON.stringify(band)}`).toBeLessThan(SHORT_BAND);
     const EPS = 0.005;
     // The cards may come back on the `settleMs` timeout with the eyes still
     // under them (the boss's eyes won), so the eyes-above-cards check skips

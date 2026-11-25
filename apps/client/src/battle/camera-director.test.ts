@@ -912,6 +912,8 @@ describe('the slide precedence (#868)', () => {
     expect(shortBand({ top: 0.203, bottom: 0.586 })).toBe(false);
     expect(shortBand({ top: 0.198, bottom: 0.509 })).toBe(false);
     expect(BOSS_CARDS.shortBand).toBeGreaterThan(0.529 - 0.378);
+    // 393x852 without the notch's insets (WebKit in e2e can't emulate them) is short too.
+    expect(BOSS_CARDS.shortBand - 0.2532).toBeGreaterThan(0.02);
   });
 });
 
