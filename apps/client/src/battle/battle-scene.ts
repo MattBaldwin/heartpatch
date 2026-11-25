@@ -1384,8 +1384,9 @@ export class BattleScene {
 
   /**
    * The team cards fade while the boss acts on a short band (#868) and come
-   * back once the camera has eased the team's eyes above them again (or after
-   * `settleMs`); `bottom` is the cards' top, as a fraction of the height.
+   * back once the camera has eased the team's eyes above them again (or, once
+   * it has settled, after `settleMs`); `bottom` is the cards' top, as a
+   * fraction of the height.
    */
   #fadeCards(short: boolean, acting: boolean, bottom: number): void {
     let faded = this.#cardsFaded;
@@ -1399,7 +1400,12 @@ export class BattleScene {
         const low = team[i]?.low ?? 0;
         if (Number.isFinite(low) && low > bottom) clear = false;
       }
-      faded = short && !clear && this.#now - this.#beatSeen < BOSS_CARDS.settleMs;
+      // Faded while the camera eases the team's eyes back up; if they settle
+      // under the cards anyway (the boss's eyes won), back after `settleMs`.
+      faded =
+        short &&
+        !clear &&
+        (this.#camera.settling || this.#now - this.#beatSeen < BOSS_CARDS.settleMs);
     }
     if (faded === this.#cardsFaded) return;
     this.#cardsFaded = faded;

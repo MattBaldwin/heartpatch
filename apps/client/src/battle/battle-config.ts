@@ -282,7 +282,8 @@ export const BOSS_CARDS = {
   fadeInMs: 280, // TUNE
   /**
    * After the boss's beat the cards come back once the friends' eyes are above
-   * them again (the camera eases back), or after this long at most (ms).
+   * them again (the camera eases back), or, once the camera has settled with
+   * them still under, after this long at most (ms).
    */
   settleMs: 700, // TUNE
 } as const;

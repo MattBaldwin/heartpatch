@@ -340,6 +340,11 @@ export class CameraDirector {
     this.#want = { focusX: 0, focusZ: 0, push: 0 };
   }
 
+  /** True while the face-first slide (#868) is still easing towards its target. */
+  get settling(): boolean {
+    return Math.abs(this.#drop - this.#dropWant) > 0.001;
+  }
+
   /** True while the camera is still travelling or shaking (keep drawing). */
   moving(now: number): boolean {
     const shaking = shakeOffset(this.#shake.amount, now - this.#shake.at, this.#config);

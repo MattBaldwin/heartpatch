@@ -457,7 +457,8 @@ describe('BattleScene', () => {
         expect(battle.stats.framing?.cardsFaded).toBe(true);
         expect(battle.stats.framing?.open).toBeCloseTo(0.59, 9);
         battle.restCamera();
-        for (let now = 60; now <= 60 + BOSS_CARDS.settleMs + 100; now += 50) draw(battle, now);
+        // The camera eases back (about a second and a half), then the cards come back.
+        for (let now = 60; now <= 3000 + BOSS_CARDS.settleMs; now += 50) draw(battle, now);
         expect(cards).toHaveBeenLastCalledWith(false);
         expect(cards).toHaveBeenCalledTimes(2);
         expect(battle.stats.framing?.cardsFaded).toBe(false);
