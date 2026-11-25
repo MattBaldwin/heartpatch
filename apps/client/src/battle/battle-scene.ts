@@ -888,6 +888,8 @@ export class BattleScene {
     if (this.#effects.update(now)) moving = true;
     if (this.#arena.update(now)) moving = true;
     if (this.#camera.moving(now)) moving = true;
+    // Faded cards are released only inside a frame, so keep frames coming until they are back.
+    if (this.#cardsFaded) moving = true;
     this.#writeShadows();
     this.#placeBubbles();
     return moving;
