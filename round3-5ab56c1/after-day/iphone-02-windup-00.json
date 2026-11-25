@@ -1,0 +1,94 @@
+{
+ "file": "iphone-02-windup-00.png",
+ "device": "iphone",
+ "tz": "Asia/Bangkok",
+ "at": "2026-11-25T03:43:04.989Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 70,
+   "fogEnd": 115,
+   "band": {
+    "top": 0.392018779342723,
+    "bottom": 0.5290676349765259
+   },
+   "face": {
+    "top": 0.4097325144695816,
+    "bottom": 0.43508514310084406
+   },
+   "team": [
+    {
+     "top": 0.5330771394114705,
+     "bottom": 0.552554468591792
+    },
+    {
+     "top": 0.5352690188038605,
+     "bottom": 0.554585544989518
+    },
+    {
+     "top": 0.5333869943778996,
+     "bottom": 0.5514495681295288
+    }
+   ],
+   "bossFacing": 0.9943926168125428,
+   "open": 0.8319395539906104,
+   "cardsFaded": true
+  },
+  "playing": {
+   "kind": "effect",
+   "at": 34.26500000010856
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "rects": {
+  "bossHead": {
+   "top": 171,
+   "bottom": 324,
+   "left": 12,
+   "right": 381
+  },
+  "plate": {
+   "top": 171,
+   "bottom": 282,
+   "left": 12,
+   "right": 381
+  },
+  "order": {
+   "top": 290,
+   "bottom": 324,
+   "left": 109.96875,
+   "right": 283.03125
+  },
+  "friends": {
+   "top": 450.765625,
+   "bottom": 494.765625,
+   "left": 16,
+   "right": 377
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "sheet": {
+   "top": 708.8125,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  }
+ },
+ "friendsDom": {
+  "opacity": "0.18",
+  "faded": true,
+  "pe": "none"
+ }
+}

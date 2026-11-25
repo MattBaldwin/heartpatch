@@ -1,0 +1,91 @@
+{
+ "file": "iphone-04-taunt.png",
+ "device": "iphone",
+ "tz": "Asia/Bangkok",
+ "at": "2026-11-25T03:44:56.248Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 68.1774320239996,
+   "fogEnd": 113.1774320239996,
+   "band": {
+    "top": 0.392018779342723,
+    "bottom": 0.5290676349765259
+   },
+   "face": null,
+   "team": [
+    {
+     "top": 0.5425790981196568,
+     "bottom": 0.5623864216959674
+    },
+    {
+     "top": 0.540041737371586,
+     "bottom": 0.561331150588204
+    },
+    {
+     "top": 0.5394282535880298,
+     "bottom": 0.5585433407164794
+    }
+   ],
+   "bossFacing": 0.2908020563292589,
+   "open": 0.8578711854460094,
+   "cardsFaded": true
+  },
+  "playing": {
+   "kind": "move",
+   "at": 57.51999999982945
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "rects": {
+  "bossHead": {
+   "top": 171,
+   "bottom": 324,
+   "left": 12,
+   "right": 381
+  },
+  "plate": {
+   "top": 171,
+   "bottom": 282,
+   "left": 12,
+   "right": 381
+  },
+  "order": {
+   "top": 290,
+   "bottom": 324,
+   "left": 124.96875,
+   "right": 268.03125
+  },
+  "friends": {
+   "top": 450.765625,
+   "bottom": 494.765625,
+   "left": 16,
+   "right": 377
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "sheet": {
+   "top": 730.90625,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  }
+ },
+ "friendsDom": {
+  "opacity": "0.18",
+  "faded": true,
+  "pe": "none"
+ }
+}

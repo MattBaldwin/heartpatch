@@ -1,0 +1,94 @@
+{
+ "file": "iphone-02-windup-02.png",
+ "device": "iphone",
+ "tz": "Asia/Bangkok",
+ "at": "2026-11-25T03:43:30.830Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 70,
+   "fogEnd": 115,
+   "band": {
+    "top": 0.392018779342723,
+    "bottom": 0.5290676349765259
+   },
+   "face": {
+    "top": 0.41310370462283186,
+    "bottom": 0.4434999981386055
+   },
+   "team": [
+    {
+     "top": 0.5526705920765714,
+     "bottom": 0.5720853493805257
+    },
+    {
+     "top": 0.5519545771715039,
+     "bottom": 0.5724016988665526
+    },
+    {
+     "top": 0.5503327361675177,
+     "bottom": 0.5690034388912395
+    }
+   ],
+   "bossFacing": 0.9912073082890959,
+   "open": 0.8319395539906104,
+   "cardsFaded": true
+  },
+  "playing": {
+   "kind": "effect",
+   "at": 678.0750000000698
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": "Rakelet is winding up Count to Three… watch out next round!",
+ "rects": {
+  "bossHead": {
+   "top": 171,
+   "bottom": 324,
+   "left": 12,
+   "right": 381
+  },
+  "plate": {
+   "top": 171,
+   "bottom": 282,
+   "left": 12,
+   "right": 381
+  },
+  "order": {
+   "top": 290,
+   "bottom": 324,
+   "left": 109.96875,
+   "right": 283.03125
+  },
+  "friends": {
+   "top": 450.765625,
+   "bottom": 494.765625,
+   "left": 16,
+   "right": 377
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "sheet": {
+   "top": 708.8125,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  }
+ },
+ "friendsDom": {
+  "opacity": "0.18",
+  "faded": true,
+  "pe": "none"
+ }
+}
