@@ -1,0 +1,94 @@
+{
+ "file": "iphone-03-hit.png",
+ "device": "iphone",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-25T03:12:36.722Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 67.31460336396367,
+   "fogEnd": 107.31460336396367,
+   "band": {
+    "top": 0.3779342723004695,
+    "bottom": 0.5290676349765259
+   },
+   "face": {
+    "top": 0.39640573937712104,
+    "bottom": 0.4276892151424734
+   },
+   "team": [
+    {
+     "top": 0.5403479731614802,
+     "bottom": 0.5581979334866979
+    },
+    {
+     "top": 0.5380761930216774,
+     "bottom": 0.5587341846275748
+    },
+    {
+     "top": 0.5373142370333086,
+     "bottom": 0.5584241029245177
+    }
+   ],
+   "bossFacing": 0.9718130353642712,
+   "open": 0.8578711854460094,
+   "cardsFaded": true
+  },
+  "playing": {
+   "kind": "hit",
+   "at": 1227.4599999999919
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "rects": {
+  "bossHead": {
+   "top": 171,
+   "bottom": 324,
+   "left": 12,
+   "right": 381
+  },
+  "plate": {
+   "top": 171,
+   "bottom": 282,
+   "left": 12,
+   "right": 381
+  },
+  "order": {
+   "top": 290,
+   "bottom": 324,
+   "left": 109.96875,
+   "right": 283.03125
+  },
+  "friends": {
+   "top": 450.765625,
+   "bottom": 494.765625,
+   "left": 16,
+   "right": 377
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "sheet": {
+   "top": 730.90625,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  }
+ },
+ "friendsDom": {
+  "opacity": "0.18",
+  "faded": true,
+  "pe": "none"
+ }
+}

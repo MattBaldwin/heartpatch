@@ -1,0 +1,91 @@
+{
+ "file": "iphone-01-rest.png",
+ "device": "iphone",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-25T03:11:23.208Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 70,
+   "fogEnd": 110,
+   "band": {
+    "top": 0.3779342723004695,
+    "bottom": 0.5290676349765259
+   },
+   "face": {
+    "top": 0.3779342723004695,
+    "bottom": 0.40704667647711384
+   },
+   "team": [
+    {
+     "top": 0.5083847309972546,
+     "bottom": 0.5248005829451227
+    },
+    {
+     "top": 0.5061955381029161,
+     "bottom": 0.5251946610193845
+    },
+    {
+     "top": 0.5047988140419485,
+     "bottom": 0.5244242554981134
+    }
+   ],
+   "bossFacing": 0.9624207448093006,
+   "open": null,
+   "cardsFaded": false
+  },
+  "playing": null,
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": "A BIG Rakelet wants to play!",
+ "rects": {
+  "bossHead": {
+   "top": 171,
+   "bottom": 312,
+   "left": 12,
+   "right": 381
+  },
+  "plate": {
+   "top": 171,
+   "bottom": 282,
+   "left": 12,
+   "right": 381
+  },
+  "order": {
+   "top": 290,
+   "bottom": 312,
+   "left": 167.96875,
+   "right": 225.03125
+  },
+  "friends": {
+   "top": 450.765625,
+   "bottom": 494.765625,
+   "left": 16,
+   "right": 377
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "sheet": {
+   "top": 573,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  }
+ },
+ "friendsDom": {
+  "opacity": "1",
+  "faded": false,
+  "pe": "none"
+ }
+}

@@ -1,0 +1,90 @@
+{
+ "file": "iphone-04-taunt.png",
+ "device": "iphone",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-25T03:17:58.293Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 68.18861332953531,
+   "fogEnd": 108.18861332953531,
+   "band": {
+    "top": 0.392018779342723,
+    "bottom": 0.5290676349765259
+   },
+   "face": {
+    "top": 0.4170398187933904,
+    "bottom": 0.44150391056130156
+   },
+   "team": [
+    {
+     "top": 0.5441436147848518,
+     "bottom": 0.5625763227652357
+    },
+    {
+     "top": 0.5425904376770615,
+     "bottom": 0.5637572236401223
+    }
+   ],
+   "bossFacing": 0.3429223904429558,
+   "open": 0.8578711854460094,
+   "cardsFaded": true
+  },
+  "playing": {
+   "kind": "move",
+   "at": 56.330000000074506
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": "Rakelet used Count to Three!",
+ "rects": {
+  "bossHead": {
+   "top": 171,
+   "bottom": 324,
+   "left": 12,
+   "right": 381
+  },
+  "plate": {
+   "top": 171,
+   "bottom": 282,
+   "left": 12,
+   "right": 381
+  },
+  "order": {
+   "top": 290,
+   "bottom": 324,
+   "left": 139.96875,
+   "right": 253.03125
+  },
+  "friends": {
+   "top": 450.765625,
+   "bottom": 494.765625,
+   "left": 16,
+   "right": 377
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "sheet": {
+   "top": 730.90625,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  }
+ },
+ "friendsDom": {
+  "opacity": "0.18",
+  "faded": true,
+  "pe": "none"
+ }
+}
