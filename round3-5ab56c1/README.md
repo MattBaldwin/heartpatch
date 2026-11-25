@@ -23,9 +23,14 @@ All y fractions of screen height.
 | after-night | iphone-03-hit | hit@1227ms | 0.378–0.529 | 0.858 | True | 0.18 | True | 0.529 | 374 / 21.8; 0.35× rest lum-std | 0.559 | pass (faded) | 0.396–0.428 | 0.972 | pass | 0.380/0.331/0.380 | 0.858 |
 | after-night | iphone-04-taunt | move@56ms | 0.392–0.529 | 0.858 | True | 0.18 | True | 0.529 | 375 / 21.4; 0.34× rest lum-std | 0.564 | pass (faded) | 0.417–0.442 | 0.343 | pass | 0.380/0.331/0.380 | 0.858 |
 | after-night | iphone-05-result | idle | 0.198–0.633 | - | False | 1 | False | - | - | - | - | 0.324–0.369 | 0.990 | result card up | -/-/- | - |
+| before-night | iphone-01-rest | idle | 0.378–0.529 | - | None | 1 | False | 0.529 | 282 / 63.3; 1.00× rest lum-std | 0.525 | pass | 0.378–0.407 | 1.000 | pass | 0.366/0.331/0.366 | 0.673 |
+| before-night | iphone-02-windup-00 | effect@30ms | 0.378–0.529 | - | None | 1 | False | 0.529 | 379 / 67.3; 1.06× rest lum-std | 0.579 | FAIL | 0.397–0.439 | 0.999 | pass | 0.380/0.331/0.380 | 0.832 |
+| before-night | iphone-03-hit | hit@1609ms | 0.378–0.529 | - | None | 1 | False | 0.529 | 315 / 62.6; 0.99× rest lum-std | 0.542 | FAIL | 0.387–0.416 | 0.974 | pass | 0.380/0.331/0.380 | 0.858 |
+| before-night | iphone-05-result | idle | 0.198–0.633 | - | None | 1 | False | - | - | - | - | 0.325–0.371 | 0.919 | result card up | -/-/- | - |
 
 Rest drift vs round 2 (|Δ| of face top/bottom, band, cards top):
 - after-night iphone-01-rest: face top Δ0.006 bottom Δ0.003; band top Δ0.000 bottom Δ0.000; cards opacity 1, cardsFaded False
+- before-night iphone-01-rest: face top Δ0.006 bottom Δ0.003; band top Δ0.000 bottom Δ0.000; cards opacity 1, cardsFaded None
 
 ## Notes / Missing
 (in progress: groups are pushed as they finish; see the commit log)

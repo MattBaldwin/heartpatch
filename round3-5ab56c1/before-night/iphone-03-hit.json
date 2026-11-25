@@ -1,0 +1,92 @@
+{
+ "file": "iphone-03-hit.png",
+ "device": "iphone",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-25T03:24:04.789Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 67.76337930743217,
+   "fogEnd": 107.76337930743217,
+   "band": {
+    "top": 0.3779342723004695,
+    "bottom": 0.5290676349765259
+   },
+   "face": {
+    "top": 0.3874160198122153,
+    "bottom": 0.41637747900982935
+   },
+   "team": [
+    {
+     "top": 0.5190746336302318,
+     "bottom": 0.5400557397184857
+    },
+    {
+     "top": 0.5173346566603876,
+     "bottom": 0.5358840143759203
+    },
+    {
+     "top": 0.5224366652689885,
+     "bottom": 0.5422593929971291
+    }
+   ],
+   "bossFacing": 0.9738831828581033
+  },
+  "playing": {
+   "kind": "hit",
+   "at": 1609.949999999997
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "rects": {
+  "bossHead": {
+   "top": 171,
+   "bottom": 324,
+   "left": 12,
+   "right": 381
+  },
+  "plate": {
+   "top": 171,
+   "bottom": 282,
+   "left": 12,
+   "right": 381
+  },
+  "order": {
+   "top": 290,
+   "bottom": 324,
+   "left": 124.96875,
+   "right": 268.03125
+  },
+  "friends": {
+   "top": 450.765625,
+   "bottom": 494.765625,
+   "left": 16,
+   "right": 377
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "sheet": {
+   "top": 730.90625,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  }
+ },
+ "friendsDom": {
+  "opacity": "1",
+  "faded": false,
+  "pe": "none"
+ }
+}
