@@ -304,7 +304,8 @@ test.describe('a mini-boss fight (#190)', () => {
       // A boss turned away is never reported as a framed face.
       if ((f.bossFacing ?? 1) < FACING_MIN - 0.05) expect(f.face, where).toBeNull();
       if (!f.cardsFaded) {
-        for (const friend of f.team) expect(friend.bottom, where).toBeLessThanOrEqual(cardsTop + EPS);
+        for (const friend of f.team)
+          expect(friend.bottom, where).toBeLessThanOrEqual(cardsTop + EPS);
       }
     }
     // Both the windup's power-up and the blows were seen, and on this short
