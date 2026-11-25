@@ -2519,3 +2519,41 @@ Merged: #856 (supervisor 46 handoff docs), #855 (Chore: #234 boss follow-ups: re
 - **Lineage limit reached next shift.** Supervisor 48 is depth 7 and does not start supervisor 49 (COORDINATOR §8 step 5).
 
 **Owner decisions (2026-11-16, supervisor 47 shift):** none received. Pending: #844 SHIP-OK (asked a sixth time); boss enable (`testers` first, recommended; sim on `760345d` passed all five gates).
+
+## Supervisor 48 (2026-11-16 → 2026-11-24)
+
+Merged: #858 (supervisor 47 handoff docs), #844 (#732 B2 Every Common milestone track and Patchwork Pal Scarf), #859 (#234 mini bosses on for everyone), #862 (Fix: session cookie `Max-Age`), #864 (#863 Hollow and trading-post reach), #867 (#234 boss camera and fog hotfix). Open: #865, #866, #868 (lane running).
+
+**Mini bosses are on (from PR #859, coordinator-recorded)**
+- Mini bosses are `on` for every patch in production via the compose default `HP_MINI_BOSSES: ${HP_MINI_BOSSES:-on}` (the Wild Isle / Long Night pattern); a `.env` line still overrides, and `deploy.sh` warns when it does. The owner chose this on 2026-11-23 ("Enable mini bosses for everyone"), skipping the `testers` and on-device frame-time stage. `pnpm sim:boss` on `760345d` stands, because the boss code is unchanged since.
+- The `changes/` entry for bosses says "Too big for now!", the in-game level gate, and quotes no thresholds: the boss level thresholds live in secret server data (CLAUDE.md rule 6).
+- **One-off:** #859 merged through a CI-wide e2e red because a probe PR (#860, `main` plus one comment line) failed all 12 shards the same way and the root cause was filed (#861); the owner said "Merge now" on that evidence. Not a precedent for unexplained reds.
+
+**Session cookie (from PR #862, #861)**
+- Session cookies carry a relative `Max-Age`, never an absolute date from the game clock. The e2e suite pins the server clock (`HP_DEV_NOW`, 2026-10-20), so the absolute `Expires` of pinned now + 30 days was 2026-11-19; from that day every real-clock browser dropped the cookie, `POST /api/v1/cinematic/seen` returned 401 and every e2e shard went red with nothing merged. Production was never affected (real clock). Session lifetime is unchanged (30 days); the server still expires sessions by `sessions.expires_at`.
+
+**Hollow and trading-post reach (from PR #864, #863)**
+- "Joined to home", for Hollow and trading-post reach, is the supply line (roads, bridges, ferry docks) on a Wild Isle and edge adjacency on a Cozy Patch; only the player's own supplied land counts. The owner chose to fix the rule, not just the copy.
+- No new view state: `away` or `journey` at distance 1 means the player's adjacent land is cut off from home, and the client keys its cut-off copy on that.
+- The issue's e2e acceptance (iPhone-viewport road- and bridge-joined cases) was waived by coordinator ruling so the rule could ship on its shared and server tests; it is #865.
+
+**Boss camera (from PR #867, #234)**
+- Cause of the blank boss fight on notched iPhones: the boss HUD leaves the stage 0.378–0.529 of the screen height, the camera's fit distance had no cap, and the 7-unit boss pushed the camera to 144–162 units, outside the sky dome (radius 95), so every stage pixel was the dome gradient. Not night-only and not WebKit.
+- `BATTLE_CAMERA.maxFitDistance` (70, `// TUNE:`) caps the battle camera below the dome and both fog ends, and `fogFor` moves the arena fog back with the shot past `fogReference` (45, `// TUNE:`), so a fight always draws.
+- At the cap the boss's head can sit under the plate on the notched band (about 78% of the boss). The coordinator ruled to ship the cap now with an honest `changes/` entry and an allowance test, and to file face-in-frame as #868 (face-first framing and/or HUD compaction; the immersive-fight plan may supersede the HUD part).
+- The Mythic shimmer finish reading as white streaks on night-lit boss vinyl (Rakelet's result screen) is #866, client-only. Swapping the boss forms to another finish is not done: `finishByRarity` (mythic → `shimmer`) is pinned by two shared tests. The rake head is Rakelet's designed tool mouth, not a fault.
+- Captures for boss and battle render checks must emulate iPhone safe-area insets (CDP `Emulation.setSafeAreaInsetsOverride`, top 59 / bottom 34 at 393×852) and build the scene at the final viewport. The #855 captures had no insets and built the scene at 393×659, so they missed this.
+
+**Process**
+- A CI-wide red with nothing merged is diagnosed with a probe PR (main plus one comment line) before the PR under review is blamed; workflow tokens get 403 on re-runs.
+- #784 WebKit tap-stall tally: sup48 +2 (`far-hollow-house.spec.ts:55` and `:260`, `ipad-webkit 5`, on `ac5c3e0`). Running: sup41 +14, sup42 +6, sup43 +2, sup44 +1, sup45 +0, sup46 +3, sup47 +1, sup48 +2.
+- Job-timeout cancels (55 minutes, no failing spec) are accepted and tallied separately: sup48 +6 (`iphone-webkit 1` three times, `ipad-webkit 2` once, the group 1 pair once counted as two). Group 1 timed out on three of the last four runs; re-sharding it or raising its timeout is a CI follow-up.
+- Not accepted, watch: `next-up.spec.ts:157` (one 240 s timeout, retry passed; reproduce on Chromium with the B2 track data if it recurs), `short-screens.spec.ts:206` (once, on a superseded #867 head), `recipe-book.spec.ts:26` (carried from supervisor 47).
+- Lanes run about 150k context / $20; trust `get_session`, because lanes under-report. The triage lane ($15.88, 269k) and the #864 lane ($14.46, 267k) ran well past that.
+- **Lineage limit reached.** Supervisor 48 is depth 7 and did not start supervisor 49; the owner starts the next supervisor from a fresh session (COORDINATOR §8 step 5, §9 state block).
+
+**Owner decisions (2026-11-16 → 2026-11-24, supervisor 48 shift):**
+- 2026-11-17: SHIP-OK on #844 (option 1 of SHIP-OK / polish / hold); #732 stays open.
+- 2026-11-23: enable mini bosses for everyone (option 2, skipping the testers stage).
+- 2026-11-24: "Merge now" on #859 through the drift red; fix #863 at the rule, not the copy (option 1); keep bosses live and fix forward after the first real boss fight showed a blank stage (option 3). Owner feedback: boss fights need "serious work; immersive, fun, different and exciting".
+- Pending: start the immersive-boss-battles plan lane now, or after the #868 fix merges and the owner has seen the captures.
