@@ -27,7 +27,10 @@ interface BattleDebug {
       face: { top: number; bottom: number } | null;
       team: { top: number; bottom: number }[];
       bossFacing: number | null;
+      open: number | null;
+      cardsFaded: boolean;
     } | null;
+    playing: { kind: string; at: number } | null;
   } | null;
   boss: {
     picking: number | null;
@@ -213,7 +216,8 @@ test.describe('a mini-boss fight (#190)', () => {
       );
     }
     await page.setViewportSize({ width: 393, height: 852 });
-    await bossFight(page);
+    // A windup round, a round where it lands, then the win: the boss's beats (#868).
+    await bossFight(page, { openRounds: 2, tricks: ['windup', 'land'] });
     await expect(page.getByTestId('boss-picker')).toBeVisible();
     await expect
       .poll(async () => (await battleState(page))?.scene?.framing?.distance ?? Infinity, {
@@ -243,6 +247,76 @@ test.describe('a mini-boss fight (#190)', () => {
       .locator('.boss-head')
       .evaluate((e) => e.getBoundingClientRect().bottom / window.innerHeight);
     expect(band.top).toBeGreaterThanOrEqual(headBottom - 0.005);
+
+    // Through the boss's windup and its blows (#868): every frame the hook
+    // reports, the boss's face is in the band whenever it faces the camera,
+    // and the team's eyes are above the team cards or the cards are faded.
+    await page.evaluate(() => {
+      type Hook = { __heartpatch?: { battle?: () => BattleDebug | null } };
+      const samples: unknown[] = [];
+      (window as unknown as { hpFraming: unknown[] }).hpFraming = samples;
+      const cards = document.querySelector('[data-testid="boss-friends"]');
+      const result = document.querySelector('[data-testid="battle-result"]');
+      const sample = () => {
+        const scene = (window as unknown as Hook).__heartpatch?.battle?.()?.scene;
+        const shown = result instanceof HTMLElement && result.offsetParent !== null;
+        if (scene?.framing && scene.playing && !shown && cards) {
+          samples.push({
+            kind: scene.playing.kind,
+            framing: scene.framing,
+            cardsTop: cards.getBoundingClientRect().top / window.innerHeight,
+            fadedClass: cards.classList.contains('battle-cards-faded'),
+          });
+        }
+        if (samples.length < 20_000) requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+    for (let round = 2; round <= 3; round++) {
+      await playRound(page);
+      await expect(page.getByTestId('boss-round')).toHaveText(`Round ${String(round)}`, {
+        timeout: 30_000,
+      });
+    }
+    type Sample = {
+      kind: string;
+      framing: NonNullable<NonNullable<BattleDebug['scene']>['framing']>;
+      cardsTop: number;
+      fadedClass: boolean;
+    };
+    const samples = await page.evaluate(
+      () => (window as unknown as { hpFraming: Sample[] }).hpFraming,
+    );
+    expect(samples.length).toBeGreaterThan(20);
+    const short = band.bottom - band.top < 0.25; // BOSS_CARDS.shortBand
+    const FACING_MIN = 0.3; // BATTLE_CAMERA.faceFacingMin
+    const EPS = 0.005;
+    for (const { framing: f, cardsTop, fadedClass, kind } of samples) {
+      const where = `${kind} ${JSON.stringify(f)}`;
+      // The hook and the cards agree on the fade.
+      expect(fadedClass, where).toBe(f.cardsFaded);
+      if (f.cardsFaded) expect(f.open ?? f.band.bottom, where).toBeGreaterThan(f.band.bottom - EPS);
+      // (A little slack: the hook reads the facing a frame after the camera did.)
+      if (f.face && (f.bossFacing ?? 1) >= FACING_MIN + 0.05) {
+        expect(f.face.top, where).toBeGreaterThanOrEqual(f.band.top - EPS);
+        expect(f.face.bottom, where).toBeLessThanOrEqual((f.open ?? f.band.bottom) + EPS);
+      }
+      // A boss turned away is never reported as a framed face.
+      if ((f.bossFacing ?? 1) < FACING_MIN - 0.05) expect(f.face, where).toBeNull();
+      if (!f.cardsFaded) {
+        for (const friend of f.team) expect(friend.bottom, where).toBeLessThanOrEqual(cardsTop + EPS);
+      }
+    }
+    // Both the windup's power-up and the blows were seen, and on this short
+    // band the cards stepped aside for them.
+    const seen = (k: string) => samples.filter((x) => x.kind === k);
+    expect(seen('effect').length).toBeGreaterThan(0);
+    expect(seen('hit').length).toBeGreaterThan(0);
+    if (short) {
+      expect(seen('effect').some((x) => x.framing.cardsFaded)).toBe(true);
+      expect(seen('hit').some((x) => x.framing.cardsFaded)).toBe(true);
+    }
+
     // And the stage between the plate and the team cards draws a scene, not one
     // flat colour. Chromium only: headless WebKit screenshots of the WebGL
     // canvas come out flat (one colour) whatever it draws.
@@ -252,6 +326,7 @@ test.describe('a mini-boss fight (#190)', () => {
       .evaluate((e) => e.getBoundingClientRect().bottom);
     // The lower part of the stage band (it ends ~140 px under the plate, at the
     // team cards), so no HUD is counted: the ground and the fighters' feet.
+    await expect(page.getByTestId('boss-picker')).toBeVisible();
     const shot = await page.screenshot({
       clip: { x: 0, y: top + 60, width: 393, height: 60 },
       animations: 'disabled',

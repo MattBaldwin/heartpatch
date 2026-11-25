@@ -6,9 +6,10 @@ import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { GAME_DATA, visualRegistry } from '@heartpatch/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CHOREO, PLAYBACK } from './battle-config.js';
+import { BOSS_CARDS, CHOREO, PLAYBACK } from './battle-config.js';
 import type { PlaybackStep } from './battle-playback.js';
 import { BattleScene } from './battle-scene.js';
+import type { SafeRegion } from './camera-director.js';
 import { BattleContent } from './battle-view.js';
 
 // The contact shadow paints a 2D canvas, which NullEngine hasn't got: a plain quad stands in.
@@ -373,8 +374,13 @@ describe('BattleScene', () => {
     expect(scene.lights.map((l) => l.name)).toEqual(['sun']);
   });
   describe('a team battle (#190, arena A)', () => {
-    function team(slots: number[]) {
+    let lastScene: Scene | null = null;
+    function team(
+      slots: number[],
+      frame: { safe?: SafeRegion; cards?: (faded: boolean) => void } = {},
+    ) {
       const scene = new Scene(engine);
+      lastScene = scene;
       scene.activeCamera = new TargetCamera('cam', Vector3.Zero(), scene);
       const battle = new BattleScene(scene, {
         registry,
@@ -387,8 +393,9 @@ describe('BattleScene', () => {
         timeOfDay: 'day',
         battleId: '01a10948-604f-73db-bbd4-5cad0847932b',
         reducedMotion: false,
-        safe: () => ({ top: 0.2, bottom: 0.6 }),
+        safe: () => frame.safe ?? { top: 0.2, bottom: 0.6 },
         team: { slots },
+        ...(frame.cards ? { cards: frame.cards } : {}),
       });
       const [one, two, three] = GAME_DATA.species;
       const mine = [one!, two!, three!].slice(0, slots.length);
@@ -427,6 +434,56 @@ describe('BattleScene', () => {
       // A tuckered-out squishy in slot 1 lies down; the others stand.
       battle.knockedOut('a', 1);
       expect(battle.stats.down).toBe(1);
+    });
+
+    describe('the team cards step aside while the boss acts (#868)', () => {
+      // A notched iPhone's fight band, and the sheet's top under it.
+      const notched: SafeRegion = { top: 0.378, bottom: 0.529, open: 0.59 };
+      const draw = (battle: BattleScene, now: number) => {
+        battle.update(now);
+        lastScene!.render();
+      };
+
+      it("fade on the boss's windup and come back once the beat is over", () => {
+        const cards = vi.fn();
+        const battle = team([0, 1, 2], { safe: notched, cards });
+        draw(battle, 10);
+        expect(cards).not.toHaveBeenCalled();
+        expect(battle.stats.framing?.cardsFaded).toBe(false);
+        expect(battle.stats.framing?.open).toBeNull();
+        battle.perform(step('effect', 'b', { windup: true }), 20);
+        draw(battle, 40);
+        expect(cards).toHaveBeenLastCalledWith(true);
+        expect(battle.stats.framing?.cardsFaded).toBe(true);
+        expect(battle.stats.framing?.open).toBeCloseTo(0.59, 9);
+        battle.restCamera();
+        for (let now = 60; now <= 60 + BOSS_CARDS.settleMs + 100; now += 50) draw(battle, now);
+        expect(cards).toHaveBeenLastCalledWith(false);
+        expect(cards).toHaveBeenCalledTimes(2);
+        expect(battle.stats.framing?.cardsFaded).toBe(false);
+        expect(battle.stats.framing?.open).toBeNull();
+      });
+
+      it("fade when the boss's blow lands on a friend, not for a friend's own move", () => {
+        const cards = vi.fn();
+        const battle = team([0, 1, 2], { safe: notched, cards });
+        battle.perform(step('move', 'a', { slot: 1, move: GAME_DATA.moves[0]!.id }), 10);
+        draw(battle, 30);
+        expect(cards).not.toHaveBeenCalled();
+        battle.perform(step('move', 'b', { move: GAME_DATA.moves[0]!.id }), 700);
+        battle.perform(step('hit', 'a', { slot: 1, effectiveness: 'normal' }), 1400);
+        draw(battle, 1420);
+        expect(cards).toHaveBeenLastCalledWith(true);
+      });
+
+      it('never fade on a taller band (an iPad)', () => {
+        const cards = vi.fn();
+        const battle = team([0, 1, 2], { safe: { top: 0.203, bottom: 0.586, open: 0.9 }, cards });
+        battle.perform(step('effect', 'b', { windup: true }), 20);
+        draw(battle, 40);
+        expect(cards).not.toHaveBeenCalled();
+        expect(battle.stats.framing?.open).toBeNull();
+      });
     });
 
     it('a shield bubble per squishy', () => {

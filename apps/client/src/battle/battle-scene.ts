@@ -42,6 +42,7 @@ import { arenaPlan, arenaSeed } from './arena-layout.js';
 import { buildArena, type Arena, type ArenaStats } from './arena.js';
 import {
   BATTLE_CAMERA,
+  BOSS_CARDS,
   CHOREO,
   FIGHTER,
   HOMES,
@@ -54,6 +55,7 @@ import {
   battleScale,
   CameraDirector,
   fogFor,
+  shortBand,
   type CameraShot,
   type FacePoint,
   type FitPoint,
@@ -130,6 +132,13 @@ export interface BattleSceneStats {
     team: { top: number; bottom: number }[];
     /** How squarely the boss faces the camera (1 straight on, 0 side-on, below 0 away), or null. */
     bossFacing: number | null;
+    /**
+     * The lowest row the team's eyes may reach while the team cards are faded
+     * (the sheet's top, #868), or null outside a short band's boss beat.
+     */
+    open: number | null;
+    /** The team cards are faded for the boss's beat (#868). */
+    cardsFaded: boolean;
   } | null;
   /** The current step's clock: what is playing and how far in, ms (the dev hook). */
   readonly playing: { kind: PlaybackStep['kind']; at: number } | null;
@@ -165,6 +174,11 @@ export interface BattleSceneOptions {
    * squishy drawn big as the boss. Left out, a battle is one-on-one.
    */
   readonly team?: { readonly slots: readonly number[] };
+  /**
+   * Fades the team cards down (true) or back (#868): on a short stage band,
+   * while the boss acts. Called only when it changes.
+   */
+  readonly cards?: (faded: boolean) => void;
 }
 
 const NO_FACES: readonly FacePoint[] = [];
@@ -286,7 +300,7 @@ export class BattleScene {
   /** Two fit points per rig: where it stands and where it is now. */
   readonly #fit: FitPoint[];
   /** The HUD's safe region plus the lowest row the stage shows (#652), reused every frame. */
-  readonly #framing = { top: 0, bottom: 1, floor: 1 };
+  readonly #framing = { top: 0, bottom: 1, floor: 1, open: Number.NaN };
   /** The team's faces, reused every frame (#868). */
   readonly #teamFacePoints: FacePoint[] = [];
   readonly #teamFacePool: FacePoint[] = [];
@@ -330,6 +344,15 @@ export class BattleScene {
   readonly #fog: [number, number] = [0, 0];
   /** The last shot's distance back (NaN before the first frame). */
   #lastDistance = Number.NaN;
+  /** The current step is one of the boss's beats (`BOSS_CARDS`, #868). */
+  #bossBeat = false;
+  /** The team cards are faded (#868), and when the boss's last beat was seen (ms). */
+  #cardsFaded = false;
+  #beatSeen = 0;
+  /** The band the team's eyes framed into while the cards are faded, or null (#868). */
+  #open: number | null = null;
+  /** The boss's facing the last shot framed with (NaN with no boss face), for the dev hook. */
+  #facingShot = Number.NaN;
 
   constructor(scene: Scene, options: BattleSceneOptions) {
     this.#scene = scene;
@@ -710,6 +733,7 @@ export class BattleScene {
       ...(extra.captured !== undefined ? { captured: extra.captured } : {}),
     });
     this.#playing = { kind: step.kind, start: now, ms: step.ms };
+    this.#bossBeat = this.#isBossBeat(step.kind, step.side, user ?? null);
     for (const cue of plan.acts) {
       const rig = rigOf(cue.side);
       if (cue.kind === 'swap-in' && extra.incoming) {
@@ -792,6 +816,7 @@ export class BattleScene {
   restCamera(): void {
     this.#camera.rest();
     this.#playing = null;
+    this.#bossBeat = false;
   }
 
   /**
@@ -1047,8 +1072,13 @@ export class BattleScene {
               : { top: this.#camera.face.high, bottom: this.#camera.face.low },
             team: Number.isNaN(this.#camera.face.high)
               ? []
-              : this.#camera.team.map((t) => ({ top: t.high, bottom: t.low })),
-            bossFacing: this.#bossFacing(),
+              : this.#camera.team
+                  .filter((t) => Number.isFinite(t.high) && Number.isFinite(t.low))
+                  .map((t) => ({ top: t.high, bottom: t.low })),
+            // The facing the last shot framed with, so it matches `face` (a twirl turns fast).
+            bossFacing: Number.isNaN(this.#facingShot) ? this.#bossFacing() : this.#facingShot,
+            open: this.#open,
+            cardsFaded: this.#cardsFaded,
           },
       playing: this.#playing
         ? { kind: this.#playing.kind, at: this.#now - this.#playing.start }
@@ -1072,6 +1102,8 @@ export class BattleScene {
     this.#scene.onBeforeRenderObservable.remove(this.#beforeRender);
     this.#scene.onAfterRenderObservable.remove(this.#afterRender);
     this.#cameraWatchers.clear();
+    if (this.#cardsFaded) this.#options.cards?.(false);
+    this.#cardsFaded = false;
     this.#effects.dispose();
     for (const rig of this.#all) rig.bubble?.dispose();
     this.#bubbleMaterial.dispose();
@@ -1290,14 +1322,23 @@ export class BattleScene {
       }
     }
     const boss = this.#bossFace();
+    const safe = this.#framed();
+    this.#facingShot = boss?.facing ?? Number.NaN;
+    // On a short band the team cards step aside while the boss acts (#868):
+    // the team's eyes may then go down to the sheet.
+    const short = boss !== null && shortBand(safe);
+    const acting = short && this.#bossBeat && this.#playing !== null;
+    this.#open = acting && safe.open !== undefined && Number.isFinite(safe.open) ? safe.open : null;
     const shot = this.#camera.shot(
       this.#now,
       aspect,
-      this.#framed(),
+      safe,
       this.#fit,
       boss,
       boss ? this.#teamFaces() : NO_FACES,
+      this.#open,
     );
+    this.#fadeCards(short, acting, safe.bottom);
     this.#noteShot(shot);
     // A shot further back than usual pushes the fog back with it (#234).
     this.#lastDistance = shot.distance;
@@ -1331,6 +1372,41 @@ export class BattleScene {
   }
 
   /**
+   * Is a step one of the boss's beats (#868, `BOSS_CARDS`): its own taunt,
+   * windup or being hit, or its blow landing on a friend (`user`: whose move).
+   */
+  #isBossBeat(kind: PlaybackStep['kind'], side: BattleSideId, user: BattleSideId | null): boolean {
+    if (this.#options.team === undefined) return false;
+    const boss = this.#options.mySide === 'a' ? 'b' : 'a';
+    if (side === boss) return BOSS_CARDS.beats.includes(kind);
+    return user === boss && BOSS_CARDS.landings.includes(kind);
+  }
+
+  /**
+   * The team cards fade while the boss acts on a short band (#868) and come
+   * back once the camera has eased the team's eyes above them again (or after
+   * `settleMs`); `bottom` is the cards' top, as a fraction of the height.
+   */
+  #fadeCards(short: boolean, acting: boolean, bottom: number): void {
+    let faded = this.#cardsFaded;
+    if (acting) {
+      faded = true;
+      this.#beatSeen = this.#now;
+    } else if (faded) {
+      let clear = true;
+      const team = this.#camera.team;
+      for (let i = 0; i < team.length; i++) {
+        const low = team[i]?.low ?? 0;
+        if (Number.isFinite(low) && low > bottom) clear = false;
+      }
+      faded = short && !clear && this.#now - this.#beatSeen < BOSS_CARDS.settleMs;
+    }
+    if (faded === this.#cardsFaded) return;
+    this.#cardsFaded = faded;
+    this.#options.cards?.(faded);
+  }
+
+  /**
    * The boss's face as drawn this frame (#868), for the camera to frame
    * first; null outside a boss fight, or while the boss is out of sight or
    * lying tuckered out (the result's flop needs no face).
@@ -1340,7 +1416,10 @@ export class BattleScene {
     const rig = this.#rigs[this.#options.mySide === 'a' ? 'b' : 'a'];
     const face = rig.out?.face;
     if (!face || rig.down || rig.pose.scale < 0.2) return null;
-    return posedFace(this.#bossFacePoint, rig.home, rig.fx, rig.fz, rig.pose, face);
+    const point = posedFace(this.#bossFacePoint, rig.home, rig.fx, rig.fz, rig.pose, face);
+    // Turned away (a taunt's twirl), the camera doesn't chase its face.
+    point.facing = this.#bossFacing() ?? 1;
+    return point;
   }
 
   /** The player's row's faces as drawn this frame (#868): their eyes stay above the team cards. */
@@ -1390,6 +1469,8 @@ export class BattleScene {
     const wide =
       typeof window !== 'undefined' && window.innerWidth >= BATTLE_CAMERA.narrowSheetFrom;
     framing.floor = wide ? 1 : safe.bottom;
+    // The band down to the sheet while the team cards are faded (#868).
+    framing.open = safe.open ?? Number.NaN;
     return framing;
   }
 }

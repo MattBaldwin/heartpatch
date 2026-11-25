@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { squishyParams } from '../procedural/params.js';
 import { ARENA_MOODS, ARENA_STAGE } from './arena-config.js';
 import battleCss from './battle.css?raw';
-import { BATTLE_CAMERA, FIGHTER, HOMES, TEAM_ARENA } from './battle-config.js';
+import { BATTLE_CAMERA, BOSS_CARDS, FIGHTER, HOMES, TEAM_ARENA } from './battle-config.js';
 import {
   arenaReach,
   battleScale,
@@ -11,7 +11,10 @@ import {
   faceDrop,
   fogFor,
   frameDistance,
+  holdDrop,
   shakeOffset,
+  shortBand,
+  slideWant,
   type CameraShot,
   type FacePoint,
   type FitPoint,
@@ -777,6 +780,80 @@ describe("a boss fight keeps the team's eyes above the team cards (#868)", () =>
     expect(at(shot, face).top).toBeCloseTo(band.top, 9);
   });
 
+  // The round-2 capture's windup: the risen boss and the team can't share the
+  // usual band, so the floor beat the cap and the team's eyes went under the cards.
+  const risen = bossFace(5.6, 6.6);
+  const low = row(1.0, 1.6);
+  // The sheet's top on a notched iPhone while a round plays (37vh + the home bar).
+  const open = 1 - 0.37 - 34 / 852;
+
+  it('in the usual band the boss keeps its eyes and the team tucks under (the round-2 case)', () => {
+    const shot = new CameraDirector(homes, true, team).shot(0, aspect, band, fit, risen, low);
+    expect(at(shot, risen).top).toBeGreaterThanOrEqual(band.top - 1e-9);
+    const lowest = Math.max(...low.map((f) => at(shot, f).bottom));
+    expect(lowest).toBeGreaterThan(band.bottom);
+  });
+
+  it('with the cards faded both fit: the boss eyes in the band, the team eyes above the sheet', () => {
+    const director = new CameraDirector(homes, true, team);
+    const shot = director.shot(0, aspect, band, fit, risen, low, open);
+    expect(at(shot, risen).top).toBeGreaterThanOrEqual(band.top - 1e-9);
+    for (const f of low) {
+      expect(at(shot, f).bottom).toBeLessThanOrEqual(open - team.faceMargin + 1e-9);
+    }
+    // The distance and the fit don't move: only the lens shift does.
+    const usual = new CameraDirector(homes, true, team).shot(0, aspect, band, fit, risen, low);
+    expect(shot.distance).toBeCloseTo(usual.distance, 9);
+  });
+
+  it("with the cards faded the team's eyes win over the boss floor and the easing hold", () => {
+    // A team so low it can't take the slide even down to the sheet.
+    const lowest = row(0.05, 0.1);
+    const director = new CameraDirector(homes, false, team);
+    // Full motion: the slide eases and the hold would push it to the floor.
+    for (let now = 0; now <= 2000; now += 16) {
+      const shot = director.shot(now, aspect, band, fit, risen, lowest, open);
+      for (const f of lowest) {
+        expect(at(shot, f).bottom).toBeLessThanOrEqual(open - team.faceMargin + 1e-9);
+      }
+    }
+  });
+
+  it('back in the usual band after the beat, the framing is the rest framing again', () => {
+    const director = new CameraDirector(homes, true, team);
+    director.shot(0, aspect, band, fit, risen, low, open);
+    const after = director.shot(16, aspect, band, fit, risen, low);
+    const rest = new CameraDirector(homes, true, team).shot(16, aspect, band, fit, risen, low);
+    expect(after.shift).toBeCloseTo(rest.shift, 9);
+  });
+
+  it('does not chase a boss turned away: holds the last target and reports no face', () => {
+    const director = new CameraDirector(homes, true, team);
+    const facing = director.shot(0, aspect, band, fit, risen, low);
+    const held = facing.shift;
+    expect(Number.isNaN(director.face.high)).toBe(false);
+    // The same boss twirled away (a taunt at −0.657), standing much higher.
+    const away = { ...bossFace(7.5, 8.5), facing: -0.657 };
+    const shot = director.shot(16, aspect, band, fit, away, low);
+    expect(shot.shift).toBeCloseTo(held, 9);
+    expect(Number.isNaN(director.face.high)).toBe(true);
+    expect(Number.isNaN(director.face.low)).toBe(true);
+    // Just above the threshold it frames the face again.
+    const back = { ...risen, facing: team.faceFacingMin + 0.01 };
+    director.shot(32, aspect, band, fit, back, low);
+    expect(Number.isNaN(director.face.high)).toBe(false);
+  });
+
+  it('holds a turned-away target under the cap while the cards are faded', () => {
+    const director = new CameraDirector(homes, true, team);
+    director.shot(0, aspect, band, fit, risen, row(0.05, 0.1));
+    const away = { ...risen, facing: -0.9 };
+    const shot = director.shot(16, aspect, band, fit, away, row(0.05, 0.1), open);
+    for (const f of row(0.05, 0.1)) {
+      expect(at(shot, f).bottom).toBeLessThanOrEqual(open - team.faceMargin + 1e-9);
+    }
+  });
+
   it('leaves a team the slide does not reach alone, and a face behind the camera unframed', () => {
     const plain = new CameraDirector(homes, true, team).shot(0, aspect, band, fit);
     const shift = plain.shift;
@@ -785,6 +862,56 @@ describe("a boss fight keeps the team's eyes above the team cards (#868)", () =>
     const shot = director.shot(0, aspect, band, fit, behind, row(2.2, 2.9));
     expect(shot.shift).toBeCloseTo(shift, 9);
     expect(Number.isFinite(shot.shift)).toBe(true);
+  });
+});
+
+describe('the slide precedence (#868)', () => {
+  it('in the usual band: face, then the team cap, then the boss floor (19a0d8c)', () => {
+    // The cap stops a slide the team can't take…
+    expect(slideWant(0.1, 0.02, 0.05, false)).toBeCloseTo(0.05, 9);
+    // …unless the boss's eyes would stay under the plate: the floor wins.
+    expect(slideWant(0.1, 0.08, 0.05, false)).toBeCloseTo(0.08, 9);
+    // No room at all reads as none.
+    expect(slideWant(0.1, -0.01, -0.03, false)).toBe(0);
+    // A face that needs no slide down needs no rules.
+    expect(slideWant(0, 0.08, 0.05, false)).toBe(0);
+    expect(slideWant(-0.04, 0.08, 0.05, false)).toBeCloseTo(-0.04, 9);
+  });
+
+  it('matches the 19a0d8c rule everywhere in the usual band', () => {
+    const old = (face: number, floor: number, cap: number) =>
+      face > 0 ? Math.max(Math.min(face, Math.max(0, cap)), floor) : face;
+    for (let face = -0.1; face <= 0.2; face += 0.025) {
+      for (let floor = -0.1; floor <= 0.2; floor += 0.025) {
+        for (let cap = -0.1; cap <= 0.2; cap += 0.025) {
+          expect(slideWant(face, floor, cap, false)).toBe(old(face, floor, cap));
+        }
+      }
+    }
+  });
+
+  it('with the cards faded: face, then the boss floor, then the team cap', () => {
+    expect(slideWant(0.1, 0.02, 0.05, true)).toBeCloseTo(0.05, 9);
+    // The cap wins over the floor now: the team's eyes stay above the sheet.
+    expect(slideWant(0.1, 0.08, 0.05, true)).toBeCloseTo(0.05, 9);
+    // With room for both, the floor still lifts a short slide.
+    expect(slideWant(0.03, 0.06, 0.2, true)).toBeCloseTo(0.06, 9);
+    expect(slideWant(0.1, 0.08, -0.02, true)).toBe(0);
+  });
+
+  it('the rising-face hold keeps the eyes under the plate, but not past the cap with the cards faded', () => {
+    expect(holdDrop(0.02, 0.06, 0.04, false)).toBeCloseTo(0.06, 9);
+    expect(holdDrop(0.02, 0.06, 0.04, true)).toBeCloseTo(0.04, 9);
+    expect(holdDrop(0.02, 0.03, 0.2, true)).toBeCloseTo(0.03, 9);
+    // A face inside the band holds nothing.
+    expect(holdDrop(0.02, -0.01, 0.01, false)).toBeCloseTo(0.02, 9);
+  });
+
+  it('calls the notched iPhone fight band short, never the iPad or the result band', () => {
+    expect(shortBand({ top: 0.378, bottom: 0.529 })).toBe(true);
+    expect(shortBand({ top: 0.203, bottom: 0.586 })).toBe(false);
+    expect(shortBand({ top: 0.198, bottom: 0.509 })).toBe(false);
+    expect(BOSS_CARDS.shortBand).toBeGreaterThan(0.529 - 0.378);
   });
 });
 
