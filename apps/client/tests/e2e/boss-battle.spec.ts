@@ -266,6 +266,7 @@ test.describe('a mini-boss fight (#190)', () => {
             framing: scene.framing,
             cardsTop: cards.getBoundingClientRect().top / window.innerHeight,
             fadedClass: cards.classList.contains('battle-cards-faded'),
+            at: performance.now(),
           });
         }
         if (samples.length < 20_000) requestAnimationFrame(sample);
@@ -283,16 +284,26 @@ test.describe('a mini-boss fight (#190)', () => {
       framing: NonNullable<NonNullable<BattleDebug['scene']>['framing']>;
       cardsTop: number;
       fadedClass: boolean;
+      at: number;
     };
     const samples = await page.evaluate(
       () => (window as unknown as { hpFraming: Sample[] }).hpFraming,
     );
     expect(samples.length).toBeGreaterThan(20);
-    // A 393x852 iPhone's band is short (BOSS_CARDS.shortBand), so the cards must step aside.
-    expect(band.bottom - band.top).toBeLessThan(0.25);
+    // Copies of battle-config's tunables (the e2e tsconfig can't import src);
+    // the asserts below are unconditional, so a TUNE change fails here, loudly.
+    const SHORT_BAND = 0.25; // BOSS_CARDS.shortBand
     const FACING_MIN = 0.3; // BATTLE_CAMERA.faceFacingMin
+    const RELEASE_MS = 700 + 280; // BOSS_CARDS.settleMs + fadeInMs
+    // A 393x852 iPhone's band is short, so the cards must step aside.
+    expect(band.bottom - band.top).toBeLessThan(SHORT_BAND);
     const EPS = 0.005;
-    for (const { framing: f, cardsTop, fadedClass, kind } of samples) {
+    // The cards may come back on the `settleMs` timeout with the eyes still
+    // under them (the boss's eyes won), so the eyes-above-cards check skips
+    // that window after a fade.
+    let fadedAt = -Infinity;
+    for (const { framing: f, cardsTop, fadedClass, kind, at } of samples) {
+      if (f.cardsFaded) fadedAt = at;
       const where = `${kind} ${JSON.stringify(f)}`;
       // The hook and the cards agree on the fade.
       expect(fadedClass, where).toBe(f.cardsFaded);
@@ -307,7 +318,7 @@ test.describe('a mini-boss fight (#190)', () => {
       // The team's boxes are reported whenever the team is in the shot, the
       // boss turned away (no face) or not.
       expect(f.team.length, where).toBeGreaterThan(0);
-      if (!f.cardsFaded) {
+      if (!f.cardsFaded && at - fadedAt > RELEASE_MS) {
         for (const friend of f.team)
           expect(friend.bottom, where).toBeLessThanOrEqual(cardsTop + EPS);
       }

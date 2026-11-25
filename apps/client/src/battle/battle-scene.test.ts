@@ -477,32 +477,31 @@ describe('BattleScene', () => {
         expect(cards).toHaveBeenLastCalledWith(true);
       });
 
-      it('with reduced motion, come back once nothing plays (the screen keeps drawing while faded)', () => {
+      it('with reduced motion, come back after the beat, playing until they do', () => {
         const cards = vi.fn();
         const battle = team([0, 1, 2], { safe: notched, cards, reducedMotion: true });
         battle.perform(step('effect', 'b', { windup: true }), 20);
-        // The battle screen's loop: every frame while something plays, then only
-        // while `update()` asks for another (breathing is off with reduced motion).
         let now = 40;
         draw(battle, now);
         expect(cards).toHaveBeenLastCalledWith(true);
-        while (now < 10_000 && battle.isPlaying(now)) draw(battle, (now += 50));
-        expect(battle.isPlaying(now)).toBe(false);
-        // Nothing plays, but the cards are still faded: keep the frames coming.
+        // The camera settles on the beat's framing, the cards still faded.
+        while (now < 3000) draw(battle, (now += 50));
         expect(battle.stats.framing?.cardsFaded).toBe(true);
+        // Faded counts as playing, so the screen draws every frame (its breath
+        // pacer, off with reduced motion or on a slow device, isn't asked).
+        expect(battle.isPlaying(now)).toBe(true);
         expect(battle.update(now)).toBe(true);
         battle.restCamera();
-        let more = true;
-        while (now < 20_000 && (more || battle.isPlaying(now))) {
-          now += 50;
-          more = battle.update(now);
-          lastScene!.render();
-          if (battle.stats.framing?.cardsFaded) expect(more).toBe(true);
+        draw(battle, (now += 50));
+        while (now < 20_000 && battle.isPlaying(now)) {
+          if (battle.stats.framing?.cardsFaded) expect(cards).toHaveBeenLastCalledWith(true);
+          draw(battle, (now += 50));
         }
         expect(cards).toHaveBeenLastCalledWith(false);
         expect(cards).toHaveBeenCalledTimes(2);
         expect(battle.stats.framing?.cardsFaded).toBe(false);
-        // Back at rest, nothing asks for frames any more.
+        // Back at rest, nothing plays or asks for frames any more.
+        expect(battle.isPlaying(now + 50)).toBe(false);
         expect(battle.update(now + 50)).toBe(false);
       });
 

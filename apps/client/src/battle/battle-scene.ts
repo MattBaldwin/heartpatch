@@ -740,7 +740,7 @@ export class BattleScene {
     this.#playing = { kind: step.kind, start: now, ms: step.ms };
     this.#bossBeat =
       this.#isBossBeat(step.kind, step.side, user ?? null) ||
-      (this.#bossBeat && BOSS_CARDS.holds.includes(step.kind));
+      (this.#bossBeat && isStep(BOSS_CARDS.holds, step.kind));
     for (const cue of plan.acts) {
       const rig = rigOf(cue.side);
       if (cue.kind === 'swap-in' && extra.incoming) {
@@ -904,6 +904,9 @@ export class BattleScene {
 
   /** True while an act, an effect or the camera is mid-motion (not just breathing or a bob). */
   isPlaying(now: number): boolean {
+    // Faded team cards (#868) keep the frames coming until they're back: the
+    // screen's breath pacer may not ask for a frame at rest (a slow device).
+    if (this.#cardsFaded) return true;
     for (const rig of this.#all) {
       if (actRunning(rig.act, now)) return true;
       if (rig.out && rig.field.isPlaying(rig.out.handle, now)) return true;
@@ -1388,8 +1391,8 @@ export class BattleScene {
   #isBossBeat(kind: PlaybackStep['kind'], side: BattleSideId, user: BattleSideId | null): boolean {
     if (this.#options.team === undefined) return false;
     const boss = this.#options.mySide === 'a' ? 'b' : 'a';
-    if (side === boss) return BOSS_CARDS.beats.includes(kind);
-    return user === boss && BOSS_CARDS.landings.includes(kind);
+    if (side === boss) return isStep(BOSS_CARDS.beats, kind);
+    return user === boss && isStep(BOSS_CARDS.landings, kind);
   }
 
   /**
@@ -1489,4 +1492,12 @@ export class BattleScene {
     framing.open = safe.open ?? Number.NaN;
     return framing;
   }
+}
+
+/**
+ * Is `kind` in a `BOSS_CARDS` list (#868)? Typing the list as step kinds makes
+ * a typo in the config a type error.
+ */
+function isStep(list: readonly PlaybackStep['kind'][], kind: PlaybackStep['kind']): boolean {
+  return list.includes(kind);
 }
