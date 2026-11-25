@@ -1509,6 +1509,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       battleId: battle.id,
       reducedMotion: reducedMotion.matches,
       safe: () => hud.safe(),
+      cards: (faded) => {
+        hud.fadeCards(faded);
+      },
       ...(isTeamBattle(battle) ? { team: { slots: slotsOut(battle, battle.mySide) } } : {}),
     });
     lastTier = tier;

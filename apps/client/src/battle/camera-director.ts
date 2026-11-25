@@ -1,5 +1,5 @@
 import { ARENA_STAGE } from './arena-config.js';
-import { BATTLE_CAMERA, FIGHTER, type BattleCameraConfig } from './battle-config.js';
+import { BATTLE_CAMERA, BOSS_CARDS, FIGHTER, type BattleCameraConfig } from './battle-config.js';
 import type { CameraCue } from './choreography.js';
 
 // Lantern Hour's camera (owner decision 2026-10-05): a fixed rig (pitch,
@@ -27,6 +27,11 @@ export interface SafeRegion {
    * the screen's bottom corners showing beside it.
    */
   readonly floor?: number;
+  /**
+   * A boss fight (#868): the lowest row the stage shows while the team cards
+   * are faded (the sheet's top), where the team's eyes may go then.
+   */
+  readonly open?: number;
 }
 
 /** Something that must stay on screen: a ground point with a radius and a height above it. */
@@ -35,6 +40,23 @@ export interface FitPoint {
   z: number;
   r: number;
   h: number;
+}
+
+/**
+ * The boss's face in a boss fight (#868): the ground point under it and the
+ * heights of its lowest and highest eye or mouth edge, as drawn this frame
+ * (lift, squash and lean included).
+ */
+export interface FacePoint {
+  x: number;
+  z: number;
+  low: number;
+  high: number;
+  /**
+   * How squarely it looks at the camera (1 straight on, 0 side-on, below 0
+   * away); left out, it faces the camera.
+   */
+  facing?: number;
 }
 
 export interface CameraShot {
@@ -176,6 +198,54 @@ export function arenaReach(
   return Math.max(config.minDistance, reach);
 }
 
+/**
+ * How far (a fraction of the screen height, + is down) the picture must
+ * slide so a face from `high` to `low` (screen fractions from the top) sits
+ * `margin` inside the stage band (#868). The top edge (the eyes) wins when
+ * the face is taller than the band; a face already inside needs nothing.
+ */
+export function faceDrop(high: number, low: number, safe: SafeRegion, margin: number): number {
+  const top = safe.top + margin;
+  const bottom = safe.bottom - margin;
+  if (high < top) return top - high;
+  if (low > bottom) return Math.max(top - high, bottom - low);
+  return 0;
+}
+
+/**
+ * True when the stage band is too short for the boss's face and the team's
+ * eyes at once (#868: a notched iPhone's boss fight), so the team cards fade
+ * while the boss acts (`BOSS_CARDS`).
+ */
+export function shortBand(safe: SafeRegion, short: number = BOSS_CARDS.shortBand): boolean {
+  return safe.bottom - safe.top < short;
+}
+
+/**
+ * The slide's target (#868), every rule in one place. `face` is the boss
+ * face's own slide (`faceDrop`), `floor` the least that keeps its eyes under
+ * the plate (`band top − eyes`), `cap` the most before the team's eyes reach
+ * the band's bottom. In the usual band (`open` false) the boss's eyes win:
+ * face, then the cap, then the floor. While the team cards are faded (`open`,
+ * the band reaching down to the sheet) the team's eyes win: face, then the
+ * floor, then the cap. A face that needs no slide down needs no rules.
+ */
+export function slideWant(face: number, floor: number, cap: number, open: boolean): number {
+  if (!(face > 0)) return face;
+  const room = Math.max(0, cap);
+  return open ? Math.min(Math.max(face, floor), room) : Math.max(Math.min(face, room), floor);
+}
+
+/**
+ * The eased slide after the rising-face hold (#868): easing never leaves the
+ * boss's eyes under the plate (`floor` > 0), except while the cards are faded
+ * (`open`), when the team's eyes (`cap`) come first.
+ */
+export function holdDrop(drop: number, floor: number, cap: number, open: boolean): number {
+  const held = floor > 0 ? Math.max(drop, floor) : drop;
+  return open ? Math.min(held, Math.max(0, cap)) : held;
+}
+
 const NO_SHAKE = { x: 0, y: 0 } as const;
 
 /** A shake's offset `age` ms after it started: a quick wobble that dies away. */
@@ -203,6 +273,18 @@ export class CameraDirector {
   #pushAt = 0;
   #shake = { amount: 0, roll: 0, at: 0 };
   #last: number | null = null;
+  /** The face-first slide (#868), eased like the push so a windup never jolts the frame. */
+  #drop = 0;
+  #dropWant = 0;
+  /** The band the face and the team's eyes may use this shot, reused (#868). */
+  readonly #band = { top: 0, bottom: 1 };
+  /**
+   * Where the last shot put the boss's face (#868), as fractions of the
+   * screen height from the top (NaN with no face): the dev hook's check.
+   */
+  readonly face = { high: Number.NaN, low: Number.NaN };
+  /** Where the last shot put the near team's faces (#868), like `face`. */
+  readonly team: { high: number; low: number }[] = [];
   /** Reused every frame, so following the fight allocates nothing. */
   readonly #shot = {
     position: { x: 0, y: 0, z: 0 },
@@ -258,6 +340,11 @@ export class CameraDirector {
     this.#want = { focusX: 0, focusZ: 0, push: 0 };
   }
 
+  /** True while the face-first slide (#868) is still easing towards its target. */
+  get settling(): boolean {
+    return Math.abs(this.#drop - this.#dropWant) > 0.001;
+  }
+
   /** True while the camera is still travelling or shaking (keep drawing). */
   moving(now: number): boolean {
     const shaking = shakeOffset(this.#shake.amount, now - this.#shake.at, this.#config);
@@ -265,15 +352,34 @@ export class CameraDirector {
       Math.abs(this.#focus.x - this.#want.focusX) > 0.002 ||
       Math.abs(this.#focus.z - this.#want.focusZ) > 0.002 ||
       Math.abs(this.#push - (now >= this.#pushAt ? this.#want.push : this.#push)) > 0.001 ||
-      shaking.x !== 0
+      shaking.x !== 0 ||
+      Math.abs(this.#drop - this.#dropWant) > 0.001
     );
   }
 
   /**
    * The camera at `now` for a screen of `aspect` (width / height), keeping
-   * `fit` inside `safe`. The result is reused next call.
+   * `fit` inside `safe`; in a boss fight the boss's `face` comes first
+   * (#868): the picture slides down (lens shift, so the distance, the dome
+   * cap and the fog stay as they were) until its eyes and mouth are inside
+   * the band. The near `team`'s faces cap the slide: their eyes stay above
+   * the team cards (only feet and bodies tuck under), and when both can't
+   * have the margin the boss gives up its own, never its eyes. While the
+   * team cards are faded (`open`: the lowest row the team's eyes may reach,
+   * the sheet's top) the band reaches down to it and the team's eyes win
+   * (`slideWant`). A boss turned away (`face.facing` under `faceFacingMin`)
+   * isn't framed: the slide holds its last target. The result is reused next
+   * call.
    */
-  shot(now: number, aspect: number, safe: SafeRegion, fit: readonly FitPoint[]): CameraShot {
+  shot(
+    now: number,
+    aspect: number,
+    safe: SafeRegion,
+    fit: readonly FitPoint[],
+    face: FacePoint | null = null,
+    team: readonly FacePoint[] = [],
+    open: number | null = null,
+  ): CameraShot {
     const dt = this.#last === null ? 1 : Math.min(0.1, Math.max(0, (now - this.#last) / 1000));
     this.#last = now;
     // Smoothly follow (frame-rate independent exponential easing).
@@ -310,8 +416,96 @@ export class CameraDirector {
     shot.up.y = Math.cos(roll);
     shot.up.z = 0;
     shot.fov = fov;
-    shot.shift = frame.shift;
     shot.distance = distance;
+    shot.shift = frame.shift;
+    let want = 0;
+    let high = Number.NaN;
+    let low = Number.NaN;
+    let floor = 0;
+    let cap = Infinity;
+    const opened = open !== null;
+    // The band the face and the team's eyes may use: to the sheet while the cards are faded.
+    const band = this.#band;
+    band.top = safe.top;
+    band.bottom = opened ? Math.max(safe.bottom, open) : safe.bottom;
+    // A face behind the camera can't be framed (and would poison the easing).
+    const seen =
+      face !== null &&
+      Number.isFinite(screenY(shot, face.x, face.high, face.z)) &&
+      Number.isFinite(screenY(shot, face.x, face.low, face.z));
+    // Turned away (a taunt's twirl): no eyes to frame, so hold the last target.
+    const away = seen && (face.facing ?? 1) < this.#config.faceFacingMin;
+    if (face && seen) {
+      high = screenY(shot, face.x, face.high, face.z);
+      low = screenY(shot, face.x, face.low, face.z);
+      floor = safe.top - high;
+      // The team's eyes stay above the cards (or the sheet, cards faded): the slide stops at their line.
+      for (let i = 0; i < team.length; i++) {
+        const t = team[i];
+        if (!t) continue;
+        const y = screenY(shot, t.x, t.low, t.z);
+        if (Number.isFinite(y)) cap = Math.min(cap, band.bottom - this.#config.faceMargin - y);
+      }
+      want = away
+        ? // The last target is its own floor: kept whole, under the cap only with the cards faded.
+          slideWant(this.#dropWant, this.#dropWant, cap, opened)
+        : slideWant(faceDrop(high, low, band, this.#config.faceMargin), floor, cap, opened);
+    }
+    // Snappy when the face rises out of the band (a windup's lift), gentle back.
+    const ease = want > this.#drop ? Math.min(1, k * 3) : k;
+    this.#dropWant = want;
+    this.#drop += (want - this.#drop) * ease;
+    // Easing never lets the eyes slip under the plate: a rising face (a windup's
+    // power-up) is held at least at the band's top, whatever the lag (`holdDrop`).
+    if (seen && !away) this.#drop = holdDrop(this.#drop, floor, cap, opened);
+    if (Math.abs(this.#drop) < 1e-5) this.#drop = 0;
+    // y = (1 − (v + shift)) / 2: sliding the picture down by `drop` lowers the shift by twice it.
+    shot.shift = frame.shift - 2 * this.#drop;
+    this.face.high = away ? Number.NaN : high + this.#drop;
+    this.face.low = away ? Number.NaN : low + this.#drop;
+    // The team's faces where the shot put them (the dev hook's check), reused.
+    this.team.length = Math.min(this.team.length, team.length);
+    for (let i = 0; i < team.length; i++) {
+      const t = team[i];
+      if (!t) continue;
+      const box = (this.team[i] ??= { high: 0, low: 0 });
+      box.high = screenY(shot, t.x, t.high, t.z);
+      box.low = screenY(shot, t.x, t.low, t.z);
+    }
     return shot;
   }
+}
+
+/**
+ * Where the world point (x, y, z) lands for `shot`, as a fraction of the
+ * screen height from the top, before the shot's lens shift. A point behind
+ * the camera reads as far off the top.
+ */
+function screenY(shot: CameraShot, x: number, y: number, z: number): number {
+  // Scalars only: this runs every frame of a boss fight.
+  let fx = shot.target.x - shot.position.x;
+  let fy = shot.target.y - shot.position.y;
+  let fz = shot.target.z - shot.position.z;
+  const fl = Math.hypot(fx, fy, fz) || 1;
+  fx /= fl;
+  fy /= fl;
+  fz /= fl;
+  // right = up × forward, then the true up = forward × right.
+  let rx = shot.up.y * fz - shot.up.z * fy;
+  let ry = shot.up.z * fx - shot.up.x * fz;
+  let rz = shot.up.x * fy - shot.up.y * fx;
+  const rl = Math.hypot(rx, ry, rz) || 1;
+  rx /= rl;
+  ry /= rl;
+  rz /= rl;
+  const ux = fy * rz - fz * ry;
+  const uy = fz * rx - fx * rz;
+  const uz = fx * ry - fy * rx;
+  const dx = x - shot.position.x;
+  const dy = y - shot.position.y;
+  const dz = z - shot.position.z;
+  const depth = dx * fx + dy * fy + dz * fz;
+  if (depth <= 1e-6) return -Infinity;
+  const v = (dx * ux + dy * uy + dz * uz) / (depth * Math.tan(shot.fov / 2));
+  return (1 - (v + shot.shift)) / 2;
 }

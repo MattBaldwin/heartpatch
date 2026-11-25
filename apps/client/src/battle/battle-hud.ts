@@ -4,7 +4,7 @@ import { evolvingMeterEl } from '../care/evolving-meter.js';
 import { buttonClass, hpClose } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import { dressResult, type BefriendCheer } from './befriend-cheer.js';
-import { WIDE_MIN } from './battle-config.js';
+import { BOSS_CARDS, WIDE_MIN } from './battle-config.js';
 import { ELEMENT_GLYPH, FEELING_GLYPH } from '../ui/glyphs.js';
 import type { SafeRegion } from './camera-director.js';
 import { charmButton, noCharmsLine } from './heart-charm.js';
@@ -189,6 +189,12 @@ export interface BattleHud {
   safe: () => SafeRegion;
   /** The bottom sheet's top edge on the page, CSS px (#391's banner sits above it). */
   sheetTop: () => number;
+  /**
+   * Fades a team battle's cards (`TeamHudSlots.bottomEdge`) down while the
+   * boss acts, or back (#868): opacity only, so nothing moves, and they take
+   * no taps while faded.
+   */
+  fadeCards: (faded: boolean) => void;
   readonly visible: boolean;
   dispose: () => void;
 }
@@ -531,7 +537,11 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   const stopWatchingSheet = watchLayout([sheet], placeTip);
   // The result card too: a boss fight frames the fight above it (#190), and
   // each ask's answer changes its height.
-  const stopWatching = watchLayout([hud, plates.mine.node, plates.theirs.node, result], forget);
+  // The sheet too: a team battle's band reaches down to its top while the cards are faded (#868).
+  const stopWatching = watchLayout(
+    [hud, plates.mine.node, plates.theirs.node, result, sheet],
+    forget,
+  );
 
   const button = (
     label: string,
@@ -923,9 +933,15 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       if (team === next) return;
       team?.top.remove();
       team?.sheet.remove();
+      team?.bottomEdge.classList.remove('battle-cards-faded');
       team = next;
       hud.classList.toggle('battle-hud-team', next !== null);
       if (next) {
+        // The fade's tunables (#868) live in `BOSS_CARDS`; battle.css reads them.
+        const cards = next.bottomEdge.style;
+        cards.setProperty('--battle-cards-faded', String(BOSS_CARDS.opacity));
+        cards.setProperty('--battle-cards-fade-out', `${String(BOSS_CARDS.fadeOutMs)}ms`);
+        cards.setProperty('--battle-cards-fade-in', `${String(BOSS_CARDS.fadeInMs)}ms`);
         hud.insertBefore(next.top, sheet);
         sheet.insertBefore(next.sheet, controls);
       }
@@ -1085,9 +1101,13 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         const floor = team.bottomEdge.getBoundingClientRect().top;
         const reserved = Number.parseFloat(getComputedStyle(sheet).maxHeight);
         const share = reserved > 0 ? Math.min(reserved / h, 0.6) : SHEET_SHARE;
+        const bottom = Math.min(1 - share, floor > 0 ? floor / h : 1 - share);
+        // With the cards faded (#868) the stage shows down to the opaque sheet's top.
+        const sheetTop = sheet.getBoundingClientRect().top;
         safe = {
           top: Math.min(0.4, edge > 0 ? (edge + 10) / h : 0.18),
-          bottom: Math.min(1 - share, floor > 0 ? floor / h : 1 - share),
+          bottom,
+          open: sheetTop > 0 ? Math.max(bottom, sheetTop / h) : bottom,
         };
         return safe;
       }
@@ -1101,6 +1121,9 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       const share = reserved > 0 ? Math.min(reserved / h, 0.6) : SHEET_SHARE;
       safe = { top: Math.min(0.4, top), bottom: 1 - share };
       return safe;
+    },
+    fadeCards: (faded) => {
+      team?.bottomEdge.classList.toggle('battle-cards-faded', faded);
     },
     sheetTop: () => {
       const top = sheet.getBoundingClientRect().top;

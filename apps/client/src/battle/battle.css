@@ -1279,6 +1279,15 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   gap: 8px;
   max-width: 560px;
   margin: 0 auto;
+  /* Back in after the boss's beat (#868); the timings come from BOSS_CARDS. */
+  transition: opacity var(--battle-cards-fade-in, 280ms) ease-out;
+}
+
+/* While the boss acts on a short band (#868): faded, not gone, so nothing moves. */
+.boss-friends.battle-cards-faded {
+  opacity: var(--battle-cards-faded, 0.18);
+  pointer-events: none;
+  transition-duration: var(--battle-cards-fade-out, 160ms);
 }
 
 .boss-friend {

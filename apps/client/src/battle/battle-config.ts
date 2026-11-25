@@ -166,6 +166,8 @@ export interface BattleCameraConfig {
   maxDistance: number;
   maxFitDistance: number;
   fogReference: number;
+  faceMargin: number;
+  faceFacingMin: number;
   narrowSheetFrom: number;
   hitPush: number;
   followPush: number;
@@ -224,6 +226,21 @@ export const BATTLE_CAMERA: Readonly<BattleCameraConfig> = {
    * ground round the fighters never fades into the haze.
    */
   fogReference: 45, // TUNE
+  /**
+   * A boss fight frames the boss's face first (#868): its eyes and mouth stay
+   * this far (a fraction of the screen height) inside the stage band. When
+   * the band is too short for the face and the team at once (a notched
+   * iPhone), the picture slides down and the near team tucks its feet under
+   * the team cards, whose meters show how each is doing.
+   */
+  faceMargin: 0.015, // TUNE: about 13 CSS px on an iPhone
+  /**
+   * The boss's face is framed only while it looks this squarely at the camera
+   * (#868: 1 straight on, 0 side-on, below 0 away). Turned further away (a
+   * taunt's twirl), the slide holds its last target instead of chasing the
+   * back of its head.
+   */
+  faceFacingMin: 0.3, // TUNE
   /** From this window width (CSS px) the sheet is a centred card (battle.css), so the screen's bottom shows. */
   narrowSheetFrom: 900,
   /** Camera beats (B): push-in on a hit (fraction of distance), shake (world units), dutch roll (radians). */
@@ -242,6 +259,43 @@ export const BATTLE_CAMERA: Readonly<BattleCameraConfig> = {
   /** How fast a push-in and a beat decay back, per second. */
   beatDecay: 2.4, // TUNE
 };
+
+/**
+ * The team cards step aside while the boss acts (#868, owner decision: option
+ * 3). On the shortest stage band (a notched iPhone's boss fight) the boss's
+ * face and the team's eyes can't both fit between the boss plate and the team
+ * cards once the boss rises, so during the boss's beats the cards fade down
+ * (opacity only, so nothing moves) and the camera frames the team's eyes down
+ * to the sheet's top instead. On a taller band (iPad) nothing fades.
+ */
+export const BOSS_CARDS = {
+  /** A stage band shorter than this (a fraction of the screen height) is short. */
+  // TUNE: a notched iPhone 15's is ~0.15; 393x852 with no insets (the WebKit
+  // e2e, which can't emulate them) ~0.253; the result band ~0.31; an iPad's ~0.38.
+  shortBand: 0.28,
+  /** The boss's own steps that fade the cards: its taunt (`move`), windup (`effect`), being hit. */
+  beats: ['move', 'effect', 'hit', 'miss'], // TUNE (step kinds: checked by battle-scene's `isStep`)
+  /** Steps on a friend that land a boss's move (its blow arriving). */
+  landings: ['hit', 'miss'], // TUNE
+  /**
+   * Once a beat has faded the cards, these steps keep them faded until the log
+   * has played out (`restCamera`), so a friend's sparkle or tuckering-out in
+   * the same sequence doesn't flicker them; any other step (a friend's own
+   * move, a swap) ends the boss's turn.
+   */
+  holds: ['hit', 'miss', 'effect', 'heal', 'tuckered', 'item'], // TUNE
+  /** The cards' opacity while faded (they stay readable, a little). */
+  opacity: 0.18, // TUNE
+  /** Fade down and back up, ms. */
+  fadeOutMs: 160, // TUNE
+  fadeInMs: 280, // TUNE
+  /**
+   * After the boss's beat the cards come back once the friends' eyes are above
+   * them again (the camera eases back), or, once the camera has settled with
+   * them still under, after this long at most (ms).
+   */
+  settleMs: 700, // TUNE
+} as const;
 
 /**
  * A potion's sparkle shield (#214): a soft lavender bubble over the squishy

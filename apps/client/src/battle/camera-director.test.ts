@@ -3,19 +3,26 @@ import { describe, expect, it } from 'vitest';
 import { squishyParams } from '../procedural/params.js';
 import { ARENA_MOODS, ARENA_STAGE } from './arena-config.js';
 import battleCss from './battle.css?raw';
-import { BATTLE_CAMERA, FIGHTER, HOMES, TEAM_ARENA } from './battle-config.js';
+import { BATTLE_CAMERA, BOSS_CARDS, FIGHTER, HOMES, TEAM_ARENA } from './battle-config.js';
 import {
   arenaReach,
   battleScale,
   CameraDirector,
+  faceDrop,
   fogFor,
   frameDistance,
+  holdDrop,
   shakeOffset,
+  shortBand,
+  slideWant,
   type CameraShot,
+  type FacePoint,
   type FitPoint,
   type Point3,
   type SafeRegion,
 } from './camera-director.js';
+import { actPose, FEELING_TRAITS, readyPose, REST, type Act, type Pose } from './choreography.js';
+import { faceSpan, posedFace } from './face-span.js';
 
 const homes = { a: HOMES.mine, b: HOMES.theirs } as const;
 const safe = { top: 0.12, bottom: 0.65 };
@@ -98,12 +105,12 @@ describe('a boss fight on a notched iPhone (#234)', () => {
     expect(capped).toBeCloseTo(free, 9);
   });
 
-  it('shows the team and the ground in the band; the boss tucks its head under the plate (the allowance)', () => {
-    // The agreed trade-off (#234 hotfix): at the cap the team stands whole in
-    // the stage band, but only the boss's feet and legs show; its head sits
-    // under the plate. Measured: head ≈ 0.253, feet ≈ 0.397 of the screen
-    // height, band 0.378–0.529. A follow-up gives the stage more room; until
-    // then this pins the allowance so a change either way is seen.
+  it('without the boss face rule, the boss tucks its head under the plate (the #867 baseline)', () => {
+    // The #234 hotfix's frame, kept as the baseline #868 improves on: with no
+    // face to frame (a 1-v-1, or a boss with no face), at the cap the team
+    // stands whole in the stage band but only the boss's feet and legs show.
+    // Measured: head ≈ 0.253, feet ≈ 0.397 of the screen height, band
+    // 0.378–0.529. The boss-face tests below frame its face first.
     const shot = new CameraDirector({ a: HOMES.mine, b: HOMES.theirs }, true, team).shot(
       0,
       aspect,
@@ -541,5 +548,387 @@ describe('framing every species (#652)', () => {
     };
     expect(at(reach)).toBeCloseTo(ARENA_STAGE.groundRadius - open.rimMargin, 4);
     expect(at(reach + 10)).toBeGreaterThan(ARENA_STAGE.groundRadius - open.rimMargin);
+  });
+});
+
+describe('a boss fight frames the boss face first (#868)', () => {
+  // The #234 fixture: Rakelet (Lv 28) against three, measured at 393×852.
+  const aspect = 393 / 852;
+  const team = { ...BATTLE_CAMERA, pitch: TEAM_ARENA.pitch };
+  const posts = TEAM_ARENA.posts[3];
+  const bossHome = TEAM_ARENA.boss;
+  const bossFit: FitPoint = { x: bossHome.x, z: bossHome.z, r: 2.57, h: 8.88 };
+  const friendsFit: FitPoint[] = posts.map((p) => ({ x: p.x, z: p.z, r: 2.4, h: 4.2 }));
+  const fit = [...friendsFit, bossFit];
+  // The boss's drawn height, back out of its fit point (battle-scene.ts: h = height · 1.25 + 0.3).
+  const bossHeight = (bossFit.h - 0.3) / 1.25;
+  // It faces the row's middle squishy (battle-scene.ts: the boss rig looks at the lead).
+  const lead = posts[1]!;
+  const len = Math.hypot(lead.x - bossHome.x, lead.z - bossHome.z);
+  const fx = (lead.x - bossHome.x) / len;
+  const fz = (lead.z - bossHome.z) / len;
+
+  const BANDS: { name: string; aspect: number; safe: SafeRegion }[] = [
+    // Measured (#867): a notched iPhone's fight and result bands.
+    { name: 'notched iPhone fight', aspect, safe: { top: 0.378, bottom: 0.529 } },
+    { name: 'notched iPhone result', aspect, safe: { top: 0.198, bottom: 0.51 } },
+    // An iPad portrait's fight band (the boss plate and team plates are shorter on a tall screen).
+    { name: 'iPad portrait fight', aspect: 820 / 1180, safe: { top: 0.2, bottom: 0.63 } },
+  ];
+
+  // Every kind's eyes and mouth (the boss's species is server data, so all of them stand in).
+  const faces = GAME_DATA.species.flatMap((species) => {
+    const span = faceSpan(squishyParams(species, `${species.id}-1`, registry), registry);
+    return span
+      ? [{ id: species.id, low: span.low * bossHeight, high: span.high * bossHeight }]
+      : [];
+  });
+
+  // The boss's poses, every 1/24 of each act a boss plays (a dash's windup, the
+  // power-up, getting bonked, its victory hop as the taunt, a cast), at full motion.
+  const ACTS = ['dash', 'power-up', 'knockback', 'victory', 'cast'] as const;
+  const feelings = Object.keys(FEELING_TRAITS) as (keyof typeof FEELING_TRAITS)[];
+  const poses: { name: string; pose: Pose }[] = [{ name: 'idle', pose: REST }];
+  for (const feeling of feelings) {
+    for (let t = 0; t < 4000; t += 250) {
+      poses.push({ name: `idle ${feeling} ${String(t)}`, pose: readyPose(t, 0, feeling, false) });
+    }
+    for (const kind of ACTS) {
+      const act: Act = {
+        kind,
+        start: 0,
+        ms: 1000,
+        from: REST,
+        reach: 6,
+        strength: 1.4,
+        feeling,
+        reduced: false,
+      };
+      for (let i = 0; i <= 24; i++) {
+        poses.push({
+          name: `${kind} ${feeling} ${String(i)}/24`,
+          pose: actPose(act, (i / 24) * 1000),
+        });
+      }
+    }
+  }
+
+  it('measures where faces sit: between about a third and the top of a squishy', () => {
+    expect(faces.length).toBeGreaterThan(100);
+    for (const f of faces) {
+      expect(f.low, f.id).toBeGreaterThan(0.2 * bossHeight);
+      expect(f.high, f.id).toBeLessThanOrEqual(bossHeight);
+      expect(f.high, f.id).toBeGreaterThan(f.low);
+    }
+  });
+
+  for (const band of BANDS) {
+    it(`keeps every kind's eyes and mouth inside the ${band.name} band, in every pose`, () => {
+      const face: FacePoint = { x: 0, z: 0, low: 0, high: 0 };
+      // Reduced motion: no easing, push or shake, so each shot stands on its own frame.
+      const director = new CameraDirector(homes, true, team);
+      for (const f of faces) {
+        // The worst pose for this face, asserted once (the pose sweep is ~850 frames).
+        let top = { y: Infinity, name: '' };
+        let bottom = { y: -Infinity, name: '' };
+        for (const { name, pose } of poses) {
+          posedFace(face, bossHome, fx, fz, pose, f);
+          const shot = director.shot(0, band.aspect, band.safe, fit, face);
+          const t = project(shot, band.aspect, { x: face.x, y: face.high, z: face.z }).y;
+          const b = project(shot, band.aspect, { x: face.x, y: face.low, z: face.z }).y;
+          if (t < top.y) top = { y: t, name };
+          if (b > bottom.y) bottom = { y: b, name };
+        }
+        expect(top.y, `${f.id} ${top.name}`).toBeGreaterThanOrEqual(band.safe.top - 1e-9);
+        expect(bottom.y, `${f.id} ${bottom.name}`).toBeLessThanOrEqual(band.safe.bottom + 1e-9);
+      }
+      // The dev hook reports the face where the shot put it.
+      posedFace(face, bossHome, fx, fz, REST, faces[0]!);
+      const shot = director.shot(0, band.aspect, band.safe, fit, face);
+      const t = project(shot, band.aspect, { x: face.x, y: face.high, z: face.z }).y;
+      expect(director.face.high).toBeCloseTo(t, 9);
+    });
+  }
+
+  it('keeps the #867 cap and fog: only the lens shift moves', () => {
+    for (const band of BANDS) {
+      const face = posedFace({ x: 0, z: 0, low: 0, high: 0 }, bossHome, fx, fz, REST, faces[0]!);
+      const plain = new CameraDirector(homes, true, team).shot(0, band.aspect, band.safe, fit);
+      const before = { ...plain, position: { ...plain.position } };
+      const framed = new CameraDirector(homes, true, team).shot(
+        0,
+        band.aspect,
+        band.safe,
+        fit,
+        face,
+      );
+      expect(framed.distance).toBeCloseTo(before.distance, 9);
+      expect(framed.distance).toBeLessThanOrEqual(team.maxFitDistance);
+      expect(framed.position.y).toBeCloseTo(before.position.y, 9);
+      expect(framed.shift).toBeLessThanOrEqual(before.shift + 1e-12);
+    }
+  });
+
+  it('on the notched fight band the team still shows: heads in the band, only feet tucked under the cards', () => {
+    const band = BANDS[0]!;
+    const drakeberry = faces.find((f) => f.id === 'drakeberry') ?? faces[0]!;
+    const face = posedFace({ x: 0, z: 0, low: 0, high: 0 }, bossHome, fx, fz, REST, drakeberry);
+    const shot = new CameraDirector(homes, true, team).shot(0, band.aspect, band.safe, fit, face);
+    for (const p of posts) {
+      // A friend's head (its drawn height, without the fit margin) is in the band.
+      const head = project(shot, band.aspect, { x: p.x, y: (4.2 - 0.3) / 1.25, z: p.z }).y;
+      expect(head, String(p.x)).toBeGreaterThan(band.safe.top);
+      expect(head, String(p.x)).toBeLessThan(band.safe.bottom);
+    }
+  });
+
+  it('leaves the iPad and the result screen as they were (the face already fits)', () => {
+    for (const band of BANDS.slice(1)) {
+      const face = posedFace({ x: 0, z: 0, low: 0, high: 0 }, bossHome, fx, fz, REST, faces[0]!);
+      const plain = new CameraDirector(homes, true, team).shot(0, band.aspect, band.safe, fit);
+      const plainShift = plain.shift;
+      const framed = new CameraDirector(homes, true, team).shot(
+        0,
+        band.aspect,
+        band.safe,
+        fit,
+        face,
+      );
+      expect(framed.shift, band.name).toBeCloseTo(plainShift, 9);
+    }
+  });
+
+  it('eases the slide at full motion, and no act lifts the eyes under the plate', () => {
+    const band = BANDS[0]!;
+    const face: FacePoint = { x: 0, z: 0, low: 0, high: 0 };
+    // The highest-set faces rise out of the band first.
+    const high = [...faces].sort((a, b) => b.high - a.high).slice(0, 3);
+    for (const f of high) {
+      for (const feeling of feelings) {
+        for (const kind of ACTS) {
+          for (const ms of [500, 1000, 1600]) {
+            const director = new CameraDirector(homes, false, team);
+            const act: Act = {
+              kind,
+              start: 1000,
+              ms,
+              from: REST,
+              reach: 6,
+              strength: 1,
+              feeling,
+              reduced: false,
+            };
+            // Settle at rest for a second, then the act at 60 fps, and a beat after.
+            for (let now = 0; now <= 1000 + ms + 500; now += 1000 / 60) {
+              posedFace(face, bossHome, fx, fz, actPose(now < 1000 ? null : act, now), f);
+              const shot = director.shot(now, band.aspect, band.safe, fit, face);
+              if (now < 900) continue;
+              const top = project(shot, band.aspect, { x: face.x, y: face.high, z: face.z }).y;
+              expect(
+                top,
+                `${f.id} ${kind} ${feeling} ${String(ms)} @${now.toFixed(0)}`,
+              ).toBeGreaterThanOrEqual(band.safe.top - 1e-9);
+            }
+          }
+        }
+      }
+    }
+  });
+});
+
+describe("a boss fight keeps the team's eyes above the team cards (#868)", () => {
+  const aspect = 393 / 852;
+  const team = { ...BATTLE_CAMERA, pitch: TEAM_ARENA.pitch };
+  const posts = TEAM_ARENA.posts[3];
+  const boss = TEAM_ARENA.boss;
+  const fit: FitPoint[] = [
+    ...posts.map((p) => ({ x: p.x, z: p.z, r: 2.4, h: 4.2 })),
+    { x: boss.x, z: boss.z, r: 2.57, h: 8.88 },
+  ];
+  const band = { top: 0.378, bottom: 0.529 };
+  const bossFace = (low: number, high: number): FacePoint => ({ x: boss.x, z: boss.z, low, high });
+  const row = (low: number, high: number): FacePoint[] =>
+    posts.map((p) => ({ x: p.x, z: p.z, low, high }));
+  const at = (shot: CameraShot, p: FacePoint) => ({
+    top: project(shot, aspect, { x: p.x, y: p.high, z: p.z }).y,
+    bottom: project(shot, aspect, { x: p.x, y: p.low, z: p.z }).y,
+  });
+
+  it("stops the slide at the team's eye line, the boss keeping its eyes in the band", () => {
+    // A small team (faces 2.2–2.9 up) and Rakelet's face (0.64–0.90 of 6.86).
+    const friends = row(2.2, 2.9);
+    const face = bossFace(4.4, 6.18);
+    const free = new CameraDirector(homes, true, team).shot(0, aspect, band, fit, face);
+    const freeLow = Math.max(...friends.map((f) => at(free, f).bottom));
+    // Without the team the slide would push their eyes under the cards.
+    expect(freeLow).toBeGreaterThan(band.bottom - team.faceMargin);
+    const director = new CameraDirector(homes, true, team);
+    const shot = director.shot(0, aspect, band, fit, face, friends);
+    for (const f of friends) {
+      expect(at(shot, f).bottom).toBeLessThanOrEqual(band.bottom - team.faceMargin + 1e-9);
+    }
+    expect(at(shot, face).top).toBeGreaterThanOrEqual(band.top - 1e-9);
+    expect(director.team).toHaveLength(3);
+    expect(director.team[0]!.low).toBeCloseTo(at(shot, friends[0]!).bottom, 9);
+  });
+
+  it("gives up the boss's margin, never its eyes, when both can't fit", () => {
+    // A team so low on screen that any slide hides it: the boss still gets its eyes in.
+    const friends = row(0.05, 0.1);
+    const face = bossFace(5.6, 6.6);
+    const shot = new CameraDirector(homes, true, team).shot(0, aspect, band, fit, face, friends);
+    expect(at(shot, face).top).toBeCloseTo(band.top, 9);
+  });
+
+  // The round-2 capture's windup: the risen boss and the team can't share the
+  // usual band, so the floor beat the cap and the team's eyes went under the cards.
+  const risen = bossFace(5.6, 6.6);
+  const low = row(1.0, 1.6);
+  // The sheet's top on a notched iPhone while a round plays (37vh + the home bar).
+  const open = 1 - 0.37 - 34 / 852;
+
+  it('in the usual band the boss keeps its eyes and the team tucks under (the round-2 case)', () => {
+    const shot = new CameraDirector(homes, true, team).shot(0, aspect, band, fit, risen, low);
+    expect(at(shot, risen).top).toBeGreaterThanOrEqual(band.top - 1e-9);
+    const lowest = Math.max(...low.map((f) => at(shot, f).bottom));
+    expect(lowest).toBeGreaterThan(band.bottom);
+  });
+
+  it('with the cards faded both fit: the boss eyes in the band, the team eyes above the sheet', () => {
+    const director = new CameraDirector(homes, true, team);
+    const shot = director.shot(0, aspect, band, fit, risen, low, open);
+    expect(at(shot, risen).top).toBeGreaterThanOrEqual(band.top - 1e-9);
+    for (const f of low) {
+      expect(at(shot, f).bottom).toBeLessThanOrEqual(open - team.faceMargin + 1e-9);
+    }
+    // The distance and the fit don't move: only the lens shift does.
+    const usual = new CameraDirector(homes, true, team).shot(0, aspect, band, fit, risen, low);
+    expect(shot.distance).toBeCloseTo(usual.distance, 9);
+  });
+
+  it("with the cards faded the team's eyes win over the boss floor and the easing hold", () => {
+    // A team so low it can't take the slide even down to the sheet.
+    const lowest = row(0.05, 0.1);
+    const director = new CameraDirector(homes, false, team);
+    // Full motion: the slide eases and the hold would push it to the floor.
+    for (let now = 0; now <= 2000; now += 16) {
+      const shot = director.shot(now, aspect, band, fit, risen, lowest, open);
+      for (const f of lowest) {
+        expect(at(shot, f).bottom).toBeLessThanOrEqual(open - team.faceMargin + 1e-9);
+      }
+    }
+  });
+
+  it('back in the usual band after the beat, the framing is the rest framing again', () => {
+    const director = new CameraDirector(homes, true, team);
+    director.shot(0, aspect, band, fit, risen, low, open);
+    const after = director.shot(16, aspect, band, fit, risen, low);
+    const rest = new CameraDirector(homes, true, team).shot(16, aspect, band, fit, risen, low);
+    expect(after.shift).toBeCloseTo(rest.shift, 9);
+  });
+
+  it('does not chase a boss turned away: holds the last target and reports no face', () => {
+    const director = new CameraDirector(homes, true, team);
+    const facing = director.shot(0, aspect, band, fit, risen, low);
+    const held = facing.shift;
+    expect(Number.isNaN(director.face.high)).toBe(false);
+    // The same boss twirled away (a taunt at −0.657), standing much higher.
+    const away = { ...bossFace(7.5, 8.5), facing: -0.657 };
+    const shot = director.shot(16, aspect, band, fit, away, low);
+    expect(shot.shift).toBeCloseTo(held, 9);
+    expect(Number.isNaN(director.face.high)).toBe(true);
+    expect(Number.isNaN(director.face.low)).toBe(true);
+    // Just above the threshold it frames the face again.
+    const back = { ...risen, facing: team.faceFacingMin + 0.01 };
+    director.shot(32, aspect, band, fit, back, low);
+    expect(Number.isNaN(director.face.high)).toBe(false);
+  });
+
+  it('holds a turned-away target under the cap while the cards are faded', () => {
+    const director = new CameraDirector(homes, true, team);
+    director.shot(0, aspect, band, fit, risen, row(0.05, 0.1));
+    const away = { ...risen, facing: -0.9 };
+    const shot = director.shot(16, aspect, band, fit, away, row(0.05, 0.1), open);
+    for (const f of row(0.05, 0.1)) {
+      expect(at(shot, f).bottom).toBeLessThanOrEqual(open - team.faceMargin + 1e-9);
+    }
+  });
+
+  it('leaves a team the slide does not reach alone, and a face behind the camera unframed', () => {
+    const plain = new CameraDirector(homes, true, team).shot(0, aspect, band, fit);
+    const shift = plain.shift;
+    const behind = { x: 0, z: -500, low: 1, high: 2 };
+    const director = new CameraDirector(homes, true, team);
+    const shot = director.shot(0, aspect, band, fit, behind, row(2.2, 2.9));
+    expect(shot.shift).toBeCloseTo(shift, 9);
+    expect(Number.isFinite(shot.shift)).toBe(true);
+  });
+});
+
+describe('the slide precedence (#868)', () => {
+  it('in the usual band: face, then the team cap, then the boss floor (19a0d8c)', () => {
+    // The cap stops a slide the team can't take…
+    expect(slideWant(0.1, 0.02, 0.05, false)).toBeCloseTo(0.05, 9);
+    // …unless the boss's eyes would stay under the plate: the floor wins.
+    expect(slideWant(0.1, 0.08, 0.05, false)).toBeCloseTo(0.08, 9);
+    // No room at all reads as none.
+    expect(slideWant(0.1, -0.01, -0.03, false)).toBe(0);
+    // A face that needs no slide down needs no rules.
+    expect(slideWant(0, 0.08, 0.05, false)).toBe(0);
+    expect(slideWant(-0.04, 0.08, 0.05, false)).toBeCloseTo(-0.04, 9);
+  });
+
+  it('matches the 19a0d8c rule everywhere in the usual band', () => {
+    const old = (face: number, floor: number, cap: number) =>
+      face > 0 ? Math.max(Math.min(face, Math.max(0, cap)), floor) : face;
+    for (let face = -0.1; face <= 0.2; face += 0.025) {
+      for (let floor = -0.1; floor <= 0.2; floor += 0.025) {
+        for (let cap = -0.1; cap <= 0.2; cap += 0.025) {
+          expect(slideWant(face, floor, cap, false)).toBe(old(face, floor, cap));
+        }
+      }
+    }
+  });
+
+  it('with the cards faded: face, then the boss floor, then the team cap', () => {
+    expect(slideWant(0.1, 0.02, 0.05, true)).toBeCloseTo(0.05, 9);
+    // The cap wins over the floor now: the team's eyes stay above the sheet.
+    expect(slideWant(0.1, 0.08, 0.05, true)).toBeCloseTo(0.05, 9);
+    // With room for both, the floor still lifts a short slide.
+    expect(slideWant(0.03, 0.06, 0.2, true)).toBeCloseTo(0.06, 9);
+    expect(slideWant(0.1, 0.08, -0.02, true)).toBe(0);
+  });
+
+  it('the rising-face hold keeps the eyes under the plate, but not past the cap with the cards faded', () => {
+    expect(holdDrop(0.02, 0.06, 0.04, false)).toBeCloseTo(0.06, 9);
+    expect(holdDrop(0.02, 0.06, 0.04, true)).toBeCloseTo(0.04, 9);
+    expect(holdDrop(0.02, 0.03, 0.2, true)).toBeCloseTo(0.03, 9);
+    // A face inside the band holds nothing.
+    expect(holdDrop(0.02, -0.01, 0.01, false)).toBeCloseTo(0.02, 9);
+  });
+
+  it('calls the notched iPhone fight band short, never the iPad or the result band', () => {
+    expect(shortBand({ top: 0.378, bottom: 0.529 })).toBe(true);
+    expect(shortBand({ top: 0.203, bottom: 0.586 })).toBe(false);
+    expect(shortBand({ top: 0.198, bottom: 0.509 })).toBe(false);
+    expect(BOSS_CARDS.shortBand).toBeGreaterThan(0.529 - 0.378);
+    // 393x852 without the notch's insets (WebKit in e2e can't emulate them) is short too.
+    expect(BOSS_CARDS.shortBand - 0.2532).toBeGreaterThan(0.02);
+  });
+});
+
+describe('faceDrop', () => {
+  const band = { top: 0.4, bottom: 0.5 };
+  it('needs nothing when the face is inside the band', () => {
+    expect(faceDrop(0.42, 0.47, band, 0.01)).toBe(0);
+  });
+  it('slides down until the top of the face is the margin under the band top', () => {
+    expect(faceDrop(0.3, 0.35, band, 0.01)).toBeCloseTo(0.11, 9);
+  });
+  it('keeps the eyes (the top) when the face is taller than the band', () => {
+    expect(faceDrop(0.3, 0.55, band, 0.01)).toBeCloseTo(0.11, 9);
+  });
+  it('slides up when the face sits under the band', () => {
+    expect(faceDrop(0.47, 0.53, band, 0.01)).toBeCloseTo(-0.04, 9);
   });
 });
