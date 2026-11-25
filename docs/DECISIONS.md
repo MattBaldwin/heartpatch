@@ -2571,7 +2571,8 @@ Merged: #870 (#868 boss fights keep the boss's face in frame on notched phones).
 
 **CI rulings and tallies**
 - #871 (`push.spec.ts:174` open-map step, `ipad-webkit 5`): sup49 +1 on `5ab56c1` (job 138941639641, both attempts).
-- Main CI reds on `505fb56`, `9aa5390` and `50ccdec` were all accepted categories: #784 tap-stall on `far-hollow-house.spec.ts:55` and `:260`, `ipad-webkit 5` (sup49 +2, observed on main `50ccdec` and `505fb56`); `next-up.spec.ts:157` flaky-then-passed on `505fb56` `ipad-webkit 5`; a pnpm action-setup download timeout (`9aa5390`, `iphone-webkit 3`); an exit-137 runner shutdown (`50ccdec`, `iphone-webkit 1`).
+- Main CI reds on `505fb56`, `9aa5390` and `50ccdec` were all accepted categories: #784 tap-stall on `far-hollow-house.spec.ts:55` and `:260`, `ipad-webkit 5` (sup49 +3 in total, observed on main `50ccdec`, `505fb56` and `0df27d6`: the Crooked House pair on `ipad-webkit 5` has failed on three consecutive main runs); `next-up.spec.ts:157` flaky-then-passed on `505fb56` `ipad-webkit 5`; a pnpm action-setup download timeout (`9aa5390`, `iphone-webkit 3`); an exit-137 runner shutdown (`50ccdec`, `iphone-webkit 1`).
+- Push CI on main `0df27d6` (run 45544476205) was red on two shards, both accepted categories: `iphone-webkit 1` an exit-137 runner shutdown (job 138970725005, no failing spec); `ipad-webkit 5` #784 tap-stall on `far-hollow-house.spec.ts:55` (flaky, passed on retry) and `:260` (failed both attempts, `locator.tap: Test ended`, job 138970725124). Deploy on `0df27d6` green. Follow-up: a reproduction lane for `far-hollow-house` on `ipad-webkit`, alongside the recipe-book one.
 - **WATCH escalation:** `recipe-book.spec.ts:26` AND `:135` failed on both attempts on main `505fb56`, `ipad-webkit 1` (job 138232978372, `locator.tap: Test ended`, 120 s timeout). It now recurs on main and on both device families, so it needs a reproduction lane (Opus) before any more "watch" notes. `short-screens.spec.ts:206` is still watch. Workflow re-runs still return 403 for workflow tokens.
 
 **Process**
@@ -2585,4 +2586,4 @@ Merged: #870 (#868 boss fights keep the boss's face in frame on notched phones).
 **Owner decisions (2026-11-25, supervisor 49 shift):**
 - Archive all previous Heartpatch supervisor sessions (done).
 - Option 3 for #868 was chosen under supervisor 48 (2026-11-25) and merged this shift.
-- Pending (asked 04:08 UTC in prose with numbered options): start the Fable "immersive boss battles" plan lane now (1, recommended), or hold until the owner has played a boss fight with the #868 fix live (2). After that: a recipe-book reproduction lane; a CI group-1 timeout `Chore:`; the carry-overs from supervisor 48, unchanged.
+- Pending (asked 04:08 UTC in prose with numbered options): start the Fable "immersive boss battles" plan lane now (1, recommended), or hold until the owner has played a boss fight with the #868 fix live (2). After that: a recipe-book reproduction lane and a `far-hollow-house` `ipad-webkit` reproduction lane; a CI group-1 timeout `Chore:`; the carry-overs from supervisor 48, unchanged.
