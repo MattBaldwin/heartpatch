@@ -238,9 +238,18 @@ test.describe('a mini-boss fight (#190)', () => {
       })
       .toBeLessThanOrEqual(MAX_FIT);
 
-    /** The HUD's boxes, as fractions of the height (px for widths). */
-    const hudBoxes = () =>
-      page.evaluate(() => {
+    /**
+     * The HUD's boxes, as fractions of the height (px for widths), once the
+     * sheet's rise or drop (a 220 ms slide) has finished: boxes read mid-slide
+     * would sit between the two places. Looping animations don't count.
+     */
+    const hudBoxes = async () => {
+      await page.waitForFunction(() =>
+        document
+          .getAnimations()
+          .every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity),
+      );
+      return page.evaluate(() => {
         const h = window.innerHeight;
         const box = (selector: string) => {
           const node = document.querySelector(selector);
@@ -265,6 +274,7 @@ test.describe('a mini-boss fight (#190)', () => {
           width: window.innerWidth,
         };
       });
+    };
 
     // Collapsed (a round playing), the band runs from under the strip to the
     // handle: the plan's rest band. Go, then measure while the round plays.
@@ -327,24 +337,45 @@ test.describe('a mini-boss fight (#190)', () => {
       const slot = document.querySelector('[data-testid="boss-windup"]');
       const bar = document.querySelector('[data-testid="boss-energy"]');
       const picker = document.querySelector('[data-testid="boss-picker"]');
+      const sheet = document.querySelector('[data-testid="battle-sheet"]');
+      const handle = document.querySelector('[data-testid="boss-handle"]');
+      // Frames since the picker went (Go!): Go! drops the sheet and clears
+      // the HUD's safe-region cache at once (`forgetLayout`, #190).
+      let hiddenFor = 0;
       const sample = () => {
         const scene = (window as unknown as Hook).__heartpatch?.battle?.()?.scene;
         const shown = result instanceof HTMLElement && result.offsetParent !== null;
         // A round playing with the sheet collapsed: the step clock can still
         // name the last step for a moment after the next picker has risen.
         const collapsed = picker instanceof HTMLElement && picker.hidden;
+        hiddenFor = collapsed ? hiddenFor + 1 : 0;
         if (scene?.framing && scene.playing && !shown && collapsed) {
+          const h = window.innerHeight;
+          // The collapsed handle's top from layout, less BOSS_HUD.handleClear (8):
+          // where the band ends once the HUD has measured the dropped sheet.
+          const expected =
+            sheet instanceof HTMLElement && handle instanceof HTMLElement
+              ? (h - sheet.offsetHeight + handle.offsetTop - 8) / h
+              : NaN;
           samples.push({
             kind: scene.playing.kind,
             framing: scene.framing,
             windup: slot instanceof HTMLElement && !slot.hidden,
             slotRight: slot?.getBoundingClientRect().right ?? 0,
             barWidth: bar?.getBoundingClientRect().width ?? 0,
+            hiddenFor,
+            expected,
           });
         }
-        if (samples.length < 20_000) requestAnimationFrame(sample);
+        if (samples.length < 20_000) requestAnimationFrame(afterDraw);
       };
-      requestAnimationFrame(sample);
+      // Read after the frame's draw: a task posted from rAF runs once every
+      // rAF callback of that frame (the stage's render among them) has run,
+      // so the hook's framing is this frame's, whatever order rAF calls in.
+      function afterDraw() {
+        setTimeout(sample, 0);
+      }
+      requestAnimationFrame(afterDraw);
     });
     await expect(page.getByTestId('boss-round')).toHaveText('Round 2', { timeout: 30_000 });
     // Round 1 was the windup: the ⏳ shows in the strip's slot, whole.
@@ -357,14 +388,27 @@ test.describe('a mini-boss fight (#190)', () => {
       windup: boolean;
       slotRight: number;
       barWidth: number;
+      hiddenFor: number;
+      expected: number;
     };
     const samples = await page.evaluate(
       () => (window as unknown as { hpFraming: Sample[] }).hpFraming,
     );
     expect(samples.length).toBeGreaterThan(20);
     const stripRight = boxes.strip!.right;
-    for (const { framing: f, kind, windup, slotRight, barWidth } of samples) {
-      const at = `${kind} ${JSON.stringify(f)}`;
+    // No grace after Go!: the very first frame drawn with the picker gone
+    // frames the dropped sheet. Before `forgetLayout` that frame still had
+    // the Ready step's risen band (~0.65) until the ResizeObserver, after
+    // rAF, cleared it (round 2's CI failure on 22a0782).
+    const GRACE = 0;
+    const settled = samples.filter((x) => x.hiddenFor > GRACE);
+    expect(settled.length).toBeGreaterThan(20);
+    for (const { framing: f, kind, windup, slotRight, barWidth, hiddenFor, expected } of settled) {
+      const at = `${kind} +${String(hiddenFor)}f expected ${String(expected)} ${JSON.stringify(f)}`;
+      // The band ends at the collapsed handle: the HUD measured the dropped
+      // sheet, not the Ready step's risen one. Holds with and without the
+      // insets (WebKit CI: no insets, ~0.85; Chromium here: notched, ~0.73).
+      expect(Math.abs(f.band.bottom - expected), at).toBeLessThanOrEqual(EPS);
       // The #868 fade's fields are gone from the hook.
       expect(Object.keys(f).sort(), at).toEqual([
         'band',
@@ -472,6 +516,19 @@ test.describe('a mini-boss fight (#190)', () => {
     await expect.poll(async () => (await sheetHeight()) / 667).toBeGreaterThan(0.45);
     picker = await fits();
     expect(picker.scroll, JSON.stringify(picker)).toBeLessThanOrEqual(picker.client + 1);
+    // A long fight's label still clears the centred chips at 375 px: "Round 10"
+    // and up (two digits, the widest a visit's fight reaches) sits left of the first chip.
+    const room = await page.evaluate(() => {
+      const round = document.querySelector('[data-testid="boss-round"]');
+      const chip = document.querySelector('[data-testid="boss-friend-0"]');
+      if (!(round instanceof HTMLElement) || !(chip instanceof HTMLElement)) return null;
+      round.textContent = 'Round 10';
+      const r = round.getBoundingClientRect();
+      const c = chip.getBoundingClientRect();
+      return { roundRight: r.right, chipLeft: c.left, gap: c.left - r.right };
+    });
+    expect(room, 'round label and chips').not.toBeNull();
+    expect(room!.gap, JSON.stringify(room)).toBeGreaterThanOrEqual(4);
   });
 
   test('a duplicate never joins: no ask, no charms', async ({ browser }) => {

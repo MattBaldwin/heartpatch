@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createLayoutCache,
   createSheetHold,
   evolvingRowAt,
   sheetHold,
@@ -115,5 +116,43 @@ describe('evolvingRowAt', () => {
     expect(evolvingRowAt(1, undefined)).toBe(1);
     // Only a cheer: first.
     expect(evolvingRowAt(1, [true])).toBe(0);
+  });
+});
+
+describe('createLayoutCache (the safe region, measured once per layout change, #190)', () => {
+  it('measures on the first read and keeps the value until forgotten', () => {
+    let measured = 0;
+    const cache = createLayoutCache(() => (measured += 1));
+    expect(cache.get()).toBe(1);
+    expect(cache.get()).toBe(1);
+    expect(measured).toBe(1);
+  });
+
+  it('forgets synchronously: the very next read measures the new layout', () => {
+    // A boss sheet drops at Go!: the next frame's read must see the handle's
+    // new place, not wait for the ResizeObserver (after rAF).
+    let bottom = 0.65;
+    let redraws = 0;
+    const cache = createLayoutCache(
+      () => ({ top: 0.1, bottom }),
+      () => (redraws += 1),
+    );
+    expect(cache.get().bottom).toBe(0.65);
+    bottom = 0.85;
+    expect(cache.get().bottom).toBe(0.65);
+    cache.forget();
+    expect(redraws).toBe(1);
+    expect(cache.get().bottom).toBe(0.85);
+  });
+
+  it('caches a falsy measurement too', () => {
+    let measured = 0;
+    const cache = createLayoutCache(() => {
+      measured += 1;
+      return 0;
+    });
+    cache.get();
+    cache.get();
+    expect(measured).toBe(1);
   });
 });

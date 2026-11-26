@@ -1245,7 +1245,9 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 }
 
 .boss-order-now {
+  /* Inside the dot: the strip (`overflow: hidden`, one dot tall) would clip it outside. */
   outline: 2px solid #b8487a;
+  outline-offset: -2px;
   opacity: 1;
 }
 
@@ -1449,6 +1451,18 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+/* A 375 px phone: "Round 10" and up beside the centred chips needs a few px
+   more room (it touched the first chip with the wider gap). */
+@media (max-width: 389px) {
+  .boss-friends {
+    gap: 12px; /* TUNE */
+  }
+
+  .boss-round {
+    padding-inline: 4px;
+  }
 }
 
 /* A team chip: a tinted disc with the squishy's first letter (the same tint

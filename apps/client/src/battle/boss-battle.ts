@@ -98,6 +98,13 @@ function samePicks(a: Readonly<Record<number, string>>, b: Readonly<Record<numbe
 
 export function createBossBattle(deps: BossBattleDeps): BossBattle {
   const ui = mountBossHud();
+  // The sheet rose or dropped: the camera's band ends at its handle, so the
+  // HUD measures again on the very next frame, not after the ResizeObserver
+  // (which runs after rAF and would leave one frame framed for the old sheet).
+  const sheetMoved = () => {
+    deps.hud.forgetLayout();
+    deps.invalidate();
+  };
   /** The HUD's slots for a boss fight: the stage is framed between the strip and the handle. */
   const slots = {
     top: ui.top,
@@ -182,6 +189,18 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     });
   };
 
+  /**
+   * The picker goes (Go!, a round playing, no pick to make): the sheet drops to
+   * its handle. Only a picker that was up moves the sheet, so a screen that
+   * asks for no picker on every frame doesn't draw frames for ever.
+   */
+  const lowerPicker = () => {
+    const wasUp = drawn !== null;
+    ui.hidePicker();
+    drawn = null;
+    if (wasUp) sheetMoved();
+  };
+
   const drawPicker = (b: PlayerBattle, names: BattleContent) => {
     const state = picker;
     if (!state) return;
@@ -203,8 +222,7 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
         const action = teamAction(state);
         if (!action || action.type !== 'team') return;
         lastPicks = { ...state.picks };
-        ui.hidePicker();
-        drawn = null;
+        lowerPicker();
         deps.scene()?.focusOn(null);
         deps.submit(action);
       },
@@ -221,7 +239,7 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
             }
           : null,
     });
-    deps.invalidate();
+    sheetMoved();
   };
 
   /** Counts the bag again, then shows the card again with the new count. */
@@ -300,8 +318,7 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     },
     controls: (b, names, canPick) => {
       if (!canPick || b.status !== 'active' || b.view.phase.type !== 'turn') {
-        ui.hidePicker();
-        drawn = null;
+        lowerPicker();
         return;
       }
       // Picking again: the round that played is done.
@@ -318,8 +335,7 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     },
     playing: (b, steps) => {
       bossMoves = 0;
-      ui.hidePicker();
-      drawn = null;
+      lowerPicker();
       playingRound = Math.max(1, b.view.turn);
       ui.setRound(playingRound);
       movers = steps.filter(isOwnMove).map((s) => ({
