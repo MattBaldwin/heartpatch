@@ -1,0 +1,189 @@
+{
+ "file": "iphone-01c-after-go.png",
+ "device": "iphone",
+ "tz": "Asia/Bangkok",
+ "at": "2026-11-26T05:50:09.714Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 40.38103208484224,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.142018779342723,
+    "bottom": 0.8755868544600939
+   },
+   "face": {
+    "top": 0.3799146380716141,
+    "bottom": 0.4383231379473287
+   },
+   "team": [
+    {
+     "top": 0.557210350600566,
+     "bottom": 0.5829583018179851
+    },
+    {
+     "top": 0.5325806705681572,
+     "bottom": 0.5710409380865217
+    },
+    {
+     "top": 0.5267426693291715,
+     "bottom": 0.5591808322812779
+    }
+   ],
+   "bossFacing": 0.9859861564614549
+  },
+  "playing": {
+   "kind": "hit",
+   "at": 726.8000000002794
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "rects": {
+  "strip": {
+   "top": 67,
+   "bottom": 111,
+   "left": 12,
+   "right": 329
+  },
+  "energy": {
+   "top": 95,
+   "bottom": 105,
+   "left": 24,
+   "right": 291
+  },
+  "name": {
+   "top": 70,
+   "bottom": 87,
+   "left": 24,
+   "right": 238
+  },
+  "order": {
+   "top": 70.5,
+   "bottom": 86.5,
+   "left": 244,
+   "right": 317
+  },
+  "handle": {
+   "top": 754,
+   "bottom": 818,
+   "left": 16,
+   "right": 377
+  },
+  "friends": {
+   "top": 758,
+   "bottom": 814,
+   "left": 96.5,
+   "right": 296.5
+  },
+  "dock": {
+   "top": 754,
+   "bottom": 818,
+   "left": 16,
+   "right": 377
+  },
+  "sheet": {
+   "top": 754,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "leave": {
+   "top": 67,
+   "bottom": 111,
+   "left": 337,
+   "right": 381
+  },
+  "round": {
+   "top": 774,
+   "bottom": 798,
+   "left": 16,
+   "right": 78.4375
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "winding": {
+   "top": 92,
+   "bottom": 108,
+   "left": 297,
+   "right": 317
+  },
+  "go": null,
+  "callout": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "caption": {
+   "top": 708.5,
+   "bottom": 740,
+   "left": 74.9921875,
+   "right": 318.0078125
+  }
+ },
+ "dockSheet": "lowered",
+ "step": "01c-after-go",
+ "windVis": {
+  "hidden": true,
+  "opacity": "1",
+  "visibility": "hidden",
+  "display": "grid",
+  "text": "⏳"
+ },
+ "captionText": "Puddlepuff lost some energy.",
+ "captionVisible": "1/block",
+ "friendRects": [
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 96.5,
+   "right": 152.5,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 168.5,
+   "right": 224.5,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 240.5,
+   "right": 296.5,
+   "w": 56,
+   "h": 56
+  }
+ ],
+ "moveRects": [],
+ "sheetScroll": {
+  "sheetClient": 98,
+  "sheetScroll": 524,
+  "pickerClient": 0,
+  "pickerScroll": 0
+ }
+}

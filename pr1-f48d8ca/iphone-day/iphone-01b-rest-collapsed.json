@@ -1,0 +1,189 @@
+{
+ "file": "iphone-01b-rest-collapsed.png",
+ "device": "iphone",
+ "tz": "Asia/Bangkok",
+ "at": "2026-11-26T05:50:23.657Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 44.33961717443037,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.142018779342723,
+    "bottom": 0.8755868544600939
+   },
+   "face": {
+    "top": 0.3537762342198118,
+    "bottom": 0.3994649391721177
+   },
+   "team": [
+    {
+     "top": 0.5593891141260618,
+     "bottom": 0.5885141112983595
+    },
+    {
+     "top": 0.5640824420399569,
+     "bottom": 0.5977620598897253
+    },
+    {
+     "top": 0.5633337114171095,
+     "bottom": 0.5915436846434593
+    }
+   ],
+   "bossFacing": 0.9843854655095965
+  },
+  "playing": {
+   "kind": "effect",
+   "at": 3320.899999999907
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "rects": {
+  "strip": {
+   "top": 67,
+   "bottom": 111,
+   "left": 12,
+   "right": 329
+  },
+  "energy": {
+   "top": 95,
+   "bottom": 105,
+   "left": 24,
+   "right": 291
+  },
+  "name": {
+   "top": 70,
+   "bottom": 87,
+   "left": 24,
+   "right": 238
+  },
+  "order": {
+   "top": 70.5,
+   "bottom": 86.5,
+   "left": 244,
+   "right": 317
+  },
+  "handle": {
+   "top": 754,
+   "bottom": 818,
+   "left": 16,
+   "right": 377
+  },
+  "friends": {
+   "top": 758,
+   "bottom": 814,
+   "left": 96.5,
+   "right": 296.5
+  },
+  "dock": {
+   "top": 754,
+   "bottom": 818,
+   "left": 16,
+   "right": 377
+  },
+  "sheet": {
+   "top": 754,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "leave": {
+   "top": 67,
+   "bottom": 111,
+   "left": 337,
+   "right": 381
+  },
+  "round": {
+   "top": 774,
+   "bottom": 798,
+   "left": 16,
+   "right": 78.4375
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "winding": {
+   "top": 92,
+   "bottom": 108,
+   "left": 297,
+   "right": 317
+  },
+  "go": null,
+  "callout": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "caption": {
+   "top": 708.5,
+   "bottom": 740,
+   "left": 105.1953125,
+   "right": 287.8046875
+  }
+ },
+ "dockSheet": "lowered",
+ "step": "01b-rest-collapsed",
+ "windVis": {
+  "hidden": true,
+  "opacity": "1",
+  "visibility": "hidden",
+  "display": "grid",
+  "text": "⏳"
+ },
+ "captionText": "Rakelet is wide open!",
+ "captionVisible": "1/block",
+ "friendRects": [
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 96.5,
+   "right": 152.5,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 168.5,
+   "right": 224.5,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 240.5,
+   "right": 296.5,
+   "w": 56,
+   "h": 56
+  }
+ ],
+ "moveRects": [],
+ "sheetScroll": {
+  "sheetClient": 98,
+  "sheetScroll": 524,
+  "pickerClient": 0,
+  "pickerScroll": 0
+ }
+}
