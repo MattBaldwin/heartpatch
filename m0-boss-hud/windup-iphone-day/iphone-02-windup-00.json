@@ -1,0 +1,157 @@
+{
+ "file": "iphone-02-windup-00.png",
+ "device": "iphone",
+ "tz": "Asia/Bangkok",
+ "at": "2026-11-26T00:49:21.205Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 43.6445002933714,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.142018779342723,
+    "bottom": 0.8755868544600939
+   },
+   "face": {
+    "top": 0.37285566060052705,
+    "bottom": 0.41205942145885543
+   },
+   "team": [
+    {
+     "top": 0.5606464166658086,
+     "bottom": 0.5962594197269471
+    },
+    {
+     "top": 0.5564794263478469,
+     "bottom": 0.5943464901076569
+    },
+    {
+     "top": 0.5595266995696926,
+     "bottom": 0.5928800420347311
+    }
+   ],
+   "bossFacing": 0.9690161477326878,
+   "open": null,
+   "cardsFaded": false
+  },
+  "playing": {
+   "kind": "effect",
+   "at": 33.41500000008091
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "variant": {
+  "var": "opt1",
+  "cap": "collapsed"
+ },
+ "rects": {
+  "bossHead": {
+   "top": 67,
+   "bottom": 111,
+   "left": 12,
+   "right": 381
+  },
+  "plate": {
+   "top": 67,
+   "bottom": 111,
+   "left": 12,
+   "right": 235
+  },
+  "order": {
+   "top": 67,
+   "bottom": 111,
+   "left": 241,
+   "right": 381
+  },
+  "friends": {
+   "top": 746,
+   "bottom": 818,
+   "left": 0,
+   "right": 393
+  },
+  "sheet": {
+   "top": 746,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "leave": {
+   "top": 117,
+   "bottom": 161,
+   "left": 337,
+   "right": 381
+  },
+  "round": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "winding": {
+   "top": 79,
+   "bottom": 99,
+   "left": 157.5625,
+   "right": 288.015625
+  },
+  "go": null,
+  "callout": {
+   "top": 283.2821350097656,
+   "bottom": 334.0616149902344,
+   "left": 4.3542866706848145,
+   "right": 131.89570665359497
+  }
+ },
+ "friendRects": [
+  {
+   "top": 758,
+   "bottom": 814,
+   "left": 84.5,
+   "right": 140.5,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "top": 758,
+   "bottom": 814,
+   "left": 168.5,
+   "right": 224.5,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "top": 758,
+   "bottom": 814,
+   "left": 252.5,
+   "right": 308.5,
+   "w": 56,
+   "h": 56
+  }
+ ],
+ "moveRects": [],
+ "sheetScroll": {
+  "sheetClient": 103,
+  "sheetScroll": 103,
+  "pickerClient": 0,
+  "pickerScroll": 0
+ }
+}

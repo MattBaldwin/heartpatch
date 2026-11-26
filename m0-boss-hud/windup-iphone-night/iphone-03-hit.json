@@ -1,0 +1,157 @@
+{
+ "file": "iphone-03-hit.png",
+ "device": "iphone",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-26T00:41:10.917Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 42.44335862652606,
+   "fogEnd": 85,
+   "band": {
+    "top": 0.142018779342723,
+    "bottom": 0.8755868544600939
+   },
+   "face": {
+    "top": 0.3431357831597698,
+    "bottom": 0.3909685452037124
+   },
+   "team": [
+    {
+     "top": 0.5532211568841093,
+     "bottom": 0.5906437511090132
+    },
+    {
+     "top": 0.5596867043703342,
+     "bottom": 0.5963332243466349
+    },
+    {
+     "top": 0.5567009127089915,
+     "bottom": 0.5897564064598687
+    }
+   ],
+   "bossFacing": 0.9622471613315942,
+   "open": null,
+   "cardsFaded": false
+  },
+  "playing": {
+   "kind": "hit",
+   "at": 1698.2599999999366
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "variant": {
+  "var": "opt1",
+  "cap": "collapsed"
+ },
+ "rects": {
+  "bossHead": {
+   "top": 67,
+   "bottom": 111,
+   "left": 12,
+   "right": 381
+  },
+  "plate": {
+   "top": 67,
+   "bottom": 111,
+   "left": 12,
+   "right": 235
+  },
+  "order": {
+   "top": 67,
+   "bottom": 111,
+   "left": 241,
+   "right": 381
+  },
+  "friends": {
+   "top": 746,
+   "bottom": 818,
+   "left": 0,
+   "right": 393
+  },
+  "sheet": {
+   "top": 746,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "leave": {
+   "top": 117,
+   "bottom": 161,
+   "left": 337,
+   "right": 381
+  },
+  "round": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "winding": {
+   "top": 79,
+   "bottom": 99,
+   "left": 157.5625,
+   "right": 288.015625
+  },
+  "go": null,
+  "callout": {
+   "top": 281.2299499511719,
+   "bottom": 336.1138000488281,
+   "left": 4.461836814880371,
+   "right": 171.053786277771
+  }
+ },
+ "friendRects": [
+  {
+   "top": 758,
+   "bottom": 814,
+   "left": 84.5,
+   "right": 140.5,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "top": 758,
+   "bottom": 814,
+   "left": 168.5,
+   "right": 224.5,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "top": 758,
+   "bottom": 814,
+   "left": 252.5,
+   "right": 308.5,
+   "w": 56,
+   "h": 56
+  }
+ ],
+ "moveRects": [],
+ "sheetScroll": {
+  "sheetClient": 103,
+  "sheetScroll": 103,
+  "pickerClient": 0,
+  "pickerScroll": 0
+ }
+}
