@@ -1,0 +1,189 @@
+{
+ "file": "se-01b-rest-collapsed.png",
+ "device": "se",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-26T06:02:29.400Z",
+ "inner": {
+  "w": 375,
+  "h": 667,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 35.76145093899991,
+   "fogEnd": 85,
+   "band": {
+    "top": 0.09295352323838081,
+    "bottom": 0.8920539730134932
+   },
+   "face": {
+    "top": 0.3163977870366803,
+    "bottom": 0.37084946482198416
+   },
+   "team": [
+    {
+     "top": 0.5608296497442733,
+     "bottom": 0.6068192551177735
+    },
+    {
+     "top": 0.5572382137672307,
+     "bottom": 0.6062241814681066
+    },
+    {
+     "top": 0.5641972586523021,
+     "bottom": 0.6107757490499393
+    }
+   ],
+   "bossFacing": 0.988394416945579
+  },
+  "playing": {
+   "kind": "effect",
+   "at": 1313.1200000001045
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "rects": {
+  "strip": {
+   "top": 8,
+   "bottom": 52,
+   "left": 12,
+   "right": 311
+  },
+  "energy": {
+   "top": 36,
+   "bottom": 46,
+   "left": 24,
+   "right": 273
+  },
+  "name": {
+   "top": 11,
+   "bottom": 28,
+   "left": 24,
+   "right": 220
+  },
+  "order": {
+   "top": 11.5,
+   "bottom": 27.5,
+   "left": 226,
+   "right": 299
+  },
+  "handle": {
+   "top": 603,
+   "bottom": 667,
+   "left": 16,
+   "right": 359
+  },
+  "friends": {
+   "top": 607,
+   "bottom": 663,
+   "left": 91.5,
+   "right": 283.5
+  },
+  "dock": {
+   "top": 603,
+   "bottom": 667,
+   "left": 16,
+   "right": 359
+  },
+  "sheet": {
+   "top": 603,
+   "bottom": 667,
+   "left": 0,
+   "right": 375
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "leave": {
+   "top": 8,
+   "bottom": 52,
+   "left": 319,
+   "right": 363
+  },
+  "round": {
+   "top": 623,
+   "bottom": 647,
+   "left": 16,
+   "right": 74.4375
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "winding": {
+   "top": 33,
+   "bottom": 49,
+   "left": 279,
+   "right": 299
+  },
+  "go": null,
+  "callout": {
+   "top": 65.6102523803711,
+   "bottom": 116.3897476196289,
+   "left": 12.354286193847656,
+   "right": 139.8957061767578
+  },
+  "caption": {
+   "top": 538,
+   "bottom": 589,
+   "left": 16,
+   "right": 359
+  }
+ },
+ "dockSheet": "lowered",
+ "step": "01b-rest-collapsed",
+ "windVis": {
+  "hidden": false,
+  "opacity": "1",
+  "visibility": "visible",
+  "display": "grid",
+  "text": "⏳"
+ },
+ "captionText": "Rakelet is winding up Count to Three… watch out next round!",
+ "captionVisible": "1/block",
+ "friendRects": [
+  {
+   "status": "ok",
+   "top": 607,
+   "bottom": 663,
+   "left": 91.5,
+   "right": 147.5,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "status": "ok",
+   "top": 607,
+   "bottom": 663,
+   "left": 159.5,
+   "right": 215.5,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "status": "ok",
+   "top": 607,
+   "bottom": 663,
+   "left": 227.5,
+   "right": 283.5,
+   "w": 56,
+   "h": 56
+  }
+ ],
+ "moveRects": [],
+ "sheetScroll": {
+  "sheetClient": 64,
+  "sheetScroll": 398,
+  "pickerClient": 0,
+  "pickerScroll": 0
+ }
+}
