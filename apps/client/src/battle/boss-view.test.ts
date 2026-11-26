@@ -1,10 +1,17 @@
-import { BATTLE_RULES, findAvoidedWords, GAME_DATA, type PlayerBattle } from '@heartpatch/shared';
+import { findAvoidedWords, GAME_DATA, type PlayerBattle } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { shownFrom } from './battle-playback.js';
 import { REWARD_TEXT } from './result-card.js';
 import { BattleContent } from './battle-view.js';
+import { BOSS_CARDS, BOSS_HUD } from './battle-config.js';
 import {
   BOSS_TEXT,
+  bossBand,
+  bossHudVars,
+  bossRestEdges,
+  bossStripWidths,
+  chipStatus,
+  type HudScreen,
   befriendView,
   bossCallout,
   isOwnMove,
@@ -28,7 +35,6 @@ import {
   sameAgain,
   slotsOut,
   teamAction,
-  stompsChip,
 } from './boss-view.js';
 
 const NOW = Date.parse('2026-11-14T12:00:00.000Z');
@@ -120,26 +126,12 @@ describe('a mini-boss fight on screen (#190)', () => {
     expect(slotsOut(b, 'b')).toEqual([0]);
   });
 
-  it.each([1, 2, 3])('shows four plates at most: a boss plate and %i friend plates', (team) => {
+  it.each([1, 2, 3])('shows the boss on the strip and %i team chips', (team) => {
     const b = battle(team);
     const plates = bossPlates(b, shownFrom(b), new BattleContent(b), nameOf(b));
     expect(plates.friends).toHaveLength(team);
     expect(plates.boss).toMatchObject({ name: boss.name, percent: 100, energyText: '300/300' });
     expect(plates.friends.map((f) => f.slot)).toEqual([0, 1, 2].slice(0, team));
-  });
-
-  it('hides the "Stomps twice" chip while the shipped rule is one action a round (#234)', () => {
-    const b = battle();
-    const plates = bossPlates(b, shownFrom(b), new BattleContent(b), nameOf(b));
-    expect(BATTLE_RULES.boss?.actionsPerRound).toBe(1);
-    expect(plates.boss.stomps).toBe(false);
-  });
-
-  it('shows the "Stomps twice" chip only when the rule has the boss act more than once (#234)', () => {
-    expect(stompsChip(1)).toBe(false);
-    expect(stompsChip(2)).toBe(true);
-    expect(stompsChip(3)).toBe(true);
-    expect(stompsChip()).toBe(stompsChip(BATTLE_RULES.boss?.actionsPerRound ?? 1));
   });
 
   it('plates follow the energy shown, not the final view', () => {
@@ -152,6 +144,115 @@ describe('a mini-boss fight on screen (#190)', () => {
       [0, true],
       [100, false],
     ]);
+  });
+
+  it('marks a friend winding up from the log played so far, never a tuckered-out one (#234)', () => {
+    const b = battle();
+    const shown = shownFrom(b);
+    const names = new BattleContent(b);
+    expect(bossPlates(b, shown, names, nameOf(b)).friends.map((f) => f.windup)).toEqual([
+      false,
+      false,
+      false,
+    ]);
+    const chips = shown.a.chips.map((c) => ({ ...c, windup: true }));
+    const winding = { ...shown, a: { ...shown.a, chips, energy: [20, 0, 40] } };
+    expect(bossPlates(b, winding, names, nameOf(b)).friends.map((f) => f.windup)).toEqual([
+      true,
+      false,
+      true,
+    ]);
+  });
+
+  describe('the phone-first boss HUD (#190 PR 1)', () => {
+    // An iPhone 15 as an installed app, with the notch's insets (the M0 captures).
+    const iphone: HudScreen = { width: 393, height: 852, insetTop: 59, insetBottom: 34 };
+
+    it('gives the stage at least 0.70 of a notched iPhone at rest (M0: 0.142–0.876)', () => {
+      const edges = bossRestEdges(iphone);
+      const band = bossBand(edges.stripBottom, edges.handleTop, iphone.height);
+      expect(band.top).toBeCloseTo(0.142, 3);
+      expect(band.bottom).toBeCloseTo(0.876, 3);
+      expect(band.bottom - band.top).toBeGreaterThanOrEqual(0.7);
+      // Far above the #868 short band (0.28), so the camera's safety net never trips at rest.
+      expect(band.bottom - band.top).toBeGreaterThan(BOSS_CARDS.shortBand * 2);
+    });
+
+    it('keeps the rest band tall without the notch and on an iPad', () => {
+      const flat = { ...iphone, insetTop: 0, insetBottom: 0 };
+      const e = bossRestEdges(flat);
+      const band = bossBand(e.stripBottom, e.handleTop, flat.height);
+      expect(band.bottom - band.top).toBeGreaterThanOrEqual(0.8);
+      const ipad: HudScreen = { width: 820, height: 1180, insetTop: 0, insetBottom: 0 };
+      const i = bossRestEdges(ipad);
+      const tall = bossBand(i.stripBottom, i.handleTop, ipad.height);
+      expect(tall.bottom - tall.top).toBeGreaterThanOrEqual(0.85);
+    });
+
+    it('frames a risen sheet above it, and guesses a rest band before layout', () => {
+      const { stripBottom } = bossRestEdges(iphone);
+      const risen = iphone.height - (iphone.height * BOSS_HUD.sheetVh) / 100 - iphone.insetBottom;
+      const band = bossBand(stripBottom, risen, iphone.height);
+      expect(band.bottom).toBeLessThan(0.65);
+      expect(band.bottom - band.top).toBeGreaterThan(0.4);
+      expect(bossBand(0, 0, 852)).toEqual({ top: 0.14, bottom: 0.86 });
+    });
+
+    it('fits name, bar, ⏳ and the order dots in the strip at 393 px (the M0 finding)', () => {
+      const w = bossStripWidths(393);
+      // The ✕ moved up into the strip's row: the strip is what's left beside it.
+      expect(w.strip + BOSS_HUD.closeSize + BOSS_HUD.closeGap + 2 * BOSS_HUD.edge).toBe(393);
+      expect(w.bar).toBeGreaterThanOrEqual(BOSS_HUD.minBar);
+      // Four dots and a name of about seven letters side by side on the first line.
+      expect(w.name).toBeGreaterThanOrEqual(90);
+      expect(w.name + BOSS_HUD.innerGap + w.dots).toBe(w.strip - 2 * BOSS_HUD.stripPad);
+      // Still true on the narrowest phone the app supports (320 px).
+      expect(bossStripWidths(320).bar).toBeGreaterThanOrEqual(BOSS_HUD.minBar);
+      // On an iPad the strip stops at its max width.
+      expect(bossStripWidths(820).strip).toBe(BOSS_HUD.stripMax);
+    });
+
+    it('sets one custom property per tunable battle.css reads', () => {
+      const vars = bossHudVars();
+      expect(vars['--boss-strip-h']).toBe(`${String(BOSS_HUD.stripHeight)}px`);
+      expect(vars['--boss-handle-h']).toBe(`${String(BOSS_HUD.handleHeight)}px`);
+      expect(vars['--boss-sheet-vh']).toBe(String(BOSS_HUD.sheetVh));
+      expect(vars['--boss-chip']).toBe(`${String(BOSS_HUD.chipSize)}px`);
+      expect(Object.keys(vars).every((k) => k.startsWith('--boss-'))).toBe(true);
+      // A chip is a 44 pt target.
+      expect(BOSS_HUD.chipSize).toBeGreaterThanOrEqual(44);
+      expect(BOSS_HUD.closeSize).toBeGreaterThanOrEqual(44);
+    });
+
+    it('gives each chip its status: napping, picking, picked, winding up or just there', () => {
+      const b = battle();
+      let p = pickerFor(b, nameOf(b));
+      const friend = (slot: number, over: Partial<{ down: boolean; windup: boolean }> = {}) => ({
+        slot,
+        down: false,
+        windup: false,
+        ...over,
+      });
+      expect(chipStatus(friend(0), null)).toBe('ok');
+      expect(chipStatus(friend(0, { windup: true }), null)).toBe('windup');
+      expect(chipStatus(friend(0, { down: true, windup: true }), null)).toBe('down');
+      expect(chipStatus(friend(0), p)).toBe('picking');
+      expect(chipStatus(friend(1), p)).toBe('ok');
+      p = pickMove(p, p.steps[0]!.moves[0]!);
+      expect(chipStatus(friend(0), p)).toBe('picked');
+      expect(chipStatus(friend(1), p)).toBe('picking');
+      expect(chipStatus(friend(1, { down: true }), p)).toBe('down');
+    });
+
+    it("labels a chip in kid words, with no number but the energy's percent", () => {
+      expect(BOSS_TEXT.chipLabel('Pip', 80, BOSS_TEXT.chipDoing.picking)).toBe(
+        'Pip, 80% energy, picking now',
+      );
+      expect(BOSS_TEXT.chipLabel('Pip', 0, BOSS_TEXT.chipDoing.down)).toBe(
+        'Pip, 0% energy, napping',
+      );
+      expect(BOSS_TEXT.chipLabel('Pip', 100, BOSS_TEXT.chipDoing.ok)).toBe('Pip, 100% energy');
+    });
   });
 
   describe('picker A1', () => {
@@ -575,8 +676,12 @@ describe('a mini-boss fight on screen (#190)', () => {
   });
 
   it('every line follows the style guide', () => {
-    const lines = Object.values(BOSS_TEXT).map((v) =>
-      typeof v === 'function' ? (v as (...args: never[]) => string)(3 as never, 3 as never) : v,
+    const lines = Object.values(BOSS_TEXT).flatMap((v) =>
+      typeof v === 'function'
+        ? [(v as (...args: never[]) => string)(3 as never, 3 as never)]
+        : typeof v === 'object'
+          ? Object.values(v)
+          : [v],
     );
     for (const line of lines) expect(findAvoidedWords(line)).toEqual([]);
   });

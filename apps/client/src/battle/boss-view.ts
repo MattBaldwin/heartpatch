@@ -1,5 +1,4 @@
 import {
-  BATTLE_RULES,
   BOSS_WARMTH_STEPS,
   type BattleSideId,
   type ItemCounts,
@@ -9,6 +8,7 @@ import {
   type PlayerBattleBoss,
 } from '@heartpatch/shared';
 import { itemName } from '../inventory/bag-view.js';
+import { BOSS_HUD } from './battle-config.js';
 import { localDateIn } from '../map/map-dressing.js';
 import { coinsText, REWARD_TEXT, xpLines } from './result-card.js';
 import type { ShownState } from './battle-playback.js';
@@ -22,7 +22,6 @@ import { energyPercent, otherSide, type BattleContent } from './battle-view.js';
 /** Player-facing words (style guide: cozy, short, kid-readable). */
 export const BOSS_TEXT = {
   start: (name: string) => `A BIG ${name} wants to play!`,
-  stompsTwice: '👣 Stomps twice',
   stompAgain: 'Stomp again!',
   round: (n: number) => `Round ${String(n)}`,
   order: 'Order',
@@ -33,8 +32,18 @@ export const BOSS_TEXT = {
   areaTag: '🌀 Hits all',
   /** A move that takes a round to wind up (#234). */
   windupTag: '⏳ Winds up',
-  /** The boss plate's chip while it winds up (#234). */
+  /** The strip's chip slot while the boss winds up (#234): ⏳ shows, this is its label. */
   windingUp: '⏳ Winding up…',
+  /** A team chip's label (#190): its name, energy and what it's doing. */
+  chipLabel: (name: string, percent: number, doing: string) =>
+    `${name}, ${String(percent)}% energy${doing ? `, ${doing}` : ''}`,
+  chipDoing: {
+    ok: '',
+    picking: 'picking now',
+    picked: 'picked',
+    windup: 'winding up',
+    down: 'napping',
+  },
   pickHeader: (name: string) => `What should ${name} do?`,
   picking: 'Picking…',
   next: 'Next',
@@ -114,34 +123,24 @@ export interface FriendPlate {
   readonly percent: number;
   readonly energyText: string;
   readonly down: boolean;
+  /** Winding up a big move (#234), as far as the log has played. */
+  readonly windup: boolean;
 }
 
 export interface BossPlates {
   readonly boss: {
     readonly name: string;
+    /** Off the fight strip (#190 PR 1); the entrance name card's to show. */
     readonly level: number;
     readonly percent: number;
     readonly energyText: string;
-    /** The "👣 Stomps twice" chip: only when the rule has the boss act more than once a round (shipped: once, so never). */
-    readonly stomps: boolean;
     /** Winding up a big move (#234), as far as the log has played. */
     readonly windup: boolean;
   };
   readonly friends: readonly FriendPlate[];
 }
 
-/**
- * Whether the boss plate shows the "👣 Stomps twice" chip: only when the rule
- * (`BATTLE_RULES.boss.actionsPerRound`) has the boss act more than once a
- * round. The shipped rule is one action, so it is hidden (#234).
- */
-export function stompsChip(
-  actionsPerRound: number = BATTLE_RULES.boss?.actionsPerRound ?? 1,
-): boolean {
-  return actionsPerRound > 1;
-}
-
-/** The four plates (arena A): the boss's wide one on top, one slim one per friend. */
+/** What the strip and the team chips show (#190 PR 1): the boss, and one entry per friend out. */
 export function bossPlates(
   b: PlayerBattle,
   shown: ShownState,
@@ -158,7 +157,6 @@ export function bossPlates(
       level: boss?.level ?? 1,
       percent: boss ? energyPercent({ energy: bossEnergy, stats: boss.stats }) : 0,
       energyText: boss ? `${String(bossEnergy)}/${String(boss.stats.hp)}` : '',
-      stomps: stompsChip(),
       windup: shown[theirs].chips[slot]?.windup ?? boss?.windup !== undefined,
     },
     friends: slotsOut(b, b.mySide).flatMap((s) => {
@@ -172,9 +170,115 @@ export function bossPlates(
           percent: energyPercent({ energy, stats: squishy.stats }),
           energyText: `${String(energy)}/${String(squishy.stats.hp)}`,
           down: energy <= 0,
+          windup: energy > 0 && (shown[b.mySide].chips[s]?.windup ?? squishy.windup !== undefined),
         },
       ];
     }),
+  };
+}
+
+// ── The phone-first boss HUD (#190 PR 1) ─────────────────────────────────
+
+/** What a team chip's status dot says: napping wins, then the picker, then a windup. */
+export type ChipStatus = 'ok' | 'picking' | 'picked' | 'windup' | 'down';
+
+/**
+ * A team chip's status (#190 PR 1): tuckered out, the squishy picking now,
+ * one with its pick made, one winding up, or just there. `picker` is the
+ * picker on screen, or null while a round plays.
+ */
+export function chipStatus(
+  friend: Pick<FriendPlate, 'slot' | 'down' | 'windup'>,
+  picker: Pick<PickerState, 'steps' | 'picks' | 'at'> | null,
+): ChipStatus {
+  if (friend.down) return 'down';
+  if (picker) {
+    if (picker.steps[picker.at]?.slot === friend.slot) return 'picking';
+    if (picker.picks[friend.slot] !== undefined) return 'picked';
+  }
+  return friend.windup ? 'windup' : 'ok';
+}
+
+/** A screen for the band maths: its height and the notch's insets, CSS px. */
+export interface HudScreen {
+  readonly width: number;
+  readonly height: number;
+  readonly insetTop: number;
+  readonly insetBottom: number;
+}
+
+/**
+ * The stage band between the strip and the handle (#190 PR 1), fractions of
+ * the height: from the strip's bottom (plus the camera's margin) to the
+ * handle's top less its clearance. `safe()` measures the two edges; with
+ * nothing laid out yet it guesses the rest band.
+ */
+export function bossBand(
+  stripBottom: number,
+  handleTop: number,
+  height: number,
+  hud: Pick<typeof BOSS_HUD, 'stripMargin' | 'handleClear'> = BOSS_HUD,
+): { top: number; bottom: number } {
+  const h = height || 1;
+  const top = Math.min(0.4, stripBottom > 0 ? (stripBottom + hud.stripMargin) / h : 0.14);
+  const bottom = handleTop > 0 ? (handleTop - hud.handleClear) / h : 0.86;
+  return { top, bottom: Math.max(top + 0.2, bottom) };
+}
+
+/** Where the strip's bottom and the collapsed handle's top sit on `screen` (battle.css's numbers). */
+export function bossRestEdges(
+  screen: HudScreen,
+  hud: Pick<typeof BOSS_HUD, 'stripTop' | 'stripHeight' | 'handleHeight'> = BOSS_HUD,
+): { stripBottom: number; handleTop: number } {
+  return {
+    stripBottom: screen.insetTop + hud.stripTop + hud.stripHeight,
+    handleTop: screen.height - screen.insetBottom - hud.handleHeight,
+  };
+}
+
+/**
+ * The strip's widths on a screen `width` wide (#190 PR 1, the M0 finding:
+ * name, bar, ⏳ and order dots didn't fit one 393 px row). The strip has two
+ * lines: the name beside the order dots, the bar beside the chip slot; this
+ * is the flex layout battle.css gives them, worked out.
+ */
+export function bossStripWidths(
+  width: number,
+  hud: typeof BOSS_HUD = BOSS_HUD,
+): { strip: number; name: number; bar: number; dots: number } {
+  const room = width - 2 * hud.edge - hud.closeSize - hud.closeGap;
+  const strip = Math.min(hud.stripMax, room);
+  const inner = strip - 2 * hud.stripPad;
+  const dots = hud.dots * hud.dotSize + (hud.dots - 1) * hud.dotGap;
+  return {
+    strip,
+    name: inner - dots - hud.innerGap,
+    bar: inner - hud.chipSlot - hud.innerGap,
+    dots,
+  };
+}
+
+/** BOSS_HUD as the custom properties battle.css reads (`--boss-*`), set on the HUD. */
+export function bossHudVars(hud: typeof BOSS_HUD = BOSS_HUD): Readonly<Record<string, string>> {
+  const px = (n: number) => `${String(n)}px`;
+  return {
+    '--boss-strip-h': px(hud.stripHeight),
+    '--boss-strip-top': px(hud.stripTop),
+    '--boss-strip-max': px(hud.stripMax),
+    '--boss-strip-pad': px(hud.stripPad),
+    '--boss-edge': px(hud.edge),
+    '--boss-close': px(hud.closeSize),
+    '--boss-close-gap': px(hud.closeGap),
+    '--boss-handle-h': px(hud.handleHeight),
+    '--boss-handle-clear': px(hud.handleClear),
+    '--boss-sheet-vh': String(hud.sheetVh),
+    '--boss-chip': px(hud.chipSize),
+    '--boss-chip-raise': px(hud.chipRaise),
+    '--boss-dot': px(hud.dotSize),
+    '--boss-dot-gap': px(hud.dotGap),
+    '--boss-chip-slot': px(hud.chipSlot),
+    '--boss-inner-gap': px(hud.innerGap),
+    '--boss-rise': `${String(hud.riseMs)}ms`,
   };
 }
 

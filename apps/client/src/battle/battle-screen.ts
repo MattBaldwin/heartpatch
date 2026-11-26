@@ -559,6 +559,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   // ── HUD ───────────────────────────────────────────────────────────────
   const hud: BattleHud = mountBattleHud(options.root, {
     onAction: (action) => void submit(action),
+    // The camera re-frames when the HUD's boxes move (a boss fight's sheet rising, #190).
+    onLayout: () => {
+      options.invalidate();
+    },
     onNoCharms: () => {
       // The bag may have filled since (a craft, a gift): look again first.
       // Busy while it looks, like a submit: no double taps, and the dev hook
@@ -1509,9 +1513,6 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       battleId: battle.id,
       reducedMotion: reducedMotion.matches,
       safe: () => hud.safe(),
-      cards: (faded) => {
-        hud.fadeCards(faded);
-      },
       ...(isTeamBattle(battle) ? { team: { slots: slotsOut(battle, battle.mySide) } } : {}),
     });
     lastTier = tier;
