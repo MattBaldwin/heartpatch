@@ -1,0 +1,189 @@
+{
+ "file": "ipad-03-hit.png",
+ "device": "ipad",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-26T06:07:41.445Z",
+ "inner": {
+  "w": 820,
+  "h": 1180,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 31.406245979584547,
+   "fogEnd": 85,
+   "band": {
+    "top": 0.05254237288135593,
+    "bottom": 0.9389830508474576
+   },
+   "face": {
+    "top": 0.26327061440583494,
+    "bottom": 0.32967559558291226
+   },
+   "team": [
+    {
+     "top": 0.5566981334563507,
+     "bottom": 0.6020894119133661
+    },
+    {
+     "top": 0.548337490094264,
+     "bottom": 0.6011921080946845
+    },
+    {
+     "top": 0.5517997960031004,
+     "bottom": 0.6062750837257949
+    }
+   ],
+   "bossFacing": 0.9686043690194499
+  },
+  "playing": {
+   "kind": "hit",
+   "at": 3211.7100000001083
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "rects": {
+  "strip": {
+   "top": 8,
+   "bottom": 52,
+   "left": 104,
+   "right": 664
+  },
+  "energy": {
+   "top": 36,
+   "bottom": 46,
+   "left": 116,
+   "right": 626
+  },
+  "name": {
+   "top": 11,
+   "bottom": 28,
+   "left": 116,
+   "right": 573
+  },
+  "order": {
+   "top": 11.5,
+   "bottom": 27.5,
+   "left": 579,
+   "right": 652
+  },
+  "handle": {
+   "top": 1116,
+   "bottom": 1180,
+   "left": 16,
+   "right": 804
+  },
+  "friends": {
+   "top": 1120,
+   "bottom": 1176,
+   "left": 310,
+   "right": 510
+  },
+  "dock": {
+   "top": 1116,
+   "bottom": 1180,
+   "left": 16,
+   "right": 804
+  },
+  "sheet": {
+   "top": 1116,
+   "bottom": 1180,
+   "left": 0,
+   "right": 820
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "leave": {
+   "top": 8,
+   "bottom": 52,
+   "left": 764,
+   "right": 808
+  },
+  "round": {
+   "top": 1136,
+   "bottom": 1160,
+   "left": 16,
+   "right": 78.4375
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "winding": {
+   "top": 33,
+   "bottom": 49,
+   "left": 632,
+   "right": 652
+  },
+  "go": null,
+  "callout": {
+   "top": 63.558067321777344,
+   "bottom": 118.44193267822266,
+   "left": 12.461836814880371,
+   "right": 179.053786277771
+  },
+  "caption": {
+   "top": 1070.5,
+   "bottom": 1102,
+   "left": 301.890625,
+   "right": 518.109375
+  }
+ },
+ "dockSheet": "lowered",
+ "step": "03-hit",
+ "windVis": {
+  "hidden": true,
+  "opacity": "1",
+  "visibility": "hidden",
+  "display": "grid",
+  "text": "⏳"
+ },
+ "captionText": "Rakelet lost some energy.",
+ "captionVisible": "1/block",
+ "friendRects": [
+  {
+   "status": "ok",
+   "top": 1120,
+   "bottom": 1176,
+   "left": 310,
+   "right": 366,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "status": "ok",
+   "top": 1120,
+   "bottom": 1176,
+   "left": 382,
+   "right": 438,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "status": "ok",
+   "top": 1120,
+   "bottom": 1176,
+   "left": 454,
+   "right": 510,
+   "w": 56,
+   "h": 56
+  }
+ ],
+ "moveRects": [],
+ "sheetScroll": {
+  "sheetClient": 64,
+  "sheetScroll": 654,
+  "pickerClient": 0,
+  "pickerScroll": 0
+ }
+}
