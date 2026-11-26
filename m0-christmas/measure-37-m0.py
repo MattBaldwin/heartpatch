@@ -57,6 +57,8 @@ def mean_px(im, cx, cy, r=4, scale=2):
     px = [im.getpixel((x, y))[:3] for x in range(max(0, x0 - r), min(im.width, x0 + r + 1))
           for y in range(max(0, y0 - r), min(im.height, y0 + r + 1))]
     n = len(px)
+    if n == 0:
+        return (0.0, 0.0, 0.0)
     return tuple(sum(p[i] for p in px) / n for i in range(3))
 
 
@@ -92,9 +94,12 @@ def main(root, downscale):
             if t['home'] or t['terrain'] not in LAND or t['xy'] is None:
                 continue
             x, y = t['xy']
-            if covered(x, y, fixed) or y < 120:
+            if y < 120:
                 continue
-            (own if t['owned'] else wild).append(mean_px(im, x, y, 3, sc))
+            # off-centre samples (the dark-moon / safe-glow marks sit on the centre of owned tiles)
+            for dx, dy in ((-17, 8), (17, 8), (0, 15)):
+                if 0 < x + dx < W and 0 < y + dy < H and not covered(x + dx, y + dy, fixed, 3):
+                    (own if t['owned'] else wild).append(mean_px(im, x + dx, y + dy, 2, sc))
         if own and wild:
             mo = tuple(sum(c[i] for c in own) / len(own) for i in range(3))
             mw = tuple(sum(c[i] for c in wild) / len(wild) for i in range(3))

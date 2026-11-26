@@ -1,0 +1,483 @@
+{
+ "file": "iphone-day-04-tree-00.png",
+ "device": "iphone",
+ "tz": "Asia/Bangkok",
+ "tag": "day",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "local": "Sat Dec 05 2026 12:36:10 GMT+0700 (Indochina Time)",
+ "fixed": [
+  {
+   "cls": "trays",
+   "id": "trays",
+   "top": 0,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  },
+  {
+   "cls": "night-chips",
+   "id": "night-chips",
+   "top": 712,
+   "bottom": 806,
+   "left": 16,
+   "right": 377
+  },
+  {
+   "cls": "map-hud",
+   "id": "map-hud",
+   "top": 123,
+   "bottom": 167,
+   "left": 86.5546875,
+   "right": 306.4453125
+  },
+  {
+   "cls": "next-up-chip",
+   "id": "next-up-chip",
+   "top": 652,
+   "bottom": 704,
+   "left": 68.890625,
+   "right": 324.109375
+  },
+  {
+   "cls": "auth-chip",
+   "id": "",
+   "top": 67,
+   "bottom": 115,
+   "left": 301,
+   "right": 385
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 83,
+   "bottom": 101,
+   "left": 209.765625,
+   "right": 232.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 177,
+   "bottom": 195,
+   "left": 78.765625,
+   "right": 101.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 144,
+   "bottom": 162,
+   "left": 107.765625,
+   "right": 130.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 113,
+   "bottom": 131,
+   "left": 184.765625,
+   "right": 207.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 144,
+   "bottom": 162,
+   "left": 315.765625,
+   "right": 338.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 211,
+   "bottom": 229,
+   "left": 375.765625,
+   "right": 398.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 212,
+   "bottom": 230,
+   "left": 103.765625,
+   "right": 126.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 248,
+   "bottom": 266,
+   "left": 129.765625,
+   "right": 152.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 177,
+   "bottom": 195,
+   "left": 131.765625,
+   "right": 154.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 144,
+   "bottom": 162,
+   "left": 159.765625,
+   "right": 182.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 285,
+   "bottom": 303,
+   "left": 270.765625,
+   "right": 293.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 144,
+   "bottom": 162,
+   "left": 210.765625,
+   "right": 233.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 247,
+   "bottom": 265,
+   "left": 296.765625,
+   "right": 319.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 144,
+   "bottom": 162,
+   "left": 262.765625,
+   "right": 285.234375
+  },
+  {
+   "cls": "post-flag",
+   "id": "post-flag",
+   "top": 287.40625,
+   "bottom": 311,
+   "left": 111.3046875,
+   "right": 280.6953125
+  },
+  {
+   "cls": "",
+   "id": "cap-tree",
+   "top": 196.609375,
+   "bottom": 337.328125,
+   "left": 152.53125,
+   "right": 240.46875
+  }
+ ],
+ "targets": [
+  {
+   "t": "My patches",
+   "cls": "hp-button hp-button-primary lo",
+   "w": 105.265625,
+   "h": 48,
+   "top": 67,
+   "bottom": 115,
+   "left": 12,
+   "right": 117.265625
+  },
+  {
+   "t": "🐾Squishies",
+   "cls": "squishies-open squishies-open-",
+   "w": 44,
+   "h": 44,
+   "top": 67,
+   "bottom": 111,
+   "left": 153,
+   "right": 197
+  },
+  {
+   "t": "💬Chat",
+   "cls": "chat-open",
+   "w": 44,
+   "h": 44,
+   "top": 67,
+   "bottom": 111,
+   "left": 201,
+   "right": 245
+  },
+  {
+   "t": "🤝Friends",
+   "cls": "friendly-open",
+   "w": 44,
+   "h": 44,
+   "top": 67,
+   "bottom": 111,
+   "left": 249,
+   "right": 293
+  },
+  {
+   "t": "",
+   "cls": "hp-close",
+   "w": 44,
+   "h": 44,
+   "top": 139,
+   "bottom": 183,
+   "left": -56,
+   "right": -12
+  },
+  {
+   "t": "🎯Next upInvite ",
+   "cls": "tray-row next-up-row",
+   "w": 253,
+   "h": 58,
+   "top": 193,
+   "bottom": 251,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "Catalog",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 253,
+   "h": 58,
+   "top": 360,
+   "bottom": 418,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "Find a squishy",
+   "cls": "hp-button hp-button-primary ba",
+   "w": 253,
+   "h": 68,
+   "top": 261,
+   "bottom": 329,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "Dev: new squishy",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 142.3125,
+   "h": 44,
+   "top": 426,
+   "bottom": 470,
+   "left": -211.65625,
+   "right": -69.34375
+  },
+  {
+   "t": "Dev: pick a figh",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 131.84375,
+   "h": 44,
+   "top": 478,
+   "bottom": 522,
+   "left": -206.421875,
+   "right": -74.578125
+  },
+  {
+   "t": "📜Report",
+   "cls": "raid-open",
+   "w": 253,
+   "h": 58,
+   "top": 598,
+   "bottom": 656,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "🌙Hollow",
+   "cls": "hollow-open",
+   "w": 253,
+   "h": 58,
+   "top": 664,
+   "bottom": 722,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "🚩Claim landTap ",
+   "cls": "tray-row",
+   "w": 253,
+   "h": 58,
+   "top": 532,
+   "bottom": 590,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "Adventure",
+   "cls": "tray-handle tray-handle-advent",
+   "w": 96,
+   "h": 94,
+   "top": 421.59375,
+   "bottom": 515.59375,
+   "left": 0,
+   "right": 96
+  },
+  {
+   "t": "",
+   "cls": "hp-close",
+   "w": 44,
+   "h": 44,
+   "top": 139,
+   "bottom": 183,
+   "left": 618,
+   "right": 662
+  },
+  {
+   "t": "🎒Bag",
+   "cls": "bag-open",
+   "w": 253,
+   "h": 58,
+   "top": 325,
+   "bottom": 383,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "🏡Home",
+   "cls": "home-open",
+   "w": 253,
+   "h": 58,
+   "top": 193,
+   "bottom": 251,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "📖Recipe book",
+   "cls": "recipe-book-open",
+   "w": 253,
+   "h": 58,
+   "top": 259,
+   "bottom": 317,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "⚔️ Team",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 253,
+   "h": 58,
+   "top": 393,
+   "bottom": 451,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "🧺 Jobs",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 253,
+   "h": 58,
+   "top": 459,
+   "bottom": 517,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "Home",
+   "cls": "tray-handle tray-handle-heartp",
+   "w": 96,
+   "h": 94,
+   "top": 421.59375,
+   "bottom": 515.59375,
+   "left": 297,
+   "right": 393
+  },
+  {
+   "t": "🌑 Long Night to",
+   "cls": "night-chip night-chip-tap",
+   "w": 177.90625,
+   "h": 44,
+   "top": 712,
+   "bottom": 756,
+   "left": 36.0625,
+   "right": 213.96875
+  },
+  {
+   "t": "🌑 14 dark spots",
+   "cls": "night-chip night-chip-tap",
+   "w": 136.953125,
+   "h": 44,
+   "top": 712,
+   "bottom": 756,
+   "left": 219.96875,
+   "right": 356.921875
+  },
+  {
+   "t": "🌑",
+   "cls": "night-chip night-chip-tap",
+   "w": 44,
+   "h": 44,
+   "top": 762,
+   "bottom": 806,
+   "left": 174.5,
+   "right": 218.5
+  },
+  {
+   "t": "",
+   "cls": "map-hud-legend",
+   "w": 14,
+   "h": 14,
+   "top": 138,
+   "bottom": 152,
+   "left": 210.1484375,
+   "right": 224.1484375
+  },
+  {
+   "t": "💛0",
+   "cls": "heart-pill heart-pill-map",
+   "w": 56.296875,
+   "h": 44,
+   "top": 123,
+   "bottom": 167,
+   "left": 234.1484375,
+   "right": 290.4453125
+  },
+  {
+   "t": "💛Next upInvite ",
+   "cls": "next-up-chip",
+   "w": 255.21875,
+   "h": 52,
+   "top": 652,
+   "bottom": 704,
+   "left": 68.890625,
+   "right": 324.109375
+  },
+  {
+   "t": "Me",
+   "cls": "auth-chip-toggle",
+   "w": 84,
+   "h": 48,
+   "top": 67,
+   "bottom": 115,
+   "left": 301,
+   "right": 385
+  }
+ ],
+ "texts": [],
+ "haveScene": true,
+ "proj": "function",
+ "ornaments": 0,
+ "star": false,
+ "post": [
+  -8,
+  13
+ ],
+ "tree": {
+  "n": 0,
+  "w": 87.95035002329358,
+  "h": 140.72056003726973,
+  "tile": 58.63356668219572,
+  "base": [
+   196.50000137364276,
+   331.477395188929
+  ]
+ }
+}

@@ -1,0 +1,594 @@
+{
+ "file": "iphone-day-03a-lights-tile.png",
+ "device": "iphone",
+ "tz": "Asia/Bangkok",
+ "tag": "day",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "local": "Sat Dec 05 2026 12:36:05 GMT+0700 (Indochina Time)",
+ "fixed": [
+  {
+   "cls": "trays",
+   "id": "trays",
+   "top": 0,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  },
+  {
+   "cls": "night-chips",
+   "id": "night-chips",
+   "top": 712,
+   "bottom": 806,
+   "left": 16,
+   "right": 377
+  },
+  {
+   "cls": "map-hud",
+   "id": "map-hud",
+   "top": 123,
+   "bottom": 167,
+   "left": 86.5546875,
+   "right": 306.4453125
+  },
+  {
+   "cls": "next-up-chip",
+   "id": "next-up-chip",
+   "top": 652,
+   "bottom": 704,
+   "left": 68.890625,
+   "right": 324.109375
+  },
+  {
+   "cls": "auth-chip",
+   "id": "",
+   "top": 67,
+   "bottom": 115,
+   "left": 301,
+   "right": 385
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 248,
+   "bottom": 266,
+   "left": 185.765625,
+   "right": 208.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 367,
+   "bottom": 385,
+   "left": 35.765625,
+   "right": 58.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 325,
+   "bottom": 343,
+   "left": 68.765625,
+   "right": 91.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 286,
+   "bottom": 304,
+   "left": 156.765625,
+   "right": 179.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 325,
+   "bottom": 343,
+   "left": 301.765625,
+   "right": 324.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 410,
+   "bottom": 428,
+   "left": 369.765625,
+   "right": 392.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 411,
+   "bottom": 429,
+   "left": 62.765625,
+   "right": 85.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 457,
+   "bottom": 475,
+   "left": 90.765625,
+   "right": 113.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 367,
+   "bottom": 385,
+   "left": 95.765625,
+   "right": 118.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 325,
+   "bottom": 343,
+   "left": 126.765625,
+   "right": 149.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 505,
+   "bottom": 523,
+   "left": 249.765625,
+   "right": 272.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 325,
+   "bottom": 343,
+   "left": 185.765625,
+   "right": 208.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 457,
+   "bottom": 475,
+   "left": 279.765625,
+   "right": 302.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 325,
+   "bottom": 343,
+   "left": 243.765625,
+   "right": 266.234375
+  },
+  {
+   "cls": "post-flag",
+   "id": "post-flag",
+   "top": 595.40625,
+   "bottom": 619,
+   "left": 78.3046875,
+   "right": 247.6953125
+  }
+ ],
+ "targets": [
+  {
+   "t": "My patches",
+   "cls": "hp-button hp-button-primary lo",
+   "w": 105.265625,
+   "h": 48,
+   "top": 67,
+   "bottom": 115,
+   "left": 12,
+   "right": 117.265625
+  },
+  {
+   "t": "🐾Squishies",
+   "cls": "squishies-open squishies-open-",
+   "w": 44,
+   "h": 44,
+   "top": 67,
+   "bottom": 111,
+   "left": 153,
+   "right": 197
+  },
+  {
+   "t": "💬Chat",
+   "cls": "chat-open",
+   "w": 44,
+   "h": 44,
+   "top": 67,
+   "bottom": 111,
+   "left": 201,
+   "right": 245
+  },
+  {
+   "t": "🤝Friends",
+   "cls": "friendly-open",
+   "w": 44,
+   "h": 44,
+   "top": 67,
+   "bottom": 111,
+   "left": 249,
+   "right": 293
+  },
+  {
+   "t": "",
+   "cls": "hp-close",
+   "w": 44,
+   "h": 44,
+   "top": 139,
+   "bottom": 183,
+   "left": -56,
+   "right": -12
+  },
+  {
+   "t": "🎯Next upInvite ",
+   "cls": "tray-row next-up-row",
+   "w": 253,
+   "h": 58,
+   "top": 193,
+   "bottom": 251,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "Catalog",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 253,
+   "h": 58,
+   "top": 360,
+   "bottom": 418,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "Find a squishy",
+   "cls": "hp-button hp-button-primary ba",
+   "w": 253,
+   "h": 68,
+   "top": 261,
+   "bottom": 329,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "Dev: new squishy",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 142.3125,
+   "h": 44,
+   "top": 426,
+   "bottom": 470,
+   "left": -211.65625,
+   "right": -69.34375
+  },
+  {
+   "t": "Dev: pick a figh",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 131.84375,
+   "h": 44,
+   "top": 478,
+   "bottom": 522,
+   "left": -206.421875,
+   "right": -74.578125
+  },
+  {
+   "t": "📜Report",
+   "cls": "raid-open",
+   "w": 253,
+   "h": 58,
+   "top": 598,
+   "bottom": 656,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "🌙Hollow",
+   "cls": "hollow-open",
+   "w": 253,
+   "h": 58,
+   "top": 664,
+   "bottom": 722,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "🚩Claim landTap ",
+   "cls": "tray-row",
+   "w": 253,
+   "h": 58,
+   "top": 532,
+   "bottom": 590,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "Adventure",
+   "cls": "tray-handle tray-handle-advent",
+   "w": 96,
+   "h": 94,
+   "top": 421.59375,
+   "bottom": 515.59375,
+   "left": 0,
+   "right": 96
+  },
+  {
+   "t": "",
+   "cls": "hp-close",
+   "w": 44,
+   "h": 44,
+   "top": 139,
+   "bottom": 183,
+   "left": 618,
+   "right": 662
+  },
+  {
+   "t": "🎒Bag",
+   "cls": "bag-open",
+   "w": 253,
+   "h": 58,
+   "top": 325,
+   "bottom": 383,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "🏡Home",
+   "cls": "home-open",
+   "w": 253,
+   "h": 58,
+   "top": 193,
+   "bottom": 251,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "📖Recipe book",
+   "cls": "recipe-book-open",
+   "w": 253,
+   "h": 58,
+   "top": 259,
+   "bottom": 317,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "⚔️ Team",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 253,
+   "h": 58,
+   "top": 393,
+   "bottom": 451,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "🧺 Jobs",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 253,
+   "h": 58,
+   "top": 459,
+   "bottom": 517,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "Home",
+   "cls": "tray-handle tray-handle-heartp",
+   "w": 96,
+   "h": 94,
+   "top": 421.59375,
+   "bottom": 515.59375,
+   "left": 297,
+   "right": 393
+  },
+  {
+   "t": "🌑 Long Night to",
+   "cls": "night-chip night-chip-tap",
+   "w": 177.90625,
+   "h": 44,
+   "top": 712,
+   "bottom": 756,
+   "left": 36.0625,
+   "right": 213.96875
+  },
+  {
+   "t": "🌑 14 dark spots",
+   "cls": "night-chip night-chip-tap",
+   "w": 136.953125,
+   "h": 44,
+   "top": 712,
+   "bottom": 756,
+   "left": 219.96875,
+   "right": 356.921875
+  },
+  {
+   "t": "🌑",
+   "cls": "night-chip night-chip-tap",
+   "w": 44,
+   "h": 44,
+   "top": 762,
+   "bottom": 806,
+   "left": 174.5,
+   "right": 218.5
+  },
+  {
+   "t": "",
+   "cls": "map-hud-legend",
+   "w": 14,
+   "h": 14,
+   "top": 138,
+   "bottom": 152,
+   "left": 210.1484375,
+   "right": 224.1484375
+  },
+  {
+   "t": "💛0",
+   "cls": "heart-pill heart-pill-map",
+   "w": 56.296875,
+   "h": 44,
+   "top": 123,
+   "bottom": 167,
+   "left": 234.1484375,
+   "right": 290.4453125
+  },
+  {
+   "t": "💛Next upInvite ",
+   "cls": "next-up-chip",
+   "w": 255.21875,
+   "h": 52,
+   "top": 652,
+   "bottom": 704,
+   "left": 68.890625,
+   "right": 324.109375
+  },
+  {
+   "t": "Me",
+   "cls": "auth-chip-toggle",
+   "w": 84,
+   "h": 48,
+   "top": 67,
+   "bottom": 115,
+   "left": 301,
+   "right": 385
+  }
+ ],
+ "texts": [],
+ "haveScene": true,
+ "proj": "function",
+ "tile": [
+  -5,
+  8
+ ],
+ "bulbs": {
+  "bulbs": 30,
+  "byColor": {
+   "#fff0c4": 7,
+   "#ff5d52": 8,
+   "#5fe39a": 8,
+   "#ffcc4d": 7
+  },
+  "pts": [
+   [
+    220,
+    312
+   ],
+   [
+    216,
+    311
+   ],
+   [
+    211,
+    309
+   ],
+   [
+    206,
+    306
+   ],
+   [
+    201,
+    304
+   ],
+   [
+    192,
+    304
+   ],
+   [
+    187,
+    306
+   ],
+   [
+    182,
+    309
+   ],
+   [
+    177,
+    311
+   ],
+   [
+    173,
+    312
+   ],
+   [
+    168,
+    319
+   ],
+   [
+    168,
+    324
+   ],
+   [
+    168,
+    328
+   ],
+   [
+    168,
+    333
+   ],
+   [
+    167,
+    337
+   ],
+   [
+    172,
+    343
+   ],
+   [
+    177,
+    346
+   ],
+   [
+    182,
+    349
+   ],
+   [
+    187,
+    351
+   ],
+   [
+    192,
+    353
+   ],
+   [
+    201,
+    353
+   ],
+   [
+    206,
+    351
+   ],
+   [
+    211,
+    349
+   ],
+   [
+    216,
+    346
+   ],
+   [
+    221,
+    343
+   ],
+   [
+    226,
+    337
+   ],
+   [
+    225,
+    333
+   ],
+   [
+    225,
+    328
+   ],
+   [
+    225,
+    324
+   ],
+   [
+    225,
+    319
+   ]
+  ]
+ }
+}

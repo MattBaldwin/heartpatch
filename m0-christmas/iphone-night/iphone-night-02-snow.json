@@ -1,0 +1,1906 @@
+{
+ "file": "iphone-night-02-snow.png",
+ "device": "iphone",
+ "tz": "America/Sao_Paulo",
+ "tag": "night",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "local": "Sat Dec 05 2026 02:40:05 GMT-0300 (Brasilia Standard Time)",
+ "fixed": [
+  {
+   "cls": "trays",
+   "id": "trays",
+   "top": 0,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  },
+  {
+   "cls": "night-chips",
+   "id": "night-chips",
+   "top": 762,
+   "bottom": 806,
+   "left": 54.046875,
+   "right": 338.953125
+  },
+  {
+   "cls": "map-hud",
+   "id": "map-hud",
+   "top": 123,
+   "bottom": 167,
+   "left": 86.5546875,
+   "right": 306.4453125
+  },
+  {
+   "cls": "next-up-chip",
+   "id": "next-up-chip",
+   "top": 702,
+   "bottom": 754,
+   "left": 68.890625,
+   "right": 324.109375
+  },
+  {
+   "cls": "auth-chip",
+   "id": "",
+   "top": 67,
+   "bottom": 115,
+   "left": 301,
+   "right": 385
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 247,
+   "bottom": 265,
+   "left": 184.765625,
+   "right": 207.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 325,
+   "bottom": 343,
+   "left": 68.765625,
+   "right": 91.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 284,
+   "bottom": 302,
+   "left": 99.765625,
+   "right": 122.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 284,
+   "bottom": 302,
+   "left": 156.765625,
+   "right": 179.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 284,
+   "bottom": 302,
+   "left": 213.765625,
+   "right": 236.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 325,
+   "bottom": 343,
+   "left": 301.765625,
+   "right": 324.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 411,
+   "bottom": 429,
+   "left": 62.765625,
+   "right": 85.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 324,
+   "bottom": 342,
+   "left": 126.765625,
+   "right": 149.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 503,
+   "bottom": 521,
+   "left": 250.765625,
+   "right": 273.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 324,
+   "bottom": 342,
+   "left": 184.765625,
+   "right": 207.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 457,
+   "bottom": 475,
+   "left": 279.765625,
+   "right": 302.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 324,
+   "bottom": 342,
+   "left": 243.765625,
+   "right": 266.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 367,
+   "bottom": 385,
+   "left": 274.765625,
+   "right": 297.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 411,
+   "bottom": 429,
+   "left": 307.765625,
+   "right": 330.234375
+  },
+  {
+   "cls": "post-flag",
+   "id": "post-flag",
+   "top": 595.40625,
+   "bottom": 619,
+   "left": 11.3046875,
+   "right": 180.6953125
+  },
+  {
+   "cls": "post-flag community-flag community-flag-",
+   "id": "community-flag",
+   "top": 249.40625,
+   "bottom": 273,
+   "left": 8.5625,
+   "right": 223.4375
+  }
+ ],
+ "targets": [
+  {
+   "t": "My patches",
+   "cls": "hp-button hp-button-primary lo",
+   "w": 105.265625,
+   "h": 48,
+   "top": 67,
+   "bottom": 115,
+   "left": 12,
+   "right": 117.265625
+  },
+  {
+   "t": "🐾Squishies",
+   "cls": "squishies-open squishies-open-",
+   "w": 44,
+   "h": 44,
+   "top": 67,
+   "bottom": 111,
+   "left": 153,
+   "right": 197
+  },
+  {
+   "t": "💬Chat",
+   "cls": "chat-open",
+   "w": 44,
+   "h": 44,
+   "top": 67,
+   "bottom": 111,
+   "left": 201,
+   "right": 245
+  },
+  {
+   "t": "🤝Friends",
+   "cls": "friendly-open",
+   "w": 44,
+   "h": 44,
+   "top": 67,
+   "bottom": 111,
+   "left": 249,
+   "right": 293
+  },
+  {
+   "t": "",
+   "cls": "hp-close",
+   "w": 44,
+   "h": 44,
+   "top": 139,
+   "bottom": 183,
+   "left": -56,
+   "right": -12
+  },
+  {
+   "t": "🎯Next upInvite ",
+   "cls": "tray-row next-up-row",
+   "w": 253,
+   "h": 58,
+   "top": 193,
+   "bottom": 251,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "Catalog",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 253,
+   "h": 58,
+   "top": 360,
+   "bottom": 418,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "Find a squishy",
+   "cls": "hp-button hp-button-primary ba",
+   "w": 253,
+   "h": 68,
+   "top": 261,
+   "bottom": 329,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "Dev: new squishy",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 142.3125,
+   "h": 44,
+   "top": 426,
+   "bottom": 470,
+   "left": -211.65625,
+   "right": -69.34375
+  },
+  {
+   "t": "Dev: pick a figh",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 131.84375,
+   "h": 44,
+   "top": 478,
+   "bottom": 522,
+   "left": -206.421875,
+   "right": -74.578125
+  },
+  {
+   "t": "📜Report",
+   "cls": "raid-open",
+   "w": 253,
+   "h": 58,
+   "top": 598,
+   "bottom": 656,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "🌙Hollow",
+   "cls": "hollow-open",
+   "w": 253,
+   "h": 58,
+   "top": 664,
+   "bottom": 722,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "🚩Claim landTap ",
+   "cls": "tray-row",
+   "w": 253,
+   "h": 58,
+   "top": 532,
+   "bottom": 590,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "Adventure",
+   "cls": "tray-handle tray-handle-advent",
+   "w": 96,
+   "h": 94,
+   "top": 421.59375,
+   "bottom": 515.59375,
+   "left": 0,
+   "right": 96
+  },
+  {
+   "t": "",
+   "cls": "hp-close",
+   "w": 44,
+   "h": 44,
+   "top": 139,
+   "bottom": 183,
+   "left": 618,
+   "right": 662
+  },
+  {
+   "t": "🎒Bag",
+   "cls": "bag-open",
+   "w": 253,
+   "h": 58,
+   "top": 325,
+   "bottom": 383,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "🏡Home",
+   "cls": "home-open",
+   "w": 253,
+   "h": 58,
+   "top": 193,
+   "bottom": 251,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "📖Recipe book",
+   "cls": "recipe-book-open",
+   "w": 253,
+   "h": 58,
+   "top": 259,
+   "bottom": 317,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "⚔️ Team",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 253,
+   "h": 58,
+   "top": 393,
+   "bottom": 451,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "🧺 Jobs",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 253,
+   "h": 58,
+   "top": 459,
+   "bottom": 517,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "Home",
+   "cls": "tray-handle tray-handle-heartp",
+   "w": 96,
+   "h": 94,
+   "top": 421.59375,
+   "bottom": 515.59375,
+   "left": 297,
+   "right": 393
+  },
+  {
+   "t": "🌑 He's watching",
+   "cls": "night-chip night-chip-tap",
+   "w": 196.5,
+   "h": 44,
+   "top": 762,
+   "bottom": 806,
+   "left": 142.453125,
+   "right": 338.953125
+  },
+  {
+   "t": "",
+   "cls": "map-hud-legend",
+   "w": 14,
+   "h": 14,
+   "top": 138,
+   "bottom": 152,
+   "left": 210.1484375,
+   "right": 224.1484375
+  },
+  {
+   "t": "💛0",
+   "cls": "heart-pill heart-pill-map",
+   "w": 56.296875,
+   "h": 44,
+   "top": 123,
+   "bottom": 167,
+   "left": 234.1484375,
+   "right": 290.4453125
+  },
+  {
+   "t": "💛Next upInvite ",
+   "cls": "next-up-chip",
+   "w": 255.21875,
+   "h": 52,
+   "top": 702,
+   "bottom": 754,
+   "left": 68.890625,
+   "right": 324.109375
+  },
+  {
+   "t": "Me",
+   "cls": "auth-chip-toggle",
+   "w": 84,
+   "h": 48,
+   "top": 67,
+   "bottom": 115,
+   "left": 301,
+   "right": 385
+  }
+ ],
+ "texts": [],
+ "haveScene": true,
+ "proj": "function",
+ "tiles": [
+  {
+   "q": -5,
+   "r": 9,
+   "terrain": "meadow",
+   "owned": true,
+   "home": false,
+   "xy": [
+    286.3232424349118,
+    376.3834739260737
+   ]
+  },
+  {
+   "q": -9,
+   "r": 10,
+   "terrain": "meadow",
+   "owned": true,
+   "home": false,
+   "xy": [
+    73.61527951977641,
+    420.2159250463783
+   ]
+  },
+  {
+   "q": -5,
+   "r": 10,
+   "terrain": "meadow",
+   "owned": true,
+   "home": false,
+   "xy": [
+    319.38472431874635,
+    420.2159250463783
+   ]
+  },
+  {
+   "q": -6,
+   "r": 11,
+   "terrain": "forest",
+   "owned": true,
+   "home": false,
+   "xy": [
+    291.1290582164699,
+    466.39354518561464
+   ]
+  },
+  {
+   "q": -7,
+   "r": 12,
+   "terrain": "hills",
+   "owned": true,
+   "home": false,
+   "xy": [
+    261.32007472206874,
+    515.1097181315539
+   ]
+  },
+  {
+   "q": -7,
+   "r": 9,
+   "terrain": "meadow",
+   "owned": false,
+   "home": true,
+   "xy": [
+    166.55892168239706,
+    376.3834739260737
+   ]
+  },
+  {
+   "q": -6,
+   "r": 9,
+   "terrain": "meadow",
+   "owned": false,
+   "home": true,
+   "xy": [
+    226.44108205865444,
+    376.3834739260737
+   ]
+  },
+  {
+   "q": -8,
+   "r": 10,
+   "terrain": "meadow",
+   "owned": false,
+   "home": true,
+   "xy": [
+    135.0576407195189,
+    420.2159250463783
+   ]
+  },
+  {
+   "q": -7,
+   "r": 10,
+   "terrain": "meadow",
+   "owned": false,
+   "home": true,
+   "xy": [
+    196.50000191926136,
+    420.2159250463783
+   ]
+  },
+  {
+   "q": -6,
+   "r": 10,
+   "terrain": "meadow",
+   "owned": false,
+   "home": true,
+   "xy": [
+    257.94236311900386,
+    420.2159250463783
+   ]
+  },
+  {
+   "q": -8,
+   "r": 11,
+   "terrain": "lake",
+   "owned": false,
+   "home": true,
+   "xy": [
+    164.95698322198274,
+    466.39354518561464
+   ]
+  },
+  {
+   "q": -7,
+   "r": 11,
+   "terrain": "hills",
+   "owned": false,
+   "home": true,
+   "xy": [
+    228.0430207192263,
+    466.39354518561464
+   ]
+  },
+  {
+   "q": -5,
+   "r": 6,
+   "terrain": "old-forest",
+   "owned": true,
+   "home": false,
+   "xy": [
+    196.50000173811807,
+    257.29707540518166
+   ]
+  },
+  {
+   "q": -8,
+   "r": 8,
+   "terrain": "forest",
+   "owned": true,
+   "home": false,
+   "xy": [
+    79.70153493320859,
+    334.72196392743507
+   ]
+  },
+  {
+   "q": -5,
+   "r": 8,
+   "terrain": "old-forest",
+   "owned": true,
+   "home": false,
+   "xy": [
+    254.8992352697015,
+    334.72196392743507
+   ]
+  },
+  {
+   "q": -6,
+   "r": 8,
+   "terrain": "old-forest",
+   "owned": true,
+   "home": false,
+   "xy": [
+    196.50000182420385,
+    334.72196392743507
+   ]
+  },
+  {
+   "q": -6,
+   "r": 7,
+   "terrain": "old-forest",
+   "owned": true,
+   "home": false,
+   "xy": [
+    168.00601263660752,
+    295.0740084714308
+   ]
+  },
+  {
+   "q": -7,
+   "r": 7,
+   "terrain": "old-forest",
+   "owned": true,
+   "home": false,
+   "xy": [
+    111.0180343495809,
+    295.0740084714308
+   ]
+  },
+  {
+   "q": -5,
+   "r": 7,
+   "terrain": "old-forest",
+   "owned": true,
+   "home": false,
+   "xy": [
+    224.99399092363413,
+    295.0740084714308
+   ]
+  },
+  {
+   "q": -7,
+   "r": 8,
+   "terrain": "old-forest",
+   "owned": true,
+   "home": false,
+   "xy": [
+    138.10076837870625,
+    334.72196392743507
+   ]
+  },
+  {
+   "q": -4,
+   "r": 8,
+   "terrain": "meadow",
+   "owned": true,
+   "home": false,
+   "xy": [
+    313.29846871519914,
+    334.72196392743507
+   ]
+  },
+  {
+   "q": 0,
+   "r": 0,
+   "terrain": "junipers-gap",
+   "owned": false,
+   "home": false,
+   "xy": [
+    293.98537878662444,
+    63.42994679987729
+   ]
+  },
+  {
+   "q": -1,
+   "r": 1,
+   "terrain": "junipers-gap",
+   "owned": false,
+   "home": false,
+   "xy": [
+    271.157141262673,
+    92.33141922995136
+   ]
+  },
+  {
+   "q": 0,
+   "r": 1,
+   "terrain": "junipers-gap",
+   "owned": false,
+   "home": false,
+   "xy": [
+    320.92856773465564,
+    92.33141922995136
+   ]
+  },
+  {
+   "q": 1,
+   "r": 0,
+   "terrain": "junipers-gap",
+   "owned": false,
+   "home": false,
+   "xy": [
+    342.72806741865446,
+    63.42994679987729
+   ]
+  },
+  {
+   "q": 1,
+   "r": -1,
+   "terrain": "junipers-gap",
+   "owned": false,
+   "home": false,
+   "xy": [
+    315.88904167274166,
+    35.69902327340901
+   ]
+  },
+  {
+   "q": 0,
+   "r": -1,
+   "terrain": "junipers-gap",
+   "owned": false,
+   "home": false,
+   "xy": [
+    268.1334256003376,
+    35.69902327340901
+   ]
+  },
+  {
+   "q": -1,
+   "r": 0,
+   "terrain": "junipers-gap",
+   "owned": false,
+   "home": false,
+   "xy": [
+    245.2426901545945,
+    63.42994679987729
+   ]
+  },
+  {
+   "q": -2,
+   "r": 2,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    247.34452615646453,
+    122.47915351114447
+   ]
+  },
+  {
+   "q": -1,
+   "r": 2,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    298.1890507247099,
+    122.47915351114447
+   ]
+  },
+  {
+   "q": 0,
+   "r": 2,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    349.0335752929553,
+    122.47915351114447
+   ]
+  },
+  {
+   "q": 1,
+   "r": 1,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    370.69999420663834,
+    92.33141922995136
+   ]
+  },
+  {
+   "q": 2,
+   "r": 0,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    391.47075605068443,
+    63.42994679987729
+   ]
+  },
+  {
+   "q": 2,
+   "r": -1,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    363.64465774514565,
+    35.69902327340901
+   ]
+  },
+  {
+   "q": 2,
+   "r": -2,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    336.9231848156668,
+    9.068946926181
+   ]
+  },
+  {
+   "q": 1,
+   "r": -2,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    290.11545703115206,
+    9.068946926181
+   ]
+  },
+  {
+   "q": 0,
+   "r": -2,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    243.30772924663734,
+    9.068946926181
+   ]
+  },
+  {
+   "q": -1,
+   "r": -1,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    220.37780952793358,
+    35.69902327340901
+   ]
+  },
+  {
+   "q": -2,
+   "r": 0,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    196.5000015225645,
+    63.42994679987729
+   ]
+  },
+  {
+   "q": -2,
+   "r": 1,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    221.38571479069034,
+    92.33141922995136
+   ]
+  },
+  {
+   "q": -3,
+   "r": 3,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    222.4824593425769,
+    153.95553611940883
+   ]
+  },
+  {
+   "q": -2,
+   "r": 3,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    274.4473747812976,
+    153.95553611940883
+   ]
+  },
+  {
+   "q": -1,
+   "r": 3,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    326.41229022001835,
+    153.95553611940883
+   ]
+  },
+  {
+   "q": 0,
+   "r": 3,
+   "terrain": "mountains",
+   "owned": false,
+   "home": false,
+   "xy": [
+    378.3772056587391,
+    153.95553611940883
+   ]
+  },
+  {
+   "q": 3,
+   "r": -2,
+   "terrain": "forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    383.7309126001815,
+    9.068946926181
+   ]
+  },
+  {
+   "q": -1,
+   "r": -2,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    196.5000014621226,
+    9.068946926181
+   ]
+  },
+  {
+   "q": -2,
+   "r": -1,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    172.62219345552953,
+    35.69902327340901
+   ]
+  },
+  {
+   "q": -3,
+   "r": 0,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    147.75731289053456,
+    63.42994679987729
+   ]
+  },
+  {
+   "q": -3,
+   "r": 1,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    171.61428831870765,
+    92.33141922995136
+   ]
+  },
+  {
+   "q": -3,
+   "r": 2,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    196.5000015882191,
+    122.47915351114447
+   ]
+  },
+  {
+   "q": -4,
+   "r": 4,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    196.50000165979102,
+    186.85037890333913
+   ]
+  },
+  {
+   "q": -3,
+   "r": 4,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    249.63579756465407,
+    186.85037890333913
+   ]
+  },
+  {
+   "q": -2,
+   "r": 4,
+   "terrain": "mountains",
+   "owned": false,
+   "home": false,
+   "xy": [
+    302.7715934695171,
+    186.85037890333913
+   ]
+  },
+  {
+   "q": -1,
+   "r": 4,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    355.9073893743801,
+    186.85037890333913
+   ]
+  },
+  {
+   "q": -2,
+   "r": -2,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    149.69227367760786,
+    9.068946926181
+   ]
+  },
+  {
+   "q": -3,
+   "r": -1,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    124.86657738312553,
+    35.69902327340901
+   ]
+  },
+  {
+   "q": -4,
+   "r": 0,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    99.01462425850457,
+    63.42994679987729
+   ]
+  },
+  {
+   "q": -4,
+   "r": 1,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    121.842861846725,
+    92.33141922995136
+   ]
+  },
+  {
+   "q": -4,
+   "r": 2,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    145.65547701997374,
+    122.47915351114447
+   ]
+  },
+  {
+   "q": -4,
+   "r": 3,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    170.51754390385614,
+    153.95553611940883
+   ]
+  },
+  {
+   "q": -5,
+   "r": 5,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    169.31967292070632,
+    221.2617749153529
+   ]
+  },
+  {
+   "q": -4,
+   "r": 5,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    223.68033047539723,
+    221.2617749153529
+   ]
+  },
+  {
+   "q": -3,
+   "r": 5,
+   "terrain": "mountains",
+   "owned": false,
+   "home": false,
+   "xy": [
+    278.04098803008816,
+    221.2617749153529
+   ]
+  },
+  {
+   "q": -2,
+   "r": 5,
+   "terrain": "mountains",
+   "owned": false,
+   "home": false,
+   "xy": [
+    332.40164558477903,
+    221.2617749153529
+   ]
+  },
+  {
+   "q": -1,
+   "r": 5,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    386.76230313946996,
+    221.2617749153529
+   ]
+  },
+  {
+   "q": -3,
+   "r": -2,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    102.8845458930931,
+    9.068946926181
+   ]
+  },
+  {
+   "q": -4,
+   "r": -1,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    77.11096131072149,
+    35.69902327340901
+   ]
+  },
+  {
+   "q": -5,
+   "r": 0,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    50.27193562647459,
+    63.42994679987729
+   ]
+  },
+  {
+   "q": -5,
+   "r": 1,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    72.07143537474232,
+    92.33141922995136
+   ]
+  },
+  {
+   "q": -5,
+   "r": 2,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    94.81095245172834,
+    122.47915351114447
+   ]
+  },
+  {
+   "q": -5,
+   "r": 3,
+   "terrain": "meadow",
+   "owned": false,
+   "home": false,
+   "xy": [
+    118.55262846513544,
+    153.95553611940883
+   ]
+  },
+  {
+   "q": -5,
+   "r": 4,
+   "terrain": "mountains",
+   "owned": false,
+   "home": false,
+   "xy": [
+    143.36420575492804,
+    186.85037890333913
+   ]
+  },
+  {
+   "q": -6,
+   "r": 6,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    140.85668021958782,
+    257.29707540518166
+   ]
+  },
+  {
+   "q": -4,
+   "r": 6,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    252.14332325664833,
+    257.29707540518166
+   ]
+  },
+  {
+   "q": -3,
+   "r": 6,
+   "terrain": "mountains",
+   "owned": false,
+   "home": false,
+   "xy": [
+    307.78664477517856,
+    257.29707540518166
+   ]
+  },
+  {
+   "q": -2,
+   "r": 6,
+   "terrain": "mountains",
+   "owned": false,
+   "home": false,
+   "xy": [
+    363.42996629370884,
+    257.29707540518166
+   ]
+  },
+  {
+   "q": -4,
+   "r": -2,
+   "terrain": "meadow",
+   "owned": false,
+   "home": false,
+   "xy": [
+    56.07681810857837,
+    9.068946926181
+   ]
+  },
+  {
+   "q": -5,
+   "r": -1,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    29.355345238317472,
+    35.69902327340901
+   ]
+  },
+  {
+   "q": -6,
+   "r": 0,
+   "terrain": "forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    1.529246994444636,
+    63.42994679987729
+   ]
+  },
+  {
+   "q": -6,
+   "r": 1,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    22.30000890275966,
+    92.33141922995136
+   ]
+  },
+  {
+   "q": -6,
+   "r": 2,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    43.96642788348293,
+    122.47915351114447
+   ]
+  },
+  {
+   "q": -6,
+   "r": 3,
+   "terrain": "meadow",
+   "owned": false,
+   "home": false,
+   "xy": [
+    66.58771302641468,
+    153.95553611940883
+   ]
+  },
+  {
+   "q": -6,
+   "r": 4,
+   "terrain": "mountains",
+   "owned": false,
+   "home": false,
+   "xy": [
+    90.22840985006499,
+    186.85037890333913
+   ]
+  },
+  {
+   "q": -6,
+   "r": 5,
+   "terrain": "mountains",
+   "owned": false,
+   "home": false,
+   "xy": [
+    114.95901536601544,
+    221.2617749153529
+   ]
+  },
+  {
+   "q": -4,
+   "r": 7,
+   "terrain": "mountains",
+   "owned": false,
+   "home": false,
+   "xy": [
+    281.98196921066074,
+    295.0740084714308
+   ]
+  },
+  {
+   "q": -3,
+   "r": 7,
+   "terrain": "mountains",
+   "owned": false,
+   "home": false,
+   "xy": [
+    338.9699474976874,
+    295.0740084714308
+   ]
+  },
+  {
+   "q": -5,
+   "r": -2,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    9.26909032406364,
+    9.068946926181
+   ]
+  },
+  {
+   "q": -7,
+   "r": 3,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    14.622797587693924,
+    153.95553611940883
+   ]
+  },
+  {
+   "q": -7,
+   "r": 4,
+   "terrain": "meadow",
+   "owned": false,
+   "home": false,
+   "xy": [
+    37.09261394520195,
+    186.85037890333913
+   ]
+  },
+  {
+   "q": -7,
+   "r": 5,
+   "terrain": "mountains",
+   "owned": false,
+   "home": false,
+   "xy": [
+    60.59835781132451,
+    221.2617749153529
+   ]
+  },
+  {
+   "q": -7,
+   "r": 6,
+   "terrain": "forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    85.21335870105756,
+    257.29707540518166
+   ]
+  },
+  {
+   "q": -3,
+   "r": 8,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    371.69770216069685,
+    334.72196392743507
+   ]
+  },
+  {
+   "q": -8,
+   "r": 5,
+   "terrain": "meadow",
+   "owned": false,
+   "home": false,
+   "xy": [
+    6.237700256633606,
+    221.2617749153529
+   ]
+  },
+  {
+   "q": -8,
+   "r": 6,
+   "terrain": "forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    29.570037182527308,
+    257.29707540518166
+   ]
+  },
+  {
+   "q": -8,
+   "r": 7,
+   "terrain": "forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    54.03005606255427,
+    295.0740084714308
+   ]
+  },
+  {
+   "q": -9,
+   "r": 9,
+   "terrain": "forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    46.794600929882314,
+    376.3834739260737
+   ]
+  },
+  {
+   "q": -8,
+   "r": 9,
+   "terrain": "forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    106.67676130613968,
+    376.3834739260737
+   ]
+  },
+  {
+   "q": -4,
+   "r": 9,
+   "terrain": "forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    346.20540281116917,
+    376.3834739260737
+   ]
+  },
+  {
+   "q": -10,
+   "r": 10,
+   "terrain": "meadow",
+   "owned": false,
+   "home": false,
+   "xy": [
+    12.172918320033915,
+    420.2159250463783
+   ]
+  },
+  {
+   "q": -4,
+   "r": 10,
+   "terrain": "forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    380.82708551848884,
+    420.2159250463783
+   ]
+  },
+  {
+   "q": -10,
+   "r": 11,
+   "terrain": "meadow",
+   "owned": false,
+   "home": false,
+   "xy": [
+    38.78490822749561,
+    466.39354518561464
+   ]
+  },
+  {
+   "q": -9,
+   "r": 11,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    101.87094572473919,
+    466.39354518561464
+   ]
+  },
+  {
+   "q": -5,
+   "r": 11,
+   "terrain": "forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    354.2150957137134,
+    466.39354518561464
+   ]
+  },
+  {
+   "q": -11,
+   "r": 12,
+   "terrain": "meadow",
+   "owned": false,
+   "home": false,
+   "xy": [
+    2.039783932874533,
+    515.1097181315539
+   ]
+  },
+  {
+   "q": -10,
+   "r": 12,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    66.85985663017308,
+    515.1097181315539
+   ]
+  },
+  {
+   "q": -9,
+   "r": 12,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    131.67992932747165,
+    515.1097181315539
+   ]
+  },
+  {
+   "q": -8,
+   "r": 12,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    196.5000020247702,
+    515.1097181315539
+   ]
+  },
+  {
+   "q": -6,
+   "r": 12,
+   "terrain": "forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    326.1401474193673,
+    515.1097181315539
+   ]
+  },
+  {
+   "q": -5,
+   "r": 12,
+   "terrain": "meadow",
+   "owned": false,
+   "home": false,
+   "xy": [
+    390.9602201166659,
+    515.1097181315539
+   ]
+  },
+  {
+   "q": -11,
+   "r": 13,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    29.869680998605123,
+    566.5796906451432
+   ]
+  },
+  {
+   "q": -10,
+   "r": 13,
+   "terrain": "trading-post",
+   "owned": false,
+   "home": false,
+   "xy": [
+    96.52180943196218,
+    566.5796906451432
+   ]
+  },
+  {
+   "q": -9,
+   "r": 13,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    163.17393786531917,
+    566.5796906451432
+   ]
+  },
+  {
+   "q": -8,
+   "r": 13,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    229.82606629867624,
+    566.5796906451432
+   ]
+  },
+  {
+   "q": -7,
+   "r": 13,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    296.4781947320333,
+    566.5796906451432
+   ]
+  },
+  {
+   "q": -6,
+   "r": 13,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    363.1303231653903,
+    566.5796906451432
+   ]
+  },
+  {
+   "q": -11,
+   "r": 14,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    59.31848670800872,
+    621.043751968873
+   ]
+  },
+  {
+   "q": -10,
+   "r": 14,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    127.90924442528149,
+    621.043751968873
+   ]
+  },
+  {
+   "q": -9,
+   "r": 14,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    196.50000214255425,
+    621.043751968873
+   ]
+  },
+  {
+   "q": -8,
+   "r": 14,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    265.090759859827,
+    621.043751968873
+   ]
+  },
+  {
+   "q": -7,
+   "r": 14,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    333.6815175770998,
+    621.043751968873
+   ]
+  },
+  {
+   "q": -12,
+   "r": 15,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    19.886156069491125,
+    678.7709848284004
+   ]
+  },
+  {
+   "q": -11,
+   "r": 15,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    90.53169452439029,
+    678.7709848284004
+   ]
+  },
+  {
+   "q": -10,
+   "r": 15,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    161.17723297928939,
+    678.7709848284004
+   ]
+  },
+  {
+   "q": -9,
+   "r": 15,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    231.82277143418852,
+    678.7709848284004
+   ]
+  },
+  {
+   "q": -8,
+   "r": 15,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    302.4683098890877,
+    678.7709848284004
+   ]
+  },
+  {
+   "q": -7,
+   "r": 15,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    373.11384834398683,
+    678.7709848284004
+   ]
+  },
+  {
+   "q": -12,
+   "r": 16,
+   "terrain": "old-forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    50.845538872372465,
+    740.0637114704123
+   ]
+  },
+  {
+   "q": -11,
+   "r": 16,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    123.67277057363026,
+    740.0637114704123
+   ]
+  },
+  {
+   "q": -10,
+   "r": 16,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    196.50000227488806,
+    740.0637114704123
+   ]
+  },
+  {
+   "q": -9,
+   "r": 16,
+   "terrain": "lake",
+   "owned": false,
+   "home": false,
+   "xy": [
+    269.3272339761458,
+    740.0637114704123
+   ]
+  },
+  {
+   "q": -8,
+   "r": 16,
+   "terrain": "hills",
+   "owned": false,
+   "home": false,
+   "xy": [
+    342.15446567740366,
+    740.0637114704123
+   ]
+  },
+  {
+   "q": -9,
+   "r": 8,
+   "terrain": "forest",
+   "owned": false,
+   "home": false,
+   "xy": [
+    21.30230148771093,
+    334.72196392743507
+   ]
+  }
+ ],
+ "home": [
+  -6,
+  9
+ ],
+ "post": "-10,13"
+}

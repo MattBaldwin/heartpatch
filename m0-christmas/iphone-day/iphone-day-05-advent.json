@@ -1,0 +1,1389 @@
+{
+ "file": "iphone-day-05-advent.png",
+ "device": "iphone",
+ "tz": "Asia/Bangkok",
+ "tag": "day",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "local": "Sat Dec 05 2026 12:36:12 GMT+0700 (Indochina Time)",
+ "fixed": [
+  {
+   "cls": "trays",
+   "id": "trays",
+   "top": 0,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  },
+  {
+   "cls": "night-chips",
+   "id": "night-chips",
+   "top": 712,
+   "bottom": 806,
+   "left": 16,
+   "right": 377
+  },
+  {
+   "cls": "map-hud",
+   "id": "map-hud",
+   "top": 123,
+   "bottom": 167,
+   "left": 86.5546875,
+   "right": 306.4453125
+  },
+  {
+   "cls": "next-up-chip",
+   "id": "next-up-chip",
+   "top": 652,
+   "bottom": 704,
+   "left": 68.890625,
+   "right": 324.109375
+  },
+  {
+   "cls": "auth-chip",
+   "id": "",
+   "top": 67,
+   "bottom": 115,
+   "left": 301,
+   "right": 385
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 83,
+   "bottom": 101,
+   "left": 209.765625,
+   "right": 232.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 177,
+   "bottom": 195,
+   "left": 78.765625,
+   "right": 101.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 144,
+   "bottom": 162,
+   "left": 107.765625,
+   "right": 130.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 113,
+   "bottom": 131,
+   "left": 184.765625,
+   "right": 207.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 144,
+   "bottom": 162,
+   "left": 315.765625,
+   "right": 338.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 211,
+   "bottom": 229,
+   "left": 375.765625,
+   "right": 398.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 212,
+   "bottom": 230,
+   "left": 103.765625,
+   "right": 126.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 248,
+   "bottom": 266,
+   "left": 129.765625,
+   "right": 152.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 177,
+   "bottom": 195,
+   "left": 131.765625,
+   "right": 154.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 144,
+   "bottom": 162,
+   "left": 159.765625,
+   "right": 182.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 285,
+   "bottom": 303,
+   "left": 270.765625,
+   "right": 293.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 144,
+   "bottom": 162,
+   "left": 210.765625,
+   "right": 233.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 247,
+   "bottom": 265,
+   "left": 296.765625,
+   "right": 319.234375
+  },
+  {
+   "cls": "dark-moon",
+   "id": "dark-moon",
+   "top": 144,
+   "bottom": 162,
+   "left": 262.765625,
+   "right": 285.234375
+  },
+  {
+   "cls": "",
+   "id": "cap-advent",
+   "top": 226.328125,
+   "bottom": 806,
+   "left": 12,
+   "right": 381
+  }
+ ],
+ "targets": [
+  {
+   "t": "My patches",
+   "cls": "hp-button hp-button-primary lo",
+   "w": 105.265625,
+   "h": 48,
+   "top": 67,
+   "bottom": 115,
+   "left": 12,
+   "right": 117.265625
+  },
+  {
+   "t": "🐾Squishies",
+   "cls": "squishies-open squishies-open-",
+   "w": 44,
+   "h": 44,
+   "top": 67,
+   "bottom": 111,
+   "left": 153,
+   "right": 197
+  },
+  {
+   "t": "💬Chat",
+   "cls": "chat-open",
+   "w": 44,
+   "h": 44,
+   "top": 67,
+   "bottom": 111,
+   "left": 201,
+   "right": 245
+  },
+  {
+   "t": "🤝Friends",
+   "cls": "friendly-open",
+   "w": 44,
+   "h": 44,
+   "top": 67,
+   "bottom": 111,
+   "left": 249,
+   "right": 293
+  },
+  {
+   "t": "",
+   "cls": "hp-close",
+   "w": 44,
+   "h": 44,
+   "top": 139,
+   "bottom": 183,
+   "left": -56,
+   "right": -12
+  },
+  {
+   "t": "🎯Next upInvite ",
+   "cls": "tray-row next-up-row",
+   "w": 253,
+   "h": 58,
+   "top": 193,
+   "bottom": 251,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "Catalog",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 253,
+   "h": 58,
+   "top": 360,
+   "bottom": 418,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "Find a squishy",
+   "cls": "hp-button hp-button-primary ba",
+   "w": 253,
+   "h": 68,
+   "top": 261,
+   "bottom": 329,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "Dev: new squishy",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 142.3125,
+   "h": 44,
+   "top": 426,
+   "bottom": 470,
+   "left": -211.65625,
+   "right": -69.34375
+  },
+  {
+   "t": "Dev: pick a figh",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 131.84375,
+   "h": 44,
+   "top": 478,
+   "bottom": 522,
+   "left": -206.421875,
+   "right": -74.578125
+  },
+  {
+   "t": "📜Report",
+   "cls": "raid-open",
+   "w": 253,
+   "h": 58,
+   "top": 598,
+   "bottom": 656,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "🌙Hollow",
+   "cls": "hollow-open",
+   "w": 253,
+   "h": 58,
+   "top": 664,
+   "bottom": 722,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "🚩Claim landTap ",
+   "cls": "tray-row",
+   "w": 253,
+   "h": 58,
+   "top": 532,
+   "bottom": 590,
+   "left": -267,
+   "right": -14
+  },
+  {
+   "t": "Adventure",
+   "cls": "tray-handle tray-handle-advent",
+   "w": 96,
+   "h": 94,
+   "top": 421.59375,
+   "bottom": 515.59375,
+   "left": 0,
+   "right": 96
+  },
+  {
+   "t": "",
+   "cls": "hp-close",
+   "w": 44,
+   "h": 44,
+   "top": 139,
+   "bottom": 183,
+   "left": 618,
+   "right": 662
+  },
+  {
+   "t": "🎒Bag",
+   "cls": "bag-open",
+   "w": 253,
+   "h": 58,
+   "top": 325,
+   "bottom": 383,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "🏡Home",
+   "cls": "home-open",
+   "w": 253,
+   "h": 58,
+   "top": 193,
+   "bottom": 251,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "📖Recipe book",
+   "cls": "recipe-book-open",
+   "w": 253,
+   "h": 58,
+   "top": 259,
+   "bottom": 317,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "⚔️ Team",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 253,
+   "h": 58,
+   "top": 393,
+   "bottom": 451,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "🧺 Jobs",
+   "cls": "hp-button hp-button-secondary ",
+   "w": 253,
+   "h": 58,
+   "top": 459,
+   "bottom": 517,
+   "left": 407,
+   "right": 660
+  },
+  {
+   "t": "Home",
+   "cls": "tray-handle tray-handle-heartp",
+   "w": 96,
+   "h": 94,
+   "top": 421.59375,
+   "bottom": 515.59375,
+   "left": 297,
+   "right": 393
+  },
+  {
+   "t": "🌑 Long Night to",
+   "cls": "night-chip night-chip-tap",
+   "w": 177.90625,
+   "h": 44,
+   "top": 712,
+   "bottom": 756,
+   "left": 36.0625,
+   "right": 213.96875
+  },
+  {
+   "t": "🌑 14 dark spots",
+   "cls": "night-chip night-chip-tap",
+   "w": 136.953125,
+   "h": 44,
+   "top": 712,
+   "bottom": 756,
+   "left": 219.96875,
+   "right": 356.921875
+  },
+  {
+   "t": "🌑",
+   "cls": "night-chip night-chip-tap",
+   "w": 44,
+   "h": 44,
+   "top": 762,
+   "bottom": 806,
+   "left": 174.5,
+   "right": 218.5
+  },
+  {
+   "t": "",
+   "cls": "map-hud-legend",
+   "w": 14,
+   "h": 14,
+   "top": 138,
+   "bottom": 152,
+   "left": 210.1484375,
+   "right": 224.1484375
+  },
+  {
+   "t": "💛0",
+   "cls": "heart-pill heart-pill-map",
+   "w": 56.296875,
+   "h": 44,
+   "top": 123,
+   "bottom": 167,
+   "left": 234.1484375,
+   "right": 290.4453125
+  },
+  {
+   "t": "💛Next upInvite ",
+   "cls": "next-up-chip",
+   "w": 255.21875,
+   "h": 52,
+   "top": 652,
+   "bottom": 704,
+   "left": 68.890625,
+   "right": 324.109375
+  },
+  {
+   "t": "Me",
+   "cls": "auth-chip-toggle",
+   "w": 84,
+   "h": 48,
+   "top": 67,
+   "bottom": 115,
+   "left": 301,
+   "right": 385
+  },
+  {
+   "t": "✕",
+   "cls": "x",
+   "w": 44,
+   "h": 44,
+   "top": 234.328125,
+   "bottom": 278.328125,
+   "left": 329,
+   "right": 373
+  },
+  {
+   "t": "1🎁✓",
+   "cls": "day claimed",
+   "w": 63.390625,
+   "h": 48,
+   "top": 309.328125,
+   "bottom": 357.328125,
+   "left": 26,
+   "right": 89.390625
+  },
+  {
+   "t": "2🎁✓",
+   "cls": "day claimed",
+   "w": 63.40625,
+   "h": 48,
+   "top": 309.328125,
+   "bottom": 357.328125,
+   "left": 95.390625,
+   "right": 158.796875
+  },
+  {
+   "t": "3catch up",
+   "cls": "day catch",
+   "w": 63.390625,
+   "h": 48,
+   "top": 309.328125,
+   "bottom": 357.328125,
+   "left": 164.796875,
+   "right": 228.1875
+  },
+  {
+   "t": "4🎁✓",
+   "cls": "day claimed",
+   "w": 63.40625,
+   "h": 48,
+   "top": 309.328125,
+   "bottom": 357.328125,
+   "left": 234.1875,
+   "right": 297.59375
+  },
+  {
+   "t": "5🎁",
+   "cls": "day today",
+   "w": 63.40625,
+   "h": 48,
+   "top": 309.328125,
+   "bottom": 357.328125,
+   "left": 303.59375,
+   "right": 367
+  },
+  {
+   "t": "6🔒",
+   "cls": "day locked",
+   "w": 63.390625,
+   "h": 48,
+   "top": 363.328125,
+   "bottom": 411.328125,
+   "left": 26,
+   "right": 89.390625
+  },
+  {
+   "t": "7🔒",
+   "cls": "day locked",
+   "w": 63.40625,
+   "h": 48,
+   "top": 363.328125,
+   "bottom": 411.328125,
+   "left": 95.390625,
+   "right": 158.796875
+  },
+  {
+   "t": "8🔒",
+   "cls": "day locked",
+   "w": 63.390625,
+   "h": 48,
+   "top": 363.328125,
+   "bottom": 411.328125,
+   "left": 164.796875,
+   "right": 228.1875
+  },
+  {
+   "t": "9🔒",
+   "cls": "day locked",
+   "w": 63.40625,
+   "h": 48,
+   "top": 363.328125,
+   "bottom": 411.328125,
+   "left": 234.1875,
+   "right": 297.59375
+  },
+  {
+   "t": "10🔒",
+   "cls": "day locked",
+   "w": 63.40625,
+   "h": 48,
+   "top": 363.328125,
+   "bottom": 411.328125,
+   "left": 303.59375,
+   "right": 367
+  },
+  {
+   "t": "11🔒",
+   "cls": "day locked",
+   "w": 63.390625,
+   "h": 48,
+   "top": 417.328125,
+   "bottom": 465.328125,
+   "left": 26,
+   "right": 89.390625
+  },
+  {
+   "t": "12🔒",
+   "cls": "day locked",
+   "w": 63.40625,
+   "h": 48,
+   "top": 417.328125,
+   "bottom": 465.328125,
+   "left": 95.390625,
+   "right": 158.796875
+  },
+  {
+   "t": "13🔒",
+   "cls": "day locked",
+   "w": 63.390625,
+   "h": 48,
+   "top": 417.328125,
+   "bottom": 465.328125,
+   "left": 164.796875,
+   "right": 228.1875
+  },
+  {
+   "t": "14🔒",
+   "cls": "day locked",
+   "w": 63.40625,
+   "h": 48,
+   "top": 417.328125,
+   "bottom": 465.328125,
+   "left": 234.1875,
+   "right": 297.59375
+  },
+  {
+   "t": "15🔒",
+   "cls": "day locked",
+   "w": 63.40625,
+   "h": 48,
+   "top": 417.328125,
+   "bottom": 465.328125,
+   "left": 303.59375,
+   "right": 367
+  },
+  {
+   "t": "16🔒",
+   "cls": "day locked",
+   "w": 63.390625,
+   "h": 48,
+   "top": 471.328125,
+   "bottom": 519.328125,
+   "left": 26,
+   "right": 89.390625
+  },
+  {
+   "t": "17🔒",
+   "cls": "day locked",
+   "w": 63.40625,
+   "h": 48,
+   "top": 471.328125,
+   "bottom": 519.328125,
+   "left": 95.390625,
+   "right": 158.796875
+  },
+  {
+   "t": "18🔒",
+   "cls": "day locked",
+   "w": 63.390625,
+   "h": 48,
+   "top": 471.328125,
+   "bottom": 519.328125,
+   "left": 164.796875,
+   "right": 228.1875
+  },
+  {
+   "t": "19🔒",
+   "cls": "day locked",
+   "w": 63.40625,
+   "h": 48,
+   "top": 471.328125,
+   "bottom": 519.328125,
+   "left": 234.1875,
+   "right": 297.59375
+  },
+  {
+   "t": "20🔒",
+   "cls": "day locked",
+   "w": 63.40625,
+   "h": 48,
+   "top": 471.328125,
+   "bottom": 519.328125,
+   "left": 303.59375,
+   "right": 367
+  },
+  {
+   "t": "21🔒",
+   "cls": "day locked",
+   "w": 63.390625,
+   "h": 48,
+   "top": 525.328125,
+   "bottom": 573.328125,
+   "left": 26,
+   "right": 89.390625
+  },
+  {
+   "t": "22🔒",
+   "cls": "day locked",
+   "w": 63.40625,
+   "h": 48,
+   "top": 525.328125,
+   "bottom": 573.328125,
+   "left": 95.390625,
+   "right": 158.796875
+  },
+  {
+   "t": "23🔒",
+   "cls": "day locked",
+   "w": 63.390625,
+   "h": 48,
+   "top": 525.328125,
+   "bottom": 573.328125,
+   "left": 164.796875,
+   "right": 228.1875
+  },
+  {
+   "t": "24🎆",
+   "cls": "day locked",
+   "w": 63.40625,
+   "h": 48,
+   "top": 525.328125,
+   "bottom": 573.328125,
+   "left": 234.1875,
+   "right": 297.59375
+  },
+  {
+   "t": "25⭐",
+   "cls": "day locked",
+   "w": 63.40625,
+   "h": 48,
+   "top": 525.328125,
+   "bottom": 573.328125,
+   "left": 303.59375,
+   "right": 367
+  },
+  {
+   "t": "Open today's pre",
+   "cls": "open",
+   "w": 341,
+   "h": 52,
+   "top": 692,
+   "bottom": 744,
+   "left": 26,
+   "right": 367
+  },
+  {
+   "t": "Open the one I m",
+   "cls": "quiet",
+   "w": 341,
+   "h": 44,
+   "top": 748,
+   "bottom": 792,
+   "left": 26,
+   "right": 367
+  }
+ ],
+ "texts": [
+  {
+   "text": "Presents under the tree 🎄",
+   "fg": "rgb(74, 49, 80)",
+   "bg": "rgba(255, 250, 252, 0.99)",
+   "size": 20,
+   "weight": "700",
+   "top": 240.328125,
+   "bottom": 263.328125,
+   "left": 28,
+   "right": 323
+  },
+  {
+   "text": "One present a day. Open today'",
+   "fg": "rgb(106, 74, 111)",
+   "bg": "rgba(255, 250, 252, 0.99)",
+   "size": 14,
+   "weight": "400",
+   "top": 265.328125,
+   "bottom": 299.328125,
+   "left": 28,
+   "right": 323
+  },
+  {
+   "text": "1",
+   "fg": "rgb(31, 90, 53)",
+   "bg": "rgb(223, 243, 228)",
+   "size": 16,
+   "weight": "700",
+   "top": 318.328125,
+   "bottom": 336.328125,
+   "left": 53.234375,
+   "right": 62.140625
+  },
+  {
+   "text": "🎁✓",
+   "fg": "rgb(31, 90, 53)",
+   "bg": "rgb(223, 243, 228)",
+   "size": 12,
+   "weight": "600",
+   "top": 336.328125,
+   "bottom": 348.328125,
+   "left": 44.890625,
+   "right": 70.484375
+  },
+  {
+   "text": "2",
+   "fg": "rgb(31, 90, 53)",
+   "bg": "rgb(223, 243, 228)",
+   "size": 16,
+   "weight": "700",
+   "top": 318.328125,
+   "bottom": 336.328125,
+   "left": 122.640625,
+   "right": 131.546875
+  },
+  {
+   "text": "🎁✓",
+   "fg": "rgb(31, 90, 53)",
+   "bg": "rgb(223, 243, 228)",
+   "size": 12,
+   "weight": "600",
+   "top": 336.328125,
+   "bottom": 348.328125,
+   "left": 114.296875,
+   "right": 139.890625
+  },
+  {
+   "text": "3",
+   "fg": "rgb(107, 67, 0)",
+   "bg": "rgb(255, 233, 184)",
+   "size": 16,
+   "weight": "700",
+   "top": 318.328125,
+   "bottom": 336.328125,
+   "left": 192.03125,
+   "right": 200.9375
+  },
+  {
+   "text": "catch up",
+   "fg": "rgb(107, 67, 0)",
+   "bg": "rgb(255, 233, 184)",
+   "size": 12,
+   "weight": "600",
+   "top": 336.328125,
+   "bottom": 348.328125,
+   "left": 171.8125,
+   "right": 221.15625
+  },
+  {
+   "text": "4",
+   "fg": "rgb(31, 90, 53)",
+   "bg": "rgb(223, 243, 228)",
+   "size": 16,
+   "weight": "700",
+   "top": 318.328125,
+   "bottom": 336.328125,
+   "left": 261.4375,
+   "right": 270.34375
+  },
+  {
+   "text": "🎁✓",
+   "fg": "rgb(31, 90, 53)",
+   "bg": "rgb(223, 243, 228)",
+   "size": 12,
+   "weight": "600",
+   "top": 336.328125,
+   "bottom": 348.328125,
+   "left": 253.09375,
+   "right": 278.6875
+  },
+  {
+   "text": "5",
+   "fg": "rgb(255, 255, 255)",
+   "bg": "rgb(184, 72, 122)",
+   "size": 16,
+   "weight": "700",
+   "top": 318.328125,
+   "bottom": 336.328125,
+   "left": 330.84375,
+   "right": 339.75
+  },
+  {
+   "text": "🎁",
+   "fg": "rgb(255, 255, 255)",
+   "bg": "rgb(184, 72, 122)",
+   "size": 12,
+   "weight": "600",
+   "top": 336.328125,
+   "bottom": 348.328125,
+   "left": 327.796875,
+   "right": 342.78125
+  },
+  {
+   "text": "6",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 372.328125,
+   "bottom": 390.328125,
+   "left": 53.234375,
+   "right": 62.140625
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 390.328125,
+   "bottom": 402.328125,
+   "left": 50.203125,
+   "right": 65.1875
+  },
+  {
+   "text": "7",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 372.328125,
+   "bottom": 390.328125,
+   "left": 122.640625,
+   "right": 131.546875
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 390.328125,
+   "bottom": 402.328125,
+   "left": 119.59375,
+   "right": 134.578125
+  },
+  {
+   "text": "8",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 372.328125,
+   "bottom": 390.328125,
+   "left": 192.03125,
+   "right": 200.9375
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 390.328125,
+   "bottom": 402.328125,
+   "left": 189,
+   "right": 203.984375
+  },
+  {
+   "text": "9",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 372.328125,
+   "bottom": 390.328125,
+   "left": 261.4375,
+   "right": 270.34375
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 390.328125,
+   "bottom": 402.328125,
+   "left": 258.390625,
+   "right": 273.375
+  },
+  {
+   "text": "10",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 372.328125,
+   "bottom": 390.328125,
+   "left": 326.390625,
+   "right": 344.1875
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 390.328125,
+   "bottom": 402.328125,
+   "left": 327.796875,
+   "right": 342.78125
+  },
+  {
+   "text": "11",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 426.328125,
+   "bottom": 444.328125,
+   "left": 49.234375,
+   "right": 66.15625
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 444.328125,
+   "bottom": 456.328125,
+   "left": 50.203125,
+   "right": 65.1875
+  },
+  {
+   "text": "12",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 426.328125,
+   "bottom": 444.328125,
+   "left": 118.1875,
+   "right": 135.984375
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 444.328125,
+   "bottom": 456.328125,
+   "left": 119.59375,
+   "right": 134.578125
+  },
+  {
+   "text": "13",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 426.328125,
+   "bottom": 444.328125,
+   "left": 187.59375,
+   "right": 205.390625
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 444.328125,
+   "bottom": 456.328125,
+   "left": 189,
+   "right": 203.984375
+  },
+  {
+   "text": "14",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 426.328125,
+   "bottom": 444.328125,
+   "left": 256.984375,
+   "right": 274.78125
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 444.328125,
+   "bottom": 456.328125,
+   "left": 258.390625,
+   "right": 273.375
+  },
+  {
+   "text": "15",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 426.328125,
+   "bottom": 444.328125,
+   "left": 326.390625,
+   "right": 344.1875
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 444.328125,
+   "bottom": 456.328125,
+   "left": 327.796875,
+   "right": 342.78125
+  },
+  {
+   "text": "16",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 480.328125,
+   "bottom": 498.328125,
+   "left": 48.796875,
+   "right": 66.59375
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 498.328125,
+   "bottom": 510.328125,
+   "left": 50.203125,
+   "right": 65.1875
+  },
+  {
+   "text": "17",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 480.328125,
+   "bottom": 498.328125,
+   "left": 118.1875,
+   "right": 135.984375
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 498.328125,
+   "bottom": 510.328125,
+   "left": 119.59375,
+   "right": 134.578125
+  },
+  {
+   "text": "18",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 480.328125,
+   "bottom": 498.328125,
+   "left": 187.59375,
+   "right": 205.390625
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 498.328125,
+   "bottom": 510.328125,
+   "left": 189,
+   "right": 203.984375
+  },
+  {
+   "text": "19",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 480.328125,
+   "bottom": 498.328125,
+   "left": 256.984375,
+   "right": 274.78125
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 498.328125,
+   "bottom": 510.328125,
+   "left": 258.390625,
+   "right": 273.375
+  },
+  {
+   "text": "20",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 480.328125,
+   "bottom": 498.328125,
+   "left": 326.390625,
+   "right": 344.1875
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 498.328125,
+   "bottom": 510.328125,
+   "left": 327.796875,
+   "right": 342.78125
+  },
+  {
+   "text": "21",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 534.328125,
+   "bottom": 552.328125,
+   "left": 48.796875,
+   "right": 66.59375
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 552.328125,
+   "bottom": 564.328125,
+   "left": 50.203125,
+   "right": 65.1875
+  },
+  {
+   "text": "22",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 534.328125,
+   "bottom": 552.328125,
+   "left": 118.1875,
+   "right": 135.984375
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 552.328125,
+   "bottom": 564.328125,
+   "left": 119.59375,
+   "right": 134.578125
+  },
+  {
+   "text": "23",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 534.328125,
+   "bottom": 552.328125,
+   "left": 187.59375,
+   "right": 205.390625
+  },
+  {
+   "text": "🔒",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 552.328125,
+   "bottom": 564.328125,
+   "left": 189,
+   "right": 203.984375
+  },
+  {
+   "text": "24",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 534.328125,
+   "bottom": 552.328125,
+   "left": 256.984375,
+   "right": 274.78125
+  },
+  {
+   "text": "🎆",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 552.328125,
+   "bottom": 564.328125,
+   "left": 258.390625,
+   "right": 273.375
+  },
+  {
+   "text": "25",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 16,
+   "weight": "700",
+   "top": 534.328125,
+   "bottom": 552.328125,
+   "left": 326.390625,
+   "right": 344.1875
+  },
+  {
+   "text": "⭐",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgb(236, 230, 240)",
+   "size": 12,
+   "weight": "600",
+   "top": 552.328125,
+   "bottom": 564.328125,
+   "left": 327.796875,
+   "right": 342.78125
+  },
+  {
+   "text": "🎁✓ opened",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgba(255, 250, 252, 0.99)",
+   "size": 12.5,
+   "weight": "400",
+   "top": 581.328125,
+   "bottom": 597.328125,
+   "left": 28,
+   "right": 102.9375
+  },
+  {
+   "text": "🎁 today",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgba(255, 250, 252, 0.99)",
+   "size": 12.5,
+   "weight": "400",
+   "top": 581.328125,
+   "bottom": 597.328125,
+   "left": 114.9375,
+   "right": 167.03125
+  },
+  {
+   "text": "catch up: 1 a day",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgba(255, 250, 252, 0.99)",
+   "size": 12.5,
+   "weight": "400",
+   "top": 581.328125,
+   "bottom": 597.328125,
+   "left": 179.03125,
+   "right": 278.140625
+  },
+  {
+   "text": "🔒 not yet",
+   "fg": "rgb(94, 74, 102)",
+   "bg": "rgba(255, 250, 252, 0.99)",
+   "size": 12.5,
+   "weight": "400",
+   "top": 581.328125,
+   "bottom": 597.328125,
+   "left": 290.140625,
+   "right": 349.90625
+  },
+  {
+   "text": "Today's present might hold: 🍬",
+   "fg": "rgb(74, 49, 80)",
+   "bg": "rgb(255, 240, 246)",
+   "size": 14,
+   "weight": "400",
+   "top": 607.328125,
+   "bottom": 682,
+   "left": 26,
+   "right": 367
+  },
+  {
+   "text": "Open today's present",
+   "fg": "rgb(255, 255, 255)",
+   "bg": "rgb(184, 72, 122)",
+   "size": 17,
+   "weight": "700",
+   "top": 708,
+   "bottom": 728,
+   "left": 107.21875,
+   "right": 285.78125
+  },
+  {
+   "text": "Open the one I missed (Day 3)",
+   "fg": "rgb(122, 45, 85)",
+   "bg": "rgba(255, 250, 252, 0.99)",
+   "size": 14,
+   "weight": "600",
+   "top": 761.5,
+   "bottom": 778.5,
+   "left": 95.125,
+   "right": 297.875
+  }
+ ],
+ "haveScene": true,
+ "proj": "function"
+}

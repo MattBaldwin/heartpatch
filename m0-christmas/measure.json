@@ -1,0 +1,497 @@
+[
+ {
+  "frame": "ipad-night-01-today",
+  "colours": 623,
+  "lum": 94.3,
+  "sd": 28.9,
+  "map_px_share": 0.931,
+  "own_n": 38,
+  "wild_n": 346,
+  "own_rgb": [
+   103,
+   93,
+   88
+  ],
+  "wild_rgb": [
+   79,
+   93,
+   94
+  ],
+  "own_dE": 10.6,
+  "own_dL": 4.2,
+  "mock_targets_min": 48,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44
+ },
+ {
+  "frame": "ipad-night-02-snow",
+  "colours": 605,
+  "lum": 119.2,
+  "sd": 29.8,
+  "map_px_share": 0.942,
+  "own_n": 38,
+  "wild_n": 352,
+  "own_rgb": [
+   123,
+   100,
+   105
+  ],
+  "wild_rgb": [
+   117,
+   124,
+   138
+  ],
+  "own_dE": 14.9,
+  "own_dL": -18.4,
+  "mock_targets_min": 48,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44,
+  "vs_today": {
+   "dlum": 24.9,
+   "dsd": 0.9,
+   "colours_ratio": 0.97
+  }
+ },
+ {
+  "frame": "ipad-night-03a-lights-tile",
+  "colours": 814,
+  "lum": 119.6,
+  "sd": 30.1,
+  "map_px_share": 0.942,
+  "bulbs": 30,
+  "bulb_core_lum": 228.0,
+  "bulb_lift": 118.6,
+  "bulb_ratio_vs_bg": 4.11,
+  "bulb_colours": {
+   "#fff0c4": 7,
+   "#ff5d52": 8,
+   "#5fe39a": 8,
+   "#ffcc4d": 7
+  },
+  "mock_targets_min": 48,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44
+ },
+ {
+  "frame": "ipad-night-03b-lights-home",
+  "colours": 822,
+  "lum": 119.5,
+  "sd": 30.1,
+  "map_px_share": 0.942,
+  "bulbs": 23,
+  "bulb_core_lum": 229.9,
+  "bulb_lift": 114.4,
+  "bulb_ratio_vs_bg": 3.62,
+  "bulb_colours": {
+   "#fff0c4": 5,
+   "#ff5d52": 5,
+   "#5fe39a": 6,
+   "#ffcc4d": 7
+  },
+  "mock_targets_min": 48,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44
+ },
+ {
+  "frame": "ipad-night-03c-lights-both",
+  "colours": 901,
+  "lum": 120.0,
+  "sd": 31.0,
+  "map_px_share": 0.942,
+  "bulbs": 53,
+  "bulb_core_lum": 228.8,
+  "bulb_lift": 116.8,
+  "bulb_ratio_vs_bg": 3.9,
+  "bulb_colours": {
+   "#fff0c4": 12,
+   "#ff5d52": 13,
+   "#5fe39a": 14,
+   "#ffcc4d": 14
+  },
+  "mock_targets_min": 48,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44
+ },
+ {
+  "frame": "ipad-night-04-tree-00",
+  "colours": 531,
+  "lum": 100.4,
+  "sd": 39.7,
+  "map_px_share": 0.921,
+  "mock_targets_min": 48,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44
+ },
+ {
+  "frame": "ipad-night-04-tree-06",
+  "colours": 531,
+  "lum": 100.4,
+  "sd": 39.7,
+  "map_px_share": 0.921,
+  "mock_targets_min": 48,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44
+ },
+ {
+  "frame": "ipad-night-04-tree-12",
+  "colours": 535,
+  "lum": 100.4,
+  "sd": 39.7,
+  "map_px_share": 0.921,
+  "mock_targets_min": 48,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44
+ },
+ {
+  "frame": "ipad-night-05-advent",
+  "colours": 584,
+  "lum": 107.8,
+  "sd": 41.0,
+  "map_px_share": 0.705,
+  "text_min": [
+   4.95,
+   "5"
+  ],
+  "text_n": 59,
+  "text_fail_4.5": [],
+  "mock_targets_min": 44,
+  "mock_targets_n": 36,
+  "hud_targets_min": 44
+ },
+ {
+  "frame": "iphone-day-01-today",
+  "colours": 697,
+  "lum": 183.9,
+  "sd": 31.7,
+  "map_px_share": 0.753,
+  "own_n": 39,
+  "wild_n": 143,
+  "own_rgb": [
+   211,
+   198,
+   178
+  ],
+  "wild_rgb": [
+   177,
+   196,
+   186
+  ],
+  "own_dE": 13.3,
+  "own_dL": 8.7,
+  "mock_targets_min": 44,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44,
+  "notch_violations": []
+ },
+ {
+  "frame": "iphone-day-02-snow",
+  "colours": 665,
+  "lum": 222.3,
+  "sd": 40.0,
+  "map_px_share": 0.784,
+  "own_n": 41,
+  "wild_n": 161,
+  "own_rgb": [
+   236,
+   205,
+   201
+  ],
+  "wild_rgb": [
+   250,
+   249,
+   250
+  ],
+  "own_dE": 17.7,
+  "own_dL": -38.1,
+  "mock_targets_min": 44,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44,
+  "notch_violations": [],
+  "vs_today": {
+   "dlum": 38.4,
+   "dsd": 8.3,
+   "colours_ratio": 0.95
+  }
+ },
+ {
+  "frame": "iphone-day-03a-lights-tile",
+  "colours": 733,
+  "lum": 222.4,
+  "sd": 39.9,
+  "map_px_share": 0.784,
+  "bulbs": 30,
+  "bulb_core_lum": 229.3,
+  "bulb_lift": 35.3,
+  "bulb_ratio_vs_bg": 1.53,
+  "bulb_colours": {
+   "#fff0c4": 7,
+   "#ff5d52": 8,
+   "#5fe39a": 8,
+   "#ffcc4d": 7
+  },
+  "mock_targets_min": 44,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44,
+  "notch_violations": []
+ },
+ {
+  "frame": "iphone-day-03b-lights-home",
+  "colours": 729,
+  "lum": 222.4,
+  "sd": 39.9,
+  "map_px_share": 0.784,
+  "bulbs": 23,
+  "bulb_core_lum": 230.1,
+  "bulb_lift": 33.7,
+  "bulb_ratio_vs_bg": 1.51,
+  "bulb_colours": {
+   "#fff0c4": 5,
+   "#ff5d52": 5,
+   "#5fe39a": 6,
+   "#ffcc4d": 7
+  },
+  "mock_targets_min": 44,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44,
+  "notch_violations": []
+ },
+ {
+  "frame": "iphone-day-03c-lights-both",
+  "colours": 737,
+  "lum": 222.8,
+  "sd": 39.8,
+  "map_px_share": 0.784,
+  "bulbs": 53,
+  "bulb_core_lum": 229.7,
+  "bulb_lift": 34.7,
+  "bulb_ratio_vs_bg": 1.52,
+  "bulb_colours": {
+   "#fff0c4": 12,
+   "#ff5d52": 13,
+   "#5fe39a": 14,
+   "#ffcc4d": 14
+  },
+  "mock_targets_min": 44,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44,
+  "notch_violations": []
+ },
+ {
+  "frame": "iphone-day-04-tree-00",
+  "colours": 609,
+  "lum": 220.0,
+  "sd": 39.3,
+  "map_px_share": 0.76,
+  "mock_targets_min": 44,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44,
+  "notch_violations": []
+ },
+ {
+  "frame": "iphone-day-04-tree-06",
+  "colours": 609,
+  "lum": 220.0,
+  "sd": 39.3,
+  "map_px_share": 0.76,
+  "mock_targets_min": 44,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44,
+  "notch_violations": []
+ },
+ {
+  "frame": "iphone-day-04-tree-12",
+  "colours": 609,
+  "lum": 220.0,
+  "sd": 39.3,
+  "map_px_share": 0.76,
+  "mock_targets_min": 44,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44,
+  "notch_violations": []
+ },
+ {
+  "frame": "iphone-day-05-advent",
+  "colours": 579,
+  "lum": 221.4,
+  "sd": 40.1,
+  "map_px_share": 0.309,
+  "text_min": [
+   4.95,
+   "5"
+  ],
+  "text_n": 59,
+  "text_fail_4.5": [],
+  "mock_targets_min": 44,
+  "mock_targets_n": 36,
+  "hud_targets_min": 44,
+  "notch_violations": []
+ },
+ {
+  "frame": "iphone-night-01-today",
+  "colours": 588,
+  "lum": 102.5,
+  "sd": 44.4,
+  "map_px_share": 0.811,
+  "own_n": 39,
+  "wild_n": 86,
+  "own_rgb": [
+   120,
+   106,
+   108
+  ],
+  "wild_rgb": [
+   97,
+   106,
+   110
+  ],
+  "own_dE": 9.4,
+  "own_dL": 5.0,
+  "mock_targets_min": 44,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44,
+  "notch_violations": []
+ },
+ {
+  "frame": "iphone-night-02-snow",
+  "colours": 578,
+  "lum": 120.9,
+  "sd": 40.6,
+  "map_px_share": 0.835,
+  "own_n": 39,
+  "wild_n": 94,
+  "own_rgb": [
+   146,
+   117,
+   126
+  ],
+  "wild_rgb": [
+   134,
+   139,
+   154
+  ],
+  "own_dE": 15.0,
+  "own_dL": -15.0,
+  "mock_targets_min": 44,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44,
+  "notch_violations": [],
+  "vs_today": {
+   "dlum": 18.4,
+   "dsd": -3.8,
+   "colours_ratio": 0.98
+  }
+ },
+ {
+  "frame": "iphone-night-03a-lights-tile",
+  "colours": 731,
+  "lum": 122.1,
+  "sd": 41.4,
+  "map_px_share": 0.835,
+  "bulbs": 30,
+  "bulb_core_lum": 229.3,
+  "bulb_lift": 128.8,
+  "bulb_ratio_vs_bg": 4.6,
+  "bulb_colours": {
+   "#fff0c4": 7,
+   "#ff5d52": 8,
+   "#5fe39a": 8,
+   "#ffcc4d": 7
+  },
+  "mock_targets_min": 44,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44,
+  "notch_violations": []
+ },
+ {
+  "frame": "iphone-night-03b-lights-home",
+  "colours": 753,
+  "lum": 121.7,
+  "sd": 41.3,
+  "map_px_share": 0.835,
+  "bulbs": 23,
+  "bulb_core_lum": 230.1,
+  "bulb_lift": 112.4,
+  "bulb_ratio_vs_bg": 3.73,
+  "bulb_colours": {
+   "#fff0c4": 5,
+   "#ff5d52": 5,
+   "#5fe39a": 6,
+   "#ffcc4d": 7
+  },
+  "mock_targets_min": 44,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44,
+  "notch_violations": []
+ },
+ {
+  "frame": "iphone-night-03c-lights-both",
+  "colours": 777,
+  "lum": 123.2,
+  "sd": 42.9,
+  "map_px_share": 0.835,
+  "bulbs": 53,
+  "bulb_core_lum": 229.7,
+  "bulb_lift": 121.8,
+  "bulb_ratio_vs_bg": 4.22,
+  "bulb_colours": {
+   "#fff0c4": 12,
+   "#ff5d52": 13,
+   "#5fe39a": 14,
+   "#ffcc4d": 14
+  },
+  "mock_targets_min": 44,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44,
+  "notch_violations": []
+ },
+ {
+  "frame": "iphone-night-04-tree-00",
+  "colours": 478,
+  "lum": 109.0,
+  "sd": 47.5,
+  "map_px_share": 0.815,
+  "mock_targets_min": 44,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44,
+  "notch_violations": []
+ },
+ {
+  "frame": "iphone-night-04-tree-06",
+  "colours": 478,
+  "lum": 109.0,
+  "sd": 47.5,
+  "map_px_share": 0.815,
+  "mock_targets_min": 44,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44,
+  "notch_violations": []
+ },
+ {
+  "frame": "iphone-night-04-tree-12",
+  "colours": 479,
+  "lum": 109.0,
+  "sd": 47.5,
+  "map_px_share": 0.815,
+  "mock_targets_min": 44,
+  "mock_targets_n": 8,
+  "hud_targets_min": 44,
+  "notch_violations": []
+ },
+ {
+  "frame": "iphone-night-05-advent",
+  "colours": 427,
+  "lum": 105.2,
+  "sd": 48.0,
+  "map_px_share": 0.308,
+  "text_min": [
+   4.95,
+   "5"
+  ],
+  "text_n": 59,
+  "text_fail_4.5": [],
+  "mock_targets_min": 44,
+  "mock_targets_n": 36,
+  "hud_targets_min": 44,
+  "notch_violations": []
+ }
+]
