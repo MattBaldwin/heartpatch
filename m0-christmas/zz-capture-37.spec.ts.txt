@@ -1,0 +1,236 @@
+// THROWAWAY (#37 M0 Christmas mockups). Lives in m0-christmas/zz-capture-37.spec.ts.txt; copy to
+// apps/client/tests/e2e/zz-capture-37.spec.ts to run. No app code is changed: the snow look is a Vite-served-module
+// rewrite done by page.route at capture time (see SNOW_*), the lights / tree / advent sheet are DOM overlays.
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { test, expect, type Page } from '@playwright/test';
+import { newPlayer, visitPatch } from './players.js';
+
+const OUT = process.env['CAPTURE_OUT'] ?? 'captures';
+const DB = process.env['CAPTURE_DB'] ?? 'postgres://heartpatch:heartpatch@localhost:5432/heartpatch';
+const TZ = process.env['CAPTURE_TZ'] ?? 'America/Sao_Paulo';
+const DEVICE = (process.env['CAPTURE_DEVICE'] ?? 'iphone') as 'iphone' | 'ipad';
+const TAG = process.env['CAPTURE_TAG'] ?? 'night';
+const LEAD_MS = Number(process.env['CAPTURE_LEAD_MS'] ?? String(9 * 86_400_000));
+const OVERRIDES = process.env['CAPTURE_OVERRIDES'] ?? 'overrides';
+const SIZES = { iphone: { width: 393, height: 852 }, ipad: { width: 820, height: 1180 } } as const;
+
+test.use({
+  actionTimeout: 90_000,
+  launchOptions: {
+    executablePath: process.env['PW_CHROMIUM_EXECUTABLE'] ?? '/opt/pw-browsers/chromium',
+    args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+  },
+});
+
+const sql = (q: string): string => execFileSync('psql', [DB, '-tAc', q], { encoding: 'utf8' }).trim();
+const HIDE_DEV = '.dev-status { display: none !important; }';
+const read = (f: string) => readFileSync(`${OVERRIDES}/${f}`, 'utf8');
+
+/** Appended to a served module when sessionStorage.__capSnow === '1' (see overrides/snow-*.js). */
+async function installSnowRoutes(page: Page): Promise<void> {
+  const patch = (glob: string, edit: (js: string) => string) =>
+    page.route(glob, async (route) => {
+      const res = await route.fetch();
+      await route.fulfill({ response: res, body: edit(await res.text()) });
+    });
+  await patch('**/src/map/map-dressing.ts*', (js) => {
+    if (!js.includes('export function tileColor(')) throw new Error('tileColor not found');
+    return js.replace('export function tileColor(', 'function tileColorToday(') + '\n' + read('snow-dressing.js');
+  });
+  await patch('**/src/map/map-config.ts*', (js) => js + '\n' + read('snow-config.js'));
+  await patch('**/src/map/ambient-layout.ts*', (js) => js + '\n' + read('snow-layout.js'));
+  await patch('**/src/map/map-ambient.ts*', (js) => js + '\n' + read('snow-ambient.js'));
+  await patch('**/src/map/map-scene.ts*', (js) => {
+    const needle = 'this.nodeField = new HomeNodes(scene,';
+    if (!js.includes(needle)) throw new Error('HomeNodes line not found');
+    return js.replace(needle, 'window.__capScene = scene; ' + needle);
+  });
+}
+
+test(`christmas captures ${DEVICE} ${TAG}`, async ({ browser }) => {
+  test.setTimeout(20 * 60_000);
+  mkdirSync(OUT, { recursive: true });
+  const prefix = `${OUT}/${DEVICE}-${TAG}`;
+  Object.assign(test.info().project.use, { viewport: SIZES[DEVICE], deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const name = 'cap' + Math.random().toString(36).slice(2, 7);
+  const page = await newPlayer(browser, name, undefined, { timezoneId: TZ });
+  if (DEVICE === 'iphone') {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setSafeAreaInsetsOverride' as never, {
+      insets: { top: 59, topMax: 59, bottom: 34, bottomMax: 34, left: 0, leftMax: 0, right: 0, rightMax: 0 },
+    } as never);
+  }
+  // The client's own clock follows the server's HP_DEV_NOW (December).
+  await page.context().addInitScript(`(() => {
+    const D = Date, lead = ${LEAD_MS};
+    class F extends D { constructor(...a) { if (a.length === 0) super(D.now() + lead); else super(...a); } static now() { return D.now() + lead; } }
+    window.Date = F;
+  })();`);
+  await installSnowRoutes(page);
+  await page.goto('/?tier=high');
+  await page.addStyleTag({ content: HIDE_DEV });
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Snowy Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+
+  const userId = sql(`select id from users where username = '${name}'`);
+  const mapId = sql(`select map_id from map_members where user_id = '${userId}'`);
+  const slot = sql(`select home_slot from map_members where user_id = '${userId}'`);
+  const home = sql(`select q || ',' || r from tiles where map_id = '${mapId}' and home_slot = ${slot} order by abs(q)+abs(r) limit 1`);
+  const [hq, hr] = home.split(',').map(Number) as [number, number];
+  // Owned land: the nearest 14 plain tiles round home (not water, post, gap, other homes).
+  sql(`update tiles set owner_user_id = '${userId}' where id in (
+         select id from tiles where map_id = '${mapId}' and owner_user_id is null and home_slot is null
+           and node_resource is null and terrain in ('meadow','forest','old-forest','hills')
+         order by (q - ${hq})^2 + (r - ${hr})^2 + (q - ${hq})*(r - ${hr}) limit 14)`);
+  const post = sql(`select q || ',' || r from tiles where map_id = '${mapId}' and terrain = 'trading-post'
+                    order by (q - ${hq})^2 + (r - ${hr})^2 + (q - ${hq})*(r - ${hr}) limit 1`);
+  console.log(`map ${mapId} home ${home} post ${post}`);
+
+  const toPatch = async (snow: boolean) => {
+    await page.evaluate((s) => sessionStorage.setItem('__capSnow', s ? '1' : '0'), snow);
+    for (let tryNo = 0; ; tryNo++) {
+      await page.goto('/?tier=high', { waitUntil: 'commit', timeout: 60_000 });
+      const visit = lobby.getByRole('button', { name: 'Visit patch' });
+      const ready = page.locator('#game[data-ready=true]');
+      const ok = await expect
+        .poll(async () => (await visit.isVisible().catch(() => false)) || ((await ready.count()) > 0 && !(await lobby.isVisible().catch(() => false))), { timeout: 40_000 })
+        .toBe(true)
+        .then(() => true, () => false);
+      if (ok) {
+        await page.waitForTimeout(3000);
+        break;
+      }
+      if (tryNo >= 4) throw new Error('the patch never opened');
+    }
+    await page.addStyleTag({ content: HIDE_DEV });
+    if (await lobby.getByRole('button', { name: 'Visit patch' }).isVisible().catch(() => false)) await visitPatch(lobby);
+    await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
+    const hint = page.getByTestId('tray-hint-ok');
+    if (await hint.isVisible().catch(() => false)) await hint.tap();
+    await page.waitForTimeout(3500);
+  };
+
+  /** Screen position of a map point (world x, y, z), CSS px; null before the scene is up. */
+  const projectFn = `(x, y, z) => {
+    const s = window.__capScene; if (!s) return null;
+    const m = s.getTransformMatrix().m;
+    const cx = x*m[0]+y*m[4]+z*m[8]+m[12], cy = x*m[1]+y*m[5]+z*m[9]+m[13], cw = x*m[3]+y*m[7]+z*m[11]+m[15];
+    return [(cx/cw*0.5+0.5)*innerWidth, (1-(cy/cw*0.5+0.5))*innerHeight];
+  }`;
+  const S3 = Math.sqrt(3);
+  const world = (q: number, r: number, size = 0.65) => ({ x: size * S3 * (q + r / 2), z: size * -1.5 * r });
+
+  const shot = async (file: string, extra: Record<string, unknown> = {}) => {
+    const path = `${prefix}-${file}.png`;
+    await page.screenshot({ path });
+    const meta = await page.evaluate((projSrc) => {
+      const proj = (0, eval)(projSrc) as (x: number, y: number, z: number) => number[] | null;
+      const fixed = [...document.querySelectorAll('body *')]
+        .filter((e) => {
+          const cs = getComputedStyle(e);
+          const r = e.getBoundingClientRect();
+          return cs.position === 'fixed' && r.width > 4 && r.height > 4 && cs.visibility !== 'hidden' && cs.display !== 'none' && e.tagName !== 'CANVAS';
+        })
+        .map((e) => {
+          const r = e.getBoundingClientRect();
+          return { cls: (e.className?.toString?.() ?? '').slice(0, 40), id: (e as HTMLElement).dataset?.['testid'] ?? e.id, top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+        });
+      const targets = [...document.querySelectorAll('button, [role=button], [data-cap-target]')]
+        .map((e) => {
+          const r = e.getBoundingClientRect();
+          return { t: (e.textContent ?? '').trim().slice(0, 16), cls: (e.className?.toString?.() ?? '').slice(0, 30), w: r.width, h: r.height, top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+        })
+        .filter((t) => t.w > 0 && t.h > 0 && t.bottom > 0 && t.top < innerHeight);
+      const texts = [...document.querySelectorAll('[data-cap-text]')].map((e) => {
+        const cs = getComputedStyle(e);
+        let bg = '';
+        for (let n: Element | null = e; n; n = n.parentElement) {
+          const b = getComputedStyle(n).backgroundColor;
+          if (b && !/rgba?\(\s*\d+,\s*\d+,\s*\d+,\s*0\)/.test(b) && b !== 'transparent') { bg = b; break; }
+        }
+        const r = e.getBoundingClientRect();
+        return { text: (e.textContent ?? '').trim().slice(0, 30), fg: cs.color, bg, size: parseFloat(cs.fontSize), weight: cs.fontWeight, top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+      });
+      return { inner: { w: innerWidth, h: innerHeight, dpr: devicePixelRatio }, local: new Date().toString(), fixed, targets, texts, haveScene: !!(window as unknown as { __capScene?: unknown }).__capScene, proj: typeof proj };
+    }, projectFn);
+    writeFileSync(path.replace(/\.png$/, '.json'), JSON.stringify({ file: path.split('/').pop(), device: DEVICE, tz: TZ, tag: TAG, ...meta, ...extra }, null, 1));
+    console.log('shot', file);
+  };
+
+  /** Projected centres of owned / unowned tiles (for the ownership delta) plus terrain. */
+  const tileSamples = async () => {
+    const rows = sql(`select q, r, terrain, coalesce(owner_user_id::text,''), coalesce(home_slot::text,'') from tiles where map_id = '${mapId}'`)
+      .split('\n').map((l) => l.split('|'));
+    const out: { q: number; r: number; terrain: string; owned: boolean; home: boolean; xy: number[] | null }[] = [];
+    for (const [q, r, terrain, owner, hs] of rows) {
+      const w = world(Number(q), Number(r));
+      const xy = await page.evaluate(`(${projectFn})(${w.x}, 0.2, ${w.z})`) as number[] | null;
+      if (xy && xy[0]! > 0 && xy[0]! < SIZES[DEVICE].width && xy[1]! > 0 && xy[1]! < SIZES[DEVICE].height)
+        out.push({ q: Number(q), r: Number(r), terrain: terrain!, owned: owner !== '' && hs === '', home: hs !== '', xy });
+    }
+    return out;
+  };
+
+  const frame = async (label: string) => {
+    await shot(label, { tiles: await tileSamples(), home: [hq, hr], post });
+  };
+
+  // 1. Today: December, no overrides.
+  await toPatch(false);
+  await frame('01-today');
+  // 2. Snow look.
+  await toPatch(true);
+  await frame('02-snow');
+
+  // Overlays share the snow look.
+  await page.addStyleTag({ content: read('overlay.css') });
+  await page.evaluate(read('overlay.js'));
+  const tileCentre = (q: number, r: number) => world(q, r);
+  // 3a. Twinkle Lights on one owned tile (the owned tile nearest the screen centre), 3b on the home's eaves.
+  const samples = await tileSamples();
+  const owned = samples.filter((t) => t.owned).sort((a, b) => Math.hypot(a.xy![0]! - SIZES[DEVICE].width / 2, a.xy![1]! - SIZES[DEVICE].height / 2) - Math.hypot(b.xy![0]! - SIZES[DEVICE].width / 2, b.xy![1]! - SIZES[DEVICE].height / 2));
+  const t0 = owned[0]!;
+  const w0 = tileCentre(t0.q, t0.r);
+  await page.evaluate(`window.__capLights.tile(${w0.x}, ${w0.z})`);
+  await page.waitForTimeout(400);
+  await shot('03a-lights-tile', { tile: [t0.q, t0.r], bulbs: await page.evaluate('window.__capLights.stats()') });
+  await page.evaluate('window.__capLights.clear()');
+  const wh = tileCentre(hq, hr);
+  await page.evaluate(`window.__capLights.home(${wh.x}, ${wh.z})`);
+  await page.waitForTimeout(400);
+  await shot('03b-lights-home', { bulbs: await page.evaluate('window.__capLights.stats()') });
+  await page.evaluate('window.__capLights.clear()');
+  // 3c. both together, tile + home.
+  await page.evaluate(`window.__capLights.tile(${w0.x}, ${w0.z}); window.__capLights.home(${wh.x}, ${wh.z})`);
+  await page.waitForTimeout(400);
+  await shot('03c-lights-both', { bulbs: await page.evaluate('window.__capLights.stats()') });
+  await page.evaluate('window.__capLights.clear()');
+
+  // 4. Patch Tree at the nearest trading post: 0, 6, 12 ornaments.
+  if (post) {
+    const [pq, pr] = post.split(',').map(Number) as [number, number];
+    await page.evaluate(([q, r]) => (window as unknown as { __heartpatch: { mapDev: () => { show: (q: number, r: number) => boolean } } }).__heartpatch.mapDev().show(q!, r!), [pq, pr]);
+    await page.waitForTimeout(2500);
+    // close the tile card the select opened, so only the map shows
+    await page.keyboard.press('Escape');
+    await page.evaluate(`document.querySelectorAll('.tile-panel').forEach(e => e.setAttribute('hidden',''))`);
+    await page.waitForTimeout(500);
+    const wp = tileCentre(pq, pr);
+    for (const n of [0, 6, 12]) {
+      await page.evaluate(`window.__capTree.set(${wp.x}, ${wp.z}, ${n})`);
+      await page.waitForTimeout(300);
+      await shot(`04-tree-${String(n).padStart(2, '0')}`, { ornaments: n, star: n >= 12, post: [pq, pr], tree: await page.evaluate('window.__capTree.stats()') });
+    }
+    await page.evaluate('window.__capTree.clear()');
+  }
+
+  // 5. Advent sheet over the snowy patch.
+  await page.evaluate(`document.querySelectorAll('.tile-panel').forEach(e => e.setAttribute('hidden',''))`);
+  await page.evaluate(read('advent.js'));
+  await page.waitForTimeout(600);
+  await shot('05-advent');
+});

@@ -1,0 +1,24 @@
+/* MOCK overlays (capture time). */
+#cap-lights { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+#cap-tree { position: fixed; pointer-events: none; z-index: 2; transform: translate(-50%, -100%); }
+#cap-advent { position: fixed; z-index: 6; left: calc(env(safe-area-inset-left) + 12px); right: calc(env(safe-area-inset-right) + 12px);
+  bottom: calc(env(safe-area-inset-bottom) + 12px); box-sizing: border-box; max-width: 470px; margin: 0 auto; padding: 14px 14px 14px;
+  border-radius: 24px; background: rgb(255 250 252 / 99%); box-shadow: 0 10px 30px rgb(74 49 80 / 28%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif; color: #4a3150; }
+#cap-advent h2 { margin: 0 44px 2px 2px; font-size: 20px; line-height: 1.15; }
+#cap-advent .sub { margin: 0 44px 10px 2px; font-size: 14px; color: #6a4a6f; }
+#cap-advent .x { position: absolute; top: 8px; right: 8px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: #f6dceb; color: #7a2d55; font-size: 20px; font-weight: 700; }
+#cap-advent .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+#cap-advent .day { position: relative; min-height: 48px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 16px; border: 0; box-shadow: inset 0 -3px 0 rgb(0 0 0 / 12%); }
+#cap-advent .day small { font-size: 12px; font-weight: 600; line-height: 1; }
+#cap-advent .claimed { background: #dff3e4; color: #1f5a35; }
+#cap-advent .today { background: #b8487a; color: #fff; box-shadow: 0 0 0 3px #ffd36b, inset 0 -3px 0 #8f3360; }
+#cap-advent .catch { background: #ffe9b8; color: #6b4300; box-shadow: 0 0 0 2px #e0a52e, inset 0 -3px 0 rgb(0 0 0 / 12%); }
+#cap-advent .locked { background: #ece6f0; color: #5e4a66; }
+#cap-advent .key { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 8px 2px 0; font-size: 12.5px; color: #5e4a66; }
+#cap-advent .box { margin: 10px 0 10px; padding: 9px 11px; border-radius: 14px; background: #fff0f6; font-size: 14px; line-height: 1.35; }
+#cap-advent .box b { color: #7a2d55; }
+#cap-advent .open { width: 100%; min-height: 52px; border: 0; border-radius: 18px; background: #b8487a; color: #fff; font-size: 17px; font-weight: 700;
+  box-shadow: 0 3px 0 #8f3360; font-family: inherit; }
+#cap-advent .quiet { display: block; width: 100%; min-height: 44px; margin-top: 4px; border: 0; background: none; color: #7a2d55; font-size: 14px; font-weight: 600; font-family: inherit; }
