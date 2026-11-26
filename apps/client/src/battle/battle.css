@@ -1302,6 +1302,36 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
  * above the handle as stickers, and the controls (only "waiting" in a boss
  * fight) step aside.
  */
+/* The risen sheet's share by screen height: the owner's ~34vh on a tall
+   phone, more on a short one so the moves never scroll (BOSS_HUD.sheetVh*). */
+.battle-hud-team {
+  --boss-sheet-vh: var(--boss-sheet-vh-tall, 34);
+}
+
+@media (max-height: 840px) {
+  .battle-hud-team {
+    --boss-sheet-vh: var(--boss-sheet-vh-840, 42);
+  }
+}
+
+@media (max-height: 700px) {
+  .battle-hud-team {
+    --boss-sheet-vh: var(--boss-sheet-vh-700, 48);
+  }
+}
+
+@media (max-height: 600px) {
+  .battle-hud-team {
+    --boss-sheet-vh: var(--boss-sheet-vh-600, 52);
+  }
+}
+
+@media (max-height: 520px) and (min-width: 640px) {
+  .battle-hud-team {
+    --boss-sheet-vh: var(--boss-sheet-vh-sideways, 46);
+  }
+}
+
 .battle-hud-team .battle-sheet {
   gap: 0;
   max-height: calc(var(--boss-sheet-vh, 34) * 1vh + env(safe-area-inset-bottom));
@@ -1323,6 +1353,9 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 }
 
 .battle-hud-team .battle-sheet:has(> .boss-dock[data-sheet='raised']) {
+  /* One height for every picker step (a move step, Ready, a windup's one
+     move), so the band holds still while picking and the drop is exact. */
+  height: calc(var(--boss-sheet-vh, 34) * 1vh + env(safe-area-inset-bottom));
   animation: boss-sheet-rise var(--boss-rise, 220ms) ease-out;
 }
 
@@ -1367,8 +1400,9 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   display: none;
 }
 
-.battle-hud-team .battle-sheet > .battle-problem {
-  z-index: 1;
+/* A problem line takes the caption's place while it shows. */
+.battle-hud-team .battle-sheet:has(> .battle-problem:not(:empty)) > .battle-caption {
+  display: none;
 }
 
 /* The picker fills the sheet on its own; while a round plays the caption is
@@ -1380,7 +1414,9 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 
 .boss-dock {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
+  min-height: 0;
 }
 
 /* The handle: the three team chips, centred, with "Round N" beside them. */
@@ -1529,10 +1565,12 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
    risen sheet if a short phone needs it. */
 .boss-picker {
   display: flex;
+  box-sizing: border-box;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
   overflow-y: auto;
-  max-height: calc(var(--boss-sheet-vh, 34) * 1vh - var(--boss-handle-h, 64px));
   padding-bottom: 12px;
 }
 

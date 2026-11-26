@@ -409,6 +409,14 @@ export function mountBossHud(): BossHud {
     reset: () => {
       hud.hidePicker();
       dock.dataset['sheet'] = 'rest';
+      // Nothing of the last fight carries into the next: its order dots, its stickers.
+      hud.setOrder(null);
+      for (const timer of timers) window.clearTimeout(timer);
+      timers.clear();
+      for (const node of [bossCallout, ...[...chips.values()].map((c) => c.callout)]) {
+        node.hidden = true;
+        node.classList.remove('boss-callout-show');
+      }
     },
     dispose: () => {
       for (const timer of timers) window.clearTimeout(timer);

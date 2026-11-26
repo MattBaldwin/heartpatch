@@ -216,7 +216,13 @@ describe('a mini-boss fight on screen (#190)', () => {
       const vars = bossHudVars();
       expect(vars['--boss-strip-h']).toBe(`${String(BOSS_HUD.stripHeight)}px`);
       expect(vars['--boss-handle-h']).toBe(`${String(BOSS_HUD.handleHeight)}px`);
-      expect(vars['--boss-sheet-vh']).toBe(String(BOSS_HUD.sheetVh));
+      expect(vars['--boss-sheet-vh-tall']).toBe(String(BOSS_HUD.sheetVh));
+      // A shorter phone gives the picker more of its height, never less.
+      const short = BOSS_HUD.sheetVhShort;
+      expect(vars['--boss-sheet-vh-700']).toBe(String(short.h700));
+      expect(short.h840).toBeGreaterThanOrEqual(BOSS_HUD.sheetVh);
+      expect(short.h700).toBeGreaterThanOrEqual(short.h840);
+      expect(short.h600).toBeGreaterThanOrEqual(short.h700);
       expect(vars['--boss-chip']).toBe(`${String(BOSS_HUD.chipSize)}px`);
       expect(Object.keys(vars).every((k) => k.startsWith('--boss-'))).toBe(true);
       // A chip is a 44 pt target.

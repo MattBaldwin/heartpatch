@@ -277,8 +277,9 @@ export const BOSS_CARDS = {
  * The phone-first boss HUD (#190 PR 1, owner option 1): a slim strip at the
  * top and a bottom sheet whose collapsed handle holds the team as chips; the
  * sheet rises with the picker on the player's turn. CSS px unless named.
- * battle.css reads these as custom properties (`bossHudStyle`), and
- * `bossRestBand` works out the band they leave, so they live in one place.
+ * battle.css reads these as custom properties (`bossHudVars`), and
+ * `bossRestEdges` and `bossBand` work out the band they leave, so they live
+ * in one place.
  */
 export const BOSS_HUD = {
   /** The top strip's height (one 44 pt row, two lines inside), and its gap under the inset. */
@@ -289,8 +290,22 @@ export const BOSS_HUD = {
   /** The collapsed handle's height (the chips' row), and the stage's clearance above it. */
   handleHeight: 64, // TUNE:
   handleClear: 8, // TUNE:
-  /** The risen sheet with the picker, a share of the screen height (handle included). */
+  /**
+   * The risen sheet with the picker, a share of the screen height (handle
+   * included): the owner's ~34vh on a tall phone, more on a short one so the
+   * moves never scroll (the battle sheet's own #656 steps, battle.css).
+   */
   sheetVh: 34, // TUNE:
+  sheetVhShort: {
+    /** At most 840 px tall (an iPhone mini). */
+    h840: 42, // TUNE:
+    /** At most 700 px tall (an iPhone SE). */
+    h700: 48, // TUNE:
+    /** At most 600 px tall. */
+    h600: 52, // TUNE:
+    /** A phone on its side (at most 520 px tall, at least 640 px wide). */
+    sideways: 46, // TUNE:
+  },
   /** A team chip's disc, and how far the squishy picking now rises out of the handle. */
   chipSize: 56, // TUNE: a 44 pt target with a ring around it
   chipRaise: 8, // TUNE:

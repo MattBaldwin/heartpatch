@@ -453,10 +453,9 @@ describe('BattleScene', () => {
       ]);
       expect(framing.band).toEqual({ top: 0.142, bottom: 0.876 });
       expect(framing.team.length).toBeGreaterThan(0);
-      if (framing.face) {
-        expect(framing.face.top).toBeGreaterThanOrEqual(band.top - 1e-6);
-        expect(framing.face.bottom).toBeLessThanOrEqual(band.bottom + 1e-6);
-      }
+      expect(framing.face).not.toBeNull();
+      expect(framing.face!.top).toBeGreaterThanOrEqual(band.top - 1e-6);
+      expect(framing.face!.bottom).toBeLessThanOrEqual(band.bottom + 1e-6);
     });
 
     it('a shield bubble per squishy', () => {

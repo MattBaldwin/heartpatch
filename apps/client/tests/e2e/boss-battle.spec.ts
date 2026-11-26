@@ -326,10 +326,14 @@ test.describe('a mini-boss fight (#190)', () => {
       const result = document.querySelector('[data-testid="battle-result"]');
       const slot = document.querySelector('[data-testid="boss-windup"]');
       const bar = document.querySelector('[data-testid="boss-energy"]');
+      const picker = document.querySelector('[data-testid="boss-picker"]');
       const sample = () => {
         const scene = (window as unknown as Hook).__heartpatch?.battle?.()?.scene;
         const shown = result instanceof HTMLElement && result.offsetParent !== null;
-        if (scene?.framing && scene.playing && !shown) {
+        // A round playing with the sheet collapsed: the step clock can still
+        // name the last step for a moment after the next picker has risen.
+        const collapsed = picker instanceof HTMLElement && picker.hidden;
+        if (scene?.framing && scene.playing && !shown && collapsed) {
           samples.push({
             kind: scene.playing.kind,
             framing: scene.framing,
@@ -370,7 +374,7 @@ test.describe('a mini-boss fight (#190)', () => {
         'fogEnd',
         'team',
       ]);
-      // The band holds its height through the round (#855): nothing in the HUD moves.
+      // Collapsed, the band holds its height through the round (#855): nothing in the HUD moves.
       expect(f.band.bottom - f.band.top, at).toBeGreaterThanOrEqual(MIN_BAND);
       // (A little slack: the hook reads the facing a frame after the camera did.)
       if (f.face && (f.bossFacing ?? 1) >= FACING_MIN + 0.05) {
@@ -445,11 +449,29 @@ test.describe('a mini-boss fight (#190)', () => {
     const f = (await battleState(page))!.scene!.framing!;
     expect(f.band.bottom, JSON.stringify(f.band)).toBeLessThan(0.75);
     expect(f.band.bottom - f.band.top, JSON.stringify(f.band)).toBeGreaterThan(0.4);
-    const picker = await page
-      .getByTestId('boss-picker')
-      .evaluate((e) => ({ scroll: e.scrollHeight, client: e.clientHeight }));
+    const fits = () =>
+      page
+        .getByTestId('boss-picker')
+        .evaluate((e) => ({ scroll: e.scrollHeight, client: e.clientHeight }));
+    const sheetHeight = () =>
+      page.getByTestId('battle-sheet').evaluate((e) => (e as HTMLElement).offsetHeight);
     // The picker fits the risen sheet without scrolling on this phone.
+    let picker = await fits();
     expect(picker.scroll).toBeLessThanOrEqual(picker.client + 1);
+    // One height for every step: a move step and Ready are the same, so the
+    // band holds still while picking.
+    const first = await sheetHeight();
+    for (let i = 0; i < 3; i++) await realTap(page.getByTestId('boss-move').first());
+    await expect(page.getByTestId('boss-go')).toBeVisible();
+    expect(await sheetHeight()).toBe(first);
+    // A short phone (an iPhone SE) gives the picker more of its height: the
+    // moves still fit without scrolling.
+    await page.setViewportSize({ width: 375, height: 667 });
+    await realTap(page.getByTestId('boss-change'));
+    await expect(page.getByTestId('boss-pick-header')).toBeVisible();
+    await expect.poll(async () => (await sheetHeight()) / 667).toBeGreaterThan(0.45);
+    picker = await fits();
+    expect(picker.scroll, JSON.stringify(picker)).toBeLessThanOrEqual(picker.client + 1);
   });
 
   test('a duplicate never joins: no ask, no charms', async ({ browser }) => {

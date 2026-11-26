@@ -24,7 +24,6 @@ export const BOSS_TEXT = {
   start: (name: string) => `A BIG ${name} wants to play!`,
   stompAgain: 'Stomp again!',
   round: (n: number) => `Round ${String(n)}`,
-  order: 'Order',
   /** `names`: the movers, in order, joined ("Pip, Puff, Bun"). */
   orderLabel: (names: string) => `Who goes when: ${names}.`,
   everyone: 'Everyone!',
@@ -45,15 +44,13 @@ export const BOSS_TEXT = {
     down: 'napping',
   },
   pickHeader: (name: string) => `What should ${name} do?`,
-  picking: 'Picking…',
-  next: 'Next',
   tuckered: 'Napping',
-  goBackHint: 'Tap a finished chip to go back.',
   ready: "Everyone's ready!",
   go: 'Go! ✨',
   changePick: 'Change a pick',
   sameAgain: 'Same again',
   triesLeft: (n: number) => `🍀 ${String(n)} ${n === 1 ? 'try' : 'tries'} left today`,
+  /** The visit's last day (#190): off the fight strip since PR 1; PR 6's loss line names it. */
   hereUntil: (day: string) => `here until ${day}`,
   lastDay: 'last day!',
   // The result (mockup frames 3 and 5).
@@ -271,7 +268,12 @@ export function bossHudVars(hud: typeof BOSS_HUD = BOSS_HUD): Readonly<Record<st
     '--boss-close-gap': px(hud.closeGap),
     '--boss-handle-h': px(hud.handleHeight),
     '--boss-handle-clear': px(hud.handleClear),
-    '--boss-sheet-vh': String(hud.sheetVh),
+    // The sheet's share is picked by screen height in battle.css (`--boss-sheet-vh`).
+    '--boss-sheet-vh-tall': String(hud.sheetVh),
+    '--boss-sheet-vh-840': String(hud.sheetVhShort.h840),
+    '--boss-sheet-vh-700': String(hud.sheetVhShort.h700),
+    '--boss-sheet-vh-600': String(hud.sheetVhShort.h600),
+    '--boss-sheet-vh-sideways': String(hud.sheetVhShort.sideways),
     '--boss-chip': px(hud.chipSize),
     '--boss-chip-raise': px(hud.chipRaise),
     '--boss-dot': px(hud.dotSize),
