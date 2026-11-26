@@ -1,0 +1,209 @@
+{
+ "file": "ipad-01-rest-opt1.png",
+ "device": "ipad",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-26T00:38:32.079Z",
+ "inner": {
+  "w": 820,
+  "h": 1180,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 32.14951879604474,
+   "fogEnd": 85,
+   "band": {
+    "top": 0.05254237288135593,
+    "bottom": 0.66
+   },
+   "face": {
+    "top": 0.26148404617024756,
+    "bottom": 0.3185142371468467
+   },
+   "team": [
+    {
+     "top": 0.49021373904219473,
+     "bottom": 0.5384084281954405
+    },
+    {
+     "top": 0.4961209407400883,
+     "bottom": 0.5367874013952512
+    },
+    {
+     "top": 0.5086605669957547,
+     "bottom": 0.5423381210723474
+    }
+   ],
+   "bossFacing": 0.9997333191789904,
+   "open": null,
+   "cardsFaded": false
+  },
+  "playing": null,
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": "A BIG Rakelet wants to play!",
+ "variant": {
+  "var": "opt1",
+  "cap": "risen"
+ },
+ "rects": {
+  "bossHead": {
+   "top": 8,
+   "bottom": 52,
+   "left": 130,
+   "right": 690
+  },
+  "plate": {
+   "top": 8,
+   "bottom": 52,
+   "left": 130,
+   "right": 660
+  },
+  "order": {
+   "top": 8,
+   "bottom": 52,
+   "left": 666,
+   "right": 690
+  },
+  "friends": {
+   "top": 778.8125,
+   "bottom": 850.8125,
+   "left": 0,
+   "right": 820
+  },
+  "sheet": {
+   "top": 870.625,
+   "bottom": 1180,
+   "left": 0,
+   "right": 820
+  },
+  "picker": {
+   "top": 945.625,
+   "bottom": 1166,
+   "left": 16,
+   "right": 804
+  },
+  "leave": {
+   "top": 58,
+   "bottom": 102,
+   "left": 764,
+   "right": 808
+  },
+  "round": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "winding": {
+   "top": 20,
+   "bottom": 40,
+   "left": 515.546875,
+   "right": 646
+  },
+  "go": null,
+  "callout": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  }
+ },
+ "friendRects": [
+  {
+   "top": 790.8125,
+   "bottom": 846.8125,
+   "left": 298,
+   "right": 354,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "top": 790.8125,
+   "bottom": 846.8125,
+   "left": 382,
+   "right": 438,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "top": 790.8125,
+   "bottom": 846.8125,
+   "left": 466,
+   "right": 522,
+   "w": 56,
+   "h": 56
+  }
+ ],
+ "moveRects": [
+  {
+   "t": "PuddlepuffPicking…",
+   "top": 945.625,
+   "bottom": 989.625,
+   "left": 16,
+   "right": 274.65625,
+   "w": 258.65625,
+   "h": 44
+  },
+  {
+   "t": "PuddlepuffNext",
+   "top": 945.625,
+   "bottom": 989.625,
+   "left": 280.65625,
+   "right": 539.328125,
+   "w": 258.671875,
+   "h": 44
+  },
+  {
+   "t": "PuddlepuffNext",
+   "top": 945.625,
+   "bottom": 989.625,
+   "left": 545.328125,
+   "right": 804,
+   "w": 258.671875,
+   "h": 44
+  },
+  {
+   "t": "Giggle DrizzleWate",
+   "top": 1041.625,
+   "bottom": 1099.8125,
+   "left": 16,
+   "right": 406,
+   "w": 390,
+   "h": 58.1875
+  },
+  {
+   "t": "Belly FlopWater💥 ",
+   "top": 1041.625,
+   "bottom": 1099.8125,
+   "left": 414,
+   "right": 804,
+   "w": 390,
+   "h": 58.1875
+  },
+  {
+   "t": "Bubble BathWater💗",
+   "top": 1107.8125,
+   "bottom": 1166,
+   "left": 16,
+   "right": 406,
+   "w": 390,
+   "h": 58.1875
+  }
+ ],
+ "sheetScroll": {
+  "sheetClient": 306,
+  "sheetScroll": 306,
+  "pickerClient": 220,
+  "pickerScroll": 220
+ }
+}

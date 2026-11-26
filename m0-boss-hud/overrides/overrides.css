@@ -1,0 +1,155 @@
+/* #190 M0 capture-time overrides. Injected with page.addStyleTag after the fight is up; no app code changes.
+   Gated by <html data-var="opt1|opt1c|opt3"> and <html data-cap="collapsed|risen"> (set by sync.js). */
+
+/* ── shared: the one-row top strip (Option 1 and Option 3) ───────────────── */
+html[data-var] .boss-head {
+  right: calc(env(safe-area-inset-right) + 12px) !important;
+  left: var(--cap-strip-left, calc(env(safe-area-inset-left) + 12px)) !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 6px !important;
+  height: 44px;
+  max-width: 560px !important;
+  margin: 0 auto !important;
+}
+html[data-var] .boss-plate {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+  min-width: 0;
+  width: auto !important;
+  height: 44px;
+  padding: 0 12px !important;
+  border-radius: 22px !important;
+}
+html[data-var] .boss-plate-row:first-child { flex: 0 0 auto; }
+html[data-var] .boss-name { overflow: visible; text-overflow: clip; }
+html[data-var] .boss-plate .battle-energy { flex: 1 1 0; width: auto !important; min-width: 40px; height: 12px !important; }
+html[data-var] .boss-plate-chips { flex-wrap: nowrap !important; flex: 0 0 auto; }
+/* one chip slot: only the ⏳ chip; the level, stomps, tries and until chips leave the strip */
+html[data-var] .boss-level,
+html[data-var] .boss-chip-gold,
+html[data-var] .boss-chip-try,
+html[data-var] .boss-chip-until,
+html[data-var] .boss-order-label { display: none !important; }
+html[data-var] .boss-order {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  height: 44px;
+  padding: 0 12px !important;
+  border-radius: 22px !important;
+}
+
+/* ── Option 1: strip at inset + 8, full width (the ✕ and Round sit at inset + 58, below it) ── */
+html[data-var='opt1'] .boss-head,
+html[data-var='opt1c'] .boss-head { top: calc(env(safe-area-inset-top) + 8px) !important; }
+html[data-var='opt1'] .boss-round,
+html[data-var='opt1c'] .boss-round { display: none !important; }
+
+/* ── Option 3: today's layout, only the top block on one row (below the ✕ / Round row) ── */
+html[data-var='opt3'] .boss-head { top: calc(env(safe-area-inset-top) + 112px) !important; }
+
+/* ── Option 1: team chips in the handle (replaces .boss-friends) ──────────── */
+html[data-var='opt1'] .boss-friends,
+html[data-var='opt1c'] .boss-friends {
+  right: 0 !important;
+  bottom: calc(env(safe-area-inset-bottom)) !important;
+  left: 0 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-end;
+  justify-content: center !important;
+  gap: 28px !important;
+  box-sizing: border-box;
+  height: 72px !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding-bottom: 4px;
+  z-index: 3;
+  pointer-events: auto;
+}
+html[data-var='opt1'][data-cap='risen'] .boss-friends {
+  /* the chips ride the top 72 px of the 34vh sheet (the plan's literal reading) */
+  bottom: calc(34vh + env(safe-area-inset-bottom) - 72px) !important;
+}
+html[data-var='opt1c'][data-cap='risen'] .boss-friends {
+  /* the handle sits on top of a 34vh picker */
+  bottom: calc(34vh + env(safe-area-inset-bottom)) !important;
+}
+html[data-var='opt1'] .boss-friends-placed,
+html[data-var='opt1c'] .boss-friends-placed { height: 72px !important; }
+html[data-var='opt1'] .boss-friend,
+html[data-var='opt1c'] .boss-friend,
+html[data-var='opt1'] .boss-friends-placed > .boss-friend,
+html[data-var='opt1c'] .boss-friends-placed > .boss-friend {
+  --pct: 100;
+  --tint: #ffe2ee;
+  position: relative !important;
+  left: auto !important;
+  box-sizing: border-box;
+  flex: 0 0 56px !important;
+  align-items: center;
+  justify-content: center;
+  width: 56px !important;
+  height: 56px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: conic-gradient(#6fcf8a calc(var(--pct) * 1%), rgb(255 255 255 / 70%) 0) !important;
+  transform: none !important;
+}
+html[data-var='opt1'] .boss-friend-tint-1, html[data-var='opt1c'] .boss-friend-tint-1 { --tint: #fff0b8; }
+html[data-var='opt1'] .boss-friend-tint-2, html[data-var='opt1c'] .boss-friend-tint-2 { --tint: #d9f2d0; }
+/* the portrait disc inside the ring (today's cards carry no portrait: a tinted disc with the initial) */
+html[data-var='opt1'] .boss-friend::before,
+html[data-var='opt1c'] .boss-friend::before {
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--tint);
+  content: '';
+}
+/* status dot */
+html[data-var='opt1'] .boss-friend::after,
+html[data-var='opt1c'] .boss-friend::after {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fffaf1;
+  border-radius: 50%;
+  background: #6fcf8a;
+  content: '';
+}
+html[data-var='opt1'] .boss-friend-down::after, html[data-var='opt1c'] .boss-friend-down::after { background: #b9b0bd; }
+html[data-var='opt1'] .boss-friend .battle-energy, html[data-var='opt1c'] .boss-friend .battle-energy { display: none !important; }
+html[data-var='opt1'] .boss-friend-name, html[data-var='opt1c'] .boss-friend-name {
+  position: relative;
+  z-index: 1;
+  display: block;
+  font-size: 0;
+}
+html[data-var='opt1'] .boss-friend-name::first-letter, html[data-var='opt1c'] .boss-friend-name::first-letter { font-size: 22px; }
+
+/* ── Option 1: the sheet. Collapsed = a 72 px handle (64 + 8 clear above it) holding the chips ── */
+html[data-var='opt1'][data-cap='collapsed'] .battle-sheet,
+html[data-var='opt1c'][data-cap='collapsed'] .battle-sheet {
+  max-height: calc(72px + env(safe-area-inset-bottom)) !important;
+  min-height: calc(72px + env(safe-area-inset-bottom)) !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+html[data-var='opt1'][data-cap='collapsed'] .battle-sheet > *,
+html[data-var='opt1c'][data-cap='collapsed'] .battle-sheet > * { display: none !important; }
+/* Risen: today's picker in a 34vh sheet; the top 72 px are the chips' zone */
+html[data-var='opt1'][data-cap='risen'] .battle-sheet {
+  --battle-sheet-vh: 34;
+  padding-top: 72px !important;
+}
+html[data-var='opt1c'][data-cap='risen'] .battle-sheet {
+  --battle-sheet-vh: 34;
+  max-height: calc(34vh + env(safe-area-inset-bottom)) !important;
+}
