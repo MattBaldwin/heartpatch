@@ -1,0 +1,162 @@
+{
+ "file": "iphone-05-result.png",
+ "device": "iphone",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-26T05:36:28.486Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 65.3393236329095,
+   "fogEnd": 105.3393236329095,
+   "band": {
+    "top": 0.1983568075117371,
+    "bottom": 0.5089678697183099
+   },
+   "face": null,
+   "team": [],
+   "bossFacing": 0.9871886872939051
+  },
+  "playing": null,
+  "shields": {
+   "a": true,
+   "b": false
+  }
+ },
+ "caption": null,
+ "rects": {
+  "strip": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "energy": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "name": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "order": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "handle": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "friends": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "dock": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "sheet": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "leave": {
+   "top": 117,
+   "bottom": 161,
+   "left": 337,
+   "right": 381
+  },
+  "round": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "result": {
+   "top": 441.640625,
+   "bottom": 806,
+   "left": 16.5,
+   "right": 376.5
+  },
+  "winding": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "go": null,
+  "callout": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "caption": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  }
+ },
+ "dockSheet": "lowered",
+ "step": "05-result",
+ "captionVisible": "1/none",
+ "friendRects": [
+  {
+   "status": "ok",
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0,
+   "w": 0,
+   "h": 0
+  },
+  {
+   "status": "ok",
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0,
+   "w": 0,
+   "h": 0
+  },
+  {
+   "status": "down",
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0,
+   "w": 0,
+   "h": 0
+  }
+ ],
+ "moveRects": [],
+ "sheetScroll": {
+  "sheetClient": 0,
+  "sheetScroll": 0,
+  "pickerClient": 0,
+  "pickerScroll": 0
+ }
+}

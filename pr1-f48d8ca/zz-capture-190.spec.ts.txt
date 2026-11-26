@@ -1,0 +1,428 @@
+// THROWAWAY (#190 M0 boss HUD mockups; adapted from #868's round-2 spec). Never committed as a spec: it lives in
+// m0-boss-hud/zz-capture-190.spec.ts.txt. Copy it to apps/client/tests/e2e/zz-capture-190.spec.ts to run (see README.md).
+// CAPTURE_MODE=rest: shoots each CAPTURE_VARIANTS entry on one frozen move-picker instant. CAPTURE_MODE=windup: CAPTURE_VARIANT
+// stays applied while the loop hunts the windup / hit frames. Real server, no route stubs: the boss visit is
+// pinned straight into `boss_windows` (the server's own lazy-open path reads it).
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { expect, test, type Page } from '@playwright/test';
+import { selectTile } from './claim-land.js';
+import { newPlayer, visitPatch } from './players.js';
+import { realTap } from './touch.js';
+import { trayButton } from './trays.js';
+
+const OUT = process.env['CAPTURE_OUT'] ?? 'captures';
+const DB = process.env['CAPTURE_DB'] ?? 'postgres://heartpatch:heartpatch@localhost:5432/heartpatch';
+/** Names on HP_MINI_BOSSES_TESTERS; the first one not signed up yet is used. */
+const TESTERS = (process.env['HP_MINI_BOSSES_TESTERS'] ?? '').split(',').filter(Boolean);
+const BOSS = process.env['CAPTURE_BOSS'] ?? 'rakelet';
+/** Which frames this run hunts, comma-separated (see FRAMES). */
+const WANT = (process.env['CAPTURE_FRAMES'] ?? 'rest,windup,hit,taunt').split(',');
+const TZ = process.env['CAPTURE_TZ'] ?? 'Asia/Bangkok';
+const BURST = Number(process.env['CAPTURE_BURST'] ?? '3');
+const MODE = process.env['CAPTURE_MODE'] ?? 'rest';
+const DEVICE = (process.env['CAPTURE_DEVICE'] ?? 'iphone') as 'iphone' | 'ipad' | 'se';
+const PARTNER_LEVEL = Number(process.env['CAPTURE_PARTNER_LEVEL'] ?? '18');
+const TEAM_LEVEL = Number(process.env['CAPTURE_TEAM_LEVEL'] ?? '30');
+const BUDGET_MS = Number(process.env['CAPTURE_BUDGET_MS'] ?? String(25 * 60_000));
+const SIZES = {
+  iphone: { width: 393, height: 852 },
+  ipad: { width: 820, height: 1180 },
+  se: { width: 375, height: 667 },
+} as const;
+
+/** Transient frames: the text that shows them. */
+const FRAMES: Record<string, RegExp> = {
+  windup: /^Winding up!$/,
+  taunt: /^Here it comes!$/,
+};
+
+test.use({
+  actionTimeout: 90_000,
+  launchOptions: {
+    executablePath: process.env['PW_CHROMIUM_EXECUTABLE'] ?? '/opt/pw-browsers/chromium',
+    args: [
+      '--use-gl=angle',
+      '--use-angle=swiftshader',
+      '--enable-unsafe-swiftshader',
+      '--ignore-gpu-blocklist',
+    ],
+  },
+});
+
+const sql = (query: string): string =>
+  execFileSync('psql', [DB, '-tAc', query], { encoding: 'utf8' }).trim();
+
+/**
+ * Slows the battle's step timers 5x so captions stay up for a screenshot, and
+ * puts the page on a virtual clock (`performance.now`, rAF times, those step
+ * timers) that `__capScale(s)` slows further: a windup's power-up is shot
+ * frame by frame at 1/20 speed, its 3D and its step timers slowed alike.
+ */
+const SLOW = `(() => {
+  const realNow = performance.now.bind(performance);
+  let base = realNow(), vbase = base, scale = 1;
+  const now = () => vbase + (realNow() - base) * scale;
+  performance.now = now;
+  const raf = window.requestAnimationFrame.bind(window);
+  window.requestAnimationFrame = (cb) => raf(() => cb(now()));
+  const st = window.setTimeout.bind(window), ct = window.clearTimeout.bind(window);
+  const timers = new Map();
+  let nextId = 1e9;
+  setInterval(() => {
+    const t = now();
+    for (const [id, x] of timers) if (t >= x.due) { timers.delete(id); x.fn(...x.a); }
+  }, 10);
+  window.setTimeout = (fn, ms, ...a) => {
+    if (typeof fn !== 'function' || typeof ms !== 'number' || ms < 250) return st(fn, ms, ...a);
+    const id = nextId++;
+    timers.set(id, { fn, due: now() + ms * 5, a });
+    return id;
+  };
+  window.clearTimeout = (id) => { if (!timers.delete(id)) ct(id); };
+  window.__capScale = (s) => { vbase = now(); base = realNow(); scale = s; };
+})();`;
+
+const HIDE_DEV = '.dev-status { display: none !important; }';
+
+test(`boss face captures ${DEVICE} ${BOSS}`, async ({ browser }) => {
+  test.setTimeout(BUDGET_MS + 300_000);
+  const prefix = `${OUT}/${DEVICE}`;
+  mkdirSync(OUT, { recursive: true });
+  const used = new Set(sql(`select username from users`).split('\n'));
+  const name = TESTERS.find((n) => !used.has(n));
+  if (!name) throw new Error('every HP_MINI_BOSSES_TESTERS name is taken');
+  Object.assign(test.info().project.use, {
+    viewport: SIZES[DEVICE],
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+  });
+  const page = await newPlayer(browser, name, undefined, { timezoneId: TZ });
+  if (DEVICE === 'iphone') {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setSafeAreaInsetsOverride' as never, {
+      insets: { top: 59, topMax: 59, bottom: 34, bottomMax: 34, left: 0, leftMax: 0, right: 0, rightMax: 0 },
+    } as never);
+  }
+  console.log(`tz ${TZ} local ${await page.evaluate(() => new Date().toString())}`);
+  await page.goto('/?tier=high');
+  await page.addStyleTag({ content: HIDE_DEV });
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Stomp Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  for (let i = 0; i < 2; i++) {
+    for (let tryNo = 0; ; tryNo++) {
+      await realTap(await trayButton(page, 'battle-dev-grant'));
+      try {
+        await expect(page.locator('.battle-entry-note')).toContainText('joined you', {
+          timeout: 15_000,
+        });
+        break;
+      } catch (e) {
+        if (tryNo >= 3) throw e;
+      }
+    }
+  }
+
+  // The visit: this week's window on the patch, the chosen boss, open now.
+  const userId = sql(`select id from users where username = '${name}'`);
+  const mapId = sql(`select map_id from map_members where user_id = '${userId}'`);
+  const tile = sql(
+    `select q || ',' || r from tiles where map_id = '${mapId}' and owner_user_id is null
+       and home_slot is null and node_resource is null and terrain = 'meadow'
+     order by abs(q) + abs(r) limit 1`,
+  ).split(',').map(Number) as [number, number];
+  sql(`insert into boss_windows (map_id, window_id, species_id, q, r, opens_at, ends_at)
+       select id, date_trunc('week', now() at time zone time_zone)::date, '${BOSS}',
+              ${tile[0]}, ${tile[1]}, now() - interval '1 hour', now() + interval '47 hours'
+       from maps where id = '${mapId}'`);
+  // Levels: the Partner sets the boss's level (+2); the other two hold out longer.
+  const starter = sql(`select starter_squishy_id from map_members where user_id = '${userId}'`);
+  sql(`update squishies set level = ${TEAM_LEVEL} where owner_user_id = '${userId}'`);
+  sql(`update squishies set level = ${PARTNER_LEVEL} where id = '${starter}'`);
+
+  console.log(`set up ${name} map ${mapId} tile ${tile.join(',')}`);
+  const toPatch = async () => {
+    // A reload now and then sticks on the lobby's "One moment…": reload again.
+    for (let tryNo = 0; ; tryNo++) {
+      await page.goto('/?tier=high', { waitUntil: 'commit', timeout: 60_000 });
+      console.log('reloaded');
+      const visit = lobby.getByRole('button', { name: 'Visit patch' });
+      const ready = page.locator('#game[data-ready=true]');
+      const ok = await expect
+        .poll(async () => (await visit.isVisible().catch(() => false)) || ((await ready.count()) > 0 && !(await lobby.isVisible().catch(() => false))), { timeout: 40_000 })
+        .toBe(true)
+        .then(() => true, () => false);
+      if (ok) {
+        await page.waitForTimeout(3000);
+        break;
+      }
+      console.log('page text: ' + JSON.stringify((await page.evaluate(() => document.body.innerText).catch((e) => String(e))).slice(0, 120)));
+      if (tryNo >= 4) throw new Error('the patch never opened');
+    }
+    await page.addStyleTag({ content: HIDE_DEV });
+    if (await lobby.getByRole('button', { name: 'Visit patch' }).isVisible().catch(() => false)) await visitPatch(lobby);
+    console.log('on the patch');
+    await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
+    const hint = page.getByTestId('tray-hint-ok');
+    if (await hint.isVisible().catch(() => false)) await hint.tap();
+  };
+  await toPatch();
+
+  const resetTries = () => {
+    sql(`update battles set started_at = started_at - interval '3 days'
+         where map_id = '${mapId}' and kind = 'miniboss' and status <> 'active'`);
+    sql(`delete from boss_encounters where map_id = '${mapId}'`);
+  };
+
+  let fightNo = 0;
+  const startFight = async () => {
+    resetTries();
+    // The tile card keeps the visit as last read ("You beat it!"): load it afresh.
+    if (fightNo++ > 0) await toPatch();
+    console.log('starting a fight');
+    const panel = page.getByTestId('tile-panel');
+    await expect(async () => {
+      await selectTile(page, { q: tile[0], r: tile[1] });
+      await expect(panel.getByTestId('boss-fight')).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 60_000 });
+    await realTap(panel.getByTestId('boss-fight'));
+    await expect(page.getByTestId('boss-strip')).toBeVisible({ timeout: 60_000 });
+  };
+
+  await startFight();
+
+  const got = new Set<string>();
+  const bossName = ((await page.getByTestId('boss-name').innerText()).match(/[A-Z][a-z]+/) ?? [''])[0];
+  console.log(`boss name ${bossName}`);
+  const rect = (sel: string) =>
+    page.evaluate((s) => {
+      const e = document.querySelector(s);
+      if (!e) return null;
+      const r = e.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+    }, sel);
+  const shot = async (file: string, label = file) => {
+    const path = `${prefix}-${file}.png`;
+    await page.screenshot({ path });
+    const meta = {
+      file: path.split('/').pop(),
+      device: DEVICE,
+      tz: TZ,
+      at: new Date().toISOString(),
+      inner: await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight, dpr: devicePixelRatio })),
+      battle: await page.evaluate(() => {
+        const b = (window as unknown as { __heartpatch?: Record<string, () => unknown> }).__heartpatch?.['battle']?.() as
+          | { scene?: { framing?: unknown; playing?: unknown; shields?: unknown } }
+          | undefined;
+        return { framing: b?.scene?.framing ?? null, playing: b?.scene?.playing ?? null, shields: (b?.scene as { shields?: unknown } | undefined)?.shields ?? null };
+      }),
+      caption: await page
+        .getByTestId('battle-caption')
+        .innerText({ timeout: 500 })
+        .catch(() => null),
+      rects: Object.fromEntries(
+        await Promise.all(
+          Object.entries({
+            strip: '[data-testid=boss-strip]',
+            energy: '[data-testid=boss-energy]',
+            name: '[data-testid=boss-name]',
+            order: '[data-testid=boss-order]',
+            handle: '[data-testid=boss-handle]',
+            friends: '[data-testid=boss-friends]',
+            dock: '.boss-dock',
+            sheet: '.battle-sheet',
+            picker: '[data-testid=boss-picker]',
+            leave: '.battle-top button',
+            round: '[data-testid=boss-round]',
+            result: '[data-testid=battle-result]',
+            winding: '[data-testid=boss-windup]',
+            go: '[data-testid=boss-go]',
+            callout: '[data-testid=boss-callout]',
+            caption: '[data-testid=battle-caption]',
+          }).map(async ([k, sel]) => [k, await rect(sel)] as const),
+        ),
+      ),
+      dockSheet: await page.evaluate(() => (document.querySelector('.boss-dock') as HTMLElement | null)?.dataset['sheet'] ?? null),
+      step: label,
+      windVis: await page.evaluate(() => { const w = document.querySelector('[data-testid=boss-windup]') as HTMLElement | null; if (!w) return null; const c = getComputedStyle(w); return { hidden: w.hidden, opacity: c.opacity, visibility: c.visibility, display: c.display, text: (w.textContent ?? '').trim() }; }),
+      captionText: await page.evaluate(() => (document.querySelector('[data-testid=battle-caption]')?.textContent ?? '').trim()),
+      captionVisible: await page.evaluate(() => { const c = document.querySelector('[data-testid=battle-caption]') as HTMLElement | null; return c ? getComputedStyle(c).opacity + '/' + getComputedStyle(c).display : null; }),
+      friendRects: await page.evaluate(() =>
+        [...document.querySelectorAll('[data-testid^=boss-friend-]')].map((e) => {
+          const r = e.getBoundingClientRect();
+          return { status: (e as HTMLElement).dataset['status'] ?? null, top: r.top, bottom: r.bottom, left: r.left, right: r.right, w: r.width, h: r.height };
+        }),
+      ),
+      moveRects: await page.evaluate(() =>
+        [...document.querySelectorAll('[data-testid=boss-move], [data-testid=boss-go], .boss-picker button')].map((e) => {
+          const r = e.getBoundingClientRect();
+          return { t: (e.textContent ?? '').trim().slice(0, 18), top: r.top, bottom: r.bottom, left: r.left, right: r.right, w: r.width, h: r.height };
+        }),
+      ),
+      sheetScroll: await page.evaluate(() => {
+        const sh = document.querySelector('.battle-sheet') as HTMLElement | null;
+        const pk = document.querySelector('[data-testid=boss-picker]') as HTMLElement | null;
+        return { sheetClient: sh?.clientHeight ?? null, sheetScroll: sh?.scrollHeight ?? null, pickerClient: pk?.clientHeight ?? null, pickerScroll: pk?.scrollHeight ?? null };
+      }),
+    };
+    writeFileSync(path.replace(/\.png$/, '.json'), JSON.stringify(meta, null, 1));
+    console.log(`shot ${meta.file} ${JSON.stringify(meta.battle)} cap=${JSON.stringify(meta.caption)}`);
+  };
+  const capScale = (s: number) =>
+    page.evaluate((v) => (window as unknown as { __capScale: (s: number) => void }).__capScale(v), s);
+
+  /** One frozen instant. */
+  const pair = async (label: string) => {
+    await capScale(0);
+    await page.waitForTimeout(400);
+    await shot(label);
+  };
+  // Transient captions: a MutationObserver calls back the moment one appears.
+  const pending: Promise<void>[] = [];
+  await page.exposeBinding('__capHit', (_src, key: string, note: string) => {
+    if (got.has(key) || !WANT.includes(key)) return;
+    got.add(key);
+    console.log(`caught ${key} (${note})`);
+    pending.push(
+      (async () => {
+        if (key === 'windup') {
+          for (let i = 0; i < BURST; i++) {
+            await pair(`02-windup-${String(i).padStart(2, '0')}`);
+            if (i < BURST - 1) {
+              await capScale(0.1);
+              await page.waitForTimeout(3000);
+            }
+          }
+        } else {
+          await pair({ hit: '03-hit', taunt: '04-taunt' }[key] ?? key);
+        }
+        await capScale(1);
+      })(),
+    );
+  });
+  const watch = `(() => {
+    const frames = ${JSON.stringify(Object.fromEntries(Object.entries(FRAMES).map(([k, v]) => [k, v.source])))};
+    const seen = new WeakSet();
+    const check = (node) => {
+      const els = node.nodeType === 1 ? [node, ...node.querySelectorAll('*')] : node.parentElement ? [node.parentElement] : [];
+      for (const el of els) {
+        const t = (el.textContent || '').trim();
+        if (t.length > 60) continue;
+        for (const [k, src] of Object.entries(frames)) {
+          if (new RegExp(src).test(t) && !window.__capGot[k]) { window.__capGot[k] = true; window.__capScale(k === 'windup' ? ${process.env['CAPTURE_WINDUP_SCALE'] ?? '0.05'} : 0.1); window.__capHit(k, 'caption ' + t); console.log('frame ' + k + ': ' + t); }
+        }
+      }
+    };
+    // The boss getting bonked: a hit step whose caption names the boss.
+    setInterval(() => {
+      if (window.__capGot.hit) return;
+      const b = window.__heartpatch && window.__heartpatch.battle && window.__heartpatch.battle();
+      const p = b && b.scene && b.scene.playing;
+      const cap = (document.querySelector('[data-testid=battle-caption]') || {}).textContent || '';
+      if (p && p.kind === 'hit' && p.at > 60 && cap.includes(${JSON.stringify('BOSSNAME')})) {
+        window.__capGot.hit = true; window.__capScale(0.1); window.__capHit('hit', 'step hit ' + cap);
+      }
+    }, 30);
+    new MutationObserver((ms) => { for (const m of ms) { m.addedNodes.forEach(check); if (m.type === 'characterData') check(m.target); } })
+      .observe(document.body, { childList: true, subtree: true, characterData: true });
+  })();`;
+  const arm = async () => {
+    await page.evaluate(SLOW);
+    await page.evaluate(`window.__capGot = ${JSON.stringify(Object.fromEntries([...got].map((k) => [k, true])))}`);
+    await page.evaluate(watch.replace('BOSSNAME', bossName));
+    await page.addStyleTag({ content: HIDE_DEV });
+  };
+  await arm();
+  page.on('console', (m) => {
+    if (m.text().startsWith('frame ')) console.log(m.text());
+  });
+
+  await page.waitForTimeout(2500);
+  await capScale(1);
+  const picker = page.getByTestId('boss-picker');
+  // 01-rest-raised: the picker up; sheet height at each picker step (identical?)
+  await page.waitForTimeout(3500);
+  const heights: unknown[] = [];
+  const hgt = () => page.evaluate(() => ({ dock: (document.querySelector('.boss-dock') as HTMLElement | null)?.getBoundingClientRect().height, sheet: (document.querySelector('.battle-sheet') as HTMLElement | null)?.getBoundingClientRect().height, h: document.querySelector('[data-testid=boss-pick-header]')?.textContent ?? null }));
+  heights.push(await hgt());
+  await shot('01-rest-raised');
+  if (DEVICE === 'se') {
+    // The reviewer's two-digit check: the label text is SET to Round 48 for this one frame (not a real round 48).
+    await page.evaluate(() => { const r = document.querySelector('[data-testid=boss-round]'); if (r) r.textContent = 'Round 48'; });
+    await page.waitForTimeout(300);
+    await shot('01-rest-raised-round48');
+  }
+  for (let i = 0; i < 3; i++) {
+    if (!(await page.getByTestId('boss-pick-header').isVisible().catch(() => false))) break;
+    const moves = picker.getByTestId('boss-move');
+    await realTap(moves.nth(i % Math.max(1, await moves.count())));
+    await page.waitForTimeout(900);
+    heights.push(await hgt());
+  }
+  writeFileSync(`${prefix}-sheet-heights.json`, JSON.stringify(heights, null, 1));
+  console.log('sheet heights ' + JSON.stringify(heights));
+  await realTap(page.getByTestId('boss-go'));
+  await shot('01c-after-go');
+  await page.waitForTimeout(1200);
+  await Promise.all(pending);
+  await pair('01b-rest-collapsed');
+  await capScale(1);
+  if (MODE === 'rest') return;
+  let resultShot = false;
+
+  const deadline = Date.now() + BUDGET_MS;
+  const result = page.getByTestId('battle-result');
+  let fights = 1;
+  let rounds = 0;
+  while (Date.now() < deadline && (!resultShot || WANT.some((w) => w !== 'rest' && !got.has(w)))) {
+    await expect
+      .poll(async () => (await picker.isVisible()) || (await result.isVisible()), {
+        timeout: 180_000,
+      })
+      .toBe(true);
+    if (await result.isVisible()) {
+      await Promise.all(pending);
+      if (!resultShot) {
+        await page.waitForTimeout(3000);
+        await pair('05-result');
+        resultShot = true;
+        if (!WANT.some((w) => w !== 'rest' && !got.has(w))) break;
+      }
+      console.log(`fight ${fights} over after ${rounds} rounds`);
+      await realTap(page.getByTestId('battle-done'));
+      await expect(result).toBeHidden();
+      // An evolution after the win, and its squishy card: close them.
+      for (let k = 0; k < 6; k++) {
+        await page.waitForTimeout(1500);
+        let closed = false;
+        for (const label of ['Yay!', 'All done']) {
+          const b = page.getByRole('button', { name: label, exact: true });
+          if (await b.first().isVisible().catch(() => false)) {
+            await b.first().tap();
+            closed = true;
+          }
+        }
+        if (!closed && k > 1) break;
+      }
+      fights++;
+      await startFight();
+      await arm();
+      continue;
+    }
+    rounds++;
+    for (let i = 0; i < 3; i++) {
+      const header = page.getByTestId('boss-pick-header');
+      if (!(await header.isVisible().catch(() => false))) break;
+      const moves = picker.getByTestId('boss-move');
+      await realTap(moves.nth((rounds + i) % Math.max(1, await moves.count())));
+    }
+    await realTap(page.getByTestId('boss-go'));
+    await expect(picker).toBeHidden({ timeout: 30_000 });
+  }
+  await Promise.all(pending);
+  console.log(`done: got ${[...got].join(',')} in ${fights} fights, ${rounds} rounds`);
+});
