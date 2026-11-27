@@ -228,9 +228,14 @@ jobs:
       - name: E2E (${{ matrix.project }}, group ${{ matrix.group }}/7)
         env:
           HP_E2E_GROUP: ${{ matrix.group }}/7
-        run: >-
-          pnpm --filter @heartpatch/client exec playwright test
-          --project=${{ matrix.project }}
+        # One memory line a minute in the log: ipad-webkit 2 was killed with exit 137 (SIGKILL, the
+        # memory limit) twice on 2026-11-27, both ~38 tests in, and timed out log-less three times.
+        run: |
+          ( while sleep 60; do
+              echo "[mem] $(free -m | awk '/^Mem/ {printf "used %s/%s MiB, avail %s", $3, $2, $7} /^Swap/ {printf ", swap %s MiB", $3}');" \
+                "top: $(ps -eo rss=,comm= --sort=-rss | head -4 | awk '{printf "%s %dM  ", $2, $1/1024}')"
+            done ) &
+          pnpm --filter @heartpatch/client exec playwright test --project=${{ matrix.project }}
 
       - uses: actions/upload-artifact@v4
         if: failure()
