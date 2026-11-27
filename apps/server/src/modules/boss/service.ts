@@ -142,7 +142,7 @@ export function createMinibossBattlePort(rules: BossEventRules = BOSS_EVENTS): M
     acted: (tx, battle, at) =>
       createBossRepo(tx).touch(battle.mapId, battle.playerUserId, battle.startedAt, at),
     ended: async (tx, battle, winner) => {
-      if (winner === 'a') {
+      if (winner === 'a' && !(await startedBeforeItsEve(tx, battle, rules))) {
         await createBossRepo(tx).markWon(
           battle.mapId,
           battle.playerUserId,
@@ -153,6 +153,25 @@ export function createMinibossBattlePort(rules: BossEventRules = BOSS_EVENTS): M
       return [];
     },
   };
+}
+
+/**
+ * A weekly fight still going when the Eve took over its row (#37 X1): its
+ * row is the Eve visit now (the kept `opens_at` maps it there), but it never
+ * met the Eve boss, so its win mustn't read as "beaten" on the Eve. Only a
+ * converted row can hold one; a plain read, no lock.
+ */
+async function startedBeforeItsEve(
+  tx: Executor,
+  battle: { mapId: string; startedAt: Date },
+  rules: BossEventRules,
+): Promise<boolean> {
+  const repo = createBossRepo(tx);
+  const visit = await repo.visitOf(battle.mapId, battle.startedAt);
+  if (visit?.kind !== 'christmas-eve') return false;
+  const map = await repo.findMap(battle.mapId);
+  const eve = map ? plannedBossVisit(map, visit.windowId, rules) : null;
+  return eve?.kind === 'christmas-eve' && battle.startedAt < eve.opensAt;
 }
 
 export function createBossService(options: BossServiceOptions): BossService {

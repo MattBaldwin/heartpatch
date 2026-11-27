@@ -13,7 +13,7 @@ import { createBattlesRepo, setupOf } from '../battles/repo.js';
 import { createBossRepo } from './repo.js';
 import { defaultBattleContent } from '../battles/service.js';
 import { BOSS_RULES, BOSS_TEAM, STAND_IN_BOSS, bossHarness } from '../../../tests/boss.js';
-import { plannedBossVisit } from './service.js';
+import { createMinibossBattlePort, plannedBossVisit } from './service.js';
 
 // The Christmas Eve visit (#37 X1).
 const EVE = BOSS_EVENTS.christmasEve!;
@@ -281,7 +281,6 @@ describe.skipIf(!url)('the Christmas Eve visit (#37 X1, needs DATABASE_URL)', ()
     // …and a step at 16:05 is 7 minutes after the last one, not 15 after the
     // start: no leave (`idleMinutes` 10), the fight goes on.
     h.clock.setTime(DENVER('2026-12-24T16:05:00').getTime());
-    expect(battle.status).toBe('active');
     await step();
     const stored = (await createBattlesRepo(db).findBattle(battle.id))!;
     expect(stored.actions.some((a) => a.type === 'forfeit')).toBe(false);
@@ -289,6 +288,15 @@ describe.skipIf(!url)('the Christmas Eve visit (#37 X1, needs DATABASE_URL)', ()
     expect((await createBossRepo(db).visitOf(mapId, stored.startedAt))?.windowId).toBe(
       '2026-12-21',
     );
+    // Won after 16:00, it's still the weekly fight's win: the Keeper hasn't
+    // met the Eve boss, so the Eve stays `here` for them.
+    await createMinibossBattlePort(BOSS_RULES).ended(db, stored, 'a', h.clock);
+    const go = await db.query.bossEncounters.findFirst({
+      where: (t, { and: all, eq: is }) =>
+        all(is(t.mapId, mapId), is(t.userId, owner.id), is(t.windowId, '2026-12-21')),
+    });
+    expect(go?.wonBattleId).toBeNull();
+    expect((await visitOf(owner, mapId))?.state).toBe('here');
   });
 
   it('stays out Christmas morning when the Eve is a Sunday (2028), then the bag resumes', async () => {
