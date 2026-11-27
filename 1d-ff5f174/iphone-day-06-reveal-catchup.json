@@ -1,0 +1,43 @@
+{
+ "days": [
+  "missed",
+  "missed",
+  "opened",
+  "missed",
+  "opened",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked"
+ ],
+ "sheet": {
+  "top": 434,
+  "bottom": 806,
+  "left": 12,
+  "right": 381
+ },
+ "inner": {
+  "w": 393,
+  "h": 852
+ },
+ "scrolls": 0,
+ "smallText": [],
+ "minTarget": 44,
+ "targets": 2
+}
