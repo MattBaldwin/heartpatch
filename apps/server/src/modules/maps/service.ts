@@ -41,6 +41,7 @@ import { canonicalTimeZone, type Clock } from '../../lib/time.js';
 import { createAuthRepo } from '../auth/repo.js';
 import { seedHomeRingNodes, type HomeRingLog } from '../buildings/home-ring.js';
 import { listPublicBuildings } from '../buildings/service.js';
+import { christmasOn, presentWaitingOn } from '../advent/service.js';
 import { giftWaitingOn } from '../house/service.js';
 import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from '../house/switch.js';
 import { listPublicFences } from '../fences/service.js';
@@ -577,6 +578,11 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
             map.kind === 'multiplayer' && houseOpenFor(house, user)
               ? await giftWaitingOn(tx, map, user.id, at)
               : false,
+          // Christmas (#37): whether today's advent present waits for me.
+          // The Patch Tree (`tree`) and warmth come with 2c.
+          ...(map.kind === 'multiplayer' && christmasOn(at, map.timeZone)
+            ? { christmas: { presentWaiting: await presentWaitingOn(tx, map, user.id, at) } }
+            : {}),
           seq: map.eventSeq,
         };
       });
