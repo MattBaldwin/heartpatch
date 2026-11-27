@@ -6,6 +6,7 @@ import {
   BossVisitResponseSchema,
   ContentIdSchema,
   DisplayNameSchema,
+  LocalDateSchema,
   MapIdParamsSchema,
   RaritySchema,
   SpeciesVisualSchema,
@@ -26,7 +27,8 @@ export interface BossRoutesOptions {
   idempotency: (fastify: Parameters<FastifyPluginCallback>[0]) => Idempotency;
   /**
    * `HP_DEV_SQUISHY_GRANTS`: also registers `GET /dev/boss-looks`, every
-   * mini-boss's look for the dev gallery (#234). Never in production
+   * mini-boss's look for the dev gallery (#234), and the Christmas Eve dry
+   * run's `POST /maps/:mapId/dev/christmas-eve-now` (#37 X2). Never in production
    * (`config.ts` refuses it there).
    */
   devTools?: boolean;
@@ -44,6 +46,16 @@ const BossLookSchema = z.strictObject({
   visual: SpeciesVisualSchema,
 });
 export const BossLooksResponseSchema = z.strictObject({ looks: z.array(BossLookSchema) });
+
+/**
+ * `POST /maps/:mapId/dev/christmas-eve-now` (dev only, #37 X2): the Christmas
+ * Eve visit pinned from now, for a dry run. Server-local, like the looks.
+ */
+export const DevChristmasEveNowResponseSchema = z.strictObject({
+  window: LocalDateSchema,
+  opensAt: z.iso.datetime(),
+  closesAt: z.iso.datetime(),
+});
 
 /** Every server-only species on the boss line, its look checked by the public schema. */
 export const bossLooks = (): z.infer<typeof BossLooksResponseSchema> => ({
@@ -120,6 +132,20 @@ export const bossRoutes =
           preHandler: [requireAuth, rateLimit('dev')],
         },
         () => bossLooks(),
+      );
+
+      // The Christmas Eve dry run (#37 X2, the `gap-now` pattern): this
+      // week's visit is the Eve's from now, with a fresh bar, any day.
+      app.post(
+        '/maps/:mapId/dev/christmas-eve-now',
+        {
+          schema: {
+            params: MapIdParamsSchema,
+            response: { 200: DevChristmasEveNowResponseSchema },
+          },
+          preHandler: [requireAuth, rateLimit('dev')],
+        },
+        async (request) => service.devChristmasEveNow(requireUser(request), request.params.mapId),
       );
     }
 

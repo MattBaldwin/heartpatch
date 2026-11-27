@@ -112,8 +112,12 @@ describe.skipIf(!url)('the Christmas Eve visit (#37 X1, needs DATABASE_URL)', ()
     expect(visit.event).toEqual({ kind: 'christmas-eve', gatesLowered: true, closesAt });
     // Partner 6: under the weekly 12, over the Eve's 5.
     expect(visit.state).toBe('here');
+    // The bar opens with it (#37 X2): one Keeper, so the goal's floor; no lights, no head start.
     expect(await eveOf(owner, mapId)).toEqual({
       opensAt: DENVER('2026-12-24T16:00:00').toISOString(),
+      state: 'open',
+      chipped: 0,
+      goal: EVE.bar.minGoal,
     });
     const row = (await windowRow(mapId, '2026-12-21'))!;
     expect(row.kind).toBe('christmas-eve');
@@ -234,9 +238,12 @@ describe.skipIf(!url)('the Christmas Eve visit (#37 X1, needs DATABASE_URL)', ()
     });
     expect((await visitOf(owner, mapId))?.state).toBe('here');
     expect((await visitOf(owner, mapId))?.event?.kind).toBe('christmas-eve');
-    // The map shows the Eve's own opening, not the weekly one.
+    // The map shows the Eve's own opening, not the weekly one, and its new bar.
     expect(await eveOf(owner, mapId)).toEqual({
       opensAt: DENVER('2026-12-24T16:00:00').toISOString(),
+      state: 'open',
+      chipped: 0,
+      goal: EVE.bar.minGoal,
     });
     // Once: a second sweep has nothing new.
     expect(await h.sweep([mapId])).toBe(0);
@@ -246,7 +253,7 @@ describe.skipIf(!url)('the Christmas Eve visit (#37 X1, needs DATABASE_URL)', ()
     expect(appeared).toHaveLength(1);
   });
 
-  it('keeps a weekly fight going across the conversion (its idle clock stays)', async () => {
+  it('keeps a weekly fight going across the conversion (its idle clock stays), never chipping the bar', async () => {
     await h.start();
     h.clock.setTime(DENVER('2026-12-21T12:00:00').getTime());
     const owner = await h.player();
@@ -317,19 +324,30 @@ describe.skipIf(!url)('the Christmas Eve visit (#37 X1, needs DATABASE_URL)', ()
       h.clock,
     );
     expect(wonView?.befriend).toBe('none');
-    // A fight started on the Eve (after 16:00) on the same row still marks the win.
-    await createMinibossBattlePort(BOSS_RULES).ended(
+    // …and it chips nothing (#37 X2): it never met the Eve visit.
+    expect(wonView).not.toHaveProperty('patchBar');
+    const chips = () =>
+      db.query.bossBarChips.findMany({
+        where: (t, { and: all, eq: is }) => all(is(t.mapId, mapId), is(t.windowId, '2026-12-21')),
+      });
+    expect(await chips()).toEqual([]);
+    // A fight started on the Eve (after 16:00) on the same row chips the bar
+    // instead, and doesn't end the visit for its Keeper (#37 X2): they can
+    // fight again while they have tries.
+    const events = await createMinibossBattlePort(BOSS_RULES).ended(
       db,
       { ...stored, startedAt: DENVER('2026-12-24T16:10:00') },
       'a',
       h.clock,
     );
+    expect(events.map((e) => e.type)).toEqual(['boss.chipped']);
+    expect(await chips()).toHaveLength(1);
     const after = await db.query.bossEncounters.findFirst({
       where: (t, { and: all, eq: is }) =>
         all(is(t.mapId, mapId), is(t.userId, owner.id), is(t.windowId, '2026-12-21')),
     });
-    expect(after?.wonBattleId).toBe(stored.id);
-    expect((await visitOf(owner, mapId))?.state).toBe('beaten');
+    expect(after?.wonBattleId).toBeNull();
+    expect((await visitOf(owner, mapId))?.state).toBe('here');
   });
 
   it('stays out Christmas morning when the Eve is a Sunday (2028), then the bag resumes', async () => {
