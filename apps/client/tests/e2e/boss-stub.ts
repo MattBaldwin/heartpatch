@@ -47,9 +47,16 @@ export interface BossStubOptions {
   /**
    * The boss's #234 trick in each open round, in order (a plain stomp past
    * the end): `windup` charges Count to Three (no hits), `land` lands it, and
-   * `assist` calls in a friend whose stomp hits everyone.
+   * `assist` calls in a friend whose stomp hits everyone; `shout` (a flinch
+   * move) hits everyone and slot 1 flinches; `drift` is a plain area move.
    */
   readonly tricks?: readonly BossTrick[];
+  /**
+   * The tricks take the four BIG squishies' signature shapes (#190 PR 5), by
+   * effect and element only: Count to Three leaf, Ask Your Mother frost
+   * calling a fire friend, the shout fire, the drift spark.
+   */
+  readonly signatures?: boolean;
   /**
    * How the open rounds' stomp lands on each friend, by slot ('normal' past
    * the end): a 'super' or 'weak' hit pops that friend's callout over its chip.
@@ -57,7 +64,7 @@ export interface BossStubOptions {
   readonly stompTiers?: readonly string[];
 }
 
-export type BossTrick = 'windup' | 'land' | 'assist';
+export type BossTrick = 'windup' | 'land' | 'assist' | 'shout' | 'drift';
 
 export interface BossStub {
   /** The `team` actions the client sent. */
@@ -84,6 +91,19 @@ const STOMP = 'big-stomp';
 const TRICK = {
   windup: 'stub-count-to-three',
   assist: 'stub-ask-your-mother',
+  shout: 'stub-full-name-shout',
+  drift: 'stub-drift-spin',
+  /** The friend Ask Your Mother calls in, with `signatures` (else it calls the stomp). */
+  called: 'stub-mama-bear-charge',
+} as const;
+
+/** The signature shapes' elements (#190 PR 5): what `SIGNATURE_FX` keys on with the effect. */
+const SIGNATURE_ELEMENTS = {
+  windup: 'leaf',
+  assist: 'frost',
+  shout: 'fire',
+  drift: 'spark',
+  called: 'fire',
 } as const;
 /** The shipped boss hp rule; a stub with no boss rule would test a fight that can't happen. */
 const BOSS_HP_PERCENT = (() => {
@@ -105,6 +125,9 @@ function toBoss(b: Battle, options: BossStubOptions): Battle {
     GAME_DATA.moves.find((m) => m.power > 0)!;
   const stomp = { ...base, id: STOMP, name: 'Big Stomp', targets: 'all-foes' };
   // The #234 tricks, as move defs the way PR 2's boss moves reach the client.
+  const sig = options.signatures === true;
+  const el = (k: keyof typeof SIGNATURE_ELEMENTS) =>
+    sig ? { element: SIGNATURE_ELEMENTS[k] } : {};
   const tricks = [
     {
       ...stomp,
@@ -112,14 +135,29 @@ function toBoss(b: Battle, options: BossStubOptions): Battle {
       name: 'Count to Three',
       power: base.power * 2,
       effects: [{ type: 'windup' }],
+      ...el('windup'),
     },
     {
       ...stomp,
       id: TRICK.assist,
       name: 'Ask Your Mother',
       power: 0,
-      effects: [{ type: 'assist', move: STOMP }],
+      effects: [{ type: 'assist', move: sig ? TRICK.called : STOMP }],
+      ...el('assist'),
     },
+    ...(sig
+      ? [
+          { ...stomp, id: TRICK.called, name: 'Mama Bear Charge', ...el('called') },
+          {
+            ...stomp,
+            id: TRICK.shout,
+            name: 'Full Name Shout',
+            effects: [{ type: 'flinch', chance: 35 }],
+            ...el('shout'),
+          },
+          { ...stomp, id: TRICK.drift, name: 'Drift Spin', ...el('drift') },
+        ]
+      : []),
   ];
   if (boss) {
     boss.moves = [STOMP, ...boss.moves.slice(0, 3)];
@@ -163,6 +201,7 @@ function openRound(
   picks: { slot: number; move: string }[],
   trick: BossTrick | null = null,
   stompTiers: readonly string[] = [],
+  signatures = false,
 ): Battle {
   const turn = b.view.turn;
   const mine = b.view.sides.a.squishies;
@@ -195,10 +234,16 @@ function openRound(
     log.push({ ...at('b', 0), type: 'windup', move: TRICK.windup });
     windup = { move: TRICK.windup };
   } else if (trick === 'assist') {
+    const called = signatures ? TRICK.called : STOMP;
     log.push({ ...at('b', 0), type: 'move', move: TRICK.assist });
-    log.push({ ...at('b', 0), type: 'assist', move: STOMP });
-    log.push({ ...at('b', 0), type: 'move', move: STOMP });
+    log.push({ ...at('b', 0), type: 'assist', move: called });
+    log.push({ ...at('b', 0), type: 'move', move: called });
     stompAll();
+  } else if (trick === 'shout' || trick === 'drift') {
+    log.push({ ...at('b', 0), type: 'move', move: TRICK[trick] });
+    stompAll();
+    // The shout's flinch: the middle friend loses its move this round.
+    if (trick === 'shout') log.push({ ...at('a', out[1] ?? out[0] ?? 0), type: 'flinch' });
   } else {
     log.push({ ...at('b', 0), type: 'move', move: trick === 'land' ? TRICK.windup : bossMove });
     stompAll();
@@ -360,7 +405,9 @@ export async function stubBossFight(page: Page, options: BossStubOptions = {}): 
         const trick = options.tricks?.[opened] ?? null;
         opened += 1;
         await route.fulfill({
-          json: { battle: keep(openRound(last, picks, trick, options.stompTiers)) },
+          json: {
+            battle: keep(openRound(last, picks, trick, options.stompTiers, options.signatures)),
+          },
         });
         return;
       }

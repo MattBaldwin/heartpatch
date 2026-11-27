@@ -85,6 +85,10 @@ export interface PlaybackStep {
   readonly backup?: boolean;
   /** The `move` a windup lands with (#234): its callout is "Here it comes!". */
   readonly landing?: boolean;
+  /** A `flinch` step (#234): its squishy loses its action (a signature beat, #190 PR 5). */
+  readonly flinch?: boolean;
+  /** An `assist` step (#234): its squishy calls a friend's move in (`move`). */
+  readonly assist?: boolean;
   readonly ms: number;
 }
 
@@ -202,6 +206,8 @@ function step(
       | 'charge'
       | 'backup'
       | 'landing'
+      | 'flinch'
+      | 'assist'
     >
   > = {},
 ): PlaybackStep {
@@ -226,6 +232,8 @@ function step(
     ...(extra.charge === true && { charge: true }),
     ...(extra.backup === true && { backup: true }),
     ...(extra.landing === true && { landing: true }),
+    ...(extra.flinch === true && { flinch: true }),
+    ...(extra.assist === true && { assist: true }),
   };
 }
 
@@ -535,7 +543,7 @@ export function playbackSteps(
           event.slot,
           EFFECT_WORDS.flinch(name(event.side, event.slot)),
           PLAYBACK.effectMs,
-          { squish: 'wobble', callout: EFFECT_WORDS.flinchCallout },
+          { squish: 'wobble', callout: EFFECT_WORDS.flinchCallout, flinch: true },
         );
       case 'assist':
         return step(
@@ -544,7 +552,7 @@ export function playbackSteps(
           event.slot,
           EFFECT_WORDS.assist(name(event.side, event.slot)),
           PLAYBACK.effectMs,
-          { squish: 'bounce', move: event.move },
+          { squish: 'bounce', move: event.move, assist: true },
         );
       case 'tuckered-out':
         return step(

@@ -66,12 +66,16 @@ import {
   actPose,
   actRunning,
   heldPose,
+  NO_TRAIL,
   planStep,
   readyPose,
   REST,
+  signatureCue,
+  trailAfter,
   type Act,
   type ActKind,
   type EffectCue,
+  type MoveTrail,
   type Pose,
   type SquishCue,
 } from './choreography.js';
@@ -311,6 +315,8 @@ export class BattleScene {
   readonly #pendingSwaps: { rig: Rig; at: number; member: TeamMember }[] = [];
   /** The last move played (and its user's slot, #190), for the hit that follows it. */
   #lastMove: { move: string; user: BattleSideId; slot: number; landing: boolean } | null = null;
+  /** The moves a boss's signature beat looks back at (#190 PR 5). */
+  #trail: MoveTrail = NO_TRAIL;
   #playing: { kind: PlaybackStep['kind']; start: number; ms: number } | null = null;
   /** The boss's entrance pose (#190 PR 3): its drop and stomp squash, or null once it's in. */
   #entrance: { lift: number; squash: number } | null = null;
@@ -726,6 +732,7 @@ export class BattleScene {
       this.#options.team !== undefined
         ? bossBeat(step, { boss, lastMove: this.#lastMove, element: move?.element ?? null })
         : null;
+    this.#trail = trailAfter(this.#trail, step);
     const plan = planStep(step, {
       move,
       user: user ?? null,
@@ -736,6 +743,12 @@ export class BattleScene {
       ...(this.#options.team !== undefined && {
         boss,
         landing: step.kind === 'hit' && this.#lastMove?.landing === true,
+        // Its signature moment (#190 PR 5): keyed by its move's effect and element.
+        signature: signatureCue(step, {
+          boss,
+          trail: this.#trail,
+          moves: this.#options.content.moves,
+        }),
       }),
     });
     this.#playing = { kind: step.kind, start: now, ms: step.ms };
@@ -774,11 +787,13 @@ export class BattleScene {
           ? cue.strength * 1000
           : cue.kind === 'charm'
             ? step.ms * CHOREO.charm.wobbleAt
-            : cue.kind === 'dizzy' || cue.kind === 'sleepy'
-              ? step.kind === 'tuckered'
-                ? 2200
-                : step.ms * 0.9
-              : 0;
+            : cue.kind === 'signature'
+              ? step.ms
+              : cue.kind === 'dizzy' || cue.kind === 'sleepy'
+                ? step.kind === 'tuckered'
+                  ? 2200
+                  : step.ms * 0.9
+                : 0;
       this.#effectCues.push({
         cue,
         rig: rigOf(cue.side),
@@ -1219,6 +1234,7 @@ export class BattleScene {
         ...(c.duration > 0 ? { duration: c.duration } : {}),
         salt: this.#salt++,
         ...(cue.caught !== undefined ? { caught: cue.caught } : {}),
+        ...(cue.burst ? { burst: cue.burst } : {}),
         reduced: this.#options.reducedMotion,
       }),
     );

@@ -221,6 +221,61 @@ test.describe('a mini-boss fight (#190)', () => {
     await expect.poll(() => stub.rounds.length).toBe(3);
   });
 
+  test('each BIG squishy signature plays its moment: counts, a shout, backup and a drift (#190 PR 5)', async ({
+    browser,
+  }) => {
+    const page = await newPlayer(browser, uniqueName('stomp'));
+    await bossFight(page, {
+      openRounds: 5,
+      tricks: ['windup', 'land', 'shout', 'assist', 'drift'],
+      signatures: true,
+    });
+    // Every sticker and caption the screen shows, and the most particles alive at once.
+    await page.evaluate(() => {
+      const w = window as unknown as {
+        hpSeen: string[];
+        hpPeak: number;
+        __heartpatch?: {
+          battle?: () => { scene?: { effects?: { live: number } } | null } | null;
+        };
+      };
+      w.hpSeen = [];
+      w.hpPeak = 0;
+      const note = (selector: string) => {
+        const text = document.querySelector(selector)?.textContent ?? '';
+        if (text && !w.hpSeen.includes(text)) w.hpSeen.push(text);
+      };
+      new MutationObserver(() => {
+        note('[data-testid="battle-caption"]');
+        note('[data-testid="boss-callout"]');
+      }).observe(document.body, { childList: true, characterData: true, subtree: true });
+      const peak = () => {
+        w.hpPeak = Math.max(w.hpPeak, w.__heartpatch?.battle?.()?.scene?.effects?.live ?? 0);
+        requestAnimationFrame(peak);
+      };
+      requestAnimationFrame(peak);
+    });
+    const seen = () => page.evaluate(() => (window as unknown as { hpSeen: string[] }).hpSeen);
+    for (let round = 2; round <= 6; round++) {
+      await playRound(page);
+      await expect(page.getByTestId('boss-round')).toHaveText(`Round ${String(round)}`, {
+        timeout: 30_000,
+      });
+    }
+    // Count to Three counts out loud, then lands on "3!" (in place of "Here it comes!").
+    await expect.poll(seen).toEqual(expect.arrayContaining(['1…', '2…', '3!']));
+    expect(await seen()).not.toContain('Here it comes!');
+    // Ask Your Mother calls for backup, and the friend comes in.
+    expect(await seen()).toEqual(expect.arrayContaining(['Backup!', 'Backup! Mama Bear Charge!']));
+    // The shout's flinch.
+    expect((await seen()).some((t) => t.includes('flinched'))).toBe(true);
+    // The pools' caps hold (effects.ts POOL_SIZE, summed: a copy, as the e2e can't import src).
+    const POOLS = 120 + 96 + 80 + 150 + 72 + 24 + 12 + 40 + 60;
+    const peak = await page.evaluate(() => (window as unknown as { hpPeak: number }).hpPeak);
+    expect(peak).toBeGreaterThan(0);
+    expect(peak).toBeLessThanOrEqual(POOLS);
+  });
+
   test('on a notched iPhone the stage gets the screen: a tall band, the boss face in it (#190, #868)', async ({
     browser,
     browserName,
