@@ -1,0 +1,157 @@
+// THROWAWAY (#37 MX Christmas Eve mockups). Copy to apps/client/tests/e2e/zz-capture-mx.spec.ts to run. No app code changed:
+// DOM/CSS overlays (overrides/mx.css, mx.js) over the real app; the boss fight is a real Rakelet fight (its strip hosts the mock patch bar).
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { expect, test } from '@playwright/test';
+import { selectTile } from './claim-land.js';
+import { newPlayer, visitPatch } from './players.js';
+import { realTap } from './touch.js';
+import { trayButton } from './trays.js';
+
+const OUT = process.env['CAPTURE_OUT'] ?? 'captures';
+const DB = process.env['CAPTURE_DB'] ?? 'postgres://heartpatch:heartpatch@localhost:5432/heartpatch';
+const TESTERS = (process.env['HP_MINI_BOSSES_TESTERS'] ?? '').split(',').filter(Boolean);
+const TZ = process.env['CAPTURE_TZ'] ?? 'America/Sao_Paulo';
+const TAG = process.env['CAPTURE_TAG'] ?? 'night';
+const DEVICE = (process.env['CAPTURE_DEVICE'] ?? 'iphone') as 'iphone' | 'ipad';
+const OV = process.env['CAPTURE_OVERRIDES'] ?? 'overrides';
+const SIZES = { iphone: { width: 393, height: 852 }, ipad: { width: 1024, height: 1366 } } as const;
+test.use({ actionTimeout: 90_000, launchOptions: { executablePath: process.env['PW_CHROMIUM_EXECUTABLE'] ?? '/opt/pw-browsers/chromium',
+  args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] } });
+const sql = (q: string): string => execFileSync('psql', [DB, '-tAc', q], { encoding: 'utf8' }).trim();
+
+test(`mx ${DEVICE} ${TAG}`, async ({ browser }) => {
+  test.setTimeout(20 * 60_000);
+  mkdirSync(OUT, { recursive: true });
+  const prefix = `${OUT}/${DEVICE}-${TAG}`;
+  Object.assign(test.info().project.use, { viewport: SIZES[DEVICE], deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const used = new Set(sql(`select username from users`).split('\n'));
+  const name = TESTERS.find((n) => !used.has(n));
+  if (!name) throw new Error('no free tester name');
+  const page = await newPlayer(browser, name, undefined, { timezoneId: TZ });
+  const cdp = await page.context().newCDPSession(page);
+  const insets = async (t: number, b: number, l: number, r: number) =>
+    cdp.send('Emulation.setSafeAreaInsetsOverride' as never, { insets: { top: t, topMax: t, bottom: b, bottomMax: b, left: l, leftMax: l, right: r, rightMax: r } } as never);
+  if (DEVICE === 'iphone') await insets(59, 34, 0, 0);
+  await page.goto('/?tier=high');
+  await page.addStyleTag({ content: '.dev-status { display: none !important; }' });
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Snow Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  for (let i = 0; i < 2; i++) {
+    for (let t = 0; ; t++) {
+      await realTap(await trayButton(page, 'battle-dev-grant'));
+      try { await expect(page.locator('.battle-entry-note')).toContainText('joined you', { timeout: 15_000 }); break; } catch (e) { if (t >= 3) throw e; }
+    }
+  }
+  const userId = sql(`select id from users where username = '${name}'`);
+  const mapId = sql(`select map_id from map_members where user_id = '${userId}'`);
+  const tile = sql(`select q || ',' || r from tiles where map_id = '${mapId}' and owner_user_id is null and home_slot is null and node_resource is null and terrain = 'meadow' order by abs(q) + abs(r) limit 1`).split(',').map(Number) as [number, number];
+  sql(`insert into boss_windows (map_id, window_id, species_id, q, r, opens_at, ends_at) select id, date_trunc('week', now() at time zone time_zone)::date, 'rakelet', ${tile[0]}, ${tile[1]}, now() - interval '1 hour', now() + interval '47 hours' from maps where id = '${mapId}'`);
+  const starter = sql(`select starter_squishy_id from map_members where user_id = '${userId}'`);
+  sql(`update squishies set level = 30 where owner_user_id = '${userId}'`);
+  sql(`update squishies set level = 18 where id = '${starter}'`);
+  const toPatch = async () => {
+    for (let t = 0; ; t++) {
+      await page.goto('/?tier=high', { waitUntil: 'commit', timeout: 60_000 });
+      const visit = lobby.getByRole('button', { name: 'Visit patch' });
+      const ready = page.locator('#game[data-ready=true]');
+      const ok = await expect.poll(async () => (await visit.isVisible().catch(() => false)) || ((await ready.count()) > 0 && !(await lobby.isVisible().catch(() => false))), { timeout: 40_000 }).toBe(true).then(() => true, () => false);
+      if (ok) { await page.waitForTimeout(3000); break; }
+      if (t >= 4) throw new Error('the patch never opened');
+    }
+    await page.addStyleTag({ content: '.dev-status { display: none !important; }' });
+    if (await lobby.getByRole('button', { name: 'Visit patch' }).isVisible().catch(() => false)) await visitPatch(lobby);
+    await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
+    const hint = page.getByTestId('tray-hint-ok');
+    if (await hint.isVisible().catch(() => false)) await hint.tap();
+  };
+  await toPatch();
+  await page.addStyleTag({ content: readFileSync(`${OV}/mx.css`, 'utf8') });
+  await page.addScriptTag({ content: readFileSync(`${OV}/mx.js`, 'utf8') });
+
+  const shot = async (file: string, extra: Record<string, unknown> = {}) => {
+    await page.waitForTimeout(700);
+    const path = `${prefix}-${file}.png`;
+    await page.screenshot({ path });
+    const meta = await page.evaluate(() => {
+      const rr = (e: Element) => { const r = e.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; };
+      const q = (s: string) => [...document.querySelectorAll(s)];
+      const strip = document.querySelector('.boss-strip');
+      return {
+        inner: { w: innerWidth, h: innerHeight, dpr: devicePixelRatio },
+        inset: (() => { const d = document.createElement('div'); d.style.cssText = 'position:fixed;top:env(safe-area-inset-top);bottom:env(safe-area-inset-bottom);left:env(safe-area-inset-left);right:env(safe-area-inset-right);visibility:hidden'; document.body.append(d); const r = d.getBoundingClientRect(); d.remove(); return { top: r.top, bottom: innerHeight - r.bottom, left: r.left, right: innerWidth - r.right }; })(),
+        strip: strip ? { rect: rr(strip), name: (() => { const n = strip.querySelector('.boss-name'); return n ? { ...rr(n), clipped: n.scrollWidth > n.clientWidth, text: n.textContent } : null; })(),
+          slot: (() => { const n = strip.querySelector('.boss-slot'); return n ? { ...rr(n), hidden: (n as HTMLElement).hidden, text: n.textContent } : null; })(),
+          energy: (() => { const n = strip.querySelector('.boss-bar'); return n ? rr(n) : null; })(),
+          patch: (() => { const n = strip.querySelector('.mx-patch'); return n ? rr(n) : null; })(),
+          pct: (() => { const n = strip.querySelector('.mx-pct'); return n ? { ...rr(n), text: n.textContent } : null; })(),
+          order: (() => { const n = strip.querySelector('.boss-order'); return n ? rr(n) : null; })() } : null,
+        targets: q('[data-cap-target]').map((e) => ({ t: (e.textContent ?? '').trim().slice(0, 24), ...rr(e) })),
+        text: q('[data-cap-text], .mx-pct, .mx-sticker, .mx-chip span, .mx-card h2, .mx-card p').map((e) => ({ t: (e.textContent ?? '').trim().slice(0, 30), fs: parseFloat(getComputedStyle(e).fontSize), ...rr(e) })),
+        panels: q('.mx-card, .mx-gal, .mx-chip, .mx-sticker').map((e) => ({ cls: e.className, ...rr(e), sh: (e as HTMLElement).scrollHeight, ch: (e as HTMLElement).clientHeight })),
+        chipHits: (() => { const c = document.querySelector('.mx-chip'); if (!c) return null; const a = c.getBoundingClientRect(); return q('button, [role=button], a, .map-label, [class*=pill]').filter((e) => !e.closest('.mx') && (e as HTMLElement).offsetParent !== null).map((e) => ({ e, r: e.getBoundingClientRect() })).filter(({ r }) => r.width > 0 && r.left < a.right && r.right > a.left && r.top < a.bottom && r.bottom > a.top).map(({ e, r }) => ({ t: (e.textContent ?? '').trim().slice(0, 20), cls: String(e.className).slice(0, 40), t0: r.top, b0: r.bottom })); })(),
+        big: (() => { const a = document.querySelector('#mx-big svg'), b = document.querySelector('#mx-tiny svg'), c = document.querySelector('#mx-pp svg'); return a && b && c ? { big: rr(a), tiny: rr(b), pp: rr(c) } : null; })(),
+      };
+    });
+    writeFileSync(path.replace(/\.png$/, '.json'), JSON.stringify({ file: path.split('/').pop(), device: DEVICE, tz: TZ, ...meta, ...extra }, null, 1));
+    console.log(`shot ${path}`);
+  };
+  const mx = (js: string) => page.evaluate(`window.__mx.${js}`);
+  const small = DEVICE === 'iphone';
+
+  // (b) notice chip, event card (16:00 Dec 24)
+  await mx('chip("A BIG snowy squishy is coming to visit!")');
+  await shot('b1-notice-chip', { when: '2026-12-24 16:00' });
+  await mx('eventCard()');
+  await shot('b2-event-card');
+  // (c) the fall, the thanks sheet
+  await mx('clear()');
+  await mx('fall()'); await mx('sticker("Poof! Snowbundle flopped!", Math.round(innerHeight * 0.17))');
+  await shot('c1-fall');
+  await mx('thanks()');
+  await shot('c2-thanks');
+  // (c) short-bar morning (10:00 Dec 25)
+  await mx('clear()');
+  await mx('chip("Snowbundle dozed off and wandered home.")'); await mx('morning()');
+  await shot('c3-short-bar-morning', { when: '2026-12-25 10:00' });
+  // (d) gallery
+  await mx('clear()'); await mx('gallery()');
+  await shot('d1-gallery-frost-boss');
+  // phone on its side: the cards
+  if (small) {
+    await insets(0, 21, 59, 59);
+    await page.setViewportSize({ width: 852, height: 393 });
+    await page.waitForTimeout(800);
+    await mx('clear()'); await mx('chip("A BIG snowy squishy is coming to visit!")'); await mx('eventCard()'); await shot('e1-landscape-event-card');
+    await mx('clear()'); await mx('thanks()'); await shot('e2-landscape-thanks');
+    await mx('clear()'); await mx('morning()'); await shot('e3-landscape-morning');
+    await mx('clear()'); await mx('gallery()'); await shot('e4-landscape-gallery');
+    await mx('clear()');
+    await insets(59, 34, 0, 0);
+    await page.setViewportSize(SIZES[DEVICE]);
+    await page.waitForTimeout(800);
+  }
+  await mx('clear()');
+
+  // (a) the patch bar in the boss strip, in a real fight
+  await toPatch();
+  await page.addStyleTag({ content: readFileSync(`${OV}/mx.css`, 'utf8') });
+  await page.addScriptTag({ content: readFileSync(`${OV}/mx.js`, 'utf8') });
+  sql(`update battles set started_at = started_at - interval '3 days' where map_id = '${mapId}' and kind = 'miniboss' and status <> 'active'`);
+  sql(`delete from boss_encounters where map_id = '${mapId}'`);
+  const panel = page.getByTestId('tile-panel');
+  await expect(async () => { await selectTile(page, { q: tile[0], r: tile[1] }); await expect(panel.getByTestId('boss-fight')).toBeVisible({ timeout: 5_000 }); }).toPass({ timeout: 60_000 });
+  await realTap(panel.getByTestId('boss-fight'));
+  await expect(page.getByTestId('boss-strip')).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId('boss-picker')).toBeVisible({ timeout: 90_000 });
+  await page.waitForTimeout(4000);
+  for (const pct of [0, 50, 100]) {
+    await mx(`patchBar(${pct})`);
+    await shot(`a${pct === 0 ? 1 : pct === 50 ? 2 : 3}-patch-bar-${String(pct).padStart(3, '0')}`);
+  }
+  await mx('patchBar(62)'); await mx('sticker("Chipped! ❄️ +12%", Math.round(innerHeight * 0.17))');
+  await shot('a4-chipped-sticker');
+});
