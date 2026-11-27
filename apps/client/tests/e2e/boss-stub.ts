@@ -50,6 +50,11 @@ export interface BossStubOptions {
    * `assist` calls in a friend whose stomp hits everyone.
    */
   readonly tricks?: readonly BossTrick[];
+  /**
+   * How the open rounds' stomp lands on each friend, by slot ('normal' past
+   * the end): a 'super' or 'weak' hit pops that friend's callout over its chip.
+   */
+  readonly stompTiers?: readonly string[];
 }
 
 export type BossTrick = 'windup' | 'land' | 'assist';
@@ -157,6 +162,7 @@ function openRound(
   b: Battle,
   picks: { slot: number; move: string }[],
   trick: BossTrick | null = null,
+  stompTiers: readonly string[] = [],
 ): Battle {
   const turn = b.view.turn;
   const mine = b.view.sides.a.squishies;
@@ -178,7 +184,7 @@ function openRound(
         type: 'hit',
         amount: was - e,
         energy: e,
-        effectiveness: 'normal',
+        effectiveness: stompTiers[slot] ?? 'normal',
       });
     }
   };
@@ -353,7 +359,9 @@ export async function stubBossFight(page: Page, options: BossStubOptions = {}): 
         open -= 1;
         const trick = options.tricks?.[opened] ?? null;
         opened += 1;
-        await route.fulfill({ json: { battle: keep(openRound(last, picks, trick)) } });
+        await route.fulfill({
+          json: { battle: keep(openRound(last, picks, trick, options.stompTiers)) },
+        });
         return;
       }
       const played = keep(playRound(last, picks, options));

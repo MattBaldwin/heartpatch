@@ -13,7 +13,6 @@ import type { BattleHud } from './battle-hud.js';
 import type { PlaybackStep, ShownState } from './battle-playback.js';
 import type { BattleScene } from './battle-scene.js';
 import { otherSide, type BattleContent } from './battle-view.js';
-import { oncePerFrame } from './once-per-frame.js';
 import { befriendPanel, mountBossHud, type OrderMover, type PickerMove } from './boss-hud.js';
 import {
   befriendView,
@@ -22,12 +21,10 @@ import {
   bossResult,
   bossSlot,
   goTo,
-  hereUntil,
   isAreaMove,
   isOwnMove,
   isWindupMove,
   pickerFor,
-  slotsOut,
   pickMove,
   sameAgain,
   teamAction,
@@ -101,6 +98,21 @@ function samePicks(a: Readonly<Record<number, string>>, b: Readonly<Record<numbe
 
 export function createBossBattle(deps: BossBattleDeps): BossBattle {
   const ui = mountBossHud();
+  // The sheet rose or dropped: the camera's band ends at its handle, so the
+  // HUD measures again on the very next frame, not after the ResizeObserver
+  // (which runs after rAF and would leave one frame framed for the old sheet).
+  const sheetMoved = () => {
+    deps.hud.forgetLayout();
+    deps.invalidate();
+  };
+  /** The HUD's slots for a boss fight: the stage is framed between the strip and the handle. */
+  const slots = {
+    top: ui.top,
+    sheet: ui.dock,
+    topEdge: ui.strip,
+    bottomEdge: ui.handle,
+    vars: ui.vars,
+  };
   let battleId: string | null = null;
   let picker: PickerState | null = null;
   /** The picker state on screen, so a refresh with nothing new leaves its buttons be. */
@@ -125,27 +137,6 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
   let recounts = 0;
   /** The battle the card was last drawn from: a late count redraws this, never an older one. */
   let latest: PlayerBattle | null = null;
-  /** Frames left to wait for the arena's first picture before the plates line up. */
-  let placing = 0;
-  let placeFrame = 0;
-  /** The battle the plates were last lined up for, and the arena told when its camera moves. */
-  let placed: PlayerBattle | null = null;
-  let watching: BattleScene | null = null;
-  let unwatch: (() => void) | null = null;
-  /** Each friend's spot, reused every pass (`place`), and the slots they were found for. */
-  const spotBuf = new Map<number, { x: number; feet: number; y: number; r: number }>();
-  let placedSlots: readonly number[] = [];
-  let placedSlotsFor: PlayerBattle | null = null;
-  /** The camera moved: one pass on the next frame, however often it says so before then. */
-  const follow = oncePerFrame(() => {
-    if (placed && battleId === placed.id) place(placed);
-  });
-  const stopWatching = () => {
-    follow.cancel();
-    unwatch?.();
-    unwatch = null;
-    watching = null;
-  };
   /** One key per ask number, so a retried ask is the same ask. */
   const keys = new Map<number, string>();
 
@@ -198,6 +189,18 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     });
   };
 
+  /**
+   * The picker goes (Go!, a round playing, no pick to make): the sheet drops to
+   * its handle. Only a picker that was up moves the sheet, so a screen that
+   * asks for no picker on every frame doesn't draw frames for ever.
+   */
+  const lowerPicker = () => {
+    const wasUp = drawn !== null;
+    ui.hidePicker();
+    drawn = null;
+    if (wasUp) sheetMoved();
+  };
+
   const drawPicker = (b: PlayerBattle, names: BattleContent) => {
     const state = picker;
     if (!state) return;
@@ -219,8 +222,7 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
         const action = teamAction(state);
         if (!action || action.type !== 'team') return;
         lastPicks = { ...state.picks };
-        ui.hidePicker();
-        drawn = null;
+        lowerPicker();
         deps.scene()?.focusOn(null);
         deps.submit(action);
       },
@@ -237,54 +239,7 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
             }
           : null,
     });
-    deps.invalidate();
-  };
-
-  /**
-   * Lines each friend's plate up under its body, once the arena has drawn it.
-   * The spots are kept in `spotBuf` and reused pass after pass: the camera can
-   * move every frame while a round plays, so a pass allocates nothing.
-   */
-  const place = (b: PlayerBattle) => {
-    const scene = deps.scene();
-    if (placedSlotsFor !== b) {
-      placedSlotsFor = b;
-      placedSlots = slotsOut(b, b.mySide);
-      spotBuf.clear();
-    }
-    let found = 0;
-    for (const slot of placedSlots) {
-      let spot = spotBuf.get(slot);
-      if (!spot) {
-        spot = { x: 0, feet: 0, y: 0, r: 0 };
-        spotBuf.set(slot, spot);
-      }
-      if (scene?.screenSpot(b.mySide, slot, true, spot)) {
-        // `r` is half the body's height on screen, so its feet are `r` below its middle.
-        spot.feet = spot.y + spot.r;
-        found += 1;
-      } else {
-        spotBuf.delete(slot);
-      }
-    }
-    if (found > 0) {
-      ui.placeFriends(spotBuf);
-      placing = 0;
-      placed = b;
-      // The camera leans and pushes in as steps play: line them up again when
-      // it moves, at most once a frame, so a plate stays under its body (#190).
-      if (scene && watching !== scene) {
-        stopWatching();
-        watching = scene;
-        unwatch = scene.onCameraMoved(follow.mark);
-      }
-      return;
-    }
-    if (placing <= 0) return;
-    placing -= 1;
-    placeFrame = requestAnimationFrame(() => {
-      if (battleId === b.id) place(b);
-    });
+    sheetMoved();
   };
 
   /** Counts the bag again, then shows the card again with the new count. */
@@ -347,42 +302,23 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
   return {
     open: (b) => {
       if (battleId !== b.id) reset(b.id);
-      // The arena takes a few frames to build: try for up to a second or so.
-      placing = 90;
-      deps.hud.setTeam({
-        top: ui.top,
-        sheet: ui.picker,
-        topEdge: ui.top.querySelector('.boss-head') ?? ui.top,
-        bottomEdge: ui.top.querySelector('.boss-friends') ?? ui.top,
-      });
+      deps.hud.setTeam(slots);
     },
     close: () => {
-      cancelAnimationFrame(placeFrame);
-      placing = 0;
-      placed = null;
-      placedSlotsFor = null;
-      stopWatching();
       deps.hud.setTeam(null);
-      ui.hidePicker();
+      ui.reset();
       drawn = null;
       battleId = null;
     },
     plates: (b, shown, names) => {
       ui.setPlates(bossPlates(b, shown, names, (side, slot) => deps.nameOf(b, side, slot)));
-      cancelAnimationFrame(placeFrame);
-      place(b);
       // "Round 1" while the first is picked; the round's own number while it plays.
+      // The tries and "here until" stay off the fight (#190 PR 1): the result card has the tries.
       ui.setRound(playingRound ?? (b.status === 'active' ? b.view.turn + 1 : null));
-      const boss = b.boss;
-      ui.setChips({
-        tries: boss ? boss.triesLeftToday : null,
-        until: boss ? hereUntil(boss, deps.now(), deps.timeZone(b)) : null,
-      });
     },
     controls: (b, names, canPick) => {
       if (!canPick || b.status !== 'active' || b.view.phase.type !== 'turn') {
-        ui.hidePicker();
-        drawn = null;
+        lowerPicker();
         return;
       }
       // Picking again: the round that played is done.
@@ -399,8 +335,7 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     },
     playing: (b, steps) => {
       bossMoves = 0;
-      ui.hidePicker();
-      drawn = null;
+      lowerPicker();
       playingRound = Math.max(1, b.view.turn);
       ui.setRound(playingRound);
       movers = steps.filter(isOwnMove).map((s) => ({

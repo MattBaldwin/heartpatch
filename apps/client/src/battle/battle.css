@@ -1097,7 +1097,11 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   }
 }
 
-/* ── A mini-boss fight (#190, owner-approved arena A and picker A1) ───────── */
+/* ── A mini-boss fight (#190 PR 1: the phone-first boss HUD, owner option 1) ──
+   A slim strip at the top, the team as chips on the sheet's handle at the
+   bottom, the stage in between (about 0.73 of a notched iPhone at rest). The
+   numbers are BOSS_HUD's (battle-config.ts), set on the HUD as --boss-*
+   properties (`bossHudVars`); the fallbacks here are the same numbers. */
 
 .battle-hud-team .battle-plate {
   display: none;
@@ -1107,311 +1111,127 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   justify-content: flex-end;
 }
 
+/* The ✕ moves up into the strip's row, beside the strip, so it never covers
+   the stage (M0: at inset + 58 it overlapped the band's top by 5 px). Over the
+   result card it stays where it was: the card's framing reads it. */
+.battle-hud-team:not(:has(.battle-result:not([hidden]))) .battle-top {
+  top: calc(env(safe-area-inset-top) + var(--boss-strip-top, 8px));
+  right: calc(env(safe-area-inset-right) + var(--boss-edge, 12px));
+}
+
 .boss-top {
   pointer-events: none;
 }
 
-/* The boss plate with the order strip under it (mockup frame 1). */
-.boss-head {
-  position: absolute;
-  top: calc(env(safe-area-inset-top) + 112px);
-  right: calc(env(safe-area-inset-right) + 12px);
-  left: calc(env(safe-area-inset-left) + 12px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  max-width: 560px;
-  margin: 0 auto;
-}
-
-.boss-plate {
-  display: flex;
-  box-sizing: border-box;
-  flex-direction: column;
-  gap: 5px;
-  width: 100%;
-  padding: 8px 12px;
-  border: 2px solid rgb(255 255 255 / 80%);
-  border-radius: 18px;
-  background: rgb(255 250 240 / 94%);
-  box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
-}
-
-.boss-plate-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-/* Three chips (⏳, tries, here until) don't fit one 375 px row: wrap (#234). */
-.boss-plate-chips {
-  flex-wrap: wrap;
-  row-gap: 4px;
-}
-
-.boss-plate-chips:empty,
-.boss-plate-chips:not(:has(:not([hidden]))) {
-  display: none;
-}
-
-.boss-name {
-  overflow: hidden;
-  font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.boss-level {
-  font-size: 13px;
-  font-weight: 800;
-  opacity: 0.75;
-}
-
-.boss-plate .battle-energy {
-  height: 14px;
-}
-
-/* A chip the plate hides (the stomps and ⏳ chips) stays hidden: the
-   display below would beat the attribute. */
-.boss-chip[hidden] {
-  display: none;
-}
-
-.boss-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.boss-chip-gold {
-  margin-left: auto;
-  background: #ffe9a8;
-  color: #6b4a06;
-}
-
-/* The boss is winding up a big move (#234): the same ⏳ tint as the plate
-   chip. Scoped to the plate: map/boss.css's own `.boss-chip` (the map card's
-   blue pill) loads later and would win a tie. */
-.boss-plate .boss-chip-windup {
-  order: 1;
-  background: #fff3c4;
-  color: #7a5a00;
-}
-
 /*
- * A hidden ⏳ chip keeps its slot, last in the row (#234), so the chip row is
- * the same height whether or not the boss winds up: at 393 px the three chips
- * wrap, and a row that grew mid-round would push the boss's face up under the
- * order strip (see `.boss-order[hidden]`).
+ * The strip: one 44 px row with two lines inside (the M0 finding: name, bar,
+ * ⏳ and the order dots didn't fit one line at 393 px). The name and the order
+ * dots, then the energy bar and the one chip slot. Nothing in it changes
+ * height mid-round (#855): the dots and the slot keep their room when empty.
+ * Its width is what `bossStripWidths` works out (the ring is a shadow, not a
+ * border, so it takes no room).
  */
-.boss-plate .boss-chip-windup[hidden] {
-  display: inline-flex;
-  visibility: hidden;
-}
-
-.boss-chip-try {
-  background: #d9ecff;
-  color: #1f4f7a;
-}
-
-.boss-chip-until {
-  background: #ffe1d3;
-  color: #8a3a12;
-}
-
-.boss-callout {
+.boss-strip {
   position: absolute;
-  top: 34%;
-  left: calc(env(safe-area-inset-left) + 6px);
-  z-index: 2;
-  padding: 6px 10px;
-  border: 3px solid #2d1b33;
-  border-radius: 10px;
-  background: #ffe34d;
-  color: #2d1b33;
-  font-weight: 900;
-  transform: rotate(-6deg);
-}
-
-.boss-callout-small {
-  top: -30px;
-  left: 50%;
-  font-size: 13px;
-  transform: translateX(-50%) rotate(-6deg);
-  white-space: nowrap;
-}
-
-.boss-callout-show {
-  animation: boss-pop 180ms ease-out;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .boss-callout-show {
-    animation: none;
-  }
-}
-
-@keyframes boss-pop {
-  from {
-    scale: 0.6;
-  }
-
-  to {
-    scale: 1;
-  }
-}
-
-.boss-friends {
-  position: absolute;
-  right: calc(env(safe-area-inset-right) + 16px);
-  /* Above the sheet's full share (the picker's height), not its height now:
-     the sheet shrinks to one line while a round plays and nothing moves. */
-  bottom: calc(var(--battle-sheet-vh, 37) * 1vh + env(safe-area-inset-bottom) + 8px);
-  left: calc(env(safe-area-inset-left) + 16px);
-  display: flex;
-  justify-content: space-around;
-  gap: 8px;
-  max-width: 560px;
-  margin: 0 auto;
-  /* Back in after the boss's beat (#868); the timings come from BOSS_CARDS. */
-  transition: opacity var(--battle-cards-fade-in, 280ms) ease-out;
-}
-
-/* While the boss acts on a short band (#868): faded, not gone, so nothing moves. */
-.boss-friends.battle-cards-faded {
-  opacity: var(--battle-cards-faded, 0.18);
-  pointer-events: none;
-  transition-duration: var(--battle-cards-fade-out, 160ms);
-}
-
-.boss-friend {
-  position: relative;
+  top: calc(env(safe-area-inset-top) + var(--boss-strip-top, 8px));
+  right: calc(
+    env(safe-area-inset-right) + var(--boss-edge, 12px) + var(--boss-close, 44px) +
+      var(--boss-close-gap, 8px)
+  );
+  left: calc(env(safe-area-inset-left) + var(--boss-edge, 12px));
   display: flex;
   box-sizing: border-box;
-  flex: 0 1 114px;
   flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  padding: 5px 8px;
-  border: 2px solid rgb(255 255 255 / 80%);
-  border-radius: 14px;
+  justify-content: center;
+  gap: 5px;
+  height: var(--boss-strip-h, 44px);
+  max-width: var(--boss-strip-max, 560px);
+  margin: 0 auto;
+  padding: 0 var(--boss-strip-pad, 12px);
+  border-radius: 22px;
   background: rgb(255 250 240 / 94%);
-  box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
+  box-shadow:
+    0 0 0 2px rgb(255 255 255 / 80%),
+    0 4px 14px rgb(107 75 110 / 14%);
+  pointer-events: auto;
 }
 
-/* Each plate wears its turn-order dot's colour (pink, yellow, green), so the
-   strip's initials point at the right friend. */
-.boss-friend-tint-0 {
-  background: rgb(255 226 238 / 96%);
-  border-color: #ffc2dc;
+.boss-strip-line {
+  display: flex;
+  align-items: center;
+  gap: var(--boss-inner-gap, 6px);
+  min-width: 0;
 }
 
-.boss-friend-tint-1 {
-  background: rgb(255 244 200 / 96%);
-  border-color: #ffe48a;
-}
-
-.boss-friend-tint-2 {
-  background: rgb(226 245 219 / 96%);
-  border-color: #bfe8b0;
-}
-
-.boss-friend-name {
+/* Cut short with "…" when long; a tap on the strip shows it whole (a sticker).
+   Plain words here: map/boss.css's dark name pill is the marker card's. */
+.boss-strip .boss-name {
+  flex: 1 1 0;
+  min-width: 0;
   overflow: hidden;
-  font-size: 13px;
-  font-weight: 800;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 17px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.boss-friend .battle-energy {
+.boss-strip .boss-bar {
+  flex: 1 1 0;
+  min-width: 0;
   height: 10px;
 }
 
-.boss-friend-down {
-  opacity: 0.6;
-}
-
-/* Picker A1 fills the sheet on its own (mockup: steps, "What should Bun do?",
-   the moves): the opening line steps aside while it shows. While a round
-   plays, the caption is the sheet's one line (no "…" under it). */
-.battle-hud-team .battle-sheet:has(.boss-picker:not([hidden])) > .battle-caption,
-.battle-hud-team .battle-waiting {
-  display: none;
-}
-
-/* "Round 2", top left, level with the ✕ (mockup frame 1). */
-.boss-round {
-  position: absolute;
-  top: calc(env(safe-area-inset-top) + 58px);
-  left: calc(env(safe-area-inset-left) + 12px);
-  display: flex;
-  box-sizing: border-box;
-  align-items: center;
-  min-height: 44px;
-  padding: 0 14px;
-  border: 2px solid rgb(255 255 255 / 80%);
-  border-radius: 999px;
-  background: rgb(255 250 240 / 94%);
-  box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
+/* The one chip slot: ⏳ while the boss winds up. Hidden, it keeps its room,
+   so the bar never changes width. */
+.boss-slot {
+  display: grid;
+  flex: 0 0 var(--boss-chip-slot, 20px);
+  place-items: center;
+  height: 16px;
   font-size: 14px;
-  font-weight: 900;
+  line-height: 1;
 }
 
-/* Who moves, in the round's order; the one moving now outlined. */
-.boss-order {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgb(255 250 240 / 94%);
-  box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.boss-round[hidden] {
-  display: none;
-}
-
-/*
- * A hidden order strip keeps its room (#234): the camera frames the boss under
- * the boss head, measured once per layout change (the head is absolutely
- * placed, so nothing re-measures it mid-round). Nothing in the head may change
- * height mid-round, or it covers the boss's face when a windup's power-up
- * lifts it right up to that edge: this strip and the ⏳ chip keep their room.
- */
-.boss-order[hidden] {
+.boss-slot[hidden] {
+  display: grid;
   visibility: hidden;
 }
 
-.boss-order-dots {
+/* Who moves, in the round's order: the one moving now lit, the rest soft. */
+.boss-order {
   display: flex;
-  gap: 4px;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: var(--boss-dot-gap, 3px);
+  overflow: hidden;
+  width: calc(4 * var(--boss-dot, 16px) + 3 * var(--boss-dot-gap, 3px));
+  height: var(--boss-dot, 16px);
 }
 
 .boss-order-dot {
   display: grid;
+  flex: 0 0 auto;
   place-items: center;
   box-sizing: border-box;
-  width: 26px;
-  height: 26px;
+  width: var(--boss-dot, 16px);
+  height: var(--boss-dot, 16px);
   border-radius: 50%;
-  font-size: 12px;
+  font-size: 9px;
   font-weight: 900;
+  line-height: 1;
+  opacity: 0.55;
 }
 
 .boss-order-boss {
   background: #e8dcf0;
 }
 
+/* The same tints as the team chips, so a dot points at its chip. */
 .boss-order-friend-0 {
   background: #ffc2dc;
 }
@@ -1425,52 +1245,353 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 }
 
 .boss-order-now {
-  outline: 3px solid #b8487a;
+  /* Inside the dot: the strip (`overflow: hidden`, one dot tall) would clip it outside. */
+  outline: 2px solid #b8487a;
+  outline-offset: -2px;
+  opacity: 1;
 }
 
-.boss-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* The callouts are stage stickers: the boss's in a fixed slot under the
+   strip, by the boss; a friend's over its chip. They come and go. */
+.boss-callout {
+  position: absolute;
+  top: calc(
+    env(safe-area-inset-top) + var(--boss-strip-top, 8px) + var(--boss-strip-h, 44px) + 20px
+  );
+  left: calc(env(safe-area-inset-left) + 14px);
+  z-index: 2;
+  max-width: 70%;
+  padding: 6px 10px;
+  border: 3px solid #2d1b33;
+  border-radius: 10px;
+  background: #ffe34d;
+  color: #2d1b33;
+  font-weight: 900;
+  transform: rotate(-6deg);
 }
 
-.boss-steps {
-  display: flex;
-  gap: 6px;
+/* Over its chip; above the caption pill while one shows (the HUD measures
+   it: `friendCalloutLift`), so a friend's "Super cozy!" never covers it. */
+.boss-callout-small {
+  top: auto;
+  bottom: calc(100% + var(--boss-callout-lift, 10px));
+  left: 50%;
+  max-width: none;
+  font-size: 13px;
+  transform: translateX(-50%) rotate(-6deg);
+  white-space: nowrap;
+  pointer-events: none;
 }
 
-.boss-step {
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  justify-content: center;
-  min-width: 0;
-  min-height: 44px;
-  padding: 4px 8px;
-  border: 0;
-  border-radius: 14px;
+.boss-callout-show {
+  animation: boss-pop 180ms ease-out;
+}
+
+@keyframes boss-pop {
+  from {
+    scale: 0.6;
+  }
+
+  to {
+    scale: 1;
+  }
+}
+
+/*
+ * The sheet: collapsed to the chip handle while a round plays, up to
+ * --boss-sheet-vh with the picker on the player's turn. Its laid-out height
+ * says where the stage ends (`safe()`), so the rise itself is a `translate`
+ * slide (a snap under reduced motion) that never moves the band mid-way.
+ * Nothing else in it takes height: the caption and a problem line float
+ * above the handle as stickers, and the controls (only "waiting" in a boss
+ * fight) step aside.
+ */
+/* The risen sheet's share by screen height: the owner's ~34vh on a tall
+   phone, more on a short one so the moves never scroll (BOSS_HUD.sheetVh*). */
+.battle-hud-team {
+  --boss-sheet-vh: var(--boss-sheet-vh-tall, 34);
+}
+
+@media (max-height: 840px) {
+  .battle-hud-team {
+    --boss-sheet-vh: var(--boss-sheet-vh-840, 42);
+  }
+}
+
+@media (max-height: 700px) {
+  .battle-hud-team {
+    --boss-sheet-vh: var(--boss-sheet-vh-700, 48);
+  }
+}
+
+@media (max-height: 600px) {
+  .battle-hud-team {
+    --boss-sheet-vh: var(--boss-sheet-vh-600, 52);
+  }
+}
+
+@media (max-height: 520px) and (min-width: 640px) {
+  .battle-hud-team {
+    --boss-sheet-vh: var(--boss-sheet-vh-sideways, 46);
+  }
+}
+
+.battle-hud-team .battle-sheet {
+  gap: 0;
+  max-height: calc(var(--boss-sheet-vh, 34) * 1vh + env(safe-area-inset-bottom));
+  overflow: visible;
+  padding-top: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  border-top: 0;
+}
+
+/* Under the sheet, the same cream, so the drop's slide never shows a gap. */
+.battle-hud-team .battle-sheet::after {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  height: 50vh;
   background: #fff3e4;
+  content: '';
+}
+
+.battle-hud-team .battle-sheet:has(> .boss-dock[data-sheet='raised']) {
+  /* One height for every picker step (a move step, Ready, a windup's one
+     move), so the band holds still while picking and the drop is exact. */
+  height: calc(var(--boss-sheet-vh, 34) * 1vh + env(safe-area-inset-bottom));
+  animation: boss-sheet-rise var(--boss-rise, 220ms) ease-out;
+}
+
+.battle-hud-team .battle-sheet:has(> .boss-dock[data-sheet='lowered']) {
+  animation: boss-sheet-drop var(--boss-rise, 220ms) ease-out;
+}
+
+@keyframes boss-sheet-rise {
+  from {
+    translate: 0 calc(100% - var(--boss-handle-h, 64px) - env(safe-area-inset-bottom));
+  }
+}
+
+@keyframes boss-sheet-drop {
+  from {
+    translate: 0 calc(var(--boss-handle-h, 64px) - var(--boss-sheet-vh, 34) * 1vh);
+  }
+}
+
+.battle-hud-team .battle-sheet > .battle-controls {
+  display: none;
+}
+
+.battle-hud-team .battle-sheet > .battle-caption,
+.battle-hud-team .battle-sheet > .battle-problem {
+  position: absolute;
+  bottom: calc(100% + var(--boss-handle-clear, 8px) + 6px);
+  left: 50%;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 6px 14px;
+  border-radius: 16px;
+  background: rgb(255 250 240 / 94%);
+  box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
+  font-size: 15px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.battle-hud-team .battle-sheet > .battle-caption:empty {
+  display: none;
+}
+
+/* A problem line takes the caption's place while it shows. */
+.battle-hud-team .battle-sheet:has(> .battle-problem:not(:empty)) > .battle-caption {
+  display: none;
+}
+
+/* The picker fills the sheet on its own; while a round plays the caption is
+   the one line (no "…" under it). */
+.battle-hud-team .battle-sheet:has(.boss-picker:not([hidden])) > .battle-caption,
+.battle-hud-team .battle-waiting {
+  display: none;
+}
+
+.boss-dock {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* The handle: the three team chips, centred, with "Round N" beside them. */
+.boss-handle {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  height: var(--boss-handle-h, 64px);
+}
+
+.boss-round {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  padding: 4px 6px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 900;
+  opacity: 0.8;
+  transform: translateY(-50%);
+}
+
+.boss-round[hidden] {
+  display: none;
+}
+
+.boss-friends {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* A 375 px phone: "Round 10" and up beside the centred chips needs a few px
+   more room (it touched the first chip with the wider gap). */
+@media (max-width: 389px) {
+  .boss-friends {
+    gap: 12px; /* TUNE */
+  }
+
+  .boss-round {
+    padding-inline: 4px;
+  }
+}
+
+/* A team chip: a tinted disc with the squishy's first letter (the same tint
+   as its order dot) in its energy ring, and a status dot. A 56 px target. */
+.boss-friend {
+  --pct: 100;
+  --tint: #ffc2dc;
+
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  box-sizing: border-box;
+  width: var(--boss-chip, 56px);
+  height: var(--boss-chip, 56px);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  appearance: none;
+  background: conic-gradient(#4fbf85 calc(var(--pct) * 1%), #efe0ea 0);
   color: inherit;
   font: inherit;
-  text-align: left;
+  transition: translate var(--boss-rise, 220ms) ease-out;
 }
 
-.boss-step-current {
-  outline: 3px solid #b8487a;
-  background: #fff;
+.boss-friend:disabled {
+  color: inherit;
+  cursor: default;
+  opacity: 1;
 }
 
-.boss-step-name {
-  font-size: 13px;
+.boss-friend-low {
+  background: conic-gradient(#f2a93b calc(var(--pct) * 1%), #efe0ea 0);
+}
+
+.boss-friend-tint-1 {
+  --tint: #ffe48a;
+}
+
+.boss-friend-tint-2 {
+  --tint: #bfe8b0;
+}
+
+.boss-friend-face {
+  display: grid;
+  place-items: center;
+  width: calc(100% - 10px);
+  height: calc(100% - 10px);
+  border-radius: 50%;
+  background: var(--tint);
+  font-size: 22px;
   font-weight: 900;
 }
 
-.boss-step-status {
-  overflow: hidden;
-  font-size: 11px;
-  opacity: 0.8;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.boss-friend-dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #fffaf1;
+  border-radius: 50%;
+  background: #6fcf8a;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+/* The squishy picking now rises out of the handle, outlined. */
+.boss-friend[data-status='picking'] {
+  outline: 3px solid #b8487a;
+  outline-offset: 2px;
+  translate: 0 calc(-1 * var(--boss-chip-raise, 8px));
+}
+
+.boss-friend[data-status='picked'] .boss-friend-dot {
+  background: #b8487a;
+}
+
+.boss-friend[data-status='windup'] .boss-friend-dot {
+  background: #fff3c4;
+}
+
+.boss-friend[data-status='down'] {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+}
+
+.boss-friend[data-status='down'] .boss-friend-dot {
+  background: #b9b0bd;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boss-callout-show {
+    animation: none;
+  }
+
+  .battle-hud-team .battle-sheet:has(> .boss-dock[data-sheet='raised']),
+  .battle-hud-team .battle-sheet:has(> .boss-dock[data-sheet='lowered']) {
+    animation: none;
+  }
+
+  .boss-friend {
+    transition: none;
+  }
+}
+
+/* The picker, under the chips: the team's own row lives on the chips (M0:
+   the picker's "Picking… / Next" row repeated them). It scrolls inside the
+   risen sheet if a short phone needs it. */
+.boss-picker {
+  display: flex;
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 12px;
+}
+
+.boss-picker[hidden] {
+  display: none;
 }
 
 .boss-moves {
@@ -1692,17 +1813,4 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
     padding-inline: 10px;
     font-size: 15px;
   }
-}
-
-/* Each friend's plate under its body (the arena's row, `placeFriends`). */
-.boss-friends-placed {
-  display: block;
-  height: 44px;
-}
-
-.boss-friends-placed > .boss-friend {
-  position: absolute;
-  bottom: 0;
-  /* Lifted to just under the friends' feet on iPad (`placeFriends`). */
-  transform: translate(-50%, var(--boss-plate-lift, 0px));
 }

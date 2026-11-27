@@ -4,7 +4,8 @@ import { evolvingMeterEl } from '../care/evolving-meter.js';
 import { buttonClass, hpClose } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
 import { dressResult, type BefriendCheer } from './befriend-cheer.js';
-import { BOSS_CARDS, WIDE_MIN } from './battle-config.js';
+import { WIDE_MIN } from './battle-config.js';
+import { bossBand } from './boss-view.js';
 import { ELEMENT_GLYPH, FEELING_GLYPH } from '../ui/glyphs.js';
 import type { SafeRegion } from './camera-director.js';
 import { charmButton, noCharmsLine } from './heart-charm.js';
@@ -149,15 +150,18 @@ export interface ResultInfo {
 }
 
 /**
- * A team battle's own HUD pieces (#190, arena A): they take the place of the
- * two pills. `top` goes over the fight, `sheet` in the sheet above the
- * controls; the fight is framed between `topEdge`'s bottom and `bottomEdge`'s top.
+ * A team battle's own HUD pieces (#190): they take the place of the two
+ * pills. `top` goes over the fight, `sheet` in the sheet above the controls;
+ * the fight is framed between `topEdge`'s bottom and `bottomEdge`'s top (the
+ * phone-first boss HUD: the strip and the chip handle, `bossBand`).
  */
 export interface TeamHudSlots {
   readonly top: HTMLElement;
   readonly sheet: HTMLElement;
   readonly topEdge: HTMLElement;
   readonly bottomEdge: HTMLElement;
+  /** Custom properties for the HUD's root while the team's pieces are up (battle.css reads them). */
+  readonly vars?: Readonly<Record<string, string>>;
 }
 
 export interface BattleHud {
@@ -187,14 +191,14 @@ export interface BattleHud {
   setKeepGoingBusy: (busy: boolean) => void;
   /** Where the fight may be drawn: under the pills, above the sheet (fractions of the height). */
   safe: () => SafeRegion;
+  /**
+   * The safe region is stale now, not after the next frame: a boss fight's
+   * sheet just rose or dropped (#190), so the next `safe()` measures again
+   * instead of waiting for the `ResizeObserver`, which runs after rAF.
+   */
+  forgetLayout: () => void;
   /** The bottom sheet's top edge on the page, CSS px (#391's banner sits above it). */
   sheetTop: () => number;
-  /**
-   * Fades a team battle's cards (`TeamHudSlots.bottomEdge`) down while the
-   * boss acts, or back (#868): opacity only, so nothing moves, and they take
-   * no taps while faded.
-   */
-  fadeCards: (faded: boolean) => void;
   readonly visible: boolean;
   dispose: () => void;
 }
@@ -221,6 +225,12 @@ export interface BattleHudOptions {
   onSip: (id: string) => void;
   /** The "Sipped ✓" button was tapped: the potion goes back in the bag. */
   onUnsip: () => void;
+  /**
+   * The safe region changed (a resize, or a box the camera frames by: a boss
+   * fight's sheet rising with the picker, #190): the screen draws a frame so
+   * the camera re-frames even when nothing else moves (a slow device's rest).
+   */
+  onLayout?: () => void;
 }
 
 /** Which side a plate shows, for the dev hook and tests. */
@@ -293,6 +303,25 @@ export function sheetHold(
  * the controls leave without a change of their own (the result card, a hidden
  * or reopened HUD, a resize), so one battle's hold never carries into the next.
  */
+/**
+ * A value measured at most once per layout change (#251, #263, #190): `get`
+ * measures on the first read and returns the same value until `forget`, which
+ * clears it at once and calls `onForget` (the screen draws a frame).
+ */
+export function createLayoutCache<T>(
+  measure: () => T,
+  onForget?: () => void,
+): { get: () => T; forget: () => void } {
+  let value: { v: T } | null = null;
+  return {
+    get: () => (value ??= { v: measure() }).v,
+    forget: () => {
+      value = null;
+      onForget?.();
+    },
+  };
+}
+
 export function createSheetHold(): {
   next: (mode: ControlMode['type'], height: number) => number | null;
   release: () => void;
@@ -530,14 +559,16 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   // The safe region is measured at most once per layout change, not per frame:
   // on a resize, and when the HUD's or a pill's box changes (iOS sends
   // `resize` before a turned layout settles and none after, #251, #263).
-  let safe: SafeRegion | null = null;
-  const forget = () => {
-    safe = null;
-  };
+  // The cache's `measure` is `measureSafe`, defined with the HUD's boxes below.
+  const safeCache = createLayoutCache<SafeRegion>(
+    () => measureSafe(),
+    () => options.onLayout?.(),
+  );
+  const forget = safeCache.forget;
   const stopWatchingSheet = watchLayout([sheet], placeTip);
   // The result card too: a boss fight frames the fight above it (#190), and
   // each ask's answer changes its height.
-  // The sheet too: a team battle's band reaches down to its top while the cards are faded (#868).
+  // The sheet too: a boss fight's band ends at its handle, which rises with the picker (#190).
   const stopWatching = watchLayout(
     [hud, plates.mine.node, plates.theirs.node, result, sheet],
     forget,
@@ -674,9 +705,10 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   // measures again).
   const hold = createSheetHold();
   const holdHeight = (mode: ControlMode): void => {
-    // A team battle (#190, arena A): the friends' row and the camera sit
-    // above the sheet's full share, not its height, so a playing round
-    // shrinks the sheet to its one-line caption with nothing to chase.
+    // A boss fight (#190 PR 1): no hold. Its sheet is a fixed-height card
+    // that rises with the picker and drops to the chip handle while a round
+    // plays; the camera frames above the handle (`bossBand`), and the screen
+    // forgets the safe region as the sheet moves (`forgetLayout`).
     if (team) {
       releaseHold();
       return;
@@ -927,21 +959,57 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     placeTip();
   };
 
+  /** The safe region as laid out now (`safeCache` keeps it until the layout changes). */
+  function measureSafe(): SafeRegion {
+    const h = window.innerHeight || 1;
+    if (team && !result.hidden) {
+      // A boss fight's card (#190) sits low, and the plates step aside
+      // under it: frame the fight between the ✕ and the card's top edge,
+      // so the boss stays in view above the card (mockup frame 3).
+      const close = leave.getBoundingClientRect().bottom;
+      const card = result.getBoundingClientRect().top;
+      const top = Math.min(0.3, close > 0 ? (close + 8) / h : 0.12);
+      // On iPad the card is narrower than the arena, so the friends either
+      // side stand near its top corners: a little more room keeps their feet clear.
+      const margin = window.innerWidth >= WIDE_MIN ? CARD_MARGIN_WIDE : 8;
+      return { top, bottom: Math.max(top + 0.2, card > 0 ? (card - margin) / h : 0.5) };
+    }
+    if (team) {
+      // A boss fight (#190 PR 1): between the strip and the chip handle,
+      // collapsed while a round plays and risen with the picker. The sheet
+      // sits on the screen's bottom edge, so the handle's top is read from
+      // layout (the sheet's height, the handle's offset in it), never from
+      // its box: the rise's slide (a `translate` animation) can't be caught
+      // mid-way.
+      const edge = team.topEdge.getBoundingClientRect().bottom;
+      const handleTop =
+        sheet.offsetHeight > 0 ? h - sheet.offsetHeight + team.bottomEdge.offsetTop : 0;
+      return bossBand(edge, handleTop, h);
+    }
+    const pillBottom = Math.max(
+      plates.mine.node.getBoundingClientRect().bottom,
+      plates.theirs.node.getBoundingClientRect().bottom,
+    );
+    // The pills aren't laid out yet (hidden): a sensible guess until they are.
+    const top = pillBottom > 0 ? (pillBottom + 10) / h : 0.14;
+    const reserved = Number.parseFloat(getComputedStyle(sheet).maxHeight);
+    const share = reserved > 0 ? Math.min(reserved / h, 0.6) : SHEET_SHARE;
+    return { top: Math.min(0.4, top), bottom: 1 - share };
+  }
+
   return {
     liveSlot,
     setTeam: (next) => {
       if (team === next) return;
       team?.top.remove();
       team?.sheet.remove();
-      team?.bottomEdge.classList.remove('battle-cards-faded');
+      for (const name of Object.keys(team?.vars ?? {})) hud.style.removeProperty(name);
       team = next;
       hud.classList.toggle('battle-hud-team', next !== null);
       if (next) {
-        // The fade's tunables (#868) live in `BOSS_CARDS`; battle.css reads them.
-        const cards = next.bottomEdge.style;
-        cards.setProperty('--battle-cards-faded', String(BOSS_CARDS.opacity));
-        cards.setProperty('--battle-cards-fade-out', `${String(BOSS_CARDS.fadeOutMs)}ms`);
-        cards.setProperty('--battle-cards-fade-in', `${String(BOSS_CARDS.fadeInMs)}ms`);
+        for (const [name, value] of Object.entries(next.vars ?? {})) {
+          hud.style.setProperty(name, value);
+        }
         hud.insertBefore(next.top, sheet);
         sheet.insertBefore(next.sheet, controls);
       }
@@ -1079,52 +1147,8 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     setKeepGoingBusy: (busy) => {
       if (keepGoingButton) keepGoingButton.disabled = busy;
     },
-    safe: () => {
-      if (safe) return safe;
-      const h = window.innerHeight || 1;
-      if (team && !result.hidden) {
-        // A boss fight's card (#190) sits low, and the plates step aside
-        // under it: frame the fight between the ✕ and the card's top edge,
-        // so the boss stays in view above the card (mockup frame 3).
-        const close = leave.getBoundingClientRect().bottom;
-        const card = result.getBoundingClientRect().top;
-        const top = Math.min(0.3, close > 0 ? (close + 8) / h : 0.12);
-        // On iPad the card is narrower than the arena, so the friends either
-        // side stand near its top corners: a little more room keeps their feet clear.
-        const margin = window.innerWidth >= WIDE_MIN ? CARD_MARGIN_WIDE : 8;
-        safe = { top, bottom: Math.max(top + 0.2, card > 0 ? (card - margin) / h : 0.5) };
-        return safe;
-      }
-      if (team) {
-        // A team battle (#190): between the boss's plate and the friends' row.
-        const edge = team.topEdge.getBoundingClientRect().bottom;
-        const floor = team.bottomEdge.getBoundingClientRect().top;
-        const reserved = Number.parseFloat(getComputedStyle(sheet).maxHeight);
-        const share = reserved > 0 ? Math.min(reserved / h, 0.6) : SHEET_SHARE;
-        const bottom = Math.min(1 - share, floor > 0 ? floor / h : 1 - share);
-        // With the cards faded (#868) the stage shows down to the opaque sheet's top.
-        const sheetTop = sheet.getBoundingClientRect().top;
-        safe = {
-          top: Math.min(0.4, edge > 0 ? (edge + 10) / h : 0.18),
-          bottom,
-          open: sheetTop > 0 ? Math.max(bottom, sheetTop / h) : bottom,
-        };
-        return safe;
-      }
-      const pillBottom = Math.max(
-        plates.mine.node.getBoundingClientRect().bottom,
-        plates.theirs.node.getBoundingClientRect().bottom,
-      );
-      // The pills aren't laid out yet (hidden): a sensible guess until they are.
-      const top = pillBottom > 0 ? (pillBottom + 10) / h : 0.14;
-      const reserved = Number.parseFloat(getComputedStyle(sheet).maxHeight);
-      const share = reserved > 0 ? Math.min(reserved / h, 0.6) : SHEET_SHARE;
-      safe = { top: Math.min(0.4, top), bottom: 1 - share };
-      return safe;
-    },
-    fadeCards: (faded) => {
-      team?.bottomEdge.classList.toggle('battle-cards-faded', faded);
-    },
+    safe: safeCache.get,
+    forgetLayout: forget,
     sheetTop: () => {
       const top = sheet.getBoundingClientRect().top;
       return top > 0 ? top : (window.innerHeight || 1) * (1 - SHEET_SHARE);

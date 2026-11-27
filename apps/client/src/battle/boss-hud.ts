@@ -1,18 +1,24 @@
 import { buttonClass } from '../ui/button/button.js';
 import { el } from '../ui/dom.js';
-import { WIDE_MIN } from './battle-config.js';
 import {
   BOSS_TEXT,
   WARMTH_HEARTS,
+  bossHudVars,
+  chipStatus,
+  friendCalloutLift,
   type BefriendView,
   type BossPlates,
+  type ChipStatus,
+  type FriendPlate,
   type PickerState,
 } from './boss-view.js';
 
-// The mini-boss fight's own HUD pieces (#190, owner-approved arena A and
-// picker A1): the boss's wide plate with the visit's chips, one slim plate
-// per friend above the sheet, the team picker in the sheet, and the befriend
-// panel on the result card. battle.css styles them (`.boss-*`).
+// The mini-boss fight's own HUD pieces (#190 PR 1, the phone-first boss HUD,
+// owner option 1): a slim strip at the top (the boss's name, energy, the
+// order dots and one chip slot), a bottom sheet whose collapsed handle holds
+// the team as three chips and rises with the picker on the player's turn,
+// stage stickers for the callouts, and the befriend panel on the result
+// card. battle.css styles them (`.boss-*`); `BOSS_HUD` holds the numbers.
 
 /** A move button's look in the picker: name, its tag pills, and the area tag. */
 export interface PickerMove {
@@ -26,6 +32,7 @@ export interface PickerMove {
 
 export interface PickerHandlers {
   readonly onPick: (move: string) => void;
+  /** A tap on a team chip whose pick is made: back to that squishy's step. */
   readonly onChip: (slot: number) => void;
   readonly onGo: () => void;
   readonly onChange: () => void;
@@ -34,25 +41,25 @@ export interface PickerHandlers {
 }
 
 export interface BossHud {
-  /** Over the fight (the boss plate, the friends' plates): goes in the HUD's root. */
+  /** Over the fight (the strip and the stage stickers): goes in the HUD's root. */
   readonly top: HTMLElement;
-  /** In the sheet, above the caption's controls: the picker. */
-  readonly picker: HTMLElement;
+  /** The strip: the stage starts under it (`safe()`). */
+  readonly strip: HTMLElement;
+  /** In the sheet: the chip handle on top, the picker under it. */
+  readonly dock: HTMLElement;
+  /** The chip handle: the stage ends above it (`safe()`). */
+  readonly handle: HTMLElement;
+  /** `BOSS_HUD` as battle.css's custom properties, for the HUD's root. */
+  readonly vars: Readonly<Record<string, string>>;
   setPlates: (plates: BossPlates) => void;
-  /**
-   * Each friend's plate under its body: `x` its middle and `feet` its lowest
-   * point, in page pixels (`BattleScene.screenSpot`).
-   */
-  placeFriends: (spots: ReadonlyMap<number, FriendSpot>) => void;
-  setChips: (chips: { tries: number | null; until: string | null }) => void;
-  /** The "Round N" pill (mockup frame 1), or null to hide it. */
+  /** "Round N" on the handle, or null to hide it. */
   setRound: (round: number | null) => void;
   /**
-   * The turn-order strip while a round plays (mockup frame 1): who moves, in
-   * the order the server's log has them, the one moving now outlined. Null hides it.
+   * The order dots while a round plays: who moves, in the order the server's
+   * log has them, the one moving now lit. Null empties them (their room stays).
    */
   setOrder: (order: { movers: readonly OrderMover[]; current: number } | null) => void;
-  /** "Stomp again!" next to the boss, or a friend's callout over its plate. */
+  /** A sticker by the boss ("Here it comes!"), or over a friend's chip. */
   callout: (who: 'boss' | number, text: string) => void;
   showPicker: (
     state: PickerState,
@@ -60,21 +67,12 @@ export interface BossHud {
     handlers: PickerHandlers,
   ) => void;
   hidePicker: () => void;
+  /** The fight closed: the picker goes and the sheet rests, so the next fight opens without a slide. */
+  reset: () => void;
   dispose: () => void;
 }
 
 const CALLOUT_MS = 1100; // TUNE: the HUD's own callout length
-
-/** Where a friend stands on screen, in page pixels. */
-export interface FriendSpot {
-  readonly x: number;
-  readonly feet: number;
-}
-
-/** A plate sits this far under the lowest friend's feet on a wide screen. */
-const PLATE_GAP = 8; // TUNE:
-/** Left to right, for `placeFriends`' sort (one function, not one per pass). */
-const byX = (a: { x: number }, b: { x: number }) => a.x - b.x;
 
 /** One mover on the order strip: the boss, or a friend by slot. */
 export interface OrderMover {
@@ -82,14 +80,13 @@ export interface OrderMover {
   readonly name: string;
 }
 
-const bar = (testId: string) => {
-  const fill = el('div', { class: 'battle-energy-fill' });
-  const track = el(
-    'div',
-    { class: 'battle-energy', role: 'progressbar', 'aria-label': 'Energy', 'data-testid': testId },
-    fill,
-  );
-  return { track, fill };
+/** The status dot's mark: a colour says most, these say the rest. */
+const STATUS_MARK: Readonly<Record<ChipStatus, string>> = {
+  ok: '',
+  picking: '',
+  picked: '✓',
+  windup: '⏳',
+  down: '💤',
 };
 
 const setBar = (b: { track: HTMLElement; fill: HTMLElement }, percent: number, text: string) => {
@@ -116,82 +113,123 @@ function sameAgainButton(handlers: PickerHandlers): HTMLElement | null {
   return again;
 }
 
+/** One team chip: the tinted disc with the initial in its energy ring, and a status dot. */
+interface TeamChip {
+  readonly node: HTMLButtonElement;
+  readonly face: HTMLElement;
+  readonly dot: HTMLElement;
+  readonly callout: HTMLElement;
+  friend: FriendPlate;
+  /** What the chip shows now, so a pass that changes nothing writes nothing. */
+  shown: string;
+}
+
 export function mountBossHud(): BossHud {
+  // ── The strip ──
   const bossName = el('span', { class: 'boss-name', 'data-testid': 'boss-name' });
-  const bossLevel = el('span', { class: 'boss-level' });
-  const stomps = el('span', { class: 'boss-chip boss-chip-gold' }, BOSS_TEXT.stompsTwice);
+  const fill = el('div', { class: 'battle-energy-fill' });
+  const bossBar = {
+    track: el(
+      'div',
+      {
+        class: 'battle-energy boss-bar',
+        role: 'progressbar',
+        'aria-label': 'Energy',
+        'data-testid': 'boss-energy',
+      },
+      fill,
+    ),
+    fill,
+  };
+  // The one chip slot: ⏳ while the boss winds up, its words as the label.
   const winding = el(
     'span',
-    { class: 'boss-chip boss-chip-windup', 'data-testid': 'boss-windup' },
-    BOSS_TEXT.windingUp,
+    {
+      class: 'boss-slot',
+      role: 'img',
+      'aria-label': BOSS_TEXT.windingUp,
+      title: BOSS_TEXT.windingUp,
+      'data-testid': 'boss-windup',
+    },
+    '⏳',
   );
   winding.hidden = true;
-  const tries = el('span', { class: 'boss-chip boss-chip-try', 'data-testid': 'boss-tries' });
-  const until = el('span', { class: 'boss-chip boss-chip-until', 'data-testid': 'boss-until' });
-  const bossBar = bar('boss-energy');
+  const orderDots = el('span', {
+    class: 'boss-order',
+    role: 'img',
+    'data-testid': 'boss-order',
+  });
+  const strip = el(
+    'div',
+    { class: 'boss-strip', 'data-testid': 'boss-strip' },
+    el('div', { class: 'boss-strip-line' }, bossName, orderDots),
+    el('div', { class: 'boss-strip-line' }, bossBar.track, winding),
+  );
   const bossCallout = el('span', {
     class: 'boss-callout',
     role: 'status',
     'data-testid': 'boss-callout',
   });
   bossCallout.hidden = true;
-  const bossPlate = el(
-    'div',
-    { class: 'boss-plate', 'data-testid': 'boss-plate' },
-    el('div', { class: 'boss-plate-row' }, bossName, bossLevel, stomps),
-    bossBar.track,
-    el('div', { class: 'boss-plate-row boss-plate-chips' }, winding, tries, until),
-  );
-  const friendRow = el('div', { class: 'boss-friends', 'data-testid': 'boss-friends' });
+  const top = el('div', { class: 'boss-top' }, strip, bossCallout);
+
+  // ── The chip handle and the picker, in the sheet ──
   const round = el('span', { class: 'boss-round', 'data-testid': 'boss-round' });
   round.hidden = true;
-  const orderDots = el('span', { class: 'boss-order-dots' });
-  const order = el(
-    'div',
-    { class: 'boss-order', 'data-testid': 'boss-order', role: 'img' },
-    el('span', { class: 'boss-order-label', 'aria-hidden': 'true' }, BOSS_TEXT.order),
-    orderDots,
-  );
-  order.hidden = true;
-  // The boss plate with the order strip under it, centred (mockup frame 1).
-  const head = el('div', { class: 'boss-head' }, bossPlate, order);
-  const top = el('div', { class: 'boss-top' }, round, head, bossCallout, friendRow);
+  const chipRow = el('div', { class: 'boss-friends', 'data-testid': 'boss-friends' });
+  const handle = el('div', { class: 'boss-handle', 'data-testid': 'boss-handle' }, round, chipRow);
   const picker = el('div', { class: 'boss-picker', 'data-testid': 'boss-picker' });
   picker.hidden = true;
+  const dock = el('div', { class: 'boss-dock', 'data-sheet': 'rest' }, handle, picker);
 
-  const friendNodes = new Map<
-    number,
-    {
-      node: HTMLElement;
-      name: HTMLElement;
-      b: ReturnType<typeof bar>;
-      callout: HTMLElement;
-      /** `placeFriends`' working value: its x in the row, then its plate's left. */
-      x: number;
-      /** The left and width last written, so an unchanged pass writes nothing. */
-      left: string;
-      width: string;
+  const chips = new Map<number, TeamChip>();
+  /** The picker on screen (its chips' statuses), and its handlers. */
+  let picking: PickerState | null = null;
+  let chipTap: ((slot: number) => void) | null = null;
+  const timers = new Set<number>();
+
+  /**
+   * A friend's callout clears the caption pill (or a problem line) the
+   * battle sheet shows just above the handle: the two stack, so neither
+   * covers the other. Measured when a callout pops, and again whenever that
+   * pill comes, goes or wraps (a ResizeObserver reports before the frame
+   * paints, so no frame draws them overlapping).
+   */
+  let stickerWatch: ResizeObserver | null = null;
+  const stickers = () => {
+    const sheet = dock.parentElement;
+    return sheet
+      ? [
+          ...sheet.querySelectorAll<HTMLElement>(
+            ':scope > .battle-caption, :scope > .battle-problem',
+          ),
+        ]
+      : [];
+  };
+  const liftCallouts = () => {
+    let stickerTop: number | null = null;
+    for (const node of stickers()) {
+      const r = node.getBoundingClientRect();
+      if (r.height > 0) stickerTop = Math.min(stickerTop ?? r.top, r.top);
     }
-  >();
-  /** `placeFriends`' left-to-right order, reused pass after pass. */
-  const plateOrder: { x: number; node: HTMLElement; left: string; width: string }[] = [];
-  let lastLift = '';
-  /** Writes a plate's left and width only when they change (rounded to whole px). */
-  const setPlace = (
-    plate: { node: HTMLElement; left: string; width: string },
-    left: string,
-    width: string,
-  ) => {
-    if (plate.left !== left) {
-      plate.left = left;
-      plate.node.style.left = left;
-    }
-    if (plate.width !== width) {
-      plate.width = width;
-      plate.node.style.width = width;
+    const chipTop = chipRow.getBoundingClientRect().top;
+    for (const { callout } of chips.values()) {
+      if (callout.hidden) continue;
+      // offsetWidth/Height: the laid-out box, before its tilt and pop.
+      const size = { width: callout.offsetWidth, height: callout.offsetHeight };
+      const lift = friendCalloutLift(chipTop, stickerTop, size);
+      callout.style.setProperty('--boss-callout-lift', `${String(lift)}px`);
     }
   };
-  const timers = new Set<number>();
+  /** The sheet whose pills are watched (the dock may be handed to another). */
+  let watchedSheet: Element | null = null;
+  const watchStickers = () => {
+    if (typeof ResizeObserver === 'undefined' || dock.parentElement === watchedSheet) return;
+    stickerWatch?.disconnect();
+    stickerWatch = new ResizeObserver(liftCallouts);
+    watchedSheet = dock.parentElement;
+    for (const node of stickers()) stickerWatch.observe(node);
+  };
 
   const flash = (node: HTMLElement, text: string) => {
     node.textContent = text;
@@ -207,104 +245,88 @@ export function mountBossHud(): BossHud {
     timers.add(timer);
   };
 
-  return {
+  /** Draws a chip's ring, dot and label from its friend and the picker; writes only what changed. */
+  const drawChip = (chip: TeamChip) => {
+    const f = chip.friend;
+    const status = chipStatus(f, picking);
+    // A finished pick goes back to that squishy's step; nothing else takes a tap.
+    const tappable = status === 'picked' && chipTap !== null;
+    const key = `${f.name}|${String(f.percent)}|${status}|${String(tappable)}`;
+    if (key === chip.shown) return;
+    chip.shown = key;
+    chip.face.textContent = Array.from(f.name)[0] ?? '';
+    chip.node.style.setProperty('--pct', String(f.percent));
+    chip.node.classList.toggle('boss-friend-low', f.percent <= 30);
+    chip.node.dataset['status'] = status;
+    chip.dot.textContent = STATUS_MARK[status];
+    chip.node.disabled = !tappable;
+    chip.node.dataset['energy'] = f.energyText;
+    chip.node.setAttribute(
+      'aria-label',
+      BOSS_TEXT.chipLabel(f.name, f.percent, BOSS_TEXT.chipDoing[status]),
+    );
+    if (status === 'picking') chip.node.setAttribute('aria-current', 'step');
+    else chip.node.removeAttribute('aria-current');
+  };
+  const drawChips = () => {
+    for (const chip of chips.values()) drawChip(chip);
+  };
+
+  /** A tap on the strip shows the boss's whole name when it's cut short. */
+  strip.addEventListener('click', () => {
+    if (bossName.scrollWidth > bossName.clientWidth + 1) flash(bossCallout, bossName.textContent);
+  });
+
+  const hud: BossHud = {
     top,
-    picker,
+    strip,
+    dock,
+    handle,
+    vars: bossHudVars(),
     setPlates: (plates) => {
       bossName.textContent = plates.boss.name;
-      bossLevel.textContent = `Lv ${String(plates.boss.level)}`;
-      stomps.hidden = !plates.boss.stomps;
       winding.hidden = !plates.boss.windup;
       setBar(bossBar, plates.boss.percent, plates.boss.energyText);
       const seen = new Set<number>();
       for (const friend of plates.friends) {
         seen.add(friend.slot);
-        let node = friendNodes.get(friend.slot);
-        if (!node) {
-          const name = el('span', { class: 'boss-friend-name' });
-          const b = bar(`boss-friend-energy-${String(friend.slot)}`);
+        let chip = chips.get(friend.slot);
+        if (!chip) {
+          const face = el('span', { class: 'boss-friend-face', 'aria-hidden': 'true' });
+          const dot = el('span', { class: 'boss-friend-dot', 'aria-hidden': 'true' });
           const callout = el('span', { class: 'boss-callout boss-callout-small', role: 'status' });
           callout.hidden = true;
-          const wrap = el(
-            'div',
+          const slot = friend.slot;
+          const node = el(
+            'button',
             {
-              // The same colour as its dot in the turn-order strip (`m.who % 3`).
-              class: `boss-friend boss-friend-tint-${String(friend.slot % 3)}`,
-              'data-testid': `boss-friend-${String(friend.slot)}`,
+              type: 'button',
+              // The same tint as its order dot (`m.who % 3`), so the dots point at the right chip.
+              class: `boss-friend boss-friend-tint-${String(slot % 3)}`,
+              'data-testid': `boss-friend-${String(slot)}`,
             },
-            name,
-            b.track,
+            face,
+            dot,
             callout,
           );
-          node = { node: wrap, name, b, callout, x: 0, left: '', width: '' };
-          friendNodes.set(friend.slot, node);
-          friendRow.append(wrap);
+          node.addEventListener('click', () => {
+            chipTap?.(slot);
+          });
+          chip = { node, face, dot, callout, friend, shown: '' };
+          chips.set(slot, chip);
+          // Slot order, left to right, whatever order they arrive in.
+          const after = [...chips.keys()].filter((s) => s > slot).sort((a, b) => a - b)[0];
+          const next = after === undefined ? null : (chips.get(after)?.node ?? null);
+          chipRow.insertBefore(node, next);
         }
-        node.name.textContent = friend.name;
-        node.node.classList.toggle('boss-friend-down', friend.down);
-        setBar(node.b, friend.percent, friend.energyText);
+        chip.friend = friend;
+        drawChip(chip);
       }
-      for (const [slot, node] of friendNodes) {
+      for (const [slot, chip] of chips) {
         if (!seen.has(slot)) {
-          node.node.remove();
-          friendNodes.delete(slot);
+          chip.node.remove();
+          chips.delete(slot);
         }
-      }
-    },
-    placeFriends: (spots) => {
-      // Runs each frame the camera moves (`once-per-frame.ts`): one layout read,
-      // reused buffers, and a style is written only when it changes.
-      const row = friendRow.getBoundingClientRect();
-      if (row.width <= 0) return;
-      let placed = friendNodes.size > 0;
-      plateOrder.length = 0;
-      for (const [slot, node] of friendNodes) {
-        const spot = spots.get(slot);
-        if (!spot) placed = false;
-        node.x = (spot?.x ?? 0) - row.left;
-        plateOrder.push(node);
-      }
-      friendRow.classList.toggle('boss-friends-placed', placed);
-      if (!placed) {
-        for (const plate of plateOrder) setPlace(plate, '', '');
-      } else {
-        const gap = 8;
-        const n = Math.max(1, plateOrder.length);
-        // Never wider than a third of the row less the gaps, so plates never overlap.
-        const width = Math.min(114, (row.width - gap * (n - 1)) / n);
-        const half = width / 2;
-        // Left to right, each at least a plate and a gap from the last, inside the row.
-        plateOrder.sort(byX);
-        let min = half;
-        for (const plate of plateOrder) {
-          plate.x = Math.max(min, plate.x);
-          min = plate.x + width + gap;
-        }
-        // Pushed past the right edge: slide the lot back in.
-        let max = row.width - half;
-        for (let i = plateOrder.length - 1; i >= 0; i--) {
-          const plate = plateOrder[i];
-          if (!plate) continue;
-          plate.x = Math.min(plate.x, max);
-          max = plate.x - width - gap;
-        }
-        const w = `${String(Math.floor(width))}px`;
-        for (const plate of plateOrder) setPlace(plate, `${String(Math.round(plate.x))}px`, w);
-      }
-      // On iPad the row is pinned above the sheet's full share, well below the
-      // friends' feet: lift the plates (never lower them) to just under the
-      // lowest friend's feet, all in one line. The row's own box stays put, so
-      // the camera's frame (which reads it) doesn't chase the plates.
-      let lift = 0;
-      if (placed && window.innerWidth >= WIDE_MIN) {
-        let feet = 0;
-        for (const spot of spots.values()) feet = Math.max(feet, spot.feet);
-        lift = Math.min(0, Math.round(feet + PLATE_GAP - row.top));
-      }
-      const liftPx = `${String(lift)}px`;
-      if (liftPx !== lastLift) {
-        lastLift = liftPx;
-        friendRow.style.setProperty('--boss-plate-lift', liftPx);
       }
     },
     setRound: (n) => {
@@ -312,8 +334,11 @@ export function mountBossHud(): BossHud {
       round.textContent = n === null ? '' : BOSS_TEXT.round(n);
     },
     setOrder: (o) => {
-      order.hidden = o === null || o.movers.length === 0;
-      if (!o) return;
+      if (!o || o.movers.length === 0) {
+        orderDots.replaceChildren();
+        orderDots.removeAttribute('aria-label');
+        return;
+      }
       orderDots.replaceChildren(
         ...o.movers.map((m, i) =>
           el(
@@ -323,70 +348,34 @@ export function mountBossHud(): BossHud {
                 m.who === 'boss' ? 'boss-order-boss' : `boss-order-friend-${String(m.who % 3)}`
               }${i === o.current ? ' boss-order-now' : ''}`,
             },
-            m.who === 'boss' ? '👣' : (m.name[0] ?? ''),
+            m.who === 'boss' ? '👣' : (Array.from(m.name)[0] ?? ''),
           ),
         ),
       );
-      order.setAttribute(
+      orderDots.setAttribute(
         'aria-label',
         BOSS_TEXT.orderLabel(o.movers.map((m) => m.name).join(', ')),
       );
     },
-    setChips: (chips) => {
-      tries.hidden = chips.tries === null;
-      tries.textContent = chips.tries === null ? '' : BOSS_TEXT.triesLeft(chips.tries);
-      until.hidden = chips.until === null;
-      until.textContent = chips.until ?? '';
-    },
     callout: (who, text) => {
-      const node = who === 'boss' ? bossCallout : friendNodes.get(who)?.callout;
-      if (node) flash(node, text);
+      const node = who === 'boss' ? bossCallout : chips.get(who)?.callout;
+      if (!node) return;
+      flash(node, text);
+      // Its words are in: stack it clear of the caption before this frame paints.
+      if (who !== 'boss') {
+        watchStickers();
+        liftCallouts();
+      }
     },
     showPicker: (state, moves, handlers) => {
       picker.hidden = false;
-      const chips = el('div', {
-        class: 'boss-steps',
-        'data-testid': 'boss-steps',
-        role: 'group',
-        'aria-label': BOSS_TEXT.goBackHint,
-      });
+      dock.dataset['sheet'] = 'raised';
+      picking = state;
+      chipTap = handlers.onChip;
+      drawChips();
+      // The team row lives on the chips above (M0: the picker's own row repeated them).
+      const body: HTMLElement[] = [];
       const ready = state.at >= state.steps.length;
-      state.steps.forEach((step, i) => {
-        const pick = state.picks[step.slot];
-        const current = i === state.at;
-        const moveName = pick ? (moves(step.slot).find((m) => m.id === pick)?.name ?? '') : '';
-        const status = current
-          ? BOSS_TEXT.picking
-          : pick
-            ? ready
-              ? moveName
-              : `${moveName} ✓`
-            : BOSS_TEXT.next;
-        const chip = el(
-          'button',
-          {
-            type: 'button',
-            class: `boss-step${current ? ' boss-step-current' : ''}`,
-            'data-testid': `boss-step-${String(step.slot)}`,
-            'aria-current': current ? 'step' : 'false',
-          },
-          el(
-            'span',
-            { class: 'boss-step-name' },
-            // Winding up (#234): ⏳ by its name, and its one move to pick again.
-            step.windingUp === true ? `⏳ ${step.name}` : step.name,
-          ),
-          el('span', { class: 'boss-step-status' }, status),
-        );
-        // A finished chip goes back to that squishy's step.
-        if (pick !== undefined && !current) {
-          chip.addEventListener('click', () => {
-            handlers.onChip(step.slot);
-          });
-        } else chip.disabled = !current;
-        chips.append(chip);
-      });
-      const body: HTMLElement[] = [chips];
       if (ready) {
         body.push(el('p', { class: 'battle-ask' }, BOSS_TEXT.ready));
         const go = el(
@@ -416,7 +405,12 @@ export function mountBossHud(): BossHud {
         const step = state.steps[state.at];
         if (step) {
           const header = el('p', { class: 'battle-ask', 'data-testid': 'boss-pick-header' });
-          header.append('What should ', el('b', {}, step.name), ' do?');
+          // Winding up (#234): ⏳ by its name, and its one move to pick again.
+          header.append(
+            'What should ',
+            el('b', {}, step.windingUp === true ? `⏳ ${step.name}` : step.name),
+            ' do?',
+          );
           header.setAttribute('aria-label', BOSS_TEXT.pickHeader(step.name));
           const grid = el('div', { class: 'battle-moves boss-moves' });
           for (const move of moves(step.slot)) {
@@ -455,16 +449,36 @@ export function mountBossHud(): BossHud {
       picker.replaceChildren(...body);
     },
     hidePicker: () => {
+      if (!picker.hidden) dock.dataset['sheet'] = 'lowered';
       picker.hidden = true;
       picker.replaceChildren();
+      picking = null;
+      chipTap = null;
+      drawChips();
+    },
+    reset: () => {
+      hud.hidePicker();
+      dock.dataset['sheet'] = 'rest';
+      // Nothing of the last fight carries into the next: its order dots, its stickers.
+      hud.setOrder(null);
+      for (const timer of timers) window.clearTimeout(timer);
+      timers.clear();
+      for (const node of [bossCallout, ...[...chips.values()].map((c) => c.callout)]) {
+        node.hidden = true;
+        node.classList.remove('boss-callout-show');
+      }
     },
     dispose: () => {
+      stickerWatch?.disconnect();
+      stickerWatch = null;
+      watchedSheet = null;
       for (const timer of timers) window.clearTimeout(timer);
       timers.clear();
       top.remove();
-      picker.remove();
+      dock.remove();
     },
   };
+  return hud;
 }
 
 /** The warmth hearts: the server's coarse step, lit as hearts, never a number (mockup frame 3). */

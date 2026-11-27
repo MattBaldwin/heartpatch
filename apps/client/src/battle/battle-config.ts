@@ -103,9 +103,8 @@ export const BREATHING_FRAME_MS = 29; // TUNE: 30 fps is plenty for a slow breat
 
 /**
  * From this page width (an iPad, never an upright phone) a boss fight's HUD
- * treats the screen as wide: the friends stand well apart, so their plates
- * lift to just under their feet (`boss-hud.ts`) and the result card leaves
- * them more room (`battle-hud.ts`). The sheet itself only turns into a card
+ * treats the screen as wide: the friends stand well apart, so the result
+ * card leaves them more room (`battle-hud.ts`). The sheet itself only turns into a card
  * later, at `BATTLE_CAMERA.narrowSheetFrom` (900 px).
  */
 export const WIDE_MIN = 600; // TUNE:
@@ -261,40 +260,83 @@ export const BATTLE_CAMERA: Readonly<BattleCameraConfig> = {
 };
 
 /**
- * The team cards step aside while the boss acts (#868, owner decision: option
- * 3). On the shortest stage band (a notched iPhone's boss fight) the boss's
- * face and the team's eyes can't both fit between the boss plate and the team
- * cards once the boss rises, so during the boss's beats the cards fade down
- * (opacity only, so nothing moves) and the camera frames the team's eyes down
- * to the sheet's top instead. On a taller band (iPad) nothing fades.
+ * The boss fight's stage band (#868, #190). Since the phone-first boss HUD
+ * (#190 PR 1) the band at rest is about 0.73 of a notched iPhone's height, so
+ * nothing fades any more; `shortBand` stays as the safety net's yardstick
+ * (`shortBand()` in camera-director.ts, pinned by its tests).
  */
 export const BOSS_CARDS = {
   /** A stage band shorter than this (a fraction of the screen height) is short. */
-  // TUNE: a notched iPhone 15's is ~0.15; 393x852 with no insets (the WebKit
-  // e2e, which can't emulate them) ~0.253; the result band ~0.31; an iPad's ~0.38.
+  // TUNE: the #868 table: a notched iPhone 15 under the old plate and cards
+  // ~0.15; 393x852 with no insets (the WebKit e2e, which can't emulate them)
+  // ~0.253; the result band ~0.31; an iPad's ~0.38.
   shortBand: 0.28,
-  /** The boss's own steps that fade the cards: its taunt (`move`), windup (`effect`), being hit. */
-  beats: ['move', 'effect', 'hit', 'miss'], // TUNE (step kinds: checked by battle-scene's `isStep`)
-  /** Steps on a friend that land a boss's move (its blow arriving). */
-  landings: ['hit', 'miss'], // TUNE
+} as const;
+
+/**
+ * The phone-first boss HUD (#190 PR 1, owner option 1): a slim strip at the
+ * top and a bottom sheet whose collapsed handle holds the team as chips; the
+ * sheet rises with the picker on the player's turn. CSS px unless named.
+ * battle.css reads these as custom properties (`bossHudVars`), and
+ * `bossRestEdges` and `bossBand` work out the band they leave, so they live
+ * in one place.
+ */
+export const BOSS_HUD = {
+  /** The top strip's height (one 44 pt row, two lines inside), and its gap under the inset. */
+  stripHeight: 44, // TUNE:
+  stripTop: 8, // TUNE:
+  /** The camera's margin under the strip (the `safe()` pattern). */
+  stripMargin: 10, // TUNE:
+  /** The collapsed handle's height (the chips' row), and the stage's clearance above it. */
+  handleHeight: 64, // TUNE:
+  handleClear: 8, // TUNE:
   /**
-   * Once a beat has faded the cards, these steps keep them faded until the log
-   * has played out (`restCamera`), so a friend's sparkle or tuckering-out in
-   * the same sequence doesn't flicker them; any other step (a friend's own
-   * move, a swap) ends the boss's turn.
+   * The risen sheet with the picker, a share of the screen height (handle
+   * included): the owner's ~34vh on a tall phone, more on a short one so the
+   * moves never scroll (the battle sheet's own #656 steps, battle.css).
    */
-  holds: ['hit', 'miss', 'effect', 'heal', 'tuckered', 'item'], // TUNE
-  /** The cards' opacity while faded (they stay readable, a little). */
-  opacity: 0.18, // TUNE
-  /** Fade down and back up, ms. */
-  fadeOutMs: 160, // TUNE
-  fadeInMs: 280, // TUNE
+  sheetVh: 34, // TUNE:
+  sheetVhShort: {
+    /** At most 840 px tall (an iPhone mini). */
+    h840: 42, // TUNE:
+    /** At most 700 px tall (an iPhone SE). */
+    h700: 48, // TUNE:
+    /** At most 600 px tall. */
+    h600: 52, // TUNE:
+    /** A phone on its side (at most 520 px tall, at least 640 px wide). */
+    sideways: 46, // TUNE:
+  },
+  /** A team chip's disc, and how far the squishy picking now rises out of the handle. */
+  chipSize: 56, // TUNE: a 44 pt target with a ring around it
+  chipRaise: 8, // TUNE:
+  /** The sheet's rise and drop, ms (a snap under reduced motion). */
+  riseMs: 220, // TUNE:
+  // The strip's row, left to right: the edge, the strip (at most `stripMax`
+  // wide, centred), a gap, the ✕ (a 44 pt target, moved up into this row so
+  // it never covers the stage), the edge. Inside the strip, two lines: the
+  // name and the order dots, then the energy bar and the one chip slot.
+  edge: 12, // TUNE:
+  closeSize: 44,
+  closeGap: 8, // TUNE:
+  stripMax: 560, // TUNE:
+  stripPad: 12, // TUNE:
+  /** The order dots: one per mover (three friends and the boss), lit in turn. */
+  dots: 4,
+  dotSize: 16, // TUNE:
+  dotGap: 3, // TUNE:
+  /** The one chip slot (⏳ while the boss winds up, or nothing): an icon, so it always fits. */
+  chipSlot: 20, // TUNE:
+  innerGap: 6, // TUNE:
+  /** The energy bar never gets narrower than this (M0: it shrank to ~40 px at 393). */
+  minBar: 120,
   /**
-   * After the boss's beat the cards come back once the friends' eyes are above
-   * them again (the camera eases back), or, once the camera has settled with
-   * them still under, after this long at most (ms).
+   * A friend's callout: how far its sticker sits above its chip, and its gap
+   * over the caption pill when one shows there (the two stack, never cover).
    */
-  settleMs: 700, // TUNE
+  calloutLift: 10, // TUNE:
+  calloutGap: 6, // TUNE:
+  /** The callout sticker's tilt, degrees: battle.css's `rotate(-6deg)` (its corners dip below its box). */
+  calloutTilt: 6,
 } as const;
 
 /**
