@@ -2651,3 +2651,47 @@ Continues the Supervisor 49 section above (same session, `session_01RAEPnFW2pNAR
 - A Fable second review on every shared-contract PR (★) earned its keep on #876.
 
 **Owner decisions (2026-11-26/27, supervisor 49 shift):** the boss-plan answers, the Phase 3 pivot and the seven Christmas answers above. Pending: the four Christmas Eve questions, approval of the addendum, and M0 approval for the advent sheet (lane 1d).
+
+## Supervisor 49 (2026-11-27 afternoon)
+
+Continues "Supervisor 49 (2026-11-26/27)". Merged: #877, #881, #883, #884, #885, #886, #888, #889 (hashes in COORDINATOR §9). Filed: #887, #892.
+
+**Owner decisions (2026-11-27, one at a time, clickable)**
+1. **First snow:** the M0 snow mockup is approved **with three fixes**: night snow lifted to read as snow and the off-map ground snowed (1a), real emissive bulbs (2a), the tree never covering a label (2d).
+2. **Boss PRs 3, 5, 6 are built with captures**, no mockup lane first; the coordinator render-check gates the merge.
+3. **The boss camera keeps the sky** of the low hero shot.
+4. **Christmas Eve:** a new single-form Christmas-only frost boss with a tiny befriend form (drafts: Snowbundle and Bundlebit, #888); the fall goes to every Keeper who finished at least one fight by 10:00 patch-local Dec 25; the Eve visit lowers the level gates; a short bar at 10:00 means it dozes off and wanders home, with a thanks bundle and no asks.
+5. **The patch bar** is a thin full-width line under the boss strip on a phone, not a second bar beside the energy bar.
+6. **Text floor:** 14 px for all player-facing text (tap targets stay 44 pt).
+
+**Verdict decisions**
+- #886: e2e specs take `test` and `expect` from `apps/client/tests/e2e/test.ts`, whose automatic fixture closes every browser context after each test; lint forbids `test` from `@playwright/test` in specs. Root cause of the iPad exit-137 kills and 45-minute cancels: 58 of 71 specs left their players' contexts open (iPad group 2 browser memory 2.9 → 6.8 GB over 28 min before the fix, flat ~3 GB after).
+- #884: CI e2e stops at a 40-minute Playwright `globalTimeout` (inside the 45-minute job limit) so a hang fails with a log, plus a `[mem]` line a minute.
+- #881: specs that are not about the tutorial seed Sprout's tips as said instead of widening timeouts (#871's "Nudges on!" race).
+- #885: the boss voice is a wobbling sine with a soft vowel and a sub-bass, never a growl; stingers key on the move's element with the arena fallback; haptics are `navigator.vibrate` on the landing only where it exists and Sounds is on.
+- #883: the music rule is night, then Halloween, then Christmas, then day.
+- #889 (★ Fable second review): the client receives the patch bar's raw `goal` and `chipped` (the formula stays server-only); one `boss_bar_chips` row per finished fight plus `boss_encounters.thanked_at`; `boss_bars.id` is the `christmas-boss` ledger ref; `MapView.christmas.eve` has an `opensAt`-only form so X1 ships before X2.
+- #877: the boss camera frames the team by its true lowest body point, capped at the HUD band bottom; `focusShift` 0.12; beat push-ins may cut the end friends' bodies (faces stay on screen).
+
+**Process**
+- Supervisor 49 ran to 818k context and $300 before handing off, against the 400k rule. Hand off at ~350k.
+- `AskUserQuestion` worked reliably this afternoon and the owner prefers it for decisions; `SendUserFile` cards do not reach the owner, so frames go on an artifact page.
+- A coordinator's "regression" read of a CI cancel was wrong twice today (#877, #879); a lane's evidence that `main` failed the same way settled it. Check `main`'s own run before blaming a PR.
+
+## Supervisor 50 (2026-11-27 evening)
+
+Supervisor 50 (`session_01RAEPnH92Kgoevthcjkk5S9`) took over from supervisor 49 at 19:10 UTC (§8 handoff; supervisor 49 retired and archived). Merged: #891 (#37 1a first snow) → `6a1ee08`, #893 (supervisor 49 handoff docs) → `8027dad`, #890 (#190 PR 3 boss entrance) → `2d01b48`. Filed: #895.
+
+**Owner decisions (2026-11-27, one at a time, clickable)**
+1. **Advent sheet (lane 1d):** the M0 advent sheet is approved **with more charm**: locked days get a small wrapped-present look instead of a plain grey lock. The M0 layout stands (5×5 grid, opened / today / catch-up / missed / locked, the "might hold" row, today's and catch-up buttons); copy follows STYLE_GUIDE and data comes from the server.
+
+**Verdict decisions**
+- #890: the picker stays drawn but inert under the entrance's layer, so the sheet and stage band never move and the entrance ends exactly on the rest framing. The name card's spot order is the sky over the boss's head, then the face-to-team gap, then the band's top, then its bottom; it takes the first spot clear of both. Follow-ups for boss PR 5/6: make the picker `inert`, wait past `clickGraceMs` in the skip e2e, measure the card once, and say "hear" not "feel" in the changes entry (the buzz is Android-only).
+- #896 (lane 1d, in review): a server-only export must not share a name with a client-visible schema field, because the bundle word check (CLAUDE.md rule 6) would trip. The fix is to rename the server symbol (`presentContents` → `wrappedPresentContents`), never to allowlist the word. Opening a wrapped present from the bag (`presents/open`) is split into its own follow-up lane.
+- #894 (X1, in review): the ★ Fable second review found that converting an already-pinned weekly row into the Christmas Eve row must not delete `boss_encounters`, because that drops `last_action_at` and forfeits a fight in progress. Reset the rows in the same transaction instead.
+
+**CI rulings**
+- `computer-mates/intents.test.ts` "guards go on border tiles…" Postgres deadlock (40P01) in the server suite = **#895** (same family as #887 and #892; DDL or TRUNCATE racing another test file).
+
+**Ops note for the owner (before Dec 24)**
+- The Christmas Eve visit only runs while `HP_MINI_BOSSES` is on, and production ships with it off. It must be on for all patches by December 24.
