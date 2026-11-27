@@ -1596,16 +1596,13 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     }
     // A won mini-boss fight's sure bundle (#190): its inventory rows (step
     // 11) after the squishy locks, before coins and the events. A scoot pays
-    // none, and a Keeper's later Eve wins pay neither it nor a drop (#37 X2b).
-    const bossWinPays =
-      row.kind === 'miniboss' &&
-      options.minibosses !== undefined &&
-      result.winner === PLAYER_SIDE &&
-      (await options.minibosses.winPays(tx, row));
-    const bundle =
-      bossWinPays && result.reason !== 'forfeit' && options.minibosses
-        ? options.minibosses.bundle()
-        : null;
+    // none, and a Keeper's later Eve wins pay neither it, a drop nor the
+    // win's coins (#37 X2b, owner decisions 2026-11-27): they only chip.
+    const bosses = row.kind === 'miniboss' ? options.minibosses : undefined;
+    const bossWin = bosses !== undefined && result.winner === PLAYER_SIDE;
+    const bossRepeat = bossWin && !(await bosses.winPays(tx, row));
+    const bossWinPays = bossWin && !bossRepeat;
+    const bundle = bossWinPays && result.reason !== 'forfeit' ? bosses.bundle() : null;
     if (bundle) {
       const owner = { mapId: row.mapId, userId: row.playerUserId };
       await lockGrantRows(tx, row.mapId, [{ userId: owner.userId, items: bundle }]);
@@ -1718,9 +1715,11 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         refId: row.id,
         source: 'battle',
         patch:
-          won && !aUnpaid && !aComputer ? share(COIN_RULES.battleWin[row.kind], tile.xpPercent) : 0,
+          won && !aUnpaid && !aComputer && !bossRepeat
+            ? share(COIN_RULES.battleWin[row.kind], tile.xpPercent)
+            : 0,
         heart:
-          won && !aUnpaid && !aComputer
+          won && !aUnpaid && !aComputer && !bossRepeat
             ? share(HEART_COIN_RULES.battleWin[row.kind], tile.xpPercent)
             : 0,
       },

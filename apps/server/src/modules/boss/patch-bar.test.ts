@@ -1,4 +1,6 @@
 import {
+  COIN_RULES,
+  HEART_COIN_RULES,
   BossBefriendResponseSchema,
   BattleResponseSchema,
   MapViewSchema,
@@ -155,6 +157,23 @@ describe.skipIf(!url)('the Christmas Eve patch bar (#37 X2, needs DATABASE_URL)'
       where: (t, { and: all, eq: is }) =>
         all(is(t.mapId, mapId), is(t.userId, userId), is(t.reason, 'boss')),
     });
+  /** A mini-boss win's coins, Patch and Heart (`COIN_RULES` / `HEART_COIN_RULES.battleWin`). */
+  const WIN_COINS = {
+    patch: COIN_RULES.battleWin.miniboss,
+    heart: HEART_COIN_RULES.battleWin.miniboss,
+  };
+  /** The battles this Keeper's win coins were credited against (Patch and Heart). */
+  const coinLedger = async (mapId: string, userId: string) => {
+    const patch = await db.query.coinLedger.findMany({
+      where: (t, { and: all, eq: is }) =>
+        all(is(t.mapId, mapId), is(t.userId, userId), is(t.source, 'battle')),
+    });
+    const heart = await db.query.heartCoinLedger.findMany({
+      where: (t, { and: all, eq: is }) =>
+        all(is(t.mapId, mapId), is(t.userId, userId), is(t.source, 'battle')),
+    });
+    return [...new Set([...patch, ...heart].map((l) => l.refId))];
+  };
   /** The finish's boss-drop rolls for this battle. */
   const bossRollsFor = (battleId: string) =>
     vi
@@ -169,14 +188,20 @@ describe.skipIf(!url)('the Christmas Eve patch bar (#37 X2, needs DATABASE_URL)'
     await toEve(mapId);
 
     const first = await h.playOut(kid, await h.fight(kid, mapId));
-    expect((await battleOf(kid, first.id)).rewards?.bundle).toEqual(BOSS_RULES.bundle);
+    const firstRewards = (await battleOf(kid, first.id)).rewards;
+    expect(firstRewards?.bundle).toEqual(BOSS_RULES.bundle);
+    expect(firstRewards?.coins).toEqual(WIN_COINS);
     expect(bossRollsFor(first.id)).toHaveLength(1);
 
     const second = await h.playOut(kid, await h.fight(kid, mapId));
     const repeat = await battleOf(kid, second.id);
     expect((await createBattlesRepo(db).findBattle(second.id))?.result?.winner).toBe('a');
-    // No bundle on the result card, in the bag or the ledger, and no drop…
+    // No bundle on the result card, in the bag or the ledger, no win coins
+    // (nor a reason line: the card just shows none) and no drop…
     expect(repeat.rewards?.bundle).toBeNull();
+    expect(repeat.rewards?.coins).toEqual({ patch: 0, heart: 0 });
+    expect(repeat.rewards?.unpaid).toBeNull();
+    expect(await coinLedger(mapId, kid.id)).toEqual([first.id]);
     const ledger = await bundleLedger(mapId, kid.id);
     expect(new Set(ledger.map((l) => l.refId))).toEqual(new Set([first.id]));
     expect(Object.fromEntries(ledger.map((l) => [l.itemId, l.delta]))).toEqual(BOSS_RULES.bundle);
@@ -188,7 +213,9 @@ describe.skipIf(!url)('the Christmas Eve patch bar (#37 X2, needs DATABASE_URL)'
 
     // It's once per Keeper: the mate's first Eve win still pays.
     const theirs = await h.playOut(mate, await h.fight(mate, mapId));
-    expect((await battleOf(mate, theirs.id)).rewards?.bundle).toEqual(BOSS_RULES.bundle);
+    const theirRewards = (await battleOf(mate, theirs.id)).rewards;
+    expect(theirRewards?.bundle).toEqual(BOSS_RULES.bundle);
+    expect(theirRewards?.coins).toEqual(WIN_COINS);
     expect((await bundleLedger(mapId, mate.id)).every((l) => l.refId === theirs.id)).toBe(true);
   });
 
