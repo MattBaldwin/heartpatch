@@ -36,7 +36,11 @@ function shuffled<T>(items: readonly T[], seed: Seed): T[] {
 }
 
 /** The week's boss from the seeded bag (every boss before one repeats), or null with an empty bag. */
-function bagDraw(mapSeed: Seed, week: LocalDate, bag: readonly BossBagEntry[]): BossBagEntry | null {
+function bagDraw(
+  mapSeed: Seed,
+  week: LocalDate,
+  bag: readonly BossBagEntry[],
+): BossBagEntry | null {
   if (bag.length === 0) return null;
   const index = weekIndex(week);
   const cycle = Math.floor(index / bag.length);

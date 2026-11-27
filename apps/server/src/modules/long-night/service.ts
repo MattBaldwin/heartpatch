@@ -323,8 +323,12 @@ export async function longNightStatus(
   const mine = latest?.outcomes.find((o) => o.userId === user.id);
   // At 0 % no Night runs (`fall`), so there's nothing to count down to.
   const nextAt = strikes
-    ? nextLongNightAt(local, weekday, latestNight, HOME_BASE_RULES, (l) =>
-        instantOfLocalDate(l, map.timeZone),
+    ? nextLongNightAt(
+        local,
+        weekday,
+        latestNight,
+        HOME_BASE_RULES,
+        (l) => instantOfLocalDate(l, map.timeZone),
         QUIET_NIGHTS,
       )
     : null;
