@@ -359,6 +359,21 @@ export class CameraDirector {
   }
 
   /**
+   * A push and a shake that keep the framing's lean (the entrance's stomp,
+   * #190 PR 3: the picker's nudge to squishy 1 stays). None under reduced motion.
+   */
+  thump(push: number, shake: number, now: number): void {
+    if (this.#reduced) return;
+    this.#want = { ...this.#want, push };
+    this.#pushAt = now;
+    this.#relax = this.#config.beatDecay;
+    this.#ramp.at = now;
+    this.#ramp.ms = 0;
+    this.#ramp.from = this.#push;
+    if (shake > 0) this.#shake = { amount: shake, roll: 0, at: now };
+  }
+
+  /**
    * Leans the framing towards a ground point and holds it (the team picker's
    * squishy, #190: the camera nudges to each one in turn), or back to the
    * middle with null.

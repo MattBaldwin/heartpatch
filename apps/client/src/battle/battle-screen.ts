@@ -71,6 +71,13 @@ import {
 import { keeperReaction } from './keeper-reaction.js';
 import { cheerFor } from './befriend-cheer.js';
 import { revealPlan, showRareReveal, wildOf, type RareReveal } from './rare-reveal.js';
+import {
+  EntranceGate,
+  showBossEntrance,
+  stompStep,
+  wantsEntrance,
+  type BossEntrance,
+} from './boss-entrance.js';
 import { FENCE_RESULTS, fenceResult, resultLine } from './result-line.js';
 import { coinLine, xpLines } from './result-card.js';
 import { keepGoing, KEEP_GOING_TEXT, type KeepGoingApi } from './keep-going.js';
@@ -402,6 +409,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   let opponentLabel: string | null = null;
   /** The rare-find moment on screen (#391), if any. */
   let reveal: RareReveal | null = null;
+  /** The boss's entrance on screen (#190 PR 3), if any; playback waits for it (`gate`). */
+  let entrance: BossEntrance | null = null;
+  const gate = new EntranceGate();
 
   // ── Entry button (shown over the map) ─────────────────────────────────
   const note = el('p', { class: 'battle-entry-note', role: 'status' });
@@ -1445,7 +1455,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     hud.setControls(replaying ? { type: 'hidden' } : { type: 'waiting' });
     if (isTeamBattle(next)) bossFight.playing(next, queue);
     if (queue.length === 0) settle();
-    else playNext();
+    // The boss's entrance plays out (or is skipped) first (#190 PR 3).
+    else gate.run(playNext);
   };
 
   const submitDeps: SubmitDeps = {
@@ -1615,6 +1626,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const wasOpen = battle !== null;
     reveal?.dispose();
     reveal = null;
+    entrance?.dispose();
+    entrance = null;
+    gate.drop();
     clock.clearAll();
     queue = [];
     waiting = false;
@@ -1674,6 +1688,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     }
     if (frame === 0) frame = requestAnimationFrame(tick);
     startReveal(next, replay);
+    startEntrance(next, replay);
     if (lureSaid && !replay) hud.setCaption(lureSaid);
     lureSaid = null;
   }
@@ -1716,11 +1731,72 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     requestAnimationFrame(begin);
   }
 
+  /**
+   * The BIG squishy arrives (#190 PR 3, `boss-entrance.ts`): every boss fight
+   * opens with the boss's drop, stomp and name card. The picker waits under
+   * it, and so does any playback (`gate`); a tap after the stomp skips.
+   */
+  function startEntrance(next: PlayerBattle, replay: boolean): void {
+    if (!wantsEntrance(next, replay) || !content) return;
+    const names = content;
+    const boss = next.view.sides[otherSide(next.mySide)].squishies[bossSlot(next)];
+    const bossName = boss ? names.speciesName(boss.speciesId) : 'The BIG squishy';
+    const element = boss?.element ?? null;
+    // The picker stays drawn (inert under the entrance's layer), so the sheet and
+    // the stage band don't move: the entrance ends on the fight's rest framing.
+    gate.hold();
+    let frames = 0;
+    const begin = (): void => {
+      if (battle?.id !== next.id || entrance || !gate.waiting) return;
+      // A few frames for the arena to build (the boss has to be there to drop in).
+      if (!scene3d && (frames += 1) < RARE_REVEAL.waitFrames) {
+        requestAnimationFrame(begin);
+        return;
+      }
+      const h = window.innerHeight || 1;
+      entrance = showBossEntrance(options.root, {
+        bossName,
+        reducedMotion: reducedMotion.matches,
+        clock,
+        layout: () => {
+          const framing = scene3d?.stats.framing ?? null;
+          const team = framing?.team ?? [];
+          return {
+            band: framing?.band ?? { top: hud.safe().top, bottom: hud.sheetTop() / h },
+            face: framing?.face ?? null,
+            teamTop: team.length > 0 ? Math.min(...team.map((f) => f.top)) : null,
+            height: h,
+          };
+        },
+        pose: (state) => {
+          scene3d?.entrancePose(state);
+          options.invalidate();
+        },
+        onStomp: () => {
+          scene3d?.stomp(now());
+          // The landing's sound and buzz, through the beat hook (#190 PR 4).
+          options.onStep?.(stompStep(next.mySide), false, { kind: 'landing', element });
+        },
+        onDone: () => {
+          entrance = null;
+          if (battle?.id !== next.id) return;
+          // Held playback plays now. Nothing else to do: the picker never went
+          // away and its lean is still on (no settle, which rests the camera).
+          gate.end();
+        },
+      });
+    };
+    requestAnimationFrame(begin);
+  }
+
   /** Takes the battle off screen; `returnToMap` hands the screen back to the map. */
   function close(returnToMap = true): void {
     const closedMap = returnToMap ? (battle?.mapId ?? null) : null;
     reveal?.dispose();
     reveal = null;
+    entrance?.dispose();
+    entrance = null;
+    gate.drop();
     clock.clearAll();
     queue = [];
     if (frame !== 0) cancelAnimationFrame(frame);
@@ -1870,6 +1946,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         clock: now(),
         safe: hud.safe(),
         breathing: breath.slow ? ('stopped' as const) : ('live' as const),
+        // The boss's entrance (#190 PR 3): how far in, and whether a tap skips yet.
+        entrance: entrance ? { at: entrance.at(), skippable: entrance.skippable() } : null,
         boss: isTeamBattle(battle)
           ? {
               picking: bossFight.debug.picker?.steps[bossFight.debug.picker.at]?.slot ?? null,

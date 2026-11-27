@@ -50,6 +50,7 @@ import {
 } from './battle-config.js';
 import type { PlaybackStep } from './battle-playback.js';
 import { bossBeat, type BossBeat } from './boss-beat.js';
+import type { EntranceState } from './boss-entrance.js';
 import type { BattleContent } from './battle-view.js';
 import {
   battleScale,
@@ -311,6 +312,8 @@ export class BattleScene {
   /** The last move played (and its user's slot, #190), for the hit that follows it. */
   #lastMove: { move: string; user: BattleSideId; slot: number; landing: boolean } | null = null;
   #playing: { kind: PlaybackStep['kind']; start: number; ms: number } | null = null;
+  /** The boss's entrance pose (#190 PR 3): its drop and stomp squash, or null once it's in. */
+  #entrance: { lift: number; squash: number } | null = null;
   #now = 0;
   #acts = 0;
   #salt = 1;
@@ -882,6 +885,11 @@ export class BattleScene {
         // Standing ready moves a little (a bob), unless motion is reduced.
         if (!this.#options.reducedMotion && rig.out && !rig.down) moving = true;
       }
+      const entering = this.#entrance && rig.boss ? this.#entrance : null;
+      if (entering) {
+        pose = { ...pose, lift: pose.lift + entering.lift, squash: pose.squash * entering.squash };
+        moving = true;
+      }
       this.#apply(rig, pose);
       if (running) moving = true;
       if (rig.field.update(now)) moving = true;
@@ -905,7 +913,29 @@ export class BattleScene {
       return true;
     if (this.#effects.stats.live > 0) return true;
     if (this.#camera.moving(now)) return true;
+    if (this.#entrance) return true;
     return this.#keeper !== null && this.#keepers.isPlaying(this.#keeper, now);
+  }
+
+  /**
+   * The boss's entrance (#190 PR 3, `boss-entrance.ts`): poses the boss from
+   * the timeline's state each frame; a state that's done lets it stand.
+   */
+  entrancePose(state: EntranceState): void {
+    if (this.#options.team === undefined) return;
+    this.#entrance = state.done ? null : { lift: state.lift, squash: state.squash };
+  }
+
+  /**
+   * The entrance's stomp lands (#190 PR 3): the boss camera's landing thump
+   * (its push and shake, none under reduced motion), as a windup's landing has,
+   * keeping whatever lean the picker gave the framing.
+   */
+  stomp(now: number): void {
+    if (this.#options.team === undefined) return;
+    const beats = BATTLE_CAMERA.boss.beats;
+    // Keeps the picker's lean (a cue would pull the framing back to the middle).
+    this.#camera.thump(beats.landingPush, beats.landingShake, now);
   }
 
   /** Shows or hides the sparkle shield over a side's squishy (from its pill's chips). */
@@ -1372,7 +1402,11 @@ export class BattleScene {
     const rig = this.#rigs[this.#options.mySide === 'a' ? 'b' : 'a'];
     const face = rig.out?.face;
     if (!face || rig.down || rig.pose.scale < 0.2) return null;
-    const point = posedFace(this.#bossFacePoint, rig.home, rig.fx, rig.fz, rig.pose, face);
+    // Dropping in (#190 PR 3), the camera frames where the face will land: one steady low shot.
+    const pose = this.#entrance
+      ? { ...rig.pose, lift: rig.pose.lift - this.#entrance.lift }
+      : rig.pose;
+    const point = posedFace(this.#bossFacePoint, rig.home, rig.fx, rig.fz, pose, face);
     // Turned away (a taunt's twirl), the camera doesn't chase its face.
     point.facing = this.#bossFacing() ?? 1;
     return point;

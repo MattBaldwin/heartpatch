@@ -32,6 +32,7 @@ interface BattleDebug {
     } | null;
     playing: { kind: string; at: number } | null;
   } | null;
+  entrance: { at: number; skippable: boolean } | null;
   boss: {
     picking: number | null;
     picks: Record<string, string>;
@@ -43,7 +44,21 @@ interface BattleDebug {
 
 const battleState = (page: Page) => hook<BattleDebug>(page, 'battle');
 
-async function bossFight(page: Page, options: BossStubOptions = {}) {
+/** Moves the held battle clock on (`BattleScreen.dev`, `?battle-clock=manual`), as rare-reveal.spec.ts. */
+async function advance(page: Page, ms: number): Promise<void> {
+  await page.evaluate((step) => {
+    const hook = (window as { __heartpatch?: { battleDev?: () => unknown } }).__heartpatch;
+    const dev = hook?.battleDev?.() as { advance: (ms: number) => void } | null | undefined;
+    if (!dev) throw new Error('no held battle clock: open the page with ?battle-clock=manual');
+    dev.advance(step);
+  }, ms);
+}
+
+async function bossFight(
+  page: Page,
+  options: BossStubOptions & { entrance?: 'keep'; clock?: 'manual' } = {},
+) {
+  if (options.clock === 'manual') await page.goto('/?battle-clock=manual');
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByLabel('Patch name').fill('Stomp Patch');
@@ -57,7 +72,16 @@ async function bossFight(page: Page, options: BossStubOptions = {}) {
   const stub = await stubBossFight(page, options);
   await realTap(await trayButton(page, 'battle-dev-fight'));
   await expect(page.getByTestId('boss-strip')).toBeVisible({ timeout: 30_000 });
+  if (options.entrance !== 'keep') await entranceOver(page);
   return stub;
+}
+
+/** The BIG squishy's entrance (#190 PR 3) comes up, plays its 2.6 s and goes. */
+async function entranceOver(page: Page): Promise<void> {
+  await expect.poll(async () => (await battleState(page))?.entrance != null).toBe(true);
+  await expect
+    .poll(async () => (await battleState(page))?.entrance ?? null, { timeout: 10_000 })
+    .toBeNull();
 }
 
 async function playRound(page: Page): Promise<void> {
@@ -615,6 +639,54 @@ test.describe('a mini-boss fight (#190)', () => {
     });
     expect(room, 'round label and chips').not.toBeNull();
     expect(room!.gap, JSON.stringify(room)).toBeGreaterThanOrEqual(4);
+  });
+
+  test('the BIG squishy arrives: a tap waits for the stomp, then skips without picking (#190 PR 3)', async ({
+    browser,
+  }) => {
+    const page = await newPlayer(browser, uniqueName('stomp'));
+    // The battle clock held (`?battle-clock=manual`), so the 2.6 s entrance waits for each step.
+    await bossFight(page, { entrance: 'keep', clock: 'manual' });
+    const layer = page.locator('.boss-entrance');
+    await expect(layer).toBeVisible();
+    await expect.poll(async () => (await battleState(page))?.entrance?.at ?? null).toBe(0);
+    // The picker is drawn under the layer (the band never moves); a real tap on a
+    // move before the stomp lands does nothing at all.
+    const move = page.getByTestId('boss-picker').getByRole('button').first();
+    await realTap(move);
+    expect((await battleState(page))?.entrance?.skippable).toBe(false);
+    await expect(layer).toBeVisible();
+    expect((await battleState(page))?.boss?.picks).toEqual({});
+    // Past the stomp: the skip pill is up, the card in, clear of the boss face and the team.
+    await advance(page, 1200);
+    expect((await battleState(page))?.entrance?.skippable).toBe(true);
+    await expect(page.locator('.boss-entrance-skip')).toHaveText('Tap to skip');
+    const card = page.locator('.boss-entrance-card');
+    await expect(card).toContainText('A BIG squishy!');
+    await expect(card).toHaveCSS('opacity', '1');
+    const box = await card.boundingBox();
+    const framing = (await battleState(page))?.scene?.framing;
+    const h = page.viewportSize()?.height ?? 1;
+    expect(box && framing).toBeTruthy();
+    if (box && framing) {
+      const off = (f: { top: number; bottom: number }) =>
+        box.y + box.height <= f.top * h || box.y >= f.bottom * h;
+      expect(framing.face ? off(framing.face) : true).toBe(true);
+      expect(framing.team.every(off)).toBe(true);
+      expect(box.y).toBeGreaterThanOrEqual(framing.band.top * h);
+      expect(box.y + box.height).toBeLessThanOrEqual(framing.band.bottom * h);
+    }
+    // A finger tap on the same move skips: the entrance goes, and the click the
+    // browser sends after the touch (at the move, now uncovered) is swallowed
+    // rather than picking it. A touch, not a mouse: that click is what iOS sends.
+    const at = await move.boundingBox();
+    expect(at).toBeTruthy();
+    if (at) await page.touchscreen.tap(at.x + at.width / 2, at.y + at.height / 2);
+    await expect.poll(async () => (await battleState(page))?.entrance ?? null).toBeNull();
+    await expect(layer).toHaveCount(0);
+    const after = await battleState(page);
+    expect(after?.boss?.picking).toBe(0);
+    expect(after?.boss?.picks).toEqual({});
   });
 
   test('a duplicate never joins: no ask, no charms', async ({ browser }) => {
