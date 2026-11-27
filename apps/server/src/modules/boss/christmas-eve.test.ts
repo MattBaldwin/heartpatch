@@ -201,6 +201,8 @@ describe.skipIf(!url)('the Christmas Eve visit (#37 X1, needs DATABASE_URL)', ()
       userId: owner.id,
       windowId: '2026-12-21',
       createdAt: DENVER('2026-12-23T17:00:00'),
+      lastActionAt: DENVER('2026-12-23T17:05:00'),
+      asks: [{ ask: 1 }],
     });
     // Before the Eve opens, the weekly visit stays out as pinned.
     h.clock.setTime(DENVER('2026-12-24T12:00:00').getTime());
@@ -219,12 +221,17 @@ describe.skipIf(!url)('the Christmas Eve visit (#37 X1, needs DATABASE_URL)', ()
     });
     const fought = await createBossRepo(db).visitOf(mapId, DENVER('2026-12-23T17:00:00'));
     expect(fought?.windowId).toBe('2026-12-21');
-    // Its weekly goes are cleared, so the Keeper meets the Eve fresh.
-    expect(
-      await db.query.bossEncounters.findMany({
-        where: (t, { and: all, eq: is }) => all(is(t.mapId, mapId), is(t.windowId, '2026-12-21')),
-      }),
-    ).toEqual([]);
+    // Its weekly goes are reset (the idle clock kept), so the Keeper meets the Eve fresh.
+    const goes = await db.query.bossEncounters.findMany({
+      where: (t, { and: all, eq: is }) => all(is(t.mapId, mapId), is(t.windowId, '2026-12-21')),
+    });
+    expect(goes).toHaveLength(1);
+    expect(goes[0]).toMatchObject({
+      wonBattleId: null,
+      asks: [],
+      lastActionAt: DENVER('2026-12-23T17:05:00'),
+    });
+    expect((await visitOf(owner, mapId))?.state).toBe('here');
     expect((await visitOf(owner, mapId))?.event?.kind).toBe('christmas-eve');
     // The map shows the Eve's own opening, not the weekly one.
     expect(await eveOf(owner, mapId)).toEqual({
@@ -236,6 +243,52 @@ describe.skipIf(!url)('the Christmas Eve visit (#37 X1, needs DATABASE_URL)', ()
       where: (t, { and: all, eq: is }) => all(is(t.mapId, mapId), is(t.type, 'boss.appeared')),
     });
     expect(appeared).toHaveLength(1);
+  });
+
+  it('keeps a weekly fight going across the conversion (its idle clock stays)', async () => {
+    await h.start();
+    h.clock.setTime(DENVER('2026-12-21T12:00:00').getTime());
+    const owner = await h.player();
+    const mapId = await h.patch(owner);
+    // An even team, so one step doesn't end the fight.
+    await h.grow(mapId, owner, 20, [20, 20]);
+    await db.insert(bossWindows).values({
+      mapId,
+      windowId: '2026-12-21',
+      speciesId: STAND_IN_BOSS.id,
+      q: 0,
+      r: 0,
+      opensAt: DENVER('2026-12-23T16:00:00'),
+      endsAt: DENVER('2026-12-25T16:00:00'),
+      kind: 'weekly',
+    });
+    // The fight starts on the weekly visit at 15:50 and steps at 15:58…
+    h.clock.setTime(DENVER('2026-12-24T15:50:00').getTime());
+    let battle = await h.fight(owner, mapId);
+    const step = async () => {
+      const side = battle.view.sides.a;
+      const picks = (side.out ?? [])
+        .filter((slot) => side.squishies[slot]!.energy > 0)
+        .map((slot) => ({ slot, move: side.squishies[slot]!.moves[0]! }));
+      battle = await h.act(owner, battle, { type: 'team', picks });
+    };
+    h.clock.setTime(DENVER('2026-12-24T15:58:00').getTime());
+    await step();
+    expect(battle.status).toBe('active');
+    // …the Eve converts the row at 16:01…
+    h.clock.setTime(DENVER('2026-12-24T16:01:00').getTime());
+    expect(await h.sweep([mapId])).toBe(1);
+    // …and a step at 16:05 is 7 minutes after the last one, not 15 after the
+    // start: no leave (`idleMinutes` 10), the fight goes on.
+    h.clock.setTime(DENVER('2026-12-24T16:05:00').getTime());
+    expect(battle.status).toBe('active');
+    await step();
+    const stored = (await createBattlesRepo(db).findBattle(battle.id))!;
+    expect(stored.actions.some((a) => a.type === 'forfeit')).toBe(false);
+    // The weekly fight still belongs to the converted row.
+    expect((await createBossRepo(db).visitOf(mapId, stored.startedAt))?.windowId).toBe(
+      '2026-12-21',
+    );
   });
 
   it('stays out Christmas morning when the Eve is a Sunday (2028), then the bag resumes', async () => {
