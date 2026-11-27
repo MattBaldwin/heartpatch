@@ -25,8 +25,8 @@
   height: var(--patch-bar-h, 4px);
   overflow: hidden;
   border-radius: 2px;
-  background: rgb(255 255 255 / 45%);
-  box-shadow: 0 0 0 1px rgb(107 75 110 / 18%);
+  background: rgb(255 255 255 / 60%);
+  box-shadow: 0 0 0 1px rgb(107 75 110 / 35%);
 }
 
 .patch-bar-fill {
