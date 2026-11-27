@@ -236,8 +236,12 @@ export interface SignatureBurst {
   readonly count: number;
   /** From the squishy's feet, middle or the top of its head. */
   readonly at: 'feet' | 'middle' | 'head';
-  /** Moved off the spot (× the squishy's height, world axes): a flash beside the stage. */
-  readonly offset?: { readonly x: number; readonly y: number; readonly z: number };
+  /**
+   * Moved off the spot, × the squishy's height, in its own frame: `toward`
+   * the other fighter (so towards the camera for the boss), to its `side`,
+   * and `up`. A flash beside the stage, a heap lifted clear of the feet.
+   */
+  readonly offset?: { readonly side: number; readonly up: number; readonly toward: number };
   /** Speed out, lift (× the squishy's height per second; a `pile`'s speed is its radius) and gravity (× height /s²). */
   readonly speed: number;
   readonly up: number;
@@ -250,7 +254,7 @@ export interface SignatureBurst {
   readonly delay: number;
   /** Its bits are born across this share of the step (a pile that grows), else at once. */
   readonly spread?: number;
-  /** `arc`: radians swept, and the radius (× height). */
+  /** `arc`: radians swept (centred on the side facing the other fighter), and the radius (× height). */
   readonly sweep?: number;
   readonly radius?: number;
   /** Every other bit gets a soft halo that blooms (`burst`). */
@@ -267,6 +271,9 @@ export interface SignatureBeatFx {
 }
 
 export type SignatureMoment = Readonly<Partial<Record<SignatureBeat, SignatureBeatFx>>>;
+
+/** Beside the BIG squishy, a little towards the team: where a called-in friend's flash goes. */
+const BESIDE = { side: 0.75, up: 0.45, toward: 0.35 } as const; // TUNE
 
 const LEAF_PILE = ['#c9772f', '#e0a040', '#9bbf4a', '#e86a3a'] as const; // TUNE: autumn rake pile
 const SKID = ['#d9d2c5', '#c4bcae', '#efe9dd'] as const; // TUNE: soft dusty skid marks, never black
@@ -286,10 +293,12 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           motion: 'pile',
           count: 110, // TUNE: ≤ 150 live leaves with the aura (the budget)
           at: 'feet',
-          speed: 0.75,
-          up: 0.22,
+          // Lifted and wide: the low camera puts the team in front of the BIG squishy's feet.
+          offset: { side: 0, up: 0.2, toward: 0.15 }, // TUNE
+          speed: 0.95,
+          up: 0.42,
           gravity: 0,
-          size: 0.11,
+          size: 0.16,
           life: 1300, // TUNE
           delay: 0,
           spread: 0.8, // the pile grows across the count
@@ -310,7 +319,7 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           speed: 2.6,
           up: 1.8,
           gravity: 1.2,
-          size: 0.13,
+          size: 0.2,
           life: 1400, // TUNE
           delay: 0.22, // just after the hit-stop
         },
@@ -366,12 +375,13 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           shape: 'shard',
           colors: 'element',
           motion: 'ballistic',
-          count: 12, // TUNE: the frost shiver
-          at: 'middle',
-          speed: 0.35,
-          up: 0.3,
+          count: 14, // TUNE: the frost shiver, off its shoulders
+          at: 'head',
+          offset: { side: 0, up: -0.15, toward: 0.2 },
+          speed: 0.45,
+          up: 0.35,
           gravity: 0.9,
-          size: 0.07,
+          size: 0.1,
           life: 600,
           delay: 0.15,
         },
@@ -386,12 +396,12 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           motion: 'pop',
           count: 1,
           at: 'middle',
-          offset: { x: 1.1, y: 0.35, z: 0.9 }, // TUNE: beside the stage
+          offset: BESIDE,
           speed: 0,
           up: 0,
           gravity: 0,
           size: 0.9,
-          life: 260,
+          life: 360, // TUNE
           delay: 0.05,
         },
         {
@@ -401,7 +411,7 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           motion: 'rise',
           count: 10, // TUNE
           at: 'middle',
-          offset: { x: 1.1, y: 0.35, z: 0.9 },
+          offset: BESIDE,
           speed: 0.4,
           up: 0.28,
           gravity: 0,
@@ -425,15 +435,16 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           motion: 'ballistic',
           count: 24, // TUNE: two skid arcs' worth
           at: 'feet',
+          offset: { side: 0, up: 0.04, toward: 0 },
           speed: 0,
           up: 0.06,
           gravity: 0,
-          size: 0.08,
+          size: 0.13,
           life: 900,
           delay: 0.2,
           spread: 0.5,
-          sweep: Math.PI * 1.4,
-          radius: 0.75,
+          sweep: Math.PI, // the front half, facing the team
+          radius: 0.95,
         },
         {
           pattern: 'arc',
@@ -442,15 +453,16 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           motion: 'zap',
           count: 16, // TUNE
           at: 'feet',
+          offset: { side: 0, up: 0.12, toward: 0 },
           speed: 0,
           up: 0.12,
           gravity: 0,
-          size: 0.06,
+          size: 0.09,
           life: 520,
           delay: 0.2,
           spread: 0.5,
-          sweep: Math.PI * 1.4,
-          radius: 0.85,
+          sweep: Math.PI,
+          radius: 1.05,
         },
       ],
     },
@@ -462,11 +474,11 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           colors: 'element',
           motion: 'zap',
           count: 12, // TUNE: a spark trail past each post
-          at: 'feet',
+          at: 'middle',
           speed: 0,
           up: 0.15,
           gravity: 0,
-          size: 0.06,
+          size: 0.08,
           life: 480,
           delay: 0.1,
           spread: 0.3,
@@ -498,7 +510,7 @@ export const SIGNATURE_FALLBACK: Readonly<Record<SignatureEffect, SignatureMomen
           motion: 'pop',
           count: 1,
           at: 'middle',
-          offset: { x: 1.1, y: 0.35, z: 0.9 },
+          offset: BESIDE,
           speed: 0,
           up: 0,
           gravity: 0,
@@ -1016,11 +1028,17 @@ export function emit(e: EmitAt): Particle[] {
       const step = e.duration ?? 0;
       const colors =
         b.colors === 'element' ? fx.colors : b.colors === 'core' ? [fx.core, '#ffffff'] : b.colors;
-      const o = b.offset ?? { x: 0, y: 0, z: 0 };
+      // Its own frame: towards the other fighter (`to`), else towards -z.
+      const dx = e.to ? e.to.x - e.at.x : 0;
+      const dz = e.to ? e.to.z - e.at.z : -1;
+      const len = Math.hypot(dx, dz) || 1;
+      const fx0 = dx / len;
+      const fz0 = dz / len;
+      const o = b.offset ?? { side: 0, up: 0, toward: 0 };
       const spot: Point = {
-        x: e.at.x + o.x * h,
-        y: (b.at === 'feet' ? 0.1 : b.at === 'head' ? e.at.y + h * 0.48 : e.at.y) + o.y * h,
-        z: e.at.z + o.z * h,
+        x: e.at.x + (fx0 * o.toward + fz0 * o.side) * h,
+        y: (b.at === 'feet' ? 0.1 : b.at === 'head' ? e.at.y + h * 0.48 : e.at.y) + o.up * h,
+        z: e.at.z + (fz0 * o.toward - fx0 * o.side) * h,
       };
       const count = n(b.count);
       // Born across `spread` of the step (a pile that grows, a skid drawn in order).
@@ -1060,7 +1078,7 @@ export function emit(e: EmitAt): Particle[] {
         const sweep = b.sweep ?? Math.PI;
         const radius = (b.radius ?? 0.8) * h;
         for (let i = 0; i < count; i++) {
-          const a = Math.PI * 0.5 + sweep * (count > 1 ? i / (count - 1) - 0.5 : 0);
+          const a = Math.atan2(fz0, fx0) + sweep * (count > 1 ? i / (count - 1) - 0.5 : 0);
           add({
             shape: b.shape,
             color: pick(colors, i),
@@ -1070,7 +1088,7 @@ export function emit(e: EmitAt): Particle[] {
             origin: {
               x: spot.x + Math.cos(a) * radius,
               y: spot.y,
-              z: spot.z - Math.sin(a) * radius * 0.8,
+              z: spot.z + Math.sin(a) * radius,
             },
             vx: 0,
             vy: b.up * h * (0.5 + r(i, 5)),

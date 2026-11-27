@@ -1216,7 +1216,9 @@ export class BattleScene {
         ? { x: k.x, y: k.y + 0.3, z: k.z }
         : this.#centre(other, other.pose, other.out ?? other.fence);
     }
-    if (cue.kind === 'bolt') to = this.#centre(other, other.pose, other.out ?? other.fence);
+    // A bolt flies there; a signature burst faces it (#190 PR 5: arcs and flashes on the camera's side).
+    if (cue.kind === 'bolt' || cue.kind === 'signature')
+      to = this.#centre(other, other.pose, other.out ?? other.fence);
     if (cue.kind === 'trail') {
       const act = rig.act;
       path = (t) => this.#centre(rig, act ? actPose(act, t) : rig.pose, fighter);

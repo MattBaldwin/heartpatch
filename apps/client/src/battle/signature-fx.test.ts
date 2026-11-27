@@ -487,6 +487,8 @@ describe('emit: signature bursts (#190 PR 5)', () => {
     strength: 1,
     now: 1000,
     at: { x: 0, y: 2.2, z: 4 },
+    // The team (and the camera) is towards -z.
+    to: { x: 0, y: 1, z: -4 },
     height: 4.4,
     duration: 700,
     salt: 3,
@@ -535,8 +537,17 @@ describe('emit: signature bursts (#190 PR 5)', () => {
 
   it('lays a skid arc on the ground, drawn in order, and rings at the feet', () => {
     const arc = emit({ ...base, element: 'spark', burst: burstOf('all-foes:spark', 'strike') });
-    expect(arc.every((p) => p.origin.y === 0.1)).toBe(true);
+    // Just off the ground, and on its front: the side facing the team, so the camera sees it.
+    expect(arc.every((p) => p.origin.y > 0 && p.origin.y < 0.2 * 4.4 + 0.1)).toBe(true);
+    expect(arc.every((p) => p.origin.z <= base.at.z + 0.01)).toBe(true);
     expect(arc.map((p) => p.born)).toEqual([...arc.map((p) => p.born)].sort((a, b) => a - b));
+    // It turns with the fight: facing +x, it lies on the +x side.
+    const turned = emit({
+      ...base,
+      to: { x: 10, y: 1, z: 4 },
+      burst: burstOf('all-foes:spark', 'strike'),
+    });
+    expect(turned.every((p) => p.origin.x >= base.at.x - 0.01)).toBe(true);
     const rings = emit({ ...base, element: 'fire', burst: burstOf('flinch:fire', 'strike', 1) });
     expect(rings).toHaveLength(3);
     expect(rings.every((p) => p.motion === 'ring' && p.origin.y === 0.06)).toBe(true);
@@ -546,8 +557,10 @@ describe('emit: signature bursts (#190 PR 5)', () => {
     const halo = burstOf('assist:frost', 'backup', 1);
     const fire = emit({ ...base, element: 'fire', burst: halo });
     expect(fire.every((p) => ['#ff7a3d', '#ffb347', '#ffe066'].includes(p.color))).toBe(true);
-    // Beside the stage, not on the boss.
-    expect(fire[0]!.origin.x).toBeGreaterThan(base.at.x + 4.4);
+    // Beside the BIG squishy (to its side, a little towards the team), not on it.
+    const o = fire[0]!.origin;
+    expect(Math.abs(o.x - base.at.x)).toBeGreaterThan(4.4 * 0.5);
+    expect(o.z).toBeLessThan(base.at.z);
   });
 
   it('is thinner for reduced motion', () => {
