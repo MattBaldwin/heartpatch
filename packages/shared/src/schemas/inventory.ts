@@ -96,6 +96,12 @@ export const ItemChangeReasonSchema = z.enum([
   'advent',
   /** Christmas (#37): opening a present from the bag, what was in it, against the opening. */
   'present-open',
+  /**
+   * Christmas Eve (#37 C0b): a contributor's thanks from the patch bar (the
+   * fall's bundle or the dozed-off one), ledgered against its `boss_bars.id`.
+   * One per Keeper per visit (`boss_encounters.thanked_at`).
+   */
+  'christmas-boss',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 

@@ -213,6 +213,61 @@ describe('public views', () => {
     expect(publicViewFor(PUBLIC_VIEWS, visited, me)).toBeNull();
   });
 
+  it('moves the Christmas Eve bar for all but names no one, and thanks the Keeper alone (#37 C0b)', () => {
+    const chipper = '0190a8c4-0000-7000-8000-000000000002';
+    const mate = '0190a8c4-0000-7000-8000-000000000003';
+    const battleId = '0190a8c4-0000-7000-8000-000000000005';
+    const chipped = event('boss.chipped', {
+      window: '2026-12-21',
+      userId: chipper,
+      battleId,
+      points: 38,
+      chipped: 138,
+      goal: 360,
+    });
+    expect(publicViewFor(PUBLIC_VIEWS, chipped, { userId: chipper })).toEqual({
+      window: '2026-12-21',
+      points: 38,
+      chipped: 138,
+      goal: 360,
+    });
+    const seen = publicViewFor(PUBLIC_VIEWS, chipped, { userId: mate });
+    expect(seen).toEqual({ window: '2026-12-21', chipped: 138, goal: 360 });
+    expect(JSON.stringify(seen)).not.toContain(chipper);
+    expect(JSON.stringify(publicViewFor(PUBLIC_VIEWS, chipped, { userId: chipper }))).not.toContain(
+      battleId,
+    );
+
+    const fell = event('boss.fell', {
+      window: '2026-12-21',
+      fellAt: '2026-12-24T19:30:00.000Z',
+      chipped: 362,
+      goal: 360,
+    });
+    expect(publicViewFor(PUBLIC_VIEWS, fell, { userId: mate })).toEqual({
+      window: '2026-12-21',
+      fellAt: '2026-12-24T19:30:00.000Z',
+      chipped: 362,
+      goal: 360,
+    });
+
+    const thanked = event('boss.thanked', {
+      window: '2026-12-21',
+      userId: chipper,
+      kind: 'dozed',
+      items: { treats: 2 },
+      asks: 0,
+    });
+    expect(publicViewFor(PUBLIC_VIEWS, thanked, { userId: chipper })).toEqual({
+      window: '2026-12-21',
+      userId: chipper,
+      kind: 'dozed',
+      items: { treats: 2 },
+      asks: 0,
+    });
+    expect(publicViewFor(PUBLIC_VIEWS, thanked, { userId: mate })).toBeNull();
+  });
+
   it('refuses a stored payload that breaks its internal schema', () => {
     expect(() =>
       publicViewFor(PUBLIC_VIEWS, event('member.left', { userId: 'nope', secret: 1 }), me),

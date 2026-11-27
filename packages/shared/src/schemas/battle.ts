@@ -7,6 +7,7 @@ import { SpeciesSchema } from './data/species.js';
 import { ElementIdSchema, FeelingIdSchema } from './data/elements.js';
 import { ItemCountsSchema } from './inventory.js';
 import { LocalDateSchema } from './time.js';
+import { BossPatchBarSchema } from './boss-bar.js';
 
 /**
  * Battle inputs (design doc §6): the setup a battle starts from and the
@@ -583,6 +584,12 @@ export const PlayerBattleBossSchema = z.object({
   baseName: z.string().min(1),
   /** How warm this boss kind is to the Keeper, 0–`BOSS_WARMTH_STEPS`, kept across visits. */
   warmth: z.number().int().min(0).max(BOSS_WARMTH_STEPS),
+  /**
+   * Christmas Eve (#37 C0b): the patch bar this fight chips, for the strip
+   * under the boss's energy bar. Left out on a weekly visit and by older
+   * servers. Never who chipped or the goal's formula.
+   */
+  patchBar: BossPatchBarSchema.optional(),
 });
 export type PlayerBattleBoss = z.infer<typeof PlayerBattleBossSchema>;
 

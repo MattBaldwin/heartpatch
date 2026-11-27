@@ -2434,10 +2434,19 @@ export const bossWindows = pgTable(
     r: smallint('r').notNull(),
     opensAt: timestamptz('opens_at').notNull(),
     endsAt: timestamptz('ends_at').notNull(),
+    // Christmas Eve (#37 C0b, migration 0071): the weekly bag draw, or the
+    // Christmas Eve visit that replaces it in the week holding Dec 24.
+    kind: text('kind').notNull().default('weekly'),
   },
   (t) => [
     primaryKey({ columns: [t.mapId, t.windowId] }),
     check('boss_windows_ends_after_opens', sql`${t.endsAt} > ${t.opensAt}`),
+    // Mirrors the shared `BossWindowKindSchema`.
+    check('boss_windows_kind_known', sql`${t.kind} in ('weekly', 'christmas-eve')`),
+    // One Christmas Eve visit per patch per year (its window is a December Monday).
+    uniqueIndex('boss_windows_one_christmas_eve_key')
+      .on(t.mapId, sql`extract(year from ${t.windowId})`)
+      .where(sql`${t.kind} = 'christmas-eve'`),
   ],
 );
 
@@ -2460,6 +2469,10 @@ export const bossEncounters = pgTable(
     // plan §12, migration 0067): `idleMinutes` with nothing and they've left
     // (a loss; the try is used). Null on rows from before it: the battle's start.
     lastActionAt: timestamptz('last_action_at'),
+    // Christmas Eve (#37 C0b, migration 0071): when this Keeper's thanks
+    // (the fall's bundle or the dozed-off one) was paid, so it's paid once
+    // per Keeper per visit. Null on weekly visits and until it's paid.
+    thankedAt: timestamptz('thanked_at'),
   },
   (t) => [
     primaryKey({ columns: [t.mapId, t.userId, t.windowId] }),
@@ -2473,6 +2486,94 @@ export const bossEncounters = pgTable(
       columns: [t.mapId, t.windowId],
       foreignColumns: [bossWindows.mapId, bossWindows.windowId],
     }).onDelete('cascade'),
+  ],
+);
+
+/**
+ * The patch bar of a Christmas Eve visit (#37 C0b): one per patch per
+ * Christmas Eve window. `chipped` is the points so far, `head_start` (from
+ * `head_start_lights` lit Twinkle Lights tiles and a lit star) included.
+ * `state` moves `open` → `fell` (once, on the chip that fills it: `fell_at`)
+ * or `open` → `dozed` at `closes_at`. Server-only; the client sees the goal,
+ * `chipped` and the state, never who chipped or the head-start rule.
+ */
+export const bossBars = pgTable(
+  'boss_bars',
+  {
+    // The `christmas-boss` ledger's `ref_id` for every thanks this bar pays.
+    id: uuid('id')
+      .notNull()
+      .$defaultFn(() => uuidv7()),
+    mapId: uuid('map_id').notNull(),
+    windowId: date('window_id', { mode: 'string' }).notNull(),
+    goal: integer('goal').notNull(),
+    chipped: integer('chipped').notNull().default(0),
+    state: text('state').notNull().default('open'),
+    headStart: integer('head_start').notNull().default(0),
+    headStartLights: smallint('head_start_lights').notNull().default(0),
+    headStartStar: boolean('head_start_star').notNull().default(false),
+    opensAt: timestamptz('opens_at').notNull(),
+    closesAt: timestamptz('closes_at').notNull(),
+    fellAt: timestamptz('fell_at'),
+  },
+  (t) => [
+    primaryKey({ columns: [t.mapId, t.windowId] }),
+    unique('boss_bars_id_key').on(t.id),
+    foreignKey({
+      name: 'boss_bars_window_fk',
+      columns: [t.mapId, t.windowId],
+      foreignColumns: [bossWindows.mapId, bossWindows.windowId],
+    }).onDelete('cascade'),
+    // Mirrors the shared `BossBarStateSchema`.
+    check('boss_bars_state_known', sql`${t.state} in ('open', 'fell', 'dozed')`),
+    check('boss_bars_goal_positive', sql`${t.goal} > 0`),
+    check(
+      'boss_bars_head_start_in_chipped',
+      sql`${t.headStart} >= 0 and ${t.chipped} >= ${t.headStart}`,
+    ),
+    check('boss_bars_head_start_lights_nonnegative', sql`${t.headStartLights} >= 0`),
+    check('boss_bars_closes_after_opens', sql`${t.closesAt} > ${t.opensAt}`),
+    check('boss_bars_fell_at_when_fell', sql`(${t.state} = 'fell') = (${t.fellAt} is not null)`),
+    check('boss_bars_fell_when_full', sql`${t.state} <> 'fell' or ${t.chipped} >= ${t.goal}`),
+    check('boss_bars_dozed_when_short', sql`${t.state} <> 'dozed' or ${t.chipped} < ${t.goal}`),
+  ],
+);
+
+/**
+ * One finished fight's chip on a Christmas Eve bar (#37 C0b): written in the
+ * fight's finish transaction, unique per battle so a retried finish can't
+ * chip twice. `points` may be 0: the fight still makes its Keeper a
+ * contributor (owner answer 2).
+ */
+export const bossBarChips = pgTable(
+  'boss_bar_chips',
+  {
+    id: id(),
+    mapId: uuid('map_id').notNull(),
+    windowId: date('window_id', { mode: 'string' }).notNull(),
+    userId: uuid('user_id').notNull(),
+    // No cascade: a chip is the bar's ledger. Battles go only with their patch.
+    battleId: uuid('battle_id')
+      .notNull()
+      .references(() => battles.id),
+    points: integer('points').notNull(),
+    createdAt: timestamptz('created_at').notNull(),
+  },
+  (t) => [
+    unique('boss_bar_chips_battle_id_key').on(t.battleId),
+    foreignKey({
+      name: 'boss_bar_chips_bar_fk',
+      columns: [t.mapId, t.windowId],
+      foreignColumns: [bossBars.mapId, bossBars.windowId],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'boss_bar_chips_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }).onDelete('cascade'),
+    // Who chipped this visit (the fall's contributors), in one index scan.
+    index('boss_bar_chips_window_user_idx').on(t.mapId, t.windowId, t.userId),
+    check('boss_bar_chips_points_nonnegative', sql`${t.points} >= 0`),
   ],
 );
 
