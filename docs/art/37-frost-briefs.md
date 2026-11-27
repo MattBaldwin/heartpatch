@@ -11,7 +11,7 @@ A huge, round, sleepy snow-heap of a squishy that walks in on Christmas Eve to s
 | | |
 |---|---|
 | **Name** | **Snowbundle** (BIG). Tiny form: **Bundlebit**. Marker: "A BIG snowy squishy!" |
-| **Silhouette** | A fat two-tier snowman-shape with no neck: a wide round body and a smaller round head sunk into it, so it reads as one big **gumdrop on a pillow** from far away. Short stubby arms, no legs (it rests on a wide round base and waddles). It is the widest and the roundest boss, about twice the width of a Puddlepuff-sized form, with a clear shape even at map size. |
+| **Silhouette** | A fat two-tier snowman-shape with no neck: a wide round body and a smaller round head sunk into it, so it reads as one big **gumdrop on a pillow** from far away. Short stubby arms, no legs (it rests on a wide round base and waddles). It is the widest and the roundest boss, roughly three times the height of a Puddlepuff, with a clear shape even at map size. |
 | **Colours** | Body: soft **ice-blue** (`~#d9eefc`) with a **snow-white** belly and head cap (`~#ffffff`). **Accent:** warm **cranberry** (`~#d9485a`) on the scarf and hat. A tiny sparkle of warm **gold** is allowed on the star only. Two colours plus one accent, so it stays distinct from the pink and brown boss lines. |
 | **Face** | Two big dot eyes set low and wide, tiny rosy blush discs, a small sleepy smile. Eyes half-lidded when idle, wide and sparkling when it is happy. No teeth, no brow, never fierce. |
 | **Signature prop** | A **knitted nightcap with a lit star** at the tip, and a scarf long enough to trail on the ground. The star is the only emissive part: it pulses softly in time with the patch's string lights and gets brighter as the patch bar fills. Hat and scarf are the cranberry accent. |
