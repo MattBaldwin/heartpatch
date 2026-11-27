@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
-import { describe, expect, inject, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createDbClient } from './client.js';
 import { migrationsFolder } from './migrator.js';
+import { ownDatabaseUrl } from '../../tests/own-database.js';
 
-const url = inject('testDatabaseUrl');
+const url = ownDatabaseUrl();
 
 // Migration 0065 (#729a) adds the trading post Shop's `post_purchases` table,
 // expand-only: nothing existed before, so there's nothing to backfill, and a
