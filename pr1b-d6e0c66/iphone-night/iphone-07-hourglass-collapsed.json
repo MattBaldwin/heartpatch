@@ -1,0 +1,247 @@
+{
+ "file": "iphone-07-hourglass-collapsed.png",
+ "device": "iphone",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-27T05:25:43.873Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 43.733664009457506,
+   "fogEnd": 85,
+   "band": {
+    "top": 0.142018779342723,
+    "bottom": 0.8755868544600939
+   },
+   "face": {
+    "top": 0.35603735378317225,
+    "bottom": 0.4009100318052196
+   },
+   "team": [
+    {
+     "top": 0.5663645464678901,
+     "bottom": 0.5972704503716191
+    },
+    {
+     "top": 0.559490141199298,
+     "bottom": 0.5935395388279081
+    },
+    {
+     "top": 0.5633147651381774,
+     "bottom": 0.5986737299621426
+    }
+   ],
+   "bossFacing": 0.9832986991041687
+  },
+  "playing": {
+   "kind": "effect",
+   "at": 9
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "rects": {
+  "strip": {
+   "top": 67,
+   "bottom": 111,
+   "left": 12,
+   "right": 329
+  },
+  "energy": {
+   "top": 95,
+   "bottom": 105,
+   "left": 24,
+   "right": 291
+  },
+  "name": {
+   "top": 70,
+   "bottom": 87,
+   "left": 24,
+   "right": 238
+  },
+  "order": {
+   "top": 70.5,
+   "bottom": 86.5,
+   "left": 244,
+   "right": 317
+  },
+  "handle": {
+   "top": 754,
+   "bottom": 818,
+   "left": 16,
+   "right": 377
+  },
+  "friends": {
+   "top": 758,
+   "bottom": 814,
+   "left": 96.5,
+   "right": 296.5
+  },
+  "dock": {
+   "top": 754,
+   "bottom": 818,
+   "left": 16,
+   "right": 377
+  },
+  "sheet": {
+   "top": 754,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "leave": {
+   "top": 67,
+   "bottom": 111,
+   "left": 337,
+   "right": 381
+  },
+  "round": {
+   "top": 774,
+   "bottom": 798,
+   "left": 16,
+   "right": 78.4375
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "winding": {
+   "top": 92,
+   "bottom": 108,
+   "left": 297,
+   "right": 317
+  },
+  "go": null,
+  "callout": {
+   "top": 124.6102523803711,
+   "bottom": 175.38973999023438,
+   "left": 12.354286193847656,
+   "right": 139.8957061767578
+  },
+  "caption": {
+   "top": 689,
+   "bottom": 740,
+   "left": 16,
+   "right": 377
+  }
+ },
+ "dockSheet": "lowered",
+ "step": "06-hourglass-x",
+ "windVis": {
+  "hidden": false,
+  "opacity": "1",
+  "visibility": "visible",
+  "display": "grid",
+  "text": "⏳"
+ },
+ "captionText": "Rakelet is winding up Count to Three… watch out next round!",
+ "captionVisible": "1/block",
+ "calloutRects": [
+  {
+   "pos": 0,
+   "text": "",
+   "hidden": true,
+   "opacity": "1",
+   "display": "none",
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0,
+   "w": 0,
+   "h": 0,
+   "lift": ""
+  },
+  {
+   "pos": 1,
+   "text": "",
+   "hidden": true,
+   "opacity": "1",
+   "display": "none",
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0,
+   "w": 0,
+   "h": 0,
+   "lift": ""
+  },
+  {
+   "pos": 2,
+   "text": "",
+   "hidden": true,
+   "opacity": "1",
+   "display": "none",
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0,
+   "w": 0,
+   "h": 0,
+   "lift": ""
+  }
+ ],
+ "captionRect": {
+  "top": 689,
+  "bottom": 740,
+  "left": 16,
+  "right": 377,
+  "w": 361,
+  "h": 51
+ },
+ "handleRect": {
+  "top": 754,
+  "bottom": 818,
+  "left": 16,
+  "right": 377
+ },
+ "friendRects": [
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 96.5,
+   "right": 152.5,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 168.5,
+   "right": 224.5,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 240.5,
+   "right": 296.5,
+   "w": 56,
+   "h": 56
+  }
+ ],
+ "moveRects": [],
+ "sheetScroll": {
+  "sheetClient": 98,
+  "sheetScroll": 524,
+  "pickerClient": 0,
+  "pickerScroll": 0
+ }
+}

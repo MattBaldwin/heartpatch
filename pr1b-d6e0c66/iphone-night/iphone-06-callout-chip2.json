@@ -1,0 +1,247 @@
+{
+ "file": "iphone-06-co-2-0-chip2n0-Super cozy!.png",
+ "device": "iphone",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-27T05:05:57.500Z",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 39.56050571163443,
+   "fogEnd": 85,
+   "band": {
+    "top": 0.142018779342723,
+    "bottom": 0.8755868544600939
+   },
+   "face": {
+    "top": 0.2852872833727259,
+    "bottom": 0.3452969759050894
+   },
+   "team": [
+    {
+     "top": 0.5067307152465887,
+     "bottom": 0.5390582879341891
+    },
+    {
+     "top": 0.5027275449605267,
+     "bottom": 0.5391128138186781
+    },
+    {
+     "top": 0.5542237680025901,
+     "bottom": 0.5871954924159514
+    }
+   ],
+   "bossFacing": 0.843343061356179
+  },
+  "playing": {
+   "kind": "hit",
+   "at": 521
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "rects": {
+  "strip": {
+   "top": 67,
+   "bottom": 111,
+   "left": 12,
+   "right": 329
+  },
+  "energy": {
+   "top": 95,
+   "bottom": 105,
+   "left": 24,
+   "right": 291
+  },
+  "name": {
+   "top": 70,
+   "bottom": 87,
+   "left": 24,
+   "right": 238
+  },
+  "order": {
+   "top": 70.5,
+   "bottom": 86.5,
+   "left": 244,
+   "right": 317
+  },
+  "handle": {
+   "top": 754,
+   "bottom": 818,
+   "left": 16,
+   "right": 377
+  },
+  "friends": {
+   "top": 758,
+   "bottom": 814,
+   "left": 96.5,
+   "right": 296.5
+  },
+  "dock": {
+   "top": 754,
+   "bottom": 818,
+   "left": 16,
+   "right": 377
+  },
+  "sheet": {
+   "top": 754,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "leave": {
+   "top": 67,
+   "bottom": 111,
+   "left": 337,
+   "right": 381
+  },
+  "round": {
+   "top": 774,
+   "bottom": 798,
+   "left": 16,
+   "right": 78.4375
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "winding": {
+   "top": 92,
+   "bottom": 108,
+   "left": 297,
+   "right": 317
+  },
+  "go": null,
+  "callout": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "caption": {
+   "top": 708.5,
+   "bottom": 740,
+   "left": 74.9921875,
+   "right": 318.0078125
+  }
+ },
+ "dockSheet": "lowered",
+ "step": "06-co-2-0-chip2n0-Super cozy!",
+ "windVis": {
+  "hidden": true,
+  "opacity": "1",
+  "visibility": "hidden",
+  "display": "grid",
+  "text": "⏳"
+ },
+ "captionText": "Puddlepuff lost some energy.",
+ "captionVisible": "1/block",
+ "calloutRects": [
+  {
+   "pos": 0,
+   "text": "Super cozy!",
+   "hidden": true,
+   "opacity": "1",
+   "display": "none",
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0,
+   "w": 0,
+   "h": 0,
+   "lift": "61px"
+  },
+  {
+   "pos": 1,
+   "text": "Super cozy!",
+   "hidden": false,
+   "opacity": "1",
+   "display": "block",
+   "top": 657.6502685546875,
+   "bottom": 702.3497314453125,
+   "left": 142.93795776367188,
+   "right": 250.06204223632812,
+   "w": 107.12408447265625,
+   "h": 44.699462890625,
+   "lift": "61px"
+  },
+  {
+   "pos": 2,
+   "text": "Super cozy!",
+   "hidden": false,
+   "opacity": "1",
+   "display": "block",
+   "top": 657.6502685546875,
+   "bottom": 702.3497314453125,
+   "left": 214.93795776367188,
+   "right": 322.0620422363281,
+   "w": 107.12408447265625,
+   "h": 44.699462890625,
+   "lift": "61px"
+  }
+ ],
+ "captionRect": {
+  "top": 708.5,
+  "bottom": 740,
+  "left": 74.9921875,
+  "right": 318.0078125,
+  "w": 243.015625,
+  "h": 31.5
+ },
+ "handleRect": {
+  "top": 754,
+  "bottom": 818,
+  "left": 16,
+  "right": 377
+ },
+ "friendRects": [
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 96.5,
+   "right": 152.5,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 168.5,
+   "right": 224.5,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 240.5,
+   "right": 296.5,
+   "w": 56,
+   "h": 56
+  }
+ ],
+ "moveRects": [],
+ "sheetScroll": {
+  "sheetClient": 98,
+  "sheetScroll": 524,
+  "pickerClient": 0,
+  "pickerScroll": 0
+ }
+}
