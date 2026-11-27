@@ -1,5 +1,6 @@
 import { HOUSE_DATA, houseLevelData, roomsAt, type HouseView } from '@heartpatch/shared';
-import { expect, test, type Page, type Route } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
+import { expect, test } from './test.js';
 import { hook } from './dev-hook.js';
 import { expectRoomyLabels } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
