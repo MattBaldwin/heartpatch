@@ -298,6 +298,12 @@ export default defineConfig({
   testDir,
   ...e2eGroup(process.env['HP_E2E_GROUP']),
   forbidOnly: isCI,
+  // End the run before ci.yml's 45-min e2e job limit does. A job GitHub cancels at its limit
+  // keeps no log and uploads no report (upload-artifact runs on failure, not cancel), so the
+  // group-2 hangs of 2026-11-27 left nothing to say which test hung. Stopped here, the run
+  // fails with the list reporter's summary, the tests still running marked interrupted, and
+  // the report uploaded. Keep it a few minutes under the job limit (setup takes ~1 min).
+  globalTimeout: isCI ? 40 * 60_000 : 0, // TUNE: with ci.yml e2e timeout-minutes
   retries: isCI ? 1 : 0,
   // In CI, list prints every test's duration in the job log, and spec-timing puts each spec's
   // time in a check-run annotation (readable when the log isn't), for balancing E2E_GROUPS.

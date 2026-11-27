@@ -154,6 +154,8 @@ jobs:
     # By 2026-10-27 ipad-webkit group 4 took 30 min on main (912fc2a) and was
     # cut off at 35 on #708 with no failure reported, so 45 until the groups are
     # rebalanced from fresh medians.
+    # playwright.config.ts `globalTimeout` (40 min on CI) stops the run first, so a hang fails
+    # with a log and a report instead of a log-less cancel: keep the two in step.
     timeout-minutes: 45 # TUNE: lower again after the groups are rebalanced
     strategy:
       fail-fast: false
