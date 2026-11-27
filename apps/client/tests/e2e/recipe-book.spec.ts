@@ -18,6 +18,14 @@ interface RecipeBookDebug {
   cooking: 'making' | null;
 }
 
+// Each test makes a patch and builds its map (shader compiles; CI renders in
+// software). On CI's iPad WebKit (group 1, main 505fb56) the shortest of the
+// three passed in 96 s, and the two longer ones ran out of a 120 s budget on
+// both tries, each mid-tap at a different step (`locator.tap: Test ended` at
+// four different taps; the page was slow, not stuck, #784). 240 s is in line
+// with the other map-building specs (180-480 s).
+const RECIPE_BOOK_TIMEOUT = 240_000;
+
 const bookState = (page: Page) => hook<RecipeBookDebug>(page, 'recipeBook');
 const bagState = (page: Page) =>
   hook<{ mapId: string; items: Record<string, number>; crafts: number }>(page, 'inventory');
@@ -26,7 +34,7 @@ const mapState = (page: Page) => hook<{ id: string; selected: string | null }>(p
 test('trays hold the controls, and the recipe book makes, seals, searches and finds', async ({
   browser,
 }) => {
-  test.setTimeout(120_000); // shader compiles; CI renders in software
+  test.setTimeout(RECIPE_BOOK_TIMEOUT);
   const page = await newPlayer(browser, uniqueName('book'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
@@ -135,7 +143,7 @@ test('trays hold the controls, and the recipe book makes, seals, searches and fi
 test('the recipe book shows what’s cooking, and a finished craft lands by itself', async ({
   browser,
 }) => {
-  test.setTimeout(120_000); // shader compiles; CI renders in software
+  test.setTimeout(RECIPE_BOOK_TIMEOUT);
   const page = await newPlayer(browser, uniqueName('pot'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
@@ -254,7 +262,7 @@ test('the recipe book shows what’s cooking, and a finished craft lands by itse
 });
 
 test('a craft started elsewhere shows up when Make it is refused', async ({ browser }) => {
-  test.setTimeout(120_000); // shader compiles; CI renders in software
+  test.setTimeout(RECIPE_BOOK_TIMEOUT);
   const page = await newPlayer(browser, uniqueName('stale'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));

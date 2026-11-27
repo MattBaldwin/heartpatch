@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { openFarHollowSheet } from './far-hollow.js';
 
 /**
  * The Crooked House screen (#306 6c): arrived at the far Hollow (the dev
@@ -70,9 +71,7 @@ test('goes inside the Crooked House, tries a locked door, walks into a dark room
   await visitPatch(lobby);
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
 
-  await page.evaluate(() =>
-    (window as unknown as Hooks).__heartpatch?.farHollowDev?.().openSheet(),
-  );
+  await openFarHollowSheet(page);
   await page.getByTestId('far-hollow-inside').tap();
   await slowExpect
     .poll(async () => (await house(page))?.scene?.rooms.length ?? 0)
@@ -276,9 +275,7 @@ test('an echo catches me with a peekaboo and sends me back to the light; tiptoe 
   expect(jump.status).toBe(201);
   await visitPatch(lobby);
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  await page.evaluate(() =>
-    (window as unknown as Hooks).__heartpatch?.farHollowDev?.().openSheet(),
-  );
+  await openFarHollowSheet(page);
   await page.getByTestId('far-hollow-inside').tap();
   await slowExpect
     .poll(async () => (await house(page))?.scene?.rooms.length ?? 0)
@@ -327,9 +324,7 @@ test('an echo catches me with a peekaboo and sends me back to the light; tiptoe 
     (await api(page, 'POST', `/maps/${mapId}/dev/far-hollow`, { room: 'front-hall' })).status,
   ).toBe(201);
   await expect.poll(async () => (await house(page))?.open).toBe(false);
-  await page.evaluate(() =>
-    (window as unknown as Hooks).__heartpatch?.farHollowDev?.().openSheet(),
-  );
+  await openFarHollowSheet(page);
   await page.getByTestId('far-hollow-inside').tap();
   await expect.poll(async () => (await house(page))?.room).toBe('front-hall');
   await getCaught(page);
