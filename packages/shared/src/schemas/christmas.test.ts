@@ -73,6 +73,8 @@ describe('advent days and claims', () => {
     expect(AdventResultSchema.safeParse({}).success).toBe(false);
     expect(AdventResultSchema.safeParse({ treats: 0 }).success).toBe(false);
     expect(AdventResultSchema.safeParse({ treats: 0.5 }).success).toBe(false);
+    // Every entry counts at least one, not just some.
+    expect(AdventResultSchema.safeParse({ treats: 0, pies: 1 }).success).toBe(false);
   });
 });
 
@@ -119,9 +121,21 @@ describe('additive API fields', () => {
     };
     expect(MapViewSchema.parse(view)).not.toHaveProperty('christmas');
     expect(MapViewSchema.parse({ ...view, christmas }).christmas).toEqual(christmas);
-    expect(MapViewSchema.safeParse({ ...view, christmas: { presentWaiting: true } }).success).toBe(
+    // No tree yet: still a valid christmas block.
+    expect(MapViewSchema.parse({ ...view, christmas: { presentWaiting: true } }).christmas).toEqual(
+      {
+        presentWaiting: true,
+      },
+    );
+    expect(MapViewSchema.safeParse({ ...view, christmas: { tree: christmas.tree } }).success).toBe(
       false,
     );
+  });
+
+  it('MapView.christmas parses with no tree', () => {
+    expect(MapViewChristmasSchema.parse({ presentWaiting: true })).toEqual({
+      presentWaiting: true,
+    });
   });
 
   it("HollowStatus.longNight.kind is 'weekly' today and open for a later kind", () => {

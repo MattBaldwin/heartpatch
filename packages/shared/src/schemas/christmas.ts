@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ItemCountsSchema } from './inventory.js';
+import { ContentIdSchema } from './data/common.js';
 import { LocalDateSchema } from './time.js';
 
 /*
@@ -22,10 +22,9 @@ export const AdventDaySchema = LocalDateSchema.refine(
 export type AdventDay = z.infer<typeof AdventDaySchema>;
 
 /** What a present held: item id → how many (at least one item). Never odds. */
-export const AdventResultSchema = ItemCountsSchema.refine(
-  (items) => Object.values(items).some((n) => n > 0),
-  { message: 'a present holds something' },
-);
+export const AdventResultSchema = z
+  .record(ContentIdSchema, z.number().int().min(1))
+  .refine((items) => Object.keys(items).length > 0, { message: 'a present holds something' });
 export type AdventResult = z.infer<typeof AdventResultSchema>;
 
 /**
@@ -87,15 +86,18 @@ export type PatchTreeRow = z.infer<typeof PatchTreeRowSchema>;
  * and by older servers.
  */
 export const MapViewChristmasSchema = z.object({
-  tree: z.object({
-    /**
-     * The trading post it stands at (`PostView.index`), as the server chose
-     * it (`patch_trees.post_tile_id`); the client never works it out (rule 1).
-     */
-    postIndex: z.number().int().min(0),
-    ornaments: z.number().int().min(0),
-    starLit: z.boolean(),
-  }),
+  tree: z
+    .object({
+      /**
+       * The trading post it stands at (`PostView.index`), as the server chose
+       * it (`patch_trees.post_tile_id`); the client never works it out (rule 1).
+       */
+      postIndex: z.number().int().min(0),
+      ornaments: z.number().int().min(0),
+      starLit: z.boolean(),
+    })
+    // Left out while the patch has no tree yet (2c backfills it on first read).
+    .optional(),
   presentWaiting: z.boolean(),
   /**
    * My warmth with each patch-mate I have any with (`keeper_warmth`), for the
