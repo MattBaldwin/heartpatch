@@ -32,6 +32,7 @@ interface BattleDebug {
     } | null;
     playing: { kind: string; at: number } | null;
   } | null;
+  entrance: { at: number; skippable: boolean } | null;
   boss: {
     picking: number | null;
     picks: Record<string, string>;
@@ -43,7 +44,7 @@ interface BattleDebug {
 
 const battleState = (page: Page) => hook<BattleDebug>(page, 'battle');
 
-async function bossFight(page: Page, options: BossStubOptions = {}) {
+async function bossFight(page: Page, options: BossStubOptions & { entrance?: 'keep' } = {}) {
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByLabel('Patch name').fill('Stomp Patch');
@@ -57,7 +58,16 @@ async function bossFight(page: Page, options: BossStubOptions = {}) {
   const stub = await stubBossFight(page, options);
   await realTap(await trayButton(page, 'battle-dev-fight'));
   await expect(page.getByTestId('boss-strip')).toBeVisible({ timeout: 30_000 });
+  if (options.entrance !== 'keep') await entranceOver(page);
   return stub;
+}
+
+/** The BIG squishy's entrance (#190 PR 3) comes up, plays its 2.6 s and goes. */
+async function entranceOver(page: Page): Promise<void> {
+  await expect.poll(async () => (await battleState(page))?.entrance != null).toBe(true);
+  await expect
+    .poll(async () => (await battleState(page))?.entrance ?? null, { timeout: 10_000 })
+    .toBeNull();
 }
 
 async function playRound(page: Page): Promise<void> {
@@ -615,6 +625,60 @@ test.describe('a mini-boss fight (#190)', () => {
     });
     expect(room, 'round label and chips').not.toBeNull();
     expect(room!.gap, JSON.stringify(room)).toBeGreaterThanOrEqual(4);
+  });
+
+  test('the BIG squishy arrives: no skip before the stomp, a tap after it skips (#190 PR 3)', async ({
+    browser,
+  }) => {
+    const page = await newPlayer(browser, uniqueName('stomp'));
+    await bossFight(page, { entrance: 'keep' });
+    // Read in the page in one go: the whole entrance is only 2.6 s.
+    const seen = await page.evaluate(
+      () =>
+        new Promise<{ early: boolean[]; card: string; hint: string; skipped: boolean }>(
+          (resolve) => {
+            const early: boolean[] = [];
+            type Hook = {
+              __heartpatch: {
+                battle: () => { entrance: { at: number; skippable: boolean } | null };
+              };
+            };
+            const battle = () => (window as unknown as Hook).__heartpatch.battle().entrance;
+            const look = (): void => {
+              const e = battle();
+              const layer = document.querySelector<HTMLElement>('.boss-entrance');
+              if (!e || !layer) {
+                requestAnimationFrame(look);
+                return;
+              }
+              if (!e.skippable) {
+                // Before the stomp lands a tap does nothing.
+                layer.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+                early.push(battle() !== null && e.at < 600);
+                requestAnimationFrame(look);
+                return;
+              }
+              const card = layer.querySelector<HTMLElement>('.boss-entrance-card');
+              const info = {
+                early,
+                card: card?.textContent ?? '',
+                hint: layer.querySelector('.boss-entrance-skip')?.textContent ?? '',
+              };
+              layer.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+              resolve({ ...info, skipped: battle() === null });
+            };
+            look();
+          },
+        ),
+    );
+    expect(seen.early.length).toBeGreaterThan(0);
+    expect(seen.early.every(Boolean)).toBe(true);
+    expect(seen.card).toContain('A BIG squishy!');
+    expect(seen.hint).toBe('Tap to skip');
+    expect(seen.skipped).toBe(true);
+    await expect(page.locator('.boss-entrance')).toHaveCount(0);
+    // The picker comes up for the first squishy.
+    await expect.poll(async () => (await battleState(page))?.boss?.picking).toBe(0);
   });
 
   test('a duplicate never joins: no ask, no charms', async ({ browser }) => {

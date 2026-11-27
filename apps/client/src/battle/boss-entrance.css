@@ -1,0 +1,70 @@
+/* The BIG squishy arrives (#190 PR 3): the name card and the skip hint over
+   the boss fight's opening. Only transform and opacity move. */
+
+.boss-entrance {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  /* Holds the battle buttons for the 2.6 s; a tap after the stomp skips. */
+  pointer-events: auto;
+  /* iOS Safari sends a tap's click to a plain element only when it looks tappable. */
+  cursor: pointer;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.boss-entrance-card {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  max-width: min(84vw, 360px);
+  padding: 10px 20px 12px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #fff6e4 0%, #ffe2b8 100%);
+  border: 3px solid #5b3a8c;
+  box-shadow:
+    0 4px 0 #3c2563,
+    0 10px 24px rgb(20 10 40 / 35%);
+  color: #3c2563;
+  text-align: center;
+  opacity: 0;
+  transform-origin: 50% 50%;
+  will-change: transform, opacity;
+}
+
+.boss-entrance-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b4471f;
+}
+
+.boss-entrance-name {
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.boss-entrance-skip {
+  position: absolute;
+  right: calc(env(safe-area-inset-right, 0px) + 14px);
+  top: calc(env(safe-area-inset-top, 0px) + 58px);
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgb(20 10 40 / 55%);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+.boss-entrance-skippable .boss-entrance-skip {
+  opacity: 1;
+}
+
+.boss-entrance-still .boss-entrance-skip {
+  transition: none;
+}
