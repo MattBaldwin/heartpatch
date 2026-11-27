@@ -1,7 +1,7 @@
 # #190 PR 1 (#873) at `d6e0c66`: friend callout stacked above the caption, measured
 
 Re-shoot of the one render-check defect from `f48d8ca` (a friend's `.boss-callout-small`, "Super cozy!", landed on the caption pill above the handle). The fix lifts it above the pill.
-**Verdict: fixed.** In all 11 caption+callout readings (3 iPhone + 2 iPhone same-instant repeats, 3 iPad + 2 iPad repeats; see table) the callout rect never intersects the caption rect; vertical gap **6.2 px** (iPhone and iPad), callout never covers a chip (≥ 56 px above the chips). One new thing the shots show: two friends' callouts at once overlap *each other* by 35 px (see Findings).
+**Verdict: fixed.** In all 10 caption+callout frames (3 iPhone + 2 iPhone same-instant repeats, 3 iPad + 2 iPad repeats; see table) the callout rect never intersects the caption rect; vertical gap **6.2 px** (iPhone and iPad), callout never covers a chip (≥ 56 px above the chips). One new thing the shots show: two friends' callouts at once overlap *each other* by 35 px (see Findings).
 
 No app code changed, no CSS injected; worktree at `d6e0c66`. Method follows `../pr1-f48d8ca/README.md` (dev servers by hand with `HP_MINI_BOSSES=testers`, testers list, `HP_SIGNUP_CODE`, `HP_DEV_SQUISHY_GRANTS=true`; Rakelet pinned into `boss_windows`; team Lv 30, Partner Lv 18; Chromium + SwiftShader, DPR 2, `?tier=high`, `--trace off`; night = America/Sao_Paulo; iPhone 393x852 with CDP insets 59/34, iPad 820x1180).
 
