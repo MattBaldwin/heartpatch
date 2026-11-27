@@ -1127,6 +1127,43 @@ describe('the boss camera: a low hero shot (#190 PR 2)', () => {
     });
   }
 
+  it("on an iPad (1024×1366) the team's bodies stand over the picker card, at rest and leaning", () => {
+    // The picker card's band, measured (captures pr2-8b41f85: band 0.045–0.654,
+    // the card's top 0.660, the screen's bottom corners showing beside it).
+    // At 8b41f85 the near row's front edges sat ~0.07 under it: only heads showed.
+    const ipad = { top: 0.045, bottom: 0.654, floor: 1 };
+    const wide = 1024 / 1366;
+    for (const f of FIGHTS) {
+      const team = teamFaces(f.friends).map((t, i) => ({ ...t, r: f.friends[i]!.radius }));
+      for (const lean of [null, ...posts.slice(0, f.friends.length)]) {
+        const director = new CameraDirector(homes, false, boss);
+        if (lean) director.lean(lean);
+        let shot = director.shot(0, wide, ipad, f.fit, bossFace(highest, f.bossHeight), team);
+        for (let t = 1000 / 60; t <= 3000; t += 1000 / 60) {
+          shot = director.shot(t, wide, ipad, f.fit, bossFace(highest, f.bossHeight), team);
+        }
+        const at = `${f.name}, ${lean ? `leaning to ${String(lean.x)}` : 'rest'}`;
+        f.friends.forEach((friend, i) => {
+          const p = posts[i]!;
+          // The front edge on the ground, towards the camera: the lowest row the body draws.
+          const cx = shot.position.x - p.x;
+          const cz = shot.position.z - p.z;
+          const len = Math.hypot(cx, cz);
+          const front = project(shot, wide, {
+            x: p.x + (cx / len) * friend.radius,
+            y: 0,
+            z: p.z + (cz / len) * friend.radius,
+          });
+          expect(front.y, `${at}, ${friend.id}`).toBeLessThanOrEqual(ipad.bottom + 1e-6);
+        });
+        expect(director.feet, at).toBeLessThanOrEqual(ipad.bottom + 1e-6);
+        // The boss's eyes stay under the strip, and the team still stands near the floor.
+        expect(director.face.high, at).toBeGreaterThanOrEqual(ipad.top);
+        expect(ipad.bottom - director.feet, at).toBeLessThan(0.15);
+      }
+    }
+  });
+
   it('sits the fight low in the band: the team just over the handle, the boss towering behind', () => {
     const shot = new CameraDirector(homes, true, boss).shot(0, rest.aspect, rest.safe, fight.fit);
     const was = new CameraDirector(homes, true, TEAM_CAMERA_867).shot(

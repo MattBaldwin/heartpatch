@@ -68,6 +68,11 @@ export interface FacePoint {
    * away); left out, it faces the camera.
    */
   facing?: number;
+  /**
+   * A team friend's body radius on the ground (#190 PR 2): given, the body's
+   * front edge, the lowest row it draws, stays above the band's bottom.
+   */
+  r?: number;
 }
 
 export interface CameraShot {
@@ -299,6 +304,8 @@ export class CameraDirector {
   readonly face = { high: Number.NaN, low: Number.NaN };
   /** Where the last shot put the near team's faces (#868), like `face`. */
   readonly team: { high: number; low: number }[] = [];
+  /** The lowest row the near team's bodies draw in the last shot (`teamFeet`), NaN with no team: the dev hook's check. */
+  feet = Number.NaN;
   /** Reused every frame, so following the fight allocates nothing. */
   readonly #shot = {
     position: { x: 0, y: 0, z: 0 },
@@ -500,6 +507,14 @@ export class CameraDirector {
         ? // The last target is its own floor: kept whole.
           slideWant(this.#dropWant, this.#dropWant, cap)
         : slideWant(faceDrop(high, low, band, this.#config.faceMargin), floor, cap);
+      // The team's bodies stand on the band's bottom, not under it (#190 PR 2:
+      // on an iPad the close camera puts the near row well below the aim, so
+      // the picker card hid all but the middle friend's head). The picture
+      // slides up until the lowest body's front edge is over the band's
+      // bottom; the boss's eyes still win (`floor`).
+      const feet = teamFeet(shot, team);
+      if (feet > band.bottom)
+        want = Math.max(Math.min(want, band.bottom - feet), away ? -Infinity : floor);
     }
     // Snappy when the face rises out of the band (a windup's lift), gentle back.
     const ease = want > this.#drop ? Math.min(1, k * 3) : k;
@@ -513,6 +528,8 @@ export class CameraDirector {
     shot.shift = frame.shift - 2 * this.#drop;
     this.face.high = away ? Number.NaN : high + this.#drop;
     this.face.low = away ? Number.NaN : low + this.#drop;
+    const feet = teamFeet(shot, team);
+    this.feet = Number.isFinite(feet) ? feet : Number.NaN;
     // The team's faces where the shot put them (the dev hook's check), reused.
     this.team.length = Math.min(this.team.length, team.length);
     for (let i = 0; i < team.length; i++) {
@@ -524,6 +541,27 @@ export class CameraDirector {
     }
     return shot;
   }
+}
+
+/**
+ * The lowest row (a fraction of the screen height from the top, before the
+ * shot's lens shift) any of the `team`'s bodies draws: each body's front edge
+ * on the ground, `r` towards the camera. A friend with no `r` counts by its
+ * feet. -Infinity with no team.
+ */
+export function teamFeet(shot: CameraShot, team: readonly FacePoint[]): number {
+  let feet = -Infinity;
+  for (let i = 0; i < team.length; i++) {
+    const t = team[i];
+    if (!t) continue;
+    const r = t.r ?? 0;
+    const cx = shot.position.x - t.x;
+    const cz = shot.position.z - t.z;
+    const len = Math.hypot(cx, cz) || 1;
+    const y = screenY(shot, t.x + (cx / len) * r, 0, t.z + (cz / len) * r);
+    if (Number.isFinite(y)) feet = Math.max(feet, y);
+  }
+  return feet;
 }
 
 /**

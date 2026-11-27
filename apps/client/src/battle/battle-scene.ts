@@ -129,6 +129,8 @@ export interface BattleSceneStats {
     face: { top: number; bottom: number } | null;
     /** The player's row's eyes-and-mouth boxes (#868), the same way; empty outside a boss fight. */
     team: { top: number; bottom: number }[];
+    /** The lowest row the team's bodies draw (#190 PR 2, `teamFeet`), or null outside a boss fight. */
+    teamFeet: number | null;
     /** How squarely the boss faces the camera (1 straight on, 0 side-on, below 0 away), or null. */
     bossFacing: number | null;
   } | null;
@@ -1062,6 +1064,7 @@ export class BattleScene {
             team: this.#camera.team
               .filter((t) => Number.isFinite(t.high) && Number.isFinite(t.low))
               .map((t) => ({ top: t.high, bottom: t.low })),
+            teamFeet: Number.isNaN(this.#camera.feet) ? null : this.#camera.feet,
             // The facing the last shot framed with, so it matches `face` (a twirl turns fast).
             bossFacing: Number.isNaN(this.#facingShot) ? this.#bossFacing() : this.#facingShot,
           },
@@ -1372,7 +1375,10 @@ export class BattleScene {
       const face = rig.out?.face;
       if (!face || rig.down || rig.pose.scale < 0.2) continue;
       const point = (this.#teamFacePool[i] ??= { x: 0, z: 0, low: 0, high: 0 });
-      faces.push(posedFace(point, rig.home, rig.fx, rig.fz, rig.pose, face));
+      posedFace(point, rig.home, rig.fx, rig.fz, rig.pose, face);
+      // The body's front edge on the ground: the camera keeps it over the band's bottom.
+      point.r = (rig.out?.radius ?? 1) * Math.max(0, rig.pose.scale);
+      faces.push(point);
     }
     return faces;
   }
