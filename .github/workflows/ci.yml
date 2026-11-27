@@ -231,12 +231,12 @@ jobs:
         # One memory line a minute in the log: ipad-webkit 2 was killed with exit 137 (SIGKILL, the
         # memory limit) twice on 2026-11-27, both ~38 tests in, and timed out log-less three times.
         run: |
-          ( while sleep 60; do
+          ( while sleep 60 >/dev/null 2>&1; do
               echo "[mem] $(free -m | awk '/^Mem/ {printf "used %s/%s MiB, avail %s", $3, $2, $7} /^Swap/ {printf ", swap %s MiB", $3}');" \
                 "top: $(ps -eo rss=,pid=,args= --sort=-rss | head -4 | awk '{n = $3; if (n ~ /node$/) for (i = 4; i <= NF; i++) if ($i !~ /^-/) { n = $i; break }; sub(/.*\//, "", n); printf "%d %s %dM  ", $2, n, $1/1024}')"
             done ) &
           mem=$!
-          trap 'kill $mem 2>/dev/null' EXIT
+          trap 'kill $mem 2>/dev/null || :' EXIT
           pnpm --filter @heartpatch/client exec playwright test --project=${{ matrix.project }}
 
       - uses: actions/upload-artifact@v4
