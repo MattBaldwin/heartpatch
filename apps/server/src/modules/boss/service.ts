@@ -143,6 +143,8 @@ export function createBossService(options: BossServiceOptions): BossService {
         r: tile.r,
         opensAt,
         endsAt,
+        // The bag draw; X1 (#37) writes the Christmas Eve visit (migration 0071).
+        kind: 'weekly',
       });
       if (!row) return null;
       await tx.appendEvent({
