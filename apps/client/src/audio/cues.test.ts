@@ -96,6 +96,11 @@ describe('cues', () => {
     }
   });
 
+  it('dips the music for the boss tuckering out, not for its backup call', () => {
+    expect(DUCKING_CUES.has('boss-tuckered')).toBe(true);
+    expect(DUCKING_CUES.has('boss-backup')).toBe(false);
+  });
+
   it('maps touches up close and care moments', () => {
     expect(touchCue('boop')).toBe('boop');
     expect(touchCue('stroke')).toBe('squeak');

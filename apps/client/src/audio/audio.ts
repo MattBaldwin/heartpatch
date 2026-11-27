@@ -53,6 +53,8 @@ export interface GameAudio {
   reseason: () => void;
   /** Rows for the lobby's Settings screen: music and sounds. */
   settings: () => Node[];
+  /** Sounds can play: the Sounds switch is on and its slider up (the Android buzz follows it, #190). */
+  soundsOn: () => boolean;
   readonly debug: AudioDebug;
 }
 
@@ -242,6 +244,7 @@ export function createAudio(options: AudioOptions = {}): GameAudio {
           cue('boop');
         },
       }),
+    soundsOn: () => effectiveVolumes(settings).sounds > 0,
     get debug() {
       return {
         state: unlock.state,

@@ -1,5 +1,4 @@
 import { createAudio } from './audio/audio.js';
-import { effectiveVolumes } from './audio/audio-settings.js';
 import { battleCue, careCue, findCue, touchCue } from './audio/cues.js';
 import { createHaptics } from './audio/haptics.js';
 import { readBisectFlags, setBisectFlags } from './engine/bisect-flags.js';
@@ -283,9 +282,7 @@ const chatFor = (mapId: string): string | null => (mapId === glade ? null : mapI
 // Halloween's loop follows the server's season on the bag's game clock (#583).
 // `inventory` is made below: `now` is only read once a tap has loaded the engine.
 const audio = createAudio({ now: () => inventory.gameNow() });
-const haptics = createHaptics({
-  soundsOn: () => effectiveVolumes(audio.debug.settings).sounds > 0,
-});
+const haptics = createHaptics({ soundsOn: audio.soundsOn });
 
 // The map's controls live in two side trays (owner decision 2026-10-04):
 // "Adventure" on the left, "My Home" on the right, with news as badges

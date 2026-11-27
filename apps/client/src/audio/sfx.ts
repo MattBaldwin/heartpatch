@@ -240,7 +240,7 @@ const BOSS_VOICE_RECIPES = Object.fromEntries(
     [`boss-windup-${element}`, bossWindup(element)],
     [`boss-landing-${element}`, bossLanding(element)],
   ]),
-) as Record<BossVoiceCue, Recipe>;
+) as Record<BossVoiceCue, Recipe>; // cues.test.ts checks every cue has a recipe
 
 /** Pentatonic steps up from the find chime's root (#391). */
 const FIND_STEPS = [0, 2, 4, 7, 9, 12, 14] as const;

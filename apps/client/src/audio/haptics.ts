@@ -31,7 +31,7 @@ export function createHaptics(options: HapticsOptions): Haptics {
       ? options.target
       : typeof navigator === 'undefined'
         ? null
-        : (navigator as VibrateTarget);
+        : navigator;
   return {
     thump: () => {
       if (typeof target?.vibrate !== 'function' || !options.soundsOn()) return false;

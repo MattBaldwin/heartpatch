@@ -3,10 +3,10 @@ import { CUE_NAMES, type CueName } from './cues.js';
 
 // Node has no Web Audio, so this can't hear a cue (lane 1b's pattern for the
 // music, `music-score.test.ts`): it records every voice a recipe starts and
-// adds up the levels of the voices sounding at each moment. That sum is an
-// upper bound on the cue's peak, which is enough to keep the BIG squishies'
-// sounds no louder than a win's `yay` (#190 PR 4). `/sounds.html`'s
-// `check()` measures the real rendered peaks by ear's proxy.
+// adds up the levels of the voices sounding at each moment: an upper bound on
+// the cue's peak. Comparing bounds is a regression guard, not a proof: the
+// real rendered peaks come from `/sounds.html`'s `check()` (#190 PR 4: yay
+// 0.592, the loudest boss cue 0.571).
 
 interface Voice {
   at: number;
