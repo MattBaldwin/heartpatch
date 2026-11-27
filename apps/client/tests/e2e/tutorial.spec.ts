@@ -1,4 +1,5 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { api, hook } from './dev-hook.js';
 import { reportHeartbeats } from './heartbeat.js';
 import { expectClear } from './layout.js';
@@ -89,13 +90,10 @@ async function celebrateFirstPatch(page: Page): Promise<void> {
   await expect(party).toBeHidden();
 }
 
-// Most tests open their own player (newPlayer); a page left on the map or the
-// starter picker keeps drawing, which starves the next test's pages when
-// rendering is in software (#397). Close them all when the test is done.
-test.afterEach(async ({ browser }, testInfo) => {
+// Most tests open their own player (newPlayer); test.ts closes them after each test (#397).
+test.afterEach(async () => {
   // Before the pages close: did a stalled one still run script and draw (#784, heartbeat.ts)?
-  await reportHeartbeats(testInfo);
-  for (const context of browser.contexts()) await context.close();
+  await reportHeartbeats(test.info());
 });
 
 test('the optional tutorial: start, resume after reload, graduate, replay and skip', async ({

@@ -5,7 +5,8 @@ import {
   tradeValuer,
   type ValuedLine,
 } from '@heartpatch/shared';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import {
   grantItems,
   grantSquishy,

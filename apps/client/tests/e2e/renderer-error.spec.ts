@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.js';
 
 test('a device without WebGL still gets the login, with the renderer note on top', async ({
   page,

@@ -1,5 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { api, hook, liveMapId } from './dev-hook.js';
 import { selectTile } from './claim-land.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';

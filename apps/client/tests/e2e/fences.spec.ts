@@ -1,5 +1,6 @@
 import { findAvoidedWords, type MapView } from '@heartpatch/shared';
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { claimLand, findTile } from './claim-land.js';
 import { api, hook, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';

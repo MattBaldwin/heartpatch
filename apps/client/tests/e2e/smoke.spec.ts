@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { draws, hook, idle, invalidate } from './dev-hook.js';
 import { holdResizes, turnLikeIos } from './layout.js';
 import { touch, type Point } from './touch.js';

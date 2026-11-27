@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 // The game's version in the profile menu (#198). The line is baked in at

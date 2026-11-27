@@ -1,5 +1,6 @@
 import { GAME_DATA, TERRITORY_RULES } from '@heartpatch/shared';
-import { expect as baseExpect, test, type Page } from '@playwright/test';
+import { expect as baseExpect, type Page } from '@playwright/test';
+import { test } from './test.js';
 import { findTile, tapCanvas } from './claim-land.js';
 import { api, hook } from './dev-hook.js';
 import { holdCinematic, newPlayer, pickKeeper, signUp, uniqueName, visitPatch } from './players.js';

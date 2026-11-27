@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import { createHmac } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import type { APIRequestContext } from '@playwright/test';
+import { expect, test } from './test.js';
 import { TEST_PASSWORD, uniqueName } from './players.js';
 
 // The operator admin console (#196): an admin made with the host scripts signs

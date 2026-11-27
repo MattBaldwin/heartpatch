@@ -1,5 +1,6 @@
 import { HEART_COIN_RULES } from '@heartpatch/shared';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { hook, liveMapId } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { careFromRoster, closeRoster } from './roster.js';

@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { tapCanvas } from './claim-land.js';
 import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
@@ -23,10 +24,6 @@ interface BattleDebug {
 
 const mapState = (page: Page) => hook<MapDebug>(page, 'map');
 const battleState = (page: Page) => hook<BattleDebug>(page, 'battle');
-
-test.afterEach(async ({ browser }) => {
-  for (const context of browser.contexts()) await context.close();
-});
 
 test('tap a rustling tile, Meet it, and the battle opens there', async ({ browser }) => {
   test.setTimeout(300_000); // two map builds and an arena; CI renders in software

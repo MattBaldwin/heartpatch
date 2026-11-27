@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.js';
 import { tapCanvas } from './claim-land.js';
 import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
@@ -20,10 +20,6 @@ interface ViewTile {
   terrain: string;
   ownerUserId: string | null;
 }
-
-test.afterEach(async ({ browser }) => {
-  for (const context of browser.contexts()) await context.close();
-});
 
 test('a BIG squishy marker shows where it stands, and tapping it opens its card', async ({
   browser,

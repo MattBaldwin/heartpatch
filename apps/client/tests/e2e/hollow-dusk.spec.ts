@@ -1,5 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { claimLand } from './claim-land.js';
 import { api, hook, waitForLiveMap } from './dev-hook.js';
 import { duskTimeZone } from './map-time.js';

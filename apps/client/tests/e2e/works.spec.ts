@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.js';
 import { hasWaterNextDoor, hexKey, hexNeighbors, waterKindOf } from '@heartpatch/shared';
 import { selectTile } from './claim-land.js';
 import { api, hook, waitForLiveMap } from './dev-hook.js';

@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { draws, hook, idle } from './dev-hook.js';
 import { expectRoomyLabels, settled } from './layout.js';
 import {

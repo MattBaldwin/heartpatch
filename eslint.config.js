@@ -308,6 +308,26 @@ export default defineConfig(
     files: ['apps/client/*.config.ts', 'apps/client/tests/**/*.ts', 'apps/client/tooling/**/*.ts'],
     languageOptions: { globals: globals.node },
   },
+  // e2e specs take `test` from tests/e2e/test.ts, whose fixture closes the contexts a test
+  // opened (#784): Playwright's own `test` left every player open for the rest of the job.
+  {
+    files: ['apps/client/tests/e2e/**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@playwright/test',
+              importNames: ['test'],
+              message:
+                "Import `test` (and `expect`) from './test.js': its fixture closes the browser contexts a test opened, which Playwright's own `test` leaves open for the rest of the job (#784).",
+            },
+          ],
+        },
+      ],
+    },
+  },
   {
     files: ['apps/client/src/pwa/sw.ts'],
     languageOptions: { globals: globals.serviceworker },
