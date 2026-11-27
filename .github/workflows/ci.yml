@@ -154,6 +154,8 @@ jobs:
     # By 2026-10-27 ipad-webkit group 4 took 30 min on main (912fc2a) and was
     # cut off at 35 on #708 with no failure reported, so 45 until the groups are
     # rebalanced from fresh medians.
+    # playwright.config.ts `globalTimeout` (40 min on CI) stops the run first, so a hang fails
+    # with a log and a report instead of a log-less cancel: keep the two in step.
     timeout-minutes: 45 # TUNE: lower again after the groups are rebalanced
     strategy:
       fail-fast: false
@@ -226,9 +228,16 @@ jobs:
       - name: E2E (${{ matrix.project }}, group ${{ matrix.group }}/7)
         env:
           HP_E2E_GROUP: ${{ matrix.group }}/7
-        run: >-
-          pnpm --filter @heartpatch/client exec playwright test
-          --project=${{ matrix.project }}
+        # One memory line a minute in the log: ipad-webkit 2 was killed with exit 137 (SIGKILL, the
+        # memory limit) twice on 2026-11-27, both ~38 tests in, and timed out log-less three times.
+        run: |
+          ( while sleep 60 >/dev/null 2>&1; do
+              echo "[mem] $(free -m | awk '/^Mem/ {printf "used %s/%s MiB, avail %s", $3, $2, $7} /^Swap/ {printf ", swap %s MiB", $3}');" \
+                "top: $(ps -eo rss=,pid=,args= --sort=-rss | head -4 | awk '{n = $3; if (n ~ /node$/) for (i = 4; i <= NF; i++) if ($i !~ /^-/) { n = $i; break }; sub(/.*\//, "", n); printf "%d %s %dM  ", $2, n, $1/1024}')"
+            done ) &
+          mem=$!
+          trap 'kill $mem 2>/dev/null || :' EXIT
+          pnpm --filter @heartpatch/client exec playwright test --project=${{ matrix.project }}
 
       - uses: actions/upload-artifact@v4
         if: failure()

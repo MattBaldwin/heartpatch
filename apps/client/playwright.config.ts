@@ -298,6 +298,14 @@ export default defineConfig({
   testDir,
   ...e2eGroup(process.env['HP_E2E_GROUP']),
   forbidOnly: isCI,
+  // End the run before ci.yml's 45-min e2e job limit does. A job GitHub cancels at its limit
+  // keeps no log and uploads no report (upload-artifact runs on failure, not cancel), so the
+  // group-2 hangs of 2026-11-27 left nothing to say which test hung. Stopped here, the run
+  // fails with "Timed out waiting 2400s for the test suite to run"; a test still running counts
+  // as "did not run" and is named on a ✘ line after the summary (Playwright 1.63 never marks
+  // it "interrupted"), and the report is uploaded. Keep it a few minutes under the job limit
+  // (the step starts ~1.3 min into the job).
+  globalTimeout: isCI ? 40 * 60_000 : 0, // TUNE: with ci.yml e2e timeout-minutes
   retries: isCI ? 1 : 0,
   // In CI, list prints every test's duration in the job log, and spec-timing puts each spec's
   // time in a check-run annotation (readable when the log isn't), for balancing E2E_GROUPS.
