@@ -1,0 +1,76 @@
+{
+ "file": "ipad-01b-leaf-burst-day.png",
+ "device": "ipad",
+ "tz": "America/Los_Angeles",
+ "reduced": false,
+ "inner": {
+  "w": 820,
+  "h": 1180,
+  "dpr": 2
+ },
+ "battle": {
+  "effects": {
+   "live": 99,
+   "meshes": 5,
+   "spawned": 28
+  },
+  "drawCalls": 59,
+  "playing": {
+   "kind": "hit",
+   "at": 380
+  },
+  "framing": {
+   "distance": 28.16319359770427,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.05254237288135593,
+    "bottom": 0.9389830508474576
+   },
+   "face": null,
+   "team": [
+    {
+     "top": 0.7426520056467902,
+     "bottom": 0.7942133853372606
+    },
+    {
+     "top": 0.7116525332777298,
+     "bottom": 0.7680723602834121
+    },
+    {
+     "top": 0.7173472142838203,
+     "bottom": 0.7694781769854688
+    }
+   ],
+   "teamFeet": 0.8933512680363729,
+   "bossFacing": -0.9507210961306155
+  },
+  "camera": {
+   "x": 6.230013088481161,
+   "y": 5.967022739256478,
+   "z": -26.550208279154365
+  }
+ },
+ "peakLiveThisRound": 38,
+ "caption": "Puddlepuff lost some energy.",
+ "sticker": {
+  "top": 0.05920961024397511,
+  "bottom": 0.09502767789161812,
+  "left": 12.131181716918945,
+  "right": 58.66568946838379,
+  "text": "3!"
+ },
+ "strip": {
+  "top": 0.006779661016949152,
+  "bottom": 0.04406779661016949,
+  "left": 104,
+  "right": 664,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "handle": {
+  "top": 0.9457627118644067,
+  "bottom": 1,
+  "left": 16,
+  "right": 804,
+  "text": "Round 2PPP"
+ }
+}

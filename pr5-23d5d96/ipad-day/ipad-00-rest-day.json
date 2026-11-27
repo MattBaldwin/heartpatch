@@ -1,0 +1,70 @@
+{
+ "file": "ipad-00-rest-day.png",
+ "device": "ipad",
+ "tz": "America/Los_Angeles",
+ "reduced": false,
+ "inner": {
+  "w": 820,
+  "h": 1180,
+  "dpr": 2
+ },
+ "battle": {
+  "effects": {
+   "live": 0,
+   "meshes": 0,
+   "spawned": 0
+  },
+  "drawCalls": 54,
+  "playing": null,
+  "framing": {
+   "distance": 31.560545474680964,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.05254237288135593,
+    "bottom": 0.6533898305084745
+   },
+   "face": {
+    "top": 0.4105030998748895,
+    "bottom": 0.4770825747883578
+   },
+   "team": [
+    {
+     "top": 0.5353888614726648,
+     "bottom": 0.5812430602536696
+    },
+    {
+     "top": 0.5331041478313928,
+     "bottom": 0.5816522764524582
+    },
+    {
+     "top": 0.5379677550433051,
+     "bottom": 0.5830108147261551
+    }
+   ],
+   "teamFeet": 0.6533898305084745,
+   "bossFacing": 0.9977117727744896
+  },
+  "camera": {
+   "x": 6.810197773959622,
+   "y": 6.201552361754855,
+   "z": -30.71045611558683
+  }
+ },
+ "peakLiveThisRound": 0,
+ "caption": "A BIG Puddlepuff wants to play!",
+ "sticker": null,
+ "strip": {
+  "top": 0.006779661016949152,
+  "bottom": 0.04406779661016949,
+  "left": 104,
+  "right": 664,
+  "text": "Puddlepuff⏳"
+ },
+ "handle": {
+  "top": 0.660010593220339,
+  "bottom": 0.7142478813559322,
+  "left": 16,
+  "right": 804,
+  "text": "Round 1PPP"
+ }
+}

@@ -1,0 +1,79 @@
+{
+ "file": "ipad-04b-drift-hit-day.png",
+ "device": "ipad",
+ "tz": "America/Los_Angeles",
+ "reduced": false,
+ "inner": {
+  "w": 820,
+  "h": 1180,
+  "dpr": 2
+ },
+ "battle": {
+  "effects": {
+   "live": 89,
+   "meshes": 5,
+   "spawned": 130
+  },
+  "drawCalls": 59,
+  "playing": {
+   "kind": "hit",
+   "at": 200
+  },
+  "framing": {
+   "distance": 30.035940072468534,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.05254237288135593,
+    "bottom": 0.9389830508474576
+   },
+   "face": {
+    "top": 0.602936655525592,
+    "bottom": 0.6892499436563737
+   },
+   "team": [
+    {
+     "top": 0.7717190696753712,
+     "bottom": 0.797201319005337
+    },
+    {
+     "top": 0.7038141728294753,
+     "bottom": 0.7563348836024075
+    },
+    {
+     "top": 0.7040994373523639,
+     "bottom": 0.7530197689170504
+    }
+   ],
+   "teamFeet": 0.8519300618062383,
+   "bossFacing": 0.9883321157193942
+  },
+  "camera": {
+   "x": 6.720653582559288,
+   "y": 6.090071034595525,
+   "z": -28.47204790871075
+  }
+ },
+ "peakLiveThisRound": 78,
+ "caption": "Puddlepuff lost some energy.",
+ "sticker": {
+  "top": 0.056293274184404794,
+  "bottom": 0.09794401395118843,
+  "left": 12.311532020568848,
+  "right": 124.32909488677979,
+  "text": "Everyone!"
+ },
+ "strip": {
+  "top": 0.006779661016949152,
+  "bottom": 0.04406779661016949,
+  "left": 104,
+  "right": 664,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "handle": {
+  "top": 0.9457627118644067,
+  "bottom": 1,
+  "left": 16,
+  "right": 804,
+  "text": "Round 5PPFlinched!P"
+ }
+}

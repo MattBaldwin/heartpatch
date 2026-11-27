@@ -1,0 +1,79 @@
+{
+ "file": "iphone-01-leaf-pile-night.png",
+ "device": "iphone",
+ "tz": "Asia/Dubai",
+ "reduced": false,
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "effects": {
+   "live": 134,
+   "meshes": 2,
+   "spawned": 3
+  },
+  "drawCalls": 57,
+  "playing": {
+   "kind": "effect",
+   "at": 520
+  },
+  "framing": {
+   "distance": 38.14824795959679,
+   "fogEnd": 85,
+   "band": {
+    "top": 0.142018779342723,
+    "bottom": 0.8755868544600939
+   },
+   "face": {
+    "top": 0.6314227987809736,
+    "bottom": 0.6677574489563729
+   },
+   "team": [
+    {
+     "top": 0.6983984573515534,
+     "bottom": 0.7343457777698937
+    },
+    {
+     "top": 0.6953012733050982,
+     "bottom": 0.7366831207440527
+    },
+    {
+     "top": 0.6891790834042311,
+     "bottom": 0.7326910398825137
+    }
+   ],
+   "teamFeet": 0.7904793524374142,
+   "bossFacing": 0.9898183273177475
+  },
+  "camera": {
+   "x": 8.799840219128045,
+   "y": 6.661087257177995,
+   "z": -35.537332651163396
+  }
+ },
+ "peakLiveThisRound": 142,
+ "caption": "Puddlepuff is winding up Count to Three… watch out next round!",
+ "sticker": {
+  "top": 0.1505501796382134,
+  "bottom": 0.20156249641812463,
+  "left": 12.162552833557129,
+  "right": 70.0874490737915,
+  "text": "2…"
+ },
+ "strip": {
+  "top": 0.07863849765258216,
+  "bottom": 0.13028169014084506,
+  "left": 12,
+  "right": 329,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "handle": {
+  "top": 0.8849765258215962,
+  "bottom": 0.960093896713615,
+  "left": 16,
+  "right": 377,
+  "text": "Round 1PPP"
+ }
+}
