@@ -392,6 +392,59 @@ test('an open home says it is saved for the next Keeper, and offers nothing to t
   await expect(panel.getByRole('button', { name: /Claim|Challenge/ })).toHaveCount(0);
 });
 
+/**
+ * Christmas's ceilings (#37 plan §1): the map 78 draw calls, Wild Isle 85,
+ * for the whole season's look (snow, lights, the tree). Snow itself adds none:
+ * it is per-instance colour and a terrain-plugin uniform, and snowfall takes
+ * the place of pollen, leaves and fireflies.
+ */
+const CHRISTMAS_CEILING = { cozy: 78, wild: 85 } as const;
+
+test('snows on every patch inside the Christmas ceilings, day and night (#37)', async ({
+  page,
+}) => {
+  test.setTimeout(300_000); // shader compiles; CI renders in software
+  type Snowy = { drawCalls: number; snow?: number | null; motes: Record<string, number> };
+  const measure = async (query: string): Promise<Snowy> => {
+    await page.goto(`/island.html?${query}`);
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const hook = (window as IslandHooks).__islandMap;
+            return hook?.ready() === true ? (hook.stats()?.drawCalls ?? 0) : 0;
+          }),
+        { timeout: 60_000 },
+      )
+      .toBeGreaterThan(30);
+    const stats = await page.evaluate(() => (window as IslandHooks).__islandMap?.stats() ?? null);
+    if (!stats) throw new Error('the island page drew no map');
+    return stats as unknown as Snowy;
+  };
+  const seen: Record<string, number> = {};
+  for (const patch of ['cozy', 'wild'] as const) {
+    for (const tier of ['high', 'medium'] as const) {
+      const today = await measure(`patch=${patch}&tier=${tier}`);
+      expect(today.snow ?? null).toBeNull();
+      for (const night of [false, true]) {
+        const snowy = await measure(
+          `patch=${patch}&tier=${tier}&season=christmas&snow=1${night ? '&night=1' : ''}`,
+        );
+        const label = `${patch} ${tier} ${night ? 'night' : 'day'}`;
+        seen[label] = snowy.drawCalls;
+        expect(snowy.snow, label).toBe(1);
+        expect(snowy.motes['snow'] ?? 0, label).toBeGreaterThan(0);
+        expect(snowy.motes['pollen'] ?? 0, label).toBe(0);
+        expect(snowy.drawCalls, label).toBeLessThanOrEqual(CHRISTMAS_CEILING[patch]);
+        // The snow adds no draw call over today's map beyond its one mote layer (the gallery's
+        // today stands still, so it draws no pollen, leaves or fireflies, which snowfall replaces).
+        expect(snowy.drawCalls, label).toBeLessThanOrEqual(today.drawCalls + 1);
+      }
+    }
+  }
+  test.info().annotations.push({ type: 'christmas draw calls', description: JSON.stringify(seen) });
+});
+
 test('keeps a Wild Isle in its draw-call and triangle budget, up close and zoomed out (#621)', async ({
   page,
 }) => {

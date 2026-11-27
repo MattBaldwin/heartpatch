@@ -654,7 +654,15 @@ export const AMBIENT = {
 } as const;
 
 /** Every kind of mote, in drawing order. */
-export const MOTE_KINDS = ['pollen', 'leaves', 'fireflies', 'sparkles', 'bats', 'fog'] as const;
+export const MOTE_KINDS = [
+  'pollen',
+  'leaves',
+  'fireflies',
+  'sparkles',
+  'bats',
+  'fog',
+  'snow',
+] as const;
 export type MoteKind = (typeof MOTE_KINDS)[number];
 
 /** Motes over the map: how many per tile of their terrain, and the most of each. */
@@ -665,6 +673,9 @@ export const MOTES: Readonly<Record<MoteKind, { perTile: number; max: number; co
   sparkles: { perTile: 4, max: 40, color: '#ffd8ff' }, // TUNE: Juniper's Gap, day and night
   bats: { perTile: 0.06, max: 9, color: '#ffffff' }, // TUNE: Halloween, over the woods and peaks
   fog: { perTile: 0.5, max: 36, color: '#ece4ff' }, // TUNE: Halloween, low land
+  // TUNE: Christmas, over all land, day and night; in place of pollen, leaves and fireflies (#37).
+  // Tier share 1 / 0.5 / 0 makes it 120 / 60 / 0.
+  snow: { perTile: 1.4, max: 120, color: '#ffffff' },
 };
 
 /** Halloween dressing (season on, map-local date): jack-o'-lanterns and the dusk glow. */
@@ -684,6 +695,61 @@ export const HALLOWEEN = {
 export const THANKSGIVING = {
   leaves: { perTile: 0.5, max: 80, terrains: ['forest', 'old-forest', 'meadow', 'hills'] }, // TUNE
   day: { inner: '#fff0d6', mid: '#f6d2a8', cloud: '#fff8ee' }, // TUNE
+} as const;
+
+/**
+ * Christmas (#37, season on by the map-local date): snow on every patch.
+ * Tile colours go towards snow by terrain id (`tileColor`'s `snow`), wild
+ * land cool white and owned land a touch warmer so ownership still reads;
+ * lakes frost over in a pale blue; the island ground round the patch snows
+ * too. On the first open of the season the snow fades in (`fadeMs`); under
+ * reduced motion it is just there. At night the snow catches the moon
+ * (`night`), so it reads white-blue, not grey. Snowfall replaces pollen,
+ * leaves and fireflies (`MOTES.snow`). Every look is per-instance colour or a
+ * terrain-plugin uniform: 0 draw calls.
+ */
+export const CHRISTMAS = {
+  /** How far each terrain's colour goes to snow (0–1). Unlisted terrains (Juniper's Gap) keep theirs. */
+  cover: {
+    meadow: 0.94,
+    forest: 0.9,
+    'old-forest': 0.86,
+    hills: 0.94,
+    mountains: 0.95,
+    'pumpkin-fields': 0.9,
+    clearing: 0.9,
+    coast: 0.8,
+    'trading-post': 0.55,
+    'hollowed-lantern-tower': 0.5,
+    'hollowed-workshop': 0.5,
+    'hollowed-old-well': 0.5,
+    'hollowed-bakery': 0.5,
+    'hollowed-watchtower': 0.5,
+  } as Readonly<Record<string, number>>, // TUNE
+  /** Water that frosts over instead (a pale blue tint, not snow), and how far. */
+  frost: { lake: 0.62, 'wild-lake': 0.62, river: 0.4 } as Readonly<Record<string, number>>, // TUNE
+  /** Snow on wild land, on owned land (warmer), and the frost on lakes. sRGB. */
+  wild: '#f6f9ff', // TUNE
+  owned: '#fff3e8', // TUNE
+  lake: '#d2eafb', // TUNE
+  /** Owned land keeps more of its own colour (its cover times this). */
+  ownedCover: 0.74, // TUNE
+  /** The island ground round the patch (off the map): grass, beach, an isle's sand. */
+  ground: { grass: 0.92, beach: 0.6 }, // TUNE
+  /** The first snow's fade on the first open of the season (ms); reduced motion snaps. */
+  fadeMs: 6000, // TUNE
+  /**
+   * At night snow catches the moon: bright surfaces (snow) get this much of
+   * their own colour again, tinted `moon`, after lighting. Day: none.
+   */
+  night: { lift: 0.28, moon: [0.78, 0.88, 1] as const }, // TUNE
+  /** Snow on top of props (trees, rocks, bushes): where the surface faces up, how much. */
+  caps: { strength: 0.85, from: 0.45, to: 0.8, color: '#f6f9ff' }, // TUNE
+  /** The backdrop under the island: snowy by day, deep moonlit blue at night. */
+  sky: {
+    day: { inner: '#f3f7ff', mid: '#dfe7fb', cloud: '#ffffff' }, // TUNE
+    night: { inner: '#56649f', mid: '#2c3262', cloud: '#8e9bd0' }, // TUNE
+  },
 } as const;
 
 /** Juniper's Gap's crystals glow softly, day and night (sRGB colour, strength). */

@@ -29,7 +29,14 @@ import { mapApi } from './map-api.js';
 import { AmbientDriver } from './ambient-driver.js';
 import type { AmbientMode } from './ambient-layout.js';
 import type { TerrainClock } from './terrain-plugin.js';
-import { isHalloween, isWaterTile, seasonsOn } from './map-dressing.js';
+import {
+  firstSnowNow,
+  isHalloween,
+  isWaterTile,
+  localDateIn,
+  seasonsOn,
+  snowSeasonYear,
+} from './map-dressing.js';
 import { mountMapLegend } from './map-legend.js';
 import { createPatchStatsScreen } from './patch-stats-screen.js';
 import type { BuildAreaView } from './build-area.js';
@@ -491,9 +498,18 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     const seasons = seasonsOn(state.view.map.timeZone, at);
     dressedFor = seasons.join();
     builds += 1;
+    // Christmas (#37): the first snow fades in on this device's first open of the season.
+    const snowFade =
+      seasons.includes('christmas') &&
+      firstSnowNow(
+        localStore(),
+        snowSeasonYear(localDateIn(state.view.map.timeZone, at)),
+        user?.id ?? null,
+      );
     const built = new MapScene(scene, drawn, {
       halloween: isHalloween(state.view.map.timeZone, at),
       seasons,
+      snowFade,
       ...ambient.state,
     });
     onStage = true;
@@ -713,4 +729,13 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       };
     },
   };
+}
+
+/** The device's localStorage, or null where it can't be reached (private mode, a test). */
+function localStore(): Pick<Storage, 'getItem' | 'setItem'> | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage;
+  } catch {
+    return null;
+  }
 }

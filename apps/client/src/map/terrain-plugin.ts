@@ -8,7 +8,7 @@ import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { Scene } from '@babylonjs/core/scene';
 import { EXPLORE_RULES } from '@heartpatch/shared';
 import { DRIFT_MODE } from './ambient-layout.js';
-import { AMBIENT, MUTED } from './map-config.js';
+import { AMBIENT, CHRISTMAS, MUTED } from './map-config.js';
 
 /**
  * Ambient life for the map's terrain (the terrain visual pass), all on the
@@ -22,6 +22,11 @@ import { AMBIENT, MUTED } from './map-config.js';
  * - Motes (`terrainDrift` per thin instance: mode, phase, range, speed):
  *   pollen and sparkles wander, leaves tumble down, fireflies blink, bats
  *   circle and flap, fog and clouds float (`DRIFT_MODE`).
+ *
+ * - Snow (`snow` option, Christmas, #37): at night bright surfaces (the
+ *   snow) catch the moon, and with `caps` the tops of props go white. Both
+ *   follow the `snow` uniform (`SnowLight`), so the first snow's fade
+ *   compiles nothing and adds no draw call.
  *
  * - Drain (`drain` option, a grey village tile while exploring, #306 2a):
  *   everything the material draws goes grey, a touch darker and cooler, and
@@ -146,9 +151,15 @@ const VERTEX_WORLDPOS = /* glsl */ `
     float tdC = cos(tdT);
     float tdS = sin(tdT);
     tdLocal.xz = vec2(tdC * tdLocal.x - tdS * tdLocal.z, tdS * tdLocal.x + tdC * tdLocal.z);
-  } else {
+  } else if (tdMode < ${num(DRIFT_MODE.float)} + 0.5) {
     tdOff = tdR * vec3(sin(tdT * 0.31), 0.0, cos(tdT * 0.27 + 1.3));
     tdScale = 0.9 + 0.1 * sin(tdT * 0.7);
+  } else {
+    // Snowfall (#37): straight down the range, slowly, with a soft sway;
+    // it grows in at the top and melts away near the ground.
+    float tdF = fract(tdT * 0.08);
+    tdOff = vec3(0.14 * sin(tdT * 0.9), -tdR * tdF, 0.1 * cos(tdT * 0.7 + 0.8));
+    tdScale = smoothstep(0.0, 0.12, tdF) * (1.0 - smoothstep(0.82, 1.0, tdF));
   }
   worldPos = finalWorld * vec4(tdLocal * tdScale, 1.0);
   worldPos.xyz += tdOff;
@@ -169,6 +180,13 @@ const FRAGMENT_BEFORE_LIGHTS = /* glsl */ `
   vec3 tmC = mix(vec3(tmL), surfaceAlbedo, terrainMute.w) * terrainMuteMix.y;
   tmC = mix(tmC, terrainMute.rgb, terrainMuteMix.x);
   surfaceAlbedo = mix(surfaceAlbedo, tmC, vTerrainMute);
+}
+#endif
+#ifdef TERRAIN_SNOW_CAPS
+{
+  // Snow caps (#37): where a prop faces up, snow, as far as the fade has come.
+  float tsUp = smoothstep(terrainSnow.z, terrainSnow.w, normalW.y);
+  surfaceAlbedo = mix(surfaceAlbedo, terrainSnowCap, tsUp * terrainSnow.x);
 }
 #endif
 #ifdef TERRAIN_DRAIN
@@ -193,6 +211,13 @@ if (terrainDrain.x > 0.0) {
 `;
 
 const FRAGMENT_BEFORE_FOG = /* glsl */ `
+#ifdef TERRAIN_SNOW
+{
+  // Moonlit snow (#37): bright albedo gets some of itself back, cool, after lighting.
+  float tsL = dot(surfaceAlbedo, vec3(0.2126, 0.7152, 0.0722));
+  finalColor.rgb += terrainSnow.y * smoothstep(0.45, 0.85, tsL) * surfaceAlbedo * terrainMoon;
+}
+#endif
 #ifdef TERRAIN_WATER
 {
   vec2 twP = vPositionW.xz;
@@ -212,6 +237,20 @@ export interface TerrainPluginOptions {
   readonly drain?: HollowedDrain;
   /** Water whose glint strength changes (Wild Isle's sea, dimmer at night, #621); else the lake's. */
   readonly glint?: { value: number };
+  /** Christmas snow (#37): the moonlit lift, and with `caps` snow on what faces up. */
+  readonly snow?: SnowLight;
+  readonly caps?: boolean;
+}
+
+/**
+ * The snow's uniform (#37), shared by every material that shows snow and
+ * changed in place (`snowLight` in map-dressing.ts works out the values):
+ * `cover` is how far the first snow has faded in (caps), `lift` the moonlit
+ * glow (0 by day).
+ */
+export class SnowLight {
+  cover = 0;
+  lift = 0;
 }
 
 /** Attaches the terrain plugin to `material` under GLSL; null under WebGPU (WGSL). */
@@ -230,6 +269,9 @@ export class TerrainPlugin extends MaterialPluginBase {
   private readonly water: boolean;
   private readonly drain: HollowedDrain | null;
   private readonly glint: { value: number } | null;
+  private readonly snow: SnowLight | null;
+  private readonly caps: boolean;
+  private readonly capColor = Color3.FromHexString(CHRISTMAS.caps.color).toLinearSpace();
   private readonly muteTint = Color3.FromHexString(MUTED.tint).toLinearSpace();
 
   constructor(material: Material, clock: TerrainClock, options: TerrainPluginOptions = {}) {
@@ -238,11 +280,15 @@ export class TerrainPlugin extends MaterialPluginBase {
       TERRAIN_WATER: false,
       TERRAIN_DRIFT: false,
       TERRAIN_DRAIN: false,
+      TERRAIN_SNOW: false,
+      TERRAIN_SNOW_CAPS: false,
     });
     this.clock = clock;
     this.water = options.water === true;
     this.drain = options.drain ?? null;
     this.glint = options.glint ?? null;
+    this.snow = options.snow ?? null;
+    this.caps = options.caps === true;
     this._enable(true);
   }
 
@@ -259,6 +305,8 @@ export class TerrainPlugin extends MaterialPluginBase {
     defines['TERRAIN_DRIFT'] = mesh.isVerticesDataPresent(DRIFT_ATTRIBUTE);
     defines['TERRAIN_WATER'] = this.water;
     defines['TERRAIN_DRAIN'] = this.drain !== null && !KEEP_COLOUR.has(mesh);
+    defines['TERRAIN_SNOW'] = this.snow !== null;
+    defines['TERRAIN_SNOW_CAPS'] = this.snow !== null && this.caps;
   }
 
   override getAttributes(attributes: string[], _scene: Scene, mesh: AbstractMesh): void {
@@ -279,6 +327,14 @@ export class TerrainPlugin extends MaterialPluginBase {
           ...JOY_UNIFORMS.map((name) => ({ name, size: 4, type: 'vec4' })),
         ]
       : [];
+    // The snow's only on a snowy material (Christmas): none out of season.
+    const snow = this.snow
+      ? [
+          { name: 'terrainSnow', size: 4, type: 'vec4' },
+          { name: 'terrainSnowCap', size: 3, type: 'vec3' },
+          { name: 'terrainMoon', size: 3, type: 'vec3' },
+        ]
+      : [];
     return {
       ubo: [
         { name: 'terrainTime', size: 1, type: 'float' },
@@ -286,6 +342,7 @@ export class TerrainPlugin extends MaterialPluginBase {
         { name: 'terrainWater', size: 2, type: 'vec2' },
         { name: 'terrainMute', size: 4, type: 'vec4' },
         ...drain,
+        ...snow,
       ],
       vertex: 'uniform float terrainTime;\nuniform vec2 terrainWater;',
       fragment: [
@@ -293,7 +350,7 @@ export class TerrainPlugin extends MaterialPluginBase {
         'uniform vec2 terrainMuteMix;',
         'uniform vec2 terrainWater;',
         'uniform vec4 terrainMute;',
-        ...drain.map((u) => `uniform ${u.type} ${u.name};`),
+        ...[...drain, ...snow].map((u) => `uniform ${u.type} ${u.name};`),
       ].join('\n'),
     };
   }
@@ -308,6 +365,20 @@ export class TerrainPlugin extends MaterialPluginBase {
     );
     const t = this.muteTint;
     uniformBuffer.updateFloat4('terrainMute', t.r, t.g, t.b, MUTED.saturation);
+    const s = this.snow;
+    if (s) {
+      const { caps, night } = CHRISTMAS;
+      uniformBuffer.updateFloat4(
+        'terrainSnow',
+        s.cover * caps.strength,
+        s.lift,
+        caps.from,
+        caps.to,
+      );
+      const c = this.capColor;
+      uniformBuffer.updateFloat3('terrainSnowCap', c.r, c.g, c.b);
+      uniformBuffer.updateFloat3('terrainMoon', night.moon[0], night.moon[1], night.moon[2]);
+    }
     const d = this.drain;
     if (!d) return;
     uniformBuffer.updateFloat2('terrainDrain', d.amount, d.count);

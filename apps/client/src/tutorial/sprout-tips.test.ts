@@ -13,11 +13,22 @@ import {
   type SproutTipFacts,
 } from './sprout-tips.js';
 
-const NONE: SproutTipFacts = { postFlag: false, hollowedVillage: false, day: 1, evolved: false };
+const NONE: SproutTipFacts = {
+  postFlag: false,
+  hollowedVillage: false,
+  day: 1,
+  evolved: false,
+  snow: false,
+};
 const ME = 'user-1';
 
 function setup(storage: Map<string, string> | null = new Map()) {
-  let facts: Omit<SproutTipFacts, 'evolved'> = { postFlag: false, hollowedVillage: false, day: 1 };
+  let facts: Omit<SproutTipFacts, 'evolved'> = {
+    postFlag: false,
+    hollowedVillage: false,
+    day: 1,
+    snow: false,
+  };
   let busy = false;
   const shown: string[] = [];
   let hides = 0;
@@ -67,8 +78,9 @@ function setup(storage: Map<string, string> | null = new Map()) {
 }
 
 describe('the tips list', () => {
-  it('has the four tips, each short enough for one bubble', () => {
+  it('has the five tips, each short enough for one bubble', () => {
     expect(SPROUT_TIPS.map((t) => t.id)).toEqual([
+      'first-snow',
       'trading-post',
       'hollowed-village',
       'day-three',
@@ -82,6 +94,8 @@ describe('the tips list', () => {
   it('keeps each tip waiting on its own thing', () => {
     expect(tipDue('trading-post', { ...NONE, postFlag: true })).toBe(true);
     expect(tipDue('trading-post', NONE)).toBe(false);
+    expect(tipDue('first-snow', NONE)).toBe(false);
+    expect(tipDue('first-snow', { ...NONE, snow: true })).toBe(true);
     expect(tipDue('hollowed-village', { ...NONE, hollowedVillage: true })).toBe(true);
     expect(tipDue('first-evolution', { ...NONE, evolved: true })).toBe(true);
     expect(tipDue('day-three', { ...NONE, day: FIRES_TIP_DAY - 1 })).toBe(false);
@@ -105,6 +119,19 @@ describe('patchDay', () => {
 });
 
 describe('Sprout tips', () => {
+  it('says the first-snow line once, when Christmas is on for the patch (#37)', () => {
+    const t = setup();
+    t.onPatch();
+    t.tick();
+    expect(t.shown).toEqual([]);
+    t.setFacts({ snow: true });
+    t.tick();
+    expect(t.shown).toEqual(['Ooh! Snow! Everyone, look up! ❄️']);
+    for (let i = 0; i < 6; i++) t.tick();
+    expect(t.shown).toHaveLength(1);
+    expect(t.storage?.get(sproutTipKey('first-snow', ME))).toBe('1');
+  });
+
   it('says the trading-post tip once, when a flag is on screen', () => {
     const t = setup();
     t.onPatch();
@@ -230,11 +257,11 @@ describe('Sprout tips', () => {
   it('stops looking once every tip is said', () => {
     const t = setup();
     t.onPatch();
-    t.setFacts({ postFlag: true, hollowedVillage: true, day: 3 });
+    t.setFacts({ postFlag: true, hollowedVillage: true, day: 3, snow: true });
     t.tips.evolved();
-    for (let i = 0; i < 20; i++) t.tick();
-    expect(t.shown).toHaveLength(4);
-    expect(t.tips.debug.said).toHaveLength(4);
+    for (let i = 0; i < 25; i++) t.tick();
+    expect(t.shown).toHaveLength(5);
+    expect(t.tips.debug.said).toHaveLength(5);
     expect(t.timers.size).toBe(0);
     expect(SPROUT_TIP_LOOK_MS).toBeGreaterThan(0);
   });

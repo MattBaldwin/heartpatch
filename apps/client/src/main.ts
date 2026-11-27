@@ -2328,6 +2328,10 @@ const sproutTips = createSproutTipsScreen({
         (view?.communities?.some((village) => village.ownerUserId === null) ?? false),
       // The game's clock (the server's time as the bag has it), not the device's.
       day: me ? patchDay(me.joinedAt, inventory.gameNow()) : null,
+      // Christmas on for this patch (#37, shared season windows, map-local date).
+      snow: view
+        ? seasonsOn(view.map.timeZone, new Date(inventory.gameNow())).includes('christmas')
+        : false,
     };
   },
   storage: (() => {
