@@ -206,6 +206,11 @@ test('the map’s controls fit short and tall screens', async ({ browser }) => {
 test('a busy tile’s five buttons fit a phone on its side (#264)', async ({ browser }) => {
   test.setTimeout(240_000); // a map build at two sizes; CI renders in software
   const page = await newPlayer(browser, uniqueName('busy'));
+  // A feature that throws while the panel fills stops the ones after it
+  // (map/tile-actions.ts runs them in order), and Send a gatherer comes last:
+  // name any page error when a button is missing.
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
   // A wild squishy on my home tile that has a node, every time (spawns are
   // rolled per window): its panel has all five buttons, Send a gatherer,
   // Meet it, Gather, Go home and Explore (#199).
@@ -265,7 +270,10 @@ test('a busy tile’s five buttons fit a phone on its side (#264)', async ({ bro
     // Gather and Go home render once the bag and home data arrive, which can
     // be after Meet it: wait for all five before measuring.
     for (const id of ['tile-send-gatherer', 'tile-gather', 'tile-home', 'tile-explore']) {
-      await expect(panel.getByTestId(id)).toBeVisible();
+      await expect(
+        panel.getByTestId(id),
+        `${id}; page errors: ${errors.join(' | ')}`,
+      ).toBeVisible();
     }
     const panelBox = (await boxes(page, '[data-testid="tile-panel"]'))[0]!;
     const buttons = await boxes(page, '[data-testid="tile-panel"] .tile-panel-actions button');

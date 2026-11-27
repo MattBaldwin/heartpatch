@@ -20,6 +20,54 @@ async function makePatch(page: Page, name = 'Nudge Patch', firstTime = true): Pr
   if (firstTime) await page.getByTestId('tray-hint-ok').tap();
 }
 
+/**
+ * What covers the map, by the app's own `mapCovered()` (main.ts), read from
+ * the dev hooks: a tapped nudge is ignored while any is up (the app only comes
+ * to the front), so the open-map step waits for none (#871).
+ */
+async function mapCovers(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    // Every field read here is optional, so one loose shape covers each hook.
+    type Debug = {
+      phase?: string;
+      hint?: boolean;
+      open?: boolean;
+      welcome?: boolean;
+      showing?: unknown;
+      bookOpen?: boolean;
+      sheetOpen?: boolean;
+      hello?: unknown;
+      report?: unknown[];
+    } | null;
+    type Hooks = Record<string, (() => unknown) | undefined>;
+    const h = (window as unknown as { __heartpatch?: Hooks }).__heartpatch ?? {};
+    const read = (key: string): unknown => h[key]?.() ?? null;
+    const debug = (key: string): Debug => read(key) as Debug;
+    const covers: string[] = [];
+    const lobby = document.querySelector('[data-testid="lobby"]');
+    if (lobby instanceof HTMLElement && !lobby.hidden && lobby.offsetParent !== null) {
+      covers.push('lobby');
+    }
+    if (read('updatesHeld') === true) covers.push('updatesHeld');
+    if (read('battle') !== null) covers.push('battle');
+    const tutorial = debug('tutorial');
+    if (tutorial?.phase !== undefined && tutorial.phase !== 'closed') {
+      covers.push(`tutorial:${tutorial.phase}`);
+    }
+    if (debug('trays')?.hint) covers.push('trayHint');
+    if (debug('recipeBook')?.open) covers.push('recipeBook');
+    if (debug('land')?.welcome) covers.push('landWelcome');
+    const lore = debug('lore');
+    if (lore?.showing != null || lore?.bookOpen) covers.push('lore');
+    if (debug('milestones')?.showing != null) covers.push('milestones');
+    if (debug('nextUp')?.sheetOpen) covers.push('nextUp');
+    if (debug('wardrobe')?.open) covers.push('wardrobe');
+    if (debug('computerMates')?.hello != null) covers.push('computerMates');
+    if ((debug('hollow')?.report?.length ?? 0) > 0) covers.push('hollowReport');
+    return covers;
+  });
+}
+
 /** The offer looked on this load, with a patch up, and found it asked already. */
 async function offerDone(page: Page): Promise<void> {
   await expect
@@ -109,7 +157,10 @@ test('the offer shows once in a Home Screen app, and Yes please turns nudges on'
   await put;
   await expect(card).toBeHidden();
   const line = page.getByTestId('patch-line');
-  await expect(line).toHaveText('Nudges on! 🔔');
+  // The line waits its turn while the map is busy (main.ts `patchLineBusy`, retried each
+  // second): with the card just gone it waited 2-5 s before showing on local Chromium, past
+  // the 5 s default; iphone-webkit 5 failed here on both tries (main bc0e111).
+  await expect(line).toHaveText('Nudges on! 🔔', { timeout: 15_000 });
   expect(await pushStubCounts(page)).toEqual({ requests: 1, subscribes: 1 });
 
   // Settings shows the real state: on, with the switches (and the Long Night's,
@@ -165,6 +216,11 @@ test('the offer shows once in a Home Screen app, and Yes please turns nudges on'
   await lobby.getByRole('button', { name: 'Back to my patches' }).tap();
   await makePatch(page, 'Second Patch', false);
   await expect.poll(mapId).not.toBe(first);
+  // The app drops a nudge while anything covers the map (main.ts `onOpenMap`), and on a slow
+  // software-rendered iPad the second patch's cards can still be coming up (#871): send it once
+  // the map is bare, so the step checks the switch, not the race. A cover that never goes is
+  // named in the failure.
+  await expect.poll(() => mapCovers(page), { timeout: 30_000 }).toEqual([]);
   // What the service worker posts on `notificationclick` (messages.ts `PageMessage`).
   await page.evaluate((id) => {
     navigator.serviceWorker.dispatchEvent(
