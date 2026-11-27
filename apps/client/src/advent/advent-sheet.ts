@@ -267,13 +267,24 @@ export function createAdvent(options: AdventOptions): Advent {
             'data-state': day.state,
             ...(day.state === 'catch-up' ? { 'aria-pressed': chosen ? 'true' : 'false' } : {}),
           },
-          el('span', { class: 'advent-day-num' }, String(look.number)),
           el(
             'span',
-            { class: 'advent-day-tag' },
-            el('span', { 'aria-hidden': 'true' }, `${look.icon} `),
-            look.tag,
+            { class: 'advent-day-num' },
+            String(look.number),
+            ...(day.state === 'locked'
+              ? []
+              : [el('span', { class: 'advent-day-icon', 'aria-hidden': 'true' }, ` ${look.icon}`)]),
           ),
+          // A wrapped day shows its bow (or the fireworks, or the star) and keeps
+          // its word for screen readers; the legend says what the bow means.
+          day.state === 'locked'
+            ? el(
+                'span',
+                { class: 'advent-day-tag' },
+                el('span', { class: 'advent-day-bow', 'aria-hidden': 'true' }, look.icon),
+                el('span', { class: 'advent-sr' }, look.tag),
+              )
+            : el('span', { class: 'advent-day-tag' }, look.tag),
         );
         cell.disabled = working;
         cell.addEventListener('click', () => {

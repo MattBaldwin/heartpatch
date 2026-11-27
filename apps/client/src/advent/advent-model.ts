@@ -20,8 +20,8 @@ import { itemName } from '../inventory/bag-view.js';
 export const ADVENT_TEXT = {
   entry: 'Presents',
   news: "Today's present!",
-  title: 'Presents under the tree 🎄',
-  lead: "One present a day. Open today's, or one you missed!",
+  title: 'Presents under the tree',
+  lead: "Open today's, or one you missed!",
   close: 'Close the presents',
   legend: {
     opened: 'Opened',
