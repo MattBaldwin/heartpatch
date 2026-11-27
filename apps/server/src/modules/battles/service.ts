@@ -393,6 +393,12 @@ export interface MinibossBattlePort {
   ) => Promise<NewGameEvent[]>;
   /** The guaranteed bundle a won fight pays (server-only rules), granted at step 11. */
   bundle: () => ItemCounts;
+  /**
+   * Whether this won fight pays its bundle and boss drop (#37 X2b): always
+   * on a weekly visit; on Christmas Eve only the Keeper's first win. Called
+   * after `ended`, whose locks it relies on, so two wins can't both pay.
+   */
+  winPays: (tx: Executor, battle: BattleRow) => Promise<boolean>;
   /** No step for this long and the Keeper has left (#190 plan §12): a loss, the try used. */
   readonly abandonAfterMs: number;
   /** When the Keeper last started or stepped this fight, or null (then its start counts). */
@@ -1589,12 +1595,15 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       }
     }
     // A won mini-boss fight's sure bundle (#190): its inventory rows (step
-    // 11) after the squishy locks, before coins and the events. A scoot pays none.
-    const bundle =
+    // 11) after the squishy locks, before coins and the events. A scoot pays
+    // none, and a Keeper's later Eve wins pay neither it nor a drop (#37 X2b).
+    const bossWinPays =
       row.kind === 'miniboss' &&
-      options.minibosses &&
+      options.minibosses !== undefined &&
       result.winner === PLAYER_SIDE &&
-      result.reason !== 'forfeit'
+      (await options.minibosses.winPays(tx, row));
+    const bundle =
+      bossWinPays && result.reason !== 'forfeit' && options.minibosses
         ? options.minibosses.bundle()
         : null;
     if (bundle) {
@@ -1787,7 +1796,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         rival: tile.drop.fromRival === true,
         at,
       });
-    } else if ((row.kind === 'wild' || row.kind === 'miniboss') && result.winner === PLAYER_SIDE) {
+    } else if ((row.kind === 'wild' && result.winner === PLAYER_SIDE) || bossWinPays) {
       await rollFoundDrop(tx, {
         source: 'battle',
         refId: row.id,

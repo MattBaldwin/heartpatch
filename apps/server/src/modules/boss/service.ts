@@ -151,6 +151,27 @@ export function createMinibossBattlePort(rules: BossEventRules = BOSS_EVENTS): M
       createBossRepo(tx).lastActionAt(battle.mapId, battle.playerUserId, battle.startedAt),
     acted: (tx, battle, at) =>
       createBossRepo(tx).touch(battle.mapId, battle.playerUserId, battle.startedAt, at),
+    winPays: async (tx, battle) => {
+      const repo = createBossRepo(tx);
+      // Both already held by this finish (`ended` took them at step 5e), so
+      // these re-reads take no new lock: the bar's `FOR UPDATE` lines up every
+      // Eve finish on this visit, so a Keeper's second win waits for the
+      // first to commit and then sees it (READ COMMITTED reads per statement).
+      const visit = await repo.shareVisitOf(battle.mapId, battle.startedAt);
+      if (visit?.kind !== 'christmas-eve' || !rules.christmasEve) return true;
+      const bar = await repo.lockBar(visit.mapId, visit.windowId);
+      // A weekly fight from before the Eve's opening pays as a weekly win.
+      if (!bar || battle.startedAt < bar.opensAt) return true;
+      // The Eve pays its win once per Keeper (owner decision, #37): only the
+      // first won Eve fight of this visit, however many they win after.
+      return !(await repo.wonOtherSince(
+        battle.mapId,
+        battle.playerUserId,
+        bar.opensAt,
+        visit.endsAt,
+        battle.id,
+      ));
+    },
     ended: async (tx, battle, winner, at) => {
       const repo = createBossRepo(tx);
       // Shared, right after the battle's lock (step 5e): a conversion to
