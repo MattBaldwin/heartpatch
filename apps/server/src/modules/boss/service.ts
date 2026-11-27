@@ -205,7 +205,8 @@ export function createBossService(options: BossServiceOptions): BossService {
       }
     }
     const plan = plannedBossVisit(map, week, rules);
-    const out = (row: BossWindowRow) => row.opensAt <= at && at < row.endsAt;
+    const out = (row: Pick<BossWindowRow, 'opensAt' | 'endsAt'>) =>
+      row.opensAt <= at && at < row.endsAt;
     let pinned = await repo.findWindow(map.id, week);
     // A weekly visit pinned in the Eve's week before X1 shipped: the Eve
     // visit takes its row when it opens (the `(map_id, window_id)` key is
