@@ -69,6 +69,9 @@ async function playRound(page: Page): Promise<void> {
   await realTap(page.getByTestId('boss-go'));
 }
 
+/** A HUD box: tops and bottoms as fractions of the height, the rest in px. */
+type Box = { top: number; bottom: number; left: number; right: number; width: number };
+
 test.describe('a mini-boss fight (#190)', () => {
   test.describe.configure({ timeout: 180_000 });
   test('won and befriended: three squishies, the picker, the bundle, two asks', async ({
@@ -245,60 +248,90 @@ test.describe('a mini-boss fight (#190)', () => {
       .toBeLessThanOrEqual(MAX_FIT);
 
     /**
-     * The HUD's boxes, as fractions of the height (px for widths), once the
-     * sheet's rise or drop (a 220 ms slide) has finished: boxes read mid-slide
-     * would sit between the two places. Looping animations don't count.
+     * The first frame of a round with the sheet down and no rise or drop (a
+     * 220 ms slide) running: the HUD's boxes as fractions of the height (px
+     * for widths), and the hook's framing, read together. Boxes read
+     * mid-slide would sit between the two places; looping animations don't
+     * count. One in-page wait at frame speed, from Go: the polls' backoff
+     * plus a separate read let round 1 end first on WebKit CI, and the
+     * handle was read rising with the next picker.
      */
-    const hudBoxes = async () => {
-      await page.waitForFunction(() =>
-        document
-          .getAnimations()
-          .every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity),
+    type Framing = NonNullable<NonNullable<BattleDebug['scene']>['framing']>;
+    interface CollapsedFrame {
+      framing: Framing;
+      boxes: {
+        strip: Box | null;
+        bar: Box | null;
+        slot: Box | null;
+        order: Box | null;
+        handle: Box | null;
+        close: Box | null;
+        chips: (Box | null)[];
+        width: number;
+      };
+    }
+    const collapsedFrame = () =>
+      page.evaluate(
+        (minBand) =>
+          new Promise<CollapsedFrame>((resolve) => {
+            type Hook = { __heartpatch?: { battle?: () => BattleDebug | null } };
+            const read = () => {
+              const scene = (window as unknown as Hook).__heartpatch?.battle?.()?.scene;
+              const picker = document.querySelector('[data-testid="boss-picker"]');
+              const busy = document
+                .getAnimations()
+                .some(
+                  (a) => a.playState === 'running' && a.effect?.getTiming().iterations !== Infinity,
+                );
+              const f = scene?.framing;
+              if (
+                busy ||
+                !scene?.playing ||
+                !f ||
+                f.band.bottom - f.band.top < minBand ||
+                !(picker instanceof HTMLElement && picker.hidden)
+              ) {
+                requestAnimationFrame(read);
+                return;
+              }
+              const h = window.innerHeight;
+              const box = (selector: string) => {
+                const node = document.querySelector(selector);
+                if (!(node instanceof HTMLElement) || node.offsetParent === null) return null;
+                const r = node.getBoundingClientRect();
+                return {
+                  top: r.top / h,
+                  bottom: r.bottom / h,
+                  left: r.left,
+                  right: r.right,
+                  width: r.width,
+                };
+              };
+              resolve({
+                framing: f,
+                boxes: {
+                  strip: box('[data-testid="boss-strip"]'),
+                  bar: box('[data-testid="boss-energy"]'),
+                  slot: box('[data-testid="boss-windup"]'),
+                  order: box('[data-testid="boss-order"]'),
+                  handle: box('[data-testid="boss-handle"]'),
+                  close: box('.battle-top > .hp-close'),
+                  chips: [0, 1, 2].map((i) => box(`[data-testid="boss-friend-${String(i)}"]`)),
+                  width: window.innerWidth,
+                },
+              });
+            };
+            requestAnimationFrame(read);
+          }),
+        MIN_BAND,
       );
-      return page.evaluate(() => {
-        const h = window.innerHeight;
-        const box = (selector: string) => {
-          const node = document.querySelector(selector);
-          if (!(node instanceof HTMLElement) || node.offsetParent === null) return null;
-          const r = node.getBoundingClientRect();
-          return {
-            top: r.top / h,
-            bottom: r.bottom / h,
-            left: r.left,
-            right: r.right,
-            width: r.width,
-          };
-        };
-        return {
-          strip: box('[data-testid="boss-strip"]'),
-          bar: box('[data-testid="boss-energy"]'),
-          slot: box('[data-testid="boss-windup"]'),
-          order: box('[data-testid="boss-order"]'),
-          handle: box('[data-testid="boss-handle"]'),
-          close: box('.battle-top > .hp-close'),
-          chips: [0, 1, 2].map((i) => box(`[data-testid="boss-friend-${String(i)}"]`)),
-          width: window.innerWidth,
-        };
-      });
-    };
 
     // Collapsed (a round playing), the band runs from under the strip to the
     // handle: the plan's rest band. Go, then measure while the round plays.
+    const frame = collapsedFrame();
     await playRound(page);
-    await expect
-      .poll(async () => (await battleState(page))?.scene?.playing?.kind ?? null, {
-        timeout: 15_000,
-      })
-      .not.toBeNull();
-    await expect
-      .poll(async () => {
-        const f = (await battleState(page))?.scene?.framing;
-        return f ? f.band.bottom - f.band.top : 0;
-      })
-      .toBeGreaterThanOrEqual(MIN_BAND);
-    const framing = (await battleState(page))!.scene!.framing!;
+    const { framing, boxes } = await frame;
     const band = framing.band;
-    const boxes = await hudBoxes();
     const where = `band ${JSON.stringify(band)} hud ${JSON.stringify(boxes)}`;
     // The boss stands about 10 past the aim: it and its ground stay inside the
     // dome and short of the fog's end.
