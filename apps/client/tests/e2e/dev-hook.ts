@@ -51,6 +51,7 @@ export type HookName =
   | 'farHollow'
   | 'farHollowHouse'
   | 'trickOrTreat'
+  | 'advent'
   | 'post'
   | 'whatsNew'
   | 'patchLine'
