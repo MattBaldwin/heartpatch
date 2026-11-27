@@ -18,7 +18,9 @@ const migrationSql = readFileSync(join(migrationsFolder, '0066_miniboss.sql'), '
 const TABLES = ['boss_bonds', 'boss_encounters', 'boss_windows'] as const;
 
 /** The plan's down migration (#190 plan §4). */
-const DOWN = sql`drop table boss_encounters, boss_bonds, boss_windows`;
+// 0071 (#37 C0b) hangs the Christmas Eve bar off `boss_windows`, so a
+// rollback this far takes its two tables first (newest down first).
+const DOWN = sql`drop table boss_bar_chips, boss_bars, boss_encounters, boss_bonds, boss_windows`;
 
 describe('migration 0066 (mini-bosses)', () => {
   it('adds the kind and three tables, backfills nothing and drops no data', () => {

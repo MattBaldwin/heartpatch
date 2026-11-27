@@ -117,7 +117,12 @@ describe.skipIf(!url)('mini-boss secrets stay on the server (#190c, needs DATABA
     const won = await h.playOut(kid, started);
     sent.push(started, won);
     // The fight's own view: exactly the documented fields, never a number behind the odds.
-    expect(Object.keys(won.boss!).sort()).toEqual(Object.keys(PlayerBattleBossSchema.shape).sort());
+    // A weekly fight has no Christmas Eve `patchBar` (#37 C0b; X2 fills it on the Eve visit).
+    expect(Object.keys(won.boss!).sort()).toEqual(
+      Object.keys(PlayerBattleBossSchema.shape)
+        .filter((key) => key !== 'patchBar')
+        .sort(),
+    );
     // Met now (marked seen at the start): the marker names it.
     expect((await get(`/maps/${mapId}/boss`))['boss']).toMatchObject({ species: STAND_IN_BOSS.id });
 
