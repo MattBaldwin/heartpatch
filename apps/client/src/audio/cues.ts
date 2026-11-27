@@ -74,7 +74,11 @@ export type CueName =
   | 'chest-big'
   | 'door-wake'
   | 'key-found'
-  | 'room-bloom';
+  | 'room-bloom'
+  /** Christmas (#37): a soft shake of sleigh bells. */
+  | 'sleigh-bells'
+  /** Christmas (#37): a boot crunching in fresh snow. */
+  | 'snow-crunch';
 
 export const CUE_NAMES: readonly CueName[] = [
   'tick',
@@ -112,6 +116,8 @@ export const CUE_NAMES: readonly CueName[] = [
   'door-wake',
   'key-found',
   'room-bloom',
+  'sleigh-bells',
+  'snow-crunch',
 ];
 
 /** True for a cue the engine has a sound for (data names cues as plain strings). */

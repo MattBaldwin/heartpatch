@@ -1,4 +1,4 @@
-import { CHEST_BUILD_S } from './audio-config.js';
+import { CHEST_BUILD_S, WINTER_SFX } from './audio-config.js';
 import type { CueName } from './cues.js';
 import { bell, noise, tone } from './synth.js';
 
@@ -810,5 +810,68 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
       2,
       0.3 + chime(kit, out, at + 0.3, 523 * pitch, [4, 7, 12, 16], 0.12, gain * 0.28),
     );
+  },
+
+  'sleigh-bells': (kit, out, at, pitch, gain) => {
+    // Christmas (#37): a few quick shakes of tiny bells, each a bright hiss of
+    // metal under a cluster of short, slightly out-of-tune jingles. Soft, not
+    // a shop-door clang.
+    const w = WINTER_SFX;
+    w.shakesS.forEach((offset, i) => {
+      const t = at + offset;
+      // The last shake is a touch softer, so it settles rather than stops.
+      const g = gain * (i === w.shakesS.length - 1 ? 0.7 : 1);
+      noise(kit.ctx, out, kit.noise, {
+        at: t,
+        dur: 0.12,
+        gain: g * w.hissGain,
+        filter: 'highpass',
+        freq: 6500 * pitch,
+        q: 0.7,
+        attack: 0.003,
+      });
+      w.jingleHz.forEach((hz, j) => {
+        tone(kit.ctx, out, {
+          type: 'sine',
+          // Each bell in the shake rattles a hair after the last.
+          at: t + j * 0.006,
+          dur: w.jingleRingS,
+          freq: hz * pitch,
+          detune: (j % 2 === 0 ? 1 : -1) * 12,
+          gain: g * w.jingleGain,
+          attack: 0.002,
+        });
+      });
+    });
+    return (w.shakesS[w.shakesS.length - 1] ?? 0) + w.jingleRingS;
+  },
+
+  'snow-crunch': (kit, out, at, pitch, gain) => {
+    // Christmas (#37): a boot in fresh snow. A soft, low step, then a few
+    // quick grains of packed snow, each a little darker than the last.
+    const w = WINTER_SFX;
+    tone(kit.ctx, out, {
+      type: 'sine',
+      at,
+      dur: 0.09,
+      freq: w.stepHz * pitch,
+      to: w.stepHz * 0.6 * pitch,
+      glide: 0.08,
+      gain: gain * w.stepGain,
+      attack: 0.004,
+    });
+    for (let i = 0; i < w.crunchGrains; i += 1) {
+      noise(kit.ctx, out, kit.noise, {
+        at: at + 0.01 + i * w.crunchGapS,
+        dur: 0.05,
+        gain: gain * w.crunchGain * (1 - i * 0.15),
+        filter: 'bandpass',
+        freq: (2400 - i * 350) * pitch,
+        to: (1100 - i * 150) * pitch,
+        q: 1.1,
+        attack: 0.002,
+      });
+    }
+    return 0.01 + w.crunchGrains * w.crunchGapS + 0.05;
   },
 };

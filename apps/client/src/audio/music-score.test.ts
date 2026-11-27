@@ -1,15 +1,50 @@
 import { describe, expect, it } from 'vitest';
-import { MUSIC } from './audio-config.js';
+import { MUSIC, VOICE_STYLES } from './audio-config.js';
 import { loopSeconds, midiToHz, pickTrack, SCORES, type TrackId } from './music-score.js';
 
-const TRACKS: TrackId[] = ['day', 'night', 'halloween', 'wonder'];
+const TRACKS: TrackId[] = ['day', 'night', 'halloween', 'christmas', 'wonder'];
 
 describe('music score', () => {
   it('picks night over Halloween, and Halloween over day', () => {
-    expect(pickTrack({ night: false, halloween: false })).toBe('day');
-    expect(pickTrack({ night: false, halloween: true })).toBe('halloween');
-    expect(pickTrack({ night: true, halloween: true })).toBe('night');
-    expect(pickTrack({ night: true, halloween: false })).toBe('night');
+    const pick = (night: boolean, halloween: boolean) =>
+      pickTrack({ night, halloween, christmas: false });
+    expect(pick(false, false)).toBe('day');
+    expect(pick(false, true)).toBe('halloween');
+    expect(pick(true, true)).toBe('night');
+    expect(pick(true, false)).toBe('night');
+  });
+
+  it('picks Christmas by day in its window, night at night, and Halloween if both are open (#37)', () => {
+    expect(pickTrack({ night: false, halloween: false, christmas: true })).toBe('christmas');
+    expect(pickTrack({ night: true, halloween: false, christmas: true })).toBe('night');
+    // Should the windows ever overlap, the season that started first keeps its music.
+    expect(pickTrack({ night: false, halloween: true, christmas: true })).toBe('halloween');
+    expect(pickTrack({ night: true, halloween: true, christmas: true })).toBe('night');
+  });
+
+  it('sits with the other loops in loudness: as busy, and no spikier (#37)', () => {
+    // The engine levels every loop to MUSIC.rms, unless a peak would pass
+    // MUSIC.peak first; a sparse, spiky loop would then come out quieter.
+    // So the new loop's note energy per beat (each note's velocity times its
+    // voice's mix gain, squared), and its loudest beat against that, must sit
+    // inside the range day, night and Halloween already span.
+    const level = (id: TrackId) => {
+      const score = SCORES[id];
+      const beats = score.bars * score.beatsPerBar;
+      const perBeat = new Array<number>(beats).fill(0);
+      for (const note of score.notes) {
+        const from = Math.floor(note.beat);
+        const to = Math.min(beats, Math.ceil(note.beat + note.beats));
+        for (let b = from; b < to; b += 1) perBeat[b] = (perBeat[b] ?? 0) + (note.velocity * VOICE_STYLES[note.voice].gain) ** 2;
+      }
+      const mean = perBeat.reduce((a, b) => a + b, 0) / beats;
+      return { mean, crest: Math.max(...perBeat) / mean };
+    };
+    const known = (['day', 'night', 'halloween'] as const).map(level);
+    const christmas = level('christmas');
+    expect(christmas.mean).toBeGreaterThanOrEqual(Math.min(...known.map((k) => k.mean)));
+    expect(christmas.mean).toBeLessThanOrEqual(Math.max(...known.map((k) => k.mean)));
+    expect(christmas.crest).toBeLessThanOrEqual(Math.max(...known.map((k) => k.crest)));
   });
 
   it('tunes A4 to 440 Hz', () => {
@@ -41,7 +76,7 @@ describe('music score', () => {
   });
 
   it('dresses up the second time round: new voices join halfway through', () => {
-    for (const id of ['day', 'night', 'halloween'] as const) {
+    for (const id of ['day', 'night', 'halloween', 'christmas'] as const) {
       const score = SCORES[id];
       const half = (score.bars * score.beatsPerBar) / 2;
       const voices = (from: number, to: number) =>

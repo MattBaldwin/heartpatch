@@ -100,6 +100,29 @@ export const SFX = {
 } as const;
 
 /**
+ * The winter sounds (#37). Sleigh bells are a few quick shakes of tiny
+ * jingles; snow crunch is a handful of packed-snow grains under a soft step.
+ */
+export const WINTER_SFX = {
+  /** When each shake of the sleigh bells lands, seconds from the start. */
+  shakesS: [0, 0.11, 0.22, 0.4], // TUNE
+  /** The little bells in one shake, Hz (inharmonic, so it jingles rather than chimes). */
+  jingleHz: [2650, 3170, 3720, 4410], // TUNE
+  /** How long each jingle rings, seconds. */
+  jingleRingS: 0.22, // TUNE
+  /** The jingles' level, and the metal hiss under each shake. */
+  jingleGain: 0.11, // TUNE
+  hissGain: 0.12, // TUNE
+  /** Snow crunch: how many grains, how far apart (seconds), and their level. */
+  crunchGrains: 4, // TUNE
+  crunchGapS: 0.028, // TUNE
+  crunchGain: 0.5, // TUNE
+  /** The soft step under the crunch, Hz, and its level. */
+  stepHz: 150, // TUNE
+  stepGain: 0.35, // TUNE
+} as const;
+
+/**
  * How long a chest's crescendo builds before its chord, in seconds (#653), so
  * each lands as its own lid comes up and the treasure shows.
  */

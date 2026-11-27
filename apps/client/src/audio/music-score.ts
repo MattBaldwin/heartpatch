@@ -3,11 +3,12 @@
 // instrument notes (#664, `music-samples.ts`) or the synth until they're in.
 // Day is a sunny marimba bounce, night a slow lavender music box, and
 // Halloween a playful minor-key plink on tiptoes with a breathy flute (style
-// guide §1: lightly spooky, never scary). Each loop plays its tune twice, the
+// guide §1: lightly spooky, never scary), and Christmas (#37) a cozy music
+// box over a harp with sleigh bells jingling the second time round. Each loop plays its tune twice, the
 // second time dressed differently (a new lead, fuller strings, a shaker), so
 // it doesn't feel like a repeat. Pure data and arithmetic, so it is unit-tested.
 
-export type TrackId = 'day' | 'night' | 'halloween' | 'wonder';
+export type TrackId = 'day' | 'night' | 'halloween' | 'christmas' | 'wonder';
 
 export type Voice =
   /** Soft sustained chord, slow in and out (strings). */
@@ -47,10 +48,20 @@ export interface Score {
   readonly notes: readonly Note[];
 }
 
-/** Picks the loop: night wins (the dusk is calm), then Halloween's window, then day. */
-export function pickTrack(input: { night: boolean; halloween: boolean }): TrackId {
+/**
+ * Picks the loop: night wins (the dusk is calm), then Halloween's window,
+ * then Christmas's (#37), then day. Halloween goes first so that if the two
+ * windows ever overlap, the season that started first keeps its music, the
+ * same way `seasonRunAt` keeps the earlier start.
+ */
+export function pickTrack(input: {
+  night: boolean;
+  halloween: boolean;
+  christmas: boolean;
+}): TrackId {
   if (input.night) return 'night';
-  return input.halloween ? 'halloween' : 'day';
+  if (input.halloween) return 'halloween';
+  return input.christmas ? 'christmas' : 'day';
 }
 
 export function loopSeconds(score: Score): number {
@@ -169,6 +180,7 @@ const MAJ = [0, 4, 7] as const;
 const MIN = [0, 3, 7] as const;
 const MAJ7 = [0, 4, 7, 11] as const;
 const MIN7 = [0, 3, 7, 10] as const;
+const DOM7 = [0, 4, 7, 10] as const;
 const chord = (root: number, tones: readonly number[]): Chord => [root, ...tones];
 
 /** Twice through the same chords: the tune, then its repeat in new clothes. */
@@ -345,6 +357,67 @@ const HALLOWEEN = compose(
   ],
 );
 
+const CHRISTMAS_TUNE: Line = [
+  [0, 1, 71],
+  [1, 1, 74],
+  [2, 2, 79],
+  [4, 1.5, 76],
+  [5.5, 0.5, 74],
+  [6, 2, 71],
+  [8, 1, 72],
+  [9, 1, 76],
+  [10, 2, 79],
+  [12, 1.5, 78],
+  [13.5, 0.5, 76],
+  [14, 2, 74],
+  [16, 1, 71],
+  [17, 1, 74],
+  [18, 2, 83],
+  [20, 1, 81],
+  [21, 1, 79],
+  [22, 2, 76],
+  [24, 1.5, 72],
+  [25.5, 0.5, 76],
+  [26, 2, 74],
+  [28, 4, 74],
+];
+
+/**
+ * Christmas (#37): G major, "snow falling past a lit window": a music box
+ * over a rippling harp and soft strings, gentle rather than jolly-loud.
+ * Second time the flute takes the tune, the music box echoes its long
+ * notes, a high bell sparkles and the sleigh bells (the shaker) jingle on
+ * the off-beats.
+ */
+const CHRISTMAS = compose(
+  'christmas',
+  92, // TUNE
+  4,
+  twice([
+    chord(55, MAJ),
+    chord(52, MIN),
+    chord(48, MAJ),
+    chord(50, MAJ),
+    chord(55, MAJ),
+    chord(52, MIN),
+    chord(57, MIN7),
+    chord(50, DOM7),
+  ]),
+  [
+    during(padPart(0.16), 0, 8),
+    during(padPart(0.18, true), 8, 16),
+    rootPart([0, 2], -12, 0.32, 'bass', 1.6),
+    arpPart([0, 1, 2, 1], 1, 12, 0.18, 'harp'),
+    during(arpPart([-1, 2, -1, 3], 1, 24, 0.08, 'bell'), 8, 16),
+    during(shakerPart([0.5, 1.5, 2.5, 3.5], 0.16), 8, 16), // TUNE: sleigh bells
+  ],
+  [
+    ...melody('bell', 0.36, CHRISTMAS_TUNE),
+    ...melody('whistle', 0.24, moved(CHRISTMAS_TUNE, 32)),
+    ...melody('bell', 0.16, moved(longNotes(CHRISTMAS_TUNE, 2), 32)),
+  ],
+);
+
 /**
  * Wonder (the opening cinematic, #46): F major, slow and sweeping, a music
  * box over warm strings and a rippling harp, like the first page of a
@@ -400,5 +473,6 @@ export const SCORES: Readonly<Record<TrackId, Score>> = {
   day: DAY,
   night: NIGHT,
   halloween: HALLOWEEN,
+  christmas: CHRISTMAS,
   wonder: WONDER,
 };

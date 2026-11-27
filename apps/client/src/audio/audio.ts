@@ -24,7 +24,7 @@ export interface AudioDebug {
   readonly state: AudioState;
   /** 'idle' until the first tap, then 'loading', then 'ready' (or 'failed'). */
   readonly engine: 'idle' | 'loading' | 'ready' | 'failed';
-  /** The loop wanted for where the player is (day, night or Halloween). */
+  /** The loop wanted for where the player is (day, night, Halloween or Christmas). */
   readonly track: TrackId;
   /** The opening cinematic's choice of music (#46), if it has one: a loop, or null for silence. */
   readonly scored: TrackId | null | undefined;
@@ -49,7 +49,7 @@ export interface GameAudio {
    * usual pick.
    */
   setScore: (track: TrackId | null | undefined) => void;
-  /** The game clock moved (#583): Halloween's loop starts or stops if the season did. */
+  /** The game clock moved (#583): a season's loop starts or stops if the season did. */
   reseason: () => void;
   /** Rows for the lobby's Settings screen: music and sounds. */
   settings: () => Node[];
@@ -67,7 +67,7 @@ export interface AudioOptions {
     createEngine: (ctx: AudioContext, volumes: { music: number; sounds: number }) => Engine;
   }>;
   /**
-   * Now on the game clock, in ms (Halloween's window): main passes the bag's,
+   * Now on the game clock, in ms (the seasons' windows): main passes the bag's,
    * the server's time (#583), so a phone whose clock is off still plays the
    * season the server says. Defaults to the device clock.
    */
@@ -136,14 +136,22 @@ export function createAudio(options: AudioOptions = {}): GameAudio {
     prime: primeSilently,
   });
 
-  const halloween = (): boolean => {
+  /** Which seasons' windows are open now (Halloween's, Christmas's, #37). */
+  const seasonsNow = (): ReadonlySet<string> => {
     try {
-      return activeSeasons(GAME_DATA.seasons, localDate(now())).some((s) => s.id === 'halloween');
+      return new Set(activeSeasons(GAME_DATA.seasons, localDate(now())).map((s) => s.id));
     } catch {
-      return false;
+      return new Set();
     }
   };
-  const wantedTrack = (): TrackId => pickTrack({ night, halloween: halloween() });
+  const wantedTrack = (): TrackId => {
+    const seasons = seasonsNow();
+    return pickTrack({
+      night,
+      halloween: seasons.has('halloween'),
+      christmas: seasons.has('christmas'),
+    });
+  };
 
   /** Music plays only while it can be heard. */
   const syncMusic = () => {
