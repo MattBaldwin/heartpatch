@@ -391,7 +391,7 @@ test.describe('a mini-boss fight (#190)', () => {
               pill.top < r.bottom;
             stacked.push({
               overlap,
-              at: `${node.textContent ?? ''} ${JSON.stringify(r)} over "${caption?.textContent ?? ''}" ${JSON.stringify(pill)}`,
+              at: `${node.textContent} ${JSON.stringify(r)} over "${caption?.textContent ?? ''}" ${JSON.stringify(pill)}`,
             });
           }
         }
