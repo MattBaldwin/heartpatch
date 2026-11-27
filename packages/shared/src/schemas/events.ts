@@ -22,6 +22,7 @@ import { LocalDateSchema } from './time.js';
 import { TrickOrTreatPrizeSchema } from './trick-or-treat.js';
 import { JourneyKindSchema } from './journeys.js';
 import { AdventDaySchema, AdventResultSchema, OrnamentSourceSchema } from './christmas.js';
+import { BossThanksItemsSchema, BossThanksKindSchema } from './boss-bar.js';
 
 /**
  * The game-event type registry (tech spec §5, §7): every `game_events.type`,
@@ -1632,6 +1633,75 @@ export const GAME_EVENTS = {
       q: z.number().int(),
       r: z.number().int(),
       endsAt: z.iso.datetime(),
+    }),
+  },
+  /**
+   * A finished fight chipped the patch's Christmas Eve bar (#37 C0b): `points`
+   * this fight added, `chipped` and `goal` the bar after it. The patch sees
+   * the bar move but never who chipped: the public view has no `userId`,
+   * and `points` goes to the Keeper who chipped alone (`PUBLIC_VIEWS`).
+   */
+  'boss.chipped': {
+    internal: z.strictObject({
+      window: LocalDateSchema,
+      userId: z.uuid(),
+      battleId: z.uuid(),
+      points: z.number().int().min(0),
+      chipped: z.number().int().min(0),
+      goal: z.number().int().min(1),
+    }),
+    public: z.object({
+      window: LocalDateSchema,
+      /** Only on the chipper's own view ("You chipped in 38!"). */
+      points: z.number().int().min(0).optional(),
+      chipped: z.number().int().min(0),
+      goal: z.number().int().min(1),
+    }),
+  },
+  /**
+   * The patch's Christmas Eve bar filled (#37 C0b, owner answer 2): the BIG
+   * squishy is tuckered out for everyone. Written once, by the chip that
+   * filled it; never who that was.
+   */
+  'boss.fell': {
+    internal: z.strictObject({
+      window: LocalDateSchema,
+      fellAt: z.iso.datetime(),
+      chipped: z.number().int().min(1),
+      goal: z.number().int().min(1),
+    }),
+    public: z.object({
+      window: LocalDateSchema,
+      fellAt: z.iso.datetime(),
+      chipped: z.number().int().min(1),
+      goal: z.number().int().min(1),
+    }),
+  },
+  /**
+   * A contributor's Christmas Eve thanks landed in their bag (#37 C0b):
+   * `kind` `fell` is the fall's bundle plus `asks` befriend asks; `dozed` is
+   * the smaller thanks when the bar closed short (owner answer 4, no asks).
+   * Only the Keeper hears it (`ownerOnlyView`); ledgered as `christmas-boss`.
+   */
+  'boss.thanked': {
+    internal: z
+      .strictObject({
+        window: LocalDateSchema,
+        userId: z.uuid(),
+        kind: BossThanksKindSchema,
+        items: BossThanksItemsSchema,
+        asks: z.number().int().min(0),
+      })
+      .refine((p) => p.kind === 'fell' || p.asks === 0, {
+        path: ['asks'],
+        message: 'a dozed-off thanks has no asks',
+      }),
+    public: z.object({
+      window: LocalDateSchema,
+      userId: z.uuid(),
+      kind: BossThanksKindSchema,
+      items: BossThanksItemsSchema,
+      asks: z.number().int().min(0),
     }),
   },
   /**

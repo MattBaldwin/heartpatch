@@ -36,4 +36,37 @@ export const BOSS_EVENTS: BossEventRules = {
     joinLevelPercent: 50, // TUNE: half the Partner's level…
     minJoinLevel: 5, // TUNE: …at least 5
   },
+  // Christmas Eve (#37 C0b; addendum on #37, owner answers 2026-11-27).
+  // Contract only: X1 schedules it, X2 runs the bar. No visit until X3 adds
+  // the species (null here), so the weekly bag runs as before.
+  christmasEve: {
+    speciesId: null, // X3: the new Christmas-only frost BIG squishy (owner answer 1)
+    terrains: ['meadow', 'hills', 'mountains'], // TUNE: fallback when the tree's post can't be used
+    day: '12-24', // TUNE: Christmas Eve, patch time
+    opensAtHour: 16, // TUNE: after school, like the weekly visit
+    closesAtHour: 10, // TUNE: 10:00 on Dec 25, a Christmas-morning catch-up (owner answer 2)
+    // Owner answer 3: every Keeper can chip in, with the usual level scaling.
+    gates: {
+      minPlayerLevel: 5, // TUNE: so a little sibling can fight
+      minPartnerLevel: null, // TUNE: no patch gate on Christmas Eve
+      levelBonus: 2, // TUNE: the weekly scaling
+      minLevel: 10, // TUNE: the sim must still pass at this floor (X3)
+    },
+    // Owner answer 2: one fight finished before the close, win or lose.
+    contributorMinFights: 1, // TUNE
+    bar: {
+      pointsPerWin: 100, // TUNE: one full win is 100 however strong the boss
+      goalPerKeeper: 120, // TUNE: X3's sim:boss --patch sets it before X7
+      minGoal: 200, // TUNE
+      maxGoal: 1200, // TUNE
+      headStartPerLightPercent: 2, // TUNE: per lit Twinkle Lights tile…
+      headStartLightsMaxPercent: 20, // TUNE: …at most 20 % from lights…
+      headStartStarPercent: 10, // TUNE: …plus 10 % for a lit star
+    },
+    // TUNE: the fall's Christmas bundle; 6 Heart Charms pays its two asks.
+    fallBundle: { 'heart-charm': 6, heartdust: 10, presents: 1 },
+    fallAsks: 2, // TUNE: owner answer 2, "two befriend asks"
+    // TUNE: owner answer 4, a smaller thanks and no asks.
+    dozedBundle: { heartdust: 5, treats: 3 },
+  },
 };

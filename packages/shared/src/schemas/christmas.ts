@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { ContentIdSchema } from './data/common.js';
 import { LocalDateSchema } from './time.js';
+import { BossBarStateSchema } from './boss-bar.js';
 
 /*
  * Christmas (#37 C0): the shared contracts for advent presents, warmth and
  * the Patch Tree. Logic lands in the plan's later PRs (1c advent, 2c tree);
- * the Christmas Eve fight's contracts come in their own C0b.
+ * the Christmas Eve fight's contracts are C0b (`boss-bar.ts`, `eve` below).
  */
 
 /**
@@ -81,6 +82,35 @@ export const PatchTreeRowSchema = z.strictObject({
 export type PatchTreeRow = z.infer<typeof PatchTreeRowSchema>;
 
 /**
+ * `MapView.christmas.eve` (#37 C0b): the Christmas Eve visit as the map
+ * shows it, for the notice chip (from three days before) and the event card.
+ * `opensAt` alone until the visit opens; then the bar comes whole (`state`,
+ * `chipped`, `goal`). Never the species, the head-start rule or who chipped.
+ */
+export const MapViewChristmasEveSchema = z
+  .object({
+    opensAt: z.iso.datetime(),
+    state: BossBarStateSchema.optional(),
+    chipped: z.number().int().min(0).optional(),
+    goal: z.number().int().min(1).optional(),
+  })
+  .refine(
+    (eve) =>
+      (eve.state === undefined) === (eve.chipped === undefined) &&
+      (eve.state === undefined) === (eve.goal === undefined),
+    { path: ['state'], message: 'the bar comes whole or not at all' },
+  )
+  .refine((eve) => eve.state !== 'fell' || (eve.chipped ?? 0) >= (eve.goal ?? 0), {
+    path: ['state'],
+    message: 'a bar falls only once it is full',
+  })
+  .refine((eve) => eve.state !== 'dozed' || (eve.chipped ?? 0) < (eve.goal ?? 0), {
+    path: ['state'],
+    message: 'a full bar falls; it does not doze off',
+  });
+export type MapViewChristmasEve = z.infer<typeof MapViewChristmasEveSchema>;
+
+/**
  * `MapView.christmas` (#37): the Patch Tree as the patch sees it, and whether
  * today's advent present waits for the viewer. Left out outside the season
  * and by older servers.
@@ -104,6 +134,11 @@ export const MapViewChristmasSchema = z.object({
    * hearts on their card. Optional so the tree lane (2c) can fill it later.
    */
   warmth: z.array(z.object({ userId: z.uuid(), warmth: z.number().int().min(1) })).optional(),
+  /**
+   * The Christmas Eve visit (#37 C0b), from its notice until it closes.
+   * Left out otherwise and by older servers.
+   */
+  eve: MapViewChristmasEveSchema.optional(),
 });
 export type MapViewChristmas = z.infer<typeof MapViewChristmasSchema>;
 

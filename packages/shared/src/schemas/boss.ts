@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PlayerBattleSchema } from './battle.js';
+import { BossVisitEventSchema } from './boss-bar.js';
 import { ContentIdSchema } from './data/common.js';
 import { LocalDateSchema } from './time.js';
 
@@ -25,6 +26,11 @@ export const BossVisitSchema = z.object({
   species: ContentIdSchema.nullable(),
   state: BossVisitStateSchema,
   triesLeftToday: z.number().int().min(0),
+  /**
+   * Christmas Eve (#37 C0b): set on a visit that isn't the weekly one, so
+   * the card can say so. Left out on a weekly visit and by older servers.
+   */
+  event: BossVisitEventSchema.optional(),
 });
 export type BossVisit = z.infer<typeof BossVisitSchema>;
 

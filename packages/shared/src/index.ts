@@ -169,6 +169,7 @@ export * from './schemas/factory.js';
 export * from './schemas/buildings.js';
 export * from './schemas/house.js';
 export * from './schemas/christmas.js';
+export * from './schemas/boss-bar.js';
 export * from './schemas/advent.js';
 export * from './advent/calendar.js';
 export * from './schemas/push.js';

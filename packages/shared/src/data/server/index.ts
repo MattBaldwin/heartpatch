@@ -32,7 +32,7 @@ export {
   type ComputerPersonaTuning,
 } from '../../schemas/data/computer-mates.js';
 export { COMPUTER_MATES } from './computer-mates.js';
-export { LONG_NIGHT_SECRETS } from './long-night.js';
+export { LONG_NIGHT_SECRETS, QUIET_NIGHTS } from './long-night.js';
 export * from '../../long-night/gap.js';
 export * from '../../schemas/data/clothing-drops.js';
 // Rolls the drop tables; its signature takes their type, so both live here.

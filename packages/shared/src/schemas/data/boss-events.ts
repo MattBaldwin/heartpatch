@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ContentIdSchema } from './common.js';
 import { formatDataIssues } from './issues.js';
+import { MonthDaySchema } from './seasons.js';
 
 /**
  * One boss in the visiting bag (#190): its boss-form species and the
@@ -39,6 +40,82 @@ export const BossBefriendRulesSchema = z.strictObject({
 });
 export type BossBefriendRules = z.infer<typeof BossBefriendRulesSchema>;
 
+const BundleSchema = z.record(ContentIdSchema, z.number().int().min(1).max(99));
+
+/**
+ * The Christmas Eve visit's lowered gates (#37 C0b, owner answer 3): every
+ * Keeper on the patch can fight it, with the usual level scaling.
+ */
+export const ChristmasEveGatesSchema = z.strictObject({
+  /** A Keeper whose Partner is under this sees it but can't fight yet ("Too big for now!"). */
+  minPlayerLevel: z.number().int().min(1).max(100),
+  /** The patch gate (some member's Partner this grown); null: no patch gate at all. */
+  minPartnerLevel: z.number().int().min(1).max(100).nullable(),
+  /** The boss's level: the Keeper's Partner level plus this… */
+  levelBonus: z.number().int().min(0).max(20),
+  /** …never under this. */
+  minLevel: z.number().int().min(1).max(100),
+});
+export type ChristmasEveGates = z.infer<typeof ChristmasEveGatesSchema>;
+
+/**
+ * The Christmas Eve patch bar (#37 C0b, addendum "The patch bar"). Secret:
+ * the client sees the goal and the points chipped, never these numbers.
+ */
+export const ChristmasEveBarRulesSchema = z.strictObject({
+  /** One fight's points: this × damage to the boss ÷ its full energy, so a win is this many. */
+  pointsPerWin: z.number().int().min(1).max(1000),
+  /** The goal: this per active Keeper… */
+  goalPerKeeper: z.number().int().min(1).max(10_000),
+  /** …never under this… */
+  minGoal: z.number().int().min(1).max(100_000),
+  /** …or over this. */
+  maxGoal: z.number().int().min(1).max(100_000),
+  /** Head start at open, as % of the goal: this per lit Twinkle Lights tile… */
+  headStartPerLightPercent: z.number().int().min(0).max(100),
+  /** …at most this from lights… */
+  headStartLightsMaxPercent: z.number().int().min(0).max(100),
+  /** …plus this when the Patch Tree's star is lit. */
+  headStartStarPercent: z.number().int().min(0).max(100),
+});
+export type ChristmasEveBarRules = z.infer<typeof ChristmasEveBarRulesSchema>;
+
+/**
+ * The Christmas Eve visit (#37 C0b): in the week holding `day`, it replaces
+ * that week's bag draw on every patch. Server-only, like the rest.
+ */
+export const ChristmasEveBossRulesSchema = z.strictObject({
+  /**
+   * The new Christmas-only BIG squishy (owner answer 1). Null until its
+   * species lands (X3): then there is no Christmas visit and the week's bag
+   * draw runs as usual.
+   */
+  speciesId: ContentIdSchema.nullable(),
+  /** The terrains it likes when the Patch Tree's post tile can't be used. */
+  terrains: z.array(ContentIdSchema).min(1),
+  /** The patch-local day it opens on. */
+  day: MonthDaySchema,
+  /** The patch-local hour it opens on `day`… */
+  opensAtHour: z.number().int().min(0).max(23),
+  /** …and the hour it closes on the morning after; the bar falls or dozes off then. */
+  closesAtHour: z.number().int().min(0).max(23),
+  gates: ChristmasEveGatesSchema,
+  /**
+   * Who shares the fall (owner answer 2): a Keeper on the patch with at
+   * least this many fights finished before the close, win or lose, online
+   * or not when the bar filled. The same Keepers get the dozed-off thanks.
+   */
+  contributorMinFights: z.number().int().min(1).max(10),
+  bar: ChristmasEveBarRulesSchema,
+  /** A contributor's bundle when the bar fell, ledgered as `christmas-boss`… */
+  fallBundle: BundleSchema,
+  /** …plus this many befriend asks (`befriend.charmsPerAsk` each). */
+  fallAsks: z.number().int().min(0).max(5),
+  /** The smaller thanks when it dozed off short (owner answer 4): no asks, nothing taken. */
+  dozedBundle: BundleSchema,
+});
+export type ChristmasEveBossRules = z.infer<typeof ChristmasEveBossRulesSchema>;
+
 /**
  * When, where and who a mini-boss visits (#190 plan §2). Server-only
  * (CLAUDE.md rule 6): the schedule, the bag, the next boss and the unlock
@@ -72,9 +149,11 @@ export const BossEventRulesSchema = z.strictObject({
    * item id → count, ledgered as `boss`. Paid once per win; a scoot or a
    * loss pays none.
    */
-  bundle: z.record(ContentIdSchema, z.number().int().min(1).max(99)),
+  bundle: BundleSchema,
   /** Befriending after a win (190c). */
   befriend: BossBefriendRulesSchema,
+  /** The Christmas Eve visit (#37 C0b). Left out: no Christmas visit. */
+  christmasEve: ChristmasEveBossRulesSchema.optional(),
 });
 export type BossEventRules = z.infer<typeof BossEventRulesSchema>;
 
@@ -108,6 +187,60 @@ export function checkBossEventRules(
   }
   if (parsed.data.minPlayerLevel > parsed.data.minPartnerLevel) {
     problems.push('boss rules: minPlayerLevel is above minPartnerLevel');
+  }
+  const eve = parsed.data.christmasEve;
+  if (eve)
+    problems.push(...checkChristmasEve(eve, parsed.data, knownSpecies, knownTerrains, knownItems));
+  return problems;
+}
+
+function checkChristmasEve(
+  eve: ChristmasEveBossRules,
+  weekly: BossEventRules,
+  knownSpecies: ReadonlySet<string>,
+  knownTerrains: ReadonlySet<string>,
+  knownItems?: ReadonlySet<string>,
+): string[] {
+  const problems: string[] = [];
+  if (eve.speciesId !== null) {
+    if (!knownSpecies.has(eve.speciesId)) {
+      problems.push(`christmas eve: unknown species "${eve.speciesId}"`);
+    }
+    if (weekly.bag.some((entry) => entry.speciesId === eve.speciesId)) {
+      problems.push(`christmas eve: "${eve.speciesId}" is also in the weekly bag`);
+    }
+  }
+  for (const terrain of eve.terrains) {
+    if (!knownTerrains.has(terrain)) problems.push(`christmas eve: unknown terrain "${terrain}"`);
+  }
+  // Lowered, never raised (owner answer 3).
+  if (eve.gates.minPlayerLevel > weekly.minPlayerLevel) {
+    problems.push('christmas eve: minPlayerLevel is above the weekly one');
+  }
+  if (eve.gates.minPartnerLevel !== null && eve.gates.minPartnerLevel > weekly.minPartnerLevel) {
+    problems.push('christmas eve: minPartnerLevel is above the weekly one');
+  }
+  if (eve.gates.minLevel > weekly.minLevel) {
+    problems.push('christmas eve: minLevel is above the weekly one');
+  }
+  if (eve.bar.minGoal > eve.bar.maxGoal) problems.push('christmas eve: minGoal is above maxGoal');
+  if (eve.bar.headStartLightsMaxPercent + eve.bar.headStartStarPercent >= 100) {
+    problems.push('christmas eve: the head start fills the bar by itself');
+  }
+  if (eve.fallAsks > weekly.befriend.asksPerWin) {
+    problems.push('christmas eve: more fall asks than a win gets');
+  }
+  for (const [name, bundle] of [
+    ['fall', eve.fallBundle],
+    ['dozed', eve.dozedBundle],
+  ] as const) {
+    if (Object.keys(bundle).length === 0)
+      problems.push(`christmas eve: the ${name} bundle is empty`);
+    for (const item of Object.keys(bundle)) {
+      if (knownItems && !knownItems.has(item)) {
+        problems.push(`christmas eve ${name} bundle: unknown item "${item}"`);
+      }
+    }
   }
   return problems;
 }

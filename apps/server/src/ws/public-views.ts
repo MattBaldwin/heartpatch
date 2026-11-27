@@ -64,7 +64,8 @@ function ownerOnlyView(
     | 'journey.arrived'
     | 'post.bought'
     | 'advent.claimed'
-    | 'present.opened',
+    | 'present.opened'
+    | 'boss.thanked',
 ): PublicView {
   return definePublicView({
     schema: GAME_EVENTS[type].public,
@@ -158,6 +159,23 @@ const trickVisitedView = definePublicView({
 });
 
 /**
+ * A chip on the Christmas Eve bar (#37 C0b): the whole patch sees the bar
+ * move, but never who chipped; only the chipper hears their own points.
+ */
+const bossChippedView = definePublicView({
+  schema: GAME_EVENTS['boss.chipped'].public,
+  build: (event, recipient) => {
+    const { window, userId, points, chipped, goal } = parseGameEventPayload(
+      'boss.chipped',
+      event.payload,
+    );
+    return userId === recipient.userId
+      ? { window, points, chipped, goal }
+      : { window, chipped, goal };
+  },
+});
+
+/**
  * The views live sync sends: one per type in the shared event registry
  * (`packages/shared/src/schemas/events.ts`), built from that type's `public`
  * schema. **Default deny:** a type that isn't registered has no entry and is
@@ -189,6 +207,10 @@ export const PUBLIC_VIEWS: PublicViews = {
   // Christmas (#37): what's in a Keeper's present is theirs, like a house gift.
   'advent.claimed': ownerOnlyView('advent.claimed'),
   'present.opened': ownerOnlyView('present.opened'),
+  // Christmas Eve (#37 C0b): the bar moves for all, nameless; the thanks is
+  // the Keeper's own. `boss.fell` is the registry view: the whole patch cheers.
+  'boss.chipped': bossChippedView,
+  'boss.thanked': ownerOnlyView('boss.thanked'),
   // A village's key hunt is its winner's own (#306 PR 2c).
   'key.found': ownerOnlyView('key.found'),
   'cellar.opened': ownerOnlyView('cellar.opened'),

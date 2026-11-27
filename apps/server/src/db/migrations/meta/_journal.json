@@ -498,6 +498,13 @@
       "when": 1795764901108,
       "tag": "0070_christmas_contracts",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1795799817112,
+      "tag": "0071_christmas_eve_contracts",
+      "breakpoints": true
     }
   ]
 }
