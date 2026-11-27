@@ -52,6 +52,7 @@ import type { PlaybackStep } from './battle-playback.js';
 import type { BattleContent } from './battle-view.js';
 import {
   battleScale,
+  cameraFor,
   CameraDirector,
   fogFor,
   type CameraShot,
@@ -305,7 +306,7 @@ export class BattleScene {
   #squishCues: SquishCueAt[] = [];
   readonly #pendingSwaps: { rig: Rig; at: number; member: TeamMember }[] = [];
   /** The last move played (and its user's slot, #190), for the hit that follows it. */
-  #lastMove: { move: string; user: BattleSideId; slot: number } | null = null;
+  #lastMove: { move: string; user: BattleSideId; slot: number; landing: boolean } | null = null;
   #playing: { kind: PlaybackStep['kind']; start: number; ms: number } | null = null;
   #now = 0;
   #acts = 0;
@@ -444,8 +445,8 @@ export class BattleScene {
     this.#camera = new CameraDirector(
       { a: this.#rigs.a.home, b: this.#rigs.b.home },
       options.reducedMotion,
-      // A team fight (#190) looks down a little more, so the boss stands above the row.
-      team.length > 0 ? { ...BATTLE_CAMERA, pitch: TEAM_ARENA.pitch } : BATTLE_CAMERA,
+      // A boss fight (#190 PR 2): the low hero shot.
+      cameraFor(team.length > 0),
     );
 
     // The stage's camera is the map camera with no input reaching it (the
@@ -693,7 +694,12 @@ export class BattleScene {
     this.#now = now;
     const other = step.side === 'a' ? 'b' : 'a';
     if ((step.kind === 'move' || step.kind === 'miss') && step.move) {
-      this.#lastMove = { move: step.move, user: step.side, slot: step.slot };
+      this.#lastMove = {
+        move: step.move,
+        user: step.side,
+        slot: step.slot,
+        landing: step.kind === 'move' && step.landing === true,
+      };
     }
     // Who a cue is about (#190): the step's squishy on its side; on the other
     // side, the last move's user, else that side's lead (the boss).
@@ -710,6 +716,11 @@ export class BattleScene {
       mySide: this.#options.mySide,
       reduced: this.#options.reducedMotion,
       ...(extra.captured !== undefined ? { captured: extra.captured } : {}),
+      // The boss's beats (#190 PR 2): the camera's windup push-in, landing thump and slow pull-back.
+      ...(this.#options.team !== undefined && {
+        boss: this.#options.mySide === 'a' ? ('b' as const) : ('a' as const),
+        landing: step.kind === 'hit' && this.#lastMove?.landing === true,
+      }),
     });
     this.#playing = { kind: step.kind, start: now, ms: step.ms };
     for (const cue of plan.acts) {
@@ -1307,7 +1318,7 @@ export class BattleScene {
     this.#noteShot(shot);
     // A shot further back than usual pushes the fog back with it (#234).
     this.#lastDistance = shot.distance;
-    fogFor(this.#baseFog, shot.distance, this.#fog);
+    fogFor(this.#baseFog, shot.distance, this.#fog, this.#camera.config);
     scene.fogStart = this.#fog[0];
     scene.fogEnd = this.#fog[1];
     camera.fov = shot.fov;

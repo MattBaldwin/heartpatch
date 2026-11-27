@@ -238,6 +238,8 @@ test.describe('a mini-boss fight (#190)', () => {
     // the asserts below are unconditional, so a TUNE change fails here, loudly.
     const MAX_FIT = 70; // BATTLE_CAMERA.maxFitDistance
     const MIN_BAND = 0.7; // the plan's floor for BOSS_HUD's rest band
+    const LOW_TEAM = 0.55; // TUNE mirror: BATTLE_CAMERA.boss puts the team's mouths ≈ 0.78 down the band
+    const BOSS_FIT = 50; // BATTLE_CAMERA.boss at rest on 393×852: 45–48 (camera-director.test.ts)
     const MIN_BAR = 120; // BOSS_HUD.minBar
     const FACING_MIN = 0.3; // BATTLE_CAMERA.faceFacingMin
     const EPS = 0.005;
@@ -489,6 +491,15 @@ test.describe('a mini-boss fight (#190)', () => {
       // A boss turned away is never reported as a framed face.
       if ((f.bossFacing ?? 1) < FACING_MIN - 0.05) expect(f.face, at).toBeNull();
       expect(f.team.length, at).toBeGreaterThan(0);
+      // The low hero shot (#190 PR 2): the team stands low in the band, no
+      // empty floor under it (M0), and a push-in only lowers it further.
+      // Holds with and without the insets: a share of the band, not a row.
+      const lowest = Math.max(...f.team.map((t) => t.bottom));
+      expect(lowest, at).toBeGreaterThanOrEqual(
+        f.band.top + LOW_TEAM * (f.band.bottom - f.band.top),
+      );
+      // The row's width sets the distance: never back at the old team camera's 52+.
+      expect(f.distance, at).toBeLessThanOrEqual(BOSS_FIT);
       // The ⏳ never clips and never squeezes the bar.
       expect(barWidth, at).toBeGreaterThanOrEqual(MIN_BAR);
       if (windup) expect(slotRight, at).toBeLessThanOrEqual(stripRight + 0.5);

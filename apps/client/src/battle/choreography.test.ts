@@ -332,3 +332,64 @@ describe('planStep', () => {
     expect(scoot.acts.map((a) => a.kind)).toEqual(['scoot']);
   });
 });
+
+describe('the boss camera beats (#190 PR 2)', () => {
+  const beats = BATTLE_CAMERA.boss.beats;
+  // The player on side a, the boss on b.
+  const boss = ctx({ boss: 'b', user: 'b' });
+  const windup = { ...step('effect', 'b', { squish: 'jiggle' }), windup: true };
+  const ko = step('tuckered', 'b');
+
+  it('a boss windup pushes in slowly across the step, with a little lean', () => {
+    const cam = planStep(windup, boss).camera;
+    expect(cam).toMatchObject({ focus: 'b', push: beats.windupPush, tilt: beats.windupRoll });
+    expect(cam.ramp).toBe(windup.ms);
+    expect(cam.shake).toBe(0);
+  });
+
+  it("the windup's move landing on the team is a bigger push and a thump", () => {
+    const hit = step('hit', 'a', { effectiveness: 'normal' });
+    const cam = planStep(hit, { ...boss, landing: true }).camera;
+    expect(cam).toMatchObject({ focus: 'a', push: beats.landingPush, shake: beats.landingShake });
+    // The push is twice a plain hit's.
+    expect(beats.landingPush).toBeCloseTo(BATTLE_CAMERA.hitPush * 2, 9);
+    // A boss hit that isn't a windup landing is a plain hit.
+    expect(planStep(hit, boss).camera).toEqual(planStep(hit, ctx({ user: 'b' })).camera);
+  });
+
+  it('the boss tuckered out: the KO push, then a slow pull-back', () => {
+    const cam = planStep(ko, boss).camera;
+    expect(cam.push).toBe(BATTLE_CAMERA.koPush);
+    expect(cam.relax).toBe(beats.koRelax);
+    expect(beats.koRelax).toBeLessThan(BATTLE_CAMERA.beatDecay);
+  });
+
+  it('leaves the 1-v-1, and a friend in a boss fight, as they were', () => {
+    const friendWindup = { ...windup, side: 'a' as const };
+    const friendHit = step('hit', 'b', { effectiveness: 'normal' });
+    for (const [s, c] of [
+      [windup, ctx({ user: 'b' })],
+      [ko, ctx()],
+      [friendWindup, boss],
+      [friendHit, { ...boss, user: 'a' as const, landing: true }],
+      [step('tuckered', 'a'), boss],
+    ] as const) {
+      const cam = planStep(s, c).camera;
+      expect(cam.ramp, s.kind).toBeUndefined();
+      expect(cam.tilt, s.kind).toBeUndefined();
+      expect(cam.relax, s.kind).toBeUndefined();
+      expect(cam.push, s.kind).not.toBe(beats.landingPush);
+    }
+  });
+
+  it('never pushes, shakes or leans with reduced motion', () => {
+    const reduced = { ...boss, reduced: true };
+    for (const s of [windup, step('hit', 'a', { effectiveness: 'super' }), ko]) {
+      const cam = planStep(s, { ...reduced, landing: true }).camera;
+      expect(cam.push, s.kind).toBe(0);
+      expect(cam.shake, s.kind).toBe(0);
+      expect(cam.roll, s.kind).toBe(0);
+      expect(cam.tilt ?? 0, s.kind).toBe(0);
+    }
+  });
+});

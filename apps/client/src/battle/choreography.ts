@@ -623,6 +623,12 @@ export interface CameraCue {
   readonly shakeDelay: number;
   /** A dutch roll on impact, radians (super hits only). */
   readonly roll: number;
+  /** A slow push-in (#190, a boss's windup): the push eases in over this many ms, then relaxes. */
+  readonly ramp?: number;
+  /** A held lean, radians (#190, a boss's windup), eased in and back out at the next beat. */
+  readonly tilt?: number;
+  /** How fast the push relaxes, per second (#190, a boss's slow pull-back); else `beatDecay`. */
+  readonly relax?: number;
 }
 
 export interface StepPlan {
@@ -648,9 +654,15 @@ export interface PlanContext {
   readonly reduced: boolean;
   /** At the end: the battle ended with a new friend. */
   readonly captured?: boolean;
+  /** The boss's side in a boss fight (#190): its beats get the boss camera's. */
+  readonly boss?: BattleSideId | null;
+  /** A hit from a windup's move landing (#190): the boss camera's thump. */
+  readonly landing?: boolean;
 }
 
 const other = (side: BattleSideId): BattleSideId => (side === 'a' ? 'b' : 'a');
+
+const BOSS_BEATS = CHOREO_CAMERA.boss.beats;
 
 /** How hard a hit lands, from its effectiveness tier. */
 export function hitStrength(tier: string | null): number {
@@ -738,6 +750,14 @@ export function planStep(step: PlaybackStep, ctx: PlanContext): StepPlan {
         shake: reduced ? 0 : CHOREO_CAMERA.shake * strength,
         roll: reduced || strength < SUPER_STRENGTH ? 0 : CHOREO_CAMERA.roll,
       });
+      // The boss's windup lands (#190): a bigger push and a thump.
+      if (ctx.boss && attacker === ctx.boss && step.side !== ctx.boss && ctx.landing === true) {
+        cam = {
+          ...cam,
+          push: reduced ? 0 : BOSS_BEATS.landingPush,
+          shake: reduced ? 0 : BOSS_BEATS.landingShake,
+        };
+      }
       break;
     }
     case 'miss': {
@@ -781,7 +801,16 @@ export function planStep(step: PlaybackStep, ctx: PlanContext): StepPlan {
         // Too dizzy or sleepy to move: the status shows again.
         fx(status, step.side);
       }
-      cam = camera({ focus: step.side });
+      cam =
+        // The boss winds up (#190): the camera leans in slowly across the step, tilting a touch.
+        step.windup === true && ctx.boss === step.side && !reduced
+          ? camera({
+              focus: step.side,
+              push: BOSS_BEATS.windupPush,
+              ramp: ms,
+              tilt: BOSS_BEATS.windupRoll,
+            })
+          : camera({ focus: step.side });
       break;
     }
     case 'tuckered':
@@ -794,6 +823,8 @@ export function planStep(step: PlaybackStep, ctx: PlanContext): StepPlan {
         pushDelay: ms * 0.5,
         shake: reduced ? 0 : CHOREO_CAMERA.shake * 0.5,
         shakeDelay: ms * 0.7,
+        // The boss tuckered out (#190): the push holds, then the camera drifts slowly back.
+        ...(ctx.boss === step.side && { relax: BOSS_BEATS.koRelax }),
       });
       break;
     case 'swap':

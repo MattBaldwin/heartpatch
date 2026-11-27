@@ -11,6 +11,22 @@ import type { CameraCue } from './choreography.js';
 // unit tested; the scene writes the result into the stage camera before each
 // frame.
 
+/**
+ * The camera for a fight (#190 PR 2): the boss fight's low hero shot
+ * (`BATTLE_CAMERA.boss` on top of the rest) when a boss is in it, else
+ * `BATTLE_CAMERA` itself, untouched.
+ */
+export function cameraFor(boss: boolean): Readonly<BattleCameraConfig> {
+  return boss ? BOSS_FIGHT_CAMERA : BATTLE_CAMERA;
+}
+
+// The profile's framing numbers over the rest (its beats are choreography's).
+const BOSS_FIGHT_CAMERA: Readonly<BattleCameraConfig> = (() => {
+  const { boss, ...base } = BATTLE_CAMERA;
+  const { pitch, aim, feetY, feetRoom, fitFrom, fitHeight } = boss;
+  return { ...base, pitch, aim, feetY, feetRoom, fitFrom, fitHeight };
+})();
+
 export interface Point3 {
   x: number;
   y: number;
@@ -104,7 +120,7 @@ export function frameDistance(
   config: BattleCameraConfig = BATTLE_CAMERA,
 ): { distance: number; shift: number } {
   const tan = Math.tan(config.fov / 2);
-  const feetY = Math.min(config.feetY, safe.bottom - 0.08);
+  const feetY = Math.min(config.feetY, safe.bottom - config.feetRoom);
   const headroom = Math.max(0.15, (feetY - safe.top - 0.03) * 2);
   const yc = Math.cos(config.yaw);
   const ys = Math.sin(config.yaw);
@@ -119,7 +135,7 @@ export function frameDistance(
     const along = (dx * ys + dz * yc) * cp;
     const across = Math.abs(dx * yc - dz * ys) + f.r;
     distance = Math.max(distance, across / (wide * 0.94) + along);
-    distance = Math.max(distance, f.h / (tan * headroom) + along);
+    distance = Math.max(distance, Math.max(0, f.h - config.fitFrom) / (tan * headroom) + along);
   }
   const shift = 1 - 2 * feetY;
   const reach = arenaReach(aspect, safe.floor ?? safe.bottom, shift, config);
@@ -262,6 +278,13 @@ export class CameraDirector {
   #push = 0;
   #want = { focusX: 0, focusZ: 0, push: 0 };
   #pushAt = 0;
+  /** A slow push-in (a windup's, #190): the push ramps from `from` over `ms` from `at`, then relaxes. */
+  #ramp = { at: 0, ms: 0, from: 0 };
+  /** How fast this beat's push relaxes, per second. */
+  #relax = 0;
+  /** A held lean (a windup's roll, #190), eased in and out like the focus. */
+  #tilt = 0;
+  #tiltWant = 0;
   #shake = { amount: 0, roll: 0, at: 0 };
   #last: number | null = null;
   /** The face-first slide (#868), eased like the push so a windup never jolts the frame. */
@@ -294,6 +317,12 @@ export class CameraDirector {
     this.#homes = homes;
     this.#reduced = reduced;
     this.#config = config;
+    this.#relax = config.beatDecay;
+  }
+
+  /** The tunables this camera frames with (the boss profile in a boss fight), for the fog. */
+  get config(): Readonly<BattleCameraConfig> {
+    return this.#config;
   }
 
   /** A new step's camera beat, starting at `now` (ms). */
@@ -307,6 +336,11 @@ export class CameraDirector {
       push: this.#reduced ? 0 : cue.push,
     };
     this.#pushAt = now + cue.pushDelay;
+    this.#ramp.at = this.#pushAt;
+    this.#ramp.ms = this.#reduced ? 0 : (cue.ramp ?? 0);
+    this.#ramp.from = this.#push;
+    this.#relax = cue.relax ?? this.#config.beatDecay;
+    this.#tiltWant = this.#reduced ? 0 : (cue.tilt ?? 0);
     if (!this.#reduced && cue.shake > 0) {
       this.#shake = { amount: cue.shake, roll: cue.roll, at: now + cue.shakeDelay };
     }
@@ -324,11 +358,13 @@ export class CameraDirector {
       focusZ: at ? (at.z - this.#config.aim.z) * shift : 0,
       push: 0,
     };
+    this.#tiltWant = 0;
   }
 
   /** Back to framing both fighters (the turn is over). */
   rest(): void {
     this.#want = { focusX: 0, focusZ: 0, push: 0 };
+    this.#tiltWant = 0;
   }
 
   /** True while the face-first slide (#868) is still easing towards its target. */
@@ -344,6 +380,8 @@ export class CameraDirector {
       Math.abs(this.#focus.z - this.#want.focusZ) > 0.002 ||
       Math.abs(this.#push - (now >= this.#pushAt ? this.#want.push : this.#push)) > 0.001 ||
       shaking.x !== 0 ||
+      now < this.#ramp.at + this.#ramp.ms ||
+      Math.abs(this.#tilt - this.#tiltWant) > 0.0005 ||
       Math.abs(this.#drop - this.#dropWant) > 0.001
     );
   }
@@ -375,10 +413,19 @@ export class CameraDirector {
     this.#focus.x += (this.#want.focusX - this.#focus.x) * k;
     this.#focus.z += (this.#want.focusZ - this.#focus.z) * k;
     if (now >= this.#pushAt) {
-      this.#push += (this.#want.push - this.#push) * Math.min(1, k * 1.6);
-      // A beat relaxes on its own: the push-in eases back as the hit settles.
-      this.#want.push *= Math.exp(-this.#config.beatDecay * dt);
+      const { at, ms, from } = this.#ramp;
+      if (now < at + ms) {
+        // A slow push-in (a windup): eased along the step from where it was, no jump.
+        const t = (now - at) / ms;
+        this.#push = from + (this.#want.push - from) * t * t * (3 - 2 * t);
+      } else {
+        this.#push += (this.#want.push - this.#push) * Math.min(1, k * 1.6);
+        // A beat relaxes on its own: the push-in eases back as the hit settles.
+        this.#want.push *= Math.exp(-this.#relax * dt);
+      }
     }
+    this.#tilt += (this.#tiltWant - this.#tilt) * k;
+    if (Math.abs(this.#tilt) < 1e-6) this.#tilt = 0;
 
     const { aim, pitch, yaw, fov } = this.#config;
     const frame = frameDistance(aspect, safe, fit, this.#config);
@@ -389,7 +436,7 @@ export class CameraDirector {
     const shake = shakeOffset(this.#shake.amount, age, this.#config);
     const fade =
       this.#shake.amount > 0 && age >= 0 ? Math.exp(-this.#config.shakeDecay * (age / 1000)) : 0;
-    const roll = this.#shake.roll * fade;
+    const roll = this.#shake.roll * fade + this.#tilt;
     // Looking along +z, swung by yaw and tilted down by pitch.
     const back = Math.cos(pitch) * distance;
     const up = Math.sin(pitch) * distance;

@@ -8,6 +8,7 @@ import {
   arenaReach,
   battleScale,
   CameraDirector,
+  cameraFor,
   faceDrop,
   fogFor,
   frameDistance,
@@ -25,6 +26,8 @@ import { actPose, FEELING_TRAITS, readyPose, REST, type Act, type Pose } from '.
 import { faceSpan, posedFace } from './face-span.js';
 
 const homes = { a: HOMES.mine, b: HOMES.theirs } as const;
+/** The team fight's camera from #234 to #190 PR 1: the 1-v-1's, tilted down 21°. */
+const TEAM_CAMERA_867 = { ...BATTLE_CAMERA, pitch: (21 * Math.PI) / 180 };
 const safe = { top: 0.12, bottom: 0.65 };
 const fit: FitPoint[] = [
   { x: HOMES.mine.x, z: HOMES.mine.z, r: 1.6, h: 3.6 },
@@ -63,7 +66,8 @@ describe('a boss fight on a notched iPhone (#234)', () => {
   // Measured in Chromium at 393×852 with the iPhone's safe-area insets (top 59,
   // bottom 34): Rakelet (Lv 28) against a team of three, at rest.
   const aspect = 393 / 852;
-  const team = { ...BATTLE_CAMERA, pitch: TEAM_ARENA.pitch };
+  // The team fight's camera before the boss profile (#190 PR 2): the #867 cap's own fixture.
+  const team = TEAM_CAMERA_867;
   const bossFit: FitPoint[] = [
     { x: -4.3, z: -3.77, r: 2.4, h: 4.27 },
     { x: 0.4, z: -2.6, r: 2.38, h: 4.25 },
@@ -554,7 +558,7 @@ describe('framing every species (#652)', () => {
 describe('a boss fight frames the boss face first (#868)', () => {
   // The #234 fixture: Rakelet (Lv 28) against three, measured at 393×852.
   const aspect = 393 / 852;
-  const team = { ...BATTLE_CAMERA, pitch: TEAM_ARENA.pitch };
+  const team = cameraFor(true);
   const posts = TEAM_ARENA.posts[3];
   const bossHome = TEAM_ARENA.boss;
   const bossFit: FitPoint = { x: bossHome.x, z: bossHome.z, r: 2.57, h: 8.88 };
@@ -741,7 +745,10 @@ describe('a boss fight frames the boss face first (#868)', () => {
 
 describe("a boss fight keeps the team's eyes above the team chips (#868, #190)", () => {
   const aspect = 393 / 852;
-  const team = { ...BATTLE_CAMERA, pitch: TEAM_ARENA.pitch };
+  // The slide's rules on the old short band, with the camera they were
+  // measured with: the safety net's own fixture. The boss profile's faces are
+  // swept on every band above (#190 PR 2).
+  const team = TEAM_CAMERA_867;
   const posts = TEAM_ARENA.posts[3];
   const boss = TEAM_ARENA.boss;
   const fit: FitPoint[] = [
@@ -878,5 +885,367 @@ describe('faceDrop', () => {
   });
   it('slides up when the face sits under the band', () => {
     expect(faceDrop(0.47, 0.53, band, 0.01)).toBeCloseTo(-0.04, 9);
+  });
+});
+
+describe('the boss camera: a low hero shot (#190 PR 2)', () => {
+  const boss = cameraFor(true);
+  const aspect = 393 / 852;
+  const posts = TEAM_ARENA.posts[3];
+  const bossHome = TEAM_ARENA.boss;
+  // The stage bands of the phone-first boss HUD (#190 PR 1, captures pr1-f48d8ca
+  // and pr1b-d6e0c66): a notched iPhone at rest and risen; the WebKit e2e's
+  // 393×852 with no insets; an iPad portrait at rest (estimated from the CSS).
+  const BANDS: { name: string; aspect: number; safe: SafeRegion }[] = [
+    { name: 'notched iPhone at rest', aspect, safe: { top: 0.142, bottom: 0.876 } },
+    { name: 'iPhone with no insets at rest', aspect, safe: { top: 0.073, bottom: 0.915 } },
+    { name: 'notched iPhone risen', aspect, safe: { top: 0.142, bottom: 0.61 } },
+    { name: 'iPad portrait at rest', aspect: 820 / 1180, safe: { top: 0.09, bottom: 0.9 } },
+  ];
+  const rest = BANDS[0]!;
+  // Teams of the smallest, ordinary and tallest kinds; the boss is drawn
+  // `TEAM_ARENA.bossScale` × the team's mean height (battle-scene.ts
+  // `#bossScale`), so its size follows the team, whichever boss it is. The
+  // #234 fixture (Rakelet against three, 6.86 tall) is the fourth.
+  const median = fighters[Math.floor(fighters.length / 2)]!;
+  const TEAMS = [
+    { name: 'small team', friends: fighters.slice(-3) },
+    { name: 'ordinary team', friends: [median, median, median] },
+    { name: 'tall team', friends: fighters.slice(0, 3) },
+  ].map(({ name, friends }) => {
+    const mean = friends.reduce((a, f) => a + f.height, 0) / friends.length;
+    return { name, friends, bossHeight: mean * TEAM_ARENA.bossScale };
+  });
+  const FIGHTS = [
+    ...TEAMS,
+    { name: 'Rakelet (#234)', friends: [median, median, median], bossHeight: 6.86 },
+  ].map((t) => ({
+    ...t,
+    fit: [
+      ...t.friends.map((f, i) => fitFor(f, posts[i]!)),
+      {
+        x: bossHome.x,
+        z: bossHome.z,
+        r: 2.57 * (t.bossHeight / 6.86),
+        h: t.bossHeight * 1.25 + 0.3,
+      },
+    ],
+  }));
+  const fight = FIGHTS[3]!;
+  // Its face (the highest-set and lowest-set kinds), looking at the row's middle.
+  const spans = GAME_DATA.species
+    .map((s) => faceSpan(squishyParams(s, `${s.id}-1`, registry), registry))
+    .filter((s) => s !== null);
+  const highest = spans.reduce((a, s) => (s.high > a.high ? s : a));
+  const lowest = spans.reduce((a, s) => (s.low < a.low ? s : a));
+  const lead = posts[1]!;
+  const len = Math.hypot(lead.x - bossHome.x, lead.z - bossHome.z);
+  const look = { x: (lead.x - bossHome.x) / len, z: (lead.z - bossHome.z) / len };
+  const bossFace = (span: { low: number; high: number }, height: number): FacePoint =>
+    posedFace({ x: 0, z: 0, low: 0, high: 0 }, bossHome, look.x, look.z, REST, {
+      low: span.low * height,
+      high: span.high * height,
+    });
+  // The team's eyes and mouths: every kind's span, at each friend's height.
+  const teamFaces = (friends: readonly { height: number }[]): FacePoint[] =>
+    friends.map((f, i) => ({
+      x: posts[i]!.x,
+      z: posts[i]!.z,
+      low: Math.min(...spans.map((s) => s.low)) * f.height,
+      high: Math.max(...spans.map((s) => s.high)) * f.height,
+    }));
+
+  it('applies only with a boss: the 1-v-1 camera is BATTLE_CAMERA, its numbers as they were', () => {
+    expect(cameraFor(false)).toBe(BATTLE_CAMERA);
+    // The 1-v-1's framing numbers, pinned (the boss profile must never leak into them).
+    expect(BATTLE_CAMERA.pitch).toBeCloseTo((11 * Math.PI) / 180, 12);
+    expect(BATTLE_CAMERA.aim).toEqual({ x: 0.35, y: 0.1, z: 0.5 });
+    expect(BATTLE_CAMERA.feetY).toBe(0.56);
+    expect(BATTLE_CAMERA.fitHeight).toBe(3.6);
+    expect(BATTLE_CAMERA.feetRoom).toBe(0.08);
+    expect(BATTLE_CAMERA.fitFrom).toBe(0);
+    expect(BATTLE_CAMERA.boss.fitFrom).toBe(BATTLE_CAMERA.boss.aim.y);
+    // The fog only moves back past the reference, never in.
+    expect(fogFor([28, 90], 30)).toEqual([28, 90]);
+    // The boss fight's camera differs from it in the profile's keys only.
+    const changed = Object.keys(boss)
+      .filter((k) => k !== 'boss')
+      .filter(
+        (k) =>
+          JSON.stringify(boss[k as keyof typeof boss]) !==
+          JSON.stringify(BATTLE_CAMERA[k as keyof typeof BATTLE_CAMERA]),
+      )
+      .sort();
+    expect(changed).toEqual(['aim', 'feetRoom', 'feetY', 'fitFrom', 'fitHeight', 'pitch']);
+    expect(boss.pitch).toBeCloseTo((4 * Math.PI) / 180, 12);
+  });
+
+  for (const f of FIGHTS) {
+    it(`fits inside the fog and the dome on every band (${f.name})`, () => {
+      for (const band of BANDS) {
+        const { distance } = frameDistance(band.aspect, band.safe, f.fit, boss);
+        // The row's width sets it on a phone (35–55): never further back than the
+        // team camera before it, and well under the cap.
+        const was = frameDistance(band.aspect, band.safe, f.fit, TEAM_CAMERA_867).distance;
+        expect(distance, band.name).toBeLessThanOrEqual(was + 1e-9);
+        expect(distance, band.name).toBeLessThan(boss.maxFitDistance - 10);
+        expect(distance + 10, band.name).toBeLessThan(ARENA_STAGE.skyRadius);
+        for (const [mood, { fog }] of Object.entries(ARENA_MOODS)) {
+          const [, end] = fogFor(fog, distance, [0, 0], boss);
+          expect(end, `${band.name} ${mood}`).toBeGreaterThanOrEqual(distance);
+          // The boss's ground, behind the aim, is well short of the fog's end.
+          expect(distance + 10, `${band.name} ${mood}`).toBeLessThan(end - 20);
+        }
+      }
+    });
+  }
+
+  it("keeps the ground's far rim as fogged as the team camera did, and the boss no hazier", () => {
+    // Babylon's linear fog by distance from the camera (fogStart → fogEnd).
+    const fogAt = (shot: CameraShot, p: Point3, [start, end]: readonly [number, number]) =>
+      Math.min(
+        1,
+        Math.max(
+          0,
+          (Math.hypot(p.x - shot.position.x, p.y - shot.position.y, p.z - shot.position.z) -
+            start) /
+            (end - start),
+        ),
+      );
+    const farRim = (shot: CameraShot): Point3 => {
+      const f = norm({
+        x: shot.target.x - shot.position.x,
+        y: 0,
+        z: shot.target.z - shot.position.z,
+      });
+      return { x: f.x * ARENA_STAGE.groundRadius, y: 0, z: f.z * ARENA_STAGE.groundRadius };
+    };
+    for (const band of BANDS) {
+      const low = new CameraDirector(homes, true, boss).shot(0, band.aspect, band.safe, fight.fit);
+      const was = new CameraDirector(homes, true, TEAM_CAMERA_867).shot(
+        0,
+        band.aspect,
+        band.safe,
+        fight.fit,
+      );
+      for (const [mood, { fog }] of Object.entries(ARENA_MOODS)) {
+        const lowFog = fogFor(fog, low.distance, [0, 0], boss);
+        const wasFog = fogFor(fog, was.distance, [0, 0], TEAM_CAMERA_867);
+        const at = `${band.name} ${mood}`;
+        // Measured: phones 0.79 / 0.86 (was 0.76 / 0.84); the iPad, closer, 0.56 (was 0.60).
+        const rim = fogAt(low, farRim(low), lowFog);
+        expect(rim, at).toBeGreaterThanOrEqual(fogAt(was, farRim(was), wasFog) - 0.05);
+        expect(rim, at).toBeGreaterThan(0.55);
+        const feet = { x: bossHome.x, y: 0, z: bossHome.z };
+        expect(fogAt(low, feet, lowFog), at).toBeLessThanOrEqual(fogAt(was, feet, wasFog) + 0.05);
+      }
+    }
+  });
+
+  for (const f of FIGHTS.slice(0, 3)) {
+    it(`frames the whole team on a 393×852 phone: no friend clipped, eyes in (${f.name})`, () => {
+      for (const band of BANDS.slice(0, 3)) {
+        const director = new CameraDirector(homes, true, boss);
+        const team = teamFaces(f.friends);
+        const shot = director.shot(
+          0,
+          band.aspect,
+          band.safe,
+          f.fit,
+          bossFace(highest, f.bossHeight),
+          team,
+        );
+        f.friends.forEach((friend, i) => {
+          const p = posts[i]!;
+          const at = `${band.name} ${friend.id} at ${String(p.x)}`;
+          // Its body, side to side, inside the screen (M0: the end friends were cut off).
+          for (const side of [-1, 1]) {
+            const edge = project(shot, band.aspect, {
+              x: p.x + side * friend.radius,
+              y: friend.height / 2,
+              z: p.z,
+            });
+            expect(Math.abs(edge.x), at).toBeLessThan(0.97);
+          }
+          // Its eyes and mouth, with a margin at the sides and inside the band.
+          const face = team[i]!;
+          for (const y of [face.low, face.high]) {
+            const e = project(shot, band.aspect, { x: face.x, y, z: face.z });
+            expect(Math.abs(e.x), at).toBeLessThan(0.9);
+            // At rest with the margin; risen (picking, the shorter band) inside it.
+            const margin = band.safe.bottom < 0.7 ? 0 : boss.faceMargin;
+            expect(e.y, at).toBeGreaterThanOrEqual(band.safe.top + margin);
+            expect(e.y, at).toBeLessThanOrEqual(band.safe.bottom - margin);
+          }
+        });
+      }
+    });
+  }
+
+  it('sits the fight low in the band: the team just over the handle, the boss towering behind', () => {
+    const shot = new CameraDirector(homes, true, boss).shot(0, rest.aspect, rest.safe, fight.fit);
+    const was = new CameraDirector(homes, true, TEAM_CAMERA_867).shot(
+      0,
+      rest.aspect,
+      rest.safe,
+      fight.fit,
+    );
+    const feet = (s: CameraShot) =>
+      Math.max(...posts.map((p) => project(s, rest.aspect, { x: p.x, y: 0, z: p.z }).y));
+    // M0: empty floor under the team (0.28 of the screen); now about 0.11.
+    expect(rest.safe.bottom - feet(was)).toBeGreaterThan(0.25);
+    expect(rest.safe.bottom - feet(shot)).toBeLessThan(0.15);
+    expect(feet(shot)).toBeLessThan(rest.safe.bottom);
+    // A low camera: below the boss's head, looking nearly level.
+    expect(shot.position.y).toBeLessThan(was.position.y / 2);
+    // The boss's head stands over the team's.
+    const bossTop = project(shot, rest.aspect, {
+      x: bossHome.x,
+      y: fight.bossHeight,
+      z: bossHome.z,
+    }).y;
+    const teamTop = Math.min(
+      ...posts.map((p) => project(shot, rest.aspect, { x: p.x, y: median.height, z: p.z }).y),
+    );
+    expect(bossTop).toBeLessThan(teamTop - 0.05);
+  });
+
+  for (const band of BANDS) {
+    it(`keeps the boss's eyes and mouth in the band through a windup, its landing and a KO (${band.name})`, () => {
+      for (const span of [highest, lowest]) {
+        const face = bossFace(span, fight.bossHeight);
+        const team = teamFaces(fight.friends);
+        const director = new CameraDirector(homes, false, boss);
+        const beats = BATTLE_CAMERA.boss.beats;
+        const BEATS = [
+          {
+            at: 500,
+            cue: {
+              ...cue,
+              focus: 'b' as const,
+              push: beats.windupPush,
+              shake: 0,
+              roll: 0,
+              ramp: 700,
+              tilt: beats.windupRoll,
+            },
+          },
+          {
+            at: 1200,
+            cue: {
+              ...cue,
+              focus: 'a' as const,
+              push: beats.landingPush,
+              shake: beats.landingShake,
+              roll: 0,
+            },
+          },
+          {
+            at: 2000,
+            cue: {
+              ...cue,
+              focus: 'b' as const,
+              push: BATTLE_CAMERA.koPush,
+              pushDelay: 550,
+              shake: 0,
+              relax: beats.koRelax,
+            },
+          },
+        ];
+        let next = 0;
+        for (let now = 0; now <= 4000; now += 1000 / 60) {
+          const beat = BEATS[next];
+          if (beat && now >= beat.at) {
+            director.cue(beat.cue, now);
+            next++;
+          }
+          const shot = director.shot(now, band.aspect, band.safe, fight.fit, face, team);
+          const top = project(shot, band.aspect, { x: face.x, y: face.high, z: face.z }).y;
+          const bottom = project(shot, band.aspect, { x: face.x, y: face.low, z: face.z }).y;
+          const at = `${band.name} ${now.toFixed(0)}`;
+          expect(top, at).toBeGreaterThanOrEqual(band.safe.top - 1e-9);
+          expect(bottom, at).toBeLessThanOrEqual(band.safe.bottom + 1e-9);
+          expect(shot.distance, at).toBeLessThanOrEqual(boss.maxFitDistance);
+        }
+      }
+    });
+  }
+});
+
+describe('the boss beats in the camera (#190 PR 2)', () => {
+  const beats = BATTLE_CAMERA.boss.beats;
+  const windup = {
+    ...cue,
+    push: beats.windupPush,
+    shake: 0,
+    roll: 0,
+    ramp: 700,
+    tilt: beats.windupRoll,
+  };
+  const rollOf = (shot: CameraShot) => Math.atan2(shot.up.x, shot.up.y);
+
+  it('pushes in slowly across the windup, leaning a touch, then lets go after the beat', () => {
+    const director = new CameraDirector(homes, false);
+    const base = director.shot(0, 0.46, safe, fit).distance;
+    director.cue(windup, 0);
+    let last = base;
+    for (let now = 0; now <= 700; now += 1000 / 60) {
+      const d = director.shot(now, 0.46, safe, fit).distance;
+      // A slow, steady push: closer every frame, no jump.
+      expect(d).toBeLessThanOrEqual(last + 1e-9);
+      expect(last - d).toBeLessThan(base * 0.01);
+      last = d;
+    }
+    expect(director.moving(600)).toBe(true);
+    const held = director.shot(700, 0.46, safe, fit);
+    expect(held.distance / base).toBeCloseTo(1 - beats.windupPush, 2);
+    expect(rollOf(held)).toBeGreaterThan(beats.windupRoll * 0.9);
+    // The next beat lets the lean go, eased; the push relaxes on its own.
+    director.rest();
+    let shot = held;
+    for (let now = 716; now <= 3500; now += 1000 / 60) shot = director.shot(now, 0.46, safe, fit);
+    expect(Math.abs(rollOf(shot))).toBeLessThan(1e-4);
+    expect(shot.distance / base).toBeGreaterThan(0.995);
+    expect(director.moving(3500)).toBe(false);
+  });
+
+  it('starts the slow push from wherever the last beat left it: no jump', () => {
+    const director = new CameraDirector(homes, false);
+    const base = director.shot(0, 0.46, safe, fit).distance;
+    director.cue({ ...cue, push: BATTLE_CAMERA.followPush, shake: 0 }, 0);
+    let before = base;
+    for (let now = 0; now <= 300; now += 1000 / 60)
+      before = director.shot(now, 0.46, safe, fit).distance;
+    expect(before).toBeLessThan(base * 0.99);
+    director.cue(windup, 316);
+    const first = director.shot(316 + 1000 / 60, 0.46, safe, fit).distance;
+    expect(Math.abs(first - before)).toBeLessThan(base * 0.01);
+  });
+
+  it('pulls back slowly after the boss is tuckered out', () => {
+    const after = (relax?: number) => {
+      const director = new CameraDirector(homes, false);
+      const base = director.shot(0, 0.46, safe, fit).distance;
+      director.cue(
+        { ...cue, push: BATTLE_CAMERA.koPush, shake: 0, ...(relax ? { relax } : {}) },
+        0,
+      );
+      let d = base;
+      for (let now = 0; now <= 1200; now += 1000 / 60)
+        d = director.shot(now, 0.46, safe, fit).distance;
+      return d / base;
+    };
+    // Still pushed in where a plain KO has nearly relaxed.
+    expect(after(beats.koRelax)).toBeLessThan(after() - 0.02);
+  });
+
+  it('with reduced motion: no push, ramp, lean or shake, a snap follow', () => {
+    const director = new CameraDirector(homes, true, cameraFor(true));
+    const base = director.shot(0, 0.46, safe, fit).distance;
+    director.cue({ ...windup, shake: 0.2 }, 0);
+    const shot = director.shot(16, 0.46, safe, fit);
+    expect(shot.distance).toBeCloseTo(base, 9);
+    expect(rollOf(shot)).toBe(0);
+    expect(director.moving(16)).toBe(false);
   });
 });
