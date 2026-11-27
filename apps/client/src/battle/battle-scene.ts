@@ -928,23 +928,14 @@ export class BattleScene {
 
   /**
    * The entrance's stomp lands (#190 PR 3): the boss camera's landing thump
-   * (its push and shake, none under reduced motion), as a windup's landing has.
+   * (its push and shake, none under reduced motion), as a windup's landing has,
+   * keeping whatever lean the picker gave the framing.
    */
   stomp(now: number): void {
     if (this.#options.team === undefined) return;
     const beats = BATTLE_CAMERA.boss.beats;
-    const reduced = this.#options.reducedMotion;
-    this.#camera.cue(
-      {
-        focus: null,
-        push: reduced ? 0 : beats.landingPush,
-        pushDelay: 0,
-        shake: reduced ? 0 : beats.landingShake,
-        shakeDelay: 0,
-        roll: 0,
-      },
-      now,
-    );
+    // Keeps the picker's lean (a cue would pull the framing back to the middle).
+    this.#camera.thump(beats.landingPush, beats.landingShake, now);
   }
 
   /** Shows or hides the sparkle shield over a side's squishy (from its pill's chips). */

@@ -156,6 +156,39 @@ describe('the BIG squishy arrives (#190 PR 3)', () => {
     expect(none + cardHeight).toBeLessThanOrEqual(band.bottom * height);
   });
 
+  it('finds a spot clear of the face and the team whenever the band has one', () => {
+    // A small deterministic generator: many layouts, the face anywhere in the band.
+    let seed = 7;
+    const rand = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const gap = BOSS_ENTRANCE.cardGapPx;
+    for (let i = 0; i < 2000; i += 1) {
+      const height = 852;
+      const cardHeight = 60 + rand() * 50;
+      const top = 0.03 + rand() * 0.2;
+      const band = { top, bottom: top + 0.2 + rand() * 0.5 };
+      const faceTop = band.top + rand() * (band.bottom - band.top - 0.05);
+      const face = { top: faceTop, bottom: faceTop + 0.03 + rand() * 0.06 };
+      const teamTop = face.bottom + rand() * 0.15;
+      const at = cardTop({ band, face, teamTop, height, cardHeight });
+      const clearAt = (t: number) => {
+        const bottom = t + cardHeight;
+        const offFace = bottom + gap <= face.top * height || t >= face.bottom * height + gap;
+        return offFace && bottom + gap <= teamTop * height;
+      };
+      let any = false;
+      for (let t = band.top * height + gap; t + cardHeight + gap <= band.bottom * height; t += 1) {
+        if (clearAt(t)) any = true;
+      }
+      if (any)
+        expect(clearAt(at), JSON.stringify({ band, face, teamTop, cardHeight, at })).toBe(true);
+      // Inside the band whenever the card fits in it.
+      if (cardHeight + 2 * gap <= (band.bottom - band.top) * height) {
+        expect(at).toBeGreaterThanOrEqual(band.top * height + gap);
+        expect(at + cardHeight).toBeLessThanOrEqual(band.bottom * height - gap);
+      }
+    }
+  });
+
   it('moves only transform and opacity', () => {
     expect(entranceCss).not.toMatch(/transition:[^;]*(top|left|width|height)/);
   });

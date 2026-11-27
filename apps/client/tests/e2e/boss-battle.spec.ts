@@ -635,46 +635,75 @@ test.describe('a mini-boss fight (#190)', () => {
     // Read in the page in one go: the whole entrance is only 2.6 s.
     const seen = await page.evaluate(
       () =>
-        new Promise<{ early: boolean[]; card: string; hint: string; skipped: boolean }>(
-          (resolve) => {
-            const early: boolean[] = [];
-            type Hook = {
-              __heartpatch: {
-                battle: () => { entrance: { at: number; skippable: boolean } | null };
+        new Promise<{
+          early: boolean[];
+          card: string;
+          hint: string;
+          clear: { face: boolean; team: boolean; band: boolean } | null;
+          skipped: boolean;
+        }>((resolve) => {
+          type Box = { top: number; bottom: number };
+          type Hook = {
+            __heartpatch: {
+              battle: () => {
+                entrance: { at: number; skippable: boolean } | null;
+                scene: { framing: { band: Box; face: Box | null; team: Box[] } | null } | null;
               };
             };
-            const battle = () => (window as unknown as Hook).__heartpatch.battle().entrance;
-            const look = (): void => {
-              const e = battle();
-              const layer = document.querySelector<HTMLElement>('.boss-entrance');
-              if (!e || !layer) {
-                requestAnimationFrame(look);
-                return;
-              }
-              if (!e.skippable) {
-                // Before the stomp lands a tap does nothing.
-                layer.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
-                early.push(battle() !== null && e.at < 600);
-                requestAnimationFrame(look);
-                return;
-              }
-              const card = layer.querySelector<HTMLElement>('.boss-entrance-card');
-              const info = {
-                early,
-                card: card?.textContent ?? '',
-                hint: layer.querySelector('.boss-entrance-skip')?.textContent ?? '',
-              };
+          };
+          const early: boolean[] = [];
+          const read = () => (window as unknown as Hook).__heartpatch.battle();
+          const look = (): void => {
+            const b = read();
+            const e = b.entrance;
+            const layer = document.querySelector<HTMLElement>('.boss-entrance');
+            const card = layer?.querySelector<HTMLElement>('.boss-entrance-card');
+            if (!e || !layer || !card) {
+              requestAnimationFrame(look);
+              return;
+            }
+            if (!e.skippable) {
+              // Before the stomp lands a tap does nothing.
+              layer.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
               layer.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
-              resolve({ ...info, skipped: battle() === null });
+              early.push(read().entrance !== null && e.at < 600);
+              requestAnimationFrame(look);
+              return;
+            }
+            // Wait for the card to be fully in, then check it against the boss's face and the team.
+            if (Number(getComputedStyle(card).opacity) < 0.99) {
+              requestAnimationFrame(look);
+              return;
+            }
+            const h = window.innerHeight;
+            const r = card.getBoundingClientRect();
+            const f = b.scene?.framing ?? null;
+            const off = (box: Box) => r.bottom <= box.top * h || r.top >= box.bottom * h;
+            const clear = f
+              ? {
+                  face: f.face ? off(f.face) : true,
+                  team: f.team.every(off),
+                  band: r.top >= f.band.top * h && r.bottom <= f.band.bottom * h,
+                }
+              : null;
+            const info = {
+              early,
+              card: card.textContent,
+              hint: layer.querySelector('.boss-entrance-skip')?.textContent ?? '',
+              clear,
             };
-            look();
-          },
-        ),
+            layer.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+            layer.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+            resolve({ ...info, skipped: read().entrance === null });
+          };
+          look();
+        }),
     );
-    expect(seen.early.length).toBeGreaterThan(0);
+    // Any pre-stomp frame the page saw stayed unskippable (a slow runner may see none).
     expect(seen.early.every(Boolean)).toBe(true);
     expect(seen.card).toContain('A BIG squishy!');
     expect(seen.hint).toBe('Tap to skip');
+    expect(seen.clear).toEqual({ face: true, team: true, band: true });
     expect(seen.skipped).toBe(true);
     await expect(page.locator('.boss-entrance')).toHaveCount(0);
     // The picker comes up for the first squishy.

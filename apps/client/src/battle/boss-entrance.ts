@@ -31,6 +31,8 @@ export const BOSS_ENTRANCE = {
   cardPopFrom: 0.86, // TUNE:
   /** The boss's head and tuft over its face, in face-heights (the card stays clear of it). */
   headroom: 1.5, // TUNE:
+  /** How long the click after a skipping tap's lift is swallowed, ms (as `RARE_REVEAL.clickGraceMs`). */
+  clickGraceMs: 350, // TUNE:
   /** The card's gap from the boss's face and the team's eyes, px. */
   cardGapPx: 10, // TUNE:
 } as const;
@@ -154,26 +156,41 @@ export interface CardLayout {
 }
 
 /**
- * The card's top, px, never over the boss's face or the team's eyes, inside
- * the band: first in the sky over the boss's head (the face's top less
- * `headroom` face-heights for the head and its tuft), else in the gap between
- * the face and the team (over its tummy), else just under the face.
+ * The card's top, px, inside the band and never over the boss's face or the
+ * team's eyes. In order: the sky over the boss's head (the face's top less
+ * `headroom` face-heights for the head and its tuft), the gap between the face
+ * and the team (over its tummy), the band's top, the band's bottom. When no
+ * spot is clear of both (a band too short for it), the band's top: the card
+ * fades in 0.2 s later and is gone by 2.4 s, and the face is the one thing it
+ * must not hide, so it never goes below the face's top there.
  */
 export function cardTop(layout: CardLayout): number {
   const { band, face, teamTop, height, cardHeight } = layout;
   const gap = BOSS_ENTRANCE.cardGapPx;
   const lo = band.top * height + gap;
   const hi = band.bottom * height - cardHeight - gap;
-  const place = (want: number): number => Math.round(Math.max(lo, Math.min(hi, want)));
+  const place = (want: number): number => Math.max(lo, Math.min(hi, want));
   if (!face) return place((lo + hi) / 2);
   const faceTop = face.top * height;
   const faceBottom = face.bottom * height;
   const headTop = faceTop - (faceBottom - faceTop) * BOSS_ENTRANCE.headroom;
+  const team = teamTop !== null ? teamTop * height : Number.POSITIVE_INFINITY;
+  /** Clear of the face and the team's eyes (each with the gap). */
+  const clear = (top: number): boolean => {
+    const bottom = top + cardHeight;
+    const offFace = bottom + gap <= faceTop || top >= faceBottom + gap;
+    return offFace && bottom + gap <= team;
+  };
   const skyBottom = headTop - gap - cardHeight;
-  if (skyBottom >= lo) return place((lo + skyBottom) / 2);
-  const from = faceBottom + gap;
-  const to = teamTop !== null ? teamTop * height - cardHeight - gap : hi;
-  return place(to >= from ? (from + to) / 2 : from);
+  const tummyTo = Math.min(team - gap, band.bottom * height - gap) - cardHeight;
+  const candidates = [
+    skyBottom >= lo ? place((lo + skyBottom) / 2) : null,
+    tummyTo >= faceBottom + gap ? place((faceBottom + gap + tummyTo) / 2) : null,
+    place(lo),
+    place(hi),
+  ];
+  for (const top of candidates) if (top !== null && clear(top)) return top;
+  return place(lo);
 }
 
 /**
@@ -252,26 +269,31 @@ export function showBossEntrance(host: HTMLElement, options: EntranceOptions): B
   const words = entranceCard(options.bossName);
   const title = doc.createElement('div');
   title.className = 'boss-entrance-title';
-  title.textContent = words.title;
   const name = doc.createElement('div');
   name.className = 'boss-entrance-name';
-  name.textContent = words.name;
   card.append(title, name);
   const hint = doc.createElement('div');
   hint.className = 'boss-entrance-skip';
   hint.textContent = 'Tap to skip';
   root.append(card, hint);
   host.append(root);
+  // Words after the card is in the page, so a screen reader announces the status.
+  title.textContent = words.title;
+  name.textContent = words.name;
 
   const start = clock.now();
   let last = -1;
   let done = false;
   let frame = 0;
+  /** A finger is down on the layer; `due`: the entrance ran out meanwhile (it ends on the lift). */
+  let pressed = false;
+  let due = false;
   const at = (): number => clock.now() - start;
   const finish = (notify: boolean): void => {
     if (done) return;
     done = true;
     if (frame !== 0) view?.cancelAnimationFrame(frame);
+    doc.removeEventListener('keydown', onKey, true);
     root.remove();
     options.pose(entranceAt(BOSS_ENTRANCE.totalMs, reducedMotion));
     if (notify) options.onDone();
@@ -281,10 +303,16 @@ export function showBossEntrance(host: HTMLElement, options: EntranceOptions): B
     if (done) return;
     const t = at();
     const state = entranceAt(t, reducedMotion);
-    if (stompedBetween(last, t)) options.onStomp();
+    // Back from a hidden tab past the end: no lone stomp, it just ends.
+    if (stompedBetween(last, t) && !state.done) options.onStomp();
     last = t;
     if (state.done) {
-      finish(true);
+      // Ends on time, unless a tap is halfway through: then when that tap lifts.
+      if (pressed) {
+        due = true;
+        options.pose(state);
+        card.style.opacity = '0';
+      } else finish(true);
       return;
     }
     options.pose(state);
@@ -297,34 +325,73 @@ export function showBossEntrance(host: HTMLElement, options: EntranceOptions): B
     root.classList.toggle('boss-entrance-skippable', state.skippable);
     frame = view?.requestAnimationFrame(draw) ?? 0;
   };
-  // A tap after the stomp skips; the click the browser sends after the lift
-  // is swallowed so it can't land on the picker the end brings back.
+  const skippable = (): boolean => !done && (due || entranceAt(at(), reducedMotion).skippable);
+  const skip = (): boolean => {
+    if (!skippable()) return false;
+    finish(true);
+    return true;
+  };
+  // As the rare find's moment (rare-reveal.ts): a skip ends as the finger
+  // lifts, and the click the browser sends right after is swallowed before it
+  // reaches the picker the end uncovers. Nothing calls preventDefault on the
+  // press: WebKit then sends no click at all, so a skip must not wait for one.
   const swallow = (event: MouseEvent): void => {
     event.preventDefault();
     event.stopPropagation();
   };
-  const skip = (): boolean => {
-    if (done || !entranceAt(at(), reducedMotion).skippable) return false;
-    finish(true);
-    return true;
+  const press = (): void => {
+    pressed = true;
   };
-  const tap = (): void => {
-    if (!skip()) return;
-    doc.addEventListener('click', swallow, { capture: true, once: true });
-    view?.setTimeout(() => {
+  const lift = (): void => {
+    if (!pressed) return;
+    pressed = false;
+    if (!skippable()) return;
+    // Disarmed by the next press anywhere, or soon after: a lift with no click
+    // (a long press) must not eat the kid's next real tap.
+    const disarm = (): void => {
       doc.removeEventListener('click', swallow, { capture: true });
-    }, 400);
+      doc.removeEventListener('pointerdown', disarm, { capture: true });
+    };
+    doc.addEventListener('click', swallow, { capture: true, once: true });
+    doc.addEventListener('pointerdown', disarm, { capture: true, once: true });
+    view?.setTimeout(disarm, BOSS_ENTRANCE.clickGraceMs);
+    finish(true);
   };
-  root.addEventListener('pointerup', tap);
+  function onKey(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Escape') return;
+    // Typing in a text box (chat) is typing, not a skip.
+    const target = event.target;
+    if (
+      target instanceof HTMLElement &&
+      (target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
+    ) {
+      return;
+    }
+    if (!skippable()) return;
+    event.preventDefault();
+    event.stopPropagation();
+    finish(true);
+  }
+  // Pointer events, and touch events too: whichever the browser sends first.
+  root.addEventListener('pointerdown', press);
+  root.addEventListener('touchstart', press, { passive: true });
+  root.addEventListener('pointerup', lift);
+  root.addEventListener('touchend', lift);
+  root.addEventListener('pointercancel', () => {
+    pressed = false;
+    if (due) finish(true);
+  });
+  // A click with no press seen (a screen reader's tap) skips too, after the stomp.
   root.addEventListener('click', (event) => {
     swallow(event);
     skip();
   });
+  doc.addEventListener('keydown', onKey, true);
   draw();
   return {
     element: root,
     at,
-    skippable: () => !done && entranceAt(at(), reducedMotion).skippable,
+    skippable,
     skip,
     dispose: () => {
       finish(false);

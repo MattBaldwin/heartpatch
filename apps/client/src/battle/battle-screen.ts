@@ -1780,9 +1780,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         onDone: () => {
           entrance = null;
           if (battle?.id !== next.id) return;
+          // Held playback plays now. Nothing else to do: the picker never went
+          // away and its lean is still on (no settle, which rests the camera).
           gate.end();
-          // Nothing was waiting: the picker comes back up.
-          if (queue.length === 0) settle();
         },
       });
     };
