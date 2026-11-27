@@ -198,8 +198,11 @@ export interface BossBarRepo {
     userId: string,
     windowId: string,
   ) => Promise<BossEncounterRow | null>;
-  /** Bars due a settle: open past their close (they doze), or settled with a thanks unpaid. */
-  barsToSettle: (at: Date) => Promise<BossBarDbRow[]>;
+  /**
+   * Bars due a settle: open past their close (they doze), or settled with a
+   * contributor (`minFights` chips before the close) whose thanks is unpaid.
+   */
+  barsToSettle: (at: Date, minFights: number) => Promise<BossBarDbRow[]>;
   /** Active real Keepers on the patch (the goal): computer patch-mates never fight. */
   activeKeepers: (mapId: string) => Promise<number>;
   /** Tiles with Twinkle Lights on them (`buildings.kind` `lights`), for the head start. */
@@ -665,7 +668,7 @@ export function createBossRepo(db: Executor): BossRepo {
       return row ?? null;
     },
 
-    barsToSettle: async (at) => {
+    barsToSettle: async (at, minFights) => {
       const owed = db
         .select({ one: sql`1` })
         .from(bossBarChips)
@@ -681,9 +684,12 @@ export function createBossRepo(db: Executor): BossRepo {
           and(
             eq(bossBarChips.mapId, bossBars.mapId),
             eq(bossBarChips.windowId, bossBars.windowId),
+            lt(bossBarChips.createdAt, bossBars.closesAt),
             isNull(bossEncounters.thankedAt),
           ),
-        );
+        )
+        .groupBy(bossBarChips.userId)
+        .having(sql`count(*) >= ${minFights}`);
       return db
         .select()
         .from(bossBars)

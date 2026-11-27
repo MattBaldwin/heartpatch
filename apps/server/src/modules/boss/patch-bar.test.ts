@@ -9,6 +9,7 @@ import { createDbClient, withTransaction, type Database, type DbClient } from '.
 import { bossWindows, buildings, patchTrees } from '../../db/schema.js';
 import { createBattlesRepo, type BattleRow } from '../battles/repo.js';
 import { BOSS_RULES, STAND_IN_BOSS, bossHarness, type BossPlayer } from '../../../tests/boss.js';
+import { thankKeeper } from './patch-bar.js';
 import { createMinibossBattlePort } from './service.js';
 
 // The Christmas Eve patch bar (#37 X2).
@@ -319,6 +320,84 @@ describe.skipIf(!url)('the Christmas Eve patch bar (#37 X2, needs DATABASE_URL)'
     expect(ask.json<{ error: { message: string } }>().error.message).toBe(
       'Fill the patch bar together first, then ask!',
     );
+  });
+
+  it('a fight finished after 10:00 Dec 25 neither chips nor makes a contributor', async () => {
+    await h.start();
+    h.clock.setTime(DENVER('2026-12-24T12:00:00').getTime());
+    const { mapId, keepers } = await patchOf(2);
+    const [kid, late] = keepers as [BossPlayer, BossPlayer];
+    await toEve(mapId);
+    await h.act(kid, await h.fight(kid, mapId), { type: 'forfeit' });
+    // Christmas morning: three fresh tries after the Eve's three.
+    h.clock.setTime(DENVER('2026-12-24T18:00:00').getTime());
+    for (let i = 0; i < 2; i++) await h.act(kid, await h.fight(kid, mapId), { type: 'forfeit' });
+    expect((await visit(kid, mapId))?.triesLeftToday).toBe(0);
+    h.clock.setTime(DENVER('2026-12-25T00:00:00').getTime());
+    expect((await visit(kid, mapId))?.triesLeftToday).toBe(BOSS_RULES.triesPerDay);
+    // The late Keeper starts at 09:58 and finishes at 10:01, after the close.
+    h.clock.setTime(DENVER('2026-12-25T09:58:00').getTime());
+    const going = await h.fight(late, mapId);
+    h.clock.setTime(DENVER('2026-12-25T10:00:00').getTime());
+    await h.sweep([mapId]);
+    h.clock.setTime(DENVER('2026-12-25T10:01:00').getTime());
+    const ended = await h.act(late, going, { type: 'forfeit' });
+    expect(ended.status).not.toBe('active');
+    expect((await chips(mapId)).map((c) => c.userId)).toEqual([kid.id, kid.id, kid.id]);
+    expect(
+      (await eventsOf(mapId, 'boss.chipped')).filter(
+        (e) => (e.payload as { userId: string }).userId === late.id,
+      ),
+    ).toEqual([]);
+    await h.sweep([mapId]);
+    const thanked = await eventsOf(mapId, 'boss.thanked');
+    expect(thanked.map((e) => (e.payload as { userId: string }).userId)).toEqual([kid.id]);
+    expect(await thanksLedger(mapId, late.id)).toEqual([]);
+  });
+
+  it('a fight finished just before the close but behind the doze still makes a contributor', async () => {
+    const rules = BOSS_RULES;
+    await h.start(rules);
+    h.clock.setTime(DENVER('2026-12-24T12:00:00').getTime());
+    const { mapId, keepers } = await patchOf(1);
+    const kid = keepers[0]!;
+    await toEve(mapId);
+    const row = (await createBattlesRepo(db).findBattle((await h.fight(kid, mapId)).id))!;
+    // The sweep dozed the bar first (as if it took the lock first at 10:00)…
+    h.clock.setTime(DENVER('2026-12-25T10:00:00').getTime());
+    await h.sweep([mapId]);
+    expect((await bar(mapId)).state).toBe('dozed');
+    // …and the finish stamped 09:59:59 reaches the bar after it.
+    const at = DENVER('2026-12-25T09:59:59');
+    const events = await withTransaction(db, (tx) =>
+      createMinibossBattlePort(rules).ended(tx, bossOut(row), 'a', at),
+    );
+    expect(events.map((e) => e.type)).toEqual(['boss.chipped']);
+    // The dozed bar never moves; the Keeper is thanked by the next sweep.
+    expect(await bar(mapId)).toMatchObject({ state: 'dozed', chipped: 0 });
+    await h.sweep([mapId]);
+    expect(await eventsOf(mapId, 'boss.thanked')).toHaveLength(1);
+  });
+
+  it('two thanks at once pay one', async () => {
+    const rules = withBar({ goalPerKeeper: 50, minGoal: 100 });
+    await h.start(rules);
+    h.clock.setTime(DENVER('2026-12-24T12:00:00').getTime());
+    const { mapId, keepers } = await patchOf(1);
+    const kid = keepers[0]!;
+    await toEve(mapId);
+    await h.playOut(kid, await h.fight(kid, mapId));
+    expect((await bar(mapId)).state).toBe('fell');
+    const fell = await bar(mapId);
+    const paid = await Promise.all([
+      thankKeeper(db, rules, fell, kid.id, h.clock),
+      thankKeeper(db, rules, fell, kid.id, h.clock),
+      h.sweep([mapId]),
+    ]);
+    expect(paid.filter((p) => p === true).length).toBeLessThanOrEqual(1);
+    expect(await eventsOf(mapId, 'boss.thanked')).toHaveLength(1);
+    const ledger = await thanksLedger(mapId, kid.id);
+    expect(Object.fromEntries(ledger.map((l) => [l.itemId, l.delta]))).toEqual(EVE.fallBundle);
   });
 
   it('keys tries by window: weekly tries on Dec 24 morning leave the Eve’s three', async () => {

@@ -89,7 +89,9 @@ export async function chipOnFinish(
   at: Date,
 ): Promise<NewGameEvent[]> {
   const repo = createBossRepo(tx);
-  if (bar.state === 'dozed' || at >= bar.closesAt) return [];
+  // A fight finished after the close neither chips nor makes a contributor
+  // (owner answer 2: "finished at least one fight by 10:00").
+  if (at >= bar.closesAt) return [];
   const boss = battle.state.sides.b.squishies[0];
   if (!boss) return [];
   const points = chipPoints(eve.bar, boss);
@@ -102,6 +104,26 @@ export async function chipOnFinish(
     createdAt: at,
   });
   if (!fresh) return [];
+  // Finished before the close but behind the sweep's doze (it took the bar
+  // lock first): the chip still makes its Keeper a contributor, and the next
+  // sweep thanks them, but a dozed bar never moves or falls.
+  if (bar.state === 'dozed') {
+    return [
+      {
+        mapId: bar.mapId,
+        type: 'boss.chipped',
+        actorUserId: battle.playerUserId,
+        payload: {
+          window: bar.windowId,
+          userId: battle.playerUserId,
+          battleId: battle.id,
+          points,
+          chipped: bar.chipped,
+          goal: bar.goal,
+        },
+      },
+    ];
+  }
   const chipped = bar.chipped + points;
   const falls = bar.state === 'open' && chipped >= bar.goal;
   const fellAt = falls ? at : bar.fellAt;
@@ -195,7 +217,9 @@ export async function thankKeeper(
 
 /**
  * The sweep's bar pass (#37 X2): an open bar past its close dozes off (its
- * own transaction, under the bar's lock, so a last-second fall wins), then
+ * own transaction, under the bar's lock: a fall committed first stands, and
+ * a fight finished before the close but locked out behind the doze still
+ * counts as a contributor's), then
  * every settled bar's unpaid contributors are thanked. Returns the patches
  * whose live sync should run. Idempotent: a retry pays nobody twice.
  */
@@ -208,7 +232,7 @@ export async function settleBars(
   const eve = rules.christmasEve;
   if (!eve) return [];
   const touched = new Set<string>();
-  for (const due of await createBossRepo(db).barsToSettle(at)) {
+  for (const due of await createBossRepo(db).barsToSettle(at, eve.contributorMinFights)) {
     if (only && !only.includes(due.mapId)) continue;
     let bar = due;
     if (bar.state === 'open') {

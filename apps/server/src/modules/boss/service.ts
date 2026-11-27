@@ -396,7 +396,11 @@ export function createBossService(options: BossServiceOptions): BossService {
         tile: { q: window.q, r: window.r },
         species: met ? window.speciesId : null,
         state,
-        triesLeftToday: state === 'here' ? await triesLeft(db, map, window, user.id, at) : 0,
+        // On the Eve a Keeper who befriended it can still chip in (#37 X2).
+        triesLeftToday:
+          state === 'here' || (state === 'friend' && window.kind === 'christmas-eve')
+            ? await triesLeft(db, map, window, user.id, at)
+            : 0,
         ...(event ? { event } : {}),
       };
     },
