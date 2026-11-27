@@ -85,8 +85,13 @@ test.afterEach(async ({ browser }, testInfo) => {
 
 const HANDLES = ['adventure', 'heartpatch'] as const;
 
-/** Sprout's one-time tips (sprout-tips.ts `SPROUT_TIPS`). */
-const SPROUT_TIP_IDS = ['trading-post', 'hollowed-village', 'day-three', 'first-evolution'];
+/** Sprout's one-time tips: keep in step with sprout-tips.ts `SPROUT_TIPS`, or a new one takes the top again. */
+const SPROUT_TIP_IDS = [
+  'trading-post',
+  'hollowed-village',
+  'day-three',
+  'first-evolution',
+] as const;
 
 /**
  * The card stays under the top row (the name pill and the corner buttons) on
