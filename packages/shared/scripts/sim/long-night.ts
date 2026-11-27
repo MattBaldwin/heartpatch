@@ -1,7 +1,7 @@
 import { HOLLOW_RULES } from '../../src/data/hollow.js';
 import { HOME_BASE_RULES } from '../../src/data/home-base.js';
 import { LONG_NIGHT_RULES } from '../../src/data/long-night.js';
-import { LONG_NIGHT_SECRETS } from '../../src/data/server/long-night.js';
+import { LONG_NIGHT_SECRETS, QUIET_NIGHTS } from '../../src/data/server/long-night.js';
 import { addDays } from '../../src/home/local-date.js';
 import {
   firstHollowNight,
@@ -75,7 +75,7 @@ export function simulatePatch(
   let latest: LocalDate | null = null;
   for (let d = 0; d < config.monthDays; d++) {
     const night = addDays(start, d);
-    if (!isLongNight(LONG_NIGHT_RULES.defaultWeekday, night, latest)) continue;
+    if (!isLongNight(LONG_NIGHT_RULES.defaultWeekday, night, latest, QUIET_NIGHTS)) continue;
     latest = night;
     const keepers = joins.flatMap((joinDay, seat) => {
       const joined = { date: addDays(start, joinDay), minute: noon };

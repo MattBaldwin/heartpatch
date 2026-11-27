@@ -5,12 +5,12 @@ import {
   replayBattle,
 } from '@heartpatch/shared';
 import { BOSS_EVENTS, bossWeekOf, type BossEventRules } from '@heartpatch/shared/server';
-import { and, eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
-import { bossEncounters, bossWindows, sessions } from '../../db/schema.js';
+import { bossEncounters, bossWindows } from '../../db/schema.js';
 import { canonicalTimeZone, localDate, mapLocalTime } from '../../lib/time.js';
 import { createBattlesRepo, setupOf } from '../battles/repo.js';
+import { createBossRepo } from './repo.js';
 import { defaultBattleContent } from '../battles/service.js';
 import { BOSS_RULES, BOSS_TEAM, STAND_IN_BOSS, bossHarness } from '../../../tests/boss.js';
 import { plannedBossVisit } from './service.js';
@@ -209,21 +209,27 @@ describe.skipIf(!url)('the Christmas Eve visit (#37 X1, needs DATABASE_URL)', ()
     h.clock.setTime(DENVER('2026-12-24T16:05:00').getTime());
     expect(await h.sweep([mapId])).toBe(1);
     const row = (await windowRow(mapId, '2026-12-21'))!;
+    // The weekly opening stays, so the week's fights still belong to this row.
     expect(row).toMatchObject({
       kind: 'christmas-eve',
-      opensAt: DENVER('2026-12-24T16:00:00'),
+      opensAt: DENVER('2026-12-23T16:00:00'),
       endsAt: DENVER('2026-12-25T10:00:00'),
       q: 0,
       r: 0,
     });
+    const fought = await createBossRepo(db).visitOf(mapId, DENVER('2026-12-23T17:00:00'));
+    expect(fought?.windowId).toBe('2026-12-21');
     // Its weekly goes are cleared, so the Keeper meets the Eve fresh.
     expect(
-      await db
-        .select()
-        .from(bossEncounters)
-        .where(and(eq(bossEncounters.mapId, mapId), eq(bossEncounters.windowId, '2026-12-21'))),
+      await db.query.bossEncounters.findMany({
+        where: (t, { and: all, eq: is }) => all(is(t.mapId, mapId), is(t.windowId, '2026-12-21')),
+      }),
     ).toEqual([]);
     expect((await visitOf(owner, mapId))?.event?.kind).toBe('christmas-eve');
+    // The map shows the Eve's own opening, not the weekly one.
+    expect(await eveOf(owner, mapId)).toEqual({
+      opensAt: DENVER('2026-12-24T16:00:00').toISOString(),
+    });
     // Once: a second sweep has nothing new.
     expect(await h.sweep([mapId])).toBe(0);
     const appeared = await db.query.gameEvents.findMany({
@@ -235,12 +241,8 @@ describe.skipIf(!url)('the Christmas Eve visit (#37 X1, needs DATABASE_URL)', ()
   it('stays out Christmas morning when the Eve is a Sunday (2028), then the bag resumes', async () => {
     await h.start();
     h.clock.setTime(DENVER('2028-12-24T16:30:00').getTime());
-    const owner = await h.player();
     // The harness's session lasts 30 real days: stretch it to 2029.
-    await db
-      .update(sessions)
-      .set({ expiresAt: new Date('2029-01-31T00:00:00Z') })
-      .where(eq(sessions.userId, owner.id));
+    const owner = await h.player(new Date('2029-01-31T00:00:00Z'));
     const mapId = await h.patch(owner);
     await h.grow(mapId, owner, 20);
     expect((await visitOf(owner, mapId))?.window.id).toBe('2028-12-18');

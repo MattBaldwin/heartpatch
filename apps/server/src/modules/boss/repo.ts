@@ -47,15 +47,16 @@ export interface BossRepo {
   insertWindow: (row: BossWindowRow) => Promise<BossWindowRow | null>;
   /**
    * Christmas Eve (#37 X1): turns the week's pinned weekly visit into the
-   * Eve visit (kind, boss, times; the tile stays), once: null if it isn't a
-   * weekly row any more. Its Keepers' goes at the weekly boss are cleared,
+   * Eve visit (kind, boss, close; the tile stays), once: null if it isn't a
+   * weekly row any more. `opens_at` stays the weekly one, so the week's
+   * fights (`visitOf`, by start time) still belong to this row. Its Keepers' goes at the weekly boss are cleared,
    * so everyone meets the Eve visit fresh (a weekly win would read as
    * "beaten"). Only a visit pinned before X1 shipped is ever converted.
    */
   convertToChristmasEve: (
     mapId: string,
     windowId: string,
-    visit: Pick<BossWindowRow, 'speciesId' | 'opensAt' | 'endsAt'>,
+    visit: Pick<BossWindowRow, 'speciesId' | 'endsAt'>,
   ) => Promise<BossWindowRow | null>;
   /** The patch's Christmas Eve visit out at `at` (`MapView.christmas.eve`), or null. */
   findChristmasEve: (mapId: string, at: Date) => Promise<BossWindowRow | null>;

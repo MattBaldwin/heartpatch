@@ -3,6 +3,7 @@ import {
   GROWTH_RULES,
   type BossVisit,
   type BossVisitEvent,
+  type BossWindowKind,
   type PublicUser,
 } from '@heartpatch/shared';
 import {
@@ -14,6 +15,7 @@ import {
   christmasEveVisitFor,
   type BossBagEntry,
   type BossEventRules,
+  type ChristmasEveGates,
 } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
@@ -69,18 +71,8 @@ export interface BossService {
   ) => Promise<BefriendResult & { battle: Awaited<ReturnType<BattlesService['get']>> }>;
 }
 
-/** One visit's level gates: the weekly ones, or Christmas Eve's lowered ones (#37 X1). */
-export interface BossGates {
-  /** A Keeper whose Partner is under this sees it but can't fight yet. */
-  minPlayerLevel: number;
-  /** The patch gate to open it (some member's Partner this grown); null: none. */
-  minPartnerLevel: number | null;
-  levelBonus: number;
-  minLevel: number;
-}
-
-/** The gates of a `boss_windows` row of this kind (rules unchanged for a weekly visit). */
-export function bossGatesFor(kind: string, rules: BossEventRules): BossGates {
+/** The gates of a `boss_windows` row of this kind: the weekly ones, or Christmas Eve's lowered ones (#37 X1). */
+export function bossGatesFor(kind: string, rules: BossEventRules): ChristmasEveGates {
   const eve = rules.christmasEve;
   if (kind === 'christmas-eve' && eve) return eve.gates;
   return {
@@ -100,7 +92,7 @@ export function bossVisitEvent(window: BossWindowRow): BossVisitEvent | undefine
 
 /** A week's visit as instants, before it's pinned. */
 export interface PlannedVisit {
-  kind: 'weekly' | 'christmas-eve';
+  kind: BossWindowKind;
   boss: BossBagEntry;
   opensAt: Date;
   endsAt: Date;
@@ -197,6 +189,8 @@ export function createBossService(options: BossServiceOptions): BossService {
     const week = bossWeekOf(today);
     // The Eve visit closes the morning after, which is the next week's
     // Monday when Christmas Eve is a Sunday (2028): still out until then.
+    // Only if it was pinned on the Sunday; one nobody opened by then is
+    // "missed whole", like any visit while the server was down.
     const yesterdayWeek = bossWeekOf(addDays(today, -1));
     if (yesterdayWeek !== week) {
       const before = await repo.findWindow(map.id, yesterdayWeek);
@@ -213,9 +207,10 @@ export function createBossService(options: BossServiceOptions): BossService {
     // taken), rather than the weekly one silently staying.
     if (pinned?.kind === 'weekly' && plan?.kind === 'christmas-eve' && out(plan)) {
       const converted = await repo.transaction(async (tx) => {
+        // `opens_at` stays the weekly one (earlier): fights started on the
+        // weekly visit still find this row (`visitOf`).
         const row = await tx.convertToChristmasEve(map.id, week, {
           speciesId: plan.boss.speciesId,
-          opensAt: plan.opensAt,
           endsAt: plan.endsAt,
         });
         if (!row) return null;

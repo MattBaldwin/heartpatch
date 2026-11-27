@@ -142,7 +142,8 @@ export function bossHarness(db: Database, url: string, prefix: string) {
       sweep = undefined;
       clock.setTime(Date.parse(BOSS_START));
     },
-    async player(): Promise<BossPlayer> {
+    /** A Keeper with a session; `expiresAt` for a clock set years ahead (#37 X1's 2028). */
+    async player(expiresAt = new Date(Date.now() + 30 * DAY_MS)): Promise<BossPlayer> {
       const username = `${prefix}_${String((counter += 1))}`;
       const [user] = await db
         .insert(users)
@@ -150,9 +151,7 @@ export function bossHarness(db: Database, url: string, prefix: string) {
         .returning({ id: users.id });
       await db.insert(keepers).values({ userId: user!.id, ...TEST_KEEPER });
       const { token, tokenHash } = newSessionToken();
-      await db
-        .insert(sessions)
-        .values({ userId: user!.id, tokenHash, expiresAt: new Date(Date.now() + 30 * DAY_MS) });
+      await db.insert(sessions).values({ userId: user!.id, tokenHash, expiresAt });
       return { id: user!.id, username, token };
     },
     async patch(owner: BossPlayer) {
