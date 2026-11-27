@@ -26,6 +26,7 @@ interface BattleDebug {
       band: { top: number; bottom: number };
       face: { top: number; bottom: number } | null;
       team: { top: number; bottom: number }[];
+      teamFeet: number | null;
       bossFacing: number | null;
     } | null;
     playing: { kind: string; at: number } | null;
@@ -480,7 +481,10 @@ test.describe('a mini-boss fight (#190)', () => {
         'face',
         'fogEnd',
         'team',
+        'teamFeet',
       ]);
+      // The team's bodies stand over the band's bottom (#190 PR 2), not under the sheet.
+      if (f.teamFeet !== null) expect(f.teamFeet, at).toBeLessThanOrEqual(f.band.bottom + 0.005);
       // Collapsed, the band holds its height through the round (#855): nothing in the HUD moves.
       expect(f.band.bottom - f.band.top, at).toBeGreaterThanOrEqual(MIN_BAND);
       // (A little slack: the hook reads the facing a frame after the camera did.)
