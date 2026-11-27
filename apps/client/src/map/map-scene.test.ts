@@ -543,6 +543,22 @@ describe('MapScene', () => {
       expect(ground(on.mesh('island'))).toBeGreaterThan(ground(off.mesh('island')) + 0.2);
     });
 
+    it('sets the snow uniform from the first frame: caps by day, the moon lift only at night', () => {
+      const { map } = build(testView(1), CHRISTMAS_ON);
+      expect(map.snowUniform).toEqual({ cover: 1, lift: 0 });
+      map.setNight(true);
+      expect(map.snowUniform).toEqual({ cover: 1, lift: CHRISTMAS.night.lift });
+      map.setNight(false);
+      expect(map.snowUniform).toEqual({ cover: 1, lift: 0 });
+      // Out of season it stays off; while the first snow fades it follows the fade.
+      expect(build(testView(1)).map.snowUniform).toEqual({ cover: 0, lift: 0 });
+      const fading = build(testView(1), { ...CHRISTMAS_ON, snowFade: true });
+      expect(fading.map.snowUniform.cover).toBe(0);
+      fading.map.tick(0);
+      fading.map.tick(CHRISTMAS.fadeMs / 2);
+      expect(fading.map.snowUniform.cover).toBeCloseTo(fading.map.stats.snow ?? -1);
+    });
+
     it('swaps pollen, leaves and fireflies for snowfall, day and night, with no more draws', () => {
       const off = build(testView(1));
       const on = build(testView(1), CHRISTMAS_ON);

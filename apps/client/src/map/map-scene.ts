@@ -521,6 +521,8 @@ export class MapScene {
     this.christmas = this.seasons.includes('christmas');
     this.snowFading = this.christmas && options.snowFade === true && options.reducedMotion !== true;
     this.snowCover = this.snowFading ? 0 : 1;
+    // The uniform starts where the snow is (caps on from the first frame unless the fade plays).
+    if (this.christmas) Object.assign(this.snow, snowLight(this.snowCover, this.night));
     scene.clearColor = new Color4(0.992, 0.91, 0.941, 1);
     for (const t of view.tiles) this.tiles.set(hexKey(t), t);
     this.grey = greyTiles(view);
@@ -838,7 +840,13 @@ export class MapScene {
     this.seaGlint.value = night ? OCEAN.glint.night : OCEAN.glint.day;
     this.borders.setNight(night ? BORDER.night : 0);
     this.applyAmbient();
-    this.applySnow(this.snowCover);
+    // Only the moon lift changes with the night: the tiles keep their snow.
+    if (this.christmas) Object.assign(this.snow, snowLight(this.snowCover, night));
+  }
+
+  /** The snow uniform's values now (#37): caps' cover and the moon lift. */
+  get snowUniform(): { readonly cover: number; readonly lift: number } {
+    return { cover: this.snow.cover, lift: this.snow.lift };
   }
 
   /**
