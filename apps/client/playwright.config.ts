@@ -42,7 +42,7 @@ const testDir = './tests/e2e';
  * (local runs) runs everything.
  */
 const E2E_GROUPS = [
-  // ~20.3 iPhone, ~24.2 iPad (spec-timing, c006b78). tutorial-flow's two runs go side by side.
+  // ~20.3 iPhone, ~24.2 iPad (spec-timing, c006b78), minus tutorial-flow (its own group below).
   [
     'accessory-everywhere',
     'admin',
@@ -57,7 +57,6 @@ const E2E_GROUPS = [
     'post-shop',
     'recipe-book',
     'squishy-gallery',
-    'tutorial-flow',
   ],
   // ~21.0 iPhone, ~24.1 iPad.
   [
@@ -142,6 +141,10 @@ const E2E_GROUPS = [
     'tutorial',
     'version',
   ],
+  // tutorial-flow alone: two tests with setTimeout(900_000) run side by side. A pass takes
+  // 4-13 min, but one #784 stall burns 15 min plus a 15 min retry, which pushed group 1 past
+  // the 45 min job limit on most runs (log-less cancels). On its own it fails with a log.
+  ['tutorial-flow'],
 ];
 
 function e2eGroup(value: string | undefined): { testMatch?: string[] } {
