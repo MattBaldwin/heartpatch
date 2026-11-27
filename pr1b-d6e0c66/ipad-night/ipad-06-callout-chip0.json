@@ -1,0 +1,247 @@
+{
+ "file": "ipad-06-co-0-0-chip0n0-Super cozy!.png",
+ "device": "ipad",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-27T05:36:25.461Z",
+ "inner": {
+  "w": 820,
+  "h": 1180,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 29.258392504216033,
+   "fogEnd": 85,
+   "band": {
+    "top": 0.05254237288135593,
+    "bottom": 0.9389830508474576
+   },
+   "face": {
+    "top": 0.3064600095409439,
+    "bottom": 0.39121056412435085
+   },
+   "team": [
+    {
+     "top": 0.5365415310531876,
+     "bottom": 0.5860336084351496
+    },
+    {
+     "top": 0.5284272185535217,
+     "bottom": 0.5805497536379689
+    },
+    {
+     "top": 0.5120981519162268,
+     "bottom": 0.5635554531422139
+    }
+   ],
+   "bossFacing": 0.9860193859707139
+  },
+  "playing": {
+   "kind": "hit",
+   "at": 6.300000000046566
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "rects": {
+  "strip": {
+   "top": 8,
+   "bottom": 52,
+   "left": 104,
+   "right": 664
+  },
+  "energy": {
+   "top": 36,
+   "bottom": 46,
+   "left": 116,
+   "right": 626
+  },
+  "name": {
+   "top": 11,
+   "bottom": 28,
+   "left": 116,
+   "right": 573
+  },
+  "order": {
+   "top": 11.5,
+   "bottom": 27.5,
+   "left": 579,
+   "right": 652
+  },
+  "handle": {
+   "top": 1116,
+   "bottom": 1180,
+   "left": 16,
+   "right": 804
+  },
+  "friends": {
+   "top": 1120,
+   "bottom": 1176,
+   "left": 310,
+   "right": 510
+  },
+  "dock": {
+   "top": 1116,
+   "bottom": 1180,
+   "left": 16,
+   "right": 804
+  },
+  "sheet": {
+   "top": 1116,
+   "bottom": 1180,
+   "left": 0,
+   "right": 820
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "leave": {
+   "top": 8,
+   "bottom": 52,
+   "left": 764,
+   "right": 808
+  },
+  "round": {
+   "top": 1136,
+   "bottom": 1160,
+   "left": 16,
+   "right": 80.953125
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "winding": {
+   "top": 33,
+   "bottom": 49,
+   "left": 632,
+   "right": 652
+  },
+  "go": null,
+  "callout": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "caption": {
+   "top": 1070.5,
+   "bottom": 1102,
+   "left": 235.5390625,
+   "right": 584.4609375
+  }
+ },
+ "dockSheet": "lowered",
+ "step": "06-co-0-0-chip0n0-Super cozy!",
+ "windVis": {
+  "hidden": true,
+  "opacity": "1",
+  "visibility": "hidden",
+  "display": "grid",
+  "text": "⏳"
+ },
+ "captionText": "Puddlepuff was on guard. Just a little bump!",
+ "captionVisible": "1/block",
+ "calloutRects": [
+  {
+   "pos": 0,
+   "text": "Super cozy!",
+   "hidden": false,
+   "opacity": "1",
+   "display": "block",
+   "top": 1019.6502685546875,
+   "bottom": 1064.3497314453125,
+   "left": 284.4379577636719,
+   "right": 391.5620422363281,
+   "w": 107.12408447265625,
+   "h": 44.699462890625,
+   "lift": "61px"
+  },
+  {
+   "pos": 1,
+   "text": "Super cozy!",
+   "hidden": true,
+   "opacity": "1",
+   "display": "none",
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0,
+   "w": 0,
+   "h": 0,
+   "lift": "61px"
+  },
+  {
+   "pos": 2,
+   "text": "",
+   "hidden": true,
+   "opacity": "1",
+   "display": "none",
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0,
+   "w": 0,
+   "h": 0,
+   "lift": ""
+  }
+ ],
+ "captionRect": {
+  "top": 1070.5,
+  "bottom": 1102,
+  "left": 235.5390625,
+  "right": 584.4609375,
+  "w": 348.921875,
+  "h": 31.5
+ },
+ "handleRect": {
+  "top": 1116,
+  "bottom": 1180,
+  "left": 16,
+  "right": 804
+ },
+ "friendRects": [
+  {
+   "status": "ok",
+   "top": 1120,
+   "bottom": 1176,
+   "left": 310,
+   "right": 366,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "status": "ok",
+   "top": 1120,
+   "bottom": 1176,
+   "left": 382,
+   "right": 438,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "status": "ok",
+   "top": 1120,
+   "bottom": 1176,
+   "left": 454,
+   "right": 510,
+   "w": 56,
+   "h": 56
+  }
+ ],
+ "moveRects": [],
+ "sheetScroll": {
+  "sheetClient": 64,
+  "sheetScroll": 654,
+  "pickerClient": 0,
+  "pickerScroll": 0
+ }
+}

@@ -1,0 +1,247 @@
+{
+ "file": "ipad-01c-after-go.png",
+ "device": "ipad",
+ "tz": "America/Sao_Paulo",
+ "at": "2026-11-27T05:32:29.016Z",
+ "inner": {
+  "w": 820,
+  "h": 1180,
+  "dpr": 2
+ },
+ "battle": {
+  "framing": {
+   "distance": 29.356659707634083,
+   "fogEnd": 85,
+   "band": {
+    "top": 0.05254237288135593,
+    "bottom": 0.9389830508474576
+   },
+   "face": {
+    "top": 0.23579139899470752,
+    "bottom": 0.30035213138483535
+   },
+   "team": [
+    {
+     "top": 0.4988749194403228,
+     "bottom": 0.5474962144083662
+    },
+    {
+     "top": 0.5085966181323104,
+     "bottom": 0.5567957035132204
+    },
+    {
+     "top": 0.4999688059636635,
+     "bottom": 0.5473153857178664
+    }
+   ],
+   "bossFacing": 0.9719514000648527
+  },
+  "playing": {
+   "kind": "hit",
+   "at": 3109.399999999907
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": null,
+ "rects": {
+  "strip": {
+   "top": 8,
+   "bottom": 52,
+   "left": 104,
+   "right": 664
+  },
+  "energy": {
+   "top": 36,
+   "bottom": 46,
+   "left": 116,
+   "right": 626
+  },
+  "name": {
+   "top": 11,
+   "bottom": 28,
+   "left": 116,
+   "right": 573
+  },
+  "order": {
+   "top": 11.5,
+   "bottom": 27.5,
+   "left": 579,
+   "right": 652
+  },
+  "handle": {
+   "top": 1116,
+   "bottom": 1180,
+   "left": 16,
+   "right": 804
+  },
+  "friends": {
+   "top": 1120,
+   "bottom": 1176,
+   "left": 310,
+   "right": 510
+  },
+  "dock": {
+   "top": 1116,
+   "bottom": 1180,
+   "left": 16,
+   "right": 804
+  },
+  "sheet": {
+   "top": 1116,
+   "bottom": 1180,
+   "left": 0,
+   "right": 820
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "leave": {
+   "top": 8,
+   "bottom": 52,
+   "left": 764,
+   "right": 808
+  },
+  "round": {
+   "top": 1136,
+   "bottom": 1160,
+   "left": 16,
+   "right": 78.4375
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "winding": {
+   "top": 33,
+   "bottom": 49,
+   "left": 632,
+   "right": 652
+  },
+  "go": null,
+  "callout": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "caption": {
+   "top": 1070.5,
+   "bottom": 1102,
+   "left": 288.4921875,
+   "right": 531.5078125
+  }
+ },
+ "dockSheet": "lowered",
+ "step": "01c-after-go",
+ "windVis": {
+  "hidden": true,
+  "opacity": "1",
+  "visibility": "hidden",
+  "display": "grid",
+  "text": "⏳"
+ },
+ "captionText": "Puddlepuff lost some energy.",
+ "captionVisible": "1/block",
+ "calloutRects": [
+  {
+   "pos": 0,
+   "text": "",
+   "hidden": true,
+   "opacity": "1",
+   "display": "none",
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0,
+   "w": 0,
+   "h": 0,
+   "lift": ""
+  },
+  {
+   "pos": 1,
+   "text": "Super cozy!",
+   "hidden": false,
+   "opacity": "1",
+   "display": "block",
+   "top": 1019.6502685546875,
+   "bottom": 1064.3497314453125,
+   "left": 356.4379577636719,
+   "right": 463.5620422363281,
+   "w": 107.12408447265625,
+   "h": 44.699462890625,
+   "lift": "61px"
+  },
+  {
+   "pos": 2,
+   "text": "",
+   "hidden": true,
+   "opacity": "1",
+   "display": "none",
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0,
+   "w": 0,
+   "h": 0,
+   "lift": ""
+  }
+ ],
+ "captionRect": {
+  "top": 1070.5,
+  "bottom": 1102,
+  "left": 288.4921875,
+  "right": 531.5078125,
+  "w": 243.015625,
+  "h": 31.5
+ },
+ "handleRect": {
+  "top": 1116,
+  "bottom": 1180,
+  "left": 16,
+  "right": 804
+ },
+ "friendRects": [
+  {
+   "status": "ok",
+   "top": 1120,
+   "bottom": 1176,
+   "left": 310,
+   "right": 366,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "status": "ok",
+   "top": 1120,
+   "bottom": 1176,
+   "left": 382,
+   "right": 438,
+   "w": 56,
+   "h": 56
+  },
+  {
+   "status": "ok",
+   "top": 1120,
+   "bottom": 1176,
+   "left": 454,
+   "right": 510,
+   "w": 56,
+   "h": 56
+  }
+ ],
+ "moveRects": [],
+ "sheetScroll": {
+  "sheetClient": 64,
+  "sheetScroll": 654,
+  "pickerClient": 0,
+  "pickerScroll": 0
+ }
+}

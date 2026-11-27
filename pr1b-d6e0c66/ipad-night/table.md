@@ -1,0 +1,10 @@
+| frame | device | sheet / step | caption rect | callout rects | intersect? | gap px (caption top − callout bottom) | covers chip? | stack end | band % | face in band | eyes vs handle | ⏳ | targets ≥44 | caption |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ipad-01-rest-raised | ipad 820x1180 | raised / idle | none | - | - | - | - | - | 60.1% | YES | clear (135px) | not shown | YES (min 44) | A BIG Rakelet wants to play! |
+| ipad-01b-rest-collapsed | ipad 820x1180 | lowered / effect@0ms | 319,1070–501,1102 | chip1 "Super cozy!" 356,1020–464,1064 | NO | 6.2 | NO | top 1020px; band top 62px (inside band); strip bottom 52px (clear) | 88.6% | YES | clear (434px) | not shown | YES (min 44) | Rakelet is wide open! |
+| ipad-01c-after-go | ipad 820x1180 | lowered / hit@3109ms | 288,1070–532,1102 | chip1 "Super cozy!" 356,1020–464,1064 | NO | 6.2 | NO | top 1020px; band top 62px (inside band); strip bottom 52px (clear) | 88.6% | YES | clear (459px) | not shown | YES (min 44) | Puddlepuff lost some energy. |
+| ipad-06-callout-chip0 | ipad 820x1180 | lowered / hit@6ms | 236,1070–584,1102 | chip0 "Super cozy!" 284,1020–392,1064 | NO | 6.2 | NO | top 1020px; band top 62px (inside band); strip bottom 52px (clear) | 88.6% | YES | clear (424px) | not shown | YES (min 44) | Puddlepuff was on guard. Just a little b |
+| ipad-06-callout-chip1 | ipad 820x1180 | lowered / hit@3109ms | 288,1070–532,1102 | chip1 "Super cozy!" 356,1020–464,1064 | NO | 6.2 | NO | top 1020px; band top 62px (inside band); strip bottom 52px (clear) | 88.6% | YES | clear (459px) | not shown | YES (min 44) | Puddlepuff lost some energy. |
+| ipad-06-callout-chip2 | ipad 820x1180 | lowered / hit@1429ms | 288,1070–532,1102 | chip2 "Super cozy!" 428,1020–536,1064 | NO | 6.2 | NO | top 1020px; band top 62px (inside band); strip bottom 52px (clear) | 88.6% | YES | clear (474px) | not shown | YES (min 44) | Puddlepuff lost some energy. |
+
+Caption+callout frames: 5; any intersection: False; min vertical gap 6.2px
