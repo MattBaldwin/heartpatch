@@ -82,6 +82,8 @@ export function createAdvent(options: AdventOptions): Advent {
   /** Bumped by every map or user change, so a late reply can't land on another map. */
   let generation = 0;
   let working = false;
+  /** Bumped by each claim's reply, so a calendar read begun before it can't undo it. */
+  let claims = 0;
   let note = '';
   /** The missed day the button means, once the player taps one. */
   let picked: string | null = null;
@@ -131,7 +133,7 @@ export function createAdvent(options: AdventOptions): Advent {
   const changed = () => options.onChange?.();
   button.addEventListener('click', () => {
     note = '';
-    reveal = null;
+    // A reveal that landed while the sheet was shut is still waiting: don't drop it.
     sheet.hidden = false;
     render();
     changed();
@@ -158,10 +160,12 @@ export function createAdvent(options: AdventOptions): Advent {
   async function refresh(): Promise<void> {
     const id = mapId;
     const at = generation;
+    const claimsThen = claims;
     if (!id || !live() || !options.inSeason()) return;
     try {
       const fresh = await api.view(id);
-      if (at !== generation) return;
+      // A claim answered meanwhile has the newer calendar.
+      if (at !== generation || claimsThen !== claims) return;
       view = fresh;
     } catch (err) {
       // The entry stays as it was; the sheet says why if it's open.
@@ -183,6 +187,7 @@ export function createAdvent(options: AdventOptions): Advent {
       const reply = await sendCommand(sendDeps, (key) => api.claim(id, day, key), stillHere);
       if (!reply || !stillHere()) return;
       view = reply.advent;
+      claims += 1;
       picked = null;
       reveal = { title: revealTitle, lines: foundLines(reply.opened.items) };
       options.cue?.('pop');
@@ -196,7 +201,8 @@ export function createAdvent(options: AdventOptions): Advent {
         void refresh();
       }
     } finally {
-      working = false;
+      // A newer map's own claim may be running by now: only this generation's flag is ours.
+      if (at === generation) working = false;
       if (stillHere()) render();
     }
   }

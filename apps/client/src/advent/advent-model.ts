@@ -42,7 +42,6 @@ export const ADVENT_TEXT = {
   revealDay: (day: number) => `Day ${String(day)} had…`,
   revealAgain: (day: number) => `Day ${String(day)} held…`,
   yay: 'Yay!',
-  back: 'Back to the tree',
   // One line each: the note's slot keeps the sheet the same height (14 px, about 40 characters).
   tapLocked: 'Not yet! Still wrapped up tight 🎁',
   tapMissedUsed: 'One missed day a day. More tomorrow! ❄️',
