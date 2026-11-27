@@ -62,7 +62,9 @@ function ownerOnlyView(
     | 'key.found'
     | 'cellar.opened'
     | 'journey.arrived'
-    | 'post.bought',
+    | 'post.bought'
+    | 'advent.claimed'
+    | 'present.opened',
 ): PublicView {
   return definePublicView({
     schema: GAME_EVENTS[type].public,
@@ -184,6 +186,9 @@ export const PUBLIC_VIEWS: PublicViews = {
   'mailbox.collected': ownerOnlyView('mailbox.collected'),
   // A Keeper's gift from a resident (#381 PR H) is theirs alone.
   'house.gift': ownerOnlyView('house.gift'),
+  // Christmas (#37): what's in a Keeper's present is theirs, like a house gift.
+  'advent.claimed': ownerOnlyView('advent.claimed'),
+  'present.opened': ownerOnlyView('present.opened'),
   // A village's key hunt is its winner's own (#306 PR 2c).
   'key.found': ownerOnlyView('key.found'),
   'cellar.opened': ownerOnlyView('cellar.opened'),

@@ -64,6 +64,14 @@ export const MorningReportSchema = z.object({
 });
 export type MorningReport = z.infer<typeof MorningReportSchema>;
 
+/** `HollowStatus.longNight.kind`: `weekly` today; open so a later kind still parses. */
+export const LongNightKindSchema = z.union([z.literal('weekly'), ContentIdSchema]);
+/**
+ * Written by hand on purpose: the schema infers plain `string`, and
+ * `(string & {})` keeps `'weekly'` in editor autocomplete.
+ */
+export type LongNightKind = 'weekly' | (string & {});
+
 /** `GET /maps/:mapId/hollow`: the night, my morning reports and my squishies in the Hollow. */
 export const HollowStatusSchema = z.object({
   night: z.object({
@@ -184,6 +192,14 @@ export const HollowStatusSchema = z.object({
    */
   longNight: z
     .object({
+      /**
+       * Which Long Night this is (#37 C0): `weekly`, the patch's weekday
+       * Night, is the only one today. An open string, so a dated one (the
+       * Christmas Eve fight, C0b) can arrive without breaking an older
+       * client, which reads any kind it doesn't know as `weekly`. Left out
+       * by older servers (read as `weekly`).
+       */
+      kind: LongNightKindSchema.optional(),
       /** The patch's weekday (0 is Sunday), or null: Off on this patch. */
       weekday: LongNightWeekdaySchema.nullable(),
       /** The coming (or current) night, `tonight.night`, is a Long Night. */

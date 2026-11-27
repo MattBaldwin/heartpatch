@@ -14,7 +14,16 @@ export const PUSH_RULES: PushRules = {
   quietHours: { from: 21 * 60, to: 7 * 60 }, // TUNE: owner answer 3, 9 PM–7 AM in the player's zone
   dailyCap: 3, // TUNE: nudges per account per day
   // TUNE: the Long Night calls first, then dusk (a squishy at risk), then chores, then friends.
-  priority: ['long-night-start', 'long-night-soon', 'dusk', 'gatherers', 'friend'],
+  // Christmas (#37 C0): Christmas Eve is a Night call; a waiting present is a chore.
+  priority: [
+    'long-night-start',
+    'christmas-eve',
+    'long-night-soon',
+    'dusk',
+    'present',
+    'gatherers',
+    'friend',
+  ],
   duskLeadMinutes: 60, // TUNE: an hour before nightfall, time to light a fire
   longNightLeadMinutes: 60, // TUNE: the Long Night's "coming" call, an hour ahead
   longNightStartWindowMinutes: 10, // TUNE: a late "begun" call is noise
@@ -28,6 +37,8 @@ export const PUSH_RULES: PushRules = {
     friend: 20 * 60, // TUNE: they've likely gone by then
     'long-night-soon': 55 * 60, // TUNE: stale once the Night begins
     'long-night-start': 2 * 60 * 60, // TUNE: still worth hearing while the Night runs
+    present: 12 * 60 * 60, // TUNE: today's present waits all day
+    'christmas-eve': 2 * 60 * 60, // TUNE: like the Long Night's call
   },
   maxDevicesPerAccount: 5, // TUNE: a phone, an iPad and a couple of spares
   maxFailures: 8, // TUNE: failures in a row before a subscription is dropped
@@ -49,6 +60,15 @@ export const PUSH_TEXT: PushText = {
   friend: { title: `${PUSH_NAME_PLACEHOLDER} is in your patch! 👋`, body: 'Pop in and say hi.' },
   'long-night-soon': { title: 'The Long Night is coming 🌙', body: 'It starts at 7. Fires ready?' },
   'long-night-start': { title: 'The Long Night has begun 🌙', body: 'Keep the fires lit!' },
+  // Christmas (#37 C0). Quiet hours and the daily cap apply as for every nudge.
+  present: {
+    title: 'A present is waiting for you! 🎁',
+    body: 'Pop by the Patch Tree and open it.',
+  },
+  'christmas-eve': {
+    title: "It's Christmas Eve! 🎄",
+    body: 'Gather your patch-mates. Something big is coming!',
+  },
 };
 
 /**

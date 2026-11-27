@@ -89,6 +89,13 @@ export const ItemChangeReasonSchema = z.enum([
   'road',
   /** What comes back when a road comes up (Wild Isle #621), against the same row. */
   'road-refund',
+  /**
+   * Christmas (#37): a day's advent present landing in the bag, ledgered
+   * against its `advent_claims` row.
+   */
+  'advent',
+  /** Christmas (#37): opening a present from the bag, what was in it, against the opening. */
+  'present-open',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 

@@ -45,6 +45,7 @@ export type GuideGroup = (typeof GUIDE_GROUPS)[number];
 
 const GROUP_OF: Record<BuildingKind, GuideGroup> = {
   hearthfire: 'fires',
+  lights: 'fires', // #37: light, not fuel; on the fires shelf beside the Hearthfires
   habitat: 'home',
   'training-grounds': 'helpers',
   factory: 'helpers',

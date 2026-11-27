@@ -8,13 +8,21 @@ import { z } from 'zod';
  * "no nudges here".
  */
 
-/** The five nudges. `push_sends.kind` holds these (its CHECK lists them). */
+/**
+ * The nudges. `push_sends.kind` holds these (its CHECK lists them).
+ * Christmas (#37 C0): `present` (today's advent present is waiting) and
+ * `christmas-eve` (the patch's Christmas Eve call); both under the
+ * `push_settings.christmas` column, which joins `PushSettingsSchema` with
+ * the lane that adds its Settings row.
+ */
 export const PushKindSchema = z.enum([
   'dusk',
   'gatherers',
   'friend',
   'long-night-soon',
   'long-night-start',
+  'present',
+  'christmas-eve',
 ]);
 export type PushKind = z.infer<typeof PushKindSchema>;
 

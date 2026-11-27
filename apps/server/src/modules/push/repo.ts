@@ -95,12 +95,17 @@ export interface PushClaim {
 export type PushClaimResult =
   { outcome: 'claimed'; id: string } | { outcome: 'sent' } | { outcome: 'capped' };
 
-/** `push_settings` columns by switch (SQL), for the candidate queries. */
+/**
+ * `push_settings` columns by switch (SQL), for the candidate queries.
+ * `christmas` (#37 C0) is server-side only until its Settings row joins
+ * `PushSettingsSchema`; no row or no change reads as on.
+ */
 const SETTING_COLUMN = {
   dusk: sql.raw('dusk'),
   gatherers: sql.raw('gatherers'),
   friend: sql.raw('friend'),
   longNight: sql.raw('long_night'),
+  christmas: sql.raw('christmas'),
 } as const;
 
 /** `u` (a `users` row) has a live device and this switch on (no settings row: on). */

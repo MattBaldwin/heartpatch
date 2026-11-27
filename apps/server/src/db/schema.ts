@@ -2974,6 +2974,8 @@ export const pushSettings = pgTable('push_settings', {
   gatherers: boolean('gatherers').notNull().default(true),
   friend: boolean('friend').notNull().default(true),
   longNight: boolean('long_night').notNull().default(true),
+  // Christmas (#37 C0): the `present` and `christmas-eve` nudges.
+  christmas: boolean('christmas').notNull().default(true),
   updatedAt: timestamptz('updated_at').notNull().defaultNow(),
 });
 
@@ -3009,9 +3011,108 @@ export const pushSends = pgTable(
     // Mirrors the shared `PushKindSchema`.
     check(
       'push_sends_kind_known',
-      sql`${t.kind} in ('dusk', 'gatherers', 'friend', 'long-night-soon', 'long-night-start')`,
+      sql`${t.kind} in ('dusk', 'gatherers', 'friend', 'long-night-soon', 'long-night-start', 'present', 'christmas-eve')`,
     ),
     check('push_sends_devices_nonnegative', sql`${t.devices} >= 0`),
     check('push_sends_dedupe_key_length', sql`length(${t.dedupeKey}) between 1 and 200`),
   ],
+);
+
+/**
+ * Advent presents (#37, owner answer 3): one row per Keeper per advent day
+ * (December 1–25), written when the present is claimed. Unique on
+ * `(user_id, day)` at account level, so a Keeper in several patches gets one
+ * present a day, not one per patch. `map_id` is the patch whose bag it went
+ * to (null once that patch is gone; the claim still counts). `seed` and
+ * `result` are the server's seeded roll (rule 6: server-only, replayable);
+ * `catch_up` marks a missed day opened later, at most one per account-local
+ * `claimed_on` day.
+ */
+export const adventClaims = pgTable(
+  'advent_claims',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // The advent day the present belongs to (December 1–25).
+    day: date('day', { mode: 'string' }).notNull(),
+    mapId: uuid('map_id').references(() => maps.id, { onDelete: 'set null' }),
+    seed: text('seed').notNull(),
+    // What was in it: item id → count (`AdventResultSchema`).
+    result: jsonb('result').$type<Record<string, number>>().notNull(),
+    catchUp: boolean('catch_up').notNull().default(false),
+    // The Keeper's local day it was opened on.
+    claimedOn: date('claimed_on', { mode: 'string' }).notNull(),
+    claimedAt: timestamptz('claimed_at').notNull(),
+  },
+  (t) => [
+    unique('advent_claims_user_id_day_key').on(t.userId, t.day),
+    // One catch-up a day.
+    uniqueIndex('advent_claims_user_id_claimed_on_catch_up_key')
+      .on(t.userId, t.claimedOn)
+      .where(sql`${t.catchUp}`),
+    check(
+      'advent_claims_day_in_advent',
+      sql`extract(month from ${t.day}) = 12 and extract(day from ${t.day}) between 1 and 25`,
+    ),
+    check('advent_claims_claimed_on_after_day', sql`${t.claimedOn} >= ${t.day}`),
+    check('advent_claims_catch_up_late', sql`${t.catchUp} = (${t.claimedOn} > ${t.day})`),
+  ],
+);
+
+/**
+ * Warmth between two patch-mates (#37 §3): a per-pair counter that gifts
+ * raise (a present gifted unopened, two). The pair is stored ordered
+ * (`user_a_id < user_b_id`), so each pair has one row; both are members
+ * of the patch.
+ */
+export const keeperWarmth = pgTable(
+  'keeper_warmth',
+  {
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userAId: uuid('user_a_id').notNull(),
+    userBId: uuid('user_b_id').notNull(),
+    warmth: integer('warmth').notNull().default(0),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'keeper_warmth_pkey', columns: [t.mapId, t.userAId, t.userBId] }),
+    // Both Keepers are members of this patch (as `trade_offers`).
+    foreignKey({
+      name: 'keeper_warmth_a_member_fk',
+      columns: [t.mapId, t.userAId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    foreignKey({
+      name: 'keeper_warmth_b_member_fk',
+      columns: [t.mapId, t.userBId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    check('keeper_warmth_pair_ordered', sql`${t.userAId} < ${t.userBId}`),
+    check('keeper_warmth_nonnegative', sql`${t.warmth} >= 0`),
+  ],
+);
+
+/**
+ * The Patch Tree (#37 §2, owner answer 5): one per patch, at the trading post
+ * nearest the map's centre. December gifts hang ornaments; the star lights
+ * at `star_lit_at` once there are enough (the threshold is data).
+ */
+export const patchTrees = pgTable(
+  'patch_trees',
+  {
+    mapId: uuid('map_id')
+      .primaryKey()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    postTileId: uuid('post_tile_id')
+      .notNull()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    ornaments: integer('ornaments').notNull().default(0),
+    starLitAt: timestamptz('star_lit_at'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [check('patch_trees_ornaments_nonnegative', sql`${t.ornaments} >= 0`)],
 );
