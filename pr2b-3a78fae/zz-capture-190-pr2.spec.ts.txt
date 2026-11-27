@@ -1,0 +1,248 @@
+// THROWAWAY (#190 PR 2 boss camera; pr2b adds CAPTURE_NOCARD measurement twins). Never committed as a spec: it lives in
+// pr2-8b41f85/zz-capture-190-pr2.spec.ts.txt. Copy it to apps/client/tests/e2e/zz-capture-190-pr2.spec.ts to run.
+// The boss fight is boss-stub.ts's three-squishy stand-in (as boss-battle.spec.ts); the app around it is real.
+// One run = one device x one time of day. Frames: rest, lean slot 0 / 1 / 2 (the picker), then three rounds:
+// a windup round (beat: push-in), its landing round (thump), the winning round (KO + pull-back).
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { expect, test, type Page } from '@playwright/test';
+import { stubBossFight } from './boss-stub.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { realTap } from './touch.js';
+import { trayButton } from './trays.js';
+
+const OUT = process.env['CAPTURE_OUT'] ?? 'captures';
+const TZ = process.env['CAPTURE_TZ'] ?? 'Asia/Dubai';
+const TAG = process.env['CAPTURE_TAG'] ?? 'day';
+const DEVICE = (process.env['CAPTURE_DEVICE'] ?? 'iphone') as 'iphone' | 'ipad';
+const SIZES = { iphone: { width: 393, height: 852 }, ipad: { width: 1024, height: 1366 } } as const;
+const BEATS = (process.env['CAPTURE_BEATS'] ?? 'all') === 'all';
+
+test.use({
+  actionTimeout: 90_000,
+  launchOptions: {
+    executablePath: process.env['PW_CHROMIUM_EXECUTABLE'] ?? '/opt/pw-browsers/chromium',
+    args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+  },
+});
+
+/** A virtual clock: `__capScale(s)` slows (0 freezes) performance.now, rAF times and the 250 ms+ timers (x5 longer). */
+const SLOW = `(() => {
+  const realNow = performance.now.bind(performance);
+  let base = realNow(), vbase = base, scale = 1;
+  const now = () => vbase + (realNow() - base) * scale;
+  performance.now = now;
+  const raf = window.requestAnimationFrame.bind(window);
+  window.requestAnimationFrame = (cb) => raf(() => cb(now()));
+  const st = window.setTimeout.bind(window), ct = window.clearTimeout.bind(window);
+  const timers = new Map();
+  let nextId = 1e9;
+  setInterval(() => {
+    const t = now();
+    for (const [id, x] of timers) if (t >= x.due) { timers.delete(id); x.fn(...x.a); }
+  }, 10);
+  window.setTimeout = (fn, ms, ...a) => {
+    if (typeof fn !== 'function' || typeof ms !== 'number' || ms < 250) return st(fn, ms, ...a);
+    const id = nextId++;
+    timers.set(id, { fn, due: now() + ms * 5, a });
+    return id;
+  };
+  window.clearTimeout = (id) => { if (!timers.delete(id)) ct(id); };
+  window.__capScale = (s) => { vbase = now(); base = realNow(); scale = s; };
+})();`;
+
+/** In-page watcher: when the armed target's test passes it freezes the clock and calls back. */
+const WATCH = `(() => {
+  let armed = null;
+  window.__capArm = (name, testSrc, preSrc, slow) => { armed = { name, slow, pre: preSrc ? new Function('s', 'cap', 'return (' + preSrc + ')(s, cap)') : null, test: new Function('s', 'cap', 'return (' + testSrc + ')(s, cap)') }; };
+  setInterval(() => {
+    if (!armed) return;
+    const b = window.__heartpatch && window.__heartpatch.battle && window.__heartpatch.battle();
+    const s = b && b.scene;
+    if (!s || !s.playing) return;
+    const key = s.playing.kind + '|' + ((document.querySelector('[data-testid=battle-caption]') || {}).textContent || '').trim();
+    if (key !== window.__capLast) { window.__capLast = key; (window.__capTrace = window.__capTrace || []).push(key + ' @' + Math.round(s.playing.at)); }
+    const capEl = document.querySelector('[data-testid=battle-caption]');
+    const cap = (capEl && capEl.textContent || '').trim();
+    let ok = false;
+    try {
+      if (armed.pre && armed.pre(s, cap)) { armed.pre = null; window.__capScale(armed.slow); }
+      ok = !armed.pre && armed.test(s, cap);
+    } catch (e) { ok = false; }
+    if (ok) { const n = armed.name; armed = null; window.__capScale(0); window.__capHit(n); }
+  }, 8);
+})();`;
+
+const HIDE_DEV = '.dev-status { display: none !important; }';
+
+test(`boss camera captures ${DEVICE} ${TAG}`, async ({ browser }) => {
+  test.setTimeout(20 * 60_000);
+  const dir = `${OUT}/${DEVICE}-${TAG}`;
+  mkdirSync(dir, { recursive: true });
+  Object.assign(test.info().project.use, { viewport: SIZES[DEVICE], deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const page = await newPlayer(browser, uniqueName('cam'), undefined, { timezoneId: TZ });
+  if (DEVICE === 'iphone') {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setSafeAreaInsetsOverride' as never, {
+      insets: { top: 59, topMax: 59, bottom: 34, bottomMax: 34, left: 0, leftMax: 0, right: 0, rightMax: 0 },
+    } as never);
+  }
+  await page.addInitScript(SLOW);
+  await page.addInitScript(WATCH);
+  console.log(`tz ${TZ} local ${await page.evaluate(() => new Date().toString())}`);
+  await page.goto('/?tier=high');
+  await page.addStyleTag({ content: HIDE_DEV });
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Stomp Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await page.addStyleTag({ content: HIDE_DEV });
+  for (let i = 0; i < 2; i++) {
+    await realTap(await trayButton(page, 'battle-dev-grant'));
+    await expect(page.locator('.battle-entry-note')).toContainText('joined you', { timeout: 30_000 });
+  }
+  await stubBossFight(page, { openRounds: 2, tricks: ['windup', 'land'] });
+  await realTap(await trayButton(page, 'battle-dev-fight'));
+  await expect(page.getByTestId('boss-strip')).toBeVisible({ timeout: 60_000 });
+  await page.addStyleTag({ content: HIDE_DEV });
+
+  const rect = (sel: string) =>
+    page.evaluate((s) => {
+      const e = document.querySelector(s);
+      if (!e) return null;
+      const r = e.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+    }, sel);
+  const shot = async (file: string) => {
+    await page.waitForTimeout(500);
+    const path = `${dir}/${DEVICE}-${file}-${TAG}.png`;
+    await page.screenshot({ path });
+    const meta = {
+      file: path.split('/').pop(),
+      device: DEVICE,
+      tz: TZ,
+      inner: await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight, dpr: devicePixelRatio })),
+      battle: await page.evaluate(() => {
+        const b = (window as unknown as { __heartpatch?: Record<string, () => unknown> }).__heartpatch?.['battle']?.() as
+          | { scene?: Record<string, unknown> }
+          | undefined;
+        return b?.scene ?? null;
+      }),
+      caption: await page.evaluate(() => (document.querySelector('[data-testid=battle-caption]')?.textContent ?? '').trim()),
+      rects: Object.fromEntries(
+        await Promise.all(
+          Object.entries({
+            strip: '[data-testid=boss-strip]',
+            handle: '[data-testid=boss-handle]',
+            friends: '[data-testid=boss-friends]',
+            sheet: '.battle-sheet',
+            picker: '[data-testid=boss-picker]',
+            caption: '[data-testid=battle-caption]',
+            result: '[data-testid=battle-result]',
+          }).map(async ([k, sel]) => [k, await rect(sel)] as const),
+        ),
+      ),
+      friendRects: await page.evaluate(() =>
+        [...document.querySelectorAll('[data-testid^=boss-friend-]')].map((e) => {
+          const r = e.getBoundingClientRect();
+          return { status: (e as HTMLElement).dataset['status'] ?? null, top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+        }),
+      ),
+    };
+    writeFileSync(path.replace(/\.png$/, '.json'), JSON.stringify(meta, null, 1));
+    // pr2b: a measurement-only twin with the HUD's sheet/picker hidden (visibility only, so the layout
+    // and the camera's band don't move; the clock is frozen, so it's the same frame).
+    if (process.env['CAPTURE_NOCARD'] === '1' && /0[1-4]-/.test(file)) {
+      const hide = await page.addStyleTag({ content: '.battle-sheet, [data-testid=boss-picker], [data-testid=boss-handle], [data-testid=boss-friends] { visibility: hidden !important; }' });
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: path.replace(/\.png$/, '-nocard.png') });
+      await hide.evaluate((e) => e.remove());
+      writeFileSync(path.replace(/\.png$/, '-nocard.json'), JSON.stringify({ ...meta, file: path.split('/').pop()!.replace(/\.png$/, '-nocard.png'), nocard: true }, null, 1));
+    }
+    console.log(`shot ${meta.file} dist=${(meta.battle as { framing?: { distance?: number } } | null)?.framing?.distance} playing=${JSON.stringify((meta.battle as { playing?: unknown } | null)?.playing)}`);
+  };
+  const scale = (s: number) => page.evaluate((v) => (window as unknown as { __capScale: (s: number) => void }).__capScale(v), s);
+  const frozen = async (file: string) => {
+    await scale(0);
+    await shot(file);
+  };
+  const hits: string[] = [];
+  const waiters = new Map<string, () => void>();
+  await page.exposeBinding('__capHit', (_s, name: string) => {
+    hits.push(name);
+    waiters.get(name)?.();
+  });
+  /** Arms a target (a source of `(scene, caption) => boolean`), resumes the clock, waits for it, shoots. */
+  const hunt = async (file: string, test: string, resume = 1, pre = '', slow = 0.12) => {
+    const done = new Promise<void>((res) => waiters.set(file, res));
+    await page.evaluate(([n, t, p, sl]) => (window as unknown as { __capArm: (n: string, t: string, p: string, s: number) => void }).__capArm(n!, t!, p!, Number(sl)), [file, test, pre, String(slow)]);
+    await scale(resume);
+    await Promise.race([
+      done,
+      new Promise<void>((_r, rej) => setTimeout(async () => {
+        console.log('TRACE ' + JSON.stringify(await page.evaluate(() => (window as any).__capTrace).catch(() => null)));
+        rej(new Error(`never saw ${file}`));
+      }, 100_000)),
+    ]);
+    await shot(file);
+  };
+
+  // Rest: the picker up at the fight start (slot 0 picking); the clock runs normally so the intro settles.
+  await expect(page.getByTestId('boss-picker')).toBeVisible();
+  await page.waitForTimeout(3500);
+  await frozen('01-rest');
+  await scale(1);
+  await page.waitForTimeout(300);
+  await frozen('02-lean-slot0');
+  await scale(1);
+  const picker = page.getByTestId('boss-picker');
+  await realTap(picker.getByTestId('boss-move').first());
+  await expect.poll(async () => (await page.evaluate(() => (window as any).__heartpatch.battle()?.boss?.picking))).toBe(1);
+  await page.waitForTimeout(2500);
+  await frozen('03-lean-slot1');
+  await scale(1);
+  await realTap(picker.getByTestId('boss-move').first());
+  await expect.poll(async () => (await page.evaluate(() => (window as any).__heartpatch.battle()?.boss?.picking))).toBe(2);
+  await page.waitForTimeout(2500);
+  await frozen('04-lean-slot2');
+  await scale(1);
+  await realTap(picker.getByTestId('boss-move').first());
+  await expect(picker).toContainText("Everyone's ready!");
+  await page.waitForTimeout(1500);
+  if (!BEATS) return;
+  await realTap(page.getByTestId('boss-go'));
+  // Round 1: the boss charges Count to Three. The windup step: slow the clock when it starts, freeze at 250 / 600 / 1100 ms in.
+  const WIND = `(s, cap) => /winding up/i.test(cap)`;
+  await hunt('05-windup-early', `(s, cap) => /winding up/i.test(cap) && s.playing.at >= 250`, 1, WIND);
+  await hunt('05b-windup-mid', `(s, cap) => /winding up/i.test(cap) && s.playing.at >= 600`, 0.12);
+  await hunt('05c-windup-late', `(s, cap) => /winding up/i.test(cap) && s.playing.at >= ${process.env['CAPTURE_LATE'] ?? '1100'}`, 0.12);
+  // Round 2 starts when the picker comes back: pick three and go.
+  await scale(1);
+  await expect(page.getByTestId('boss-picker')).toBeVisible({ timeout: 240_000 });
+  for (let i = 0; i < 3; i++) {
+    await expect(page.getByTestId('boss-pick-header')).toBeVisible();
+    await realTap(page.getByTestId('boss-picker').getByTestId('boss-move').first());
+  }
+  await expect(page.getByTestId('boss-picker')).toContainText("Everyone's ready!");
+  await realTap(page.getByTestId('boss-go'));
+  // The landing: round 2's first hit (the windup's stomp on a friend); the thump is at its start.
+  const HIT = `(s, cap) => s.playing.kind === 'hit'`;
+  await hunt('06-landing', `(s, cap) => s.playing.kind === 'hit' && s.playing.at >= 50`, 1, HIT);
+  await hunt('06b-landing-settle', `(s, cap) => s.playing.kind === 'hit' && s.playing.at >= 350`, 0.12);
+  // Round 3: it ends. The boss's tuckered step is the KO.
+  await scale(1);
+  await expect(page.getByTestId('boss-picker')).toBeVisible({ timeout: 240_000 });
+  for (let i = 0; i < 3; i++) {
+    await expect(page.getByTestId('boss-pick-header')).toBeVisible();
+    await realTap(page.getByTestId('boss-picker').getByTestId('boss-move').first());
+  }
+  await expect(page.getByTestId('boss-picker')).toContainText("Everyone's ready!");
+  await realTap(page.getByTestId('boss-go'));
+  const KO = `(s, cap) => s.playing.kind === 'tuckered'`;
+  await hunt('07-ko-push', `(s, cap) => s.playing.kind === 'tuckered' && s.playing.at >= 400`, 1, KO);
+  await hunt('08-ko-pullback', `(s, cap) => s.playing.kind === 'tuckered' && s.playing.at >= 1500`, 0.12);
+  await hunt('08b-ko-pullback-late', `(s, cap) => s.playing.kind === 'tuckered' && s.playing.at >= 3000`, 0.12);
+  await scale(1);
+  await page.waitForTimeout(2500);
+  await frozen('09-after-ko');
+});

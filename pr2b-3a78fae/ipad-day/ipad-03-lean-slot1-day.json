@@ -1,0 +1,143 @@
+{
+ "file": "ipad-03-lean-slot1-day.png",
+ "device": "ipad",
+ "tz": "Asia/Dubai",
+ "inner": {
+  "w": 1024,
+  "h": 1366,
+  "dpr": 2
+ },
+ "battle": {
+  "squishies": 4,
+  "meshes": 12,
+  "instances": 56,
+  "shadowLook": 0,
+  "accessories": 0,
+  "lod": "high",
+  "keeper": true,
+  "arena": {
+   "terrain": "meadow",
+   "timeOfDay": "day",
+   "known": true,
+   "props": 84,
+   "meshes": 15,
+   "shadowMap": true,
+   "lowTier": false
+  },
+  "effects": {
+   "live": 0,
+   "meshes": 0,
+   "spawned": 0
+  },
+  "acts": 0,
+  "down": 0,
+  "reducedMotion": false,
+  "drawCalls": 54,
+  "camera": {
+   "x": 7.1595094781315956,
+   "y": 6.156681457970477,
+   "z": -29.962237054877917
+  },
+  "framing": {
+   "distance": 30.9172947285356,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.04538799414348463,
+    "bottom": 0.6544655929721815
+   },
+   "face": {
+    "top": 0.3917626860744173,
+    "bottom": 0.46482500546861943
+   },
+   "team": [
+    {
+     "top": 0.5402869418202978,
+     "bottom": 0.5897844606471967
+    },
+    {
+     "top": 0.5354934331653464,
+     "bottom": 0.5784778128049982
+    },
+    {
+     "top": 0.5300989521433205,
+     "bottom": 0.5804753221371659
+    }
+   ],
+   "teamFeet": 0.6544891554865792,
+   "bossFacing": 0.9896647551049297
+  },
+  "playing": null,
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": "A BIG Puddlepuff wants to play!",
+ "rects": {
+  "strip": {
+   "top": 8,
+   "bottom": 52,
+   "left": 206,
+   "right": 766
+  },
+  "handle": {
+   "top": 901.5625,
+   "bottom": 965.5625,
+   "left": 248,
+   "right": 776
+  },
+  "friends": {
+   "top": 905.5625,
+   "bottom": 961.5625,
+   "left": 412,
+   "right": 612
+  },
+  "sheet": {
+   "top": 901.5625,
+   "bottom": 1366,
+   "left": 232,
+   "right": 792
+  },
+  "picker": {
+   "top": 965.5625,
+   "bottom": 1366,
+   "left": 248,
+   "right": 776
+  },
+  "caption": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  }
+ },
+ "friendRects": [
+  {
+   "status": "picked",
+   "top": 905.5625,
+   "bottom": 961.5625,
+   "left": 412,
+   "right": 468
+  },
+  {
+   "status": "picking",
+   "top": 897.5625,
+   "bottom": 953.5625,
+   "left": 484,
+   "right": 540
+  },
+  {
+   "status": "ok",
+   "top": 905.5625,
+   "bottom": 961.5625,
+   "left": 556,
+   "right": 612
+  }
+ ]
+}

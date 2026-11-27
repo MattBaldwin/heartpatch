@@ -1,0 +1,146 @@
+{
+ "file": "ipad-05-windup-early-day.png",
+ "device": "ipad",
+ "tz": "Asia/Dubai",
+ "inner": {
+  "w": 1024,
+  "h": 1366,
+  "dpr": 2
+ },
+ "battle": {
+  "squishies": 4,
+  "meshes": 12,
+  "instances": 56,
+  "shadowLook": 0,
+  "accessories": 0,
+  "lod": "high",
+  "keeper": true,
+  "arena": {
+   "terrain": "meadow",
+   "timeOfDay": "day",
+   "known": true,
+   "props": 84,
+   "meshes": 15,
+   "shadowMap": true,
+   "lowTier": false
+  },
+  "effects": {
+   "live": 0,
+   "meshes": 0,
+   "spawned": 2
+  },
+  "acts": 1,
+  "down": 0,
+  "reducedMotion": false,
+  "drawCalls": 54,
+  "camera": {
+   "x": 6.177237875868074,
+   "y": 5.903249945558009,
+   "z": -25.02027769158033
+  },
+  "framing": {
+   "distance": 27.284205227164257,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.04538799414348463,
+    "bottom": 0.9472913616398243
+   },
+   "face": {
+    "top": 0.5604974044158268,
+    "bottom": 0.6412016946709127
+   },
+   "team": [
+    {
+     "top": 0.7281922186124579,
+     "bottom": 0.78942342112705
+    },
+    {
+     "top": 0.7290798363581168,
+     "bottom": 0.7797224938559515
+    },
+    {
+     "top": 0.7285026542514526,
+     "bottom": 0.7845921120626105
+    }
+   ],
+   "teamFeet": 0.8743169015313201,
+   "bossFacing": 0.8553663687244271
+  },
+  "playing": {
+   "kind": "effect",
+   "at": 1465.2879999999277
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": "Puddlepuff is winding up Count to Three… watch out next round!",
+ "rects": {
+  "strip": {
+   "top": 8,
+   "bottom": 52,
+   "left": 206,
+   "right": 766
+  },
+  "handle": {
+   "top": 1302,
+   "bottom": 1366,
+   "left": 248,
+   "right": 776
+  },
+  "friends": {
+   "top": 1306,
+   "bottom": 1362,
+   "left": 412,
+   "right": 612
+  },
+  "sheet": {
+   "top": 1302,
+   "bottom": 1366,
+   "left": 232,
+   "right": 792
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "caption": {
+   "top": 1256.5,
+   "bottom": 1288,
+   "left": 261.8046875,
+   "right": 762.1953125
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  }
+ },
+ "friendRects": [
+  {
+   "status": "ok",
+   "top": 1306,
+   "bottom": 1362,
+   "left": 412,
+   "right": 468
+  },
+  {
+   "status": "ok",
+   "top": 1306,
+   "bottom": 1362,
+   "left": 484,
+   "right": 540
+  },
+  {
+   "status": "ok",
+   "top": 1306,
+   "bottom": 1362,
+   "left": 556,
+   "right": 612
+  }
+ ]
+}
