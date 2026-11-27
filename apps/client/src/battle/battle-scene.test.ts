@@ -450,9 +450,13 @@ describe('BattleScene', () => {
         'face',
         'fogEnd',
         'team',
+        'teamFeet',
       ]);
       expect(framing.band).toEqual({ top: 0.142, bottom: 0.876 });
       expect(framing.team.length).toBeGreaterThan(0);
+      // The team's lowest body row (#190 PR 2): over the band's bottom.
+      expect(framing.teamFeet).not.toBeNull();
+      expect(framing.teamFeet!).toBeLessThanOrEqual(band.bottom + 1e-6);
       expect(framing.face).not.toBeNull();
       expect(framing.face!.top).toBeGreaterThanOrEqual(band.top - 1e-6);
       expect(framing.face!.bottom).toBeLessThanOrEqual(band.bottom + 1e-6);
