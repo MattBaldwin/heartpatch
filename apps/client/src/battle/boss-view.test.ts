@@ -34,9 +34,12 @@ import {
   pickerReady,
   pickMove,
   sameAgain,
+  SIGNATURE_STICKERS,
+  signatureStickers,
   slotsOut,
   teamAction,
 } from './boss-view.js';
+import { SIGNATURE_FX, type SignatureBeat } from './element-fx.js';
 
 const NOW = Date.parse('2026-11-14T12:00:00.000Z');
 const species = GAME_DATA.species.filter((s) => s.moves.length >= 2);
@@ -720,5 +723,36 @@ describe('a mini-boss fight on screen (#190)', () => {
           : [v],
     );
     for (const line of lines) expect(findAvoidedWords(line)).toEqual([]);
+  });
+});
+
+describe('signature stickers (#190 PR 5)', () => {
+  it('counts "1… 2…" through the windup, then "3!" as it lands, and calls "Backup!"', () => {
+    expect(signatureStickers({ key: 'windup:leaf', beat: 'windup' }, 700)).toEqual([
+      { text: '1…', delay: 175 },
+      { text: '2…', delay: 490 },
+    ]);
+    expect(signatureStickers({ key: 'windup:leaf', beat: 'strike' }, 650)).toEqual([
+      { text: '3!', delay: 0 },
+    ]);
+    expect(signatureStickers({ key: 'assist:frost', beat: 'call' }, 700)).toEqual([
+      { text: 'Backup!', delay: 105 },
+    ]);
+    expect(signatureStickers({ key: 'all-foes:spark', beat: 'strike' }, 650)).toEqual([]);
+    expect(signatureStickers(null, 700)).toEqual([]);
+  });
+
+  it('keys every sticker by a signature pair and beat, in short, kind words', () => {
+    for (const [id, list] of Object.entries(SIGNATURE_STICKERS)) {
+      const [key, beat] = id.split('/') as [string, SignatureBeat];
+      // Its beat is in the table (`signatureCue` finds only those), maybe with no FX ("3!").
+      expect(SIGNATURE_FX[key]?.[beat], id).toBeDefined();
+      for (const { text, at } of list) {
+        expect(findAvoidedWords(text), id).toEqual([]);
+        expect(text.length, id).toBeLessThanOrEqual(12);
+        expect(at, id).toBeGreaterThanOrEqual(0);
+        expect(at, id).toBeLessThan(1);
+      }
+    }
   });
 });

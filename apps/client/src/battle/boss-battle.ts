@@ -27,11 +27,13 @@ import {
   pickerFor,
   pickMove,
   sameAgain,
+  signatureStickers,
   teamAction,
   type BossResultCard,
   type PickerState,
 } from './boss-view.js';
 import { describeMove } from './move-info.js';
+import { NO_TRAIL, signatureCue, trailAfter, type MoveTrail } from './choreography.js';
 
 // A mini-boss fight's screen parts (#190): the team HUD, the picker's round,
 // the playback callouts and the befriend moment, driven by battle-screen.ts.
@@ -120,6 +122,8 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
   let pickerTurn = -1;
   let lastPicks: Readonly<Record<number, string>> | null = null;
   let bossMoves = 0;
+  /** The moves a signature beat looks back at (#190 PR 5); like the scene's, it sees every step. */
+  let trail: MoveTrail = NO_TRAIL;
   /** The round playing now (its number), or null while picking. */
   let playingRound: number | null = null;
   /** The order strip: this round's movers from the log, and the one moving now. */
@@ -146,6 +150,7 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     pickerTurn = -1;
     lastPicks = null;
     bossMoves = 0;
+    trail = NO_TRAIL;
     playingRound = null;
     movers = [];
     moving = -1;
@@ -352,7 +357,12 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
       }
       const extra = bossCallout(step, b.mySide, bossMoves, names.moves);
       if (isOwnMove(step) && step.side !== b.mySide) bossMoves += 1;
-      if (extra) ui.callout('boss', extra);
+      // A signature beat's stickers (#190 PR 5) take the step's callout's place.
+      trail = trailAfter(trail, step);
+      const cue = signatureCue(step, { boss: otherSide(b.mySide), trail, moves: names.moves });
+      const stickers = signatureStickers(cue, step.ms);
+      if (stickers.length > 0) for (const s of stickers) ui.callout('boss', s.text, s.delay);
+      else if (extra) ui.callout('boss', extra);
       else if (step.callout) ui.callout(step.side === b.mySide ? step.slot : 'boss', step.callout);
     },
     result: (b, names) => {

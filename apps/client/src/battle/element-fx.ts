@@ -1,3 +1,4 @@
+import type { Move, MoveEffect } from '@heartpatch/shared';
 import type { EffectKind } from './choreography.js';
 
 /*
@@ -39,6 +40,8 @@ export type ParticleMotion =
   | 'zap'
   /** Spirals out and up around where it started (shadow, auras). */
   | 'swirl'
+  /** Circles round where it started at its own radius (its speed), rising: a leaf pile (#190). */
+  | 'pile'
   /** Hangs about, pulsing (twinkles). */
   | 'twinkle'
   /** Circles over a head (dizzy stars). */
@@ -47,6 +50,8 @@ export type ParticleMotion =
   | 'pop'
   /** A ground ring that grows and thins. */
   | 'ring'
+  /** A ring standing up to face the camera that grows and thins (a shout), so a low camera sees a hoop, not a bar. */
+  | 'hoop'
   /** A speed line: a fixed radial spot in the camera plane, streaking outwards. */
   | 'speedline'
   /** A sky ray: a long wedge from the hit, behind the fight, in the camera plane. */
@@ -176,6 +181,398 @@ export const IMPACT = {
   raysAtStrength: 1.4, // TUNE
 } as const;
 
+// ── Signature moments (#190 PR 5) ───────────────────────────────────────
+//
+// A BIG squishy's signature move looks like nothing else, keyed by the
+// move's (effect, element) pair the engine already sends (`windup:leaf`), so
+// no boss name ever enters the bundle and a fifth boss needs only data. A
+// pair with no entry takes its effect kind's fallback (null: the element's
+// ordinary look). Only the boss's moves play them (`signatureCue`).
+
+/** What a signature keys on: one of a move's #234 effect types, or `all-foes` (its targets). */
+export type SignatureEffect = MoveEffect['type'] | 'all-foes';
+
+/**
+ * Which signature a move with several traits takes: the first trait with an
+ * entry of its own, else the first with a fallback (`stat` + `assist` is an assist).
+ */
+export const SIGNATURE_ORDER: readonly SignatureEffect[] = [
+  'windup',
+  'assist',
+  'flinch',
+  'all-foes',
+  'low-energy',
+  'status',
+  'stat',
+  'heal',
+];
+
+/** When in a signature move's turn a beat plays. */
+export type SignatureBeat =
+  /** The boss's windup step (the round it counts). */
+  | 'windup'
+  /** The boss's own `move` step with it (a windup's landing round too, not its charge round). */
+  | 'strike'
+  /** Each of its hits on the team. */
+  | 'hit'
+  /** A friend flinches from it. */
+  | 'flinch'
+  /** The boss calls a friend in (its `assist` step). */
+  | 'call'
+  /** The friend's move comes in (the `move` step an assist called in). */
+  | 'backup';
+
+/** A data-driven burst of pooled particles (no new meshes, so no new draw calls). */
+export interface SignatureBurst {
+  /**
+   * `burst`: thrown out from the spot. `arc`: laid along a ground arc round
+   * the squishy, drawn in order (a skid). `rings`: ground rings, one after
+   * another (a shout). `pop`: one swelling flash.
+   */
+  readonly pattern: 'burst' | 'arc' | 'rings' | 'pop';
+  readonly shape: ParticleShape;
+  /** `element`: the move's colours; `core`: its core and white; else these. */
+  readonly colors: 'element' | 'core' | readonly string[];
+  readonly motion: ParticleMotion;
+  /** Full count (reduced motion takes 60%, as `emit` does). */
+  readonly count: number;
+  /** From the squishy's feet, middle or the top of its head. */
+  readonly at: 'feet' | 'middle' | 'head' | 'shoulders';
+  /**
+   * Moved off the spot, × the squishy's height, in its own frame: `toward`
+   * the other fighter (so towards the camera for the boss), to its `side`,
+   * and `up`. A flash beside the stage, a heap lifted clear of the feet.
+   */
+  readonly offset?: { readonly side: number; readonly up: number; readonly toward: number };
+  /** Speed out, lift (× the squishy's height per second; a `pile`'s speed is its radius) and gravity (× height /s²). */
+  readonly speed: number;
+  readonly up: number;
+  readonly gravity: number;
+  /** × the squishy's height. */
+  readonly size: number;
+  /** ms. */
+  readonly life: number;
+  /** When it starts, as a share of the step. */
+  readonly delay: number;
+  /** Its bits are born across this share of the step (a pile that grows), else at once. */
+  readonly spread?: number;
+  /**
+   * Which way its frame faces: `other` (the default), towards the other
+   * fighter; `away`, the opposite. A friend's camera side is away from the
+   * boss, so a burst on the team faces away to be seen.
+   */
+  readonly face?: 'other' | 'away';
+  /** `arc`: radians swept (centred on the side its frame faces), and the radius (× height). */
+  readonly sweep?: number;
+  readonly radius?: number;
+  /** Every other bit gets a soft halo that blooms (`burst`). */
+  readonly halos?: boolean;
+  /**
+   * `burst`: bits start at the squishy's two flanks (beside the body, by its
+   * real radius) and go out sideways, never across its face.
+   */
+  readonly flank?: boolean;
+}
+
+/** What one beat of a signature does. */
+export interface SignatureBeatFx {
+  readonly bursts?: readonly SignatureBurst[];
+  /** The beat's squishy does this in place of its usual act. */
+  readonly act?: 'stomp' | 'shrug' | 'shiver';
+  /** A held camera lean, degrees (never with reduced motion). */
+  readonly tilt?: number;
+}
+
+export type SignatureMoment = Readonly<Partial<Record<SignatureBeat, SignatureBeatFx>>>;
+
+/** Beside the BIG squishy, a little towards the team: where a called-in friend's flash goes. */
+const BESIDE = { side: 1.0, up: 0.2, toward: 0.3 } as const; // TUNE: out to the BIG squishy's side, near its middle, not up in the sky
+
+const LEAF_PILE = ['#e0a040', '#9bbf4a', '#c9772f', '#7fae3c'] as const; // TUNE: autumn rake pile
+const SKID = ['#d9d2c5', '#c4bcae', '#efe9dd'] as const; // TUNE: soft dusty skid marks, never black
+
+/** Keyed `${effect}:${element}` (the four BIG squishies' signature moves today). */
+export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
+  // The windup leaf move: a leaf pile swirls up and grows while it counts ("1… 2…"
+  // stomps), then "3!" and the leaves burst outward as it lands.
+  'windup:leaf': {
+    windup: {
+      act: 'stomp',
+      bursts: [
+        {
+          pattern: 'burst',
+          shape: 'leaf',
+          colors: LEAF_PILE,
+          motion: 'flutter',
+          count: 110, // TUNE: ≤ 150 live leaves with the aura (the budget)
+          // The team stands in front of the BIG squishy's body, so the heap swirls up from
+          // its two flanks at chin height: beside the head, never across the face.
+          at: 'shoulders',
+          flank: true,
+          offset: { side: 0, up: 0, toward: 0 },
+          speed: 0.22,
+          up: 0.5,
+          gravity: 0.35,
+          size: 0.2, // TUNE: big enough to read as leaves
+          life: 1300, // TUNE
+          delay: 0,
+          spread: 0.8, // the pile grows across the count
+        },
+      ],
+    },
+    // The landing round's move: no FX of its own, but its "3!" sticker (boss-view).
+    strike: {},
+    hit: {
+      bursts: [
+        {
+          pattern: 'burst',
+          shape: 'leaf',
+          colors: LEAF_PILE,
+          motion: 'flutter',
+          count: 48, // TUNE
+          at: 'middle',
+          speed: 2.6,
+          up: 1.8,
+          gravity: 1.2,
+          size: 0.2,
+          life: 1400, // TUNE
+          delay: 0.22, // just after the hit-stop
+        },
+      ],
+    },
+  },
+  // The flinch fire move: hair sticks flare, and a shout ring rolls out round her.
+  'flinch:fire': {
+    strike: {
+      bursts: [
+        {
+          pattern: 'burst',
+          shape: 'puff',
+          colors: 'element',
+          motion: 'rise',
+          count: 14, // TUNE: the hair-stick flare
+          at: 'head',
+          speed: 0.1,
+          up: 0.5,
+          gravity: 0,
+          size: 0.09,
+          life: 620,
+          delay: 0,
+          halos: true,
+        },
+        {
+          pattern: 'rings',
+          shape: 'ring',
+          colors: 'core',
+          motion: 'hoop',
+          count: 3, // TUNE: shout hoops
+          at: 'head',
+          offset: { side: 0, up: 0.5, toward: 0 }, // TUNE: hoops spread out above the head (its feet are behind the team)
+          speed: 0,
+          up: 0,
+          gravity: 0,
+          size: 0.5,
+          life: 640,
+          delay: 0.1,
+          spread: 0.6, // further apart, so they read as rings one after another
+        },
+      ],
+    },
+    flinch: { act: 'shiver' },
+  },
+  // The frost assist: a frosty shrug and "Backup!", then a fire flash beside
+  // the stage as the friend's move comes in (the called move's own colours).
+  'assist:frost': {
+    call: {
+      act: 'shrug',
+      bursts: [
+        {
+          pattern: 'burst',
+          shape: 'shard',
+          colors: 'element',
+          motion: 'ballistic',
+          count: 14, // TUNE: the frost shiver, off its shoulders
+          at: 'shoulders',
+          offset: { side: 0, up: 0.14, toward: 0 }, // TUNE: up at the chin line, where the camera sees it
+          flank: true, // off its two shoulders, sideways, clear of the face
+          speed: 0.5,
+          up: 0.3,
+          gravity: 0.9,
+          size: 0.12,
+          life: 650,
+          delay: 0.15,
+        },
+      ],
+    },
+    backup: {
+      // A burst of stars and halos, not one big pale disc.
+      bursts: [
+        {
+          pattern: 'pop',
+          shape: 'puff',
+          colors: 'core',
+          motion: 'pop',
+          count: 1,
+          at: 'head',
+          offset: BESIDE,
+          speed: 0,
+          up: 0,
+          gravity: 0,
+          size: 0.2, // TUNE: a bright core, small
+          life: 300,
+          delay: 0.05,
+        },
+        {
+          pattern: 'burst',
+          shape: 'star',
+          colors: 'element',
+          motion: 'ballistic',
+          count: 14, // TUNE
+          at: 'head',
+          offset: BESIDE,
+          speed: 0.7,
+          up: 0.4,
+          gravity: 0.9,
+          size: 0.2,
+          life: 650,
+          delay: 0.08,
+        },
+      ],
+    },
+  },
+  // The spark area move: skid arcs round its post, a 2° lean of the camera, and spark
+  // trails at every post it hits.
+  'all-foes:spark': {
+    strike: {
+      tilt: 2, // TUNE: degrees
+      bursts: [
+        {
+          pattern: 'arc',
+          shape: 'puff',
+          colors: SKID,
+          motion: 'ballistic',
+          count: 24, // TUNE: two skid arcs' worth
+          at: 'shoulders',
+          // The team hides its feet, so the skid sweeps across its chest, towards the camera.
+          offset: { side: 0, up: 0, toward: 0.3 }, // TUNE
+          speed: 0,
+          up: 0,
+          gravity: 0,
+          size: 0.12,
+          life: 1000,
+          delay: 0.2,
+          spread: 0.5,
+          sweep: Math.PI * 0.8, // the front, facing the team
+          radius: 0.9,
+        },
+        {
+          pattern: 'arc',
+          shape: 'shard',
+          colors: 'element',
+          motion: 'zap',
+          count: 16, // TUNE
+          at: 'shoulders',
+          offset: { side: 0, up: 0, toward: 0.3 }, // TUNE: at the skid, and rising to stay under the chin (zap jitters ±0.17)
+          speed: 0,
+          up: 0.04,
+          gravity: 0,
+          size: 0.09,
+          life: 520,
+          delay: 0.2,
+          spread: 0.5,
+          sweep: Math.PI * 0.8,
+          radius: 1,
+        },
+      ],
+    },
+    hit: {
+      bursts: [
+        {
+          pattern: 'arc',
+          shape: 'shard',
+          colors: 'element',
+          motion: 'zap',
+          count: 12, // TUNE: a spark trail past each post
+          at: 'middle',
+          face: 'away', // on the friend: the camera's side is away from the boss
+          speed: 0,
+          up: 0.15,
+          gravity: 0,
+          size: 0.08,
+          life: 480,
+          delay: 0.1,
+          spread: 0.3,
+          sweep: Math.PI * 0.9,
+          radius: 0.7,
+        },
+      ],
+    },
+  },
+}; // TUNE
+
+/**
+ * Each effect kind's look when its pair has no entry of its own (null: the
+ * element's ordinary look). A record over every kind, so a new #234 effect
+ * type can't ship without a choice here.
+ */
+export const SIGNATURE_FALLBACK: Readonly<Record<SignatureEffect, SignatureMoment | null>> = {
+  windup: null,
+  // Anyone flinching shivers; anyone's backup comes in with a flash of its colours.
+  flinch: { flinch: { act: 'shiver' } },
+  assist: {
+    call: { act: 'shrug' },
+    backup: {
+      bursts: [
+        {
+          pattern: 'pop',
+          shape: 'puff',
+          colors: 'core',
+          motion: 'pop',
+          count: 1,
+          at: 'middle',
+          offset: BESIDE,
+          speed: 0,
+          up: 0,
+          gravity: 0,
+          size: 0.7,
+          life: 220,
+          delay: 0.05,
+        },
+      ],
+    },
+  },
+  'all-foes': null,
+  'low-energy': null,
+  status: null,
+  stat: null,
+  heal: null,
+};
+
+/** The traits of a move a signature can key on, in `SIGNATURE_ORDER`. */
+export function signatureTraits(move: Pick<Move, 'effects' | 'targets'>): SignatureEffect[] {
+  const has = new Set<SignatureEffect>((move.effects ?? []).map((e) => e.type));
+  if (move.targets === 'all-foes') has.add('all-foes');
+  return SIGNATURE_ORDER.filter((t) => has.has(t));
+}
+
+/** A move's signature: its own pair's entry, else its kind's fallback; null for an ordinary move. */
+export function signatureOf(
+  move: Pick<Move, 'effects' | 'targets' | 'element'> | null | undefined,
+): { readonly key: string; readonly moment: SignatureMoment } | null {
+  if (!move) return null;
+  const traits = signatureTraits(move);
+  for (const t of traits) {
+    const key = `${t}:${move.element}`;
+    const moment = SIGNATURE_FX[key];
+    if (moment) return { key, moment };
+  }
+  for (const t of traits) {
+    const moment = SIGNATURE_FALLBACK[t];
+    if (moment) return { key: t, moment };
+  }
+  return null;
+}
+
 /** Where things are, in world units. */
 export interface Point {
   readonly x: number;
@@ -229,6 +626,14 @@ export interface EmitAt {
   readonly salt: number;
   /** `charm`: the squishy wants to be friends. */
   readonly caught?: boolean;
+  /** `signature`: the burst to throw (`duration` is its step's length, for `delay` and `spread`). */
+  readonly burst?: SignatureBurst;
+  /**
+   * `signature`: the squishy's real face box (world y, above the ground) and
+   * body radius, so a burst can sit on its shoulders and clear its face.
+   */
+  readonly face?: { readonly low: number; readonly high: number } | null;
+  readonly radius?: number;
   /** Reduced motion: thinner, no flash, no speed lines or rays. */
   readonly reduced: boolean;
 }
@@ -643,6 +1048,137 @@ export function emit(e: EmitAt): Particle[] {
       burst(n(12), 'heart', EXTRAS.hearts, 'ballistic', 2.4, 4.6, 6, 0.18 * h, 1100);
       burst(n(8), 'star', EXTRAS.stars, 'ballistic', 2.6, 5, 6, 0.14 * h, 1000);
       break;
+    case 'signature': {
+      const b = e.burst;
+      if (!b) break;
+      const step = e.duration ?? 0;
+      const colors =
+        b.colors === 'element' ? fx.colors : b.colors === 'core' ? [fx.core, '#ffffff'] : b.colors;
+      // Its own frame: towards the other fighter (`to`), else towards -z.
+      const dx = e.to ? e.to.x - e.at.x : 0;
+      const dz = e.to ? e.to.z - e.at.z : -1;
+      const len = Math.hypot(dx, dz) || 1;
+      const away = b.face === 'away' ? -1 : 1;
+      const fx0 = (away * dx) / len;
+      const fz0 = (away * dz) / len;
+      const o = b.offset ?? { side: 0, up: 0, toward: 0 };
+      const face = e.face ?? null;
+      const radius = e.radius ?? 0.4 * h;
+      // `head` is the middle of the real face box, `shoulders` just under its chin.
+      const baseY =
+        b.at === 'feet'
+          ? 0.1
+          : b.at === 'head'
+            ? face
+              ? (face.low + face.high) / 2
+              : e.at.y + h * 0.48
+            : b.at === 'shoulders'
+              ? face
+                ? face.low - 0.1 * h
+                : e.at.y + h * 0.1
+              : e.at.y;
+      const spot: Point = {
+        x: e.at.x + (fx0 * o.toward + fz0 * o.side) * h,
+        y: baseY + o.up * h,
+        z: e.at.z + (fz0 * o.toward - fx0 * o.side) * h,
+      };
+      const count = n(b.count);
+      // Born across `spread` of the step (a pile that grows, a skid drawn in order).
+      const bornAt = (i: number) =>
+        e.now + step * (b.spread ?? 0) * (count > 1 ? i / (count - 1) : 0);
+      if (b.pattern === 'burst') {
+        for (let i = 0; i < count; i++) {
+          const a = TAU * ((i + r(i, 1) * 0.5) / count);
+          const v = b.speed * h * (0.6 + 0.6 * r(i, 2));
+          let origin = spot;
+          let dirX = Math.cos(a);
+          let dirZ = Math.sin(a) * 0.7; // a flatter spread in depth (world z), as `emit`'s bursts
+          if (b.flank) {
+            // Out from the body's own flanks, in its frame: left bits left, right bits right.
+            const sgn = i % 2 === 0 ? 1 : -1;
+            const gap = radius + 0.12 * h;
+            origin = {
+              x: spot.x + fz0 * gap * sgn,
+              y: spot.y,
+              z: spot.z - fx0 * gap * sgn,
+            };
+            const spreadA = (r(i, 7) - 0.5) * 1.2; // fans out a little, never across the face
+            dirX = fz0 * sgn * Math.cos(spreadA) + fx0 * Math.sin(spreadA);
+            dirZ = -fx0 * sgn * Math.cos(spreadA) + fz0 * Math.sin(spreadA);
+          }
+          const vy = b.up * h * (0.5 + r(i, 5));
+          const bit: Particle = {
+            shape: b.shape,
+            color: pick(colors, i),
+            born: bornAt(i) + r(i, 3) * 40,
+            life: b.life * (0.75 + 0.5 * r(i, 4)),
+            motion: b.motion,
+            origin,
+            vx: dirX * v,
+            vy,
+            vz: dirZ * v,
+            gravity: b.gravity * h,
+            size: b.size * h * (0.7 + 0.6 * r(i, 6)),
+            seed: r(i, 9),
+          };
+          add(bit);
+          if (b.halos === true && i % 2 === 0) {
+            add({
+              ...bit,
+              shape: 'halo',
+              color: pick(colors, i + 1),
+              life: bit.life * 0.8,
+              size: bit.size * 1.9,
+            });
+          }
+        }
+      } else if (b.pattern === 'arc') {
+        // Along an arc round the squishy, centred on the side its frame faces (`face`).
+        const sweep = b.sweep ?? Math.PI;
+        const radius = (b.radius ?? 0.8) * h;
+        for (let i = 0; i < count; i++) {
+          const a = Math.atan2(fz0, fx0) + sweep * (count > 1 ? i / (count - 1) - 0.5 : 0);
+          add({
+            shape: b.shape,
+            color: pick(colors, i),
+            born: bornAt(i),
+            life: b.life * (0.8 + 0.4 * r(i, 4)),
+            motion: b.motion,
+            origin: {
+              x: spot.x + Math.cos(a) * radius,
+              y: spot.y,
+              z: spot.z + Math.sin(a) * radius,
+            },
+            vx: 0,
+            vy: b.up * h * (0.5 + r(i, 5)),
+            vz: 0,
+            gravity: b.gravity * h,
+            size: b.size * h * (0.8 + 0.4 * r(i, 6)),
+            seed: r(i, 9),
+          });
+        }
+      } else {
+        // `rings` roll out from its feet one after another; `pop` is one flash.
+        for (let i = 0; i < count; i++) {
+          add({
+            shape: b.shape,
+            color: pick(colors, i),
+            born: bornAt(i),
+            life: b.life,
+            motion: b.motion,
+            origin:
+              b.pattern === 'rings' && b.at === 'feet' ? { x: spot.x, y: 0.06, z: spot.z } : spot,
+            vx: 0,
+            vy: 0,
+            vz: 0,
+            gravity: 0,
+            size: b.size * h,
+            seed: r(i, 9),
+          });
+        }
+      }
+      break;
+    }
   }
   return out;
 }
@@ -706,6 +1242,16 @@ export function particleAt(p: Particle, now: number, out: ParticleState): boolea
       y = p.origin.y + p.vy * t;
       break;
     }
+    case 'pile': {
+      // A heap that turns and grows: each bit circles at its own radius as it rises.
+      const r0 = Math.hypot(p.vx, p.vz) * (0.55 + 0.45 * u);
+      const a = Math.atan2(p.vz, p.vx) + t * 3.2;
+      x = p.origin.x + Math.cos(a) * r0;
+      z = p.origin.z + Math.sin(a) * r0 * 0.8;
+      y = p.origin.y + p.vy * t;
+      tumble = t * 5 + p.seed * 3;
+      break;
+    }
     case 'twinkle':
       x = p.origin.x + p.vx * 0.25 + Math.sin(t * 3 + p.seed * TAU) * 0.1;
       y = p.origin.y + p.vy * 0.25 + t * 0.3;
@@ -729,6 +1275,14 @@ export function particleAt(p: Particle, now: number, out: ParticleState): boolea
       out.sy = Math.max(0.05, 1 - u) * 0.4;
       yaw = 0;
       tumble = 0;
+      break;
+    }
+    case 'hoop': {
+      const e = 1 - (1 - u) ** 2;
+      scale = p.size * (0.3 + 2.2 * e);
+      out.sy = Math.max(0.05, 1 - u) * 0.4;
+      yaw = 0;
+      tumble = Math.PI / 2; // its axis turns from up to along the view: a standing hoop
       break;
     }
     case 'speedline': {
