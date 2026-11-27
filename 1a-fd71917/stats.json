@@ -1,0 +1,240 @@
+[
+ {
+  "name": "iphone-cozy-day-today",
+  "drawCalls": 59,
+  "snow": null,
+  "motes": {
+   "sparkles": 28
+  },
+  "triangles": 720420,
+  "errors": []
+ },
+ {
+  "name": "iphone-cozy-day-snow",
+  "drawCalls": 60,
+  "snow": 1,
+  "motes": {
+   "sparkles": 28,
+   "snow": 120
+  },
+  "triangles": 732420,
+  "errors": []
+ },
+ {
+  "name": "iphone-cozy-night-today",
+  "drawCalls": 60,
+  "snow": null,
+  "motes": {
+   "fireflies": 90,
+   "sparkles": 28
+  },
+  "triangles": 729420,
+  "errors": []
+ },
+ {
+  "name": "iphone-cozy-night-snow",
+  "drawCalls": 60,
+  "snow": 1,
+  "motes": {
+   "sparkles": 28,
+   "snow": 120
+  },
+  "triangles": 732420,
+  "errors": []
+ },
+ {
+  "name": "iphone-wild-day-today",
+  "drawCalls": 65,
+  "snow": null,
+  "motes": {
+   "sparkles": 28
+  },
+  "triangles": 1164588,
+  "errors": []
+ },
+ {
+  "name": "iphone-wild-day-snow",
+  "drawCalls": 66,
+  "snow": 1,
+  "motes": {
+   "sparkles": 28,
+   "snow": 120
+  },
+  "triangles": 1176588,
+  "errors": []
+ },
+ {
+  "name": "iphone-wild-night-today",
+  "drawCalls": 66,
+  "snow": null,
+  "motes": {
+   "fireflies": 90,
+   "sparkles": 28
+  },
+  "triangles": 1173588,
+  "errors": []
+ },
+ {
+  "name": "iphone-wild-night-snow",
+  "drawCalls": 66,
+  "snow": 1,
+  "motes": {
+   "sparkles": 28,
+   "snow": 120
+  },
+  "triangles": 1176588,
+  "errors": []
+ },
+ {
+  "name": "ipad-cozy-day-today",
+  "drawCalls": 59,
+  "snow": null,
+  "motes": {
+   "sparkles": 28
+  },
+  "triangles": 720420,
+  "errors": []
+ },
+ {
+  "name": "ipad-cozy-day-snow",
+  "drawCalls": 60,
+  "snow": 1,
+  "motes": {
+   "sparkles": 28,
+   "snow": 120
+  },
+  "triangles": 732420,
+  "errors": []
+ },
+ {
+  "name": "ipad-cozy-night-today",
+  "drawCalls": 60,
+  "snow": null,
+  "motes": {
+   "fireflies": 90,
+   "sparkles": 28
+  },
+  "triangles": 729420,
+  "errors": []
+ },
+ {
+  "name": "ipad-cozy-night-snow",
+  "drawCalls": 60,
+  "snow": 1,
+  "motes": {
+   "sparkles": 28,
+   "snow": 120
+  },
+  "triangles": 732420,
+  "errors": []
+ },
+ {
+  "name": "ipad-wild-day-today",
+  "drawCalls": 65,
+  "snow": null,
+  "motes": {
+   "sparkles": 28
+  },
+  "triangles": 1164588,
+  "errors": []
+ },
+ {
+  "name": "ipad-wild-day-snow",
+  "drawCalls": 66,
+  "snow": 1,
+  "motes": {
+   "sparkles": 28,
+   "snow": 120
+  },
+  "triangles": 1176588,
+  "errors": []
+ },
+ {
+  "name": "ipad-wild-night-today",
+  "drawCalls": 66,
+  "snow": null,
+  "motes": {
+   "fireflies": 90,
+   "sparkles": 28
+  },
+  "triangles": 1173588,
+  "errors": []
+ },
+ {
+  "name": "ipad-wild-night-snow",
+  "drawCalls": 66,
+  "snow": 1,
+  "motes": {
+   "sparkles": 28,
+   "snow": 120
+  },
+  "triangles": 1176588,
+  "errors": []
+ },
+ {
+  "name": "iphone-cozy-day-midfade",
+  "drawCalls": 60,
+  "snow": 0.5,
+  "motes": {
+   "sparkles": 28,
+   "snow": 120
+  },
+  "triangles": 732420,
+  "errors": []
+ },
+ {
+  "name": "iphone-cozy-night-midfade",
+  "drawCalls": 60,
+  "snow": 0.5,
+  "motes": {
+   "sparkles": 28,
+   "snow": 120
+  },
+  "triangles": 732420,
+  "errors": []
+ },
+ {
+  "name": "ipad-cozy-night-snow-far",
+  "drawCalls": 59,
+  "snow": 1,
+  "motes": {
+   "sparkles": 28,
+   "snow": 120
+  },
+  "triangles": 392564,
+  "errors": []
+ },
+ {
+  "name": "ipad-wild-night-snow-far",
+  "drawCalls": 65,
+  "snow": 1,
+  "motes": {
+   "sparkles": 28,
+   "snow": 120
+  },
+  "triangles": 601232,
+  "errors": []
+ },
+ {
+  "name": "ipad-cozy-day-snow-far",
+  "drawCalls": 59,
+  "snow": 1,
+  "motes": {
+   "sparkles": 28,
+   "snow": 120
+  },
+  "triangles": 392564,
+  "errors": []
+ },
+ {
+  "name": "ipad-wild-day-snow-far",
+  "drawCalls": 65,
+  "snow": 1,
+  "motes": {
+   "sparkles": 28,
+   "snow": 120
+  },
+  "triangles": 601232,
+  "errors": []
+ }
+]

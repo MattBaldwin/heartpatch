@@ -1,0 +1,47 @@
+// Captures for #37 1a: the dev island page (real renderer, no server), DPR 2.
+const { chromium } = require('playwright');
+const out = process.argv[2];
+const base = process.argv[3] || 'http://localhost:5199';
+const only = process.argv[4] || '';
+const DEVICES = {
+  iphone: { width: 393, height: 852, insets: { top: 59, bottom: 34 } },
+  ipad: { width: 1024, height: 1366, insets: { top: 24, bottom: 20 } },
+};
+const SHOTS = [];
+for (const dev of ['iphone', 'ipad'])
+  for (const patch of ['cozy', 'wild'])
+    for (const time of ['day', 'night'])
+      for (const look of ['today', 'snow']) SHOTS.push({ dev, patch, time, look });
+SHOTS.push({ dev: 'iphone', patch: 'cozy', time: 'day', look: 'midfade' });
+SHOTS.push({ dev: 'iphone', patch: 'cozy', time: 'night', look: 'midfade' });
+for (const patch of ['cozy', 'wild']) SHOTS.push({ dev: 'ipad', patch, time: 'night', look: 'snow', far: true });
+for (const patch of ['cozy', 'wild']) SHOTS.push({ dev: 'ipad', patch, time: 'day', look: 'snow', far: true });
+(async () => {
+  const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+  const results = [];
+  for (const s of SHOTS) {
+    const name = `${s.dev}-${s.patch}-${s.time}-${s.look}${s.far ? '-far' : ''}`;
+    if (only && !name.includes(only)) continue;
+    const d = DEVICES[s.dev];
+    const ctx = await browser.newContext({ viewport: { width: d.width, height: d.height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    const q = new URLSearchParams({ patch: s.patch, tier: 'high' });
+    if (s.time === 'night') q.set('night', '1');
+    if (s.look !== 'today') q.set('season', 'christmas');
+    q.set('snow', s.look === 'midfade' ? '0.5' : '1'); if (s.look === 'today') q.delete('snow');
+    if (s.far) q.set('far', '1');
+    await page.goto(`${base}/island.html?${q}`);
+    await page.waitForFunction(() => window.__islandMap?.ready() === true && (window.__islandMap.stats()?.drawCalls ?? 0) > 20, null, { timeout: 120000 });
+    await page.waitForTimeout(1500);
+    const stats = await page.evaluate(() => window.__islandMap.stats());
+    const file = `${out}/${name}.png`;
+    await page.screenshot({ path: file });
+    results.push({ name, drawCalls: stats.drawCalls, snow: stats.snow, motes: stats.motes, triangles: stats.activeTriangles, errors: errors.slice(0, 3) });
+    console.log(name, stats.drawCalls, stats.snow, JSON.stringify(stats.motes), errors.length ? 'ERR ' + errors[0].slice(0, 300) : '');
+    await ctx.close();
+  }
+  require('fs').writeFileSync(`${out}/stats.json`, JSON.stringify(results, null, 1));
+  await browser.close();
+})();
