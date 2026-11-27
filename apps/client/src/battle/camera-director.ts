@@ -27,11 +27,6 @@ export interface SafeRegion {
    * the screen's bottom corners showing beside it.
    */
   readonly floor?: number;
-  /**
-   * A boss fight (#868): the lowest row the stage shows while the team cards
-   * are faded (the sheet's top), where the team's eyes may go then.
-   */
-  readonly open?: number;
 }
 
 /** Something that must stay on screen: a ground point with a radius and a height above it. */
@@ -214,8 +209,9 @@ export function faceDrop(high: number, low: number, safe: SafeRegion, margin: nu
 
 /**
  * True when the stage band is too short for the boss's face and the team's
- * eyes at once (#868: a notched iPhone's boss fight), so the team cards fade
- * while the boss acts (`BOSS_CARDS`).
+ * eyes at once (#868: a notched iPhone's boss fight under the old plate and
+ * cards). The phone-first boss HUD (#190 PR 1) leaves a band well above it;
+ * `faceDrop` and `holdDrop` stay as the safety net if a screen ever is short.
  */
 export function shortBand(safe: SafeRegion, short: number = BOSS_CARDS.shortBand): boolean {
   return safe.bottom - safe.top < short;
@@ -224,26 +220,21 @@ export function shortBand(safe: SafeRegion, short: number = BOSS_CARDS.shortBand
 /**
  * The slide's target (#868), every rule in one place. `face` is the boss
  * face's own slide (`faceDrop`), `floor` the least that keeps its eyes under
- * the plate (`band top − eyes`), `cap` the most before the team's eyes reach
- * the band's bottom. In the usual band (`open` false) the boss's eyes win:
- * face, then the cap, then the floor. While the team cards are faded (`open`,
- * the band reaching down to the sheet) the team's eyes win: face, then the
- * floor, then the cap. A face that needs no slide down needs no rules.
+ * the strip (`band top − eyes`), `cap` the most before the team's eyes reach
+ * the band's bottom. The boss's eyes win: face, then the cap, then the floor.
+ * A face that needs no slide down needs no rules.
  */
-export function slideWant(face: number, floor: number, cap: number, open: boolean): number {
+export function slideWant(face: number, floor: number, cap: number): number {
   if (!(face > 0)) return face;
-  const room = Math.max(0, cap);
-  return open ? Math.min(Math.max(face, floor), room) : Math.max(Math.min(face, room), floor);
+  return Math.max(Math.min(face, Math.max(0, cap)), floor);
 }
 
 /**
  * The eased slide after the rising-face hold (#868): easing never leaves the
- * boss's eyes under the plate (`floor` > 0), except while the cards are faded
- * (`open`), when the team's eyes (`cap`) come first.
+ * boss's eyes under the strip (`floor` > 0).
  */
-export function holdDrop(drop: number, floor: number, cap: number, open: boolean): number {
-  const held = floor > 0 ? Math.max(drop, floor) : drop;
-  return open ? Math.min(held, Math.max(0, cap)) : held;
+export function holdDrop(drop: number, floor: number): number {
+  return floor > 0 ? Math.max(drop, floor) : drop;
 }
 
 const NO_SHAKE = { x: 0, y: 0 } as const;
@@ -363,11 +354,9 @@ export class CameraDirector {
    * (#868): the picture slides down (lens shift, so the distance, the dome
    * cap and the fog stay as they were) until its eyes and mouth are inside
    * the band. The near `team`'s faces cap the slide: their eyes stay above
-   * the team cards (only feet and bodies tuck under), and when both can't
-   * have the margin the boss gives up its own, never its eyes. While the
-   * team cards are faded (`open`: the lowest row the team's eyes may reach,
-   * the sheet's top) the band reaches down to it and the team's eyes win
-   * (`slideWant`). A boss turned away (`face.facing` under `faceFacingMin`)
+   * the team chips (only feet and bodies tuck under), and when both can't
+   * have the margin the boss gives up its own, never its eyes (`slideWant`).
+   * A boss turned away (`face.facing` under `faceFacingMin`)
    * isn't framed: the slide holds its last target. The result is reused next
    * call.
    */
@@ -378,7 +367,6 @@ export class CameraDirector {
     fit: readonly FitPoint[],
     face: FacePoint | null = null,
     team: readonly FacePoint[] = [],
-    open: number | null = null,
   ): CameraShot {
     const dt = this.#last === null ? 1 : Math.min(0.1, Math.max(0, (now - this.#last) / 1000));
     this.#last = now;
@@ -423,11 +411,10 @@ export class CameraDirector {
     let low = Number.NaN;
     let floor = 0;
     let cap = Infinity;
-    const opened = open !== null;
-    // The band the face and the team's eyes may use: to the sheet while the cards are faded.
+    // The band the face and the team's eyes may use.
     const band = this.#band;
     band.top = safe.top;
-    band.bottom = opened ? Math.max(safe.bottom, open) : safe.bottom;
+    band.bottom = safe.bottom;
     // A face behind the camera can't be framed (and would poison the easing).
     const seen =
       face !== null &&
@@ -439,7 +426,7 @@ export class CameraDirector {
       high = screenY(shot, face.x, face.high, face.z);
       low = screenY(shot, face.x, face.low, face.z);
       floor = safe.top - high;
-      // The team's eyes stay above the cards (or the sheet, cards faded): the slide stops at their line.
+      // The team's eyes stay above the chips: the slide stops at their line.
       for (let i = 0; i < team.length; i++) {
         const t = team[i];
         if (!t) continue;
@@ -447,9 +434,9 @@ export class CameraDirector {
         if (Number.isFinite(y)) cap = Math.min(cap, band.bottom - this.#config.faceMargin - y);
       }
       want = away
-        ? // The last target is its own floor: kept whole, under the cap only with the cards faded.
-          slideWant(this.#dropWant, this.#dropWant, cap, opened)
-        : slideWant(faceDrop(high, low, band, this.#config.faceMargin), floor, cap, opened);
+        ? // The last target is its own floor: kept whole.
+          slideWant(this.#dropWant, this.#dropWant, cap)
+        : slideWant(faceDrop(high, low, band, this.#config.faceMargin), floor, cap);
     }
     // Snappy when the face rises out of the band (a windup's lift), gentle back.
     const ease = want > this.#drop ? Math.min(1, k * 3) : k;
@@ -457,7 +444,7 @@ export class CameraDirector {
     this.#drop += (want - this.#drop) * ease;
     // Easing never lets the eyes slip under the plate: a rising face (a windup's
     // power-up) is held at least at the band's top, whatever the lag (`holdDrop`).
-    if (seen && !away) this.#drop = holdDrop(this.#drop, floor, cap, opened);
+    if (seen && !away) this.#drop = holdDrop(this.#drop, floor);
     if (Math.abs(this.#drop) < 1e-5) this.#drop = 0;
     // y = (1 − (v + shift)) / 2: sliding the picture down by `drop` lowers the shift by twice it.
     shot.shift = frame.shift - 2 * this.#drop;
