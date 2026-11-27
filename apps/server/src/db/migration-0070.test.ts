@@ -81,10 +81,55 @@ describe('migration 0070 (Christmas contracts)', () => {
             // A catch-up the next day is fine.
             await claim('2026-12-02', '2026-12-04', true);
 
-            // Warmth is stored ordered.
-            await refused(() =>
-              tx.execute(sql`insert into keeper_warmth (map_id, user_a_id, user_b_id)
-                values (gen_random_uuid(), ${kid!.id}, ${kid!.id})`),
+            // Warmth: both Keepers are members of the patch, stored ordered.
+            const [map] = await tx.execute<{ id: string }>(
+              sql`insert into maps (id, kind, name, time_zone, max_players)
+                values (gen_random_uuid(), 'tutorial', 'M0070 Hollow', 'UTC', 3) returning id`,
+            );
+            const [mate] = await tx.execute<{ id: string }>(
+              sql`insert into users (id, username, password_hash, birth_year)
+                values (gen_random_uuid(), 'm0070_mate', 'x', 2013) returning id`,
+            );
+            const [stranger] = await tx.execute<{ id: string }>(
+              sql`insert into users (id, username, password_hash, birth_year)
+                values (gen_random_uuid(), 'm0070_stranger', 'x', 2013) returning id`,
+            );
+            await tx.execute(sql`insert into map_members (map_id, user_id, role)
+              values (${map!.id}, ${kid!.id}, 'owner'), (${map!.id}, ${mate!.id}, 'member')`);
+            const [lo, hi] = [kid!.id, mate!.id].sort();
+            const warm = (a: string, b: string) =>
+              tx.execute(sql`insert into keeper_warmth (map_id, user_a_id, user_b_id, warmth)
+                values (${map!.id}, ${a}, ${b}, 2)`);
+            const refusedBy = async (name: string, run: () => Promise<unknown>) => {
+              const error = await tx
+                .transaction(async () => run())
+                .then(
+                  () => null,
+                  (e: unknown) => e,
+                );
+              expect(String((error as { cause?: unknown } | null)?.cause ?? error)).toContain(name);
+            };
+            await warm(lo!, hi!);
+            await refusedBy('keeper_warmth_pair_ordered', () => warm(hi!, lo!));
+            await refusedBy('keeper_warmth_pair_ordered', () => warm(lo!, lo!));
+            const [sLo, sHi] = [kid!.id, stranger!.id].sort();
+            await refusedBy('member_fk', () => warm(sLo!, sHi!));
+            await refusedBy('keeper_warmth_nonnegative', () =>
+              tx.execute(sql`update keeper_warmth set warmth = -1 where map_id = ${map!.id}`),
+            );
+
+            // The Patch Tree stands on one of the patch's tiles, one per patch.
+            const [tile] = await tx.execute<{ id: string }>(
+              sql`insert into tiles (id, map_id, q, r, terrain)
+                values (gen_random_uuid(), ${map!.id}, 0, 0, 'meadow') returning id`,
+            );
+            const tree = () =>
+              tx.execute(sql`insert into patch_trees (map_id, post_tile_id)
+                values (${map!.id}, ${tile!.id})`);
+            await tree();
+            await refusedBy('patch_trees_pkey', tree);
+            await refusedBy('patch_trees_ornaments_nonnegative', () =>
+              tx.execute(sql`update patch_trees set ornaments = -1 where map_id = ${map!.id}`),
             );
 
             // The switch defaults on; the send log takes the new kinds.

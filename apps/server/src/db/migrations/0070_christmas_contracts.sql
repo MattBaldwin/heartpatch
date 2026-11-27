@@ -39,8 +39,8 @@ ALTER TABLE "push_settings" ADD COLUMN "christmas" boolean DEFAULT true NOT NULL
 ALTER TABLE "advent_claims" ADD CONSTRAINT "advent_claims_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "advent_claims" ADD CONSTRAINT "advent_claims_map_id_maps_id_fk" FOREIGN KEY ("map_id") REFERENCES "public"."maps"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "keeper_warmth" ADD CONSTRAINT "keeper_warmth_map_id_maps_id_fk" FOREIGN KEY ("map_id") REFERENCES "public"."maps"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "keeper_warmth" ADD CONSTRAINT "keeper_warmth_user_a_id_users_id_fk" FOREIGN KEY ("user_a_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "keeper_warmth" ADD CONSTRAINT "keeper_warmth_user_b_id_users_id_fk" FOREIGN KEY ("user_b_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "keeper_warmth" ADD CONSTRAINT "keeper_warmth_a_member_fk" FOREIGN KEY ("map_id","user_a_id") REFERENCES "public"."map_members"("map_id","user_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "keeper_warmth" ADD CONSTRAINT "keeper_warmth_b_member_fk" FOREIGN KEY ("map_id","user_b_id") REFERENCES "public"."map_members"("map_id","user_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "patch_trees" ADD CONSTRAINT "patch_trees_map_id_maps_id_fk" FOREIGN KEY ("map_id") REFERENCES "public"."maps"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "patch_trees" ADD CONSTRAINT "patch_trees_post_tile_id_tiles_id_fk" FOREIGN KEY ("post_tile_id") REFERENCES "public"."tiles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "advent_claims_user_id_claimed_on_catch_up_key" ON "advent_claims" USING btree ("user_id","claimed_on") WHERE "advent_claims"."catch_up";--> statement-breakpoint

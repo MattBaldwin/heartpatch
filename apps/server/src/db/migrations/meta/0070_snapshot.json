@@ -1,5 +1,5 @@
 {
-  "id": "b0e97155-1e2a-41dc-81c9-db96b0601d4c",
+  "id": "4e576bfa-e24c-4afa-85a0-5150d85897a0",
   "prevId": "e233812f-f8b9-43e8-b57d-4ae977b75dd7",
   "version": "7",
   "dialect": "postgresql",
@@ -4616,22 +4616,22 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "keeper_warmth_user_a_id_users_id_fk": {
-          "name": "keeper_warmth_user_a_id_users_id_fk",
+        "keeper_warmth_a_member_fk": {
+          "name": "keeper_warmth_a_member_fk",
           "tableFrom": "keeper_warmth",
-          "tableTo": "users",
-          "columnsFrom": ["user_a_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
+          "tableTo": "map_members",
+          "columnsFrom": ["map_id", "user_a_id"],
+          "columnsTo": ["map_id", "user_id"],
+          "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "keeper_warmth_user_b_id_users_id_fk": {
-          "name": "keeper_warmth_user_b_id_users_id_fk",
+        "keeper_warmth_b_member_fk": {
+          "name": "keeper_warmth_b_member_fk",
           "tableFrom": "keeper_warmth",
-          "tableTo": "users",
-          "columnsFrom": ["user_b_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
+          "tableTo": "map_members",
+          "columnsFrom": ["map_id", "user_b_id"],
+          "columnsTo": ["map_id", "user_id"],
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },

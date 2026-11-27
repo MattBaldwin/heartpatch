@@ -3064,7 +3064,8 @@ export const adventClaims = pgTable(
 /**
  * Warmth between two patch-mates (#37 §3): a per-pair counter that gifts
  * raise (a present gifted unopened, two). The pair is stored ordered
- * (`user_a_id < user_b_id`), so each pair has one row.
+ * (`user_a_id < user_b_id`), so each pair has one row; both are members
+ * of the patch.
  */
 export const keeperWarmth = pgTable(
   'keeper_warmth',
@@ -3072,17 +3073,24 @@ export const keeperWarmth = pgTable(
     mapId: uuid('map_id')
       .notNull()
       .references(() => maps.id, { onDelete: 'cascade' }),
-    userAId: uuid('user_a_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    userBId: uuid('user_b_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userAId: uuid('user_a_id').notNull(),
+    userBId: uuid('user_b_id').notNull(),
     warmth: integer('warmth').notNull().default(0),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
   },
   (t) => [
     primaryKey({ name: 'keeper_warmth_pkey', columns: [t.mapId, t.userAId, t.userBId] }),
+    // Both Keepers are members of this patch (as `trade_offers`).
+    foreignKey({
+      name: 'keeper_warmth_a_member_fk',
+      columns: [t.mapId, t.userAId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    foreignKey({
+      name: 'keeper_warmth_b_member_fk',
+      columns: [t.mapId, t.userBId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
     check('keeper_warmth_pair_ordered', sql`${t.userAId} < ${t.userBId}`),
     check('keeper_warmth_nonnegative', sql`${t.warmth} >= 0`),
   ],
