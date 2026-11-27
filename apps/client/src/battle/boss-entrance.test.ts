@@ -134,25 +134,26 @@ describe('the BIG squishy arrives (#190 PR 3)', () => {
     expect(wantsEntrance(fight({ status: 'ended' }), false)).toBe(false);
   });
 
-  it('puts the card between the boss face and the team, inside the band', () => {
+  it('puts the card clear of the boss face and the team, inside the band', () => {
     const height = 852;
-    const band = { top: 0.1, bottom: 0.7 };
-    const face = { top: 0.15, bottom: 0.3 };
-    const top = cardTop({ band, face, teamTop: 0.6, height, cardHeight: 64 });
-    expect(top).toBeGreaterThanOrEqual(face.bottom * height + BOSS_ENTRANCE.cardGapPx);
-    expect(top + 64).toBeLessThanOrEqual(0.6 * height - BOSS_ENTRANCE.cardGapPx);
-    // No room between them: under the face, never off the band's bottom.
-    const tight = cardTop({
-      band,
-      face: { top: 0.4, bottom: 0.66 },
-      teamTop: 0.6,
-      height,
-      cardHeight: 64,
-    });
-    expect(tight + 64).toBeLessThanOrEqual(band.bottom * height - BOSS_ENTRANCE.cardGapPx);
-    // Nothing framed yet: in the band.
-    const none = cardTop({ band, face: null, teamTop: null, height, cardHeight: 64 });
+    const band = { top: 0.14, bottom: 0.61 };
+    const cardHeight = 95;
+    const gap = BOSS_ENTRANCE.cardGapPx;
+    // The notched iPhone's rest framing (pr3 captures): sky over the boss's head.
+    const face = { top: 0.4285, bottom: 0.4824 };
+    const sky = cardTop({ band, face, teamTop: 0.5265, height, cardHeight });
+    const headTop = (face.top - (face.bottom - face.top) * BOSS_ENTRANCE.headroom) * height;
+    expect(sky).toBeGreaterThanOrEqual(band.top * height + gap);
+    expect(sky + cardHeight).toBeLessThanOrEqual(headTop - gap);
+    // No sky (the face high in the band): over its tummy, between the face and the team.
+    const high = { top: 0.16, bottom: 0.22 };
+    const tummy = cardTop({ band, face: high, teamTop: 0.5, height, cardHeight });
+    expect(tummy).toBeGreaterThanOrEqual(high.bottom * height + gap);
+    expect(tummy + cardHeight).toBeLessThanOrEqual(0.5 * height - gap);
+    // Nothing framed yet: inside the band.
+    const none = cardTop({ band, face: null, teamTop: null, height, cardHeight });
     expect(none).toBeGreaterThanOrEqual(band.top * height);
+    expect(none + cardHeight).toBeLessThanOrEqual(band.bottom * height);
   });
 
   it('moves only transform and opacity', () => {

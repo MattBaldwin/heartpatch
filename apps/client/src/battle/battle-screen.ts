@@ -1742,8 +1742,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const boss = next.view.sides[otherSide(next.mySide)].squishies[bossSlot(next)];
     const bossName = boss ? names.speciesName(boss.speciesId) : 'The BIG squishy';
     const element = boss?.element ?? null;
+    // The picker stays drawn (inert under the entrance's layer), so the sheet and
+    // the stage band don't move: the entrance ends on the fight's rest framing.
     gate.hold();
-    hud.setControls({ type: 'hidden' });
     let frames = 0;
     const begin = (): void => {
       if (battle?.id !== next.id || entrance || !gate.waiting) return;

@@ -29,6 +29,8 @@ export const BOSS_ENTRANCE = {
   settleMs: 2420, // TUNE:
   /** The card's pop: from this size up to 1 as it fades in (not under reduced motion). */
   cardPopFrom: 0.86, // TUNE:
+  /** The boss's head and tuft over its face, in face-heights (the card stays clear of it). */
+  headroom: 1.5, // TUNE:
   /** The card's gap from the boss's face and the team's eyes, px. */
   cardGapPx: 10, // TUNE:
 } as const;
@@ -152,19 +154,26 @@ export interface CardLayout {
 }
 
 /**
- * The card's top, px: in the gap between the boss's face and the team's eyes
- * (over the boss's tummy, never its face or the team), inside the band. A gap
- * too small for the card puts it just under the face, still in the band.
+ * The card's top, px, never over the boss's face or the team's eyes, inside
+ * the band: first in the sky over the boss's head (the face's top less
+ * `headroom` face-heights for the head and its tuft), else in the gap between
+ * the face and the team (over its tummy), else just under the face.
  */
 export function cardTop(layout: CardLayout): number {
   const { band, face, teamTop, height, cardHeight } = layout;
   const gap = BOSS_ENTRANCE.cardGapPx;
   const lo = band.top * height + gap;
   const hi = band.bottom * height - cardHeight - gap;
-  const from = face ? face.bottom * height + gap : lo;
+  const place = (want: number): number => Math.round(Math.max(lo, Math.min(hi, want)));
+  if (!face) return place((lo + hi) / 2);
+  const faceTop = face.top * height;
+  const faceBottom = face.bottom * height;
+  const headTop = faceTop - (faceBottom - faceTop) * BOSS_ENTRANCE.headroom;
+  const skyBottom = headTop - gap - cardHeight;
+  if (skyBottom >= lo) return place((lo + skyBottom) / 2);
+  const from = faceBottom + gap;
   const to = teamTop !== null ? teamTop * height - cardHeight - gap : hi;
-  const want = to >= from ? (from + to) / 2 : from;
-  return Math.round(Math.max(lo, Math.min(hi, want)));
+  return place(to >= from ? (from + to) / 2 : from);
 }
 
 /**
