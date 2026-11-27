@@ -8,7 +8,8 @@
 // a new device may say a tip again.
 
 /** What a tip waits for. */
-export type SproutTipId = 'trading-post' | 'hollowed-village' | 'day-three' | 'first-evolution';
+export type SproutTipId =
+  'first-snow' | 'trading-post' | 'hollowed-village' | 'day-three' | 'first-evolution';
 
 export interface SproutTip {
   readonly id: SproutTipId;
@@ -18,6 +19,8 @@ export interface SproutTip {
 
 /** The tips, in the order they are offered when more than one is due. */
 export const SPROUT_TIPS: readonly SproutTip[] = [
+  // Christmas (#37): the first snow on a patch (the owner's line, Christmas plan §1).
+  { id: 'first-snow', text: 'Ooh! Snow! Everyone, look up! ❄️' },
   { id: 'trading-post', text: "That's a trading post!" },
   { id: 'hollowed-village', text: "Something's wrong with that village…" },
   { id: 'day-three', text: 'Fires keep them safe at night.' },
@@ -47,11 +50,15 @@ export interface SproutTipFacts {
   readonly day: number | null;
   /** The player's squishy has evolved on a patch. */
   readonly evolved: boolean;
+  /** Christmas is on for the patch on screen: it's snowing (#37). */
+  readonly snow: boolean;
 }
 
 /** Whether the thing a tip is about has happened. */
 export function tipDue(id: SproutTipId, facts: SproutTipFacts): boolean {
   switch (id) {
+    case 'first-snow':
+      return facts.snow;
     case 'trading-post':
       return facts.postFlag;
     case 'hollowed-village':

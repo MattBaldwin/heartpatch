@@ -81,8 +81,12 @@ import {
   isOcean,
   isWaterTile,
   muteRgb,
+  snowCoverAt,
+  snowGroundRgb,
+  snowLight,
   tileColor,
   tileJitter,
+  type Rgb,
 } from './map-dressing.js';
 import { bridgeYaw } from '../roads/road-layout.js';
 import { greyTiles, villageSeeds, villageSquares } from '../hollowed/community-model.js';
@@ -96,7 +100,12 @@ import {
 } from './map-layout.js';
 import { buildProp, buildWildTuft, linear, merged, painted, type PropDetail } from './map-props.js';
 import type { WildMarker } from './wild-markers.js';
-import { AMBIENT_ATTRIBUTE, attachTerrainPlugin, TerrainClock } from './terrain-plugin.js';
+import {
+  AMBIENT_ATTRIBUTE,
+  attachTerrainPlugin,
+  SnowLight,
+  TerrainClock,
+} from './terrain-plugin.js';
 import type { QualityTier } from '../engine/config.js';
 import { outOfSeason } from '../resource-buildings/resource-model.js';
 
@@ -189,6 +198,8 @@ export interface MapSceneStats {
   readonly mutedProps: number;
   /** Halloween dressing is on (season, map-local date). */
   readonly halloween: boolean;
+  /** Christmas snow (#37): how far the first snow has faded in (0–1), or null out of season. */
+  readonly snow: number | null;
   readonly night: boolean;
   /** Ambient life: `live`, `still` (reduced motion) or `off` (low tier or a slow device). */
   readonly ambient: AmbientMode;
@@ -210,6 +221,11 @@ export interface MapSceneOptions {
   /** The quality tier and reduced motion to start with (`setAmbient` follows changes). */
   readonly tier?: QualityTier;
   readonly reducedMotion?: boolean;
+  /**
+   * Christmas (#37): play the first snow's fade (the first open of the
+   * season on this device). Reduced motion, or no ambient life, snaps.
+   */
+  readonly snowFade?: boolean;
 }
 
 function lookOf(tile: PublicTile): TerrainLook {
@@ -486,11 +502,27 @@ export class MapScene {
   private isles: ReadonlySet<HexKey> = new Set();
   /** The sea's glint strength (Wild Isle, #621): softer at night. */
   private readonly seaGlint: { value: number } = { value: OCEAN.glint.day };
+  /** Christmas is on (#37): snow on every tile, the island ground and props' tops. */
+  private readonly christmas: boolean;
+  /** The snow's uniform (moonlit lift, caps), shared by every snowy material. */
+  private readonly snow = new SnowLight();
+  /** How far the first snow has faded in (0–1); 1 once it has. */
+  private snowCover = 1;
+  /** The first snow's fade is still playing (from `fadeStart`, the first live tick). */
+  private snowFading = false;
+  private fadeStart: number | null = null;
+  /** The island ground's materials and their own colours, snowed with the tiles. */
+  private readonly grounds: { mat: PBRMaterial; rgb: Rgb; ground: 'grass' | 'beach' }[] = [];
 
   constructor(scene: Scene, view: MapView, options: MapSceneOptions = {}) {
     this.scene = scene;
     this.seasons = options.seasons ?? [];
     this.halloween = options.halloween === true;
+    this.christmas = this.seasons.includes('christmas');
+    this.snowFading = this.christmas && options.snowFade === true && options.reducedMotion !== true;
+    this.snowCover = this.snowFading ? 0 : 1;
+    // The uniform starts where the snow is (caps on from the first frame unless the fade plays).
+    if (this.christmas) Object.assign(this.snow, snowLight(this.snowCover, this.night));
     scene.clearColor = new Color4(0.992, 0.91, 0.941, 1);
     for (const t of view.tiles) this.tiles.set(hexKey(t), t);
     this.grey = greyTiles(view);
@@ -537,6 +569,7 @@ export class MapScene {
     this.ambient = new MapAmbient(scene, land, this.clock, {
       halloween: this.halloween,
       thanksgiving: options.seasons?.includes('thanksgiving') === true,
+      christmas: this.christmas,
       // The backdrop and clouds sit out past the sea, if there is one.
       islandRadius: sea ?? mapRadius(view.tiles, HEX_SIZE) + ISLAND.margin,
     });
@@ -662,6 +695,7 @@ export class MapScene {
       drawCalls: this.drawCalls,
       activeTriangles: activeTriangles(this.scene),
       halloween: this.halloween,
+      snow: this.christmas ? this.snowCover : null,
       night: this.night,
       ambient: this.mode,
       motes: this.ambient.stats.motes,
@@ -770,7 +804,28 @@ export class MapScene {
     }
     this.clockStart ??= now;
     this.clock.time = (now - this.clockStart) / 1000;
+    if (this.snowFading) {
+      this.fadeStart ??= now;
+      const cover = snowCoverAt({ startMs: this.fadeStart }, now, false);
+      // TUNE: recolour the tiles in steps of 2% of the fade, not every frame.
+      if (cover >= 1 || cover - this.snowCover >= 0.02) this.applySnow(cover);
+    }
     return true;
+  }
+
+  /** Christmas snow at `cover` (#37): tile colours, the island ground and the snow uniform. */
+  private applySnow(cover: number): void {
+    if (!this.christmas) return;
+    this.snowCover = Math.min(1, Math.max(0, cover));
+    if (this.snowCover >= 1) this.snowFading = false;
+    const light = snowLight(this.snowCover, this.night);
+    this.snow.cover = light.cover;
+    this.snow.lift = light.lift;
+    for (const g of this.grounds) {
+      const c = snowGroundRgb(g.rgb, g.ground, this.snowCover);
+      g.mat.albedoColor = new Color3(...c.map(toLinear));
+    }
+    this.recolour(true);
   }
 
   /** The page was hidden: the time away isn't a slow frame (`AmbientJudge.skip`). */
@@ -785,6 +840,13 @@ export class MapScene {
     this.seaGlint.value = night ? OCEAN.glint.night : OCEAN.glint.day;
     this.borders.setNight(night ? BORDER.night : 0);
     this.applyAmbient();
+    // Only the moon lift changes with the night: the tiles keep their snow.
+    if (this.christmas) Object.assign(this.snow, snowLight(this.snowCover, night));
+  }
+
+  /** The snow uniform's values now (#37): caps' cover and the moon lift. */
+  get snowUniform(): { readonly cover: number; readonly lift: number } {
+    return { cover: this.snow.cover, lift: this.snow.lift };
   }
 
   /**
@@ -1070,17 +1132,8 @@ export class MapScene {
       this.scene,
     );
     rim.position.y = -ISLAND.thickness / 2;
-    const mat = vinyl(this.scene, 'island-mat', {
-      ...FALLBACK_LOOK,
-      color: ISLAND.color,
-      roughness: 0.85,
-    });
     // Softened like wild land (part way), since nobody ever owns the island.
-    const green = hexRgb(ISLAND.color);
-    const soft = muteRgb(green);
-    mat.albedoColor = new Color3(
-      ...green.map((v, i) => toLinear(v + ((soft[i] ?? v) - v) * MUTED.island)),
-    );
+    const mat = this.islandMaterial('island-mat', ISLAND.color, 'grass');
     for (const m of [island, rim]) {
       m.material = mat;
       m.isPickable = false;
@@ -1099,7 +1152,13 @@ export class MapScene {
   private buildSea(tiles: readonly PublicTile[], island: readonly PublicTile[]): number {
     const beach = beachRadius(island);
     const outer = mapRadius(tiles, HEX_SIZE) + OCEAN.reach;
-    const slab = (name: string, radius: number, top: number, color: string): Mesh => {
+    const slab = (
+      name: string,
+      radius: number,
+      top: number,
+      color: string,
+      ground: 'grass' | 'beach',
+    ): Mesh => {
       const mesh = meshFrom(
         this.scene,
         name,
@@ -1116,14 +1175,14 @@ export class MapScene {
       );
       // Turned 30° to the land's hexagon (corners east and west).
       mesh.rotation.y = Math.PI / 6;
-      mesh.material = this.islandMaterial(`${name}-mat`, color);
+      mesh.material = this.islandMaterial(`${name}-mat`, color, ground);
       mesh.freezeWorldMatrix();
       return mesh;
     };
     // The grass stops a little inside the coast, so the gaps round the coast
     // tiles show sand, as the beach runs on under them.
-    slab('island', beach - OCEAN.margin - HEX_SIZE, 0, ISLAND.color);
-    slab('island-beach', beach, -0.02, OCEAN.beach);
+    slab('island', beach - OCEAN.margin - HEX_SIZE, 0, ISLAND.color, 'grass');
+    slab('island-beach', beach, -0.02, OCEAN.beach, 'beach');
     const sea = meshFrom(
       this.scene,
       'sea',
@@ -1155,13 +1214,19 @@ export class MapScene {
   }
 
   /** Island ground (grass, beach, an isle's sand), softened like wild land part way, since nobody owns it. */
-  private islandMaterial(name: string, color: string): PBRMaterial {
+  private islandMaterial(name: string, color: string, ground: 'grass' | 'beach'): PBRMaterial {
     const mat = vinyl(this.scene, name, { ...FALLBACK_LOOK, color, roughness: 0.85 });
     const rgb = hexRgb(color);
     const soft = muteRgb(rgb);
-    mat.albedoColor = new Color3(
-      ...rgb.map((v, i) => toLinear(v + ((soft[i] ?? v) - v) * MUTED.island)),
-    );
+    const blend = (i: 0 | 1 | 2) => rgb[i] + (soft[i] - rgb[i]) * MUTED.island;
+    const own: Rgb = [blend(0), blend(1), blend(2)];
+    // Christmas (#37): the ground off the map snows too, so the patch is no white island on green.
+    const drawn = this.christmas ? snowGroundRgb(own, ground, this.snowCover) : own;
+    mat.albedoColor = new Color3(...drawn.map(toLinear));
+    if (this.christmas) {
+      this.grounds.push({ mat, rgb: own, ground });
+      attachTerrainPlugin(mat, this.clock, { snow: this.snow });
+    }
     return mat;
   }
 
@@ -1189,7 +1254,7 @@ export class MapScene {
         { corner: 0.5, segments: 4, centre: { y: top } },
       ),
     );
-    mesh.material = this.islandMaterial('isle-sand-mat', OCEAN.beach);
+    mesh.material = this.islandMaterial('isle-sand-mat', OCEAN.beach, 'beach');
     // Neighbours' skirts overlap: each stands a hair higher or lower than the
     // next, so the overlap never shares one depth (it would shimmer).
     setInstances(
@@ -1245,7 +1310,10 @@ export class MapScene {
       // White albedo: each tile's colour comes from its instance colour.
       const mat = vinyl(this.scene, `tiles-${group.key}-mat`, { ...look, color: '#ffffff' });
       if (look.glow > 0) mat.emissiveColor = linear(look.color).scale(look.glow);
-      const plugin = attachTerrainPlugin(mat, this.clock, { water: group.key === 'lake' });
+      const plugin = attachTerrainPlugin(mat, this.clock, {
+        water: group.key === 'lake',
+        ...(this.christmas ? { snow: this.snow } : {}),
+      });
       if (!plugin) animated = false;
       const matrices = group.tiles.map((tile) => tileMatrix(tile, h));
       // Both detail levels share the colours: recolouring one recolours both.
@@ -1385,10 +1453,11 @@ export class MapScene {
         group.terrains[i] = shapeOf(tile);
         if (reshaped) moved = true;
         changed = true;
+        const snow = this.christmas ? { terrain: tile.terrain, cover: this.snowCover } : undefined;
         const c =
           tile.homeSlot !== null
-            ? tileColor(lookOf(tile).color, { brightness: 1, warmth: 0, height: 0 }, muted)
-            : tileColor(lookOf(tile).color, tileJitter(tile, tile.terrain), muted);
+            ? tileColor(lookOf(tile).color, { brightness: 1, warmth: 0, height: 0 }, muted, snow)
+            : tileColor(lookOf(tile).color, tileJitter(tile, tile.terrain), muted, snow);
         // A Hollowed village (#306): drained past wild, in its own instance colour.
         const drawn = this.grey.has(key) ? drainRgb(c) : c;
         group.colors.set([...drawn.map(toLinear), 1], i * 4);
@@ -1485,7 +1554,8 @@ export class MapScene {
       }
     }
     const propMat = vinyl(this.scene, 'prop-mat', { color: '#ffffff' });
-    attachTerrainPlugin(propMat, this.clock);
+    // Christmas (#37): snow on the tops of trees, rocks and bushes, in the shader (0 draw calls).
+    attachTerrainPlugin(propMat, this.clock, this.christmas ? { snow: this.snow, caps: true } : {});
     // Jack-o'-lanterns and Juniper's crystals glow softly (lanterns brighter at night).
     const glowing = (name: string, color: string, glow: number): PBRMaterial => {
       const m = vinyl(this.scene, name, { color: '#ffffff' });
@@ -1603,6 +1673,9 @@ export class MapScene {
   /** Pushes night, mode and the tier's share into the motes, backdrop and lanterns. */
   private applyAmbient(): void {
     if (this.judge.slow && this.mode === 'live') this.mode = 'off';
+    // Nothing moves (reduced motion, the low tier, a device judged slow, even mid-fade):
+    // the first snow is just there.
+    if (this.snowFading && this.mode !== 'live' && this.tileGroups.length > 0) this.applySnow(1);
     this.ambient.set({ night: this.night, mode: this.mode, share: this.share });
     if (this.lanternMat) {
       const glow = this.night ? HALLOWEEN.glow.night : HALLOWEEN.glow.day;

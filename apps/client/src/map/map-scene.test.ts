@@ -6,7 +6,15 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { hexKey, hexNeighbors, hexToWorld, worldToHex, type MapView } from '@heartpatch/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BORDER, HEX_SIZE, MAP_DETAIL, OCEAN, PLAYER_COLORS, type PropKind } from './map-config.js';
+import {
+  BORDER,
+  CHRISTMAS,
+  HEX_SIZE,
+  MAP_DETAIL,
+  OCEAN,
+  PLAYER_COLORS,
+  type PropKind,
+} from './map-config.js';
 import { findHomeBases } from './map-layout.js';
 import {
   buildProp,
@@ -494,6 +502,113 @@ describe('MapScene', () => {
     expect(on.instances('jack-o-lantern')).toBeGreaterThan(0);
     expect(on.map.stats.motes.bats ?? 0).toBeGreaterThan(0);
     expect(on.map.stats.motes.fog ?? 0).toBeGreaterThan(0);
+  });
+
+  describe('Christmas snow (#37)', () => {
+    const CHRISTMAS_ON = { seasons: ['christmas'] } as const;
+    /** Meshes that would draw (a proxy for draw calls under NullEngine). */
+    const drawn = (scene: Scene) =>
+      scene.meshes.filter((m) => m.isEnabled() && m.isVisible && m.material !== null).length;
+    /** Mean luminance of a mesh's instance colours (the buffer is kept and recoloured in place). */
+    const tileLum = (build: () => { scene: Scene }, name: string): number => {
+      const setBuffer = vi.spyOn(Mesh.prototype, 'thinInstanceSetBuffer');
+      build();
+      let colors: Float32Array | undefined;
+      setBuffer.mock.calls.forEach(([kind, data], i) => {
+        const m = setBuffer.mock.contexts[i] as Mesh;
+        if (kind === 'color' && data && m.name === name) colors = data;
+      });
+      setBuffer.mockRestore();
+      if (!colors) return -1;
+      let sum = 0;
+      for (let i = 0; i < colors.length; i += 4)
+        sum +=
+          0.2126 * (colors[i] ?? 0) + 0.7152 * (colors[i + 1] ?? 0) + 0.0722 * (colors[i + 2] ?? 0);
+      return sum / (colors.length / 4);
+    };
+
+    it('snows every tile and the island ground, only in its season', () => {
+      const off = build(testView(1));
+      const on = build(testView(1), CHRISTMAS_ON);
+      expect(off.map.stats.snow).toBeNull();
+      expect(on.map.stats.snow).toBe(1);
+      const before = tileLum(() => build(testView(1)), 'tiles-meadow');
+      const after = tileLum(() => build(testView(1), CHRISTMAS_ON), 'tiles-meadow');
+      expect(after).toBeGreaterThan(before + 0.1);
+      const ground = (m: Mesh | null) => {
+        const c = (m?.material as { albedoColor?: { r: number; g: number; b: number } } | null)
+          ?.albedoColor;
+        return c ? 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b : -1;
+      };
+      expect(ground(on.mesh('island'))).toBeGreaterThan(ground(off.mesh('island')) + 0.2);
+    });
+
+    it('sets the snow uniform from the first frame: caps by day, the moon lift only at night', () => {
+      const { map } = build(testView(1), CHRISTMAS_ON);
+      expect(map.snowUniform).toEqual({ cover: 1, lift: 0 });
+      map.setNight(true);
+      expect(map.snowUniform).toEqual({ cover: 1, lift: CHRISTMAS.night.lift });
+      map.setNight(false);
+      expect(map.snowUniform).toEqual({ cover: 1, lift: 0 });
+      // Out of season it stays off; while the first snow fades it follows the fade.
+      expect(build(testView(1)).map.snowUniform).toEqual({ cover: 0, lift: 0 });
+      const fading = build(testView(1), { ...CHRISTMAS_ON, snowFade: true });
+      expect(fading.map.snowUniform.cover).toBe(0);
+      fading.map.tick(0);
+      fading.map.tick(CHRISTMAS.fadeMs / 2);
+      expect(fading.map.snowUniform.cover).toBeCloseTo(fading.map.stats.snow ?? -1);
+    });
+
+    it('swaps pollen, leaves and fireflies for snowfall, day and night, with no more draws', () => {
+      const off = build(testView(1));
+      const on = build(testView(1), CHRISTMAS_ON);
+      for (const night of [false, true]) {
+        off.map.setNight(night);
+        on.map.setNight(night);
+        const motes = on.map.stats.motes;
+        expect(motes.snow ?? 0, `night ${String(night)}`).toBeGreaterThan(0);
+        expect(motes.pollen ?? 0).toBe(0);
+        expect(motes.leaves ?? 0).toBe(0);
+        expect(motes.fireflies ?? 0).toBe(0);
+        expect(drawn(on.scene), `night ${String(night)}`).toBeLessThanOrEqual(drawn(off.scene));
+      }
+      // Out of season: no snowfall at all.
+      expect(off.map.stats.motes.snow ?? 0).toBe(0);
+      expect(off.mesh('mote-snow')).toBeNull();
+    });
+
+    it('fades the first snow in over the first live seconds; reduced motion snaps', () => {
+      const { map } = build(testView(1), { ...CHRISTMAS_ON, snowFade: true });
+      expect(map.stats.snow).toBe(0);
+      map.tick(10_000);
+      expect(map.stats.snow).toBe(0);
+      map.tick(10_000 + CHRISTMAS.fadeMs / 2);
+      expect(map.stats.snow ?? 0).toBeGreaterThan(0.4);
+      expect(map.stats.snow ?? 1).toBeLessThan(0.6);
+      map.tick(10_000 + CHRISTMAS.fadeMs);
+      expect(map.stats.snow).toBe(1);
+
+      expect(
+        build(testView(1), { ...CHRISTMAS_ON, snowFade: true, reducedMotion: true }).map.stats.snow,
+      ).toBe(1);
+      // Reduced motion turned on mid-fade: the snow is just there.
+      const mid = build(testView(1), { ...CHRISTMAS_ON, snowFade: true });
+      mid.map.tick(0);
+      mid.map.tick(CHRISTMAS.fadeMs / 4);
+      mid.map.setAmbient('high', true);
+      expect(mid.map.stats.snow).toBe(1);
+      // A device judged slow mid-fade (the older iPads): ambient life stops and the snow snaps in.
+      const slow = build(testView(1), { ...CHRISTMAS_ON, snowFade: true });
+      let t = 0;
+      for (; t <= 2100; t += 16) slow.map.tick(t);
+      for (let i = 0; i < 40; i++) slow.map.tick((t += 100));
+      expect(slow.map.stats.ambient).toBe('off');
+      expect(slow.map.stats.snow).toBe(1);
+      // The low tier (no ambient life) snaps too.
+      expect(
+        build(testView(1), { ...CHRISTMAS_ON, snowFade: true, tier: 'low' }).map.stats.snow,
+      ).toBe(1);
+    });
   });
 
   it('swaps daytime motes for fireflies at night', () => {

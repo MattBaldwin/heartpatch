@@ -17,6 +17,8 @@ export const DRIFT_MODE = {
   firefly: 2,
   orbit: 3,
   float: 4,
+  /** Christmas snowfall (#37): a slow fall with a soft sway, no tumble. */
+  snowfall: 5,
 } as const;
 
 /** One mote: where it hangs and how it drifts. */
@@ -36,6 +38,18 @@ const TERRAINS_FOR: Readonly<Record<MoteKind, readonly string[]>> = {
   sparkles: ['junipers-gap'],
   bats: ['forest', 'old-forest', 'mountains'],
   fog: ['lake', 'meadow'],
+  // Over every patch's land (Wild Isle's too), never water.
+  snow: [
+    'meadow',
+    'forest',
+    'old-forest',
+    'hills',
+    'mountains',
+    'pumpkin-fields',
+    'clearing',
+    'coast',
+    'trading-post',
+  ],
 };
 
 /** How each kind floats: height above its tile, size, and its drift. TUNE: all of it. */
@@ -93,6 +107,13 @@ const STYLE: Readonly<
     range: [0.2, 0.4],
     speed: [0.15, 0.25],
   },
+  snow: {
+    lift: [0.9, 1.7],
+    size: [0.04, 0.07],
+    mode: DRIFT_MODE.snowfall,
+    range: [1.1, 1.6],
+    speed: [0.3, 0.55],
+  },
 };
 
 const SALT: Readonly<Record<MoteKind, number>> = {
@@ -102,6 +123,7 @@ const SALT: Readonly<Record<MoteKind, number>> = {
   sparkles: 130,
   bats: 140,
   fog: 150,
+  snow: 160,
 };
 
 /**

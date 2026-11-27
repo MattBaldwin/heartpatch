@@ -7,7 +7,7 @@ import { isQualityTier, pickInitialTier } from '../../engine/quality/tiers.js';
 import { createRenderer, parseRendererPreference } from '../../engine/renderer.js';
 import { mountStage, type Stage } from '../../engine/stage.js';
 import { NIGHT_LOOK } from '../../hollow/hollow-config.js';
-import { HEX_SIZE } from '../map-config.js';
+import { CHRISTMAS, HEX_SIZE } from '../map-config.js';
 import { maxZoomFor } from '../map-layout.js';
 import { MapScene, type MapSceneStats } from '../map-scene.js';
 import { testPatch, testWildIsle } from '../test-view.js';
@@ -33,6 +33,9 @@ setPerfReports(false);
  * `&focus=q,r` centres a tile; `&dist=` sets the camera's distance (default
  * the game's start); `&far=1` starts at the farthest zoom. Plus the main
  * page's `?tier=` (pinned, governor off), `?quality=` and `?renderer=webgpu`.
+ * `&season=christmas` dresses it in snow (#37); with `&snow=0.5` the first
+ * snow's fade stops halfway (the clock ticks once to that point of the fade;
+ * `&snow=1` is the whole fade, with the snowfall showing).
  * Nothing moves (the terrain clock never ticks), so a shot is the same every time.
  */
 
@@ -50,6 +53,11 @@ const far = params.get('far') === '1';
 const focus = params.get('focus')?.split(',').map(Number) ?? null;
 const distance = Number(params.get('dist')) || null;
 const weatherKind = galleryWeatherKind(params.get('weather'));
+const seasons = params.get('season') === 'christmas' ? ['christmas'] : [];
+/** A point of the first snow's fade to stop at (0–1, eased), or null for the snow just there. */
+const snowAt = params.has('snow')
+  ? Math.min(1, Math.max(0, Number(params.get('snow')) || 0))
+  : null;
 
 const view: MapView = patch === 'cozy' ? testPatch() : testWildIsle();
 
@@ -73,8 +81,20 @@ await boot(canvas, {
       renderer,
       target,
       (scene) => {
-        map = new MapScene(scene, view, { tier, reducedMotion: true });
+        map = new MapScene(scene, view, {
+          tier,
+          seasons,
+          // Mid-fade (#37): ambient time has to run for the fade; it ticks once, below.
+          reducedMotion: snowAt === null,
+          snowFade: snowAt !== null,
+        });
         map.setNight(night);
+        if (snowAt !== null) {
+          // Smoothstep's inverse, so the cover lands on `snowAt`.
+          const t = 0.5 - Math.sin(Math.asin(1 - 2 * snowAt) / 3);
+          map.tick(0);
+          map.tick(t * CHRISTMAS.fadeMs);
+        }
         if (weatherKind) {
           // The weather layer under a fixed sky, as map-screen would host it (#621).
           const store: WeatherStore = new WeatherStore({

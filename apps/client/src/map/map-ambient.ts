@@ -19,7 +19,14 @@ import {
   type MoteKind,
 } from './ambient-layout.js';
 import { hash01 } from './map-layout.js';
-import { HEX_SIZE, MOTE_KINDS, MOTES, SKY_BACKDROP, THANKSGIVING } from './map-config.js';
+import {
+  CHRISTMAS,
+  HEX_SIZE,
+  MOTE_KINDS,
+  MOTES,
+  SKY_BACKDROP,
+  THANKSGIVING,
+} from './map-config.js';
 import { linear, merged, painted } from './map-props.js';
 import { attachTerrainPlugin, DRIFT_ATTRIBUTE, type TerrainClock } from './terrain-plugin.js';
 
@@ -35,8 +42,12 @@ const WHEN: Readonly<Record<MoteKind, { day: boolean; night: boolean; drifts: bo
   sparkles: { day: true, night: true, drifts: false },
   bats: { day: true, night: true, drifts: true },
   fog: { day: true, night: true, drifts: false },
+  snow: { day: true, night: true, drifts: true },
 };
 const HALLOWEEN_ONLY: ReadonlySet<MoteKind> = new Set(['bats', 'fog']);
+/** Christmas's snowfall (#37), and what it replaces then (so the mote draw calls don't grow). */
+const CHRISTMAS_ONLY: ReadonlySet<MoteKind> = new Set(['snow']);
+const NOT_AT_CHRISTMAS: ReadonlySet<MoteKind> = new Set(['pollen', 'leaves', 'fireflies']);
 
 interface MoteLayer {
   readonly kind: MoteKind;
@@ -108,9 +119,11 @@ export function softDisc(scene: Scene, name: string, rings: readonly [number, nu
 
 function moteMesh(scene: Scene, kind: MoteKind): Mesh {
   switch (kind) {
+    // Snowflakes (#37) are the same soft dot, white (no new particle system).
     case 'pollen':
     case 'fireflies':
-    case 'sparkles': {
+    case 'sparkles':
+    case 'snow': {
       const m = CreateSphere(`mote-${kind}`, { diameter: 1, segments: 3 }, scene);
       m.isPickable = false;
       m.alwaysSelectAsActiveMesh = true;
@@ -200,6 +213,7 @@ export class MapAmbient {
   private readonly cloudMaterial: StandardMaterial;
   private readonly halloween: boolean;
   private readonly thanksgiving: boolean;
+  private readonly christmas: boolean;
   private readonly rings: readonly number[];
   private night = false;
   private shown: Partial<Record<MoteKind, number>> = {};
@@ -208,12 +222,20 @@ export class MapAmbient {
     scene: Scene,
     tiles: readonly PublicTile[],
     clock: TerrainClock,
-    options: { halloween: boolean; thanksgiving?: boolean; islandRadius: number },
+    options: {
+      halloween: boolean;
+      thanksgiving?: boolean;
+      /** Christmas (#37): snowfall instead of pollen, leaves and fireflies, and the snowy sky. */
+      christmas?: boolean;
+      islandRadius: number;
+    },
   ) {
     this.halloween = options.halloween;
     this.thanksgiving = options.thanksgiving === true;
+    this.christmas = options.christmas === true;
     for (const kind of MOTE_KINDS) {
       if (HALLOWEEN_ONLY.has(kind) && !options.halloween) continue;
+      if (this.christmas ? NOT_AT_CHRISTMAS.has(kind) : CHRISTMAS_ONLY.has(kind)) continue;
       const season = kind === 'leaves' && this.thanksgiving ? THANKSGIVING.leaves : undefined;
       const motes = motesFor(kind, tiles, HEX_SIZE, season);
       if (motes.length === 0) continue;
@@ -352,13 +374,12 @@ export class MapAmbient {
   }
 
   private paintSky(): void {
-    const look = this.night
-      ? this.halloween
-        ? SKY_BACKDROP.halloweenNight
-        : SKY_BACKDROP.night
-      : this.thanksgiving
-        ? THANKSGIVING.day
-        : SKY_BACKDROP.day;
+    const look = skyLook({
+      night: this.night,
+      halloween: this.halloween,
+      thanksgiving: this.thanksgiving,
+      christmas: this.christmas,
+    });
     const inner = linear(look.inner);
     const mid = linear(look.mid);
     // Centre and the island's rim: inner; then mid; then fading out.
@@ -383,4 +404,19 @@ export class MapAmbient {
     this.backdrop.updateVerticesData(VertexBuffer.ColorKind, colors);
     this.cloudMaterial.emissiveColor = linear(look.cloud);
   }
+}
+
+/** The backdrop's colours for the seasons on and the time of day (Christmas's snowy sky, #37). */
+export function skyLook(on: {
+  night: boolean;
+  halloween: boolean;
+  thanksgiving: boolean;
+  christmas: boolean;
+}): { readonly inner: string; readonly mid: string; readonly cloud: string } {
+  if (on.night) {
+    if (on.halloween) return SKY_BACKDROP.halloweenNight;
+    return on.christmas ? CHRISTMAS.sky.night : SKY_BACKDROP.night;
+  }
+  if (on.christmas) return CHRISTMAS.sky.day;
+  return on.thanksgiving ? THANKSGIVING.day : SKY_BACKDROP.day;
 }

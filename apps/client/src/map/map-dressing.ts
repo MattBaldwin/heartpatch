@@ -1,6 +1,7 @@
 import {
   activeSeasons,
   GAME_DATA,
+  seasonRunAt,
   hexToWorld,
   isTradingPost,
   isWater,
@@ -8,6 +9,7 @@ import {
   type PublicTile,
 } from '@heartpatch/shared';
 import {
+  CHRISTMAS,
   FALLBACK_DRESSING,
   HALLOWEEN,
   HOLLOWED_LOOK,
@@ -222,8 +224,120 @@ export function drainRgb(c: Rgb): Rgb {
  * The colour a tile is drawn in (sRGB 0–1): its look's colour, wobbled, and
  * muted on wild land. `muted` may be a share (0–1): land that misses its
  * owner is drawn part of the way to wild (owner decision 2026-10-06).
+ * With `snow` (Christmas, #37) it then goes towards snow by its terrain.
  */
-export function tileColor(lookColor: string, jitter: TileJitter, muted: boolean | number): Rgb {
+export function tileColor(
+  lookColor: string,
+  jitter: TileJitter,
+  muted: boolean | number,
+  snow?: SnowCover,
+): Rgb {
+  const c = seasonless(lookColor, jitter, muted);
+  if (!snow || snow.cover <= 0) return c;
+  const share = muted === true ? 1 : muted === false ? 0 : Math.min(1, Math.max(0, muted));
+  return snowRgb(c, snow.terrain, share, snow.cover);
+}
+
+/** Christmas snow on a tile (#37): its terrain, and how far the first snow has faded in (0–1). */
+export interface SnowCover {
+  readonly terrain: string;
+  readonly cover: number;
+}
+
+const mixRgb = (a: Rgb, b: Rgb, k: number): Rgb => [
+  a[0] + (b[0] - a[0]) * k,
+  a[1] + (b[1] - a[1]) * k,
+  a[2] + (b[2] - a[2]) * k,
+];
+
+/**
+ * A colour under Christmas snow (#37, `CHRISTMAS`), by terrain id: land goes
+ * towards snow, cool white on wild land and a touch warmer on owned land,
+ * which also keeps more of its own colour (`wild` is its wild share, 0–1);
+ * lakes and rivers frost a pale blue; Juniper's Gap and unknown terrains keep
+ * theirs. `cover` is how far the first snow has faded in.
+ */
+export function snowRgb(c: Rgb, terrain: string, wild: number, cover: number): Rgb {
+  const k = Math.min(1, Math.max(0, cover));
+  const frost = CHRISTMAS.frost[terrain];
+  if (frost !== undefined) return mixRgb(c, hexRgb(CHRISTMAS.lake), frost * k);
+  const amount = CHRISTMAS.cover[terrain];
+  if (amount === undefined) return c;
+  const w = Math.min(1, Math.max(0, wild));
+  const target = mixRgb(hexRgb(CHRISTMAS.owned), hexRgb(CHRISTMAS.wild), w);
+  const reach = amount * (CHRISTMAS.ownedCover + (1 - CHRISTMAS.ownedCover) * w);
+  return mixRgb(c, target, reach * k);
+}
+
+/** The island ground round the patch under snow (#37): off the map, so nobody's (wild white). */
+export function snowGroundRgb(c: Rgb, ground: 'grass' | 'beach', cover: number): Rgb {
+  const k = Math.min(1, Math.max(0, cover));
+  return mixRgb(c, hexRgb(CHRISTMAS.wild), CHRISTMAS.ground[ground] * k);
+}
+
+/**
+ * The snow uniform's values (#37): caps follow the fade; at night the snow
+ * catches the moon (as far as it has faded in), by day it doesn't.
+ */
+export function snowLight(cover: number, night: boolean): { cover: number; lift: number } {
+  const k = Math.min(1, Math.max(0, cover));
+  return { cover: k, lift: night ? CHRISTMAS.night.lift * k : 0 };
+}
+
+/**
+ * How far the first snow has faded in (0–1, #37): from `startMs` (the first
+ * open of the season) over `CHRISTMAS.fadeMs`, eased; already seen, or
+ * reduced motion, it is just there.
+ */
+export function snowCoverAt(
+  fade: { readonly startMs: number } | null,
+  nowMs: number,
+  reducedMotion: boolean,
+): number {
+  if (fade === null || reducedMotion) return 1;
+  const t = Math.min(1, Math.max(0, (nowMs - fade.startMs) / CHRISTMAS.fadeMs));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * The year of the season run a local `YYYY-MM-DD` falls in (shared
+ * `seasonRunAt`, #37), so the first snow's fade plays once a season.
+ */
+export function snowSeasonYear(localDate: string): string {
+  try {
+    const run = seasonRunAt(GAME_DATA.seasons, localDate);
+    return String(run?.year ?? localDate.slice(0, 4));
+  } catch {
+    return localDate.slice(0, 4);
+  }
+}
+
+/**
+ * True the first time this device opens a map in a Christmas season (#37),
+ * and remembers it: the first snow fades in then, and is just there after.
+ * Storage that can't remember (private mode) plays no fade rather than every time.
+ */
+export function firstSnowNow(
+  storage: Pick<Storage, 'getItem' | 'setItem'> | null,
+  year: string,
+  accountId: string | null,
+): boolean {
+  if (storage === null || accountId === null) return false;
+  const key = firstSnowKey(year, accountId);
+  try {
+    if (storage.getItem(key) === '1') return false;
+    storage.setItem(key, '1');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Where a device remembers it has seen the first snow of a season year (#37), per account. */
+export const firstSnowKey = (year: string, accountId: string) =>
+  `heartpatch.first-snow.${year}.${accountId}`;
+
+function seasonless(lookColor: string, jitter: TileJitter, muted: boolean | number): Rgb {
   const [r, g, b] = hexRgb(lookColor);
   const clamp = (v: number) => Math.min(1, Math.max(0, v));
   const wobbled: Rgb = [
@@ -268,6 +382,11 @@ export function seasonsOn(timeZone: string, now: Date): string[] {
   } catch {
     return [];
   }
+}
+
+/** True while Christmas is on for a map, by its local date (shared `activeSeasons`, #37). */
+export function isChristmas(timeZone: string, now: Date): boolean {
+  return seasonsOn(timeZone, now).includes('christmas');
 }
 
 /** True while Halloween is on for a map, by its local date (shared `activeSeasons`). */
