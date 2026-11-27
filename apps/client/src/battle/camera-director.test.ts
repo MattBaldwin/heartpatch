@@ -1239,6 +1239,48 @@ describe('the boss beats in the camera (#190 PR 2)', () => {
     expect(after(beats.koRelax)).toBeLessThan(after() - 0.02);
   });
 
+  it('keeps pulling back slowly through the end step and the rest after it', () => {
+    // The boss's tuckered step (1100 ms, the push from 550), then `end`, then the settle's rest().
+    const pushAt = (relax?: number) => {
+      const director = new CameraDirector(homes, false, cameraFor(true));
+      const base = director.shot(0, 0.46, safe, fit).distance;
+      const ko = { ...cue, push: BATTLE_CAMERA.koPush, pushDelay: 550, shake: 0 };
+      director.cue(relax ? { ...ko, relax } : ko, 0);
+      let d = base;
+      for (let now = 0; now <= 2200; now += 1000 / 60) {
+        if (Math.abs(now - 1100) < 8)
+          director.cue({ ...cue, focus: 'b', push: 0, shake: 0, roll: 0 }, now);
+        if (Math.abs(now - 1700) < 8) director.rest();
+        d = director.shot(now, 0.46, safe, fit).distance;
+        if (Math.abs(now - 1600) < 8) expect(1 - d / base).toBeGreaterThan(relax ? 0.03 : -1);
+      }
+      return 1 - d / base;
+    };
+    // Still clearly pushed in a second after the end step where a plain KO is long done.
+    expect(pushAt(beats.koRelax)).toBeGreaterThan(0.02);
+    expect(pushAt()).toBeLessThan(0.002);
+  });
+
+  it('a new push-in, or a lean or rest mid-windup, takes over without a jump', () => {
+    const director = new CameraDirector(homes, false);
+    const base = director.shot(0, 0.46, safe, fit).distance;
+    director.cue({ ...cue, push: BATTLE_CAMERA.koPush, shake: 0, relax: beats.koRelax }, 0);
+    for (let now = 0; now <= 500; now += 1000 / 60) director.shot(now, 0.46, safe, fit);
+    // A real beat after the pull-back replaces it (the plain decay is back).
+    director.cue({ ...cue, push: 0.1, shake: 0 }, 516);
+    for (let now = 516; now <= 3000; now += 1000 / 60) director.shot(now, 0.46, safe, fit);
+    expect(director.shot(3016, 0.46, safe, fit).distance / base).toBeGreaterThan(0.995);
+    // Mid-windup, rest() eases back from where the push is.
+    director.cue(windup, 3100);
+    let before = director.shot(3400, 0.46, safe, fit).distance;
+    director.rest();
+    for (let now = 3416; now <= 3600; now += 1000 / 60) {
+      const d = director.shot(now, 0.46, safe, fit).distance;
+      expect(Math.abs(d - before)).toBeLessThan(base * 0.01);
+      before = d;
+    }
+  });
+
   it('with reduced motion: no push, ramp, lean or shake, a snap follow', () => {
     const director = new CameraDirector(homes, true, cameraFor(true));
     const base = director.shot(0, 0.46, safe, fit).distance;

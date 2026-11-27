@@ -446,7 +446,7 @@ export class BattleScene {
       { a: this.#rigs.a.home, b: this.#rigs.b.home },
       options.reducedMotion,
       // A boss fight (#190 PR 2): the low hero shot.
-      cameraFor(team.length > 0),
+      cameraFor(options.team !== undefined),
     );
 
     // The stage's camera is the map camera with no input reaching it (the

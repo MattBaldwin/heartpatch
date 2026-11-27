@@ -330,16 +330,21 @@ export class CameraDirector {
     const shift = this.#config.focusShift * (this.#reduced ? 0.4 : 1);
     // `at`: the one fighter of a team the beat is about (#190), else the side's home.
     const home = cue.focus ? (at ?? this.#homes[cue.focus]) : null;
+    const push = this.#reduced ? 0 : cue.push;
+    // A slow pull-back (the boss tuckered out, #190) outlasts the beats after it that push nothing.
+    const keep = push === 0 && this.#pullingBack();
     this.#want = {
       focusX: home ? (home.x - this.#config.aim.x) * shift : 0,
       focusZ: home ? (home.z - this.#config.aim.z) * shift : 0,
-      push: this.#reduced ? 0 : cue.push,
+      push: keep ? this.#want.push : push,
     };
-    this.#pushAt = now + cue.pushDelay;
+    if (!keep) {
+      this.#pushAt = now + cue.pushDelay;
+      this.#relax = cue.relax ?? this.#config.beatDecay;
+    }
     this.#ramp.at = this.#pushAt;
     this.#ramp.ms = this.#reduced ? 0 : (cue.ramp ?? 0);
     this.#ramp.from = this.#push;
-    this.#relax = cue.relax ?? this.#config.beatDecay;
     this.#tiltWant = this.#reduced ? 0 : (cue.tilt ?? 0);
     if (!this.#reduced && cue.shake > 0) {
       this.#shake = { amount: cue.shake, roll: cue.roll, at: now + cue.shakeDelay };
@@ -356,15 +361,26 @@ export class CameraDirector {
     this.#want = {
       focusX: at ? (at.x - this.#config.aim.x) * shift : 0,
       focusZ: at ? (at.z - this.#config.aim.z) * shift : 0,
-      push: 0,
+      push: this.#pullingBack() ? this.#want.push : 0,
     };
-    this.#tiltWant = 0;
+    this.#calm();
   }
 
   /** Back to framing both fighters (the turn is over). */
   rest(): void {
-    this.#want = { focusX: 0, focusZ: 0, push: 0 };
+    this.#want = { focusX: 0, focusZ: 0, push: this.#pullingBack() ? this.#want.push : 0 };
+    this.#calm();
+  }
+
+  /** True while a slow pull-back (`CameraCue.relax`) is still easing the push out. */
+  #pullingBack(): boolean {
+    return this.#relax < this.#config.beatDecay && this.#want.push > 0.001;
+  }
+
+  /** No lean, and a windup's push-in stops ramping (it eases back from where it is). */
+  #calm(): void {
     this.#tiltWant = 0;
+    this.#ramp.ms = 0;
   }
 
   /** True while the face-first slide (#868) is still easing towards its target. */
