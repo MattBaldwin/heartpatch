@@ -63,7 +63,7 @@ async function stubDecember(page: Page, wrapped = 0) {
   let inBag = wrapped;
   let opened = [1, 4];
   let catchUpLeft = true;
-  await page.route(/\/maps\/[^/]+\/inventory$/, async (route) => {
+  await page.route(/\/maps\/[^/]+\/(inventory|settle)$/, async (route) => {
     const reply = await route.fetch();
     const body = (await reply.json()) as { now: string; items: Record<string, number> };
     const items = inBag > 0 ? { ...body.items, presents: inBag } : body.items;
@@ -248,6 +248,8 @@ test('opens a wrapped present from the bag and shows what came out (#37 1d2)', a
 }) => {
   test.setTimeout(180_000);
   const page = await newPlayer(browser, uniqueName('advpr'));
+  // The sheet's height budget is an iPhone's: 393×852.
+  await page.setViewportSize({ width: 393, height: 852 });
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
   const server = await stubDecember(page, 2);

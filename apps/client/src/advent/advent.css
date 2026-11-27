@@ -344,3 +344,15 @@
 .advent-still .advent-found-item {
   animation: none;
 }
+
+/* A present from the bag (#37 1d2): a snug box and button, so the sheet still
+   fits its 393×852 height budget without scrolling. */
+.advent-body .advent-present-box {
+  margin: 4px 0 0;
+  padding: 5px 10px;
+  line-height: 1.3;
+}
+
+.advent-body .advent-present-box + .hp-button {
+  margin-top: 4px;
+}

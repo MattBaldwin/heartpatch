@@ -40,7 +40,7 @@ export interface AdventOptions {
   /** Wrapped presents in this patch's bag now (the bag's own count; the server still decides). */
   presentsInBag?: (mapId: string) => number;
   /** A wrapped present was opened from the bag: the bag reads again. */
-  onPresentOpened?: (mapId: string) => void;
+  onPresentOpened?: (mapId: string) => Promise<void> | void;
   /** Sounds for the opening (the game's cue set). */
   cue?: (name: 'pop' | 'twinkle') => void;
   /** Reduce Motion is on (tests pass a fake). */
@@ -239,18 +239,28 @@ export function createAdvent(options: AdventOptions): Advent {
       };
       options.cue?.('pop');
       options.cue?.('twinkle');
-      options.onPresentOpened?.(id);
+      void bagRead(id, at);
     } catch (err) {
       if (stillHere()) {
         note = messageOf(err);
         // "No wrapped presents" means the bag's count was old: read it again.
         presentsLeft = null;
-        options.onPresentOpened?.(id);
+        void bagRead(id, at);
       }
     } finally {
       if (at === generation) working = false;
       if (stillHere()) render();
     }
+  }
+
+  /** The bag reads again; the sheet draws what it now holds (unless the map moved on). */
+  async function bagRead(id: string, at: number): Promise<void> {
+    try {
+      await options.onPresentOpened?.(id);
+    } catch {
+      // The bag says why on its own; the sheet keeps what it knows.
+    }
+    if (at === generation && mapId === id) render();
   }
 
   /** Wrapped presents in the bag, as far as the sheet knows (never decides: the server does). */
