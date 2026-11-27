@@ -13,6 +13,7 @@ import { createBattlesRepo, setupOf } from '../battles/repo.js';
 import { createBossRepo } from './repo.js';
 import { defaultBattleContent } from '../battles/service.js';
 import { BOSS_RULES, BOSS_TEAM, STAND_IN_BOSS, bossHarness } from '../../../tests/boss.js';
+import { bossBattleView } from './befriend.js';
 import { createMinibossBattlePort, plannedBossVisit } from './service.js';
 
 // The Christmas Eve visit (#37 X1).
@@ -297,6 +298,38 @@ describe.skipIf(!url)('the Christmas Eve visit (#37 X1, needs DATABASE_URL)', ()
     });
     expect(go?.wonBattleId).toBeNull();
     expect((await visitOf(owner, mapId))?.state).toBe('here');
+    // …and its battle, once won, offers no befriend ask the server would refuse.
+    const wonView = await bossBattleView(
+      db,
+      BOSS_RULES,
+      {
+        ...stored,
+        status: 'finished',
+        endedAt: h.clock,
+        result: {
+          winner: 'a',
+          reason: 'tuckered-out',
+          contentHash: stored.contentHash,
+          turns: 1,
+          xp: [],
+        },
+      },
+      h.clock,
+    );
+    expect(wonView?.befriend).toBe('none');
+    // A fight started on the Eve (after 16:00) on the same row still marks the win.
+    await createMinibossBattlePort(BOSS_RULES).ended(
+      db,
+      { ...stored, startedAt: DENVER('2026-12-24T16:10:00') },
+      'a',
+      h.clock,
+    );
+    const after = await db.query.bossEncounters.findFirst({
+      where: (t, { and: all, eq: is }) =>
+        all(is(t.mapId, mapId), is(t.userId, owner.id), is(t.windowId, '2026-12-21')),
+    });
+    expect(after?.wonBattleId).toBe(stored.id);
+    expect((await visitOf(owner, mapId))?.state).toBe('beaten');
   });
 
   it('stays out Christmas morning when the Eve is a Sunday (2028), then the bag resumes', async () => {
