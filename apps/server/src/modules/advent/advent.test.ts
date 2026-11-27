@@ -10,7 +10,7 @@ import {
 import {
   ADVENT_PRESENTS,
   adventSeed,
-  presentContents,
+  wrappedPresentContents,
   rollAdventPresent,
 } from '@heartpatch/shared/server';
 import type { FastifyInstance } from 'fastify';
@@ -149,7 +149,7 @@ describe.skipIf(!url)('advent presents, #37 1c (needs DATABASE_URL)', () => {
       ...Array<string>(20).fill('locked'),
     ]);
     expect(view.catchUpLeft).toBe(true);
-    expect(view.presentContents).toEqual(presentContents(ADVENT_PRESENTS));
+    expect(view.presentContents).toEqual(wrappedPresentContents(ADVENT_PRESENTS));
 
     const res = await claim(server, kid, mapId, '2026-12-05');
     expect(res.statusCode, res.body).toBe(200);

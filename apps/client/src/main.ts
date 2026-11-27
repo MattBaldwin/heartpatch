@@ -95,6 +95,7 @@ import { wardrobeBackTo, wardrobeFrom, type WardrobeFrom } from './ui/wardrobe/w
 import { createTrays, trayRow } from './ui/trays/trays.js';
 import { findSpot } from './recipes/book-model.js';
 import { createRecipeBook } from './recipes/recipe-book.js';
+import { createAdvent } from './advent/advent-sheet.js';
 import { appUpdates } from './pwa/app-updates.js';
 import { CLIENT_BUILD } from './pwa/build-info.js';
 import { startPwa } from './pwa/pwa.js';
@@ -1552,6 +1553,7 @@ const maps = createMapScreen({
     sproutTips.setOnPatch(mapId !== null && mapId !== glade);
     mapSquishies.hidden = mapId === null || mapId === glade;
     recipeBook.setMap(mapId);
+    void advent.setMap(mapId);
     // The Next-up chip reads the patch on screen's goals; never on the Glade (#731).
     nextUp.setMap(mapId === glade ? null : mapId);
     // Hidden, then shown: the Team and Jobs row checks the map (not on the Glade).
@@ -1620,6 +1622,28 @@ const maps = createMapScreen({
 // The Keeper's Recipe Book (owner decision 2026-10-05): from the My
 // Home tray. "Make it" uses the bag's own crafting; "Find on map" taps
 // the player's nearest tile with the ingredient and glides there.
+// The advent calendar (#37 1d): a "Presents" row in the My Home tray, there
+// only while Christmas is on for the patch on screen, with a badge while
+// today's present waits. The server decides what opens (rules 1 and 6).
+const advent = createAdvent({
+  root: document.body,
+  entryRoot: trays.slot('heartpatch'),
+  inSeason: () => {
+    const zone = maps.view?.map.timeZone;
+    return zone ? seasonsOn(zone, new Date(inventory.gameNow())).includes('christmas') : false;
+  },
+  isGlade: (mapId) => mapId === glade,
+  // A present landed in this patch's bag: the bag reads again.
+  onOpened: () => {
+    void inventory.refresh();
+  },
+  cue: (name) => {
+    audio.cue(name);
+  },
+  onChange: () => {
+    hollow.otherReportChanged();
+  },
+});
 const recipeBook = createRecipeBook({
   root: document.body,
   entryRoot: trays.slot('heartpatch'),
@@ -1770,6 +1794,7 @@ const milestones = createMilestoneCelebration({
     (care.debug?.celebrating ?? false) ||
     (wardrobe.debug?.open ?? false) ||
     trickOrTreat.isOpen ||
+    advent.isOpen ||
     lobby.formOpen,
   onChange: () => {
     hollow.otherReportChanged();
@@ -2258,6 +2283,7 @@ const mapCovered = (): boolean =>
   postScreen.isOpen ||
   heartCoins.isOpen ||
   raidReportOpen ||
+  advent.isOpen ||
   (land.debug?.welcome ?? false) ||
   lorebook.debug.showing !== null ||
   lorebook.isOpen ||
@@ -2291,6 +2317,7 @@ const patchLineBusy = (): boolean =>
   whatsNewOpen ||
   pushOfferOpen ||
   raidReportOpen ||
+  advent.isOpen ||
   hollowReportOpen() ||
   trays.debug.hint ||
   trays.debug.open !== null ||
@@ -2437,6 +2464,7 @@ mountAuth(document.body, {
     house.setUser(user);
     inventory.setUser(user);
     recipeBook.setUser(user);
+    advent.setUser(user);
     territory.setUser(user);
     journeys.setUser(user);
     trickOrTreat.setUser(user);
@@ -2523,6 +2551,7 @@ if (import.meta.env.DEV) {
     friendly: () => friendly.debug,
     computerMates: () => computerMatesNotes.debug,
     raids: () => raidReport.debug,
+    advent: () => advent.debug,
     home: () => home.debug,
     explore: () => explore.debug,
     care: () => care.debug,

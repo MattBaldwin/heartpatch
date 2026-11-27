@@ -18,7 +18,7 @@ import {
   ADVENT_PRESENTS,
   adventContents,
   adventSeed,
-  presentContents,
+  wrappedPresentContents,
   PRESENT_ITEM,
   rollAdventPresent,
   rollPresentOpening,
@@ -140,7 +140,7 @@ export function createAdventService(options: AdventServiceOptions): AdventServic
     return {
       today,
       catchUpLeft,
-      presentContents: presentContents(table),
+      presentContents: wrappedPresentContents(table),
       days: days.map((day): AdventDayView => {
         const contents = adventContents(table, day);
         const claim = opened.get(day);

@@ -26,6 +26,7 @@ export const TRAY_OF: Readonly<Record<string, TraySide>> = {
   'home-open': 'heartpatch',
   'bag-open': 'heartpatch',
   'recipe-book-open': 'heartpatch',
+  'advent-open': 'heartpatch',
   'hollow-fire-hint': 'heartpatch',
   'jobs-open': 'heartpatch',
   'team-open': 'heartpatch',
