@@ -3,6 +3,7 @@ import { tonightOf, type MapLocalTime } from '../home/hearthfire.js';
 import type { HollowRules } from '../schemas/data/hollow.js';
 import type { HomeBaseRules } from '../schemas/data/home-base.js';
 import type { LongNightRules, LongNightWeekday } from '../schemas/data/long-night.js';
+import type { MonthDay } from '../schemas/data/seasons.js';
 import type { LocalDate } from '../schemas/time.js';
 
 // The Long Night (#727, plan on the issue, owner answers 2026-10-30). Pure:
@@ -31,14 +32,18 @@ export function weekdayOf(date: LocalDate): LongNightWeekday {
  * owner who moves the day mid-week can't bring two in one week. `latest`
  * equal to `night` is the same Night resolved again, so it still counts.
  * Whether the Long Night is switched on at all (`HP_LONG_NIGHT`) is the
- * server's to check.
+ * server's to check. `quiet` is the server's `QUIET_NIGHTS` (#37 X1): a
+ * night on one of those days is never a Long Night (Christmas Eve), and the
+ * patch's next one is its weekday the week after, as usual.
  */
 export function isLongNight(
   weekday: LongNightWeekday | null,
   night: LocalDate,
   latest: LocalDate | null,
+  quiet: readonly MonthDay[] = [],
 ): boolean {
   if (weekday === null || weekdayOf(night) !== weekday) return false;
+  if (quiet.includes(night.slice(5))) return false;
   if (latest === null) return true;
   const since = daysBetween(latest, night);
   // A `latest` after `night` (a later Night already ran) never makes this one.
@@ -57,14 +62,17 @@ export function nextLongNight(
   weekday: LongNightWeekday | null,
   latest: LocalDate | null,
   rules: NightfallRules,
+  quiet: readonly MonthDay[] = [],
 ): MapLocalTime | null {
   if (weekday === null) return null;
   const tonight = tonightOf(now, rules);
-  // Within two weeks: the weekday comes round once a week, and the 6-night
-  // guard only ever skips one of them.
-  for (let d = 0; d < 2 * WEEK; d++) {
+  // Within three weeks: the weekday comes round once a week, the 6-night
+  // guard only ever skips one of them, and a quiet night (#37 X1) one more.
+  for (let d = 0; d < 3 * WEEK; d++) {
     const night = addDays(tonight, d);
-    if (isLongNight(weekday, night, latest)) return { date: night, minute: rules.nightfallMinute };
+    if (isLongNight(weekday, night, latest, quiet)) {
+      return { date: night, minute: rules.nightfallMinute };
+    }
   }
   return null;
 }
@@ -80,8 +88,9 @@ export function nextLongNightAt(
   latest: LocalDate | null,
   rules: NightfallRules,
   instantOf: (local: MapLocalTime) => Date,
+  quiet: readonly MonthDay[] = [],
 ): Date | null {
-  const next = nextLongNight(now, weekday, latest, rules);
+  const next = nextLongNight(now, weekday, latest, rules, quiet);
   return next === null ? null : instantOf(next);
 }
 

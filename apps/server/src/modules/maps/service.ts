@@ -42,6 +42,7 @@ import { createAuthRepo } from '../auth/repo.js';
 import { seedHomeRingNodes, type HomeRingLog } from '../buildings/home-ring.js';
 import { listPublicBuildings } from '../buildings/service.js';
 import { christmasOn, presentWaitingOn } from '../advent/service.js';
+import { createBossRepo } from '../boss/repo.js';
 import { giftWaitingOn } from '../house/service.js';
 import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from '../house/switch.js';
 import { listPublicFences } from '../fences/service.js';
@@ -578,10 +579,16 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
             map.kind === 'multiplayer' && houseOpenFor(house, user)
               ? await giftWaitingOn(tx, map, user.id, at)
               : false,
-          // Christmas (#37): whether today's advent present waits for me.
-          // The Patch Tree (`tree`) and warmth come with 2c.
+          // Christmas (#37): whether today's advent present waits for me, and
+          // the Christmas Eve visit while it's out (X1: `opensAt` alone; the
+          // bar comes with X2). The Patch Tree (`tree`) and warmth come with 2c.
           ...(map.kind === 'multiplayer' && christmasOn(at, map.timeZone)
-            ? { christmas: { presentWaiting: await presentWaitingOn(tx, map, user.id, at) } }
+            ? {
+                christmas: {
+                  presentWaiting: await presentWaitingOn(tx, map, user.id, at),
+                  ...(await christmasEveView(tx, mapId, at)),
+                },
+              }
             : {}),
           seq: map.eventSeq,
         };
@@ -841,4 +848,18 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     },
   };
   return service;
+}
+
+/**
+ * `MapView.christmas.eve` (#37 X1): the patch's Christmas Eve visit from
+ * when it's pinned until it closes, `opensAt` alone (X2 adds the bar). A
+ * plain read: the boss module pins it (rule 4).
+ */
+async function christmasEveView(
+  db: Executor,
+  mapId: string,
+  at: Date,
+): Promise<{ eve?: { opensAt: string } }> {
+  const eve = await createBossRepo(db).findChristmasEve(mapId, at);
+  return eve ? { eve: { opensAt: eve.opensAt.toISOString() } } : {};
 }

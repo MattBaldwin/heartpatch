@@ -37,8 +37,8 @@ export const BOSS_EVENTS: BossEventRules = {
     minJoinLevel: 5, // TUNE: …at least 5
   },
   // Christmas Eve (#37 C0b; addendum on #37, owner answers 2026-11-27).
-  // Contract only: X1 schedules it, X2 runs the bar. No visit until X3 adds
-  // the species (null here), so the weekly bag runs as before.
+  // X1 schedules it, X2 runs the bar. Until X3 adds the species (null here)
+  // the week's bag draw stands in on Christmas Eve's timing and gates.
   christmasEve: {
     speciesId: null, // X3: the new Christmas-only frost BIG squishy (owner answer 1)
     terrains: ['meadow', 'hills', 'mountains'], // TUNE: fallback when the tree's post can't be used
