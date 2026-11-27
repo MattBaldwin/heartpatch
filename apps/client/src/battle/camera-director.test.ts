@@ -976,7 +976,15 @@ describe('the boss camera: a low hero shot (#190 PR 2)', () => {
           JSON.stringify(BATTLE_CAMERA[k as keyof typeof BATTLE_CAMERA]),
       )
       .sort();
-    expect(changed).toEqual(['aim', 'feetRoom', 'feetY', 'fitFrom', 'fitHeight', 'pitch']);
+    expect(changed).toEqual([
+      'aim',
+      'feetRoom',
+      'feetY',
+      'fitFrom',
+      'fitHeight',
+      'focusShift',
+      'pitch',
+    ]);
     expect(boss.pitch).toBeCloseTo((4 * Math.PI) / 180, 12);
   });
 
@@ -1078,6 +1086,43 @@ describe('the boss camera: a low hero shot (#190 PR 2)', () => {
             expect(e.y, at).toBeLessThanOrEqual(band.safe.bottom - margin);
           }
         });
+        // The picker leans towards each friend in turn (full motion): every body stays on screen.
+        posts.slice(0, f.friends.length).forEach((lean, l) => {
+          const leaning = new CameraDirector(homes, true, boss);
+          leaning.lean(lean);
+          let held = leaning.shot(
+            0,
+            band.aspect,
+            band.safe,
+            f.fit,
+            bossFace(highest, f.bossHeight),
+            team,
+          );
+          for (let t = 1000 / 60; t <= 3000; t += 1000 / 60) {
+            held = leaning.shot(
+              t,
+              band.aspect,
+              band.safe,
+              f.fit,
+              bossFace(highest, f.bossHeight),
+              team,
+            );
+          }
+          f.friends.forEach((friend, i) => {
+            const p = posts[i]!;
+            for (const side of [-1, 1]) {
+              const edge = project(held, band.aspect, {
+                x: p.x + side * friend.radius,
+                y: friend.height / 2,
+                z: p.z,
+              });
+              expect(
+                Math.abs(edge.x),
+                `${band.name} leaning to ${String(l)}, ${friend.id}`,
+              ).toBeLessThan(0.97);
+            }
+          });
+        });
       }
     });
   }
@@ -1120,6 +1165,7 @@ describe('the boss camera: a low hero shot (#190 PR 2)', () => {
         const BEATS = [
           {
             at: 500,
+            where: bossHome,
             cue: {
               ...cue,
               focus: 'b' as const,
@@ -1132,6 +1178,7 @@ describe('the boss camera: a low hero shot (#190 PR 2)', () => {
           },
           {
             at: 1200,
+            where: posts[0]!,
             cue: {
               ...cue,
               focus: 'a' as const,
@@ -1142,6 +1189,7 @@ describe('the boss camera: a low hero shot (#190 PR 2)', () => {
           },
           {
             at: 2000,
+            where: bossHome,
             cue: {
               ...cue,
               focus: 'b' as const,
@@ -1156,7 +1204,7 @@ describe('the boss camera: a low hero shot (#190 PR 2)', () => {
         for (let now = 0; now <= 4000; now += 1000 / 60) {
           const beat = BEATS[next];
           if (beat && now >= beat.at) {
-            director.cue(beat.cue, now);
+            director.cue(beat.cue, now, beat.where);
             next++;
           }
           const shot = director.shot(now, band.aspect, band.safe, fight.fit, face, team);

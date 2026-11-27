@@ -23,8 +23,8 @@ export function cameraFor(boss: boolean): Readonly<BattleCameraConfig> {
 // The profile's framing numbers over the rest (its beats are choreography's).
 const BOSS_FIGHT_CAMERA: Readonly<BattleCameraConfig> = (() => {
   const { boss, ...base } = BATTLE_CAMERA;
-  const { pitch, aim, feetY, feetRoom, fitFrom, fitHeight } = boss;
-  return { ...base, pitch, aim, feetY, feetRoom, fitFrom, fitHeight };
+  const { pitch, aim, feetY, feetRoom, fitFrom, fitHeight, focusShift } = boss;
+  return { ...base, pitch, aim, feetY, feetRoom, fitFrom, fitHeight, focusShift };
 })();
 
 export interface Point3 {
@@ -341,10 +341,10 @@ export class CameraDirector {
     if (!keep) {
       this.#pushAt = now + cue.pushDelay;
       this.#relax = cue.relax ?? this.#config.beatDecay;
+      this.#ramp.at = this.#pushAt;
+      this.#ramp.ms = this.#reduced ? 0 : (cue.ramp ?? 0);
+      this.#ramp.from = this.#push;
     }
-    this.#ramp.at = this.#pushAt;
-    this.#ramp.ms = this.#reduced ? 0 : (cue.ramp ?? 0);
-    this.#ramp.from = this.#push;
     this.#tiltWant = this.#reduced ? 0 : (cue.tilt ?? 0);
     if (!this.#reduced && cue.shake > 0) {
       this.#shake = { amount: cue.shake, roll: cue.roll, at: now + cue.shakeDelay };
