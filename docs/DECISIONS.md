@@ -2587,3 +2587,67 @@ Merged: #870 (#868 boss fights keep the boss's face in frame on notched phones).
 - Archive all previous Heartpatch supervisor sessions (done).
 - Option 3 for #868 was chosen under supervisor 48 (2026-11-25) and merged this shift.
 - Pending (asked 04:08 UTC in prose with numbered options): start the Fable "immersive boss battles" plan lane now (1, recommended), or hold until the owner has played a boss fight with the #868 fix live (2). After that: a recipe-book reproduction lane and a `far-hollow-house` `ipad-webkit` reproduction lane; a CI group-1 timeout `Chore:`; the carry-overs from supervisor 48, unchanged.
+
+## Supervisor 49 (2026-11-26/27)
+
+Continues the Supervisor 49 section above (same session, `session_01RAEPnFW2pNARCYPk1LdRwq`). Merged: #873 (#190 PR 1 boss HUD) → `50e75f3`; #878 (e2e flake fixes) → `3656675`; #879 (tutorial-flow own e2e group, 7 groups) → `a948239`; #876 (#37 Christmas shared contracts, C0) → `72c59cf`; #880 (#37 advent presents, server, 1c) → `5f2bb97`. Open when this was written: #877 (#190 PR 2 boss camera), the CI-health fix PR for #871, #874, #875.
+
+**Boss plan owner answers (#190, [comment 7180578195](https://github.com/MattBaldwin/heartpatch/issues/190#issuecomment-7180578195), 2026-11-26)**
+- Recommendations 1–5 accepted. 1: boss HUD is a bottom sheet whose collapsed handle shows the three team chips, plus the slim top strip. 2: entrance 2.6 s, tap to skip after the stomp, every fight. 3: one continuous low camera with push-ins and a thump, no cuts. 4: the boss's own silly squishy voice, low and big, with the element stinger under it. 5: vibrate on Android under the Sounds switch, the visual thump everywhere, no iOS switch-control trick.
+- Item 6 (team tuckered out) goes with **option 2, the gentle taunt twirl** (not the wave). Keep the kid-friendly caption with the day the boss leaves and "come back stronger"; nothing is taken.
+- Merge order stands: M0 (done) → PR 1 → PR 2 → {PR 3, PR 4} → PR 5 → PR 6 → (PR 7 only if needed).
+- PR 1 had to fix what M0 found: the 44 px strip did not fit name + bar + ⏳ chip + order dots at 393 px; the risen picker repeated the team; chips needed portraits or matching tints; the ✕ overlapped the band top by ~5 px. M0 measured the stage at 73.4 % of the notched iPhone screen collapsed, 47.8 % risen (was 15.1 %).
+
+**Pivot to Phase 3, Christmas (owner, 2026-11-26)**
+- The owner moved the work to Phase 3 and asked for a third patch type, filed as **#874 Clockwork Isle** ("a new Wild Isle patch, but with tech and advanced buildings and concepts"; a plan first, COORDINATOR §2 big feature; the name is a draft). The coordinator's render-check of #873 filed **#875** (two friends' callouts up at once overlap on iPhone; a follow-up to #190 PR 1, not a blocker).
+- Owner pillar for Christmas: **"make sure the plan includes snow, Christmas lights and feels magical for the season."**
+
+**Christmas plan and the owner's seven answers (#37, [plan 7183480148](https://github.com/MattBaldwin/heartpatch/issues/37#issuecomment-7183480148), [answers 7211232597](https://github.com/MattBaldwin/heartpatch/issues/37#issuecomment-7211232597))**
+1. **Clockwork Isle (#874):** after Christmas, season-neutral; Fable plan lane in January. Reason: patch type is fixed at creation, so a frosty isle would give Christmas only to new patches. The `lights` building kind is shaped so a Clockwork beacon reuses it.
+2. **Christmas Eve:** a **co-op Christmas boss fight** for the whole patch, not the Longest Night reskin. This un-pauses the #190 chain (PRs 2–6) and replaces 3d / 3e / 3g of the Christmas plan.
+3. **Advent:** 25 presents, December 1–25, today's plus one missed day per day, contents shown, odds server-side, Fireworks fixed on the 24th.
+4. **Lights and the Hollow Man:** Twinkle Lights count as light only on **December 24 and 25** (own tile); a lit Patch Tree star lights radius 2; cosmetic on other nights, so the Emberwood loop stands.
+5. **Tree:** one shared Patch Tree per patch at the post nearest the centre; ornaments from December gifts (a present gift counts ×2); star at `[DEFAULT: 12]`.
+6. **Frost squishies:** five (Jinglehoof, Mittenmoth, Snowglobin, Tinselwisp, Cocoamallow) plus the Mythic **Aurorelle**, iridescent not shimmer (#866).
+7. **Lanes:** three code lanes in parallel through December: Christmas (C0 contracts first, then waves 1–4), boss (#190 PRs 2–6 after #873 merges, then the Christmas Eve fight), CI health (flaky e2e specs and the group-1 timeout). The one-lane rule is relaxed for this phase.
+- Merge order for the Christmas lane: M0 → C0 → {1a, 1b, 1c} → {1d, 1e} → 1f → wave 2 → wave 3 → wave 4. Out for this season: breeding (#36), Harmony (#38), passkeys.
+
+**Christmas Eve co-op addendum ([#37 comment 7211383869](https://github.com/MattBaldwin/heartpatch/issues/37#issuecomment-7211383869), a plan, not yet approved)**
+- Recommended: **the Christmas Eve BIG squishy with a server-side shared patch bar.** At 16:00 patch-local on December 24 one snowy BIG squishy visits every patch. Each Keeper fights it in their own deterministic 3-v-1 battle, exactly as the weekly boss; each finished fight adds `round(100 × damageToBoss ÷ bossFullEnergy)` to one patch bar (row-locked in `MinibossBattlePort.ended`). Lit Twinkle Lights and a lit star give a head start. When the bar fills, the BIG squishy is tuckered out for everyone and every contributor gets the bundle and two befriend asks; nothing is ever taken. No engine change, no Colyseus (#186 and #734 would need a live multi-Keeper side, which TECH_SPEC marks Phase 2).
+- Floor if the co-op layer slips: X1 (the visit) + X3 (the species) ship it as a solo boss event.
+- **C0b contracts (★, Fable second reviewer):** `boss_windows.kind` (`weekly` | `christmas-eve`), new tables `boss_bars` and `boss_bar_chips`, additive optional `BossVisitSchema.event`, `PlayerBattleBossSchema.patchBar`, `MapView.christmas.eve { opensAt }`, events `boss.chipped` / `boss.fell` / `boss.thanked`, `ItemChangeReason` + `christmas-boss`, `BOSS_EVENTS.christmasEve` and `QUIET_NIGHTS` in `data/server`, a `christmas-eve` push rule. No `BattleKind`, state or hash change.
+- **Four owner questions still open** (each has a recommended option 1): (1) who the BIG squishy is (a new single-form frost boss with a tiny befriend form, vs Papa Brrr's line, vs a grown Snowpop); (2) who gets the fall (every Keeper who finished a fight by 10:00 Dec 25, vs every member, vs only winners); (3) lower level gates for little Keepers (the Christmas visit lowers them, vs keep "Too big for now!", vs a snowball chip); (4) a short bar at 10:00 (it dozes off and wanders home, contributors get a thanks bundle and no asks, vs the window stretches, vs a guaranteed fall).
+- Dates: required on `main` by December 20: PR 1, C0b, X1, X2, X3, X4, X5, X7. May slip past Christmas: #190 PR 5, PR 6, PR 3, PR 4.
+
+**Merges and verdict decisions**
+- **#873 (#190 PR 1, boss HUD) → `50e75f3`.** Render-check FAIL, then PASS on re-captures (the callout above the caption). Captures on `captures-190-boss-hud`.
+- **#878 (e2e flake fixes) → `3656675`.** **#879 (`Chore:` tutorial-flow gets its own e2e group, 7 groups) → `a948239`**, moving the group-1 stall that had been timing out `iphone-webkit 1`.
+- **#876 (#37 Christmas shared contracts) → `72c59cf`**, verdict [7215372048](https://github.com/MattBaldwin/heartpatch/pull/876#issuecomment-7215372048):
+  1. `MapView.christmas.tree` is **optional** and means "not planted yet"; the Patch Tree server lane (2c) must always populate it once it lands. This lets the advent lanes (1c, 1d) ship before 2c without a later incompatible schema change (a client built against a required `tree` would fail `MapViewSchema.parse` once the server omitted it).
+  2. `AdventResultSchema` entries are `int().min(1)` on a non-empty record: a present never carries a zero-count item.
+  3. `PushSettingsSchema` does not yet expose the `christmas` switch (server-side column only, default on) until its Settings row lands.
+  - Migration 0070 (`0070_christmas_contracts`) adds `advent_claims`, `keeper_warmth` (member FKs to `map_members`, pair stored ordered), `patch_trees` and `push_settings.christmas`; the `push_sends` kind CHECK gains `present` and `christmas-eve`. The Fable second review caught the `tree` item that two reviewer rounds had missed. Routed on: 2c orders `keeper_warmth` pairs from Postgres lowercase ids, checks that `patch_trees.post_tile_id` is on the same map, and words `tree.decorated` without names; the `christmas-eve` push body names the fun, not "Something big is coming!".
+- **#880 (#37 advent presents, server, 1c) → `5f2bb97`**, verdict [7217711958](https://github.com/MattBaldwin/heartpatch/pull/880#issuecomment-7217711958):
+  1. The present is rolled lazily on claim, seeded per (user, day) with a **server-only salt kept as a source constant** under `packages/shared/data/server`, never in the client bundle; it may move to an environment variable later without changing results already stored.
+  2. The advent view lists each day's **possible item ids and never odds**; the fixed days (Fireworks on the 24th, Heartdust on the 25th) are data, not code. Round 1 added `AdventView.presentContents` (ids only) because owner answer 3 says contents are shown.
+  3. **Opening a wrapped present is its own action** (`presents/open`) with its own ledger id; a present never contains another present.
+
+**CI rulings in force**
+- `push.spec.ts:91` and `:174` are **#871** (now on iphone too). A fix PR is coming from the CI lane: Sprout tips left unsaid covered the screen, so the open-map listener bailed.
+- `far-hollow-house.spec.ts:55` and `:260`, `roads.spec.ts:32` and `far-hollow-relight.spec.ts:68` on WebKit are the **#784** tap stall. `short-screens.spec.ts:206` is a flake.
+- 55-minute job-timeout cancels and exit-137 runner shutdowns are infra. Workflow re-runs return 403 for everyone.
+- `ipad-webkit 2` hit an exit-137 and a 55-minute cancel on the same morning: the next split candidate.
+
+**Visual gates applied**
+- **#873:** render-check FAIL, then PASS on re-captures (callout above the caption).
+- **#877 (boss camera):** render-check FAIL on `8b41f85` (the iPad picker card hid the team), then PASS on `3a78fae` (feet cap at the band bottom via `teamFeet`).
+- Beat push-ins cutting the end friends 10–25 % on iPhone are **accepted as designed**.
+- Captures live on `captures-190-boss-hud` (`pr2-8b41f85/`, `pr2b-3a78fae/`) and `captures-37-christmas` (`m0-christmas/`, at `21a7b81`). M0 render-check notes for the Christmas client PRs: night snow must be lifted and the off-map ground snowed; lights must be real emissive bulbs spread across the patch; the tree must be a 3D toy-style building that does not cover labels; the advent sheet needs distinct "today" and "catch-up" looks and more charm on locked days.
+
+**Process**
+- Lanes over budget get finish-only orders and handoff comments (the #876 lane handed off at the budget line). A narrow round 5 was allowed on #877 after the render-check reopened it.
+- `AskUserQuestion` dialogs were closed by worker restarts three times, so owner questions fell back to prose with numbered options.
+- A 22-hour usage-limit pause ran 2026-11-26 ~06:15 → 2026-11-27 04:45 UTC.
+- A Fable second review on every shared-contract PR (★) earned its keep on #876.
+
+**Owner decisions (2026-11-26/27, supervisor 49 shift):** the boss-plan answers, the Phase 3 pivot and the seven Christmas answers above. Pending: the four Christmas Eve questions, approval of the addendum, and M0 approval for the advent sheet (lane 1d).
