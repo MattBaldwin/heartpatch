@@ -8,6 +8,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import {
   ADVENT_TEXT,
+  bagLine,
   catchUpDays,
   contentsLine,
   dayLook,
@@ -138,5 +139,30 @@ describe('advent words (style guide §9)', () => {
     };
     collect(ADVENT_TEXT);
     expect(findAvoidedWords(words.join(' '))).toEqual([]);
+  });
+});
+
+describe('a present from the bag (#37 1d2)', () => {
+  it('names how many are wrapped, only when it is more than one', () => {
+    expect(ADVENT_TEXT.openPresent(1)).toBe('Open a wrapped present');
+    expect(ADVENT_TEXT.openPresent(4)).toBe('Open a wrapped present (4)');
+  });
+
+  it('says how many are left after one opens, or the plain line at none', () => {
+    expect(bagLine(2)).toBe('Safe in your bag! 2 more to open 🎁');
+    expect(bagLine(1)).toBe('Safe in your bag! 1 more to open 🎁');
+    expect(bagLine(0)).toBe(ADVENT_TEXT.bag);
+    expect(bagLine(null)).toBe(ADVENT_TEXT.bag);
+  });
+
+  it('keeps each line short enough for one 14 px line', () => {
+    for (const line of [
+      ADVENT_TEXT.presentMightHold,
+      ADVENT_TEXT.openPresent(12),
+      ADVENT_TEXT.revealPresent,
+      bagLine(12),
+    ]) {
+      expect(line.length).toBeLessThanOrEqual(40);
+    }
   });
 });
