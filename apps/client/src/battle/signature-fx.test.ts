@@ -561,6 +561,22 @@ describe('emit: signature bursts (#190 PR 5)', () => {
     const o = fire[0]!.origin;
     expect(Math.abs(o.x - base.at.x)).toBeGreaterThan(4.4 * 0.5);
     expect(o.z).toBeLessThan(base.at.z);
+    // Its `side` is the fighter's right (`#centre`'s convention): facing -z, that is -x.
+    expect(o.x).toBeLessThan(base.at.x);
+  });
+
+  it('puts a friend’s spark trail on the camera’s side, away from the BIG squishy', () => {
+    // A friend at -z facing the boss at +z: the camera is behind the friend, at -z.
+    const friend = {
+      ...base,
+      element: 'spark',
+      at: { x: 0, y: 1, z: -4 },
+      to: { x: 0, y: 2.2, z: 4 },
+      height: 2,
+    };
+    const trail = emit({ ...friend, burst: burstOf('all-foes:spark', 'hit') });
+    expect(trail.length).toBeGreaterThan(0);
+    expect(trail.every((p) => p.origin.z <= friend.at.z + 0.01)).toBe(true);
   });
 
   it('is thinner for reduced motion', () => {

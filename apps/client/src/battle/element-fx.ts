@@ -254,7 +254,13 @@ export interface SignatureBurst {
   readonly delay: number;
   /** Its bits are born across this share of the step (a pile that grows), else at once. */
   readonly spread?: number;
-  /** `arc`: radians swept (centred on the side facing the other fighter), and the radius (× height). */
+  /**
+   * Which way its frame faces: `other` (the default), towards the other
+   * fighter; `away`, the opposite. A friend's camera side is away from the
+   * boss, so a burst on the team faces away to be seen.
+   */
+  readonly face?: 'other' | 'away';
+  /** `arc`: radians swept (centred on the side its frame faces), and the radius (× height). */
   readonly sweep?: number;
   readonly radius?: number;
   /** Every other bit gets a soft halo that blooms (`burst`). */
@@ -475,6 +481,7 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           motion: 'zap',
           count: 12, // TUNE: a spark trail past each post
           at: 'middle',
+          face: 'away', // on the friend: the camera's side is away from the boss
           speed: 0,
           up: 0.15,
           gravity: 0,
@@ -1032,8 +1039,9 @@ export function emit(e: EmitAt): Particle[] {
       const dx = e.to ? e.to.x - e.at.x : 0;
       const dz = e.to ? e.to.z - e.at.z : -1;
       const len = Math.hypot(dx, dz) || 1;
-      const fx0 = dx / len;
-      const fz0 = dz / len;
+      const away = b.face === 'away' ? -1 : 1;
+      const fx0 = (away * dx) / len;
+      const fz0 = (away * dz) / len;
       const o = b.offset ?? { side: 0, up: 0, toward: 0 };
       const spot: Point = {
         x: e.at.x + (fx0 * o.toward + fz0 * o.side) * h,
@@ -1057,7 +1065,7 @@ export function emit(e: EmitAt): Particle[] {
             origin: spot,
             vx: Math.cos(a) * v,
             vy: b.up * h * (0.5 + r(i, 5)),
-            vz: Math.sin(a) * v * 0.7,
+            vz: Math.sin(a) * v * 0.7, // a flatter spread in depth (world z), as `emit`'s bursts
             gravity: b.gravity * h,
             size: b.size * h * (0.7 + 0.6 * r(i, 6)),
             seed: r(i, 9),
@@ -1074,7 +1082,7 @@ export function emit(e: EmitAt): Particle[] {
           }
         }
       } else if (b.pattern === 'arc') {
-        // Along a ground arc round the squishy, from its back round to its front.
+        // Along an arc round the squishy, centred on the side its frame faces (`face`).
         const sweep = b.sweep ?? Math.PI;
         const radius = (b.radius ?? 0.8) * h;
         for (let i = 0; i < count; i++) {
