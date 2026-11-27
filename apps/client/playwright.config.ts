@@ -108,8 +108,9 @@ const E2E_GROUPS = [
     'trick-or-treat',
     'whats-new',
   ],
-  // ~17.9 iPhone, ~24.2 iPad, before next-up (~2.5 min, #731).
+  // ~17.9 iPhone, ~24.2 iPad, before next-up (~2.5 min, #731); advent adds about 2 min (#37 1d).
   [
+    'advent',
     'buildings-guide',
     'chat',
     'cinematic',
