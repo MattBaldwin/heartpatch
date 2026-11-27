@@ -329,6 +329,14 @@ export const BOSS_HUD = {
   innerGap: 6, // TUNE:
   /** The energy bar never gets narrower than this (M0: it shrank to ~40 px at 393). */
   minBar: 120,
+  /**
+   * A friend's callout: how far its sticker sits above its chip, and its gap
+   * over the caption pill when one shows there (the two stack, never cover).
+   */
+  calloutLift: 10, // TUNE:
+  calloutGap: 6, // TUNE:
+  /** The callout sticker's tilt, degrees: battle.css's `rotate(-6deg)` (its corners dip below its box). */
+  calloutTilt: 6,
 } as const;
 
 /**

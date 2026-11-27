@@ -8,6 +8,7 @@ import {
   BOSS_TEXT,
   bossBand,
   bossHudVars,
+  friendCalloutLift,
   bossRestEdges,
   bossStripWidths,
   chipStatus,
@@ -228,6 +229,35 @@ describe('a mini-boss fight on screen (#190)', () => {
       // A chip is a 44 pt target.
       expect(BOSS_HUD.chipSize).toBeGreaterThanOrEqual(44);
       expect(BOSS_HUD.closeSize).toBeGreaterThanOrEqual(44);
+    });
+
+    it("stacks a friend's callout above the caption pill, never over it", () => {
+      // battle.css's collapsed sheet, in the viewport: the chips centred in the
+      // handle, the caption pill's bottom (handleClear + 6) above the sheet.
+      const sheetTop = 852 - 34 - BOSS_HUD.handleHeight; // a notched iPhone, collapsed
+      const chipTop = sheetTop + (BOSS_HUD.handleHeight - BOSS_HUD.chipSize) / 2;
+      const pillBottom = sheetTop - (BOSS_HUD.handleClear + 6);
+      // No pill: its usual spot just over the chip.
+      expect(friendCalloutLift(chipTop, null)).toBe(BOSS_HUD.calloutLift);
+      // "Just a little boop." laid out (133×26), tilted: its lower corner dips ~7 px.
+      const size = { width: 133, height: 26 };
+      const tilt = (BOSS_HUD.calloutTilt * Math.PI) / 180;
+      const dip = (size.width * Math.sin(tilt) + size.height * Math.cos(tilt) - size.height) / 2;
+      expect(dip).toBeGreaterThan(6);
+      for (const pillHeight of [30, 50, 70.4]) {
+        const pillTop = pillBottom - pillHeight;
+        const lift = friendCalloutLift(chipTop, pillTop, size);
+        // The callout's tilted box ends `lift - dip` above the chip's top: clear
+        // of the pill (one, two or three lines) by the gap, so they never meet.
+        const paintedBottom = chipTop - lift + dip;
+        expect(paintedBottom).toBeLessThanOrEqual(pillTop - BOSS_HUD.calloutGap);
+        expect(paintedBottom).toBeGreaterThan(pillTop - BOSS_HUD.calloutGap - 1);
+        // Untilted (no size given) it still clears the pill's top.
+        expect(chipTop - friendCalloutLift(chipTop, pillTop)).toBeLessThan(pillTop);
+      }
+      // A pill below the chips' top (never, collapsed) leaves the usual spot.
+      expect(friendCalloutLift(chipTop, chipTop + 20)).toBe(BOSS_HUD.calloutLift);
+      expect(bossHudVars()['--boss-callout-lift']).toBe(`${String(BOSS_HUD.calloutLift)}px`);
     });
 
     it('gives each chip its status: napping, picking, picked, winding up or just there', () => {

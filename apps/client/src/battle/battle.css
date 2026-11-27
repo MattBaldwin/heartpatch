@@ -1270,9 +1270,11 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
   transform: rotate(-6deg);
 }
 
+/* Over its chip; above the caption pill while one shows (the HUD measures
+   it: `friendCalloutLift`), so a friend's "Super cozy!" never covers it. */
 .boss-callout-small {
   top: auto;
-  bottom: calc(100% + 10px);
+  bottom: calc(100% + var(--boss-callout-lift, 10px));
   left: 50%;
   max-width: none;
   font-size: 13px;

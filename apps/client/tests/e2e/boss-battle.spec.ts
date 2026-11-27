@@ -223,7 +223,13 @@ test.describe('a mini-boss fight (#190)', () => {
     }
     await page.setViewportSize({ width: 393, height: 852 });
     // A windup round, a round where it lands, then the win: the boss's beats (#868).
-    await bossFight(page, { openRounds: 2, tricks: ['windup', 'land'] });
+    // Its stomp lands "Super cozy!" on the middle friend and "Just a little
+    // boop." on the right one: their callouts pop while the caption shows.
+    await bossFight(page, {
+      openRounds: 2,
+      tricks: ['windup', 'land'],
+      stompTiers: ['normal', 'super', 'weak'],
+    });
     await expect(page.getByTestId('boss-picker')).toBeVisible();
     // Copies of battle-config's tunables (the e2e tsconfig can't import src);
     // the asserts below are unconditional, so a TUNE change fails here, loudly.
@@ -339,6 +345,11 @@ test.describe('a mini-boss fight (#190)', () => {
       const picker = document.querySelector('[data-testid="boss-picker"]');
       const sheet = document.querySelector('[data-testid="battle-sheet"]');
       const handle = document.querySelector('[data-testid="boss-handle"]');
+      const caption = document.querySelector('[data-testid="battle-caption"]');
+      // Frames that show a caption pill and a friend's callout at once (#190
+      // render-check): their rects, and whether they meet.
+      const stacked: { overlap: boolean; at: string }[] = [];
+      (window as unknown as { hpStacked: typeof stacked }).hpStacked = stacked;
       // Frames since the picker went (Go!): Go! drops the sheet and clears
       // the HUD's safe-region cache at once (`forgetLayout`, #190).
       let hiddenFor = 0;
@@ -366,6 +377,23 @@ test.describe('a mini-boss fight (#190)', () => {
             hiddenFor,
             expected,
           });
+        }
+        const pill = caption instanceof HTMLElement ? caption.getBoundingClientRect() : null;
+        if (pill && pill.height > 0) {
+          for (const node of document.querySelectorAll('.boss-callout-small')) {
+            if (!(node instanceof HTMLElement) || node.hidden) continue;
+            const r = node.getBoundingClientRect();
+            if (r.height === 0) continue;
+            const overlap =
+              r.left < pill.right &&
+              pill.left < r.right &&
+              r.top < pill.bottom &&
+              pill.top < r.bottom;
+            stacked.push({
+              overlap,
+              at: `${node.textContent ?? ''} ${JSON.stringify(r)} over "${caption?.textContent ?? ''}" ${JSON.stringify(pill)}`,
+            });
+          }
         }
         if (samples.length < 20_000) requestAnimationFrame(afterDraw);
       };
@@ -432,6 +460,15 @@ test.describe('a mini-boss fight (#190)', () => {
       expect(barWidth, at).toBeGreaterThanOrEqual(MIN_BAR);
       if (windup) expect(slotRight, at).toBeLessThanOrEqual(stripRight + 0.5);
     }
+    // A friend's callout never covers the caption pill (it stacks above it).
+    const stacked = await page.evaluate(
+      () => (window as unknown as { hpStacked: { overlap: boolean; at: string }[] }).hpStacked,
+    );
+    expect(
+      stacked.length,
+      'a caption and a friend callout were on screen together',
+    ).toBeGreaterThan(0);
+    for (const { overlap, at } of stacked) expect(overlap, at).toBe(false);
     // Both the windup's power-up and the blows were seen, the ⏳ up for some of them.
     const seen = (k: string) => samples.filter((x) => x.kind === k);
     expect(seen('effect').length).toBeGreaterThan(0);

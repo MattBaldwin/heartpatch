@@ -5,6 +5,7 @@ import {
   WARMTH_HEARTS,
   bossHudVars,
   chipStatus,
+  friendCalloutLift,
   type BefriendView,
   type BossPlates,
   type ChipStatus,
@@ -187,6 +188,49 @@ export function mountBossHud(): BossHud {
   let chipTap: ((slot: number) => void) | null = null;
   const timers = new Set<number>();
 
+  /**
+   * A friend's callout clears the caption pill (or a problem line) the
+   * battle sheet shows just above the handle: the two stack, so neither
+   * covers the other. Measured when a callout pops, and again whenever that
+   * pill comes, goes or wraps (a ResizeObserver reports before the frame
+   * paints, so no frame draws them overlapping).
+   */
+  let stickerWatch: ResizeObserver | null = null;
+  const stickers = () => {
+    const sheet = dock.parentElement;
+    return sheet
+      ? [
+          ...sheet.querySelectorAll<HTMLElement>(
+            ':scope > .battle-caption, :scope > .battle-problem',
+          ),
+        ]
+      : [];
+  };
+  const liftCallouts = () => {
+    let stickerTop: number | null = null;
+    for (const node of stickers()) {
+      const r = node.getBoundingClientRect();
+      if (r.height > 0) stickerTop = Math.min(stickerTop ?? r.top, r.top);
+    }
+    const chipTop = chipRow.getBoundingClientRect().top;
+    for (const { callout } of chips.values()) {
+      if (callout.hidden) continue;
+      // offsetWidth/Height: the laid-out box, before its tilt and pop.
+      const size = { width: callout.offsetWidth, height: callout.offsetHeight };
+      const lift = friendCalloutLift(chipTop, stickerTop, size);
+      callout.style.setProperty('--boss-callout-lift', `${String(lift)}px`);
+    }
+  };
+  /** The sheet whose pills are watched (the dock may be handed to another). */
+  let watchedSheet: Element | null = null;
+  const watchStickers = () => {
+    if (typeof ResizeObserver === 'undefined' || dock.parentElement === watchedSheet) return;
+    stickerWatch?.disconnect();
+    stickerWatch = new ResizeObserver(liftCallouts);
+    watchedSheet = dock.parentElement;
+    for (const node of stickers()) stickerWatch.observe(node);
+  };
+
   const flash = (node: HTMLElement, text: string) => {
     node.textContent = text;
     node.hidden = false;
@@ -315,7 +359,13 @@ export function mountBossHud(): BossHud {
     },
     callout: (who, text) => {
       const node = who === 'boss' ? bossCallout : chips.get(who)?.callout;
-      if (node) flash(node, text);
+      if (!node) return;
+      flash(node, text);
+      // Its words are in: stack it clear of the caption before this frame paints.
+      if (who !== 'boss') {
+        watchStickers();
+        liftCallouts();
+      }
     },
     showPicker: (state, moves, handlers) => {
       picker.hidden = false;
@@ -419,6 +469,9 @@ export function mountBossHud(): BossHud {
       }
     },
     dispose: () => {
+      stickerWatch?.disconnect();
+      stickerWatch = null;
+      watchedSheet = null;
       for (const timer of timers) window.clearTimeout(timer);
       timers.clear();
       top.remove();

@@ -281,7 +281,33 @@ export function bossHudVars(hud: typeof BOSS_HUD = BOSS_HUD): Readonly<Record<st
     '--boss-chip-slot': px(hud.chipSlot),
     '--boss-inner-gap': px(hud.innerGap),
     '--boss-rise': `${String(hud.riseMs)}ms`,
+    '--boss-callout-lift': px(hud.calloutLift),
   };
+}
+
+/**
+ * How far a friend's callout sits above its chip's top, px (its CSS `bottom`
+ * past the chip). The caption pill (or a problem line) shows just above the
+ * handle, centred over the chips, while a round plays: the callout then
+ * stacks above it, still over its own chip, so both read and neither covers
+ * the other. `stickerTop` is that pill's top (null when none shows); both
+ * tops are in the same coordinates (the viewport's). `size` is the callout's
+ * own laid-out box: tilted, its lower corner dips below that box by
+ * (w·sin θ + h·cos θ − h) / 2, which the stack clears too.
+ */
+export function friendCalloutLift(
+  chipTop: number,
+  stickerTop: number | null,
+  size: { readonly width: number; readonly height: number } = { width: 0, height: 0 },
+  hud: Pick<typeof BOSS_HUD, 'calloutLift' | 'calloutGap' | 'calloutTilt'> = BOSS_HUD,
+): number {
+  if (stickerTop === null) return hud.calloutLift;
+  const tilt = (hud.calloutTilt * Math.PI) / 180;
+  const dip = Math.max(
+    0,
+    (size.width * Math.sin(tilt) + size.height * Math.cos(tilt) - size.height) / 2,
+  );
+  return Math.max(hud.calloutLift, Math.ceil(chipTop - stickerTop + dip) + hud.calloutGap);
 }
 
 // ── Picker A1 ───────────────────────────────────────────────────────────
