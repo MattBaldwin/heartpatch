@@ -1089,7 +1089,7 @@ export function emit(e: EmitAt): Particle[] {
       if (b.pattern === 'burst') {
         for (let i = 0; i < count; i++) {
           const a = TAU * ((i + r(i, 1) * 0.5) / count);
-          let v = b.speed * h * (0.6 + 0.6 * r(i, 2));
+          const v = b.speed * h * (0.6 + 0.6 * r(i, 2));
           let origin = spot;
           let dirX = Math.cos(a);
           let dirZ = Math.sin(a) * 0.7; // a flatter spread in depth (world z), as `emit`'s bursts
