@@ -1,0 +1,109 @@
+{
+ "file": "ipad-02-stomp-night.png",
+ "device": "ipad",
+ "reduced": false,
+ "inner": {
+  "w": 1024,
+  "h": 1366,
+  "dpr": 2
+ },
+ "entrance": {
+  "at": 1074.4500000000116,
+  "skippable": true
+ },
+ "scene": {
+  "squishies": 4,
+  "meshes": 12,
+  "instances": 56,
+  "shadowLook": 0,
+  "accessories": 0,
+  "lod": "high",
+  "keeper": true,
+  "arena": {
+   "terrain": "meadow",
+   "timeOfDay": "night",
+   "known": true,
+   "props": 83,
+   "meshes": 16,
+   "shadowMap": true,
+   "lowTier": false
+  },
+  "effects": {
+   "live": 0,
+   "meshes": 0,
+   "spawned": 0
+  },
+  "acts": 0,
+  "down": 0,
+  "reducedMotion": false,
+  "drawCalls": 55,
+  "camera": {
+   "x": 5.976328993305984,
+   "y": 5.875945643648199,
+   "z": -25.976720205271757
+  },
+  "framing": {
+   "distance": 26.971857299277286,
+   "fogEnd": 85,
+   "band": {
+    "top": 0.04538799414348463,
+    "bottom": 0.6544655929721815
+   },
+   "face": {
+    "top": 0.40013698224886146,
+    "bottom": 0.4759264372493114
+   },
+   "team": [
+    {
+     "top": 0.5409360146609563,
+     "bottom": 0.604714171195081
+    },
+    {
+     "top": 0.5562045643317949,
+     "bottom": 0.607717225676343
+    },
+    {
+     "top": 0.5620736585377096,
+     "bottom": 0.6105271940840739
+    }
+   ],
+   "teamFeet": 0.690548237099248,
+   "bossFacing": 0.9848624319014454
+  },
+  "playing": null,
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "rects": {
+  "card": {
+   "top": 192,
+   "bottom": 261.296875,
+   "left": 366.921875,
+   "right": 657.078125,
+   "opacity": "1"
+  },
+  "skip": {
+   "top": 58,
+   "bottom": 87,
+   "left": 911.9375,
+   "right": 1010,
+   "opacity": "1"
+  },
+  "strip": {
+   "top": 8,
+   "bottom": 52,
+   "left": 206,
+   "right": 766,
+   "opacity": "1"
+  },
+  "handle": {
+   "top": 901.5625,
+   "bottom": 965.5625,
+   "left": 248,
+   "right": 776,
+   "opacity": "1"
+  }
+ }
+}

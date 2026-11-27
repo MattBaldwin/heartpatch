@@ -1,0 +1,109 @@
+{
+ "file": "iphone-03-card-day.png",
+ "device": "iphone",
+ "reduced": false,
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "entrance": {
+  "at": 1538.3949999999932,
+  "skippable": true
+ },
+ "scene": {
+  "squishies": 4,
+  "meshes": 12,
+  "instances": 56,
+  "shadowLook": 0,
+  "accessories": 0,
+  "lod": "high",
+  "keeper": true,
+  "arena": {
+   "terrain": "meadow",
+   "timeOfDay": "day",
+   "known": true,
+   "props": 84,
+   "meshes": 15,
+   "shadowMap": true,
+   "lowTier": false
+  },
+  "effects": {
+   "live": 0,
+   "meshes": 0,
+   "spawned": 0
+  },
+  "acts": 0,
+  "down": 0,
+  "reducedMotion": false,
+  "drawCalls": 54,
+  "camera": {
+   "x": 10.161822542481364,
+   "y": 7.0345808565896535,
+   "z": -41.78443445928905
+  },
+  "framing": {
+   "distance": 43.502497957692675,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.142018779342723,
+    "bottom": 0.6103286384976526
+   },
+   "face": {
+    "top": 0.42092491461297893,
+    "bottom": 0.477968141466198
+   },
+   "team": [
+    {
+     "top": 0.5248468913877856,
+     "bottom": 0.5638762216645591
+    },
+    {
+     "top": 0.5250728171908349,
+     "bottom": 0.5588554752445525
+    },
+    {
+     "top": 0.5242809417770207,
+     "bottom": 0.5557656032050783
+    }
+   ],
+   "teamFeet": 0.6096770458239452,
+   "bossFacing": 0.9488826673711025
+  },
+  "playing": null,
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "rects": {
+  "card": {
+   "top": 156,
+   "bottom": 250.59375,
+   "left": 98.25,
+   "right": 294.75,
+   "opacity": "1"
+  },
+  "skip": {
+   "top": 117,
+   "bottom": 146,
+   "left": 280.9375,
+   "right": 379,
+   "opacity": "1"
+  },
+  "strip": {
+   "top": 67,
+   "bottom": 111,
+   "left": 12,
+   "right": 329,
+   "opacity": "1"
+  },
+  "handle": {
+   "top": 528.328125,
+   "bottom": 592.328125,
+   "left": 16,
+   "right": 377,
+   "opacity": "1"
+  }
+ }
+}

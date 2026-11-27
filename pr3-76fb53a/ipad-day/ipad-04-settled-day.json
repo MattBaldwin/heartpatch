@@ -1,0 +1,94 @@
+{
+ "file": "ipad-04-settled-day.png",
+ "device": "ipad",
+ "reduced": false,
+ "inner": {
+  "w": 1024,
+  "h": 1366,
+  "dpr": 2
+ },
+ "entrance": null,
+ "scene": {
+  "squishies": 4,
+  "meshes": 12,
+  "instances": 56,
+  "shadowLook": 0,
+  "accessories": 0,
+  "lod": "high",
+  "keeper": true,
+  "arena": {
+   "terrain": "meadow",
+   "timeOfDay": "day",
+   "known": true,
+   "props": 82,
+   "meshes": 15,
+   "shadowMap": true,
+   "lowTier": false
+  },
+  "effects": {
+   "live": 0,
+   "meshes": 0,
+   "spawned": 0
+  },
+  "acts": 0,
+  "down": 0,
+  "reducedMotion": false,
+  "drawCalls": 54,
+  "camera": {
+   "x": 7.106293001432081,
+   "y": 6.149541010456618,
+   "z": -29.497129005462675
+  },
+  "framing": {
+   "distance": 30.81493222179463,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.04538799414348463,
+    "bottom": 0.6544655929721815
+   },
+   "face": {
+    "top": 0.3943798706421354,
+    "bottom": 0.46595795236898097
+   },
+   "team": [
+    {
+     "top": 0.5327176213096582,
+     "bottom": 0.5799323134703022
+    },
+    {
+     "top": 0.541233904487567,
+     "bottom": 0.5804502465115896
+    },
+    {
+     "top": 0.5348453664101686,
+     "bottom": 0.5858802442419493
+    }
+   ],
+   "teamFeet": 0.6544655929721815,
+   "bossFacing": 0.9800584612625852
+  },
+  "playing": null,
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "rects": {
+  "card": null,
+  "skip": null,
+  "strip": {
+   "top": 8,
+   "bottom": 52,
+   "left": 206,
+   "right": 766,
+   "opacity": "1"
+  },
+  "handle": {
+   "top": 901.5625,
+   "bottom": 965.5625,
+   "left": 248,
+   "right": 776,
+   "opacity": "1"
+  }
+ }
+}

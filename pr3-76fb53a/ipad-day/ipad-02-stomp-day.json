@@ -1,0 +1,109 @@
+{
+ "file": "ipad-02-stomp-day.png",
+ "device": "ipad",
+ "reduced": false,
+ "inner": {
+  "w": 1024,
+  "h": 1366,
+  "dpr": 2
+ },
+ "entrance": {
+  "at": 789.0350000000108,
+  "skippable": true
+ },
+ "scene": {
+  "squishies": 4,
+  "meshes": 12,
+  "instances": 56,
+  "shadowLook": 0,
+  "accessories": 0,
+  "lod": "high",
+  "keeper": true,
+  "arena": {
+   "terrain": "meadow",
+   "timeOfDay": "day",
+   "known": true,
+   "props": 82,
+   "meshes": 15,
+   "shadowMap": true,
+   "lowTier": false
+  },
+  "effects": {
+   "live": 0,
+   "meshes": 0,
+   "spawned": 0
+  },
+  "acts": 0,
+  "down": 0,
+  "reducedMotion": false,
+  "drawCalls": 54,
+  "camera": {
+   "x": 6.032499817975246,
+   "y": 5.871352446269498,
+   "z": -26.3600218527661
+  },
+  "framing": {
+   "distance": 27.36788228618987,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.04538799414348463,
+    "bottom": 0.6544655929721815
+   },
+   "face": {
+    "top": 0.3702647282671291,
+    "bottom": 0.45898615847793844
+   },
+   "team": [
+    {
+     "top": 0.5501581968410968,
+     "bottom": 0.6033477917394694
+    },
+    {
+     "top": 0.552221406519878,
+     "bottom": 0.5993582599418579
+    },
+    {
+     "top": 0.5458924321825084,
+     "bottom": 0.6059773300484421
+    }
+   ],
+   "teamFeet": 0.6888265744223145,
+   "bossFacing": 0.9904819549383412
+  },
+  "playing": null,
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "rects": {
+  "card": {
+   "top": 0,
+   "bottom": 69.296875,
+   "left": 512,
+   "right": 802.15625,
+   "opacity": "0"
+  },
+  "skip": {
+   "top": 58,
+   "bottom": 87,
+   "left": 911.9375,
+   "right": 1010,
+   "opacity": "1"
+  },
+  "strip": {
+   "top": 8,
+   "bottom": 52,
+   "left": 206,
+   "right": 766,
+   "opacity": "1"
+  },
+  "handle": {
+   "top": 901.5625,
+   "bottom": 965.5625,
+   "left": 248,
+   "right": 776,
+   "opacity": "1"
+  }
+ }
+}

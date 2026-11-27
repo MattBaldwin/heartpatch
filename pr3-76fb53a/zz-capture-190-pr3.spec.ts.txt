@@ -1,0 +1,121 @@
+// THROWAWAY (#190 PR 3 boss entrance captures). Never committed as a spec: copy to
+// apps/client/tests/e2e/zz-capture-190-pr3.spec.ts to run. The boss fight is boss-stub.ts's stand-in.
+// One run = one device x one time of day (x reduced motion). Frames: the entrance frozen at its beats.
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { expect, test } from '@playwright/test';
+import { stubBossFight } from './boss-stub.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { realTap } from './touch.js';
+import { trayButton } from './trays.js';
+
+const OUT = process.env['CAPTURE_OUT'] ?? 'captures';
+const TZ = process.env['CAPTURE_TZ'];
+const TAG = process.env['CAPTURE_TAG'] ?? 'day';
+const DEVICE = (process.env['CAPTURE_DEVICE'] ?? 'iphone') as 'iphone' | 'ipad';
+const REDUCED = process.env['CAPTURE_REDUCED'] === '1';
+const SIZES = { iphone: { width: 393, height: 852 }, ipad: { width: 1024, height: 1366 } } as const;
+/** Entrance beats (ms into the 2.6 s): arrive (mid-drop), stomp (just landed), name card, settled. */
+const BEATS = (process.env['CAPTURE_BEATS'] ?? '01-arrive:300,02-stomp:640,03-card:1500,04-settled:2500')
+  .split(',')
+  .map((b) => { const [name, at] = b.split(':'); return { name: name!, at: Number(at) }; });
+const HIDE_DEV = '.dev-status { display: none !important; }';
+
+test.use({
+  actionTimeout: 90_000,
+  launchOptions: {
+    executablePath: process.env['PW_CHROMIUM_EXECUTABLE'] ?? '/opt/pw-browsers/chromium',
+    args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+  },
+});
+
+/** A virtual clock: `__capScale(s)` slows (0 freezes) performance.now, rAF times and the 250 ms+ timers (x5 longer). */
+const SLOW = `(() => {
+  const realNow = performance.now.bind(performance);
+  let base = realNow(), vbase = base, scale = 1;
+  const now = () => vbase + (realNow() - base) * scale;
+  performance.now = now;
+  const raf = window.requestAnimationFrame.bind(window);
+  window.requestAnimationFrame = (cb) => raf(() => cb(now()));
+  const st = window.setTimeout.bind(window), ct = window.clearTimeout.bind(window);
+  const timers = new Map();
+  let nextId = 1e9;
+  setInterval(() => {
+    const t = now();
+    for (const [id, x] of timers) if (t >= x.due) { timers.delete(id); x.fn(...x.a); }
+  }, 10);
+  window.setTimeout = (fn, ms, ...a) => {
+    if (typeof fn !== 'function' || typeof ms !== 'number' || ms < 250) return st(fn, ms, ...a);
+    const id = nextId++;
+    timers.set(id, { fn, due: now() + ms * 5, a });
+    return id;
+  };
+  window.clearTimeout = (id) => { if (!timers.delete(id)) ct(id); };
+  window.__capScale = (s) => { vbase = now(); base = realNow(); scale = s; };
+})();`;
+
+
+test(`boss entrance captures ${DEVICE} ${TAG}`, async ({ browser }) => {
+  test.setTimeout(20 * 60_000);
+  const dir = `${OUT}/${DEVICE}-${TAG}`;
+  mkdirSync(dir, { recursive: true });
+  Object.assign(test.info().project.use, { viewport: SIZES[DEVICE], deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const page = await newPlayer(browser, uniqueName('cam'), undefined, TZ ? { timezoneId: TZ } : undefined);
+  if (REDUCED) await page.emulateMedia({ reducedMotion: 'reduce' });
+  if (DEVICE === 'iphone') {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setSafeAreaInsetsOverride' as never, {
+      insets: { top: 59, topMax: 59, bottom: 34, bottomMax: 34, left: 0, leftMax: 0, right: 0, rightMax: 0 },
+    } as never);
+  }
+  await page.addInitScript(SLOW);
+  await page.goto('/?tier=high');
+  await page.addStyleTag({ content: HIDE_DEV });
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Stomp Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  for (let i = 0; i < 2; i++) {
+    await realTap(await trayButton(page, 'battle-dev-grant'));
+    await expect(page.locator('.battle-entry-note')).toContainText('joined you', { timeout: 30_000 });
+  }
+  await stubBossFight(page, {});
+  const scale = (s: number) => page.evaluate((v) => (window as unknown as { __capScale: (s: number) => void }).__capScale(v), s);
+  // Slow the whole page 20x so the 2.6 s entrance can be caught at each beat.
+  await scale(0.05);
+  await realTap(await trayButton(page, 'battle-dev-fight'));
+  const state = () =>
+    page.evaluate(() => (window as unknown as { __heartpatch: { battle: () => { entrance: { at: number; skippable: boolean } | null } | null } }).__heartpatch.battle()?.entrance ?? null);
+  const rect = (sel: string) =>
+    page.evaluate((s) => {
+      const e = document.querySelector(s);
+      if (!e) return null;
+      const r = e.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, opacity: getComputedStyle(e).opacity };
+    }, sel);
+  for (const beat of BEATS) {
+    await expect.poll(async () => (await state())?.at ?? -1, { timeout: 300_000, intervals: [20] }).toBeGreaterThanOrEqual(beat.at);
+    await scale(0);
+    // Let the frozen frame render (rAF still runs; time stands still).
+    await page.waitForTimeout(1500);
+    const file = `${DEVICE}-${beat.name}-${TAG}${REDUCED ? '-reduced' : ''}`;
+    await page.screenshot({ path: `${dir}/${file}.png` });
+    const meta = {
+      file: `${file}.png`,
+      device: DEVICE,
+      reduced: REDUCED,
+      inner: await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight, dpr: devicePixelRatio })),
+      entrance: await state(),
+      scene: await page.evaluate(() => ((window as unknown as { __heartpatch: { battle: () => { scene?: unknown } | null } }).__heartpatch.battle()?.scene ?? null)),
+      rects: {
+        card: await rect('.boss-entrance-card'),
+        skip: await rect('.boss-entrance-skip'),
+        strip: await rect('[data-testid=boss-strip]'),
+        handle: await rect('[data-testid=boss-handle]'),
+      },
+    };
+    writeFileSync(`${dir}/${file}.json`, JSON.stringify(meta, null, 1));
+    console.log(`shot ${file} at=${meta.entrance?.at ?? 'done'}`);
+    await scale(0.05);
+  }
+});
