@@ -7,7 +7,7 @@ import { adventClaimProblem, adventDaysOf, adventNumber, isCatchUp } from './cal
 import {
   adventContents,
   adventSeed,
-  presentContents,
+  wrappedPresentContents,
   rollAdventPresent,
   rollPresentOpening,
 } from './roll.js';
@@ -121,7 +121,7 @@ describe('advent presents roll (#37 1c)', () => {
       expect(AdventResultSchema.safeParse(items).success).toBe(true);
       expect(items[PRESENT_ITEM]).toBeUndefined();
     }
-    const can = presentContents(ADVENT_PRESENTS);
+    const can = wrappedPresentContents(ADVENT_PRESENTS);
     for (let i = 0; i < 50; i += 1) {
       for (const id of Object.keys(rollPresentOpening(ADVENT_PRESENTS, BOB, `o-${String(i)}`))) {
         expect(can).toContain(id);

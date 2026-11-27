@@ -17,6 +17,7 @@ import {
   type MapDetail,
   type MapMember,
   type MapView,
+  type MapViewChristmasEve,
   type PatchStats,
   type MemberPasswordResetResponse,
   type MyJoinRequest,
@@ -43,7 +44,9 @@ import { createAuthRepo } from '../auth/repo.js';
 import { seedHomeRingNodes, type HomeRingLog } from '../buildings/home-ring.js';
 import { listPublicBuildings } from '../buildings/service.js';
 import { christmasOn, presentWaitingOn } from '../advent/service.js';
+import { barView } from '../boss/patch-bar.js';
 import { createBossRepo } from '../boss/repo.js';
+import { MINIBOSSES_OFF, minibossOpenFor, type MinibossSwitch } from '../boss/switch.js';
 import { giftWaitingOn } from '../house/service.js';
 import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from '../house/switch.js';
 import { listPublicFences } from '../fences/service.js';
@@ -119,6 +122,12 @@ export interface MapsServiceOptions {
   house?: HouseSwitch;
   /** `HP_COMPUTER_MATES` (#386): the switch in details; off when left out. */
   computerMates?: ComputerMatesSwitch;
+  /**
+   * `HP_MINI_BOSSES` (#234): `MapView.christmas.eve` follows `/boss`, so a
+   * patch the switch closes shows no Christmas Eve visit (#37 X2); off when
+   * left out.
+   */
+  miniBosses?: MinibossSwitch;
   clock?: Clock;
   /**
    * Live sync (`wsHub.publish`): called after a command that wrote game events
@@ -262,6 +271,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
   const keepersRepo = createKeepersRepo(db);
   const wildIsle = options.wildIsle ?? WILD_ISLE_OFF;
   const longNight = options.longNight ?? LONG_NIGHT_OFF;
+  const miniBosses = options.miniBosses ?? MINIBOSSES_OFF;
   const house = options.house ?? HOUSE_OFF;
   const computerMatesState = createComputerMatesService({
     db,
@@ -581,13 +591,13 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
               ? await giftWaitingOn(tx, map, user.id, at)
               : false,
           // Christmas (#37): whether today's advent present waits for me, and
-          // the Christmas Eve visit while it's out (X1: `opensAt` alone; the
-          // bar comes with X2). The Patch Tree (`tree`) and warmth come with 2c.
+          // the Christmas Eve visit and its bar while it's out (X1, X2). The
+          // Patch Tree (`tree`) and warmth come with 2c.
           ...(map.kind === 'multiplayer' && christmasOn(at, map.timeZone)
             ? {
                 christmas: {
                   presentWaiting: await presentWaitingOn(tx, map, user.id, at),
-                  ...(await christmasEveView(tx, map, at)),
+                  ...(await christmasEveView(tx, miniBosses, map, at)),
                 },
               }
             : {}),
@@ -852,20 +862,30 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
 }
 
 /**
- * `MapView.christmas.eve` (#37 X1): the patch's Christmas Eve visit from
- * when it's pinned until it closes, `opensAt` alone (X2 adds the bar). A
- * plain read: the boss module pins it (rule 4). `opensAt` is the Eve's own
- * opening, also on a row converted from the week's weekly visit (which
- * keeps that visit's earlier `opens_at`).
+ * `MapView.christmas.eve` (#37 X1, X2): the patch's Christmas Eve visit
+ * from when it's pinned until it closes, with its bar (`state`, `chipped`,
+ * `goal`; never who chipped or the formulas behind them). A plain read: the
+ * boss module pins it and opens its bar (rule 4). `opensAt` is the Eve's own
+ * opening, the bar's (also on a row converted from the week's weekly visit,
+ * which keeps that visit's earlier `opens_at`); `opensAt` alone while a
+ * visit pinned before X2 has no bar yet. Nothing while the mini-boss switch
+ * is closed for the patch (it follows `/boss`).
  */
 async function christmasEveView(
   db: Executor,
+  miniBosses: MinibossSwitch,
   map: { id: string; timeZone: string },
   at: Date,
-): Promise<{ eve?: { opensAt: string } }> {
+): Promise<{ eve?: MapViewChristmasEve }> {
   const rules = BOSS_EVENTS.christmasEve;
-  const eve = await createBossRepo(db).findChristmasEve(map.id, at);
-  if (!eve || !rules) return {};
+  if (!rules || miniBosses.mode === 'off') return {};
+  const repo = createBossRepo(db);
+  const eve = await repo.findChristmasEve(map.id, at);
+  if (!eve) return {};
+  const owner = await repo.findMap(map.id);
+  if (!owner || !minibossOpenFor(miniBosses, owner.ownerUsername)) return {};
+  const bar = await repo.findBar(map.id, eve.windowId);
+  if (bar) return { eve: { opensAt: bar.opensAt.toISOString(), ...barView(bar, at) } };
   // The window's Monday is in the Eve's own December.
   const day = `${eve.windowId.slice(0, 4)}-${rules.day}`;
   const opensAt = instantOfLocalDate({ date: day, minute: rules.opensAtHour * 60 }, map.timeZone);

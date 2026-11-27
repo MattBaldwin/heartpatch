@@ -2695,3 +2695,19 @@ Supervisor 50 (`session_01RAEPnH92Kgoevthcjkk5S9`) took over from supervisor 49 
 
 **Ops note for the owner (before Dec 24)**
 - The Christmas Eve visit only runs while `HP_MINI_BOSSES` is on, and production ships with it off. It must be on for all patches by December 24.
+
+## Supervisor 51 (2026-11-27 night)
+
+Supervisor 51 (`session_01RAEPnEYoj7YN81Wf9LsLVw`) took over from supervisor 50 at 21:03 UTC (§8 handoff; supervisor 50 retired and archived). Merged: #894 (#37 X1 Christmas Eve visit) → `53ce39c`, #896 (#37 1d advent sheet) → `1bf92f4`, #899 (handoff docs) → `c15008e`, #900 (#37 X2 patch bar server) → `13b3557`.
+
+**Owner decisions (2026-11-27, one at a time, clickable)**
+1. **Christmas Eve repeat wins:** a Keeper's first Eve win pays the weekly `bundle` and rolls the boss drop; later Eve wins in the same window still chip the patch bar and count toward the fall's Christmas bundle and asks, but pay no bundle or drop of their own. Weekly visits are unchanged. (Raised by the ★ Fable review of #900; follow-up X2b, required by Dec 20.)
+
+**From merged PRs (Decisions sections)**
+- #894 (X1): a null `BOSS_EVENTS.christmasEve.speciesId` still runs the Eve on its own timing and gates, with the week's bag boss standing in. Converting an already-pinned weekly row keeps its `opens_at` and tile and resets (not deletes) that week's `boss_encounters`, keeping `last_action_at`; a weekly fight won after 16:00 pays its bundle but isn't marked won, and the Eve stays `here`. Conversion lock order: `boss_windows` → `boss_encounters` → `maps`. `gatesLowered` stays `z.literal(true)`.
+- #896 (1d): the advent entry is a row in the My Home tray, not a HUD chip. A wrapped day shows a bow (screen readers hear "Wrapped") so the 5×5 grid fits one iPhone screen. With several missed days, the catch-up button opens the tapped one, else the oldest. Opening a bag present is lane 1d2.
+- #900 (X2): on the Eve a win doesn't end the visit (`markWon` skipped), so every fight chips until the day's tries run out (repeat-win pay changed by owner decision 1 above). The fall's asks (2 per Keeper) belong to the visit, open 24 h from the thanks. Tries are keyed by window: they count from max(patch-local day start, the visit's opening), so weekly tries before 16:00 on Dec 24 leave the Eve's three whole. Contributors are Keepers with ≥ `contributorMinFights` (1) fights finished before the 10:00 close; the thanks is paid on read or by the sweep, even while the mini-boss switch is off. The goal counts active real Keepers (`map_members.status = 'active'`, `users.kind = 'player'`). Lit Twinkle Lights = tiles holding a `lights` building (0 until lane 2a lands; lit on Dec 24–25 per owner answer 4); the star = `patch_trees.star_lit_at` set. The Eve doesn't pin on a patch with no active member. The client gets raw `goal`/`chipped` per the C0b contract; X4 rounds for display. Finish lock order: battle → `boss_windows` FOR SHARE → `boss_bars` FOR UPDATE → chip insert → the existing tail; the FOR SHARE closes X1's READ COMMITTED race.
+
+**Verdict decisions**
+- PR 5 (#898): the lane's own captures showed the signature FX hidden behind the team and clumped on the boss's face after four review rounds and $33; a fresh Sonnet lane (PR 5b) does the visual tuning on the same PR. Camera and HUD issues (the boss facing away on its landing and backup beats, a friend covering its mouth, the left friend cropped) go to PR 6, not 5b.
+- #900 Fable non-blocking items 2–8 go to X4/X5 and the next docs pass (TECH_SPEC §5 and §7 step 5e need the lines X1 and X2 drafted in their PR bodies).

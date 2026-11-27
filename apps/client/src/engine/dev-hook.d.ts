@@ -21,6 +21,7 @@ import type { CommunityFlags } from '../hollowed/community-flags.js';
 import type { MapDebug } from '../map/map-screen.js';
 import type { WeatherStats } from '../weather/weather-layer.js';
 import type { RaidReportDebug } from '../raids/raid-report.js';
+import type { AdventDebug } from '../advent/advent-sheet.js';
 import type { TerritoryDebug } from '../territory/territory-screen.js';
 import type { TileBuildDebug } from '../building/tile-build.js';
 import type { BuildingsGuideDebug } from '../building/buildings-guide.js';
@@ -176,6 +177,8 @@ declare global {
       };
       /** Trick-or-treat (#515): whether it's on, each patch-mate's door, the last treat's toast. */
       trickOrTreat?(): TrickOrTreatDebug;
+      /** The advent calendar (#37 1d): its days' states, the sheet, the reveal, or null off a map. */
+      advent?(): AdventDebug | null;
       /** A trading post's screen (#271): tab, picks, offers and mailbox counts. */
       post?(): PostDebug;
       /**

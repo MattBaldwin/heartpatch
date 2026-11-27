@@ -31,7 +31,14 @@ import { creditHeartCoins } from '../heart-coins/service.js';
 import { consumeItems } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
-import { createBossRepo, type BossEncounterRow } from './repo.js';
+import { barView, triesFrom } from './patch-bar.js';
+import {
+  createBossRepo,
+  type BossBarDbRow,
+  type BossEncounterRow,
+  type BossRepo,
+  type BossWindowRow,
+} from './repo.js';
 
 const PLAYER_SIDE = 'a';
 const HOUR_MS = 3_600_000;
@@ -50,6 +57,10 @@ const MESSAGES = {
   mixedUp: 'Oops, that ask got mixed up. Try again!',
   haveOne: (name: string) => `You already have a ${name}! 💗`,
   stompedOff: (name: string) => `${name} stomped off for now. It’ll be back next visit!`,
+  // Christmas Eve (#37 X2): the asks come with the fall, never "next visit".
+  barFirst: 'Fill the patch bar together first, then ask!',
+  finishFirst: 'Finish this battle first, then ask!',
+  snuggledUp: (name: string) => `${name} is all snuggled up now. Thanks for helping! 💙`,
 } as const;
 
 /**
@@ -94,6 +105,35 @@ const won = (row: BattleRow) => row.status === 'finished' && row.result?.winner 
 const asksOpen = (row: BattleRow, rules: BossEventRules, at: Date) =>
   row.endedAt !== null && at.getTime() < row.endedAt.getTime() + rules.befriend.askHours * HOUR_MS;
 
+/**
+ * A Christmas Eve fight's visit and bar (#37 X2), or null for any other
+ * fight: a weekly one, or a weekly fight still going when the Eve took over
+ * its row (started before the Eve's own opening). Reads only.
+ */
+async function eveFightOf(
+  repo: BossRepo,
+  row: Pick<BattleRow, 'mapId' | 'startedAt'>,
+  rules: BossEventRules,
+): Promise<{ window: BossWindowRow; bar: BossBarDbRow } | null> {
+  if (!rules.christmasEve) return null;
+  const window = await repo.visitOf(row.mapId, row.startedAt);
+  if (window?.kind !== 'christmas-eve') return null;
+  const bar = await repo.findBar(window.mapId, window.windowId);
+  if (!bar || row.startedAt < bar.opensAt) return null;
+  return { window, bar };
+}
+
+/**
+ * The Christmas Eve asks (#37 X2, owner answer 2): `fallAsks` per Keeper
+ * per visit, once the bar fell and their thanks is paid, open
+ * `befriend.askHours` from that thanks. Any finished Eve fight of theirs
+ * can carry an ask; the asks are counted across the visit.
+ */
+function eveAsksOpen(encounter: BossEncounterRow, rules: BossEventRules, at: Date): boolean {
+  if (!encounter.thankedAt) return false;
+  return at.getTime() < encounter.thankedAt.getTime() + rules.befriend.askHours * HOUR_MS;
+}
+
 export interface BefriendResult {
   outcome: AskRecord['outcome'];
   squishyId: string | null;
@@ -132,13 +172,27 @@ export async function befriendBoss(
     if (!row) throw new AppError('NOT_FOUND', MESSAGES.notFound);
     const battleRowId = row.id;
     if (row.kind !== 'miniboss') throw new AppError('CONFLICT', MESSAGES.notBoss);
-    if (!won(row)) throw new AppError('CONFLICT', MESSAGES.winFirst);
     const { mapId } = row;
-    const encounter = await boss.lockWonEncounter(mapId, user.id, row.id);
-    if (!encounter) throw new AppError('CONFLICT', MESSAGES.winFirst);
+    // Christmas Eve (#37 X2): the asks come from the fall, win or lose, and
+    // are the visit's (not one win's); the weekly "win first" never applies.
+    const eveFight = await eveFightOf(boss, row, rules);
+    let encounter: BossEncounterRow | null;
+    if (eveFight) {
+      if (row.status !== 'finished') throw new AppError('CONFLICT', MESSAGES.finishFirst);
+      encounter = await boss.lockEncounter(mapId, user.id, eveFight.window.windowId);
+      if (!encounter?.thankedAt || eveFight.bar.state !== 'fell') {
+        throw new AppError('CONFLICT', MESSAGES.barFirst);
+      }
+    } else {
+      if (!won(row)) throw new AppError('CONFLICT', MESSAGES.winFirst);
+      encounter = await boss.lockWonEncounter(mapId, user.id, row.id);
+      if (!encounter) throw new AppError('CONFLICT', MESSAGES.winFirst);
+    }
+    const visitRow = encounter;
     // Every ask on this visit's row (earlier wins' too), parsed once.
-    const stored = AsksSchema.parse(encounter.asks);
-    const asks = stored.filter((a) => a.battleId === row.id);
+    const stored = AsksSchema.parse(visitRow.asks);
+    // The asks that count against this ask: the win's, or the whole Eve visit's.
+    const asks = eveFight ? stored : stored.filter((a) => a.battleId === row.id);
     // A double tap: the ask was made, so its answer stands (nothing more spent).
     const made = asks.find((a) => a.ask === ask);
     if (made) return { outcome: made.outcome, squishyId: made.squishyId, mapId, fresh: false };
@@ -149,7 +203,12 @@ export async function befriendBoss(
     if (bond.befriendedAt !== null) {
       throw new AppError('CONFLICT', MESSAGES.haveOne(nameOf(baseSpecies)));
     }
-    if (asks.length >= rules.befriend.asksPerWin || !asksOpen(row, rules, at)) {
+    if (eveFight) {
+      const limit = rules.christmasEve?.fallAsks ?? 0;
+      if (asks.length >= limit || !eveAsksOpen(visitRow, rules, at)) {
+        throw new AppError('CONFLICT', MESSAGES.snuggledUp(nameOf(bossSpecies)));
+      }
+    } else if (asks.length >= rules.befriend.asksPerWin || !asksOpen(row, rules, at)) {
       throw new AppError('CONFLICT', MESSAGES.stompedOff(nameOf(bossSpecies)));
     }
     if (ask !== asks.length + 1) throw new AppError('CONFLICT', MESSAGES.mixedUp);
@@ -193,7 +252,7 @@ export async function befriendBoss(
       squishyId = friend.id;
       await spawns.markCaught(mapId, user.id, baseSpecies, at);
       await boss.befriended(mapId, user.id, bossSpecies, friend.id, at);
-      await boss.setAsks(mapId, user.id, encounter.windowId, [...stored, record('joined')]);
+      await boss.setAsks(mapId, user.id, visitRow.windowId, [...stored, record('joined')]);
       const credit = { userId: user.id, refId: row.id, source: 'capture' as const, mapId, at };
       await creditCoins(tx, { ...credit, amount: COIN_RULES.capture.wild });
       await creditHeartCoins(tx, { ...credit, amount: HEART_COIN_RULES.capture.wild });
@@ -227,7 +286,7 @@ export async function befriendBoss(
       }
     } else {
       await boss.addMiss(mapId, user.id, bossSpecies);
-      await boss.setAsks(mapId, user.id, encounter.windowId, [...stored, record('not-yet')]);
+      await boss.setAsks(mapId, user.id, visitRow.windowId, [...stored, record('not-yet')]);
     }
     return { outcome: squishyId ? 'joined' : 'not-yet', squishyId, mapId, fresh: true };
 
@@ -264,12 +323,16 @@ export async function bossBattleView(
   if (!window) return undefined;
   const map = await repo.findMap(row.mapId);
   const out = at < window.opensAt || at >= window.endsAt;
+  // Tries keyed by window (#37 X2, `triesFrom`): the Eve's own from its opening.
+  const day = map ? localDayStart(at, map.timeZone) : at;
+  const from = await triesFrom(db, window);
   const used =
     map && !out
-      ? await repo.triesSince(row.mapId, row.playerUserId, localDayStart(at, map.timeZone))
+      ? await repo.triesSince(row.mapId, row.playerUserId, from > day ? from : day)
       : rules.triesPerDay;
   const bossSpecies = bossSpeciesOf(row);
   const bond = await repo.findBond(row.mapId, row.playerUserId, bossSpecies);
+  const eveFight = await eveFightOf(repo, row, rules);
   const base = {
     eventWindow: { id: window.windowId, endsAt: window.endsAt.toISOString() },
     triesLeftToday: Math.max(0, rules.triesPerDay - used),
@@ -278,7 +341,25 @@ export async function bossBattleView(
     baseName: nameOf(baseFormOf(bossSpecies, EVOLUTION_STEPS)),
     // A coarse step for the hearts, never the misses or the odds (rule 6).
     warmth: bossWarmthStep(rules.befriend, bond?.misses ?? 0),
+    // Christmas Eve (#37 X2): the bar this fight chips; never who chipped.
+    ...(eveFight ? { patchBar: barView(eveFight.bar, at) } : {}),
   };
+  if (eveFight) {
+    // The fall's asks (owner answer 2), win or lose, once its thanks is paid.
+    if (row.status !== 'finished' || eveFight.bar.state !== 'fell') {
+      return { ...base, asksLeft: 0, befriend: 'none' };
+    }
+    const visitRow = await repo.findEncounter(row.mapId, row.playerUserId, window.windowId);
+    if (!visitRow?.thankedAt) return { ...base, asksLeft: 0, befriend: 'none' };
+    const asks = AsksSchema.parse(visitRow.asks);
+    if (asks.some((a) => a.outcome === 'joined')) {
+      return { ...base, asksLeft: 0, befriend: 'joined' };
+    }
+    if (bond?.befriendedAt) return { ...base, asksLeft: 0, befriend: 'have-one' };
+    const limit = rules.christmasEve?.fallAsks ?? 0;
+    const asksLeft = eveAsksOpen(visitRow, rules, at) ? Math.max(0, limit - asks.length) : 0;
+    return { ...base, asksLeft, befriend: asks.length === 0 ? 'offer' : 'not-yet' };
+  }
   if (!won(row)) return { ...base, asksLeft: 0, befriend: 'none' };
   const encounter = await repo.findWonEncounter(row.mapId, row.playerUserId, row.id);
   // A win no visit holds (a weekly fight won after the Eve took over its row,
@@ -294,7 +375,13 @@ export async function bossBattleView(
 }
 
 /** Has this Keeper's win on this visit been answered with a yes (`BossVisit.state` `friend`)? */
-export function joinedOn(encounter: BossEncounterRow | null): boolean {
-  if (!encounter?.wonBattleId) return false;
+export function joinedOn(encounter: BossEncounterRow | null, kind = 'weekly'): boolean {
+  if (!encounter) return false;
+  // A Christmas Eve visit's yes is the fall's (#37 X2): no win is marked,
+  // and the asks are the visit's (a conversion clears the weekly ones).
+  if (kind === 'christmas-eve' && !encounter.wonBattleId) {
+    return AsksSchema.parse(encounter.asks).some((a) => a.outcome === 'joined');
+  }
+  if (!encounter.wonBattleId) return false;
   return asksOf(encounter, encounter.wonBattleId).some((a) => a.outcome === 'joined');
 }

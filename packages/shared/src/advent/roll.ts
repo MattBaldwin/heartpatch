@@ -69,7 +69,7 @@ export function rollPresentOpening(
 }
 
 /** What a wrapped present from the bag *can* hold, as item ids in table order, with no odds. */
-export const presentContents = (table: AdventPresents): string[] =>
+export const wrappedPresentContents = (table: AdventPresents): string[] =>
   table.opening.pool.filter((e) => e.weight > 0).map((e) => e.itemId);
 
 /**

@@ -49,7 +49,7 @@ describe('@heartpatch/shared/server', () => {
       'adventSeed',
       'presentOpeningSeed',
       'adventContents',
-      'presentContents',
+      'wrappedPresentContents',
     ]) {
       expect(name in serverEntry).toBe(true);
       expect(name in publicEntry).toBe(false);
