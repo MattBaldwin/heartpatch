@@ -1,4 +1,6 @@
+import { ElementIdSchema, type ElementId } from '@heartpatch/shared';
 import type { PlaybackStep } from '../battle/battle-playback.js';
+import type { BossBeat } from '../battle/boss-beat.js';
 import type { CloseUpTouch } from '../close-up/close-up-view.js';
 
 // Which sound goes with which moment (#25). Screens report what happened
@@ -78,7 +80,33 @@ export type CueName =
   /** Christmas (#37): a soft shake of sleigh bells. */
   | 'sleigh-bells'
   /** Christmas (#37): a boot crunching in fresh snow. */
-  | 'snow-crunch';
+  | 'snow-crunch'
+  /**
+   * A BIG squishy's beats (#190 PR 4, owner answer 4): its own silly squishy
+   * voice, low and big, with its move's element stinger under it. The windup
+   * is a slow "hmmm… HUP!"; the landing a "bwomp!" on a soft thud.
+   */
+  | BossVoiceCue
+  /** The boss's friend comes in to help: a two-note "yoo-hoo!". */
+  | 'boss-backup'
+  /** The boss is tuckered out: a big sleepy "phewww", then a little cheer. */
+  | 'boss-tuckered';
+
+/** A boss voice cue: its beat and the element of the move under it. */
+export type BossVoiceCue = `boss-${'windup' | 'landing'}-${ElementId}`;
+
+/** The elements the boss stingers are keyed by (never by boss name), as the battle's element FX are. */
+export const BOSS_ELEMENTS: readonly ElementId[] = ElementIdSchema.options;
+
+/**
+ * A move with no element gets this one's stinger, matching the arena's
+ * fallback (`FALLBACK_ELEMENT` in `element-fx.ts`, checked by a test).
+ */
+export const BOSS_FALLBACK_ELEMENT: ElementId = 'light';
+
+const BOSS_VOICE_CUES: readonly BossVoiceCue[] = (['windup', 'landing'] as const).flatMap((beat) =>
+  BOSS_ELEMENTS.map((element): BossVoiceCue => `boss-${beat}-${element}`),
+);
 
 export const CUE_NAMES: readonly CueName[] = [
   'tick',
@@ -118,6 +146,9 @@ export const CUE_NAMES: readonly CueName[] = [
   'room-bloom',
   'sleigh-bells',
   'snow-crunch',
+  ...BOSS_VOICE_CUES,
+  'boss-backup',
+  'boss-tuckered',
 ];
 
 /** True for a cue the engine has a sound for (data names cues as plain strings). */
@@ -144,16 +175,38 @@ export const DUCKING_CUES: ReadonlySet<CueName> = new Set([
   'door-wake',
   'key-found',
   'room-bloom',
+  // A boss's windup, landing and tuckering out (#190 PR 4): the stinger ducks like 'hollow-sting'.
+  ...BOSS_VOICE_CUES,
+  'boss-tuckered',
 ]);
 
 /** UI cues go on the UI bus; the rest on the SFX bus (both follow the Sounds slider). */
 export const UI_CUES: ReadonlySet<CueName> = new Set(['tick']);
 
-/** A battle step as it plays (`battle-screen`'s playback). */
+/**
+ * A battle step as it plays (`battle-screen`'s playback). `beat`: the boss's
+ * beat in a boss fight (#190 PR 4), which plays the boss's cue in place of
+ * the step's own (one boss cue per step).
+ */
 export function battleCue(
   step: Pick<PlaybackStep, 'kind' | 'squish'> & Partial<Pick<PlaybackStep, 'effectiveness'>>,
   rareFriend = false,
+  beat: BossBeat | null = null,
 ): CueName | null {
+  if (beat) {
+    const element = beat.element ?? BOSS_FALLBACK_ELEMENT;
+    switch (beat.kind) {
+      case 'windup':
+        return `boss-windup-${element}`;
+      case 'landing':
+        return `boss-landing-${element}`;
+      case 'backup':
+        return 'boss-backup';
+      case 'end':
+        // The boss tuckered out (my win); anything else is the same kind "aww".
+        return step.squish === 'bounce' ? 'boss-tuckered' : 'aww';
+    }
+  }
   switch (step.kind) {
     case 'move':
       return 'whoosh';

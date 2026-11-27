@@ -1,5 +1,6 @@
-import { CHEST_BUILD_S, WINTER_SFX } from './audio-config.js';
-import type { CueName } from './cues.js';
+import type { ElementId } from '@heartpatch/shared';
+import { BOSS_SFX, CHEST_BUILD_S, WINTER_SFX, type BossStinger } from './audio-config.js';
+import { BOSS_ELEMENTS, type BossVoiceCue, type CueName } from './cues.js';
 import { bell, noise, tone } from './synth.js';
 
 // The sound effects (#25), each a tiny synth recipe: squishy squeaks and
@@ -70,6 +71,176 @@ function chime(
   });
   return steps.length * step + 0.75;
 }
+
+/**
+ * The BIG squishy's voice (#190 PR 4): the squeak's low, big cousin. A sine
+ * that glides `from` → `to` with a silly wobble, a soft vowel an octave up,
+ * and a sub an octave down so it sounds big. Never a growl: no grit, no noise.
+ */
+function bossVoice(
+  kit: SfxKit,
+  out: AudioNode,
+  at: number,
+  spec: { from: number; to: number; dur: number; glide: number; gain: number },
+): number {
+  const { from, to, dur, glide, gain } = spec;
+  const vibrato = BOSS_SFX.vibrato;
+  tone(kit.ctx, out, {
+    type: 'sine',
+    at,
+    dur,
+    freq: from,
+    to,
+    glide,
+    gain: gain * 0.6,
+    attack: 0.03,
+    hold: dur * 0.4,
+    vibrato: [vibrato[0], vibrato[1]],
+  });
+  tone(kit.ctx, out, {
+    type: 'triangle',
+    at,
+    dur: dur * 0.9,
+    freq: from * 2,
+    to: to * 2,
+    glide,
+    gain: gain * 0.22,
+    attack: 0.04,
+    hold: dur * 0.3,
+    lowpass: 900,
+  });
+  tone(kit.ctx, out, {
+    type: 'sine',
+    at,
+    dur,
+    freq: from / 2,
+    to: to / 2,
+    glide,
+    gain: gain * 0.32,
+    attack: 0.04,
+    hold: dur * 0.4,
+  });
+  return dur;
+}
+
+/** An element's stinger under the boss's voice (#190 PR 4): its motif, then its bed. */
+function bossStinger(
+  kit: SfxKit,
+  out: AudioNode,
+  at: number,
+  pitch: number,
+  gain: number,
+  s: BossStinger,
+): number {
+  s.steps.forEach((semis, i) => {
+    const freq = s.rootHz * pitch * 2 ** (semis / 12);
+    tone(kit.ctx, out, {
+      type: s.wave,
+      at: at + i * s.stepS,
+      dur: s.noteS,
+      freq,
+      ...(s.glide !== 1 && { to: freq * s.glide, glide: s.noteS * 0.6 }),
+      gain,
+      attack: s.attack,
+      lowpass: s.lowpass,
+    });
+  });
+  if (s.bed) {
+    noise(kit.ctx, out, kit.noise, {
+      at,
+      dur: s.bed.dur,
+      gain: gain * s.bed.gain,
+      filter: s.bed.filter,
+      freq: s.bed.freq * pitch,
+      to: s.bed.to * pitch,
+      q: s.bed.q,
+      attack: 0.02,
+    });
+  }
+  return Math.max((s.steps.length - 1) * s.stepS + s.noteS, s.bed?.dur ?? 0);
+}
+
+/** The boss winds up: a slow "hmmm…" rising, a quick "HUP!", the stinger under it. */
+function bossWindup(element: ElementId): Recipe {
+  return (kit, out, at, pitch, gain) => {
+    const b = BOSS_SFX;
+    const hz = b.voiceHz * pitch;
+    bossVoice(kit, out, at, {
+      from: hz * 0.85,
+      to: hz * 1.25,
+      dur: b.windupS,
+      glide: b.windupS * 0.8,
+      gain: gain * b.voiceGain,
+    });
+    bossVoice(kit, out, at + b.windupS, {
+      from: hz * 1.5,
+      to: hz * 1.8,
+      dur: b.hupS,
+      glide: b.hupS * 0.5,
+      gain: gain * b.voiceGain,
+    });
+    const stinger = bossStinger(
+      kit,
+      out,
+      at + b.stingerDelayS,
+      pitch,
+      gain * b.stingerGain,
+      b.stingers[element],
+    );
+    return Math.max(b.windupS + b.hupS, b.stingerDelayS + stinger);
+  };
+}
+
+/** The boss's windup lands: a soft thud, a "bwomp!" falling, the stinger under it. */
+function bossLanding(element: ElementId): Recipe {
+  return (kit, out, at, pitch, gain) => {
+    const b = BOSS_SFX;
+    const hz = b.voiceHz * pitch;
+    tone(kit.ctx, out, {
+      type: 'sine',
+      at,
+      dur: 0.36,
+      freq: b.thudHz * pitch,
+      to: b.thudHz * 0.5 * pitch,
+      glide: 0.18,
+      gain: gain * b.thudGain,
+      attack: 0.004,
+    });
+    noise(kit.ctx, out, kit.noise, {
+      at,
+      dur: 0.2,
+      gain: gain * b.puffGain,
+      filter: 'lowpass',
+      freq: 240 * pitch,
+      to: 120 * pitch,
+      q: 0.7,
+      attack: 0.003,
+    });
+    bossVoice(kit, out, at + 0.02, {
+      from: hz * 1.3,
+      to: hz * 0.7,
+      dur: b.landingS,
+      glide: b.landingS * 0.6,
+      gain: gain * b.voiceGain,
+    });
+    const stinger = bossStinger(
+      kit,
+      out,
+      at + b.stingerDelayS,
+      pitch,
+      gain * b.stingerGain,
+      b.stingers[element],
+    );
+    return Math.max(0.36, 0.02 + b.landingS, b.stingerDelayS + stinger);
+  };
+}
+
+const BOSS_VOICE_RECIPES = Object.fromEntries(
+  BOSS_ELEMENTS.flatMap((element) => [
+    [`boss-windup-${element}`, bossWindup(element)],
+    [`boss-landing-${element}`, bossLanding(element)],
+  ]),
+) as Record<BossVoiceCue, Recipe>;
 
 /** Pentatonic steps up from the find chime's root (#391). */
 const FIND_STEPS = [0, 2, 4, 7, 9, 12, 14] as const;
@@ -873,5 +1044,55 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
       });
     }
     return 0.01 + w.crunchGrains * w.crunchGapS + 0.05;
+  },
+  ...BOSS_VOICE_RECIPES,
+
+  'boss-backup': (kit, out, at, pitch, gain) => {
+    // The boss calls a friend in (#190 PR 4): a two-note "yoo-hoo!", up then down.
+    const [hi, lo] = BOSS_SFX.backupHz;
+    const g = gain * BOSS_SFX.voiceGain;
+    bossVoice(kit, out, at, {
+      from: hi * pitch,
+      to: hi * 1.06 * pitch,
+      dur: 0.22,
+      glide: 0.12,
+      gain: g,
+    });
+    bossVoice(kit, out, at + 0.24, {
+      from: lo * pitch,
+      to: lo * 0.96 * pitch,
+      dur: 0.34,
+      glide: 0.2,
+      gain: g,
+    });
+    return 0.58;
+  },
+
+  'boss-tuckered': (kit, out, at, pitch, gain) => {
+    // The boss is tuckered out (#190 PR 4): a big sleepy "phewww" sliding
+    // down, a breath under it, then a little cheer for the team.
+    const b = BOSS_SFX;
+    const [from, to] = b.tuckeredHz;
+    bossVoice(kit, out, at, {
+      from: from * pitch,
+      to: to * pitch,
+      dur: b.tuckeredS,
+      glide: b.tuckeredS * 0.85,
+      gain: gain * b.voiceGain,
+    });
+    noise(kit.ctx, out, kit.noise, {
+      at,
+      dur: b.tuckeredS,
+      gain: gain * 0.1,
+      filter: 'bandpass',
+      freq: 1400 * pitch,
+      to: 500 * pitch,
+      q: 0.9,
+      attack: 0.08,
+    });
+    const cheerAt = b.tuckeredS - 0.05;
+    return (
+      cheerAt + chime(kit, out, at + cheerAt, 523 * pitch, [0, 4, 7, 12], 0.09, gain * b.cheerGain)
+    );
   },
 };
