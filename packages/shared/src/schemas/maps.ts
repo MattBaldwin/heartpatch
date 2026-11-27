@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MapViewChristmasSchema } from './christmas.js';
 import { HexSchema } from '../hex/index.js';
 import { PatchTypeSchema } from '../patch-types/patch-type.js';
 import { PublicUserSchema, RECOVERY_CODE_ALPHABET } from './auth.js';
@@ -502,6 +503,11 @@ export const MapViewSchema = z.object({
    * views parse.
    */
   giftWaiting: z.boolean().optional(),
+  /**
+   * Christmas (#37 C0): the Patch Tree and whether today's advent present
+   * waits for me. Left out outside the season and by older servers.
+   */
+  christmas: MapViewChristmasSchema.optional(),
   /**
    * The map's latest event seq this view includes (`maps.event_seq`). Live
    * sync subscribes with it as `afterSeq` (tech spec §5 "WebSocket").

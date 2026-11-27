@@ -53,6 +53,9 @@ export const TRADE_VALUES: TradeValues = {
     pumpkins: 8, // TUNE:
     'witch-dust': 12, // TUNE:
     'magic-fallen-leaves': 10, // TUNE:
+    // Christmas (#37 C0): a present is one day's advent pick, gifted unopened.
+    presents: 15, // TUNE: about a Heartdust; what's inside is worth more on average
+    fireworks: 12, // TUNE: like Witch Dust, one a year from the 24th's present
     'heart-charm': 20, // TUNE:
     'jack-o-lantern-hearthfire': 40, // TUNE:
     'brave-brew': 18, // TUNE:

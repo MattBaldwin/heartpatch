@@ -76,6 +76,10 @@ export function buildingEffects(building: Building, level = 1): BuildingEffect[]
       // Wild Isle kinds (#621): `wildIsleEffects` (and a works' output,
       // `economyEffects`), kept apart so an older build menu stays exhaustive.
       return [];
+    case 'lights':
+      // Christmas (#37 C0): the kind only; its glow-night effect lands with
+      // the lights lane (2a), with the safe-tile rule.
+      return [];
   }
 }
 

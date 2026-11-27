@@ -21,6 +21,7 @@ import { ChallengeKindSchema } from './challenges.js';
 import { LocalDateSchema } from './time.js';
 import { TrickOrTreatPrizeSchema } from './trick-or-treat.js';
 import { JourneyKindSchema } from './journeys.js';
+import { AdventDaySchema, AdventResultSchema, OrnamentSourceSchema } from './christmas.js';
 
 /**
  * The game-event type registry (tech spec §5, §7): every `game_events.type`,
@@ -1533,12 +1534,73 @@ export const GAME_EVENTS = {
       heldBy: z.array(z.uuid()),
       keeperOfNight: z.uuid().nullable(),
       outcomes: z.array(LongNightOutcomeSchema),
+      /** The season a dated Night belonged to (#37 C0); left out on a weekly Night and before it. */
+      season: ContentIdSchema.optional(),
     }),
     public: z.object({
       night: LocalDateSchema,
       held: z.boolean(),
       heldBy: z.array(z.uuid()),
       keeperOfNight: z.uuid().nullable(),
+      season: ContentIdSchema.optional(),
+    }),
+  },
+  /**
+   * A Keeper claimed an advent present (#37): today's, or one missed day
+   * (`catchUp`). Only the Keeper hears it (`ownerOnlyView`), like a house
+   * gift; `claimId` is its `advent_claims` row, the ledger's ref.
+   */
+  'advent.claimed': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      claimId: z.uuid(),
+      day: AdventDaySchema,
+      catchUp: z.boolean(),
+      items: AdventResultSchema,
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      day: AdventDaySchema,
+      catchUp: z.boolean(),
+      items: AdventResultSchema,
+    }),
+  },
+  /**
+   * A Keeper opened a present from their bag (#37), one gifted to them.
+   * Only they hear it (`ownerOnlyView`); `openingId` is the ledger's ref.
+   */
+  'present.opened': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      openingId: z.uuid(),
+      items: AdventResultSchema,
+    }),
+    public: z.object({ userId: z.uuid(), items: AdventResultSchema }),
+  },
+  /**
+   * A December gift between patch-mates hung ornaments on the Patch Tree
+   * (#37, owner answer 5): `added` (a present gifted unopened, two),
+   * `ornaments` the new total, `starLit` true on the gift that lit the star.
+   * The patch hears it; the gift's contents stay on `trade.answered`'s view.
+   */
+  'tree.decorated': {
+    internal: z.strictObject({
+      offerId: z.uuid(),
+      postTileId: z.uuid(),
+      fromUserId: z.uuid(),
+      toUserId: z.uuid(),
+      source: OrnamentSourceSchema,
+      added: z.number().int().min(1),
+      ornaments: z.number().int().min(1),
+      starLit: z.boolean(),
+    }),
+    public: z.object({
+      fromUserId: z.uuid(),
+      toUserId: z.uuid(),
+      source: OrnamentSourceSchema,
+      added: z.number().int().min(1),
+      ornaments: z.number().int().min(1),
+      starLit: z.boolean(),
     }),
   },
   /**

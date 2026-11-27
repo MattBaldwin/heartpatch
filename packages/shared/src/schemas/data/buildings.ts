@@ -9,6 +9,7 @@ import { ElementIdSchema, FeelingIdSchema } from './elements.js';
 import { formatDataIssues, type Report } from './issues.js';
 import type { JobRules } from './jobs.js';
 import { WaterKindSchema } from './terrains.js';
+import { MonthDaySchema } from './seasons.js';
 import { WeatherKindSchema } from './weather.js';
 import { PatchTypeSchema, type PatchType } from '../../patch-types/patch-type.js';
 
@@ -229,6 +230,27 @@ export const ShelterBuildingSchema = z.strictObject({
   levels: levels({}),
 });
 
+/**
+ * Lights (#37 C0, owner answer 4): a fuel-free building that glows at night.
+ * On a `glowNights` night (map-local `MM-DD`, the night that starts that day) it counts as light against the
+ * Hollow Man within `safeRadius` tiles (0: its own tile); other nights it
+ * is cosmetic. Twinkle Lights are the first; a Clockwork beacon (#874) is a
+ * later one with `safeRadius` 2, needing no second rule. The safe-tile rule
+ * itself lands with the lights lane (`home/safe-tiles.ts`), not here.
+ */
+export const LightsBuildingSchema = z
+  .strictObject({
+    ...buildingBase,
+    kind: z.literal('lights'),
+    glowNights: z.array(MonthDaySchema).min(1).max(31),
+    safeRadius: z.number().int().min(0).max(2),
+    levels: levels({}),
+  })
+  .refine((b) => new Set(b.glowNights).size === b.glowNights.length, {
+    message: 'list each glow night once',
+    path: ['glowNights'],
+  });
+
 /** The Weather Vane (Wild Isle, #621): its owner sees tomorrow's fronts in full. */
 export const VaneBuildingSchema = z.strictObject({
   ...buildingBase,
@@ -287,6 +309,7 @@ export const BuildingSchema = z.discriminatedUnion('kind', [
   ShelterBuildingSchema,
   VaneBuildingSchema,
   TravelBuildingSchema,
+  LightsBuildingSchema,
 ]);
 export type Building = z.infer<typeof BuildingSchema>;
 export type BuildingKind = Building['kind'];

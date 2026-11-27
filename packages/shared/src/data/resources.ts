@@ -141,22 +141,16 @@ export const RESOURCES: Resource[] = [
     season: 'thanksgiving',
     gather: { seconds: 20 * 60, quantity: 3 }, // TUNE: a home leaf pile, like the farm plot
   },
-  // #735: `RETIRED_RESOURCES` until their season's lane gives them a use.
-  {
-    id: 'turkey-feathers',
-    name: 'Turkey Feathers',
-    description: 'Fluffy feathers in every autumn color.',
-    kind: 'seasonal',
-    season: 'thanksgiving',
-    tradable: false,
-  },
+  // Christmas (#37 C0): back from `RETIRED_RESOURCES`. A present comes from
+  // the day's advent claim and opens in the bag (or is gifted unopened, which
+  // hangs two ornaments on the Patch Tree); Fireworks are the 24th's advent
+  // present and go off at New Year (#41).
   {
     id: 'presents',
     name: 'Presents',
     description: 'Wrapped surprises. What could be inside?',
     kind: 'seasonal',
     season: 'christmas',
-    tradable: false,
   },
   {
     id: 'fireworks',
@@ -164,6 +158,14 @@ export const RESOURCES: Resource[] = [
     description: 'Big, bright and very loud. Great for a party!',
     kind: 'seasonal',
     season: 'new-year',
+  },
+  // #735: `RETIRED_RESOURCES` until their season's lane gives them a use.
+  {
+    id: 'turkey-feathers',
+    name: 'Turkey Feathers',
+    description: 'Fluffy feathers in every autumn color.',
+    kind: 'seasonal',
+    season: 'thanksgiving',
     tradable: false,
   },
   {
@@ -303,6 +305,6 @@ export const RESOURCES: Resource[] = [
  * Resources with no way in and no way out yet (#735), kept only so saved
  * bags load: not tradable, no trade value, no icon. `content.test.ts` checks
  * every other resource has both; each season's lane takes its own off this
- * list (Fireworks: #41).
+ * list (Presents and Fireworks: #37 C0).
  */
-export const RETIRED_RESOURCES: readonly string[] = ['turkey-feathers', 'presents', 'fireworks'];
+export const RETIRED_RESOURCES: readonly string[] = ['turkey-feathers'];

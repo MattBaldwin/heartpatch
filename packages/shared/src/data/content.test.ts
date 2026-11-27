@@ -179,7 +179,23 @@ describe('every resource has a way in and a way out (#735)', () => {
     ...GLIMMER_SWAP.accepts,
   ]);
 
-  it.each(RESOURCES.filter((r) => !RETIRED.includes(r.id)).map((r) => r.id))('%s', (id) => {
+  // Un-retired by the Christmas contracts (#37 C0); their ways in and out
+  // land with their lanes. Each lane takes its own off this list.
+  const AWAITING_LANE: Readonly<Record<string, string>> = {
+    presents: '#37 1c: advent claims in, present opening out',
+    fireworks: '#37 1c in (the 24th), #41 4a launch out',
+  };
+
+  it.each(Object.keys(AWAITING_LANE))('%s waits for its lane, tradable and valued', (id) => {
+    const r = RESOURCES.find((x) => x.id === id);
+    expect(r?.tradable, AWAITING_LANE[id]).not.toBe(false);
+    expect(RETIRED).not.toContain(id);
+    expect(TRADE_VALUES.items[id]).toBeGreaterThan(0);
+  });
+
+  it.each(
+    RESOURCES.filter((r) => !RETIRED.includes(r.id) && !(r.id in AWAITING_LANE)).map((r) => r.id),
+  )('%s', (id) => {
     expect(faucets.has(id), `${id} has no way in`).toBe(true);
     expect(sinks.has(id), `${id} has no way out`).toBe(true);
   });
