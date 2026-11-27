@@ -1,6 +1,7 @@
 import {
   activeSeasons,
   GAME_DATA,
+  seasonRunAt,
   hexToWorld,
   isTradingPost,
   isWater,
@@ -299,14 +300,16 @@ export function snowCoverAt(
 }
 
 /**
- * The year a Christmas season started, from a local `YYYY-MM-DD` (#37): a
- * January day still belongs to the December before, so the fade plays once
- * a season, not again at New Year.
+ * The year of the season run a local `YYYY-MM-DD` falls in (shared
+ * `seasonRunAt`, #37), so the first snow's fade plays once a season.
  */
 export function snowSeasonYear(localDate: string): string {
-  const year = Number.parseInt(localDate.slice(0, 4), 10);
-  const month = Number.parseInt(localDate.slice(5, 7), 10);
-  return String(month >= 7 ? year : year - 1);
+  try {
+    const run = seasonRunAt(GAME_DATA.seasons, localDate);
+    return String(run?.year ?? localDate.slice(0, 4));
+  } catch {
+    return localDate.slice(0, 4);
+  }
 }
 
 /**

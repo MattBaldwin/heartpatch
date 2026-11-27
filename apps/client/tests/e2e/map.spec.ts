@@ -27,6 +27,9 @@ interface MapDebug {
   halloween: boolean;
   /** Builds since the map was opened (a reseason rebuilds it, #583). */
   builds: number;
+  /** Christmas snow (#37): how far the first snow has faded in, null out of season. */
+  snow?: number | null;
+  motes?: Record<string, number>;
 }
 
 /**
@@ -404,8 +407,7 @@ test('snows on every patch inside the Christmas ceilings, day and night (#37)', 
   page,
 }) => {
   test.setTimeout(300_000); // shader compiles; CI renders in software
-  type Snowy = { drawCalls: number; snow?: number | null; motes: Record<string, number> };
-  const measure = async (query: string): Promise<Snowy> => {
+  const measure = async (query: string) => {
     await page.goto(`/island.html?${query}`);
     await expect
       .poll(
@@ -419,7 +421,7 @@ test('snows on every patch inside the Christmas ceilings, day and night (#37)', 
       .toBeGreaterThan(30);
     const stats = await page.evaluate(() => (window as IslandHooks).__islandMap?.stats() ?? null);
     if (!stats) throw new Error('the island page drew no map');
-    return stats as unknown as Snowy;
+    return stats;
   };
   const seen: Record<string, number> = {};
   for (const patch of ['cozy', 'wild'] as const) {
@@ -433,8 +435,8 @@ test('snows on every patch inside the Christmas ceilings, day and night (#37)', 
         const label = `${patch} ${tier} ${night ? 'night' : 'day'}`;
         seen[label] = snowy.drawCalls;
         expect(snowy.snow, label).toBe(1);
-        expect(snowy.motes['snow'] ?? 0, label).toBeGreaterThan(0);
-        expect(snowy.motes['pollen'] ?? 0, label).toBe(0);
+        expect(snowy.motes?.['snow'] ?? 0, label).toBeGreaterThan(0);
+        expect(snowy.motes?.['pollen'] ?? 0, label).toBe(0);
         expect(snowy.drawCalls, label).toBeLessThanOrEqual(CHRISTMAS_CEILING[patch]);
         // The snow adds no draw call over today's map beyond its one mote layer (the gallery's
         // today stands still, so it draws no pollen, leaves or fireflies, which snowfall replaces).

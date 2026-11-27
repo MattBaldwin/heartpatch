@@ -581,6 +581,13 @@ describe('MapScene', () => {
       mid.map.tick(CHRISTMAS.fadeMs / 4);
       mid.map.setAmbient('high', true);
       expect(mid.map.stats.snow).toBe(1);
+      // A device judged slow mid-fade (the older iPads): ambient life stops and the snow snaps in.
+      const slow = build(testView(1), { ...CHRISTMAS_ON, snowFade: true });
+      let t = 0;
+      for (; t <= 2100; t += 16) slow.map.tick(t);
+      for (let i = 0; i < 40; i++) slow.map.tick((t += 100));
+      expect(slow.map.stats.ambient).toBe('off');
+      expect(slow.map.stats.snow).toBe(1);
       // The low tier (no ambient life) snaps too.
       expect(
         build(testView(1), { ...CHRISTMAS_ON, snowFade: true, tier: 'low' }).map.stats.snow,

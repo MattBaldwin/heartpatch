@@ -142,14 +142,14 @@ describe('the first snow fade (#37)', () => {
     expect(snowCoverAt(null, 0, false)).toBe(1);
   });
 
-  it('plays once a season per account on this device; a January day is the December season', () => {
+  it('plays once a season per account on this device; keyed by the shared season run year', () => {
     const store = new Map<string, string>();
     const storage = {
       getItem: (k: string) => store.get(k) ?? null,
       setItem: (k: string, v: string) => void store.set(k, v),
     };
     expect(snowSeasonYear('2026-12-01')).toBe('2026');
-    expect(snowSeasonYear('2027-01-03')).toBe('2026');
+    expect(snowSeasonYear('2026-12-31')).toBe('2026');
     expect(firstSnowNow(storage, '2026', 'me')).toBe(true);
     expect(firstSnowNow(storage, '2026', 'me')).toBe(false);
     expect(store.get(firstSnowKey('2026', 'me'))).toBe('1');

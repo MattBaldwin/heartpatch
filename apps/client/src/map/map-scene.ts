@@ -1664,9 +1664,10 @@ export class MapScene {
 
   /** Pushes night, mode and the tier's share into the motes, backdrop and lanterns. */
   private applyAmbient(): void {
-    // Nothing moves (reduced motion, the low tier, a slow device): the first snow is just there.
-    if (this.snowFading && this.mode !== 'live' && this.tileGroups.length > 0) this.applySnow(1);
     if (this.judge.slow && this.mode === 'live') this.mode = 'off';
+    // Nothing moves (reduced motion, the low tier, a device judged slow, even mid-fade):
+    // the first snow is just there.
+    if (this.snowFading && this.mode !== 'live' && this.tileGroups.length > 0) this.applySnow(1);
     this.ambient.set({ night: this.night, mode: this.mode, share: this.share });
     if (this.lanternMat) {
       const glow = this.night ? HALLOWEEN.glow.night : HALLOWEEN.glow.day;
