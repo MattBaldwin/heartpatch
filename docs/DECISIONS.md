@@ -2711,3 +2711,16 @@ Supervisor 51 (`session_01RAEPnEYoj7YN81Wf9LsLVw`) took over from supervisor 50 
 **Verdict decisions**
 - PR 5 (#898): the lane's own captures showed the signature FX hidden behind the team and clumped on the boss's face after four review rounds and $33; a fresh Sonnet lane (PR 5b) does the visual tuning on the same PR. Camera and HUD issues (the boss facing away on its landing and backup beats, a friend covering its mouth, the left friend cropped) go to PR 6, not 5b.
 - #900 Fable non-blocking items 2–8 go to X4/X5 and the next docs pass (TECH_SPEC §5 and §7 step 5e need the lines X1 and X2 drafted in their PR bodies).
+
+## Supervisor 52 (2026-11-27 late night)
+
+Supervisor 52 (`session_01RAEPnGHXGzArmH6umqkTo1`) took over from supervisor 51 at 22:16 UTC (§8 handoff; supervisor 51 retired and archived). Merged: #901 (handoff docs) → `f2ebf26`, #902 (#895 CI health) → `1404f54`, #898 (#190 PR 5 + 5b) → `ea2e506`.
+
+**Owner decisions (2026-11-27, one at a time, clickable)**
+2. **Christmas Eve repeat wins skip the win coins too:** only a Keeper's first Eve win in the window pays the mini-boss win coins (`COIN_RULES.battleWin.miniboss`), the Heart Coin, the weekly `bundle` and the boss drop. Later Eve wins still chip the patch bar and count toward the fall's Christmas bundle and asks. Weekly visits are unchanged. (Raised by the #903 reviewer; folded into #903 via `bossWinPays`; #37 comment 7230072512.)
+
+**Verdict decisions**
+- X4 (#37 patch bar on screen) starts without a new mockup: owner decision 7225429326 (a thin ~4 px full-width line under the boss strip, gold when full; ❄ and % on the event card, Chipped! sticker and thanks sheet) replaces the MX frames. On iPad and phone landscape the coordinator default is the same line, pending one owner question with X4's captures.
+- #902 (#895): the fix also moved four DDL test files outside `src/db/` (`modules/boss/befriend`, `modules/starters`, `modules/admin`, `jobs`) onto their own databases; accepted, since the brief was to keep all DDL off the shared test DB. The 40P01 flake ruling lapses with this merge.
+- #898: merged with a SOFT render check (leaf burst, backup flash, drift weak; nothing hidden or on the face). The polish list in comment 7230472758 goes to PR 6 or a small 5c. `fast` red on `00fbf563` was the pre-#902 40P01 deadlock and was ruled a flake.
+
