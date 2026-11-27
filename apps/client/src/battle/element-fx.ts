@@ -289,7 +289,7 @@ export interface SignatureBeatFx {
 export type SignatureMoment = Readonly<Partial<Record<SignatureBeat, SignatureBeatFx>>>;
 
 /** Beside the BIG squishy, a little towards the team: where a called-in friend's flash goes. */
-const BESIDE = { side: 0.95, up: 0.1, toward: 0.3 } as const; // TUNE: out to the BIG squishy's side, near its middle, not up in the sky
+const BESIDE = { side: 1.0, up: 0.2, toward: 0.3 } as const; // TUNE: out to the BIG squishy's side, near its middle, not up in the sky
 
 const LEAF_PILE = ['#e0a040', '#9bbf4a', '#c9772f', '#7fae3c'] as const; // TUNE: autumn rake pile
 const SKID = ['#d9d2c5', '#c4bcae', '#efe9dd'] as const; // TUNE: soft dusty skid marks, never black
@@ -306,19 +306,20 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           pattern: 'burst',
           shape: 'leaf',
           colors: LEAF_PILE,
-          motion: 'pile',
+          motion: 'flutter',
           count: 110, // TUNE: ≤ 150 live leaves with the aura (the budget)
-          at: 'feet',
-          // A wide ring round the body (its real radius), rising to the chin and no higher.
-          offset: { side: 0, up: 0.1, toward: 0 }, // TUNE
-          speed: 0,
-          up: 0.3,
-          gravity: 0,
+          // The team stands in front of the BIG squishy's body, so the heap swirls up from
+          // its two flanks at chin height: beside the head, never across the face.
+          at: 'shoulders',
+          flank: true,
+          offset: { side: 0, up: 0, toward: 0 },
+          speed: 0.22,
+          up: 0.5,
+          gravity: 0.35,
           size: 0.2, // TUNE: big enough to read as leaves
           life: 1300, // TUNE
           delay: 0,
           spread: 0.8, // the pile grows across the count
-          clearFace: true,
         },
       ],
     },
@@ -368,12 +369,12 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           colors: 'core',
           motion: 'ring',
           count: 3, // TUNE: shout rings
-          at: 'feet',
-          offset: { side: 0, up: 0, toward: 0.3 }, // TUNE: rolled out in front of its feet, not under the team
+          at: 'head',
+          offset: { side: 0, up: 0.5, toward: 0 }, // TUNE: hoops spread out above the head (its feet are behind the team)
           speed: 0,
           up: 0,
           gravity: 0,
-          size: 1.1,
+          size: 1.2,
           life: 640,
           delay: 0.1,
           spread: 0.6, // further apart, so they read as rings one after another
@@ -414,7 +415,7 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           colors: 'core',
           motion: 'pop',
           count: 1,
-          at: 'middle',
+          at: 'head',
           offset: BESIDE,
           speed: 0,
           up: 0,
@@ -428,13 +429,13 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           shape: 'star',
           colors: 'element',
           motion: 'ballistic',
-          count: 12, // TUNE
-          at: 'middle',
+          count: 14, // TUNE
+          at: 'head',
           offset: BESIDE,
-          speed: 0.9,
-          up: 0.5,
-          gravity: 1.1,
-          size: 0.13,
+          speed: 0.7,
+          up: 0.4,
+          gravity: 0.9,
+          size: 0.2,
           life: 650,
           delay: 0.08,
           halos: true,
@@ -454,9 +455,9 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           colors: SKID,
           motion: 'ballistic',
           count: 24, // TUNE: two skid arcs' worth
-          at: 'feet',
-          // Brought out towards the camera, in front of the BIG squishy's feet: a crescent on the ground.
-          offset: { side: 0, up: 0.02, toward: 0.45 }, // TUNE
+          at: 'shoulders',
+          // The team hides its feet, so the skid sweeps across its chest, towards the camera.
+          offset: { side: 0, up: 0, toward: 0.3 }, // TUNE
           speed: 0,
           up: 0,
           gravity: 0,
@@ -473,8 +474,8 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           colors: 'element',
           motion: 'zap',
           count: 16, // TUNE
-          at: 'feet',
-          offset: { side: 0, up: 0.2, toward: 0.45 }, // TUNE: lifted just over the skid
+          at: 'shoulders',
+          offset: { side: 0, up: 0.1, toward: 0.3 }, // TUNE: just over the skid
           speed: 0,
           up: 0.1,
           gravity: 0,
@@ -1179,7 +1180,8 @@ export function emit(e: EmitAt): Particle[] {
             born: bornAt(i),
             life: b.life,
             motion: b.motion,
-            origin: b.pattern === 'rings' ? { x: spot.x, y: 0.06, z: spot.z } : spot,
+            origin:
+              b.pattern === 'rings' && b.at === 'feet' ? { x: spot.x, y: 0.06, z: spot.z } : spot,
             vx: 0,
             vy: 0,
             vz: 0,

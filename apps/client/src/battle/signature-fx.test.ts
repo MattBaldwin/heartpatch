@@ -535,10 +535,12 @@ describe('emit: signature bursts (#190 PR 5)', () => {
     expect(Math.hypot(state.x - base.at.x, (state.z - base.at.z) / 0.8)).toBeGreaterThan(4.4 * 0.3);
   });
 
-  it('lays a skid arc on the ground, drawn in order, and rings at the feet', () => {
+  it('lays a skid arc across the chest, drawn in order, and rings above the head', () => {
     const arc = emit({ ...base, element: 'spark', burst: burstOf('all-foes:spark', 'strike') });
-    // Just off the ground, and on its front: the side facing the team, so the camera sees it.
-    expect(arc.every((p) => p.origin.y > 0 && p.origin.y < 0.2 * 4.4 + 0.1)).toBe(true);
+    // At chest height (the team hides its feet), on its front: the side facing the team.
+    expect(arc.every((p) => p.origin.y > 0.4 * 4.4 && p.origin.y < base.at.y + 0.5 * 4.4)).toBe(
+      true,
+    );
     expect(arc.every((p) => p.origin.z <= base.at.z + 0.01)).toBe(true);
     expect(arc.map((p) => p.born)).toEqual([...arc.map((p) => p.born)].sort((a, b) => a - b));
     // It turns with the fight: facing +x, it lies on the +x side.
@@ -550,7 +552,7 @@ describe('emit: signature bursts (#190 PR 5)', () => {
     expect(turned.every((p) => p.origin.x >= base.at.x - 0.01)).toBe(true);
     const rings = emit({ ...base, element: 'fire', burst: burstOf('flinch:fire', 'strike', 1) });
     expect(rings).toHaveLength(3);
-    expect(rings.every((p) => p.motion === 'ring' && p.origin.y === 0.06)).toBe(true);
+    expect(rings.every((p) => p.motion === 'ring' && p.origin.y > base.at.y)).toBe(true);
   });
 
   it('takes the move’s own colours for the backup’s flash (fire, in a frost fight)', () => {
@@ -592,15 +594,14 @@ describe('emit: signature bursts (#190 PR 5)', () => {
     const frost = SIGNATURE_FX['assist:frost']!.call!.bursts![0]!;
     const pile = SIGNATURE_FX['windup:leaf']!.windup!.bursts![0]!;
 
-    it('keeps the leaf pile wide of the body and below the chin for its whole life', () => {
+    it('swirls the leaf pile up from both flanks, beside the head and never across the face', () => {
       const out = emit({ ...real, burst: pile });
       expect(out.length).toBe(pile.count);
+      expect(new Set(out.map((p) => Math.sign(p.origin.x)))).toEqual(new Set([1, -1]));
       for (const p of out) {
-        const top = p.origin.y + p.vy * (p.life / 1000);
-        expect(top, 'rises no higher than the chin').toBeLessThanOrEqual(real.face.low);
-        expect(Math.hypot(p.vx, p.vz), 'orbits outside the body').toBeGreaterThanOrEqual(
-          real.radius,
-        );
+        expect(Math.abs(p.origin.x), 'starts beside the body').toBeGreaterThan(real.radius);
+        expect(Math.sign(p.vx), 'drifts outwards').toBe(Math.sign(p.origin.x));
+        expect(p.origin.y).toBeLessThan(real.face.low);
       }
     });
 
