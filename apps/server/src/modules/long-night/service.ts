@@ -28,6 +28,7 @@ import {
 import {
   LONG_NIGHT_GAP_TABLE,
   LONG_NIGHT_SECRETS,
+  QUIET_NIGHTS,
   longNightContentHash,
   rollGapEncounter,
   SPAWN_RULES,
@@ -109,7 +110,7 @@ export async function isLongNightOn(
   if (!PATCHES.includes(map.kind) || !(await longNightOnMap(db, longNight, map.id))) return false;
   const repo = createLongNightRepo(db);
   const [weekday, latest] = await Promise.all([repo.weekday(map.id), repo.latest(map.id)]);
-  return weekday !== undefined && isLongNight(weekday, night, latest?.night ?? null);
+  return weekday !== undefined && isLongNight(weekday, night, latest?.night ?? null, QUIET_NIGHTS);
 }
 
 /**
@@ -322,8 +323,13 @@ export async function longNightStatus(
   const mine = latest?.outcomes.find((o) => o.userId === user.id);
   // At 0 % no Night runs (`fall`), so there's nothing to count down to.
   const nextAt = strikes
-    ? nextLongNightAt(local, weekday, latestNight, HOME_BASE_RULES, (l) =>
-        instantOfLocalDate(l, map.timeZone),
+    ? nextLongNightAt(
+        local,
+        weekday,
+        latestNight,
+        HOME_BASE_RULES,
+        (l) => instantOfLocalDate(l, map.timeZone),
+        QUIET_NIGHTS,
       )
     : null;
   return {
@@ -331,7 +337,7 @@ export async function longNightStatus(
     // A night that has fallen was one if it left a row; a coming one if it will be.
     tonight:
       latestNight === showNight ||
-      (!fallen && strikes && isLongNight(weekday, showNight, latestNight)),
+      (!fallen && strikes && isLongNight(weekday, showNight, latestNight, QUIET_NIGHTS)),
     nextAt: nextAt?.toISOString() ?? null,
     gap:
       latest && window && isGapOpen(window, at)

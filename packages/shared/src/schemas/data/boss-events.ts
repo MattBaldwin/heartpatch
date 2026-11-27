@@ -87,8 +87,8 @@ export type ChristmasEveBarRules = z.infer<typeof ChristmasEveBarRulesSchema>;
 export const ChristmasEveBossRulesSchema = z.strictObject({
   /**
    * The new Christmas-only BIG squishy (owner answer 1). Null until its
-   * species lands (X3): then there is no Christmas visit and the week's bag
-   * draw runs as usual.
+   * species lands (X3): the visit still runs on Christmas Eve, with the
+   * week's bag draw standing in (`christmasEveVisitFor`, X1).
    */
   speciesId: ContentIdSchema.nullable(),
   /** The terrains it likes when the Patch Tree's post tile can't be used. */
@@ -222,6 +222,16 @@ function checkChristmasEve(
   }
   if (eve.gates.minLevel > weekly.minLevel) {
     problems.push('christmas eve: minLevel is above the weekly one');
+  }
+  if (eve.gates.levelBonus > weekly.levelBonus) {
+    problems.push('christmas eve: levelBonus is above the weekly one');
+  }
+  if (eve.gates.minPartnerLevel !== null && eve.gates.minPlayerLevel > eve.gates.minPartnerLevel) {
+    problems.push('christmas eve: minPlayerLevel is above minPartnerLevel');
+  }
+  // A Keeper must be able to finish enough fights in one patch day to share the fall.
+  if (eve.contributorMinFights > weekly.triesPerDay) {
+    problems.push('christmas eve: contributorMinFights is above triesPerDay');
   }
   if (eve.bar.minGoal > eve.bar.maxGoal) problems.push('christmas eve: minGoal is above maxGoal');
   if (eve.bar.headStartLightsMaxPercent + eve.bar.headStartStarPercent >= 100) {

@@ -280,7 +280,11 @@ export async function bossBattleView(
     warmth: bossWarmthStep(rules.befriend, bond?.misses ?? 0),
   };
   if (!won(row)) return { ...base, asksLeft: 0, befriend: 'none' };
-  const asks = asksOf(await repo.findWonEncounter(row.mapId, row.playerUserId, row.id), row.id);
+  const encounter = await repo.findWonEncounter(row.mapId, row.playerUserId, row.id);
+  // A win no visit holds (a weekly fight won after the Eve took over its row,
+  // #37 X1): nothing to ask, as `befriendBoss` would refuse it.
+  if (!encounter) return { ...base, asksLeft: 0, befriend: 'none' };
+  const asks = asksOf(encounter, row.id);
   if (asks.some((a) => a.outcome === 'joined')) return { ...base, asksLeft: 0, befriend: 'joined' };
   if (bond?.befriendedAt) return { ...base, asksLeft: 0, befriend: 'have-one' };
   const asksLeft = asksOpen(row, rules, at)

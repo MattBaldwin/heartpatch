@@ -9,20 +9,16 @@ import {
   type PlayerBattle,
   type PublicUser,
 } from '@heartpatch/shared';
-import {
-  BOSS_EVENTS,
-  bossVisitFor,
-  bossWeekOf,
-  type BossEventRules,
-} from '@heartpatch/shared/server';
+import { BOSS_EVENTS, bossWeekOf, type BossEventRules } from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { expect } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import type { Database } from '../src/db/client.js';
 import { keepers, sessions, squishies, users } from '../src/db/schema.js';
-import { instantOfLocalDate, localDate } from '../src/lib/time.js';
+import { localDate } from '../src/lib/time.js';
 import { SESSION_COOKIE } from '../src/modules/auth/limits.js';
+import { plannedBossVisit } from '../src/modules/boss/service.js';
 import { newSessionToken } from '../src/modules/auth/secrets.js';
 
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -146,7 +142,8 @@ export function bossHarness(db: Database, url: string, prefix: string) {
       sweep = undefined;
       clock.setTime(Date.parse(BOSS_START));
     },
-    async player(): Promise<BossPlayer> {
+    /** A Keeper with a session; `expiresAt` for a clock set years ahead (#37 X1's 2028). */
+    async player(expiresAt = new Date(Date.now() + 30 * DAY_MS)): Promise<BossPlayer> {
       const username = `${prefix}_${String((counter += 1))}`;
       const [user] = await db
         .insert(users)
@@ -154,9 +151,7 @@ export function bossHarness(db: Database, url: string, prefix: string) {
         .returning({ id: users.id });
       await db.insert(keepers).values({ userId: user!.id, ...TEST_KEEPER });
       const { token, tokenHash } = newSessionToken();
-      await db
-        .insert(sessions)
-        .values({ userId: user!.id, tokenHash, expiresAt: new Date(Date.now() + 30 * DAY_MS) });
+      await db.insert(sessions).values({ userId: user!.id, tokenHash, expiresAt });
       return { id: user!.id, username, token };
     },
     async patch(owner: BossPlayer) {
@@ -194,15 +189,18 @@ export function bossHarness(db: Database, url: string, prefix: string) {
         `update map_members set starter_squishy_id = '${rows[0]!.id}' where map_id = '${mapId}' and user_id = '${who.id}'`,
       );
     },
-    /** Moves the clock a minute past this week's visit opening on the patch. */
+    /**
+     * Moves the clock a minute past this week's visit opening on the patch
+     * (the Christmas Eve one in its week, #37 X1).
+     */
     async toVisit(mapId: string, rules: BossEventRules = BOSS_RULES) {
       const map = await db.query.maps.findFirst({ where: (t, { eq }) => eq(t.id, mapId) });
       const week = bossWeekOf(localDate(clock, BOSS_ZONE));
-      const plan = bossVisitFor(map!.seed!, week, map!.longNightWeekday ?? null, rules)!;
-      const opensAt = instantOfLocalDate(
-        { date: plan.opensOn, minute: rules.opensAtHour * 60 },
-        BOSS_ZONE,
-      );
+      const { opensAt } = plannedBossVisit(
+        { seed: map!.seed!, timeZone: BOSS_ZONE, longNightWeekday: map!.longNightWeekday ?? null },
+        week,
+        rules,
+      )!;
       clock.setTime(opensAt.getTime() + 60_000);
       return { week, opensAt };
     },
