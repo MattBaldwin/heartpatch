@@ -673,3 +673,5 @@ Event types and payloads come from the shared registry, `packages/shared/src/sch
 ## Tests
 
 DB integration tests run against a real Postgres. `tests/global-setup.ts` creates a scratch database next to `DATABASE_URL` (the role needs `CREATEDB`), applies every migration from scratch, and drops it afterwards, so tests never touch your dev data. Without `DATABASE_URL`, those tests are skipped locally with a warning. CI sets it and fails if it's missing.
+
+Test files run in parallel against that one shared database, so a test that runs DDL there (a migration's statements or its DOWN, an `ALTER`, a `DROP`, a whole-table backfill) blocks or deadlocks (40P01) the files beside it: DDL takes an AccessExclusiveLock, and dropping a foreign key takes one on the table it points at too (#895). Such a test uses a database of its own: `const url = ownDatabaseUrl()` from `tests/own-database.ts` in place of `inject('testDatabaseUrl')`. It's a copy of a migrated template global-setup keeps, made in `beforeAll` and dropped in `afterAll`. A test that needs the schema before a migration uses `databaseBefore` from `tests/before-migration.ts` instead.
