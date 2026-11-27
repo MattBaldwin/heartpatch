@@ -39,7 +39,7 @@ export const AdventPresentsSchema = z.strictObject({
   daily: AdventPoolSchema,
   /** Added on top on these days of December (`1`–`25`), always: Fireworks on the 24th. */
   fixed: z.record(
-    z.string().regex(/^(0?[1-9]|1\d|2[0-5])$/),
+    z.string().regex(/^([1-9]|1\d|2[0-5])$/),
     z.record(ContentIdSchema, z.number().int().min(1)),
   ),
   /** A wrapped present to pass on comes too, on 1 claim in this many (1: every claim). */

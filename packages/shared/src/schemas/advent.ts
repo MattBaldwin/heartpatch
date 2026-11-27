@@ -36,6 +36,11 @@ export const AdventViewSchema = z.strictObject({
   days: z.array(AdventDayViewSchema).length(25),
   /** Today's one catch-up is still free (and the calendar isn't over). */
   catchUpLeft: z.boolean(),
+  /**
+   * What a wrapped present from the bag *can* hold (item ids, no odds), so
+   * it shows its possible contents before it's opened (GAME_DESIGN §15).
+   */
+  presentContents: z.array(ContentIdSchema).min(1),
 });
 export type AdventView = z.infer<typeof AdventViewSchema>;
 

@@ -4,7 +4,13 @@ import { ADVENT_PRESENTS } from '../data/server/advent.js';
 import { AdventResultSchema } from '../schemas/christmas.js';
 import { checkAdventPresents, PRESENT_ITEM } from '../schemas/data/advent.js';
 import { adventClaimProblem, adventDaysOf, adventNumber, isCatchUp } from './calendar.js';
-import { adventContents, adventSeed, rollAdventPresent, rollPresentOpening } from './roll.js';
+import {
+  adventContents,
+  adventSeed,
+  presentContents,
+  rollAdventPresent,
+  rollPresentOpening,
+} from './roll.js';
 
 const RESOURCE_IDS = new Set(RESOURCES.map((r) => r.id));
 const ALICE = '00000000-0000-4000-8000-00000000000a';
@@ -62,6 +68,9 @@ describe('advent presents roll (#37 1c)', () => {
     expect(problems).toContain('opening: a present must not hold another present');
     expect(problems).toContain('fixed.24: unknown item "not-a-thing"');
     expect(problems.some((p) => p.startsWith('opening: fewer items'))).toBe(true);
+    // Fixed days are keyed as the roll looks them up: '9', never '09'.
+    const padded = { ...ADVENT_PRESENTS, fixed: { '09': { pies: 1 } } };
+    expect(checkAdventPresents(padded, RESOURCE_IDS)).not.toEqual([]);
   });
 
   it('is the same for the same Keeper and day, and differs between them', () => {
@@ -111,6 +120,12 @@ describe('advent presents roll (#37 1c)', () => {
       const items = rollPresentOpening(ADVENT_PRESENTS, ALICE, `opening-${String(i)}`);
       expect(AdventResultSchema.safeParse(items).success).toBe(true);
       expect(items[PRESENT_ITEM]).toBeUndefined();
+    }
+    const can = presentContents(ADVENT_PRESENTS);
+    for (let i = 0; i < 50; i += 1) {
+      for (const id of Object.keys(rollPresentOpening(ADVENT_PRESENTS, BOB, `o-${String(i)}`))) {
+        expect(can).toContain(id);
+      }
     }
     expect(rollPresentOpening(ADVENT_PRESENTS, ALICE, 'x')).toEqual(
       rollPresentOpening(ADVENT_PRESENTS, ALICE, 'x'),

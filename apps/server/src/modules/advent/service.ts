@@ -18,6 +18,7 @@ import {
   ADVENT_PRESENTS,
   adventContents,
   adventSeed,
+  presentContents,
   PRESENT_ITEM,
   rollAdventPresent,
   rollPresentOpening,
@@ -56,7 +57,7 @@ export const ADVENT_MESSAGES = {
     'not-advent': 'Presents come December 1 to 25! 🎄',
     'not-yet': "Not yet! That one's still wrapped up tight 🎁",
     over: 'The advent calendar is all done. See you next December! ❄️',
-    claimed: 'Already opened! A new present comes tomorrow 🎁',
+    claimed: 'Already opened! 🎁',
     'catch-up-used':
       'You opened a missed present today already. Come back tomorrow for another! ❄️',
   } satisfies Record<AdventClaimProblem, string>,
@@ -132,12 +133,14 @@ export function createAdventService(options: AdventServiceOptions): AdventServic
     const catchUpLeft = live && !catchUpTaken;
     const stateOf = (day: string): AdventDayView['state'] => {
       if (day > today) return 'locked';
-      if (day === today) return live ? 'today' : 'missed';
+      // Today equals an advent day only while the calendar is live.
+      if (day === today) return 'today';
       return catchUpLeft ? 'catch-up' : 'missed';
     };
     return {
       today,
       catchUpLeft,
+      presentContents: presentContents(table),
       days: days.map((day): AdventDayView => {
         const contents = adventContents(table, day);
         const claim = opened.get(day);

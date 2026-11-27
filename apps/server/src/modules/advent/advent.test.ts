@@ -7,7 +7,12 @@ import {
   OpenPresentResponseSchema,
   type AdventView,
 } from '@heartpatch/shared';
-import { ADVENT_PRESENTS, adventSeed, rollAdventPresent } from '@heartpatch/shared/server';
+import {
+  ADVENT_PRESENTS,
+  adventSeed,
+  presentContents,
+  rollAdventPresent,
+} from '@heartpatch/shared/server';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -144,6 +149,7 @@ describe.skipIf(!url)('advent presents, #37 1c (needs DATABASE_URL)', () => {
       ...Array<string>(20).fill('locked'),
     ]);
     expect(view.catchUpLeft).toBe(true);
+    expect(view.presentContents).toEqual(presentContents(ADVENT_PRESENTS));
 
     const res = await claim(server, kid, mapId, '2026-12-05');
     expect(res.statusCode, res.body).toBe(200);
@@ -173,7 +179,7 @@ describe.skipIf(!url)('advent presents, #37 1c (needs DATABASE_URL)', () => {
     // A second tap is refused and changes nothing.
     const again = await claim(server, kid, mapId, '2026-12-05');
     expect(again.statusCode).toBe(409);
-    expect(message(again)).toBe('Already opened! A new present comes tomorrow 🎁');
+    expect(message(again)).toBe('Already opened! 🎁');
     expect(await bag(mapId, kid)).toEqual(after);
   });
 
@@ -313,6 +319,28 @@ describe.skipIf(!url)('advent presents, #37 1c (needs DATABASE_URL)', () => {
     expect(
       await db.query.adventClaims.findMany({ where: (t, { eq }) => eq(t.userId, kid.id) }),
     ).toEqual([]);
+  });
+
+  it('opening a present rolls back whole when the grant fails: the present stays', async () => {
+    await start();
+    const kid = await player();
+    const mapId = await newMap(app!, kid);
+    await grantItems(db, { mapId, userId: kid.id }, { presents: 1 }, 'dev-grant');
+    const broken = createAdventService({
+      db,
+      clock: () => clock,
+      presents: {
+        ...ADVENT_PRESENTS,
+        opening: { picks: 1, pool: [{ itemId: 'not-a-real-item', min: 1, max: 1, weight: 1 }] },
+      },
+    });
+    const user: Parameters<typeof broken.openPresent>[0] = { id: kid.id, username: kid.username };
+    await expect(broken.openPresent(user, mapId)).rejects.toThrow();
+    expect((await bag(mapId, kid))['presents']).toBe(1);
+    const ledger = await db.query.resourceLedger.findMany({
+      where: (t, { and, eq }) => and(eq(t.userId, kid.id), eq(t.reason, 'present-open')),
+    });
+    expect(ledger).toEqual([]);
   });
 
   it('never sends a seed, odds or the salt, and the events are owner-only', async () => {

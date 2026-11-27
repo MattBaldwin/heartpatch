@@ -68,6 +68,10 @@ export function rollPresentOpening(
   return out;
 }
 
+/** What a wrapped present from the bag *can* hold, as item ids in table order, with no odds. */
+export const presentContents = (table: AdventPresents): string[] =>
+  table.opening.pool.filter((e) => e.weight > 0).map((e) => e.itemId);
+
 /**
  * What a day's present *can* hold, as item ids in table order, with no
  * odds: the calendar sheet shows these (owner answer 3, "contents shown").
