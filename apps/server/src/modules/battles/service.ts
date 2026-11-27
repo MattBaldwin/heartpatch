@@ -394,7 +394,7 @@ export interface MinibossBattlePort {
   /** The guaranteed bundle a won fight pays (server-only rules), granted at step 11. */
   bundle: () => ItemCounts;
   /**
-   * Whether this won fight pays its bundle and boss drop (#37 X2b): always
+   * Whether this won fight pays its bundle, boss drop and win coins (#37 X2b): always
    * on a weekly visit; on Christmas Eve only the Keeper's first win. Called
    * after `ended`, whose locks it relies on, so two wins can't both pay.
    */
