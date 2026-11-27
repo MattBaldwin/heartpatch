@@ -48,6 +48,7 @@ export type HookName =
   | 'posts'
   | 'communities'
   | 'journey'
+  | 'farHollow'
   | 'farHollowHouse'
   | 'trickOrTreat'
   | 'post'

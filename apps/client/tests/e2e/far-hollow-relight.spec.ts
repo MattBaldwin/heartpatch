@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { openFarHollowSheet } from './far-hollow.js';
 
 /**
  * The Crooked House's Relight boards (#306 6f, owner decision 5): with the
@@ -88,9 +89,7 @@ test('relights the Library’s board, blooms it with a story scrap, and opens th
   await visitPatch(lobby);
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
 
-  await page.evaluate(() =>
-    (window as unknown as Hooks).__heartpatch?.farHollowDev?.().openSheet(),
-  );
+  await openFarHollowSheet(page);
   await page.getByTestId('far-hollow-inside').tap();
   await slowExpect
     .poll(async () => (await house(page))?.scene?.rooms.length ?? 0)

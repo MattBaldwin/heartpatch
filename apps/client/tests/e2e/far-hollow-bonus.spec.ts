@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { openFarHollowSheet } from './far-hollow.js';
 
 /**
  * The Crooked House's bonus rooms (#306 6e): the Parlour's cold fireplace
@@ -74,9 +75,7 @@ test('a Fire friend lights the cold fireplace and the Inglenook’s chest opens 
     (await api(page, 'POST', `/maps/${mapId}/dev/far-hollow`, { room: 'parlour' })).status,
   ).toBe(201);
 
-  await page.evaluate(() =>
-    (window as unknown as Hooks).__heartpatch?.farHollowDev?.().openSheet(),
-  );
+  await openFarHollowSheet(page);
   await page.getByTestId('far-hollow-inside').tap();
   await slowExpect
     .poll(async () => (await house(page))?.scene?.rooms.length ?? 0)
