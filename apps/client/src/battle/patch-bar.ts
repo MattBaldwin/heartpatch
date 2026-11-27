@@ -16,7 +16,10 @@ import './patch-bar.css';
  * and the screen all follow. Set on the HUD as `--patch-bar-*` (`patchBarVars`).
  */
 export const PATCH_BAR = {
-  /** The line's thickness, px; the stage band gives up this much under the strip. */
+  /**
+   * The line's thickness, px; the stage band gives up this much under the strip.
+   * The line itself sits `gap` lower, inside the camera's strip margin.
+   */
   lineHeight: 4, // TUNE:
   /** The gap between the strip's bottom and the line, px (inside the camera's strip margin). */
   gap: 2, // TUNE:
@@ -45,7 +48,8 @@ export const PATCH_BAR_TEXT = {
   cardFell: 'Full! Everyone helped. ❄',
   cardDozed: 'It dozed off and wandered home. Thanks for helping! 💤',
   chipped: 'Chipped!',
-  youChipped: (points: number) => `You chipped in ${String(points)}!`,
+  youChipped: (points: number) =>
+    points > 0 ? `You chipped in ${String(points)}!` : 'You helped!',
   stickerFull: 'The patch bar is full! ❄',
 } as const;
 
@@ -82,8 +86,13 @@ export function patchBarLabel(bar: PatchBarState): string {
  */
 export function newerBar(current: PatchBarState | null, next: PatchBarState): PatchBarState {
   if (!current) return next;
-  if (next.chipped < current.chipped) return current;
-  return current.state === 'fell' ? { ...next, state: 'fell' } : next;
+  const winner = next.chipped >= current.chipped ? next : current;
+  const other = winner === next ? current : next;
+  // A bar that fell or dozed off stays that way, whichever read says so: live
+  // events never say `dozed`, so an older `open` copy must not undo the view's.
+  return winner.state === 'open' && other.state !== 'open'
+    ? { ...winner, state: other.state }
+    : winner;
 }
 
 /** `boss.chipped` / `boss.fell` carry the bar's numbers but not its state: a full bar fell. */

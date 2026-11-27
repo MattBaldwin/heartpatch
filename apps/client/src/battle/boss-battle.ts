@@ -446,8 +446,9 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
       if (ui.patchBar.set(bar)) sheetMoved();
       const redrawn = sticker ? chippedSticker(bar, ownPoints) : null;
       if (sticker && redrawn) {
-        sticker.replaceWith(redrawn);
-        sticker = redrawn;
+        // In place, so a screen reader still hears the status node change.
+        sticker.className = redrawn.className;
+        sticker.replaceChildren(...redrawn.childNodes);
       }
     },
     get debug() {

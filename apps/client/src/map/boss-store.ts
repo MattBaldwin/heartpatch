@@ -138,7 +138,8 @@ export function createBossStore(options: BossStoreOptions): BossStore {
           event.type === 'boss.chipped'
             ? GAME_EVENTS['boss.chipped'].public.safeParse(event.data)
             : GAME_EVENTS['boss.fell'].public.safeParse(event.data);
-        if (!parsed.success) return;
+        // Another visit's bar (a window we aren't showing) isn't ours.
+        if (!parsed.success || (visit && parsed.data.window !== visit.window.id)) return;
         const next = barFromEvent(parsed.data);
         eveBar = newerBar(eveBar, event.type === 'boss.fell' ? { ...next, state: 'fell' } : next);
         emit();

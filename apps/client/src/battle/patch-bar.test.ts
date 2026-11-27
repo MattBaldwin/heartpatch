@@ -67,6 +67,13 @@ describe('newerBar', () => {
     expect(newerBar(bar(60), bar(100))).toEqual(bar(100));
     expect(newerBar(null, bar(60))).toEqual(bar(60));
   });
+  it('keeps a dozed-off bar dozed against an older live copy, in either order', () => {
+    const dozed = bar(150, 200, 'dozed');
+    const live = bar(150, 200, 'open');
+    expect(newerBar(dozed, live).state).toBe('dozed');
+    expect(newerBar(live, dozed).state).toBe('dozed');
+    expect(newerBar(live, bar(120, 200, 'dozed')).state).toBe('dozed');
+  });
   it('keeps a fall a fall', () => {
     const fell = bar(210, 200, 'fell');
     expect(newerBar(fell, bar(220, 200, 'open')).state).toBe('fell');
@@ -107,6 +114,7 @@ describe('words', () => {
   it('puts the ❄ and the percentage off the line, on the card and sticker', () => {
     expect(PATCH_BAR_TEXT.percent(45)).toBe('❄ 45%');
     expect(PATCH_BAR_TEXT.youChipped(38)).toBe('You chipped in 38!');
+    expect(PATCH_BAR_TEXT.youChipped(0)).toBe('You helped!');
   });
   it('never says boss or enemy to a player', () => {
     for (const text of Object.values(PATCH_BAR_TEXT)) {
