@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.js';
 import { grantItems, grantSquishy, postState, twoTraders, visitPost } from './trading.js';
 
 /**

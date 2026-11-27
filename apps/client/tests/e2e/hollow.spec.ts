@@ -1,5 +1,6 @@
 import { findAvoidedWords, STARTERS } from '@heartpatch/shared';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { claimLand } from './claim-land.js';
 import { api, hook, idle, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';

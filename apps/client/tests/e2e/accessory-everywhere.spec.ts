@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
@@ -22,13 +23,6 @@ const slow = { timeout: 30_000 };
 
 const scene = <T>(page: Page, name: 'battle') =>
   hook<{ scene: T | null }>(page, name).then((s) => s?.scene ?? null);
-
-// Every test opens its own player (newPlayer); a page left mid-battle keeps
-// drawing, which starves the next test's pages when rendering is in software
-// (#397). Close them all when the test is done.
-test.afterEach(async ({ browser }) => {
-  for (const context of browser.contexts()) await context.close();
-});
 
 test('the battle arena draws what my squishy wears, and a wild one wears nothing', async ({
   browser,

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.js';
 import { newPlayer, savedCode, uniqueName } from './players.js';
 
 // Grown-up helpers (#197): the kid asks at sign up, the grown-up says yes,

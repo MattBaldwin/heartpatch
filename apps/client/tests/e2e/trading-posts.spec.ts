@@ -1,5 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { tapCanvas } from './claim-land.js';
 import { SCREENS } from './layout.js';
 import { api, hook, liveMapId, waitForLiveMap } from './dev-hook.js';

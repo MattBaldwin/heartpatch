@@ -1,5 +1,6 @@
 import { GAME_DATA, type MapView } from '@heartpatch/shared';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { tapCanvas } from './claim-land.js';
 import { hook } from './dev-hook.js';
 import { expectRoomyLabels, settled, still } from './layout.js';

@@ -6,7 +6,8 @@ import {
   type MapView,
   type PlayerBattle,
 } from '@heartpatch/shared';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { api, hook, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { bigMoveButton } from './big-move.js';

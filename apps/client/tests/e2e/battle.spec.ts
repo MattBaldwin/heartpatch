@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
@@ -74,13 +75,6 @@ async function openPatch(page: Page, name: string): Promise<void> {
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
 }
-
-// Every test opens its own player (newPlayer); a page left mid-battle keeps
-// drawing the arena, which starves the next test's page when rendering is in
-// software. Close them all when the test is done.
-test.afterEach(async ({ browser }) => {
-  for (const context of browser.contexts()) await context.close();
-});
 
 test('plays a wild battle to the end and resumes it after a refresh', async ({ browser }) => {
   // Five scene builds and a whole log playback, every step drawn frame by

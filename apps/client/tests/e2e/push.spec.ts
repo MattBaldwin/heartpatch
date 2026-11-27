@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { api, hook } from './dev-hook.js';
 import { reportHeartbeats } from './heartbeat.js';
 import { expectClear } from './layout.js';
@@ -76,11 +77,9 @@ async function offerDone(page: Page): Promise<void> {
 }
 
 // Every stall here so far came just after a page.reload() (#784): on a failure, say whether the
-// page was still running script and drawing (heartbeat.ts), then close what a failed test left
-// open (#397).
-test.afterEach(async ({ browser }, testInfo) => {
-  await reportHeartbeats(testInfo);
-  for (const context of browser.contexts()) await context.close();
+// page was still running script and drawing (heartbeat.ts). test.ts then closes what it left open.
+test.afterEach(async () => {
+  await reportHeartbeats(test.info());
 });
 
 const HANDLES = ['adventure', 'heartpatch'] as const;

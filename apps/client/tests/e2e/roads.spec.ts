@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { hexDistance, hexKey, hexNeighbors, isWaterTerrain } from '@heartpatch/shared';
 import { claimLand, playClaimBattle, selectTile } from './claim-land.js';
 import { api, hook, waitForLiveMap } from './dev-hook.js';

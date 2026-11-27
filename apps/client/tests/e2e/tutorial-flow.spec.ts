@@ -1,4 +1,5 @@
-import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
+import type { Browser, Locator, Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { api, hook, idle } from './dev-hook.js';
 import { newPlayer, skipCinematic, TEST_PASSWORD, tickGrownUp, uniqueName } from './players.js';
 import { REAL_TAP_HOLD_MS, realTap, realTapAt } from './touch.js';

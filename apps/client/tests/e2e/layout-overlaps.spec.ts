@@ -1,5 +1,6 @@
 import { MAP_NAME_MAX_LENGTH } from '@heartpatch/shared';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { selectTile } from './claim-land.js';
 import { api, liveMapId } from './dev-hook.js';
 import { expectClear, settled } from './layout.js';

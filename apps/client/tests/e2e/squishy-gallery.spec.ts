@@ -5,7 +5,8 @@ import {
   SPECIES,
   SQUISHY_COSTUME_IDS,
 } from '@heartpatch/shared';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { draws, idle } from './dev-hook.js';
 
 /**

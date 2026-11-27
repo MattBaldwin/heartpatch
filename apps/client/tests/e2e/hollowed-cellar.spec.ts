@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { api, hook } from './dev-hook.js';
 import { nearestFirst, walkTo, waypoint } from './explore-walk.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';

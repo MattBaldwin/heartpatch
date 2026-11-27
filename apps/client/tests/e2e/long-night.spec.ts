@@ -1,5 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { api, hook, idle, waitForLiveMap } from './dev-hook.js';
 import { viewportOf } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';

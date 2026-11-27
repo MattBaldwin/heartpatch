@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.js';
 import { draws } from './dev-hook.js';
 import { newPlayer, uniqueName } from './players.js';
 

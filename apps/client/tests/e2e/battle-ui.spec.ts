@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { api, draws, hook, idle, liveMapId, waitForLiveMap } from './dev-hook.js';
 import { expectRoomyLabels, freshResize, holdResizes, still, turnLikeIos } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
@@ -75,13 +76,6 @@ const HUD_CONTROLS = [
   '.battle-caption',
   '.battle-hint',
 ].join(', ');
-
-// Every test opens its own player (newPlayer); a page left mid-battle keeps
-// drawing the arena, which starves the next test's page when rendering is in
-// software. Close them all when the test is done.
-test.afterEach(async ({ browser }) => {
-  for (const context of browser.contexts()) await context.close();
-});
 
 test('one real tap works every battle action, and the HUD fits the screen', async ({ browser }) => {
   test.setTimeout(240_000); // a map build and a battle; CI renders in software

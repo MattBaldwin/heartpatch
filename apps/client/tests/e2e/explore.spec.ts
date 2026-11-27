@@ -1,5 +1,6 @@
 import { findAvoidedWords, houseTile } from '@heartpatch/shared';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { selectTile, tapCanvas } from './claim-land.js';
 import { api, hook } from './dev-hook.js';
 import { still } from './layout.js';

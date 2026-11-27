@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { api, hook, liveMapId, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
@@ -56,10 +57,6 @@ async function meet(page: Page, mapId: string, speciesId: string): Promise<void>
   });
   expect(ran.status).toBe(200);
 }
-
-test.afterEach(async ({ browser }) => {
-  for (const context of browser.contexts()) await context.close();
-});
 
 test('a patch-mate’s Legendary friend tells the patch, by name only to who has met it (#391)', async ({
   browser,

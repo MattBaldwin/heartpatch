@@ -1,4 +1,5 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { hook } from './dev-hook.js';
 import { expectClear, expectRoomyLabels, SCREENS } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';

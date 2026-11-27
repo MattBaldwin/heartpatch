@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { selectTile } from './claim-land.js';
 import { api, hook, liveMapId } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
@@ -98,10 +99,6 @@ const heartdust = async (page: Page, mapId: string): Promise<number> => {
   const res = await api<{ items: Record<string, number> }>(page, 'GET', `/maps/${mapId}/inventory`);
   return res.body.items['heartdust'] ?? 0;
 };
-
-test.afterEach(async ({ browser }) => {
-  for (const context of browser.contexts()) await context.close();
-});
 
 test('a Keeper trick-or-treats at a patch-mate’s home, once a day, and the host hears of it (#515)', async ({
   browser,

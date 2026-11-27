@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { findAvoidedWords } from '@heartpatch/shared';
 import { api, hook, waitForLiveMap } from './dev-hook.js';
 import { expectRoomyLabels } from './layout.js';
@@ -35,10 +36,6 @@ async function settled(page: Page): Promise<BattleDebug> {
     .toMatchObject({ pending: 0, waiting: false });
   return (await battleState(page))!;
 }
-
-test.afterEach(async ({ browser }) => {
-  for (const context of browser.contexts()) await context.close();
-});
 
 test('crafts a Brave Brew, drinks it in a wild battle, and shows the chip', async ({ browser }) => {
   test.setTimeout(300_000); // a map build and a battle; CI renders in software

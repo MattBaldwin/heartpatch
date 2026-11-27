@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { claimLand, tapTile } from './claim-land.js';
 import { hook, idle, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';

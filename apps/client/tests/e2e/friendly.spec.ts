@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { hook } from './dev-hook.js';
 import { visitPatch } from './players.js';
 import { grantSquishy, twoTraders } from './trading.js';

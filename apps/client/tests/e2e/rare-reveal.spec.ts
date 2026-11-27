@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
@@ -67,10 +68,6 @@ async function forfeit(page: Page, battleId: string): Promise<void> {
   });
   expect(res.status).toBe(200);
 }
-
-test.afterEach(async ({ browser }) => {
-  for (const context of browser.contexts()) await context.close();
-});
 
 test('a rare find gets its moment the first time, and just a banner after (#391)', async ({
   browser,
