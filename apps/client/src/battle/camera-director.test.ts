@@ -1088,7 +1088,7 @@ describe('the boss camera: a low hero shot (#190 PR 2)', () => {
         });
         // The picker leans towards each friend in turn (full motion): every body stays on screen.
         posts.slice(0, f.friends.length).forEach((lean, l) => {
-          const leaning = new CameraDirector(homes, true, boss);
+          const leaning = new CameraDirector(homes, false, boss);
           leaning.lean(lean);
           let held = leaning.shot(
             0,

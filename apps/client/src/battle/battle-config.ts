@@ -213,7 +213,7 @@ const BOSS_PROFILE = {
   /** A 1.8× boss's box (the 1-v-1's 3.6 × 1.8); the row's width binds first on a phone. */
   fitHeight: 6.5, // TUNE
   /** The picker's lean towards the friend picking (the team fight's is 0.35). */
-  focusShift: 0.15, // TUNE: the picker's lean kept every end friend on screen (0.35 clipped up to 17%)
+  focusShift: 0.12, // TUNE: the picker's lean keeps every end friend on screen (worst edge 0.958; 0.15 reached 0.975, 0.35 clipped up to 17%)
   beats: {
     /** A windup: a slow push-in across the step, with a little lean. */
     windupPush: 0.18, // TUNE
