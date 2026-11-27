@@ -1,0 +1,192 @@
+// THROWAWAY (#190 PR 5 signature moments). Never committed as a spec: it lives in
+// pr5-<sha>/zz-capture-190-pr5.spec.ts.txt. Copy it to apps/client/tests/e2e/zz-capture-190-pr5.spec.ts to run.
+// The boss fight is boss-stub.ts's three-squishy stand-in (as boss-battle.spec.ts); the app around it is real.
+// One run = one device x one time of day. Frames: rest, lean slot 0 / 1 / 2 (the picker), then three rounds:
+// a windup round (beat: push-in), its landing round (thump), the winning round (KO + pull-back).
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { expect, test } from './test.js';
+import { stubBossFight } from './boss-stub.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { realTap } from './touch.js';
+import { trayButton } from './trays.js';
+
+const OUT = process.env['CAPTURE_OUT'] ?? 'captures';
+const TZ = process.env['CAPTURE_TZ'] ?? 'Asia/Dubai';
+const TAG = process.env['CAPTURE_TAG'] ?? 'day';
+const DEVICE = (process.env['CAPTURE_DEVICE'] ?? 'iphone') as 'iphone' | 'ipad';
+const SIZES = { iphone: { width: 393, height: 852 }, ipad: { width: 820, height: 1180 } } as const;
+const BEATS = (process.env['CAPTURE_BEATS'] ?? 'all') === 'all';
+
+test.use({
+  actionTimeout: 90_000,
+  launchOptions: {
+    executablePath: process.env['PW_CHROMIUM_EXECUTABLE'] ?? '/opt/pw-browsers/chromium',
+    args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+  },
+});
+
+const HIDE_DEV = '.dev-status { display: none !important; }';
+const REDUCED = process.env['CAPTURE_REDUCED'] === '1';
+
+interface Now { kind: string | null; at: number; cap: string; live: number }
+
+test(`boss signature captures ${DEVICE} ${TAG}`, async ({ browser }) => {
+  test.setTimeout(25 * 60_000);
+  const dir = `${OUT}/${DEVICE}-${TAG}`;
+  mkdirSync(dir, { recursive: true });
+  Object.assign(test.info().project.use, { viewport: SIZES[DEVICE], deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const page = await newPlayer(browser, uniqueName('sig'), undefined, { timezoneId: TZ });
+  if (REDUCED) await page.emulateMedia({ reducedMotion: 'reduce' });
+  if (DEVICE === 'iphone') {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setSafeAreaInsetsOverride' as never, {
+      insets: { top: 59, topMax: 59, bottom: 34, bottomMax: 34, left: 0, leftMax: 0, right: 0, rightMax: 0 },
+    } as never);
+  }
+  // Capture only: the HUD's sticker hide (CALLOUT_MS 1100, a real timer) never fires, since software
+  // GL takes ~1 s a frame and would hide it before the shot; a new word still replaces the old one.
+  await page.addInitScript(`(() => {
+    const st = window.setTimeout.bind(window);
+    window.setTimeout = (fn, ms, ...a) => (ms === 1100 ? 0 : st(fn, ms, ...a));
+  })();`);
+  // The held battle clock (`?battle-clock=manual`): each beat is reached by advancing it exactly.
+  await page.goto('/?tier=high&battle-clock=manual');
+  await page.addStyleTag({ content: HIDE_DEV });
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Stomp Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await page.addStyleTag({ content: HIDE_DEV });
+  for (let i = 0; i < 2; i++) {
+    await realTap(await trayButton(page, 'battle-dev-grant'));
+    await expect(page.locator('.battle-entry-note')).toContainText('joined you', { timeout: 30_000 });
+  }
+  await stubBossFight(page, { openRounds: 5, tricks: ['windup', 'land', 'shout', 'assist', 'drift'], signatures: true });
+  await realTap(await trayButton(page, 'battle-dev-fight'));
+  await expect(page.getByTestId('boss-strip')).toBeVisible({ timeout: 60_000 });
+  await page.addStyleTag({ content: HIDE_DEV });
+
+  const advance = (ms: number) => page.evaluate((m) => (window as any).__heartpatch.battleDev().advance(m), ms);
+  const now = (): Promise<Now> =>
+    page.evaluate(() => {
+      const s = (window as any).__heartpatch?.battle?.()?.scene;
+      return {
+        kind: s?.playing?.kind ?? null,
+        at: s?.playing?.at ?? 0,
+        cap: (document.querySelector('[data-testid=battle-caption]')?.textContent ?? '').trim(),
+        live: s?.effects?.live ?? 0,
+      };
+    });
+  /** Advances the held clock in `step` ms until `want` holds; tracks the most particles alive on the way. */
+  let peak = 0;
+  const until = async (label: string, want: (n: Now) => boolean, step = 20, max = 60_000) => {
+    for (let t = 0; t <= max; t += step) {
+      const n = await now();
+      peak = Math.max(peak, n.live);
+      if (want(n)) return n;
+      await advance(step);
+    }
+    throw new Error(`never saw ${label}`);
+  };
+  /** In one jump (stickers run on real timers, so a slow walk would outlast them): to `ms` into the step now playing. */
+  const jump = async (ms: number) => {
+    const n = await now();
+    if (ms > n.at) await advance(Math.ceil(ms - n.at));
+  };
+  const rect = (sel: string) =>
+    page.evaluate((s) => {
+      const e = document.querySelector(s) as HTMLElement | null;
+      if (!e || e.hidden) return null;
+      const r = e.getBoundingClientRect();
+      return { top: r.top / innerHeight, bottom: r.bottom / innerHeight, left: r.left, right: r.right, text: e.textContent };
+    }, sel);
+  const shot = async (file: string) => {
+    await page.waitForTimeout(600);
+    const path = `${dir}/${DEVICE}-${file}-${TAG}.png`;
+    await page.screenshot({ path });
+    const meta = {
+      file: path.split('/').pop(),
+      device: DEVICE,
+      tz: TZ,
+      reduced: REDUCED,
+      inner: await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight, dpr: devicePixelRatio })),
+      battle: await page.evaluate(() => {
+        const s = (window as any).__heartpatch?.battle?.()?.scene;
+        return s ? { effects: s.effects, drawCalls: s.drawCalls, playing: s.playing, framing: s.framing, camera: s.camera } : null;
+      }),
+      peakLiveThisRound: peak,
+      caption: (await now()).cap,
+      sticker: await rect('[data-testid=boss-callout]'),
+      strip: await rect('[data-testid=boss-strip]'),
+      handle: await rect('[data-testid=boss-handle]'),
+    };
+    writeFileSync(path.replace(/\.png$/, '.json'), JSON.stringify(meta, null, 1));
+    console.log(`shot ${meta.file} at=${Math.round((meta.battle as any)?.playing?.at ?? -1)} live=${(meta.battle as any)?.effects?.live} draws=${(meta.battle as any)?.drawCalls} peak=${peak} sticker=${JSON.stringify(meta.sticker?.text ?? null)}`);
+  };
+  const picker = page.getByTestId('boss-picker');
+  const toPicker = async () => {
+    for (let i = 0; i < 400; i++) {
+      if ((await picker.isVisible()) && (await page.getByTestId('boss-pick-header').isVisible())) return;
+      await advance(200);
+    }
+    throw new Error('no picker');
+  };
+  const go = async () => {
+    await toPicker();
+    for (let i = 0; i < 3; i++) {
+      await expect(page.getByTestId('boss-pick-header')).toBeVisible();
+      await realTap(picker.getByTestId('boss-move').first());
+      await advance(600);
+    }
+    for (let i = 0; i < 50 && !((await picker.textContent()) ?? '').includes("Everyone's ready!"); i++) await advance(200);
+    await expect(picker).toContainText("Everyone's ready!");
+    await realTap(page.getByTestId('boss-go'));
+    peak = 0;
+  };
+
+  // Rest: past the entrance, the picker up.
+  await toPicker();
+  // The entrance (2.6 s of battle time) covers the picker until it ends.
+  for (let i = 0; i < 100; i++) {
+    if ((await page.evaluate(() => (window as any).__heartpatch?.battle?.()?.entrance ?? null)) === null) break;
+    await advance(200);
+  }
+  await advance(1500);
+  await shot('00-rest');
+  // Round 1: the count, the pile grown ("1…" on the first stomp).
+  await go();
+  await until('windup', (n) => n.kind === 'effect' && /winding up/i.test(n.cap));
+  await jump(520);
+  await shot('01-leaf-pile');
+  // Round 2: it lands ("3!"), and the leaves burst on the first hit.
+  await go();
+  await until('landing move', (n) => n.kind === 'move' && /Count to Three/.test(n.cap));
+  await jump(200);
+  await shot('01a-three');
+  await until('landing hit', (n) => n.kind === 'hit');
+  await jump(380);
+  await shot('01b-leaf-burst');
+  // Round 3: the shout: hair flare and rings.
+  await go();
+  await until('shout', (n) => n.kind === 'move' && /Full Name Shout/.test(n.cap));
+  await jump(260);
+  await shot('02-shout');
+  // Round 4: the call (shrug, "Backup!"), then the friend's fire flash.
+  await go();
+  await until('call', (n) => n.kind === 'effect' && /called for backup/i.test(n.cap));
+  await jump(300);
+  await shot('03-backup-call');
+  await until('backup move', (n) => n.kind === 'move' && /^Backup!/.test(n.cap));
+  await jump(110);
+  await shot('03b-backup-flash');
+  // Round 5: the drift: skid arcs and the 2° lean.
+  await go();
+  await until('drift', (n) => n.kind === 'move' && /Drift Spin/.test(n.cap));
+  await jump(440);
+  await shot('04-drift');
+  // Its spark trail at a friend's post (the hit beat).
+  await until('drift hit', (n) => n.kind === 'hit');
+  await jump(200);
+  await shot('04b-drift-hit');
+});

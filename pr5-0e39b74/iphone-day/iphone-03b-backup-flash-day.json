@@ -1,0 +1,76 @@
+{
+ "file": "iphone-03b-backup-flash-day.png",
+ "device": "iphone",
+ "tz": "America/Los_Angeles",
+ "reduced": false,
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "effects": {
+   "live": 39,
+   "meshes": 4,
+   "spawned": 93
+  },
+  "drawCalls": 58,
+  "playing": {
+   "kind": "move",
+   "at": 110
+  },
+  "framing": {
+   "distance": 43.954027275588956,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.142018779342723,
+    "bottom": 0.8755868544600939
+   },
+   "face": null,
+   "team": [
+    {
+     "top": 0.6792842418489111,
+     "bottom": 0.7128825853404477
+    },
+    {
+     "top": 0.6840759294245993,
+     "bottom": 0.7197745285784328
+    },
+    {
+     "top": 0.6890971431373067,
+     "bottom": 0.7146644847989401
+    }
+   ],
+   "teamFeet": 0.7641321543657604,
+   "bossFacing": -0.6380950371711999
+  },
+  "camera": {
+   "x": 10.197801344052463,
+   "y": 7.0660779495981885,
+   "z": -41.117895901270884
+  }
+ },
+ "peakLiveThisRound": 48,
+ "caption": "Backup! Mama Bear Charge!",
+ "sticker": {
+  "top": 0.14820955840634628,
+  "bottom": 0.20390312660468016,
+  "left": 12.267065048217773,
+  "right": 108.13918113708496,
+  "text": "Backup!"
+ },
+ "strip": {
+  "top": 0.07863849765258216,
+  "bottom": 0.13028169014084506,
+  "left": 12,
+  "right": 329,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "handle": {
+  "top": 0.8849765258215962,
+  "bottom": 0.960093896713615,
+  "left": 16,
+  "right": 377,
+  "text": "Round 4PPFlinched!P"
+ }
+}
