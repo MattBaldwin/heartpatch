@@ -271,11 +271,9 @@ test.describe('a mini-boss fight (#190)', () => {
     expect(await seen()).toEqual(expect.arrayContaining(['Backup!', 'Backup! Mama Bear Charge!']));
     // The shout's flinch.
     expect((await seen()).some((t) => t.includes('flinched'))).toBe(true);
-    // The pools' caps hold (effects.ts POOL_SIZE, summed: a copy, as the e2e can't import src).
-    const POOLS = 120 + 96 + 80 + 150 + 72 + 24 + 12 + 40 + 60;
+    // The leaf pile really drew (the pools' caps are unit-tested: a full pool reuses its oldest).
     const peak = await page.evaluate(() => (window as unknown as { hpPeak: number }).hpPeak);
-    expect(peak).toBeGreaterThan(0);
-    expect(peak).toBeLessThanOrEqual(POOLS);
+    expect(peak).toBeGreaterThanOrEqual(60);
   });
 
   test('on a notched iPhone the stage gets the screen: a tall band, the boss face in it (#190, #868)', async ({

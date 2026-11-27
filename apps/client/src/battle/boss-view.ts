@@ -459,8 +459,9 @@ export const SIGNATURE_STICKERS: Readonly<
 > = {
   // The windup leaf move: it counts as it stomps, then lands on "3!".
   'windup:leaf/windup': [
-    { text: '1…', at: 0 },
-    { text: '2…', at: 0.5 }, // TUNE
+    // TUNE: on the stomps' landings (the act's 0.55 and 0.78 of 0.9 × the step)
+    { text: '1…', at: 0.25 },
+    { text: '2…', at: 0.7 },
   ],
   'windup:leaf/strike': [{ text: '3!', at: 0 }],
   // The frost assist: the shrug, then the call.

@@ -5,6 +5,8 @@ import {
   type BattleSideId,
   type Move,
 } from '@heartpatch/shared';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { PlaybackStep } from './battle-playback.js';
 import {
@@ -39,79 +41,75 @@ const PUBLIC = GAME_DATA.moves;
  * tests can't import it, as the `forbid-server-data` plugin makes sure).
  * Power and accuracy are stand-ins; only the effects, element and targets matter here.
  */
-const SERVER_MOVES: readonly Move[] = (
-  [
-    ['rake-mouth', 'leaf', 90, [{ type: 'status', status: 'dizzy', chance: 15 }]],
-    ['stink-bomb', 'leaf', 55, [{ type: 'status', status: 'dizzy', chance: 20 }], 'all-foes'],
-    ['leaf-pile-pounce', 'leaf', 75, [{ type: 'flinch', chance: 25 }]],
-    ['count-to-three', 'leaf', 170, [{ type: 'windup' }]],
-    [
-      'the-look',
-      'fire',
-      0,
-      [{ type: 'stat', target: 'opponent', stat: 'attack', stages: -1, chance: 100 }],
-    ],
-    ['full-name-shout', 'fire', 85, [{ type: 'flinch', chance: 35 }]],
-    ['mama-bear-charge', 'fire', 80, [{ type: 'low-energy', extraPercent: 80 }]],
-    ['dad-joke', 'frost', 0, [{ type: 'status', status: 'dizzy', chance: 60 }]],
-    ['lawnmower-rumble', 'frost', 65, [], 'all-foes'],
-    [
-      'thermostat-lock',
-      'frost',
-      70,
-      [{ type: 'stat', target: 'opponent', stat: 'speed', stages: -1, chance: 50 }],
-    ],
-    [
-      'ask-your-mother',
-      'frost',
-      0,
-      [
-        { type: 'assist', move: 'mama-bear-charge' },
-        { type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 20 },
-      ],
-    ],
-    [
-      'pit-stop',
-      'spark',
-      0,
-      [
-        { type: 'heal', percent: 30 },
-        { type: 'stat', target: 'self', stat: 'speed', stages: 1, chance: 100 },
-      ],
-    ],
-    ['drift-spin', 'spark', 60, [], 'all-foes'],
-    [
-      'speed-bump',
-      'spark',
-      70,
-      [{ type: 'stat', target: 'opponent', stat: 'speed', stages: -1, chance: 30 }],
-    ],
-    ['heart-glow', 'light', 0, [{ type: 'heal', percent: 30 }]],
-    [
-      'heart-chorus',
-      'light',
-      0,
-      [{ type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 100 }],
-    ],
-  ] as const
-).map(
-  ([id, element, power, effects, targets]: readonly [
-    string,
-    string,
-    number,
-    readonly unknown[],
-    ('all-foes' | undefined)?,
-  ]): Move => ({
-    id,
-    name: id,
-    description: id,
-    element,
-    power,
-    accuracy: 100,
-    effects: effects as Move['effects'],
-    ...(targets ? { targets } : {}),
-  }),
-);
+const mv = (
+  id: string,
+  element: Move['element'],
+  power: number,
+  effects: NonNullable<Move['effects']> = [],
+  targets?: Move['targets'],
+): Move => ({
+  id,
+  name: id,
+  description: id,
+  element,
+  power,
+  accuracy: 100,
+  effects,
+  ...(targets ? { targets } : {}),
+});
+const SERVER_MOVES: readonly Move[] = [
+  mv('rake-mouth', 'leaf', 90, [{ type: 'status', status: 'dizzy', chance: 15 }]),
+  mv('stink-bomb', 'leaf', 55, [{ type: 'status', status: 'dizzy', chance: 20 }], 'all-foes'),
+  mv('leaf-pile-pounce', 'leaf', 75, [{ type: 'flinch', chance: 25 }]),
+  mv('count-to-three', 'leaf', 170, [{ type: 'windup' }]),
+  mv('the-look', 'fire', 0, [
+    { type: 'stat', target: 'opponent', stat: 'attack', stages: -1, chance: 100 },
+  ]),
+  mv('full-name-shout', 'fire', 85, [{ type: 'flinch', chance: 35 }]),
+  mv('mama-bear-charge', 'fire', 80, [{ type: 'low-energy', extraPercent: 80 }]),
+  mv('dad-joke', 'frost', 0, [{ type: 'status', status: 'dizzy', chance: 60 }]),
+  mv('lawnmower-rumble', 'frost', 65, [], 'all-foes'),
+  mv('thermostat-lock', 'frost', 70, [
+    { type: 'stat', target: 'opponent', stat: 'speed', stages: -1, chance: 50 },
+  ]),
+  mv('ask-your-mother', 'frost', 0, [
+    { type: 'assist', move: 'mama-bear-charge' },
+    { type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 20 },
+  ]),
+  mv('pit-stop', 'spark', 0, [
+    { type: 'heal', percent: 30 },
+    { type: 'stat', target: 'self', stat: 'speed', stages: 1, chance: 100 },
+  ]),
+  mv('drift-spin', 'spark', 60, [], 'all-foes'),
+  mv('speed-bump', 'spark', 70, [
+    { type: 'stat', target: 'opponent', stat: 'speed', stages: -1, chance: 30 },
+  ]),
+  mv('heart-glow', 'light', 0, [
+    { type: 'heal', percent: 30 },
+    { type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 100 },
+  ]),
+  mv('heart-chorus', 'light', 60, [
+    { type: 'stat', target: 'self', stat: 'speed', stages: 1, chance: 30 },
+  ]),
+];
+
+/**
+ * The server files' own text (an fs read, which the plugin doesn't see and
+ * nothing bundles): the copy above must list every secret move, so a new or
+ * renamed one fails here instead of drifting from the table.
+ */
+function serverMoveIds(): string[] {
+  const dir = fileURLToPath(
+    new URL('../../../../packages/shared/src/data/server/', import.meta.url),
+  );
+  const block = (file: string, name: string) => {
+    const text = readFileSync(dir + file, 'utf8');
+    const from = text.indexOf(`export const ${name}`);
+    const to = text.indexOf('\n];', from);
+    return [...text.slice(from, to).matchAll(/^\s{4}id: '([a-z0-9-]+)'/gm)].map((m) => m[1]!);
+  };
+  return [...block('boss-species.ts', 'BOSS_MOVES'), ...block('secret-species.ts', 'SECRET_MOVES')];
+}
 const ALL: readonly Move[] = [...PUBLIC, ...SERVER_MOVES];
 const MOVES = new Map(ALL.map((m) => [m.id, m]));
 const byId = (id: string): Move => {
@@ -153,6 +151,10 @@ function cues(steps: readonly PlaybackStep[], boss: BattleSideId | null = 'b') {
 const named = (c: SignatureCue | null) => (c ? `${c.key}/${c.beat}` : null);
 
 describe('signature table (#190 PR 5)', () => {
+  it('mirrors every secret move on the server (the copy can’t drift)', () => {
+    expect(SERVER_MOVES.map((m) => m.id).sort()).toEqual(serverMoveIds().sort());
+  });
+
   it('resolves every (effect, element) in the public and server move tables to an FX or its fallback', () => {
     let pairs = 0;
     for (const move of ALL) {
@@ -319,10 +321,16 @@ describe('budgets at the heaviest beat (#190 PR 5)', () => {
   const HOME = { a: { x: 0, y: 1, z: -4 }, b: { x: 0, y: 2.2, z: 4 } } as const;
 
   /** Every particle a plan spawns (as the scene would), its effects at `now + delay`. */
-  function spawn(s: PlaybackStep, ctx: PlanContext, now: number, salt: number): Particle[] {
+  function spawn(
+    s: PlaybackStep,
+    ctx: PlanContext,
+    now: number,
+    salt: number,
+    ringsAndArcs: Particle[] = [],
+  ): Particle[] {
     const p = planStep(s, ctx);
-    return p.effects.flatMap((e, i) =>
-      emit({
+    return p.effects.flatMap((e, i) => {
+      const made = emit({
         kind: e.kind,
         element: e.element,
         strength: e.strength,
@@ -334,8 +342,10 @@ describe('budgets at the heaviest beat (#190 PR 5)', () => {
         salt: salt + i,
         ...(e.burst ? { burst: e.burst } : {}),
         reduced: ctx.reduced,
-      }),
-    );
+      });
+      if (e.burst?.pattern === 'rings' || e.burst?.pattern === 'arc') ringsAndArcs.push(...made);
+      return made;
+    });
   }
 
   /** The most of each shape alive at once over [from, to]. */
@@ -401,6 +411,7 @@ describe('budgets at the heaviest beat (#190 PR 5)', () => {
         let trail: MoveTrail = NO_TRAIL;
         let now = 1000;
         const parts: Particle[] = [];
+        const ringsAndArcs: Particle[] = [];
         let sawSignature = false;
         steps.forEach((s, i) => {
           trail = trailAfter(trail, s);
@@ -416,7 +427,7 @@ describe('budgets at the heaviest beat (#190 PR 5)', () => {
             landing: s.kind === 'hit' && i > 0 && steps[i - 1]?.landing === true,
             signature: cue,
           };
-          parts.push(...spawn(s, ctx, now, i * 100));
+          parts.push(...spawn(s, ctx, now, i * 100, ringsAndArcs));
           now += s.ms;
         });
         expect(sawSignature, key).toBe(true);
@@ -426,6 +437,11 @@ describe('budgets at the heaviest beat (#190 PR 5)', () => {
         }
         // The plan's budgets: ≤ 150 live leaves, ≤ 80 rings and arc bits.
         expect(peak.get('leaf') ?? 0, `${key}: leaves`).toBeLessThanOrEqual(150);
+        // Live at once across the turn (a skid's arcs and three hits' trails overlap).
+        expect(
+          peaks(ringsAndArcs, 1000, now + 1500).total,
+          `${key}: rings and arcs`,
+        ).toBeLessThanOrEqual(80);
         expect(total, `${key}: all live`).toBeLessThanOrEqual(
           Object.values(POOL_SIZE).reduce((a, b) => a + b, 0),
         );

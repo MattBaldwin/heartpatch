@@ -122,7 +122,7 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
   let pickerTurn = -1;
   let lastPicks: Readonly<Record<number, string>> | null = null;
   let bossMoves = 0;
-  /** The moves a signature beat looks back at (#190 PR 5). */
+  /** The moves a signature beat looks back at (#190 PR 5); like the scene's, it sees every step. */
   let trail: MoveTrail = NO_TRAIL;
   /** The round playing now (its number), or null while picking. */
   let playingRound: number | null = null;

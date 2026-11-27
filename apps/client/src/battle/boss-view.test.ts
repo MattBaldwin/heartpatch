@@ -729,8 +729,8 @@ describe('a mini-boss fight on screen (#190)', () => {
 describe('signature stickers (#190 PR 5)', () => {
   it('counts "1… 2…" through the windup, then "3!" as it lands, and calls "Backup!"', () => {
     expect(signatureStickers({ key: 'windup:leaf', beat: 'windup' }, 700)).toEqual([
-      { text: '1…', delay: 0 },
-      { text: '2…', delay: 350 },
+      { text: '1…', delay: 175 },
+      { text: '2…', delay: 490 },
     ]);
     expect(signatureStickers({ key: 'windup:leaf', beat: 'strike' }, 650)).toEqual([
       { text: '3!', delay: 0 },
