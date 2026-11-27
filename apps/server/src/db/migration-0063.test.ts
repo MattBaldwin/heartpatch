@@ -23,8 +23,10 @@ describe('migration 0063 (push nudges)', () => {
     expect(migrationSql).not.toContain('"maps"');
   });
 
-  it('lists every shared push kind in the send log’s check', () => {
-    for (const kind of PushKindSchema.options) expect(migrationSql).toContain(`'${kind}'`);
+  it('lists the first five push kinds in the send log’s check (0070 widens it, #37)', () => {
+    const first = PushKindSchema.options.slice(0, 5);
+    expect(first).toEqual(['dusk', 'gatherers', 'friend', 'long-night-soon', 'long-night-start']);
+    for (const kind of first) expect(migrationSql).toContain(`'${kind}'`);
   });
 
   it.skipIf(!url)('keeps rows sane and cleans up after logout (needs DATABASE_URL)', async () => {

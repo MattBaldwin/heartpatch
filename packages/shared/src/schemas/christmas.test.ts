@@ -146,17 +146,26 @@ describe('new kinds', () => {
     expect(Object.keys(PushSettingsSchema.shape)).not.toContain('christmas');
   });
 
-  it("parses a 'lights' building, keeps it unbuildable for now, and checks its fields", () => {
+  it("parses a 'lights' building and checks its fields", () => {
     expect(BuildingKindSchema.parse('lights')).toBe('lights');
-    const lights = BUILDINGS.find((b) => b.id === 'twinkle-lights');
-    expect(lights).toMatchObject({
+    // The Twinkle Lights the lights lane (2a) adds to BUILDINGS with its model.
+    const lights = {
+      id: 'twinkle-lights',
       kind: 'lights',
+      name: 'Twinkle Lights',
+      description: 'Twinkly bulbs for your land. So cozy on a snowy night!',
       season: 'christmas',
+      placement: 'owned',
+      maxPerHome: 12,
+      maxPerTile: 1,
+      slot: 'ring',
       glowNights: ['12-24', '12-25'],
       safeRadius: 0,
-    });
-    expect(Object.keys(lights?.levels[0]?.cost ?? {}).sort()).toEqual(['glimmer', 'timber']);
+      levels: [{ cost: { timber: 6, glimmer: 2 } }],
+    };
     expect(BuildingSchema.parse(lights)).toEqual(lights);
+    // Not in the data, and not buildable, until 2a.
+    expect(BUILDINGS.some((b) => b.kind === 'lights')).toBe(false);
     expect((HOME_BASE_RULES.buildableKinds as readonly string[]).includes('lights')).toBe(false);
     // A Clockwork beacon (#874) is the same kind with a wider reach.
     const beacon = { ...lights, id: 'clockwork-beacon', safeRadius: 2 };

@@ -175,12 +175,8 @@ describe('buildingGuide (#715)', () => {
         buildingsGuide(BUILDINGS, ctx({ patchType })).map((e) => e.id),
       ),
     );
-    // The Waystation waits until the server builds it (#735); Twinkle Lights
-    // until the lights lane makes `lights` buildable (#37 2a).
-    expect(BUILDINGS.filter((b) => !ids.has(b.id)).map((b) => b.id)).toEqual([
-      'waystation',
-      'twinkle-lights',
-    ]);
+    // The Waystation waits until the server builds it (#735).
+    expect(BUILDINGS.filter((b) => !ids.has(b.id)).map((b) => b.id)).toEqual(['waystation']);
   });
 
   it('a new building shows up with no guide code (rule 5)', () => {

@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { PushKindSchema } from '@heartpatch/shared';
 import { sql } from 'drizzle-orm';
 import { describe, expect, inject, it } from 'vitest';
 import { createDbClient } from './client.js';
@@ -34,7 +35,9 @@ describe('migration 0070 (Christmas contracts)', () => {
     expect(migrationSql).toContain(
       'ALTER TABLE "push_settings" ADD COLUMN "christmas" boolean DEFAULT true NOT NULL;',
     );
-    expect(migrationSql).toContain(`'long-night-start', 'present', 'christmas-eve'`);
+    // The latest send-log CHECK lists every shared push kind.
+    const check = migrationSql.match(/"push_sends_kind_known" CHECK \(.*\)\);/)?.[0] ?? '';
+    for (const kind of PushKindSchema.options) expect(check).toContain(`'${kind}'`);
     const code = migrationSql.replace(/^--.*$/gm, '');
     expect(code).not.toMatch(/^\s*(DELETE|TRUNCATE|UPDATE)\b|DROP TABLE|DROP COLUMN/im);
     // The only thing dropped is the CHECK it widens.

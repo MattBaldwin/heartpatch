@@ -757,24 +757,4 @@ export const BUILDINGS: Building[] = [
     slot: 'ring',
     levels: [{ cost: { timber: 15, glimmer: 2 } }], // TUNE:
   },
-  {
-    // Christmas (#37 C0, owner answer 4): bulbs strung along the tile's
-    // fences and eaves. No fuel. Light against the Hollow Man on its own
-    // tile on Christmas Eve and Christmas night only; cosmetic otherwise, so
-    // the Emberwood loop stands. Not buildable until the lights lane (2a)
-    // puts `lights` in `HOME_BASE_RULES.buildableKinds` with its look, its
-    // effect row and the safe-tile rule.
-    id: 'twinkle-lights',
-    kind: 'lights',
-    name: 'Twinkle Lights',
-    description: 'Twinkly bulbs for your land. So cozy on a snowy night!',
-    season: 'christmas',
-    placement: 'owned',
-    maxPerHome: 12, // TUNE: one string per owned tile, a dozen in all
-    maxPerTile: 1,
-    slot: 'ring', // drawn along the tile's edges and eaves; it takes one ring spot
-    glowNights: ['12-24', '12-25'], // TUNE: owner answer 4
-    safeRadius: 0, // own tile only (owner answer 4)
-    levels: [{ cost: { timber: 6, glimmer: 2 } }], // TUNE:
-  },
 ];

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../data/buildings.js';
 import { EXPLORE_RULES } from '../data/explore.js';
-import { HOME_BASE_RULES } from '../data/home-base.js';
 import { JOB_RULES } from '../data/jobs.js';
 import { RESOURCE_BUILDING_RULES } from '../data/resource-buildings.js';
 import { BuildingSchema, buildsOnPatchType, type Building } from '../schemas/data/buildings.js';
@@ -69,12 +68,8 @@ describe('buildingEffects (#207)', () => {
   });
 
   it('gives every building in the data at least one effect', () => {
-    // Wild Isle buildings (#621) get their rows with the lanes that build
-    // them, and so does a kind not buildable yet (Twinkle Lights, #37 2a).
-    const buildable = (b: (typeof BUILDINGS)[number]) =>
-      buildsOnPatchType(b, 'cozy') &&
-      (HOME_BASE_RULES.buildableKinds as readonly string[]).includes(b.kind);
-    for (const b of BUILDINGS.filter(buildable)) {
+    // Wild Isle buildings (#621) get their rows with the lanes that build them.
+    for (const b of BUILDINGS.filter((b) => buildsOnPatchType(b, 'cozy'))) {
       const effects = [...buildingEffects(b), ...economyEffects(b, 1, RULES)];
       expect(effects.length, b.id).toBeGreaterThan(0);
     }

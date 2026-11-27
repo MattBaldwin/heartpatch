@@ -35,6 +35,8 @@ export const PUSH_KINDS: readonly PushKind[] = [
   'friend',
   'long-night-soon',
   'long-night-start',
+  'present',
+  'christmas-eve',
 ];
 
 /** `PUSH_RULES.maxPayloadBytes` (a test checks they match). */
