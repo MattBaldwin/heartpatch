@@ -39,6 +39,22 @@ describe('@heartpatch/shared/server', () => {
     }
   });
 
+  it('keeps the advent table, its schema and the rolls server-only (#37 1c)', () => {
+    for (const name of [
+      'ADVENT_PRESENTS',
+      'AdventPresentsSchema',
+      'checkAdventPresents',
+      'rollAdventPresent',
+      'rollPresentOpening',
+      'adventSeed',
+      'presentOpeningSeed',
+      'adventContents',
+    ]) {
+      expect(name in serverEntry).toBe(true);
+      expect(name in publicEntry).toBe(false);
+    }
+  });
+
   it("keeps trick-or-treat's prize table, its schema and the roll server-only (#515)", () => {
     for (const name of [
       'TRICK_OR_TREAT_PRIZES',

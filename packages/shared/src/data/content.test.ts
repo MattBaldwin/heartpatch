@@ -27,6 +27,8 @@ import {
   HOLLOWED_HELPER_GIFT,
   REKINDLED_DROPS,
 } from './server/hollowed-finds.js';
+import { PRESENT_ITEM } from '../schemas/data/advent.js';
+import { ADVENT_PRESENTS } from './server/advent.js';
 import { HOUSE_GIFTS } from './server/house-gifts.js';
 import { PUZZLE_REWARDS } from './server/puzzle-rewards.js';
 import { RESCUE_GUARDIANS } from './server/rescue-guardians.js';
@@ -163,7 +165,10 @@ describe('every resource has a way in and a way out (#735)', () => {
       PUZZLE_REWARDS,
       TRICK_OR_TREAT_PRIZES,
       HOUSE_GIFTS,
+      ADVENT_PRESENTS,
     ),
+    // A wrapped present to pass on comes with some advent claims (#37 1c).
+    PRESENT_ITEM,
   ]);
   // Ways out: a recipe, a build or upgrade cost, care, fuel, battle, a
   // tool's uses, the house, selling or the Glimmer swap.
@@ -177,13 +182,14 @@ describe('every resource has a way in and a way out (#735)', () => {
     ...idsIn(HOUSE_DATA),
     ...Object.keys(SELL_RULES.items),
     ...GLIMMER_SWAP.accepts,
+    // Opened from the bag (`POST /presents/open`, #37 1c).
+    PRESENT_ITEM,
   ]);
 
   // Un-retired by the Christmas contracts (#37 C0); their ways in and out
   // land with their lanes. Each lane takes its own off this list.
   const AWAITING_LANE: Readonly<Record<string, string>> = {
-    presents: '#37 1c: advent claims in, present opening out',
-    fireworks: '#37 1c in (the 24th), #41 4a launch out',
+    fireworks: '#41 4a: launched at New Year (in: the 24th advent present, #37 1c)',
   };
 
   it.each(Object.keys(AWAITING_LANE))('%s waits for its lane, tradable and valued', (id) => {

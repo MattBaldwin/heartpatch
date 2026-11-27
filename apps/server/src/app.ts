@@ -72,6 +72,8 @@ import { createTradesService } from './modules/trades/service.js';
 import { createJourneyBattlePort, createJourneysService } from './modules/journeys/service.js';
 import { createHollowService, type HollowService } from './modules/hollow/service.js';
 import { createClearingService } from './modules/clearing/service.js';
+import { adventRoutes } from './modules/advent/routes.js';
+import { createAdventService } from './modules/advent/service.js';
 import { houseRoutes } from './modules/house/routes.js';
 import { createHouseService } from './modules/house/service.js';
 import { houseSwitchOf } from './modules/house/switch.js';
@@ -745,6 +747,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // The Keeper's house (#381), behind `HP_HOUSE` (off by default).
         await api.register(
           houseRoutes(createHouseService({ db, clock, house, ...publish }), {
+            hooks: authHooks,
+            idempotency,
+          }),
+        );
+        // Advent presents (#37 1c): the calendar, a day's claim, opening a present.
+        await api.register(
+          adventRoutes(createAdventService({ db, clock, ...publish }), {
             hooks: authHooks,
             idempotency,
           }),
