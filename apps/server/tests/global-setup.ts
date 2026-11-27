@@ -2,6 +2,8 @@
 // DATABASE_URL, applies every migration from scratch, and drops it afterwards,
 // so tests never touch your dev data. Reads the repo-root .env like the db:*
 // scripts do. Without DATABASE_URL the DB tests skip locally, but CI must run them.
+// It also keeps a migrated copy as a template for tests that run DDL: each
+// such file gets a database of its own from it (`tests/own-database.ts`, #895).
 import { existsSync } from 'node:fs';
 import type { TestProject } from 'vitest/node';
 import { createDbClient } from '../src/db/client.js';
@@ -11,6 +13,8 @@ declare module 'vitest' {
   export interface ProvidedContext {
     /** Migrated scratch database, or null when DATABASE_URL is unset. */
     testDatabaseUrl: string | null;
+    /** Migrated template for `ownDatabaseUrl`, or null when DATABASE_URL is unset. */
+    testTemplateDatabase: string | null;
   }
 }
 
@@ -27,15 +31,26 @@ export default async function setup(
       '\n⚠ DATABASE_URL is unset: skipping DB integration tests (see src/db/README.md).\n\n',
     );
     project.provide('testDatabaseUrl', null);
+    project.provide('testTemplateDatabase', null);
     return undefined;
   }
 
   const name = `heartpatch_test_${String(process.pid)}_${String(Date.now())}`;
+  const template = `${name}_template`;
   const testUrl = new URL(baseUrl);
   testUrl.pathname = `/${name}`;
 
   const admin = createDbClient(baseUrl, { max: 1, quiet: true });
   const dropDatabase = async () => {
+    // Own databases (`tests/own-database.ts`) are named after this run, so any
+    // a crashed or aborted file left behind go too.
+    const own = await admin.db.execute<{ datname: string }>(
+      `select datname from pg_database where starts_with(datname, '${name}_own_')`,
+    );
+    for (const { datname } of own) {
+      await admin.db.execute(`drop database if exists "${datname}" with (force)`);
+    }
+    await admin.db.execute(`drop database if exists "${template}" with (force)`);
     await admin.db.execute(`drop database if exists "${name}" with (force)`);
     await admin.close();
   };
@@ -49,7 +64,15 @@ export default async function setup(
     throw err;
   }
   await test.close();
+  try {
+    // A copy needs the source idle, so it's taken before any test connects.
+    await admin.db.execute(`create database "${template}" template "${name}"`);
+  } catch (err) {
+    await dropDatabase();
+    throw err;
+  }
   project.provide('testDatabaseUrl', testUrl.href);
+  project.provide('testTemplateDatabase', template);
 
   return dropDatabase;
 }
