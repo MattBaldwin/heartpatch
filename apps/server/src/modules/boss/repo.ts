@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNotNull, isNull, lte, max, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, isNotNull, isNull, lte, max, ne, sql } from 'drizzle-orm';
 import type { Hex } from '@heartpatch/shared';
 import type { BossTileCandidate } from '@heartpatch/shared/server';
 import { withTransaction, type Executor } from '../../db/client.js';
@@ -45,6 +45,22 @@ export interface BossRepo {
   findWindow: (mapId: string, windowId: string) => Promise<BossWindowRow | null>;
   /** Inserts a visit once; null if it was already there (the insert is the idempotency). */
   insertWindow: (row: BossWindowRow) => Promise<BossWindowRow | null>;
+  /**
+   * Christmas Eve (#37 X1): turns the week's pinned weekly visit into the
+   * Eve visit (kind, boss, close; the tile stays), once: null if it isn't a
+   * weekly row any more. `opens_at` stays the weekly one, so the week's
+   * fights (`visitOf`, by start time) still belong to this row. Its
+   * Keepers' goes at the weekly boss are reset (win and asks cleared, the
+   * idle clock kept), so everyone meets the Eve visit fresh. Only a visit
+   * pinned before X1 shipped is ever converted.
+   */
+  convertToChristmasEve: (
+    mapId: string,
+    windowId: string,
+    visit: Pick<BossWindowRow, 'speciesId' | 'endsAt'>,
+  ) => Promise<BossWindowRow | null>;
+  /** The patch's Christmas Eve visit out at `at` (`MapView.christmas.eve`), or null. */
+  findChristmasEve: (mapId: string, at: Date) => Promise<BossWindowRow | null>;
   /** The highest Partner level among the patch's active members, or null. */
   topPartnerLevel: (mapId: string) => Promise<number | null>;
   /** Neutral land a boss could stand on, and Juniper's Gap's tiles as the fallback. */
@@ -200,6 +216,43 @@ export function createBossRepo(db: Executor): BossRepo {
     insertWindow: async (row) => {
       const [inserted] = await db.insert(bossWindows).values(row).onConflictDoNothing().returning();
       return inserted ?? null;
+    },
+
+    convertToChristmasEve: async (mapId, windowId, visit) => {
+      const [row] = await db
+        .update(bossWindows)
+        .set({ ...visit, kind: 'christmas-eve' })
+        .where(
+          and(
+            eq(bossWindows.mapId, mapId),
+            eq(bossWindows.windowId, windowId),
+            eq(bossWindows.kind, 'weekly'),
+          ),
+        )
+        .returning();
+      if (!row) return null;
+      // Reset, not deleted: `last_action_at` stays, so a weekly fight still
+      // going at the conversion keeps its idle clock and isn't forfeited.
+      await db
+        .update(bossEncounters)
+        .set({ wonBattleId: null, asks: [] })
+        .where(and(eq(bossEncounters.mapId, mapId), eq(bossEncounters.windowId, windowId)));
+      return row;
+    },
+
+    findChristmasEve: async (mapId, at) => {
+      const [row] = await db
+        .select()
+        .from(bossWindows)
+        .where(
+          and(
+            eq(bossWindows.mapId, mapId),
+            eq(bossWindows.kind, 'christmas-eve'),
+            lte(bossWindows.opensAt, at),
+            gt(bossWindows.endsAt, at),
+          ),
+        );
+      return row ?? null;
     },
 
     topPartnerLevel: async (mapId) => {

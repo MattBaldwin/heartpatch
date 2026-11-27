@@ -35,6 +35,18 @@ function shuffled<T>(items: readonly T[], seed: Seed): T[] {
   return out;
 }
 
+/** The week's boss from the seeded bag (every boss before one repeats), or null with an empty bag. */
+function bagDraw(
+  mapSeed: Seed,
+  week: LocalDate,
+  bag: readonly BossBagEntry[],
+): BossBagEntry | null {
+  if (bag.length === 0) return null;
+  const index = weekIndex(week);
+  const cycle = Math.floor(index / bag.length);
+  return shuffled(bag, deriveSeed(mapSeed, 'boss-bag', cycle))[index % bag.length] ?? null;
+}
+
 /** A week's visit, in patch-local time; the server turns it into instants. */
 export interface BossVisitPlan {
   boss: BossBagEntry;
@@ -55,11 +67,7 @@ export function bossVisitFor(
   longNightWeekday: number | null,
   rules: Pick<BossEventRules, 'bag' | 'windowHours'>,
 ): BossVisitPlan | null {
-  if (rules.bag.length === 0) return null;
-  const index = weekIndex(week);
-  const cycle = Math.floor(index / rules.bag.length);
-  const bag = shuffled(rules.bag, deriveSeed(mapSeed, 'boss-bag', cycle));
-  const boss = bag[index % rules.bag.length];
+  const boss = bagDraw(mapSeed, week, rules.bag);
   if (!boss) return null;
   // Days the visit fully fits inside the week and misses the Long Night.
   const spanDays = Math.ceil(rules.windowHours / 24);
@@ -72,6 +80,41 @@ export function bossVisitFor(
   if (days.length === 0) return null;
   const opensOn = Rng.fromSeed(deriveSeed(mapSeed, 'boss-day', week)).pick(days);
   return { boss, opensOn };
+}
+
+/** The Christmas Eve visit (#37 X1), in patch-local time; the server turns it into instants. */
+export interface ChristmasEvePlan {
+  /** Its species, and the terrains its tile prefers. */
+  boss: BossBagEntry;
+  /** `christmasEve.day` this year: it opens at `opensAtHour`… */
+  opensOn: LocalDate;
+  /** …and closes the morning after at `closesAtHour`. */
+  closesOn: LocalDate;
+}
+
+/**
+ * The Christmas Eve visit if `week` (a boss week's Monday) holds
+ * `christmasEve.day`, else null (#37 X1): it replaces that week's bag draw.
+ * Its boss is `christmasEve.speciesId`; until that species lands (X3, null
+ * in the data) the week's bag draw stands in, so the visit runs either way.
+ * The week's bag slot is used either way, so the bag resumes the week after
+ * exactly as it would have. Pure, like `bossVisitFor`. Null with no
+ * Christmas block, or with no species and an empty bag.
+ */
+export function christmasEveVisitFor(
+  mapSeed: Seed,
+  week: LocalDate,
+  rules: Pick<BossEventRules, 'bag' | 'christmasEve'>,
+): ChristmasEvePlan | null {
+  const eve = rules.christmasEve;
+  if (!eve) return null;
+  const opensOn = Array.from({ length: WEEK }, (_, i) => addDays(week, i)).find(
+    (day) => day.slice(5) === eve.day,
+  );
+  if (!opensOn) return null;
+  const speciesId = eve.speciesId ?? bagDraw(mapSeed, week, rules.bag)?.speciesId;
+  if (!speciesId) return null;
+  return { boss: { speciesId, terrains: eve.terrains }, opensOn, closesOn: addDays(opensOn, 1) };
 }
 
 /** A tile a boss could stand on: neutral land, with its terrain. */

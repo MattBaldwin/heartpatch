@@ -1,11 +1,21 @@
-import { GROWTH_RULES, type BossVisit, type PublicUser } from '@heartpatch/shared';
+import {
+  addDays,
+  GROWTH_RULES,
+  type BossVisit,
+  type BossVisitEvent,
+  type BossWindowKind,
+  type PublicUser,
+} from '@heartpatch/shared';
 import {
   BOSS_EVENTS,
   bossLevelFor,
   bossTileFor,
   bossVisitFor,
   bossWeekOf,
+  christmasEveVisitFor,
+  type BossBagEntry,
   type BossEventRules,
+  type ChristmasEveGates,
 } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
@@ -61,6 +71,66 @@ export interface BossService {
   ) => Promise<BefriendResult & { battle: Awaited<ReturnType<BattlesService['get']>> }>;
 }
 
+/** The gates of a `boss_windows` row of this kind: the weekly ones, or Christmas Eve's lowered ones (#37 X1). */
+export function bossGatesFor(kind: string, rules: BossEventRules): ChristmasEveGates {
+  const eve = rules.christmasEve;
+  if (kind === 'christmas-eve' && eve) return eve.gates;
+  return {
+    minPlayerLevel: rules.minPlayerLevel,
+    minPartnerLevel: rules.minPartnerLevel,
+    levelBonus: rules.levelBonus,
+    minLevel: rules.minLevel,
+  };
+}
+
+/** `BossVisit.event` for a visit that isn't the weekly one (#37 X1); undefined on a weekly one. */
+export function bossVisitEvent(window: BossWindowRow): BossVisitEvent | undefined {
+  if (window.kind !== 'christmas-eve') return undefined;
+  // `ends_at` is the close: the window's end and the event's never disagree.
+  return { kind: 'christmas-eve', gatesLowered: true, closesAt: window.endsAt.toISOString() };
+}
+
+/** A week's visit as instants, before it's pinned. */
+export interface PlannedVisit {
+  kind: BossWindowKind;
+  boss: BossBagEntry;
+  opensAt: Date;
+  endsAt: Date;
+}
+
+/**
+ * The week's visit on a patch (#190 plan §2, #37 X1): the Christmas Eve visit
+ * in the week holding its day, else the bag draw. Pure but for the zone math.
+ */
+export function plannedBossVisit(
+  map: Pick<BossMapRow, 'seed' | 'timeZone' | 'longNightWeekday'>,
+  week: string,
+  rules: BossEventRules,
+): PlannedVisit | null {
+  const eve = rules.christmasEve && christmasEveVisitFor(map.seed, week, rules);
+  if (eve && rules.christmasEve) {
+    const { opensAtHour, closesAtHour } = rules.christmasEve;
+    return {
+      kind: 'christmas-eve',
+      boss: eve.boss,
+      opensAt: instantOfLocalDate({ date: eve.opensOn, minute: opensAtHour * 60 }, map.timeZone),
+      endsAt: instantOfLocalDate({ date: eve.closesOn, minute: closesAtHour * 60 }, map.timeZone),
+    };
+  }
+  const plan = bossVisitFor(map.seed, week, map.longNightWeekday, rules);
+  if (!plan) return null;
+  const opensAt = instantOfLocalDate(
+    { date: plan.opensOn, minute: rules.opensAtHour * 60 },
+    map.timeZone,
+  );
+  return {
+    kind: 'weekly',
+    boss: plan.boss,
+    opensAt,
+    endsAt: new Date(opensAt.getTime() + rules.windowHours * 3_600_000),
+  };
+}
+
 /** The boss module's side of a fight's end (#190): a win ends the visit for its Keeper. */
 export function createMinibossBattlePort(rules: BossEventRules = BOSS_EVENTS): MinibossBattlePort {
   return {
@@ -72,7 +142,7 @@ export function createMinibossBattlePort(rules: BossEventRules = BOSS_EVENTS): M
     acted: (tx, battle, at) =>
       createBossRepo(tx).touch(battle.mapId, battle.playerUserId, battle.startedAt, at),
     ended: async (tx, battle, winner) => {
-      if (winner === 'a') {
+      if (winner === 'a' && !(await startedBeforeItsEve(tx, battle, rules))) {
         await createBossRepo(tx).markWon(
           battle.mapId,
           battle.playerUserId,
@@ -85,13 +155,33 @@ export function createMinibossBattlePort(rules: BossEventRules = BOSS_EVENTS): M
   };
 }
 
+/**
+ * A weekly fight still going when the Eve took over its row (#37 X1): its
+ * row is the Eve visit now (the kept `opens_at` maps it there), but it never
+ * met the Eve boss, so its win mustn't read as "beaten" on the Eve. Only a
+ * converted row can hold one; a plain read, no lock.
+ */
+async function startedBeforeItsEve(
+  tx: Executor,
+  battle: { mapId: string; startedAt: Date },
+  rules: BossEventRules,
+): Promise<boolean> {
+  const repo = createBossRepo(tx);
+  const visit = await repo.visitOf(battle.mapId, battle.startedAt);
+  if (visit?.kind !== 'christmas-eve') return false;
+  const map = await repo.findMap(battle.mapId);
+  const eve = map ? plannedBossVisit(map, visit.windowId, rules) : null;
+  return eve?.kind === 'christmas-eve' && battle.startedAt < eve.opensAt;
+}
+
 export function createBossService(options: BossServiceOptions): BossService {
   const { db, battles } = options;
   const rules = options.rules ?? BOSS_EVENTS;
   const miniBosses = options.miniBosses ?? MINIBOSSES_OFF;
-  /** Whether a boss may visit this patch at all: a bag to draw from and the switch open. */
-  const openOn = (map: BossMapRow) =>
-    rules.bag.length > 0 && minibossOpenFor(miniBosses, map.ownerUsername);
+  /** Whether any boss can come: a bag to draw from, or a Christmas Eve species. */
+  const anyBoss = rules.bag.length > 0 || (rules.christmasEve?.speciesId ?? null) !== null;
+  /** Whether a boss may visit this patch at all: a boss to send and the switch open. */
+  const openOn = (map: BossMapRow) => anyBoss && minibossOpenFor(miniBosses, map.ownerUsername);
   const now = options.clock ?? (() => new Date());
   const published = (mapId: string) => {
     void options.publish?.(mapId);
@@ -103,31 +193,72 @@ export function createBossService(options: BossServiceOptions): BossService {
    * with its tile, so land changing hands mid-visit never moves it. The
    * insert is the idempotency: whoever opens it appends `boss.appeared`
    * once. Lazy (rule 4): the sweep opens visits on time, and a read opens one
-   * the sweep hasn't reached yet. Null while none is out.
+   * the sweep hasn't reached yet. Null while none is out. In the week holding
+   * Christmas Eve the visit is the Eve one (#37 X1, `kind` `christmas-eve`).
    */
   const openVisit = async (
     map: BossMapRow,
     at: Date,
     { onlyNew = false } = {},
   ): Promise<BossWindowRow | null> => {
-    // Closed (switch off, or nothing in the bag): as if no boss ever comes.
+    // Closed (switch off, or no boss to send): as if no boss ever comes.
     if (!openOn(map)) return null;
     const repo = createBossRepo(db);
-    const week = bossWeekOf(localDate(at, map.timeZone));
-    const pinned = await repo.findWindow(map.id, week);
+    const today = localDate(at, map.timeZone);
+    const week = bossWeekOf(today);
+    // The Eve visit closes the morning after, which is the next week's
+    // Monday when Christmas Eve is a Sunday (2028): still out until then.
+    // Only if it was pinned on the Sunday; one nobody opened by then is
+    // "missed whole", like any visit while the server was down.
+    const yesterdayWeek = bossWeekOf(addDays(today, -1));
+    if (yesterdayWeek !== week) {
+      const before = await repo.findWindow(map.id, yesterdayWeek);
+      if (before?.kind === 'christmas-eve' && before.opensAt <= at && at < before.endsAt) {
+        return onlyNew ? null : before;
+      }
+    }
+    const plan = plannedBossVisit(map, week, rules);
+    const out = (row: Pick<BossWindowRow, 'opensAt' | 'endsAt'>) =>
+      row.opensAt <= at && at < row.endsAt;
+    let pinned = await repo.findWindow(map.id, week);
+    // A weekly visit pinned in the Eve's week before X1 shipped: the Eve
+    // visit takes its row when it opens (the `(map_id, window_id)` key is
+    // taken), rather than the weekly one silently staying.
+    if (pinned?.kind === 'weekly' && plan?.kind === 'christmas-eve' && out(plan)) {
+      const converted = await repo.transaction(async (tx) => {
+        // `opens_at` stays the weekly one (earlier): fights started on the
+        // weekly visit still find this row (`visitOf`).
+        const row = await tx.convertToChristmasEve(map.id, week, {
+          speciesId: plan.boss.speciesId,
+          endsAt: plan.endsAt,
+        });
+        if (!row) return null;
+        await tx.appendEvent({
+          mapId: map.id,
+          type: 'boss.appeared',
+          actorUserId: null,
+          payload: { window: week, q: row.q, r: row.r, endsAt: row.endsAt.toISOString() },
+        });
+        return row;
+      });
+      if (converted) {
+        published(map.id);
+        return converted;
+      }
+      pinned = await repo.findWindow(map.id, week);
+    }
     // The sweep counts only visits it opens; one already pinned isn't news.
-    if (pinned) return !onlyNew && pinned.opensAt <= at && at < pinned.endsAt ? pinned : null;
-    const plan = bossVisitFor(map.seed, week, map.longNightWeekday, rules);
+    if (pinned) return !onlyNew && out(pinned) ? pinned : null;
     if (!plan) return null;
-    const opensAt = instantOfLocalDate(
-      { date: plan.opensOn, minute: rules.opensAtHour * 60 },
-      map.timeZone,
-    );
-    const endsAt = new Date(opensAt.getTime() + rules.windowHours * 3_600_000);
+    const { opensAt, endsAt } = plan;
     // Not yet, or missed whole (the server was down): nothing to pin.
-    if (at < opensAt || at >= endsAt) return null;
-    // It starts when the patch is ready: some member's Partner grown enough.
-    if (((await repo.topPartnerLevel(map.id)) ?? 0) < rules.minPartnerLevel) return null;
+    if (!out(plan)) return null;
+    // It starts when the patch is ready: some member's Partner grown enough
+    // (no patch gate on Christmas Eve).
+    const { minPartnerLevel } = bossGatesFor(plan.kind, rules);
+    if (minPartnerLevel !== null && ((await repo.topPartnerLevel(map.id)) ?? 0) < minPartnerLevel) {
+      return null;
+    }
     const ground = await repo.groundTiles(map.id);
     const homes = await repo.homes(map.id);
     const tile =
@@ -143,8 +274,7 @@ export function createBossService(options: BossServiceOptions): BossService {
         r: tile.r,
         opensAt,
         endsAt,
-        // The bag draw; X1 (#37) writes the Christmas Eve visit (migration 0071).
-        kind: 'weekly',
+        kind: plan.kind,
       });
       if (!row) return null;
       await tx.appendEvent({
@@ -186,12 +316,13 @@ export function createBossService(options: BossServiceOptions): BossService {
       const { map, window } = found;
       const repo = createBossRepo(db);
       const partner = (await createSpawnsRepo(db).partnerLevel(mapId, user.id)) ?? 0;
+      const gates = bossGatesFor(window.kind, rules);
       const encounter = await repo.findEncounter(mapId, user.id, window.windowId);
       const state = joinedOn(encounter)
         ? 'friend'
         : encounter?.wonBattleId != null
           ? 'beaten'
-          : partner < rules.minPlayerLevel
+          : partner < gates.minPlayerLevel
             ? 'too-big'
             : 'here';
       // A Keeper too small to fight still sees it (#190 plan §2): its name
@@ -200,12 +331,14 @@ export function createBossService(options: BossServiceOptions): BossService {
         state === 'too-big' ||
         state === 'friend' ||
         (await repo.hasSeen(mapId, user.id, window.speciesId));
+      const event = bossVisitEvent(window);
       return {
         window: { id: window.windowId, endsAt: window.endsAt.toISOString() },
         tile: { q: window.q, r: window.r },
         species: met ? window.speciesId : null,
         state,
         triesLeftToday: state === 'here' ? await triesLeft(db, map, user.id, at) : 0,
+        ...(event ? { event } : {}),
       };
     },
 
@@ -225,7 +358,8 @@ export function createBossService(options: BossServiceOptions): BossService {
         }
         const repo = createBossRepo(tx);
         const partner = (await createSpawnsRepo(tx).partnerLevel(mapId, user.id)) ?? 0;
-        if (partner < rules.minPlayerLevel) throw new AppError('CONFLICT', MESSAGES.tooBig);
+        const gates = bossGatesFor(window.kind, rules);
+        if (partner < gates.minPlayerLevel) throw new AppError('CONFLICT', MESSAGES.tooBig);
         const encounter = await repo.findEncounter(mapId, user.id, window.windowId);
         if (encounter?.wonBattleId != null) throw new AppError('CONFLICT', MESSAGES.beaten);
         if ((await triesLeft(tx, map, user.id, at)) === 0) {
@@ -239,7 +373,7 @@ export function createBossService(options: BossServiceOptions): BossService {
           boss: {
             id: `boss-${window.windowId}`,
             speciesId: window.speciesId,
-            level: bossLevelFor(partner, rules, GROWTH_RULES.maxLevel),
+            level: bossLevelFor(partner, gates, GROWTH_RULES.maxLevel),
           },
           tile: { q: window.q, r: window.r },
           // The Keeper's row for this visit (step 5e), right after the battle.
@@ -267,7 +401,7 @@ export function createBossService(options: BossServiceOptions): BossService {
     },
 
     sweep: async (only) => {
-      if (rules.bag.length === 0 || miniBosses.mode === 'off') return 0;
+      if (!anyBoss || miniBosses.mode === 'off') return 0;
       const at = now();
       let opened = 0;
       for (const map of await createBossRepo(db).listMaps()) {
