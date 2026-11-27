@@ -585,4 +585,48 @@ describe('emit: signature bursts (#190 PR 5)', () => {
       emit({ ...base, burst }).length,
     );
   });
+
+  describe('anchored on the real face box (PR 5b)', () => {
+    // A BIG squishy 4.4 tall, its face between 2.6 and 3.3 up, a body 1.8 across.
+    const real = { ...base, face: { low: 2.6, high: 3.3 }, radius: 0.9 } as const;
+    const frost = SIGNATURE_FX['assist:frost']!.call!.bursts![0]!;
+    const pile = SIGNATURE_FX['windup:leaf']!.windup!.bursts![0]!;
+
+    it('keeps the leaf pile wide of the body and below the chin for its whole life', () => {
+      const out = emit({ ...real, burst: pile });
+      expect(out.length).toBe(pile.count);
+      for (const p of out) {
+        const top = p.origin.y + p.vy * (p.life / 1000);
+        expect(top, 'rises no higher than the chin').toBeLessThanOrEqual(real.face.low);
+        expect(Math.hypot(p.vx, p.vz), 'orbits outside the body').toBeGreaterThanOrEqual(
+          real.radius,
+        );
+      }
+    });
+
+    it('throws the frost shards off both shoulders, under the chin and clear of the face column', () => {
+      const out = emit({ ...real, burst: frost });
+      const sides = new Set(out.map((p) => Math.sign(p.origin.x)));
+      expect(sides).toEqual(new Set([1, -1]));
+      for (const p of out) {
+        expect(p.origin.y).toBeLessThan(real.face.low);
+        expect(Math.abs(p.origin.x)).toBeGreaterThan(real.radius);
+        // Moving away from the middle, never across it.
+        expect(Math.sign(p.vx)).toBe(Math.sign(p.origin.x));
+      }
+    });
+
+    it('falls back without a face box (a squishy with no face), and with reduced motion', () => {
+      const noFace = emit({ ...base, burst: frost });
+      expect(noFace.length).toBeGreaterThan(0);
+      const calm = emit({ ...real, burst: pile, reduced: true });
+      expect(calm.length).toBe(Math.round(pile.count * 0.6));
+    });
+
+    it('makes the backup flash a burst of stars, with only a small core', () => {
+      const flash = SIGNATURE_FX['assist:frost']!.backup!.bursts!;
+      expect(flash[0]!.size).toBeLessThanOrEqual(0.4);
+      expect(flash.some((b) => b.shape === 'star' && b.pattern === 'burst')).toBe(true);
+    });
+  });
 });

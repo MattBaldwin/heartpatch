@@ -1236,7 +1236,20 @@ export class BattleScene {
         ...(c.duration > 0 ? { duration: c.duration } : {}),
         salt: this.#salt++,
         ...(cue.caught !== undefined ? { caught: cue.caught } : {}),
-        ...(cue.burst ? { burst: cue.burst } : {}),
+        ...(cue.burst
+          ? {
+              burst: cue.burst,
+              // Its real face box (world y) and body radius: bursts sit on the shoulders and clear the face.
+              face:
+                'face' in fighter && fighter.face
+                  ? {
+                      low: rig.pose.lift + fighter.face.low * rig.pose.scale * rig.pose.squash,
+                      high: rig.pose.lift + fighter.face.high * rig.pose.scale * rig.pose.squash,
+                    }
+                  : null,
+              radius: fighter.radius * rig.pose.scale,
+            }
+          : {}),
         reduced: this.#options.reducedMotion,
       }),
     );

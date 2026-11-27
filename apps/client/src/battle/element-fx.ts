@@ -235,7 +235,7 @@ export interface SignatureBurst {
   /** Full count (reduced motion takes 60%, as `emit` does). */
   readonly count: number;
   /** From the squishy's feet, middle or the top of its head. */
-  readonly at: 'feet' | 'middle' | 'head';
+  readonly at: 'feet' | 'middle' | 'head' | 'shoulders';
   /**
    * Moved off the spot, × the squishy's height, in its own frame: `toward`
    * the other fighter (so towards the camera for the boss), to its `side`,
@@ -265,6 +265,16 @@ export interface SignatureBurst {
   readonly radius?: number;
   /** Every other bit gets a soft halo that blooms (`burst`). */
   readonly halos?: boolean;
+  /**
+   * `burst`: bits start at the squishy's two flanks (beside the body, by its
+   * real radius) and go out sideways, never across its face.
+   */
+  readonly flank?: boolean;
+  /**
+   * `burst`: bits are kept below the face box (`pile`: a ring wider than the
+   * body, rising no higher than the chin), so nothing lands on its face.
+   */
+  readonly clearFace?: boolean;
 }
 
 /** What one beat of a signature does. */
@@ -279,9 +289,9 @@ export interface SignatureBeatFx {
 export type SignatureMoment = Readonly<Partial<Record<SignatureBeat, SignatureBeatFx>>>;
 
 /** Beside the BIG squishy, a little towards the team: where a called-in friend's flash goes. */
-const BESIDE = { side: 0.75, up: 0.45, toward: 0.35 } as const; // TUNE
+const BESIDE = { side: 0.95, up: 0.1, toward: 0.3 } as const; // TUNE: out to the BIG squishy's side, near its middle, not up in the sky
 
-const LEAF_PILE = ['#c9772f', '#e0a040', '#9bbf4a', '#e86a3a'] as const; // TUNE: autumn rake pile
+const LEAF_PILE = ['#e0a040', '#9bbf4a', '#c9772f', '#7fae3c'] as const; // TUNE: autumn rake pile
 const SKID = ['#d9d2c5', '#c4bcae', '#efe9dd'] as const; // TUNE: soft dusty skid marks, never black
 
 /** Keyed `${effect}:${element}` (the four BIG squishies' signature moves today). */
@@ -299,15 +309,16 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           motion: 'pile',
           count: 110, // TUNE: ≤ 150 live leaves with the aura (the budget)
           at: 'feet',
-          // Lifted and wide: the low camera puts the team in front of the BIG squishy's feet.
-          offset: { side: 0, up: 0.2, toward: 0.15 }, // TUNE
-          speed: 0.95,
-          up: 0.42,
+          // A wide ring round the body (its real radius), rising to the chin and no higher.
+          offset: { side: 0, up: 0.1, toward: 0 }, // TUNE
+          speed: 0,
+          up: 0.3,
           gravity: 0,
-          size: 0.16,
+          size: 0.2, // TUNE: big enough to read as leaves
           life: 1300, // TUNE
           delay: 0,
           spread: 0.8, // the pile grows across the count
+          clearFace: true,
         },
       ],
     },
@@ -358,13 +369,14 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           motion: 'ring',
           count: 3, // TUNE: shout rings
           at: 'feet',
+          offset: { side: 0, up: 0, toward: 0.3 }, // TUNE: rolled out in front of its feet, not under the team
           speed: 0,
           up: 0,
           gravity: 0,
-          size: 0.9,
-          life: 560,
+          size: 1.1,
+          life: 640,
           delay: 0.1,
-          spread: 0.45,
+          spread: 0.6, // further apart, so they read as rings one after another
         },
       ],
     },
@@ -382,18 +394,19 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           colors: 'element',
           motion: 'ballistic',
           count: 14, // TUNE: the frost shiver, off its shoulders
-          at: 'head',
-          offset: { side: 0, up: -0.15, toward: 0.2 },
-          speed: 0.45,
-          up: 0.35,
+          at: 'shoulders',
+          flank: true, // off its two shoulders, sideways, clear of the face
+          speed: 0.5,
+          up: 0.3,
           gravity: 0.9,
-          size: 0.1,
-          life: 600,
+          size: 0.12,
+          life: 650,
           delay: 0.15,
         },
       ],
     },
     backup: {
+      // A burst of stars and halos, not one big pale disc.
       bursts: [
         {
           pattern: 'pop',
@@ -406,24 +419,25 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           speed: 0,
           up: 0,
           gravity: 0,
-          size: 0.9,
-          life: 360, // TUNE
+          size: 0.35, // TUNE: a bright core, small
+          life: 300,
           delay: 0.05,
         },
         {
           pattern: 'burst',
-          shape: 'halo',
+          shape: 'star',
           colors: 'element',
-          motion: 'rise',
-          count: 10, // TUNE
+          motion: 'ballistic',
+          count: 12, // TUNE
           at: 'middle',
           offset: BESIDE,
-          speed: 0.4,
-          up: 0.28,
-          gravity: 0,
-          size: 0.16,
-          life: 520,
+          speed: 0.9,
+          up: 0.5,
+          gravity: 1.1,
+          size: 0.13,
+          life: 650,
           delay: 0.08,
+          halos: true,
         },
       ],
     },
@@ -441,16 +455,17 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           motion: 'ballistic',
           count: 24, // TUNE: two skid arcs' worth
           at: 'feet',
-          offset: { side: 0, up: 0.04, toward: 0 },
+          // Brought out towards the camera, in front of the BIG squishy's feet: a crescent on the ground.
+          offset: { side: 0, up: 0.02, toward: 0.45 }, // TUNE
           speed: 0,
-          up: 0.06,
+          up: 0,
           gravity: 0,
-          size: 0.13,
-          life: 900,
+          size: 0.12,
+          life: 1000,
           delay: 0.2,
           spread: 0.5,
-          sweep: Math.PI, // the front half, facing the team
-          radius: 0.95,
+          sweep: Math.PI * 0.8, // the front, facing the team
+          radius: 0.9,
         },
         {
           pattern: 'arc',
@@ -459,16 +474,16 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           motion: 'zap',
           count: 16, // TUNE
           at: 'feet',
-          offset: { side: 0, up: 0.12, toward: 0 },
+          offset: { side: 0, up: 0.2, toward: 0.45 }, // TUNE: lifted just over the skid
           speed: 0,
-          up: 0.12,
+          up: 0.1,
           gravity: 0,
           size: 0.09,
           life: 520,
           delay: 0.2,
           spread: 0.5,
-          sweep: Math.PI,
-          radius: 1.05,
+          sweep: Math.PI * 0.8,
+          radius: 1,
         },
       ],
     },
@@ -615,6 +630,12 @@ export interface EmitAt {
   readonly caught?: boolean;
   /** `signature`: the burst to throw (`duration` is its step's length, for `delay` and `spread`). */
   readonly burst?: SignatureBurst;
+  /**
+   * `signature`: the squishy's real face box (world y, above the ground) and
+   * body radius, so a burst can sit on its shoulders and clear its face.
+   */
+  readonly face?: { readonly low: number; readonly high: number } | null;
+  readonly radius?: number;
   /** Reduced motion: thinner, no flash, no speed lines or rays. */
   readonly reduced: boolean;
 }
@@ -1043,9 +1064,26 @@ export function emit(e: EmitAt): Particle[] {
       const fx0 = (away * dx) / len;
       const fz0 = (away * dz) / len;
       const o = b.offset ?? { side: 0, up: 0, toward: 0 };
+      const face = e.face ?? null;
+      const radius = e.radius ?? 0.4 * h;
+      // `head` is the middle of the real face box, `shoulders` just under its chin.
+      const baseY =
+        b.at === 'feet'
+          ? 0.1
+          : b.at === 'head'
+            ? face
+              ? (face.low + face.high) / 2
+              : e.at.y + h * 0.48
+            : b.at === 'shoulders'
+              ? face
+                ? face.low - 0.1 * h
+                : e.at.y + h * 0.1
+              : e.at.y;
+      // Nothing rises past the chin when it must clear the face.
+      const ceiling = b.clearFace && face ? face.low - 0.08 * h : Infinity;
       const spot: Point = {
         x: e.at.x + (fx0 * o.toward + fz0 * o.side) * h,
-        y: (b.at === 'feet' ? 0.1 : b.at === 'head' ? e.at.y + h * 0.48 : e.at.y) + o.up * h,
+        y: baseY + o.up * h,
         z: e.at.z + (fz0 * o.toward - fx0 * o.side) * h,
       };
       const count = n(b.count);
@@ -1055,17 +1093,43 @@ export function emit(e: EmitAt): Particle[] {
       if (b.pattern === 'burst') {
         for (let i = 0; i < count; i++) {
           const a = TAU * ((i + r(i, 1) * 0.5) / count);
-          const v = b.speed * h * (0.6 + 0.6 * r(i, 2));
+          let v = b.speed * h * (0.6 + 0.6 * r(i, 2));
+          let origin = spot;
+          let dirX = Math.cos(a);
+          let dirZ = Math.sin(a) * 0.7; // a flatter spread in depth (world z), as `emit`'s bursts
+          if (b.flank) {
+            // Out from the body's own flanks, in its frame: left bits left, right bits right.
+            const sgn = i % 2 === 0 ? 1 : -1;
+            const gap = radius + 0.12 * h;
+            origin = {
+              x: spot.x + fz0 * gap * sgn,
+              y: spot.y,
+              z: spot.z - fx0 * gap * sgn,
+            };
+            const spreadA = (r(i, 7) - 0.5) * 1.2; // fans out a little, never across the face
+            dirX = fz0 * sgn * Math.cos(spreadA) + fx0 * Math.sin(spreadA);
+            dirZ = -fx0 * sgn * Math.cos(spreadA) + fz0 * Math.sin(spreadA);
+          } else if (b.motion === 'pile' && b.clearFace) {
+            // A ring wider than the body, so no bit orbits inside it.
+            v = radius * (1.15 + 0.9 * r(i, 2));
+            dirZ = Math.sin(a); // `pile` squashes its own depth
+          }
+          let vy = b.up * h * (0.5 + r(i, 5));
+          if (Number.isFinite(ceiling)) {
+            // Rises to the chin by the end of its life, never past it.
+            const rise = (ceiling - origin.y) / (b.life / 1000);
+            vy = Math.max(0, Math.min(vy, rise * (0.45 + 0.55 * r(i, 5))));
+          }
           const bit: Particle = {
             shape: b.shape,
             color: pick(colors, i),
             born: bornAt(i) + r(i, 3) * 40,
             life: b.life * (0.75 + 0.5 * r(i, 4)),
             motion: b.motion,
-            origin: spot,
-            vx: Math.cos(a) * v,
-            vy: b.up * h * (0.5 + r(i, 5)),
-            vz: Math.sin(a) * v * 0.7, // a flatter spread in depth (world z), as `emit`'s bursts
+            origin,
+            vx: dirX * v,
+            vy,
+            vz: dirZ * v,
             gravity: b.gravity * h,
             size: b.size * h * (0.7 + 0.6 * r(i, 6)),
             seed: r(i, 9),
