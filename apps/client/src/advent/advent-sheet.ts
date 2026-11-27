@@ -97,8 +97,6 @@ export function createAdvent(options: AdventOptions): Advent {
   /** The missed day the button means, once the player taps one. */
   let picked: string | null = null;
   let reveal: Reveal | null = null;
-  /** What the last present from the bag said was left, until the bag reads again. */
-  let presentsLeft: number | null = null;
 
   // ── Entry button and sheet ────────────────────────────────────────────
   const badge = el('span', {
@@ -144,7 +142,6 @@ export function createAdvent(options: AdventOptions): Advent {
   const changed = () => options.onChange?.();
   button.addEventListener('click', () => {
     note = '';
-    presentsLeft = null;
     // A reveal that landed while the sheet was shut is still waiting: don't drop it.
     sheet.hidden = false;
     render();
@@ -231,7 +228,6 @@ export function createAdvent(options: AdventOptions): Advent {
     try {
       const reply = await sendCommand(sendDeps, (key) => api.openPresent(id, key), stillHere);
       if (!reply || !stillHere()) return;
-      presentsLeft = reply.presentsLeft;
       reveal = {
         title: ADVENT_TEXT.revealPresent,
         lines: foundLines(reply.items),
@@ -244,7 +240,6 @@ export function createAdvent(options: AdventOptions): Advent {
       if (stillHere()) {
         note = messageOf(err);
         // "No wrapped presents" means the bag's count was old: read it again.
-        presentsLeft = null;
         void bagRead(id, at);
       }
     } finally {
@@ -264,7 +259,7 @@ export function createAdvent(options: AdventOptions): Advent {
   }
 
   /** Wrapped presents in the bag, as far as the sheet knows (never decides: the server does). */
-  const inBag = (): number => presentsLeft ?? (mapId ? (options.presentsInBag?.(mapId) ?? 0) : 0);
+  const inBag = (): number => (mapId ? (options.presentsInBag?.(mapId) ?? 0) : 0);
 
   // ── Drawing ───────────────────────────────────────────────────────────
 
@@ -434,28 +429,26 @@ export function createAdvent(options: AdventOptions): Advent {
     }
     // A wrapped present from the bag, only while the bag says it holds one.
     const bagPresents = inBag();
-    const presentBlock =
-      bagPresents > 0
-        ? [
-            el(
-              'div',
-              { class: 'advent-box advent-present-box', 'data-testid': 'advent-present-contents' },
-              el('b', {}, ADVENT_TEXT.presentMightHold),
-              ' ',
-              contentsLine(current.presentContents),
-            ),
-            hpButton(ADVENT_TEXT.openPresent(bagPresents), {
-              variant: 'secondary',
-              testId: 'advent-open-present',
-            }),
-          ]
-        : [];
-    const presentButton = presentBlock[1];
-    if (presentButton instanceof HTMLButtonElement) {
+    const presentBlock: HTMLElement[] = [];
+    if (bagPresents > 0) {
+      const presentButton = hpButton(ADVENT_TEXT.openPresent(bagPresents), {
+        variant: 'secondary',
+        testId: 'advent-open-present',
+      });
       presentButton.disabled = working;
       presentButton.addEventListener('click', () => {
         void openPresent();
       });
+      presentBlock.push(
+        el(
+          'div',
+          { class: 'advent-box advent-present-box', 'data-testid': 'advent-present-contents' },
+          el('b', {}, ADVENT_TEXT.presentMightHold),
+          ' ',
+          contentsLine(current.presentContents),
+        ),
+        presentButton,
+      );
     }
     // Catch-up is used for today: say so, kindly, instead of a button that can't work.
     const usedNote =
@@ -486,7 +479,6 @@ export function createAdvent(options: AdventOptions): Advent {
     note = '';
     picked = null;
     reveal = null;
-    presentsLeft = null;
     working = false;
     if (!sheet.hidden) {
       sheet.hidden = true;
