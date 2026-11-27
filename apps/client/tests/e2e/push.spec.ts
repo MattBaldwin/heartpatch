@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { hook } from './dev-hook.js';
+import { api, hook } from './dev-hook.js';
 import { reportHeartbeats } from './heartbeat.js';
 import { expectClear } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
@@ -85,6 +85,14 @@ test.afterEach(async ({ browser }, testInfo) => {
 
 const HANDLES = ['adventure', 'heartpatch'] as const;
 
+/** Sprout's one-time tips: keep in step with sprout-tips.ts `SPROUT_TIPS`, or a new one takes the top again. */
+const SPROUT_TIP_IDS = [
+  'trading-post',
+  'hollowed-village',
+  'day-three',
+  'first-evolution',
+] as const;
+
 /**
  * The card stays under the top row (the name pill and the corner buttons) on
  * an iPhone 15, an SE and an SE on its side, with its buttons on screen
@@ -142,6 +150,18 @@ test('the offer shows once in a Home Screen app, and Yes please turns nudges on'
   test.setTimeout(180_000);
   const page = await newPlayer(browser, uniqueName('nudge'));
   await stubPush(page);
+  // A new patch shows Sprout's one-time tips (sprout-tips.ts `SPROUT_TIPS`: "That's a trading
+  // post!", then "Something's wrong with that village…"), each for 5 s, and the card doesn't wait
+  // for them, so "Nudges on!" waited its turn behind one, up to 6 s with the line's 1 s look: past
+  // the 5 s default (#871). Mark them said, as hollow.spec.ts does a lore page, so the line has
+  // the top to itself.
+  const me = (await api<{ user: { id: string } }>(page, 'GET', '/me')).body.user.id;
+  await page.evaluate(
+    (keys) => {
+      for (const key of keys) localStorage.setItem(key, '1');
+    },
+    SPROUT_TIP_IDS.map((tip) => `heartpatch.sprout-tip.${tip}.${me}`),
+  );
   await page.reload();
   await makePatch(page);
 
@@ -157,10 +177,8 @@ test('the offer shows once in a Home Screen app, and Yes please turns nudges on'
   await put;
   await expect(card).toBeHidden();
   const line = page.getByTestId('patch-line');
-  // The line waits its turn while the map is busy (main.ts `patchLineBusy`, retried each
-  // second): with the card just gone it waited 2-5 s before showing on local Chromium, past
-  // the 5 s default; iphone-webkit 5 failed here on both tries (main bc0e111).
-  await expect(line).toHaveText('Nudges on! 🔔', { timeout: 15_000 });
+  // Nothing else holds the top now (main.ts `patchLineBusy`), so it shows as the card goes.
+  await expect(line).toHaveText('Nudges on! 🔔');
   expect(await pushStubCounts(page)).toEqual({ requests: 1, subscribes: 1 });
 
   // Settings shows the real state: on, with the switches (and the Long Night's,
