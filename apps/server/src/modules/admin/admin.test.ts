@@ -18,7 +18,8 @@ import {
 import cookie from '@fastify/cookie';
 import rateLimitPlugin from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance, type LightMyRequestResponse } from 'fastify';
-import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { ownDatabaseUrl } from '../../../tests/own-database.js';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
@@ -45,7 +46,7 @@ vi.mock('../auth/secrets.js', async (importOriginal) =>
   ),
 );
 
-const url = inject('testDatabaseUrl');
+const url = ownDatabaseUrl();
 const HEADERS = { 'x-requested-with': 'heartpatch' };
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PASSWORD = 'grown-up-password';

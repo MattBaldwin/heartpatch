@@ -1,6 +1,7 @@
 import { PgBoss } from 'pg-boss';
 import pino from 'pino';
-import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { ownDatabaseUrl } from '../../tests/own-database.js';
 import { createDbClient, type Database, type DbClient } from '../db/client.js';
 import { appendGameEvent, appendRawGameEvent } from '../db/game-events.js';
 import { maps } from '../db/schema.js';
@@ -10,7 +11,7 @@ import { runConsumer, type EventConsumer } from './consumers.js';
 import { CONSUMER_RETRY_LIMIT } from './limits.js';
 import { createJobsRepo } from './repo.js';
 
-const url = inject('testDatabaseUrl');
+const url = ownDatabaseUrl();
 
 describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
   let client: DbClient;

@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
-import { describe, expect, inject, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { ownDatabaseUrl } from '../../tests/own-database.js';
 import { createDbClient } from './client.js';
 import { migrationsFolder } from './migrator.js';
 
-const url = inject('testDatabaseUrl');
+const url = ownDatabaseUrl();
 
 // Migration 0069 (#386) adds `raids.attacker_computer`, not null with a
 // constant default (expand-only, metadata-only in PG16), and backfills it

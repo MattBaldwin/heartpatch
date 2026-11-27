@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
-import { describe, expect, inject, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { ownDatabaseUrl } from '../../tests/own-database.js';
 import { createDbClient } from './client.js';
 import { migrationsFolder } from './migrator.js';
 
-const url = inject('testDatabaseUrl');
+const url = ownDatabaseUrl();
 
 // Migration 0068 adds a partial index on `tile_attacks (map_id) where
 // ended_at is null`, expand-only: computer mates' claim guard

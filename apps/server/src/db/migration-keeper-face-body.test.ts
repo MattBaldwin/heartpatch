@@ -1,12 +1,13 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { inArray, sql } from 'drizzle-orm';
-import { describe, expect, inject, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { ownDatabaseUrl } from '../../tests/own-database.js';
 import { createDbClient } from './client.js';
 import { migrationsFolder } from './migrator.js';
 import { keepers, users } from './schema.js';
 
-const url = inject('testDatabaseUrl');
+const url = ownDatabaseUrl();
 
 // The face and body migration (#372) fills both from each row's base, whose
 // face shape and body type share its id, so no Keeper changes. This runs its
@@ -34,7 +35,7 @@ describe('the keeper face and body migration (#372)', () => {
     try {
       const { db } = client;
       // The table as it was before: in a transaction that's rolled back, so
-      // the migrated schema the other tests use is untouched.
+      // this file's own database keeps the migrated schema.
       await db
         .transaction(async (tx) => {
           await tx.execute(sql`ALTER TABLE "keepers" DROP COLUMN "face", DROP COLUMN "body"`);

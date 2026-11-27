@@ -2,11 +2,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PushKindSchema } from '@heartpatch/shared';
 import { sql } from 'drizzle-orm';
-import { describe, expect, inject, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { ownDatabaseUrl } from '../../tests/own-database.js';
 import { createDbClient } from './client.js';
 import { migrationsFolder } from './migrator.js';
 
-const url = inject('testDatabaseUrl');
+const url = ownDatabaseUrl();
 
 // Migration 0070 (#37 C0) adds the Christmas tables (`advent_claims`,
 // `keeper_warmth`, `patch_trees`), the `push_settings.christmas` switch (not
