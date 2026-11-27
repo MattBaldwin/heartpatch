@@ -617,6 +617,35 @@ describe('emit: signature bursts (#190 PR 5)', () => {
       }
     });
 
+    it('keeps the drift arcs under the chin, the hoops above the head and the flash beside it', () => {
+      for (const b of SIGNATURE_FX['all-foes:spark']!.strike!.bursts!) {
+        for (const p of emit({ ...real, element: 'spark', burst: b })) {
+          // The highest a bit gets: its start, its rise over its life, and a zap's ±0.17 jitter.
+          const top = p.origin.y + Math.max(0, p.vy) * (p.life / 1000) + 0.17;
+          expect(top, 'drift arc stays below the face').toBeLessThan(real.face.low);
+        }
+      }
+      const hoops = SIGNATURE_FX['flinch:fire']!.strike!.bursts![1]!;
+      for (const p of emit({ ...real, element: 'fire', burst: hoops }))
+        expect(p.origin.y, 'above the head').toBeGreaterThan(real.face.high);
+      const flash = SIGNATURE_FX['assist:frost']!.backup!.bursts!;
+      for (const b of flash)
+        for (const p of emit({ ...real, element: 'fire', burst: b }))
+          expect(Math.abs(p.origin.x - real.at.x), 'beside, not on it').toBeGreaterThan(
+            real.radius,
+          );
+    });
+
+    it('flanks along the right axis when the fight is turned', () => {
+      // Facing +x, the body's flanks lie along z.
+      const out = emit({ ...real, to: { x: 10, y: 1, z: 4 }, burst: frost });
+      expect(new Set(out.map((p) => Math.sign(p.origin.z - real.at.z)))).toEqual(new Set([1, -1]));
+      for (const p of out) {
+        expect(Math.abs(p.origin.z - real.at.z)).toBeGreaterThan(real.radius);
+        expect(Math.sign(p.vz)).toBe(Math.sign(p.origin.z - real.at.z));
+      }
+    });
+
     it('falls back without a face box (a squishy with no face), and with reduced motion', () => {
       const noFace = emit({ ...base, burst: frost });
       expect(noFace.length).toBeGreaterThan(0);

@@ -272,11 +272,6 @@ export interface SignatureBurst {
    * real radius) and go out sideways, never across its face.
    */
   readonly flank?: boolean;
-  /**
-   * `burst`: bits are kept below the face box (`pile`: a ring wider than the
-   * body, rising no higher than the chin), so nothing lands on its face.
-   */
-  readonly clearFace?: boolean;
 }
 
 /** What one beat of a signature does. */
@@ -477,9 +472,9 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           motion: 'zap',
           count: 16, // TUNE
           at: 'shoulders',
-          offset: { side: 0, up: 0.1, toward: 0.3 }, // TUNE: just over the skid
+          offset: { side: 0, up: 0, toward: 0.3 }, // TUNE: at the skid, and rising to stay under the chin (zap jitters ±0.17)
           speed: 0,
-          up: 0.1,
+          up: 0.04,
           gravity: 0,
           size: 0.09,
           life: 520,
@@ -1082,8 +1077,6 @@ export function emit(e: EmitAt): Particle[] {
                 ? face.low - 0.1 * h
                 : e.at.y + h * 0.1
               : e.at.y;
-      // Nothing rises past the chin when it must clear the face.
-      const ceiling = b.clearFace && face ? face.low - 0.08 * h : Infinity;
       const spot: Point = {
         x: e.at.x + (fx0 * o.toward + fz0 * o.side) * h,
         y: baseY + o.up * h,
@@ -1112,17 +1105,8 @@ export function emit(e: EmitAt): Particle[] {
             const spreadA = (r(i, 7) - 0.5) * 1.2; // fans out a little, never across the face
             dirX = fz0 * sgn * Math.cos(spreadA) + fx0 * Math.sin(spreadA);
             dirZ = -fx0 * sgn * Math.cos(spreadA) + fz0 * Math.sin(spreadA);
-          } else if (b.motion === 'pile' && b.clearFace) {
-            // A ring wider than the body, so no bit orbits inside it.
-            v = radius * (1.15 + 0.9 * r(i, 2));
-            dirZ = Math.sin(a); // `pile` squashes its own depth
           }
-          let vy = b.up * h * (0.5 + r(i, 5));
-          if (Number.isFinite(ceiling)) {
-            // Rises to the chin by the end of its life, never past it.
-            const rise = (ceiling - origin.y) / (b.life / 1000);
-            vy = Math.max(0, Math.min(vy, rise * (0.45 + 0.55 * r(i, 5))));
-          }
+          const vy = b.up * h * (0.5 + r(i, 5));
           const bit: Particle = {
             shape: b.shape,
             color: pick(colors, i),
