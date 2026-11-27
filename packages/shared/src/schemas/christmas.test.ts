@@ -97,10 +97,20 @@ describe('warmth and the Patch Tree rows', () => {
 });
 
 describe('additive API fields', () => {
-  const christmas = { tree: { ornaments: 5, starLit: false }, presentWaiting: true };
+  const christmas = { tree: { postIndex: 2, ornaments: 5, starLit: false }, presentWaiting: true };
 
   it('MapView.christmas is optional, so older servers still parse', () => {
     expect(MapViewChristmasSchema.parse(christmas)).toEqual(christmas);
+    const warm = { ...christmas, warmth: [{ userId: userB, warmth: 2 }] };
+    expect(MapViewChristmasSchema.parse(warm)).toEqual(warm);
+    expect(
+      MapViewChristmasSchema.safeParse({ ...christmas, tree: { ornaments: 5, starLit: false } })
+        .success,
+    ).toBe(false);
+    expect(
+      MapViewChristmasSchema.safeParse({ ...christmas, warmth: [{ userId: userB, warmth: 0 }] })
+        .success,
+    ).toBe(false);
     const view = {
       map: { id: mapId, name: 'Pumpkin Hollow', timeZone: 'UTC', pvpMode: 'gentle', maxPlayers: 6 },
       members: [],
@@ -208,6 +218,7 @@ describe('Christmas game events', () => {
         {
           offerId: rowId,
           postTileId: tileId,
+          postIndex: 1,
           fromUserId: userA,
           toUserId: userB,
           source: 'present-gift',
@@ -216,6 +227,7 @@ describe('Christmas game events', () => {
           starLit: true,
         },
         {
+          postIndex: 1,
           fromUserId: userA,
           toUserId: userB,
           source: 'present-gift',

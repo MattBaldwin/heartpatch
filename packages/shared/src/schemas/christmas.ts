@@ -88,10 +88,20 @@ export type PatchTreeRow = z.infer<typeof PatchTreeRowSchema>;
  */
 export const MapViewChristmasSchema = z.object({
   tree: z.object({
+    /**
+     * The trading post it stands at (`PostView.index`), as the server chose
+     * it (`patch_trees.post_tile_id`); the client never works it out (rule 1).
+     */
+    postIndex: z.number().int().min(0),
     ornaments: z.number().int().min(0),
     starLit: z.boolean(),
   }),
   presentWaiting: z.boolean(),
+  /**
+   * My warmth with each patch-mate I have any with (`keeper_warmth`), for the
+   * hearts on their card. Optional so the tree lane (2c) can fill it later.
+   */
+  warmth: z.array(z.object({ userId: z.uuid(), warmth: z.number().int().min(1) })).optional(),
 });
 export type MapViewChristmas = z.infer<typeof MapViewChristmasSchema>;
 

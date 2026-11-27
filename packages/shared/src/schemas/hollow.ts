@@ -64,11 +64,15 @@ export const MorningReportSchema = z.object({
 });
 export type MorningReport = z.infer<typeof MorningReportSchema>;
 
-/** `GET /maps/:mapId/hollow`: the night, my morning reports and my squishies in the Hollow. */
 /** `HollowStatus.longNight.kind`: `weekly` today; open so a later kind still parses. */
 export const LongNightKindSchema = z.union([z.literal('weekly'), ContentIdSchema]);
+/**
+ * Written by hand on purpose: the schema infers plain `string`, and
+ * `(string & {})` keeps `'weekly'` in editor autocomplete.
+ */
 export type LongNightKind = 'weekly' | (string & {});
 
+/** `GET /maps/:mapId/hollow`: the night, my morning reports and my squishies in the Hollow. */
 export const HollowStatusSchema = z.object({
   night: z.object({
     /** Between nightfall and morning, map time: the map is drawn at night. */

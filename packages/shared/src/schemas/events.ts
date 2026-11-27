@@ -1587,6 +1587,8 @@ export const GAME_EVENTS = {
     internal: z.strictObject({
       offerId: z.uuid(),
       postTileId: z.uuid(),
+      /** The tree's post as the patch sees it (`PostView.index`). */
+      postIndex: z.number().int().min(0),
       fromUserId: z.uuid(),
       toUserId: z.uuid(),
       source: OrnamentSourceSchema,
@@ -1595,6 +1597,7 @@ export const GAME_EVENTS = {
       starLit: z.boolean(),
     }),
     public: z.object({
+      postIndex: z.number().int().min(0),
       fromUserId: z.uuid(),
       toUserId: z.uuid(),
       source: OrnamentSourceSchema,
