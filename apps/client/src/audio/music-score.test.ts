@@ -35,7 +35,8 @@ describe('music score', () => {
       for (const note of score.notes) {
         const from = Math.floor(note.beat);
         const to = Math.min(beats, Math.ceil(note.beat + note.beats));
-        for (let b = from; b < to; b += 1) perBeat[b] = (perBeat[b] ?? 0) + (note.velocity * VOICE_STYLES[note.voice].gain) ** 2;
+        for (let b = from; b < to; b += 1)
+          perBeat[b] = (perBeat[b] ?? 0) + (note.velocity * VOICE_STYLES[note.voice].gain) ** 2;
       }
       const mean = perBeat.reduce((a, b) => a + b, 0) / beats;
       return { mean, crest: Math.max(...perBeat) / mean };
