@@ -1,5 +1,14 @@
-import { BossBefriendResponseSchema, PlayerBattleBossSchema } from '@heartpatch/shared';
-import { SECRET_MOVES, SECRET_SPECIES, type BossEventRules } from '@heartpatch/shared/server';
+import {
+  BossBefriendResponseSchema,
+  MapViewSchema,
+  PlayerBattleBossSchema,
+} from '@heartpatch/shared';
+import {
+  BOSS_EVENTS,
+  SECRET_MOVES,
+  SECRET_SPECIES,
+  type BossEventRules,
+} from '@heartpatch/shared/server';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
 import type { GameEvent } from '../../db/game-events.js';
@@ -75,6 +84,33 @@ function warmthsIn(value: unknown, into: unknown[] = []): unknown[] {
   return into;
 }
 const leaks = (value: unknown) => SECRET_KEYS.filter((k) => keysOf(value).has(k));
+
+/**
+ * The Christmas Eve bar's secrets (#37 X2): the goal's formula, the head
+ * start's rule and what it came from, a fight's points rule, who shares the
+ * fall and what the thanks hold before they're paid. The client gets the
+ * bar's `goal`, `chipped` and `state` (#889 verdict), and a Keeper their own
+ * chip's `points`.
+ */
+const EVE_SECRET_KEYS = [
+  'goalPerKeeper',
+  'minGoal',
+  'maxGoal',
+  'pointsPerWin',
+  'headStart',
+  'headStartLights',
+  'headStartStar',
+  'headStartPerLightPercent',
+  'headStartLightsMaxPercent',
+  'headStartStarPercent',
+  'contributorMinFights',
+  'fallBundle',
+  'fallAsks',
+  'dozedBundle',
+  'activeKeepers',
+  'gates',
+];
+const eveLeaks = (value: unknown) => EVE_SECRET_KEYS.filter((k) => keysOf(value).has(k));
 
 // Half the asks miss and half join at most: either way, nothing may show why.
 const COIN_FLIP: BossEventRules = {
@@ -274,6 +310,88 @@ describe.skipIf(!url)('mini-boss secrets stay on the server (#190c, needs DATABA
       expect(leaks(battle)).toEqual([]);
     },
   );
+
+  it('the Christmas Eve bar (#37 X2): only goal, chipped and state, never its formula or who chipped', async () => {
+    // Goal 100 for two: the kid's win fills it, so the fall and the thanks go out too.
+    const eve = BOSS_EVENTS.christmasEve!;
+    const rules: BossEventRules = {
+      ...COIN_FLIP,
+      christmasEve: { ...eve, bar: { ...eve.bar, goalPerKeeper: 40, minGoal: 100 } },
+    };
+    await h.start(rules);
+    h.clock.setTime(new Date('2026-12-24T12:00:00-07:00').getTime());
+    const kid = await h.player();
+    const mate = await h.player();
+    const mapId = await h.patch(kid);
+    await h.join(mapId, kid, mate);
+    await h.grow(mapId, kid, 20);
+    await h.grow(mapId, mate, 20);
+    h.clock.setTime(new Date('2026-12-24T16:01:00-07:00').getTime());
+    const sent: unknown[] = [];
+    const get = async (path: string, who = kid) => {
+      const res = await h.call('GET', path, who);
+      expect(res.statusCode, res.body).toBe(200);
+      sent.push(res.json());
+      return res.json<Record<string, unknown>>();
+    };
+    await get(`/maps/${mapId}/boss`);
+    const started = await h.fight(kid, mapId);
+    const won = await h.playOut(kid, started);
+    sent.push(started, won);
+    // The fight's bar: exactly the three documented fields.
+    expect(Object.keys(started.boss!.patchBar!).sort()).toEqual(['chipped', 'goal', 'state']);
+    expect(won.boss!.patchBar).toEqual({ goal: 100, chipped: 100, state: 'fell' });
+    // The map's Eve: the opening and the bar, nothing else.
+    const view = MapViewSchema.parse(await get(`/maps/${mapId}/view`));
+    expect(Object.keys(view.christmas!.eve!).sort()).toEqual([
+      'chipped',
+      'goal',
+      'opensAt',
+      'state',
+    ]);
+    await get(`/maps/${mapId}/view`, mate);
+    await get(`/maps/${mapId}/boss`);
+    await get(`/maps/${mapId}/boss`, mate);
+    await get(`/battles/${won.id}`);
+    for (const reply of sent) expect(eveLeaks(reply), JSON.stringify(reply)).toEqual([]);
+    // The boss routes and the map's Christmas block never say who else chipped
+    // (the map's member list names the mate, as always), and the boss routes
+    // keep the weekly secrets too (`opensAt` is the map's alone).
+    const bossReplies = sent.filter((r) => !('map' in (r as object)));
+    expect(JSON.stringify([...bossReplies, view.christmas])).not.toContain(mate.id);
+    for (const reply of bossReplies) {
+      expect(leaks(reply).filter((k) => k !== 'opensAt')).toEqual([]);
+    }
+
+    // The live events: the bar moves for everyone, nameless; the points and
+    // the thanks are the kid's alone.
+    const events: GameEvent[] = await db.query.gameEvents.findMany({
+      where: (t, { eq }) => eq(t.mapId, mapId),
+    });
+    const types = events.map((e) => e.type);
+    expect(types).toEqual(expect.arrayContaining(['boss.chipped', 'boss.fell', 'boss.thanked']));
+    for (const event of events) {
+      for (const who of [kid, mate]) {
+        const shown = publicViewFor(PUBLIC_VIEWS, event, { userId: who.id });
+        expect(eveLeaks(shown), `${event.type}: ${JSON.stringify(shown)}`).toEqual([]);
+      }
+      const toMate = publicViewFor(PUBLIC_VIEWS, event, { userId: mate.id });
+      if (event.type === 'boss.chipped') {
+        expect(Object.keys(toMate as object).sort()).toEqual(['chipped', 'goal', 'window']);
+        const toKid = publicViewFor(PUBLIC_VIEWS, event, { userId: kid.id });
+        expect(toKid).toMatchObject({ points: 100 });
+      }
+      if (event.type === 'boss.thanked') expect(toMate).toBeNull();
+      if (event.type === 'boss.fell') {
+        expect(Object.keys(toMate as object).sort()).toEqual([
+          'chipped',
+          'fellAt',
+          'goal',
+          'window',
+        ]);
+      }
+    }
+  });
 
   it('the switch closed (#234): nothing about the visit is sent', async () => {
     await h.start(REAL_BAG_RULES, { miniBosses: 'off' });

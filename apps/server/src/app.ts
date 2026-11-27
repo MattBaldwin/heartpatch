@@ -333,6 +333,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           // Who can make a Wild Isle (#621), off by default.
           wildIsle: wildIsleSwitchOf(config),
           longNight,
+          // `MapView.christmas.eve` follows `/boss` (#37 X2).
+          miniBosses: minibossSwitchOf(config),
           clock,
           log: app.log,
           ...(wsHub ? { publish: wsHub.publish } : {}),
