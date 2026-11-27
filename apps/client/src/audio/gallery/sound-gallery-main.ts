@@ -52,7 +52,7 @@ const button = (label: string, onTap: () => void, testid: string) => {
   return b;
 };
 
-const tracks: TrackId[] = ['day', 'night', 'halloween', 'wonder'];
+const tracks: TrackId[] = ['day', 'night', 'halloween', 'christmas', 'wonder'];
 root.append(
   el('h1', { class: 'auth-title' }, 'Sound gallery'),
   el(

@@ -28,7 +28,7 @@ export const DEFAULT_VOLUMES = {
 } as const;
 
 export const MUSIC = {
-  /** Cross-fade between day, night and Halloween loops. */
+  /** Cross-fade between the day, night and season loops. */
   crossFadeS: 2.5, // TUNE
   /** Music dips under key moments (his visit, a new friend). */
   duckTo: 0.25, // TUNE: fraction of the music level
@@ -39,7 +39,7 @@ export const MUSIC = {
   tailS: 3,
   /**
    * Every loop is levelled to this loudness (RMS), then pulled down if a peak
-   * would pass `peak`, so day, night and Halloween sit at one level (#664).
+   * would pass `peak`, so day, night, Halloween and Christmas sit at one level (#664).
    */
   rms: 0.13, // TUNE: today's synth loops measure 0.10-0.17
   peak: 0.85, // TUNE
@@ -97,6 +97,29 @@ export const SFX = {
   recordedPitchJitter: 0.015, // TUNE
   /** Random volume spread per play (fraction off the top). */
   gainJitter: 0.15, // TUNE
+} as const;
+
+/**
+ * The winter sounds (#37). Sleigh bells are a few quick shakes of tiny
+ * jingles; snow crunch is a handful of packed-snow grains under a soft step.
+ */
+export const WINTER_SFX = {
+  /** When each shake of the sleigh bells lands, seconds from the start. */
+  shakesS: [0, 0.11, 0.22, 0.4], // TUNE
+  /** The little bells in one shake, Hz (inharmonic, so it jingles rather than chimes). */
+  jingleHz: [2650, 3170, 3720, 4410], // TUNE
+  /** How long each jingle rings, seconds. */
+  jingleRingS: 0.22, // TUNE
+  /** The jingles' level, and the metal hiss under each shake. */
+  jingleGain: 0.11, // TUNE
+  hissGain: 0.12, // TUNE
+  /** Snow crunch: how many grains, how far apart (seconds), and their level. */
+  crunchGrains: 4, // TUNE
+  crunchGapS: 0.028, // TUNE
+  crunchGain: 0.5, // TUNE
+  /** The soft step under the crunch, Hz, and its level. */
+  stepHz: 150, // TUNE
+  stepGain: 0.35, // TUNE
 } as const;
 
 /**

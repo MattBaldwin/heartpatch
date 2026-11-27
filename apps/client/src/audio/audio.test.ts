@@ -1,3 +1,4 @@
+import { GAME_DATA } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import type { Engine } from './audio-engine.js';
 import { AUDIO_SETTINGS_KEY } from './audio-config.js';
@@ -161,6 +162,28 @@ describe('createAudio', () => {
     audio.setNight(false);
     expect(engine.track).toBe('halloween');
     expect(audio.debug.track).toBe('halloween');
+  });
+
+  it("plays Christmas in its window by day, from the season's data (#37)", async () => {
+    let at = noonOn('2026-12-14');
+    const { audio, target, engine } = setup({ now: () => at });
+    target.tap();
+    await flush();
+    expect(engine.track).toBe('christmas');
+    audio.setNight(true);
+    expect(engine.track).toBe('night');
+    audio.setNight(false);
+    expect(engine.track).toBe('christmas');
+    // The window's last day still jingles; the day after is plain day.
+    const christmas = GAME_DATA.seasons.find((s) => s.id === 'christmas');
+    if (!christmas) throw new Error('no christmas season');
+    const { window } = christmas;
+    at = noonOn(`2026-${window.end}`);
+    audio.reseason();
+    expect(engine.track).toBe('christmas');
+    at = noonOn(`2026-${window.start}`) - 24 * 60 * 60 * 1000;
+    audio.reseason();
+    expect(engine.track).toBe('day');
   });
 
   it('follows the game clock, not the device date (#583)', async () => {
