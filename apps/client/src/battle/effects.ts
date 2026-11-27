@@ -31,10 +31,10 @@ export const POOL_SIZE: Readonly<Record<ParticleShape, number>> = {
   puff: 120, // TUNE
   halo: 96, // TUNE
   shard: 80, // TUNE
-  leaf: 60, // TUNE
+  leaf: 150, // TUNE: a BIG squishy's leaf pile (#190 PR 5) is the most at once, ≤ 150
   star: 72, // TUNE
   heart: 24, // TUNE
-  ring: 6, // TUNE
+  ring: 12, // TUNE: a shout's rings (#190 PR 5) on top of the hits' flourishes
   line: 40, // TUNE
   drop: 60, // TUNE
 };

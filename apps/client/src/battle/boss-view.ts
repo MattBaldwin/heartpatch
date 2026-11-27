@@ -448,6 +448,38 @@ export function bossCallout(
   return isAreaMove(step.move ? moves.get(step.move) : null) ? BOSS_TEXT.everyone : null;
 }
 
+/**
+ * A BIG squishy's signature stickers (#190 PR 5), by `${pair}/${beat}` (the
+ * `signatureCue` of a step): each pops by the boss at `at`, a share of the
+ * step, in place of the step's own callout. Keyed by move effect and
+ * element, never by a boss's name.
+ */
+export const SIGNATURE_STICKERS: Readonly<
+  Record<string, readonly { readonly text: string; readonly at: number }[]>
+> = {
+  // The windup leaf move: it counts as it stomps, then lands on "3!".
+  'windup:leaf/windup': [
+    // TUNE: on the stomps' landings (the act's 0.55 and 0.78 of 0.9 × the step)
+    { text: '1…', at: 0.25 },
+    { text: '2…', at: 0.7 },
+  ],
+  'windup:leaf/strike': [{ text: '3!', at: 0 }],
+  // The frost assist: the shrug, then the call.
+  'assist:frost/call': [{ text: 'Backup!', at: 0.15 }], // TUNE
+};
+
+/** A step's signature stickers, with each one's delay in ms (none for an ordinary step). */
+export function signatureStickers(
+  cue: { readonly key: string; readonly beat: string } | null,
+  ms: number,
+): { readonly text: string; readonly delay: number }[] {
+  if (!cue) return [];
+  return (SIGNATURE_STICKERS[`${cue.key}/${cue.beat}`] ?? []).map((s) => ({
+    text: s.text,
+    delay: Math.round(s.at * ms),
+  }));
+}
+
 /** A `move` step that is a squishy's own action this round: not one an assist called in (#234). */
 export function isOwnMove(step: { kind: string; backup?: boolean }): boolean {
   return step.kind === 'move' && step.backup !== true;

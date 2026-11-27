@@ -2,6 +2,12 @@ import type { BattleSideId, FeelingId, Move } from '@heartpatch/shared';
 import type { SquishMove } from '../procedural/config.js';
 import { BATTLE_CAMERA as CHOREO_CAMERA, CHOREO } from './battle-config.js';
 import type { PlaybackStep } from './battle-playback.js';
+import {
+  signatureOf,
+  type SignatureBeat,
+  type SignatureBeatFx,
+  type SignatureBurst,
+} from './element-fx.js';
 
 /*
  * Saturday Morning Smackdown's hits (owner decision 2026-10-05): what each
@@ -85,6 +91,10 @@ export type ActKind =
   | 'pop-out'
   /** Won: two happy hops and a twirl. */
   | 'victory'
+  /** Two big stomps on the spot, a count each (#190: a BIG squishy counting to three). */
+  | 'stomp'
+  /** A big shrug with a wobble (#190: a BIG squishy calling for backup). */
+  | 'shrug'
   /** Scooted away (forfeit): turns tail and hops off (held). */
   | 'scoot'
   /** Back home from wherever the last act left it. */
@@ -109,6 +119,8 @@ export const ACT_END: Readonly<Record<ActKind, ActEnd>> = {
   charmed: 'small',
   'pop-out': 'home',
   victory: 'home',
+  stomp: 'home',
+  shrug: 'home',
   scoot: 'gone',
   return: 'home',
 };
@@ -416,6 +428,30 @@ function curve(act: Act, u: number): Pose {
         spin: twirl * (second ? Math.PI * 2 * easeInOut(hop) : 0),
       });
     }
+    case 'stomp': {
+      // Up on its toes, then down hard with a squash; twice, a count each.
+      const k = (u * 2) % 1;
+      const up = arc(span(k, 0, 0.55));
+      const land = span(k, 0.55, 1);
+      return pose({
+        lift: 0.45 * big * up,
+        squash:
+          k < 0.55
+            ? 1 + 0.1 * big * up
+            : 1 - 0.28 * big * arc(span(land, 0, 0.4)) + 0.08 * big * wobble(span(land, 0.4, 1)),
+        lean: 0.12 * big * up,
+      });
+    }
+    case 'shrug': {
+      // Shoulders up (taller and narrower), a wobble side to side, and back down.
+      const up = arc(span(u, 0, 1));
+      return pose({
+        squash: 1 + 0.14 * big * up,
+        lift: 0.12 * big * up,
+        lean: -0.1 * big * up,
+        roll: 0.12 * big * Math.sin(span(u, 0.15, 0.85) * Math.PI * 4) * up,
+      });
+    }
     case 'scoot': {
       const t = easeIn(span(u, 0.2, 1));
       return pose({
@@ -582,7 +618,9 @@ export type EffectKind =
   /** The Heart Charm's throw, and its wobble on the ground. */
   | 'charm'
   /** Hearts and sparkles: a new friend, or a win. */
-  | 'confetti';
+  | 'confetti'
+  /** One burst of a BIG squishy's signature moment (#190 PR 5, `SIGNATURE_FX`). */
+  | 'signature';
 
 export interface EffectCue {
   readonly kind: EffectKind;
@@ -594,6 +632,8 @@ export interface EffectCue {
   readonly strength: number;
   /** `charm`: true if the squishy wants to be friends. */
   readonly caught?: boolean;
+  /** `signature`: the burst (its `delay` is already in `delay`). */
+  readonly burst?: SignatureBurst;
 }
 
 export interface ActCue {
@@ -658,6 +698,73 @@ export interface PlanContext {
   readonly boss?: BattleSideId | null;
   /** A hit from a windup's move landing (#190): the boss camera's thump. */
   readonly landing?: boolean;
+  /** The boss's signature beat this step is (#190 PR 5, `signatureCue`), if any. */
+  readonly signature?: SignatureCue | null;
+}
+
+// ── Signature moments (#190 PR 5) ───────────────────────────────────────
+
+/**
+ * The moves a signature looks back at: the last one played and who used it,
+ * and for a move an assist called in, the move that called it.
+ */
+export interface MoveTrail {
+  readonly last: { readonly move: string; readonly user: BattleSideId } | null;
+  readonly caller: string | null;
+}
+
+export const NO_TRAIL: MoveTrail = { last: null, caller: null };
+
+/** The trail once `step` plays (a `move` or `miss` moves it on). */
+export function trailAfter(
+  trail: MoveTrail,
+  step: Pick<PlaybackStep, 'kind' | 'side' | 'move'> & Partial<Pick<PlaybackStep, 'backup'>>,
+): MoveTrail {
+  if ((step.kind !== 'move' && step.kind !== 'miss') || !step.move) return trail;
+  return {
+    last: { move: step.move, user: step.side },
+    caller: step.kind === 'move' && step.backup === true ? (trail.last?.move ?? null) : null,
+  };
+}
+
+/** A signature beat a step plays: which pair it is (`windup:leaf`, or a fallback's kind) and what it does. */
+export interface SignatureCue {
+  readonly key: string;
+  readonly beat: SignatureBeat;
+  readonly fx: SignatureBeatFx;
+}
+
+/**
+ * The boss's signature beat `step` is, or null (#190 PR 5). `trail` is the
+ * trail after the step (`trailAfter`). Only the boss's own moves have one;
+ * nothing here reads a boss's name, only its move's effects and element.
+ */
+export function signatureCue(
+  step: Pick<PlaybackStep, 'kind' | 'side'> &
+    Partial<Pick<PlaybackStep, 'windup' | 'flinch' | 'assist' | 'backup' | 'charge'>>,
+  ctx: {
+    readonly boss: BattleSideId | null | undefined;
+    readonly trail: MoveTrail;
+    readonly moves: ReadonlyMap<string, Move>;
+  },
+): SignatureCue | null {
+  const { boss, trail } = ctx;
+  const last = trail.last;
+  if (!boss || !last || last.user !== boss) return null;
+  let beat: SignatureBeat | null = null;
+  let id: string | null = last.move;
+  if (step.kind === 'effect' && step.side === boss && step.windup === true) beat = 'windup';
+  else if (step.kind === 'effect' && step.side === boss && step.assist === true) beat = 'call';
+  else if (step.kind === 'effect' && step.side !== boss && step.flinch === true) beat = 'flinch';
+  else if (step.kind === 'move' && step.side === boss && step.backup === true) {
+    beat = 'backup';
+    id = trail.caller;
+  } else if (step.kind === 'move' && step.side === boss && step.charge !== true) beat = 'strike';
+  else if (step.kind === 'hit' && step.side !== boss) beat = 'hit';
+  if (!beat || !id) return null;
+  const sig = signatureOf(ctx.moves.get(id));
+  const fx = sig?.moment[beat];
+  return sig && fx ? { key: sig.key, beat, fx } : null;
 }
 
 const other = (side: BattleSideId): BattleSideId => (side === 'a' ? 'b' : 'a');
@@ -877,6 +984,21 @@ export function planStep(step: PlaybackStep, ctx: PlanContext): StepPlan {
       cam = camera({ focus: won ? step.side : null });
       break;
     }
+  }
+  // A BIG squishy's signature beat (#190 PR 5): its act in place of the
+  // usual one, its bursts on top, and a lean of the camera.
+  const sig = ctx.signature;
+  if (sig) {
+    if (sig.fx.act) {
+      const kind = sig.fx.act;
+      const i = acts.findIndex((a) => a.side === step.side);
+      const len = kind === 'shiver' ? ms * 0.6 : ms * 0.9;
+      if (i >= 0) acts.splice(i, 1, { side: step.side, kind, delay: 0, ms: len, strength: 1 });
+      else acts.push({ side: step.side, kind, delay: 0, ms: len, strength: 1 });
+    }
+    for (const b of sig.fx.bursts ?? []) fx('signature', step.side, ms * b.delay, { burst: b });
+    if (sig.fx.tilt !== undefined && !reduced)
+      cam = { ...cam, tilt: (sig.fx.tilt * Math.PI) / 180 };
   }
   return { acts, effects, squish, camera: cam, hitStop };
 }

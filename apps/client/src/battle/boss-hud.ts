@@ -62,8 +62,11 @@ export interface BossHud {
    * log has them, the one moving now lit. Null empties them (their room stays).
    */
   setOrder: (order: { movers: readonly OrderMover[]; current: number } | null) => void;
-  /** A sticker by the boss ("Here it comes!"), or over a friend's chip. */
-  callout: (who: 'boss' | number, text: string) => void;
+  /**
+   * A sticker by the boss ("Here it comes!"), or over a friend's chip;
+   * `delay` ms later for a signature's count ("1…", "2…", #190 PR 5).
+   */
+  callout: (who: 'boss' | number, text: string, delay?: number) => void;
   showPicker: (
     state: PickerState,
     moves: (slot: number) => readonly PickerMove[],
@@ -235,18 +238,27 @@ export function mountBossHud(): BossHud {
     for (const node of stickers()) stickerWatch.observe(node);
   };
 
+  /** Each sticker's pending hide, so a new word on it (a count's "2…") gets its full time. */
+  const hiding = new Map<HTMLElement, number>();
   const flash = (node: HTMLElement, text: string) => {
     node.textContent = text;
     node.hidden = false;
     node.classList.remove('boss-callout-show');
     node.getBoundingClientRect(); // a style flush, so the pop restarts
     node.classList.add('boss-callout-show');
+    const before = hiding.get(node);
+    if (before !== undefined) {
+      window.clearTimeout(before);
+      timers.delete(before);
+    }
     const timer = window.setTimeout(() => {
       timers.delete(timer);
+      hiding.delete(node);
       node.hidden = true;
       node.classList.remove('boss-callout-show');
     }, CALLOUT_MS);
     timers.add(timer);
+    hiding.set(node, timer);
   };
 
   /** Draws a chip's ring, dot and label from its friend and the picker; writes only what changed. */
@@ -362,15 +374,26 @@ export function mountBossHud(): BossHud {
         BOSS_TEXT.orderLabel(o.movers.map((m) => m.name).join(', ')),
       );
     },
-    callout: (who, text) => {
+    callout: (who, text, delay = 0) => {
       const node = who === 'boss' ? bossCallout : chips.get(who)?.callout;
       if (!node) return;
-      flash(node, text);
-      // Its words are in: stack it clear of the caption before this frame paints.
-      if (who !== 'boss') {
-        watchStickers();
-        liftCallouts();
+      const show = () => {
+        flash(node, text);
+        // Its words are in: stack it clear of the caption before this frame paints.
+        if (who !== 'boss') {
+          watchStickers();
+          liftCallouts();
+        }
+      };
+      if (delay <= 0) {
+        show();
+        return;
       }
+      const timer = window.setTimeout(() => {
+        timers.delete(timer);
+        show();
+      }, delay);
+      timers.add(timer);
     },
     showPicker: (state, moves, handlers) => {
       picker.hidden = false;
@@ -468,6 +491,7 @@ export function mountBossHud(): BossHud {
       hud.setOrder(null);
       for (const timer of timers) window.clearTimeout(timer);
       timers.clear();
+      hiding.clear();
       for (const node of [bossCallout, ...[...chips.values()].map((c) => c.callout)]) {
         node.hidden = true;
         node.classList.remove('boss-callout-show');
@@ -479,6 +503,7 @@ export function mountBossHud(): BossHud {
       watchedSheet = null;
       for (const timer of timers) window.clearTimeout(timer);
       timers.clear();
+      hiding.clear();
       top.remove();
       dock.remove();
     },
