@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { hook } from './dev-hook.js';
+import { api, hook } from './dev-hook.js';
 import { reportHeartbeats } from './heartbeat.js';
 import { expectClear } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
@@ -142,6 +142,14 @@ test('the offer shows once in a Home Screen app, and Yes please turns nudges on'
   test.setTimeout(180_000);
   const page = await newPlayer(browser, uniqueName('nudge'));
   await stubPush(page);
+  // A new patch shows Sprout's one-time "That's a trading post!" for 5 s (sprout-tips.ts), and
+  // the card doesn't wait for it, so "Nudges on!" waited its turn behind it, up to 6 s with the
+  // line's 1 s look: past the 5 s default when the tip came up just before the card (#871). Mark
+  // it said already, as hollow.spec.ts does a lore page, so the line has the top to itself.
+  const me = (await api<{ user: { id: string } }>(page, 'GET', '/me')).body.user.id;
+  await page.evaluate((key) => {
+    localStorage.setItem(key, '1');
+  }, `heartpatch.sprout-tip.trading-post.${me}`);
   await page.reload();
   await makePatch(page);
 
@@ -157,10 +165,8 @@ test('the offer shows once in a Home Screen app, and Yes please turns nudges on'
   await put;
   await expect(card).toBeHidden();
   const line = page.getByTestId('patch-line');
-  // The line waits its turn while the map is busy (main.ts `patchLineBusy`, retried each
-  // second): with the card just gone it waited 2-5 s before showing on local Chromium, past
-  // the 5 s default; iphone-webkit 5 failed here on both tries (main bc0e111).
-  await expect(line).toHaveText('Nudges on! 🔔', { timeout: 15_000 });
+  // Nothing else holds the top now (main.ts `patchLineBusy`), so it shows as the card goes.
+  await expect(line).toHaveText('Nudges on! 🔔');
   expect(await pushStubCounts(page)).toEqual({ requests: 1, subscribes: 1 });
 
   // Settings shows the real state: on, with the switches (and the Long Night's,
