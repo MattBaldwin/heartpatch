@@ -273,7 +273,7 @@ const SKID = ['#d9d2c5', '#c4bcae', '#efe9dd'] as const; // TUNE: soft dusty ski
 
 /** Keyed `${effect}:${element}` (the four BIG squishies' signature moves today). */
 export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
-  // Count to Three: a leaf pile swirls up and grows while it counts ("1… 2…"
+  // The windup leaf move: a leaf pile swirls up and grows while it counts ("1… 2…"
   // stomps), then "3!" and the leaves burst outward as it lands.
   'windup:leaf': {
     windup: {
@@ -317,7 +317,7 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
       ],
     },
   },
-  // Full Name Shout: her hair sticks flare, and a shout ring rolls out round her.
+  // The flinch fire move: hair sticks flare, and a shout ring rolls out round her.
   'flinch:fire': {
     strike: {
       bursts: [
@@ -355,7 +355,7 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
     },
     flinch: { act: 'shiver' },
   },
-  // Ask Your Mother: a frosty shrug and "Backup!", then a fire flash beside
+  // The frost assist: a frosty shrug and "Backup!", then a fire flash beside
   // the stage as the friend's move comes in (the called move's own colours).
   'assist:frost': {
     call: {
@@ -412,7 +412,7 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
       ],
     },
   },
-  // Drift Spin: skid arcs round its post, a 2° lean of the camera, and spark
+  // The spark area move: skid arcs round its post, a 2° lean of the camera, and spark
   // trails at every post it hits.
   'all-foes:spark': {
     strike: {

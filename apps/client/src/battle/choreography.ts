@@ -93,7 +93,7 @@ export type ActKind =
   | 'victory'
   /** Two big stomps on the spot, a count each (#190: a BIG squishy counting to three). */
   | 'stomp'
-  /** A big shrug with a wobble (#190: "ask your mother"). */
+  /** A big shrug with a wobble (#190: a BIG squishy calling for backup). */
   | 'shrug'
   /** Scooted away (forfeit): turns tail and hops off (held). */
   | 'scoot'

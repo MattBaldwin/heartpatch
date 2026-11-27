@@ -457,13 +457,13 @@ export function bossCallout(
 export const SIGNATURE_STICKERS: Readonly<
   Record<string, readonly { readonly text: string; readonly at: number }[]>
 > = {
-  // Count to Three: it counts as it stomps, then lands on "3!".
+  // The windup leaf move: it counts as it stomps, then lands on "3!".
   'windup:leaf/windup': [
     { text: '1…', at: 0 },
     { text: '2…', at: 0.5 }, // TUNE
   ],
   'windup:leaf/strike': [{ text: '3!', at: 0 }],
-  // Ask Your Mother: the shrug, then the call.
+  // The frost assist: the shrug, then the call.
   'assist:frost/call': [{ text: 'Backup!', at: 0.15 }], // TUNE
 };
 
