@@ -1,7 +1,8 @@
-import { hexKey } from '@heartpatch/shared';
+import { hexKey, type MapView } from '@heartpatch/shared';
 import { el, messageOf } from '../ui/dom.js';
 import type { TileActions } from './map-screen.js';
 import type { BossStore } from './boss-store.js';
+import { eveCardBar, newerBar, type PatchBarState } from '../battle/patch-bar.js';
 import { BOSS_TEXT, cardModel, markerModel } from './boss-view.js';
 
 /*
@@ -62,12 +63,31 @@ export function bossTileInfo<T extends { guardians: string | null; gatherer: str
   return picker.claims(tile) ? { ...info, guardians: null, gatherer: null } : info;
 }
 
+/** The patch bar on the map view's Christmas Eve entry, or null before the bar opens (`opensAt` alone) or off the Eve. */
+export function barOfView(view: Pick<MapView, 'christmas'> | undefined): PatchBarState | null {
+  const eve = view?.christmas?.eve;
+  if (!eve || eve.state === undefined || eve.chipped === undefined || eve.goal === undefined)
+    return null;
+  return { goal: eve.goal, chipped: eve.chipped, state: eve.state };
+}
+
+/** The bar the Eve card shows: the newer of the map view's read and the live events'. */
+export function eveBarOf(
+  fromView: PatchBarState | null,
+  live: PatchBarState | null,
+): PatchBarState | null {
+  if (!fromView) return null;
+  return live && live.goal === fromView.goal ? newerBar(fromView, live) : fromView;
+}
+
 export function createBossPicker(options: BossPickerOptions): BossPicker {
   const { store } = options;
   const now = options.now ?? (() => new Date());
   let panel: { container: HTMLElement; q: number; r: number } | null = null;
   let problem: string | null = null;
   let working = false;
+  /** The Eve's bar as the map view last said (`MapView.christmas.eve`); live events may be newer. */
+  let viewBar: PatchBarState | null = null;
 
   const render = (): void => {
     if (!panel) return;
@@ -85,6 +105,8 @@ export function createBossPicker(options: BossPickerOptions): BossPicker {
     ];
     if (card.chip)
       children.push(el('span', { class: 'boss-chip', 'data-testid': 'boss-tries' }, card.chip));
+    const eve = eveBarOf(viewBar, store.eveBar);
+    if (eve) children.push(eveCardBar(eve));
     if (problem) children.push(el('p', { class: 'boss-card-body', role: 'status' }, problem));
     if (card.canFight) {
       const go = el(
@@ -122,7 +144,8 @@ export function createBossPicker(options: BossPickerOptions): BossPicker {
       const marker = markerModel(store.visit, now(), store.nameOf);
       return marker !== null && hexKey(marker) === hexKey(tile);
     },
-    show: (container, tile) => {
+    show: (container, tile, view) => {
+      viewBar = barOfView(view);
       if (!panel || panel.q !== tile.q || panel.r !== tile.r) problem = null;
       panel = { container, q: tile.q, r: tile.r };
       render();

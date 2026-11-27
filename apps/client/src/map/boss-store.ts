@@ -1,4 +1,5 @@
 import { GAME_EVENTS, type BossVisit, type WsEventMessage } from '@heartpatch/shared';
+import { barFromEvent, newerBar, type PatchBarState } from '../battle/patch-bar.js';
 
 /*
  * The mini-boss visit for the map on screen (#190, 190f): what
@@ -21,6 +22,11 @@ export interface BossStoreOptions {
 export interface BossStore {
   readonly mapId: string | null;
   readonly visit: BossVisit | null;
+  /**
+   * The Christmas Eve patch bar as live events last left it (#37 X4), or null
+   * before any came. The map view's own read is newer or older: `newerBar` picks.
+   */
+  readonly eveBar: PatchBarState | null;
   nameOf: (speciesId: string) => string | null;
   /** The map on screen (null when none): fetches its boss. */
   setMap: (mapId: string | null) => Promise<void>;
@@ -40,6 +46,7 @@ export function createBossStore(options: BossStoreOptions): BossStore {
   const listeners = new Set<() => void>();
   let mapId: string | null = null;
   let visit: BossVisit | null = null;
+  let eveBar: PatchBarState | null = null;
   let names: ReadonlyMap<string, string> = new Map();
   let ticket = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -69,6 +76,7 @@ export function createBossStore(options: BossStoreOptions): BossStore {
     if (id === null) {
       mapId = null;
       visit = null;
+      eveBar = null;
       names = new Map();
       arm();
       emit();
@@ -77,6 +85,7 @@ export function createBossStore(options: BossStoreOptions): BossStore {
     if (mapId !== id) {
       mapId = id;
       visit = null;
+      eveBar = null;
       names = new Map();
       emit();
     }
@@ -112,6 +121,9 @@ export function createBossStore(options: BossStoreOptions): BossStore {
     get visit() {
       return visit;
     },
+    get eveBar() {
+      return eveBar;
+    },
     nameOf: (speciesId) => names.get(speciesId) ?? null,
     setMap: async (id) => {
       await load(id);
@@ -120,6 +132,18 @@ export function createBossStore(options: BossStoreOptions): BossStore {
       if (mapId !== null) await load(mapId);
     },
     liveEvent: (event) => {
+      if (event.type === 'boss.chipped' || event.type === 'boss.fell') {
+        if (event.mapId !== mapId) return;
+        const parsed =
+          event.type === 'boss.chipped'
+            ? GAME_EVENTS['boss.chipped'].public.safeParse(event.data)
+            : GAME_EVENTS['boss.fell'].public.safeParse(event.data);
+        if (!parsed.success) return;
+        const next = barFromEvent(parsed.data);
+        eveBar = newerBar(eveBar, event.type === 'boss.fell' ? { ...next, state: 'fell' } : next);
+        emit();
+        return;
+      }
       if (event.type !== 'boss.appeared' || event.mapId !== mapId) return;
       if (!GAME_EVENTS['boss.appeared'].public.safeParse(event.data).success) return;
       const id = mapId;

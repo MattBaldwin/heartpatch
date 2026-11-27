@@ -55,6 +55,10 @@ export interface BossStubOptions {
    * the end): a 'super' or 'weak' hit pops that friend's callout over its chip.
    */
   readonly stompTiers?: readonly string[];
+  /** The visit's window id (the fight's day by default); a Christmas Eve spec names its own. */
+  readonly eventWindow?: string;
+  /** A Christmas Eve fight's patch bar (`PlayerBattle.boss.patchBar`, #37 X4); a weekly fight has none. */
+  readonly patchBar?: { goal: number; chipped: number; state?: 'open' | 'fell' | 'dozed' };
 }
 
 export type BossTrick = 'windup' | 'land' | 'assist';
@@ -144,7 +148,7 @@ function toBoss(b: Battle, options: BossStubOptions): Battle {
     },
     boss: {
       eventWindow: {
-        id: today,
+        id: options.eventWindow ?? today,
         endsAt: new Date(now + (options.endsInMs ?? 2 * DAY)).toISOString(),
       },
       triesLeftToday: options.triesLeftToday ?? 2,
@@ -153,6 +157,7 @@ function toBoss(b: Battle, options: BossStubOptions): Battle {
       befriend: 'none',
       baseName: STUB_BASE_NAME,
       warmth: options.warmth ?? 0,
+      ...(options.patchBar ? { patchBar: { state: 'open', ...options.patchBar } } : {}),
     },
   };
 }

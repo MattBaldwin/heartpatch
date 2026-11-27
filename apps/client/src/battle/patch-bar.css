@@ -1,0 +1,104 @@
+/* The Christmas Eve patch bar (#37 X4). One style for every screen: the line
+   is a full-width strip under the boss strip, `--patch-bar-h` tall (patch-bar.ts
+   sets the numbers on the HUD). Its box is the stage band's top edge: as tall
+   as the line while a bar shows, nothing while it doesn't. */
+
+.patch-bar {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + var(--boss-strip-top, 8px) + var(--boss-strip-h, 44px));
+  right: env(safe-area-inset-right);
+  left: env(safe-area-inset-left);
+  height: var(--patch-bar-h, 4px);
+  pointer-events: none;
+}
+
+.patch-bar[hidden] {
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+.patch-bar-track {
+  position: relative;
+  top: var(--patch-bar-gap, 2px);
+  height: var(--patch-bar-h, 4px);
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 45%);
+  box-shadow: 0 0 0 1px rgb(107 75 110 / 18%);
+}
+
+.patch-bar-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8fd3ff, #c9ecff);
+  transition: width var(--patch-bar-fill-ms, 450ms) ease-out;
+}
+
+.patch-bar-full .patch-bar-fill {
+  background: linear-gradient(90deg, #ffd45e, #ffb400);
+  box-shadow: 0 0 8px rgb(255 196 40 / 70%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .patch-bar-fill {
+    transition: none;
+  }
+}
+
+/* The "Chipped!" sticker on the result card (text 14 px at least). */
+.patch-chipped {
+  margin: 8px auto 0;
+  padding: 6px 14px;
+  border-radius: 14px;
+  background: #e8f6ff;
+  color: #1f4f7a;
+  text-align: center;
+}
+
+.patch-chipped-full {
+  background: #fff1c2;
+  color: #6b4a00;
+}
+
+.patch-chipped p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.patch-chipped .patch-chipped-title {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+/* The map card's patch bar: the same fill, thicker, with ❄ and the percentage. */
+.patch-card {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 200px;
+}
+
+.patch-card-head {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.patch-card-caption {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.patch-card-track {
+  top: 0;
+  height: 10px;
+  border-radius: 5px;
+}

@@ -2,7 +2,13 @@ import type { BossVisit } from '@heartpatch/shared';
 import { describe, expect, it, vi } from 'vitest';
 import type { TileActions } from './map-screen.js';
 import type { BossStore } from './boss-store.js';
-import { bossTileInfo, createBossPicker, exceptBossTile } from './boss-picker.js';
+import {
+  barOfView,
+  bossTileInfo,
+  createBossPicker,
+  eveBarOf,
+  exceptBossTile,
+} from './boss-picker.js';
 
 const NOW = new Date('2026-11-14T12:00:00');
 const visit: BossVisit = {
@@ -93,5 +99,30 @@ describe('bossTileInfo', () => {
       gatherer: null,
     });
     expect(bossTileInfo(picker, info, { q: 0, r: 0 })).toBe(info);
+  });
+});
+
+describe('the Christmas Eve card bar (#37 X4)', () => {
+  const viewWith = (eve: object | undefined) =>
+    ({ christmas: { presentWaiting: false, eve } }) as never;
+
+  it('reads the bar off MapView.christmas.eve once it is whole', () => {
+    expect(
+      barOfView(
+        viewWith({ opensAt: '2026-12-24T16:00:00Z', state: 'open', chipped: 80, goal: 200 }),
+      ),
+    ).toEqual({ goal: 200, chipped: 80, state: 'open' });
+  });
+  it('has no bar before it opens (opensAt alone), off the Eve or on an older server', () => {
+    expect(barOfView(viewWith({ opensAt: '2026-12-24T16:00:00Z' }))).toBeNull();
+    expect(barOfView(viewWith(undefined))).toBeNull();
+    expect(barOfView(undefined)).toBeNull();
+  });
+  it('shows the newer of the view and the live events, and nothing without a view bar', () => {
+    const fromView = { goal: 200, chipped: 80, state: 'open' } as const;
+    expect(eveBarOf(fromView, { goal: 200, chipped: 120, state: 'open' })?.chipped).toBe(120);
+    expect(eveBarOf(fromView, { goal: 200, chipped: 40, state: 'open' })?.chipped).toBe(80);
+    expect(eveBarOf(fromView, null)).toEqual(fromView);
+    expect(eveBarOf(null, { goal: 200, chipped: 120, state: 'open' })).toBeNull();
   });
 });
