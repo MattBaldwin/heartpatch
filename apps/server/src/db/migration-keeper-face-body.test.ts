@@ -2,10 +2,10 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { inArray, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
+import { ownDatabaseUrl } from '../../tests/own-database.js';
 import { createDbClient } from './client.js';
 import { migrationsFolder } from './migrator.js';
 import { keepers, users } from './schema.js';
-import { ownDatabaseUrl } from '../../tests/own-database.js';
 
 const url = ownDatabaseUrl();
 

@@ -2,11 +2,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { inArray, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
+import { ownDatabaseUrl } from '../../tests/own-database.js';
 import { ICU_LINK_TO_ZONE } from '../lib/time.js';
 import { createDbClient } from './client.js';
 import { migrationsFolder } from './migrator.js';
 import { maps, users } from './schema.js';
-import { ownDatabaseUrl } from '../../tests/own-database.js';
 
 const url = ownDatabaseUrl();
 

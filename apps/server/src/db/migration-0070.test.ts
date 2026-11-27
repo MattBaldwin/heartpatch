@@ -3,9 +3,9 @@ import { join } from 'node:path';
 import { PushKindSchema } from '@heartpatch/shared';
 import { sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
+import { ownDatabaseUrl } from '../../tests/own-database.js';
 import { createDbClient } from './client.js';
 import { migrationsFolder } from './migrator.js';
-import { ownDatabaseUrl } from '../../tests/own-database.js';
 
 const url = ownDatabaseUrl();
 

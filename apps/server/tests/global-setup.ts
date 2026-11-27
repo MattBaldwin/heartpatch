@@ -42,6 +42,14 @@ export default async function setup(
 
   const admin = createDbClient(baseUrl, { max: 1, quiet: true });
   const dropDatabase = async () => {
+    // Own databases (`tests/own-database.ts`) are named after this run, so any
+    // a crashed or aborted file left behind go too.
+    const own = await admin.db.execute<{ datname: string }>(
+      `select datname from pg_database where starts_with(datname, '${name}_own_')`,
+    );
+    for (const { datname } of own) {
+      await admin.db.execute(`drop database if exists "${datname}" with (force)`);
+    }
     await admin.db.execute(`drop database if exists "${template}" with (force)`);
     await admin.db.execute(`drop database if exists "${name}" with (force)`);
     await admin.close();

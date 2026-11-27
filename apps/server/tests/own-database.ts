@@ -15,14 +15,18 @@ import { createDbClient } from '../src/db/client.js';
  * DATABASE_URL is unset (the DB tests skip). Call it once at the top of the
  * file, in place of `inject('testDatabaseUrl')`: the URL is known at once,
  * for `it.skipIf(!url)`, and the database exists from `beforeAll` until
- * `afterAll` drops it.
+ * `afterAll` drops it. It registers those hooks itself, unlike
+ * `databaseBefore` (`tests/before-migration.ts`), because the URL must exist
+ * while tests are collected; use that one for a schema before a migration.
  */
 export function ownDatabaseUrl(): string | null {
   const sharedUrl = inject('testDatabaseUrl');
   const template = inject('testTemplateDatabase');
   if (!sharedUrl || !template) return null;
 
-  const name = `heartpatch_own_${String(process.pid)}_${randomUUID().slice(0, 8)}`;
+  // Named after the run (`<shared>_own_<random>`, under Postgres's 63-byte
+  // limit) so global teardown drops it even if this file never gets to.
+  const name = `${new URL(sharedUrl).pathname.slice(1)}_own_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
   const url = new URL(sharedUrl);
   url.pathname = `/${name}`;
   // `create database` only reads the template's catalog, so this connection

@@ -7,7 +7,8 @@ import {
   type PlayerBattle,
 } from '@heartpatch/shared';
 import { baseFormOf, type BossEventRules } from '@heartpatch/shared/server';
-import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { ownDatabaseUrl } from '../../../tests/own-database.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
 import { BOSS_RULES, STAND_IN_BOSS, bossHarness, type BossPlayer } from '../../../tests/boss.js';
 import { EVOLUTION_STEPS } from '../care/service.js';
@@ -15,7 +16,7 @@ import { createBattlesService } from '../battles/service.js';
 import { grantItems } from '../inventory/service.js';
 import { createBossService, createMinibossBattlePort } from './service.js';
 
-const url = inject('testDatabaseUrl');
+const url = ownDatabaseUrl();
 const errorOf = (res: { json: () => unknown }) =>
   (res.json() as { error: { message: string } }).error.message;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
