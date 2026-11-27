@@ -38,11 +38,6 @@ export const TEAM_ARENA = {
   keeperBeside: { x: 2.2, z: 1.2 }, // TUNE
   /** The boss's size against a usual fighter's (plan §10: "about 1.8×"). */
   bossScale: 2.2, // TUNE: drawn bigger than 1.8× because it stands further back; reads as ~1.8× on screen
-  /**
-   * The camera's tilt for a team fight: steeper than the 1-v-1's, so the
-   * boss's row stands clearly above the friends' on screen (arena A).
-   */
-  pitch: (21 * Math.PI) / 180, // TUNE
 } as const;
 
 export const FIGHTER = {
@@ -168,6 +163,8 @@ export interface BattleCameraConfig {
   faceMargin: number;
   faceFacingMin: number;
   narrowSheetFrom: number;
+  feetRoom: number;
+  fitFrom: number;
   hitPush: number;
   followPush: number;
   koPush: number;
@@ -180,12 +177,64 @@ export interface BattleCameraConfig {
   beatDecay: number;
 }
 
+/** The boss camera's beats (#190 PR 2): fractions of distance, world units, radians. */
+export interface BossCameraBeats {
+  readonly windupPush: number;
+  readonly windupRoll: number;
+  readonly landingPush: number;
+  readonly landingShake: number;
+  readonly koRelax: number;
+}
+
+/**
+ * The boss fight's camera (#190 PR 2, owner answer 3: one continuous low
+ * camera with push-ins and a thump, no cuts), `BATTLE_CAMERA.boss`: laid
+ * over the rest by `cameraFor` (camera-director.ts), only when a boss is in
+ * the fight. On a portrait phone the three friends' row sets the distance (it must fit
+ * across), so the low angle doesn't shrink anyone: the camera comes down to
+ * about the boss's chest height and the fight sits low in the tall band, the
+ * team's feet just over the handle and the boss towering behind them.
+ */
+const BOSS_PROFILE = {
+  /** Nearly level: a low hero shot looking up at the boss (the team fight was 21°). */
+  pitch: (4 * Math.PI) / 180, // TUNE
+  /**
+   * Where it looks: about a 1.8× boss's chest high, over the middle of the
+   * row across the view (the yaw), so both end friends get the same margin
+   * at the screen's edges (M0: the left one was clipped).
+   */
+  aim: { x: -0.33, y: 4, z: 0.33 }, // TUNE
+  /** The aim (the boss's chest) on screen: low in the tall band. */
+  feetY: 0.62, // TUNE: the team's feet a little over 0.11 above a notched iPhone's handle (was 0.28)
+  /** Room under the aim on a short band (the picker risen): the team's eyes stay above the sheet. */
+  feetRoom: 0.12, // TUNE: 0.2 sent a tall team's camera to the 70 cap with the picker up
+  /** Heights count from the aim (the boss's chest, `aim.y`), not the ground: the camera looks from there. */
+  fitFrom: 4, // TUNE: = aim.y
+  /** A 1.8× boss's box (the 1-v-1's 3.6 × 1.8); the row's width binds first on a phone. */
+  fitHeight: 6.5, // TUNE
+  /** The picker's lean towards the friend picking (the team fight's is 0.35). */
+  focusShift: 0.12, // TUNE: the picker's lean keeps every end friend on screen (worst edge 0.958; 0.15 reached 0.975, 0.35 clipped up to 17%)
+  beats: {
+    /** A windup: a slow push-in across the step, with a little lean. */
+    windupPush: 0.18, // TUNE
+    windupRoll: (1 * Math.PI) / 180, // TUNE
+    /** The windup's move landing: twice the hit push (`hitPush`), and a thump. */
+    landingPush: 0.2, // TUNE
+    landingShake: 0.2, // TUNE
+    /** The boss tuckered out: `koPush`, then a slow pull-back (per second, `beatDecay` is 2.4). */
+    koRelax: 0.8, // TUNE
+  } satisfies BossCameraBeats,
+} as const;
+
+/** The battle camera, with the boss fight's profile on it. */
+type BattleCamera = Readonly<BattleCameraConfig> & { readonly boss: typeof BOSS_PROFILE };
+
 /**
  * Lantern Hour's camera (owner decision 2026-10-05): low, swung a little to
  * the player's side, framing the fight into the safe region between the
  * HUD's pills and its bottom sheet. Angles in radians, distances in world units.
  */
-export const BATTLE_CAMERA: Readonly<BattleCameraConfig> = {
+export const BATTLE_CAMERA: BattleCamera = {
   /** Tilt down from the horizon. */
   pitch: (11 * Math.PI) / 180, // TUNE
   /** Swing around the fight (0 looks along +z). */
@@ -242,6 +291,10 @@ export const BATTLE_CAMERA: Readonly<BattleCameraConfig> = {
   faceFacingMin: 0.3, // TUNE
   /** From this window width (CSS px) the sheet is a centred card (battle.css), so the screen's bottom shows. */
   narrowSheetFrom: 900,
+  /** The aim lands at least this far (a fraction of the screen height) above the band's bottom. */
+  feetRoom: 0.08, // TUNE
+  /** Fit points' heights count from this height: the ground (the aim's at the fighters' feet). */
+  fitFrom: 0,
   /** Camera beats (B): push-in on a hit (fraction of distance), shake (world units), dutch roll (radians). */
   hitPush: 0.1, // TUNE
   followPush: 0.04, // TUNE
@@ -257,6 +310,8 @@ export const BATTLE_CAMERA: Readonly<BattleCameraConfig> = {
   shakeDecay: 9, // TUNE
   /** How fast a push-in and a beat decay back, per second. */
   beatDecay: 2.4, // TUNE
+  /** The boss fight's profile (#190 PR 2): only with a boss, see above. */
+  boss: BOSS_PROFILE,
 };
 
 /**
