@@ -17,7 +17,7 @@ import path from 'node:path';
 const OUT = process.env.OUT ?? path.resolve('.music-capture');
 const BASE = process.env.BASE ?? 'http://localhost:5173';
 const SECONDS = process.env.SECONDS ? Number(process.env.SECONDS) : null;
-const TRACKS = (process.env.TRACKS ?? 'day,night,halloween,wonder').split(',');
+const TRACKS = (process.env.TRACKS ?? 'day,night,halloween,christmas,wonder').split(',');
 
 /** 16-bit mono PCM WAV. */
 function wav(samples, rate) {

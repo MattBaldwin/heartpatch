@@ -1,12 +1,12 @@
 // The music loops (#25; `wonder` is the opening cinematic's, #46), written as notes rather than recordings: the
 // engine renders each one to a buffer the first time it plays, with real CC0
 // instrument notes (#664, `music-samples.ts`) or the synth until they're in.
-// Day is a sunny marimba bounce, night a slow lavender music box, and
-// Halloween a playful minor-key plink on tiptoes with a breathy flute (style
-// guide §1: lightly spooky, never scary), and Christmas (#37) a cozy music
-// box over a harp with sleigh bells jingling the second time round. Each loop plays its tune twice, the
-// second time dressed differently (a new lead, fuller strings, a shaker), so
-// it doesn't feel like a repeat. Pure data and arithmetic, so it is unit-tested.
+// Day is a sunny marimba bounce, night a slow lavender music box, Halloween
+// a playful minor-key plink on tiptoes with a breathy flute (style guide §1:
+// lightly spooky, never scary), and Christmas (#37) a cozy music box over a
+// harp, with sleigh bells jingling the second time round. Each loop plays its
+// tune twice, the second time dressed differently (a new lead, fuller
+// strings, a shaker), so it doesn't feel like a repeat. Pure data and arithmetic, so it is unit-tested.
 
 export type TrackId = 'day' | 'night' | 'halloween' | 'christmas' | 'wonder';
 

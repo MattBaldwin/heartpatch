@@ -28,7 +28,7 @@ export const DEFAULT_VOLUMES = {
 } as const;
 
 export const MUSIC = {
-  /** Cross-fade between day, night and Halloween loops. */
+  /** Cross-fade between the day, night and season loops. */
   crossFadeS: 2.5, // TUNE
   /** Music dips under key moments (his visit, a new friend). */
   duckTo: 0.25, // TUNE: fraction of the music level
@@ -39,7 +39,7 @@ export const MUSIC = {
   tailS: 3,
   /**
    * Every loop is levelled to this loudness (RMS), then pulled down if a peak
-   * would pass `peak`, so day, night and Halloween sit at one level (#664).
+   * would pass `peak`, so day, night, Halloween and Christmas sit at one level (#664).
    */
   rms: 0.13, // TUNE: today's synth loops measure 0.10-0.17
   peak: 0.85, // TUNE

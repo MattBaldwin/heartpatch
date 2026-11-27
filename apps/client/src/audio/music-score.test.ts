@@ -22,12 +22,14 @@ describe('music score', () => {
     expect(pickTrack({ night: true, halloween: true, christmas: true })).toBe('night');
   });
 
-  it('sits with the other loops in loudness: as busy, and no spikier (#37)', () => {
-    // The engine levels every loop to MUSIC.rms, unless a peak would pass
-    // MUSIC.peak first; a sparse, spiky loop would then come out quieter.
-    // So the new loop's note energy per beat (each note's velocity times its
-    // voice's mix gain, squared), and its loudest beat against that, must sit
-    // inside the range day, night and Halloween already span.
+  it('keeps Christmas as busy and as even as the other loops: a tripwire, not a loudness meter (#37)', () => {
+    // The engine levels every loop to MUSIC.rms unless a peak would pass
+    // MUSIC.peak first. Node has no Web Audio, so this can't hear the
+    // render: it only checks that the score's note energy per beat (velocity
+    // times voice gain, squared) and its busiest beat against that stay in
+    // the range day, night and Halloween already span, so a big edit to the
+    // score gets noticed. Real loudness is measured in Chromium through
+    // /sounds.html (`window.__heartpatchSounds.capture`, full loop): see #883.
     const level = (id: TrackId) => {
       const score = SCORES[id];
       const beats = score.bars * score.beatsPerBar;
