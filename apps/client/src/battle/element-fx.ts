@@ -50,6 +50,8 @@ export type ParticleMotion =
   | 'pop'
   /** A ground ring that grows and thins. */
   | 'ring'
+  /** A ring standing up to face the camera that grows and thins (a shout), so a low camera sees a hoop, not a bar. */
+  | 'hoop'
   /** A speed line: a fixed radial spot in the camera plane, streaking outwards. */
   | 'speedline'
   /** A sky ray: a long wedge from the hit, behind the fight, in the camera plane. */
@@ -367,14 +369,14 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           pattern: 'rings',
           shape: 'ring',
           colors: 'core',
-          motion: 'ring',
-          count: 3, // TUNE: shout rings
+          motion: 'hoop',
+          count: 3, // TUNE: shout hoops
           at: 'head',
           offset: { side: 0, up: 0.5, toward: 0 }, // TUNE: hoops spread out above the head (its feet are behind the team)
           speed: 0,
           up: 0,
           gravity: 0,
-          size: 1.2,
+          size: 0.5,
           life: 640,
           delay: 0.1,
           spread: 0.6, // further apart, so they read as rings one after another
@@ -396,6 +398,7 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           motion: 'ballistic',
           count: 14, // TUNE: the frost shiver, off its shoulders
           at: 'shoulders',
+          offset: { side: 0, up: 0.14, toward: 0 }, // TUNE: up at the chin line, where the camera sees it
           flank: true, // off its two shoulders, sideways, clear of the face
           speed: 0.5,
           up: 0.3,
@@ -420,7 +423,7 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           speed: 0,
           up: 0,
           gravity: 0,
-          size: 0.35, // TUNE: a bright core, small
+          size: 0.2, // TUNE: a bright core, small
           life: 300,
           delay: 0.05,
         },
@@ -438,7 +441,6 @@ export const SIGNATURE_FX: Readonly<Record<string, SignatureMoment>> = {
           size: 0.2,
           life: 650,
           delay: 0.08,
-          halos: true,
         },
       ],
     },
@@ -1289,6 +1291,14 @@ export function particleAt(p: Particle, now: number, out: ParticleState): boolea
       out.sy = Math.max(0.05, 1 - u) * 0.4;
       yaw = 0;
       tumble = 0;
+      break;
+    }
+    case 'hoop': {
+      const e = 1 - (1 - u) ** 2;
+      scale = p.size * (0.3 + 2.2 * e);
+      out.sy = Math.max(0.05, 1 - u) * 0.4;
+      yaw = 0;
+      tumble = Math.PI / 2; // its axis turns from up to along the view: a standing hoop
       break;
     }
     case 'speedline': {

@@ -552,7 +552,7 @@ describe('emit: signature bursts (#190 PR 5)', () => {
     expect(turned.every((p) => p.origin.x >= base.at.x - 0.01)).toBe(true);
     const rings = emit({ ...base, element: 'fire', burst: burstOf('flinch:fire', 'strike', 1) });
     expect(rings).toHaveLength(3);
-    expect(rings.every((p) => p.motion === 'ring' && p.origin.y > base.at.y)).toBe(true);
+    expect(rings.every((p) => p.motion === 'hoop' && p.origin.y > base.at.y)).toBe(true);
   });
 
   it('takes the move’s own colours for the backup’s flash (fire, in a frost fight)', () => {
@@ -605,12 +605,12 @@ describe('emit: signature bursts (#190 PR 5)', () => {
       }
     });
 
-    it('throws the frost shards off both shoulders, under the chin and clear of the face column', () => {
+    it('throws the frost shards off both shoulders, at the chin line and clear of the face column', () => {
       const out = emit({ ...real, burst: frost });
       const sides = new Set(out.map((p) => Math.sign(p.origin.x)));
       expect(sides).toEqual(new Set([1, -1]));
       for (const p of out) {
-        expect(p.origin.y).toBeLessThan(real.face.low);
+        expect(p.origin.y).toBeLessThan(real.face.high);
         expect(Math.abs(p.origin.x)).toBeGreaterThan(real.radius);
         // Moving away from the middle, never across it.
         expect(Math.sign(p.vx)).toBe(Math.sign(p.origin.x));
