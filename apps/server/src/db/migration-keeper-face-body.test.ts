@@ -35,7 +35,7 @@ describe('the keeper face and body migration (#372)', () => {
     try {
       const { db } = client;
       // The table as it was before: in a transaction that's rolled back, so
-      // the migrated schema the other tests use is untouched.
+      // this file's own database keeps the migrated schema.
       await db
         .transaction(async (tx) => {
           await tx.execute(sql`ALTER TABLE "keepers" DROP COLUMN "face", DROP COLUMN "body"`);
