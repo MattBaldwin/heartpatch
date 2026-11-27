@@ -221,13 +221,15 @@ test.describe('a mini-boss fight (#190)', () => {
     await expect.poll(() => stub.rounds.length).toBe(3);
   });
 
-  test('each BIG squishy signature plays its moment: counts, a shout, backup and a drift (#190 PR 5)', async ({
+  test('each BIG squishy signature plays its moment: counts, a shout and backup (#190 PR 5)', async ({
     browser,
   }) => {
+    test.setTimeout(240_000); // four rounds of software-GL playback
     const page = await newPlayer(browser, uniqueName('stomp'));
     await bossFight(page, {
-      openRounds: 5,
-      tricks: ['windup', 'land', 'shout', 'assist', 'drift'],
+      // The drift's skid has no sticker: signature-fx.test.ts and the captures cover it.
+      openRounds: 4,
+      tricks: ['windup', 'land', 'shout', 'assist'],
       signatures: true,
     });
     // Every sticker and caption the screen shows, and the most particles alive at once.
@@ -256,7 +258,7 @@ test.describe('a mini-boss fight (#190)', () => {
       requestAnimationFrame(peak);
     });
     const seen = () => page.evaluate(() => (window as unknown as { hpSeen: string[] }).hpSeen);
-    for (let round = 2; round <= 6; round++) {
+    for (let round = 2; round <= 5; round++) {
       await playRound(page);
       await expect(page.getByTestId('boss-round')).toHaveText(`Round ${String(round)}`, {
         timeout: 30_000,
