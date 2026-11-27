@@ -2677,3 +2677,21 @@ Continues "Supervisor 49 (2026-11-26/27)". Merged: #877, #881, #883, #884, #885,
 - Supervisor 49 ran to 818k context and $300 before handing off, against the 400k rule. Hand off at ~350k.
 - `AskUserQuestion` worked reliably this afternoon and the owner prefers it for decisions; `SendUserFile` cards do not reach the owner, so frames go on an artifact page.
 - A coordinator's "regression" read of a CI cancel was wrong twice today (#877, #879); a lane's evidence that `main` failed the same way settled it. Check `main`'s own run before blaming a PR.
+
+## Supervisor 50 (2026-11-27 evening)
+
+Supervisor 50 (`session_01RAEPnH92Kgoevthcjkk5S9`) took over from supervisor 49 at 19:10 UTC (§8 handoff; supervisor 49 retired and archived). Merged: #891 (#37 1a first snow) → `6a1ee08`, #893 (supervisor 49 handoff docs) → `8027dad`, #890 (#190 PR 3 boss entrance) → `2d01b48`. Filed: #895.
+
+**Owner decisions (2026-11-27, one at a time, clickable)**
+1. **Advent sheet (lane 1d):** the M0 advent sheet is approved **with more charm**: locked days get a small wrapped-present look instead of a plain grey lock. The M0 layout stands (5×5 grid, opened / today / catch-up / missed / locked, the "might hold" row, today's and catch-up buttons); copy follows STYLE_GUIDE and data comes from the server.
+
+**Verdict decisions**
+- #890: the picker stays drawn but inert under the entrance's layer, so the sheet and stage band never move and the entrance ends exactly on the rest framing. The name card's spot order is the sky over the boss's head, then the face-to-team gap, then the band's top, then its bottom; it takes the first spot clear of both. Follow-ups for boss PR 5/6: make the picker `inert`, wait past `clickGraceMs` in the skip e2e, measure the card once, and say "hear" not "feel" in the changes entry (the buzz is Android-only).
+- #896 (lane 1d, in review): a server-only export must not share a name with a client-visible schema field, because the bundle word check (CLAUDE.md rule 6) would trip. The fix is to rename the server symbol (`presentContents` → `wrappedPresentContents`), never to allowlist the word. Opening a wrapped present from the bag (`presents/open`) is split into its own follow-up lane.
+- #894 (X1, in review): the ★ Fable second review found that converting an already-pinned weekly row into the Christmas Eve row must not delete `boss_encounters`, because that drops `last_action_at` and forfeits a fight in progress. Reset the rows in the same transaction instead.
+
+**CI rulings**
+- `computer-mates/intents.test.ts` "guards go on border tiles…" Postgres deadlock (40P01) in the server suite = **#895** (same family as #887 and #892; DDL or TRUNCATE racing another test file).
+
+**Ops note for the owner (before Dec 24)**
+- The Christmas Eve visit only runs while `HP_MINI_BOSSES` is on, and production ships with it off. It must be on for all patches by December 24.
