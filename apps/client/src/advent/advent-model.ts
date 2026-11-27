@@ -27,7 +27,8 @@ export const ADVENT_TEXT = {
     opened: 'Opened',
     today: 'Today',
     'catch-up': 'Catch up',
-    locked: 'Wrapped',
+    missed: 'Missed',
+    locked: 'Wrapped · not yet',
   },
   mightHold: "Today's present might hold:",
   mightHoldDay: (day: number) => `Day ${String(day)} might hold:`,
@@ -42,9 +43,10 @@ export const ADVENT_TEXT = {
   revealAgain: (day: number) => `Day ${String(day)} held…`,
   yay: 'Yay!',
   back: 'Back to the tree',
-  tapLocked: "Not yet! That one's still wrapped up tight 🎁",
-  tapMissedUsed: "You opened a missed one today. There's another tomorrow!",
-  tapMissedOver: 'That one got away. See you next December ❄️',
+  // One line each: the note's slot keeps the sheet the same height (14 px, about 40 characters).
+  tapLocked: 'Not yet! Still wrapped up tight 🎁',
+  tapMissedUsed: 'One missed day a day. More tomorrow! ❄️',
+  tapMissedOver: "That one's gone. See you next December ❄️",
   bag: 'Safe in your bag!',
 } as const;
 

@@ -152,8 +152,11 @@ test('opens today, then the one I missed, and shows what came out (#37 1d)', asy
   expect(findAvoidedWords((await sheet.textContent()) ?? '')).toEqual([]);
 
   // A still-wrapped day says so, kindly, without asking the server.
+  // The note has its own one-line slot: the sheet keeps its size and its place.
+  const before = await sheet.boundingBox();
   await sheet.getByTestId('advent-day-9').tap();
-  await expect(sheet.getByTestId('advent-note')).toContainText('still wrapped up tight');
+  await expect(sheet.getByTestId('advent-note')).toContainText('wrapped up tight');
+  expect(await sheet.boundingBox()).toEqual(before);
   expect(server.claimed).toEqual([]);
 
   // Open today's: the day tapped is what's sent, and the reveal shows what came out.
@@ -186,7 +189,7 @@ test('opens today, then the one I missed, and shows what came out (#37 1d)', asy
   await expect(sheet.getByTestId('advent-open-missed')).toHaveCount(0);
   await expect(sheet.getByTestId('advent-day-2')).toContainText('Missed');
   await sheet.getByTestId('advent-day-2').tap();
-  await expect(sheet.getByTestId('advent-note')).toContainText('another tomorrow');
+  await expect(sheet.getByTestId('advent-note')).toContainText('More tomorrow');
   await expect(sheet.getByTestId('advent-used')).toContainText('Come back tomorrow');
   await sheet.getByTestId('advent-close').tap();
   await expect(sheet).toBeHidden();

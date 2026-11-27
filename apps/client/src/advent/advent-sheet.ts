@@ -312,7 +312,7 @@ export function createAdvent(options: AdventOptions): Advent {
     const legend = el(
       'ul',
       { class: 'advent-legend' },
-      ...(['opened', 'today', 'catch-up', 'locked'] as const).map((state) =>
+      ...(['opened', 'today', 'catch-up', 'missed', 'locked'] as const).map((state) =>
         el(
           'li',
           { class: `advent-legend-item advent-legend-${state}` },
