@@ -44,7 +44,21 @@ interface BattleDebug {
 
 const battleState = (page: Page) => hook<BattleDebug>(page, 'battle');
 
-async function bossFight(page: Page, options: BossStubOptions & { entrance?: 'keep' } = {}) {
+/** Moves the held battle clock on (`BattleScreen.dev`, `?battle-clock=manual`), as rare-reveal.spec.ts. */
+async function advance(page: Page, ms: number): Promise<void> {
+  await page.evaluate((step) => {
+    const hook = (window as { __heartpatch?: { battleDev?: () => unknown } }).__heartpatch;
+    const dev = hook?.battleDev?.() as { advance: (ms: number) => void } | null | undefined;
+    if (!dev) throw new Error('no held battle clock: open the page with ?battle-clock=manual');
+    dev.advance(step);
+  }, ms);
+}
+
+async function bossFight(
+  page: Page,
+  options: BossStubOptions & { entrance?: 'keep'; clock?: 'manual' } = {},
+) {
+  if (options.clock === 'manual') await page.goto('/?battle-clock=manual');
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByLabel('Patch name').fill('Stomp Patch');
@@ -627,87 +641,52 @@ test.describe('a mini-boss fight (#190)', () => {
     expect(room!.gap, JSON.stringify(room)).toBeGreaterThanOrEqual(4);
   });
 
-  test('the BIG squishy arrives: no skip before the stomp, a tap after it skips (#190 PR 3)', async ({
+  test('the BIG squishy arrives: a tap waits for the stomp, then skips without picking (#190 PR 3)', async ({
     browser,
   }) => {
     const page = await newPlayer(browser, uniqueName('stomp'));
-    await bossFight(page, { entrance: 'keep' });
-    // Read in the page in one go: the whole entrance is only 2.6 s.
-    const seen = await page.evaluate(
-      () =>
-        new Promise<{
-          early: boolean[];
-          card: string;
-          hint: string;
-          clear: { face: boolean; team: boolean; band: boolean } | null;
-          skipped: boolean;
-        }>((resolve) => {
-          type Box = { top: number; bottom: number };
-          type Hook = {
-            __heartpatch: {
-              battle: () => {
-                entrance: { at: number; skippable: boolean } | null;
-                scene: { framing: { band: Box; face: Box | null; team: Box[] } | null } | null;
-              };
-            };
-          };
-          const early: boolean[] = [];
-          const read = () => (window as unknown as Hook).__heartpatch.battle();
-          const look = (): void => {
-            const b = read();
-            const e = b.entrance;
-            const layer = document.querySelector<HTMLElement>('.boss-entrance');
-            const card = layer?.querySelector<HTMLElement>('.boss-entrance-card');
-            if (!e || !layer || !card) {
-              requestAnimationFrame(look);
-              return;
-            }
-            if (!e.skippable) {
-              // Before the stomp lands a tap does nothing.
-              layer.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-              layer.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
-              early.push(read().entrance !== null && e.at < 600);
-              requestAnimationFrame(look);
-              return;
-            }
-            // Wait for the card to be fully in, then check it against the boss's face and the team.
-            if (Number(getComputedStyle(card).opacity) < 0.99) {
-              requestAnimationFrame(look);
-              return;
-            }
-            const h = window.innerHeight;
-            const r = card.getBoundingClientRect();
-            const f = b.scene?.framing ?? null;
-            const off = (box: Box) => r.bottom <= box.top * h || r.top >= box.bottom * h;
-            const clear = f
-              ? {
-                  face: f.face ? off(f.face) : true,
-                  team: f.team.every(off),
-                  band: r.top >= f.band.top * h && r.bottom <= f.band.bottom * h,
-                }
-              : null;
-            const info = {
-              early,
-              card: card.textContent,
-              hint: layer.querySelector('.boss-entrance-skip')?.textContent ?? '',
-              clear,
-            };
-            layer.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-            layer.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
-            resolve({ ...info, skipped: read().entrance === null });
-          };
-          look();
-        }),
-    );
-    // Any pre-stomp frame the page saw stayed unskippable (a slow runner may see none).
-    expect(seen.early.every(Boolean)).toBe(true);
-    expect(seen.card).toContain('A BIG squishy!');
-    expect(seen.hint).toBe('Tap to skip');
-    expect(seen.clear).toEqual({ face: true, team: true, band: true });
-    expect(seen.skipped).toBe(true);
-    await expect(page.locator('.boss-entrance')).toHaveCount(0);
-    // The picker comes up for the first squishy.
-    await expect.poll(async () => (await battleState(page))?.boss?.picking).toBe(0);
+    // The battle clock held (`?battle-clock=manual`), so the 2.6 s entrance waits for each step.
+    await bossFight(page, { entrance: 'keep', clock: 'manual' });
+    const layer = page.locator('.boss-entrance');
+    await expect(layer).toBeVisible();
+    await expect.poll(async () => (await battleState(page))?.entrance?.at ?? null).toBe(0);
+    // The picker is drawn under the layer (the band never moves); a real tap on a
+    // move before the stomp lands does nothing at all.
+    const move = page.getByTestId('boss-picker').getByRole('button').first();
+    await realTap(move);
+    expect((await battleState(page))?.entrance?.skippable).toBe(false);
+    await expect(layer).toBeVisible();
+    expect((await battleState(page))?.boss?.picks).toEqual({});
+    // Past the stomp: the skip pill is up, the card in, clear of the boss face and the team.
+    await advance(page, 1200);
+    expect((await battleState(page))?.entrance?.skippable).toBe(true);
+    await expect(page.locator('.boss-entrance-skip')).toHaveText('Tap to skip');
+    const card = page.locator('.boss-entrance-card');
+    await expect(card).toContainText('A BIG squishy!');
+    await expect(card).toHaveCSS('opacity', '1');
+    const box = await card.boundingBox();
+    const framing = (await battleState(page))?.scene?.framing;
+    const h = page.viewportSize()?.height ?? 1;
+    expect(box && framing).toBeTruthy();
+    if (box && framing) {
+      const off = (f: { top: number; bottom: number }) =>
+        box.y + box.height <= f.top * h || box.y >= f.bottom * h;
+      expect(framing.face ? off(framing.face) : true).toBe(true);
+      expect(framing.team.every(off)).toBe(true);
+      expect(box.y).toBeGreaterThanOrEqual(framing.band.top * h);
+      expect(box.y + box.height).toBeLessThanOrEqual(framing.band.bottom * h);
+    }
+    // A finger tap on the same move skips: the entrance goes, and the click the
+    // browser sends after the touch (at the move, now uncovered) is swallowed
+    // rather than picking it. A touch, not a mouse: that click is what iOS sends.
+    const at = await move.boundingBox();
+    expect(at).toBeTruthy();
+    if (at) await page.touchscreen.tap(at.x + at.width / 2, at.y + at.height / 2);
+    await expect.poll(async () => (await battleState(page))?.entrance ?? null).toBeNull();
+    await expect(layer).toHaveCount(0);
+    const after = await battleState(page);
+    expect(after?.boss?.picking).toBe(0);
+    expect(after?.boss?.picks).toEqual({});
   });
 
   test('a duplicate never joins: no ask, no charms', async ({ browser }) => {

@@ -1376,3 +1376,57 @@ describe('the boss beats in the camera (#190 PR 2)', () => {
     expect(director.moving(16)).toBe(false);
   });
 });
+
+describe("the boss entrance's stomp keeps the picker's lean (#190 PR 3)", () => {
+  const beats = BATTLE_CAMERA.boss.beats;
+  const lean = { x: HOMES.mine.x + 2, z: HOMES.mine.z };
+  const frames = (director: CameraDirector, from: number, to: number) => {
+    let shot = director.shot(from, 0.46, safe, fit);
+    for (let now = from; now <= to; now += 1000 / 60) shot = director.shot(now, 0.46, safe, fit);
+    return shot;
+  };
+  /** A director leaned to the picked squishy and settled there. */
+  const leaned = (reduced: boolean) => {
+    const director = new CameraDirector(homes, reduced);
+    director.lean(lean);
+    frames(director, 0, 2000);
+    return director;
+  };
+
+  it('pushes in and shakes, then relaxes back with the lean still on', () => {
+    const still = leaned(false);
+    const stomped = leaned(false);
+    const before = frames(stomped, 2000, 2000);
+    stomped.thump(beats.landingPush, beats.landingShake, 2016);
+    // The closest the push gets: in from the leaned shot.
+    let closest = before.distance;
+    for (let now = 2016; now <= 2600; now += 1000 / 60) {
+      closest = Math.min(closest, stomped.shot(now, 0.46, safe, fit).distance);
+    }
+    expect(closest).toBeLessThan(before.distance * 0.995);
+    expect(stomped.moving(2100)).toBe(true);
+    const after = frames(stomped, 2600, 6000);
+    const held = frames(still, 2000, 6000);
+    // Back to the same leaned shot: the lean survived the stomp.
+    expect(after.target.x).toBeCloseTo(held.target.x, 3);
+    expect(after.target.z).toBeCloseTo(held.target.z, 3);
+    expect(after.distance).toBeCloseTo(held.distance, 2);
+    // A cue (the round-1 bug) would have pulled the framing back to the middle.
+    const cued = leaned(false);
+    cued.cue({ ...cue, focus: null, push: beats.landingPush, shake: beats.landingShake }, 2016);
+    expect(Math.abs(frames(cued, 2016, 6000).target.x - held.target.x)).toBeGreaterThan(1e-3);
+  });
+
+  it('does nothing under reduced motion: no push, no shake', () => {
+    const still = leaned(true);
+    const stomped = leaned(true);
+    stomped.thump(beats.landingPush, beats.landingShake, 2016);
+    for (const t of [2032, 2100, 2400]) {
+      const a = frames(stomped, t, t);
+      const b = frames(still, t, t);
+      expect(a.position).toEqual(b.position);
+      expect(a.target).toEqual(b.target);
+    }
+    expect(stomped.moving(2100)).toBe(false);
+  });
+});
