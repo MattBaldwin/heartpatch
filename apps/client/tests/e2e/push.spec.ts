@@ -85,6 +85,9 @@ test.afterEach(async ({ browser }, testInfo) => {
 
 const HANDLES = ['adventure', 'heartpatch'] as const;
 
+/** Sprout's one-time tips (sprout-tips.ts `SPROUT_TIPS`). */
+const SPROUT_TIP_IDS = ['trading-post', 'hollowed-village', 'day-three', 'first-evolution'];
+
 /**
  * The card stays under the top row (the name pill and the corner buttons) on
  * an iPhone 15, an SE and an SE on its side, with its buttons on screen
@@ -142,14 +145,18 @@ test('the offer shows once in a Home Screen app, and Yes please turns nudges on'
   test.setTimeout(180_000);
   const page = await newPlayer(browser, uniqueName('nudge'));
   await stubPush(page);
-  // A new patch shows Sprout's one-time "That's a trading post!" for 5 s (sprout-tips.ts), and
-  // the card doesn't wait for it, so "Nudges on!" waited its turn behind it, up to 6 s with the
-  // line's 1 s look: past the 5 s default when the tip came up just before the card (#871). Mark
-  // it said already, as hollow.spec.ts does a lore page, so the line has the top to itself.
+  // A new patch shows Sprout's one-time tips (sprout-tips.ts `SPROUT_TIPS`: "That's a trading
+  // post!", then "Something's wrong with that village…"), each for 5 s, and the card doesn't wait
+  // for them, so "Nudges on!" waited its turn behind one, up to 6 s with the line's 1 s look: past
+  // the 5 s default (#871). Mark them said, as hollow.spec.ts does a lore page, so the line has
+  // the top to itself.
   const me = (await api<{ user: { id: string } }>(page, 'GET', '/me')).body.user.id;
-  await page.evaluate((key) => {
-    localStorage.setItem(key, '1');
-  }, `heartpatch.sprout-tip.trading-post.${me}`);
+  await page.evaluate(
+    (keys) => {
+      for (const key of keys) localStorage.setItem(key, '1');
+    },
+    SPROUT_TIP_IDS.map((tip) => `heartpatch.sprout-tip.${tip}.${me}`),
+  );
   await page.reload();
   await makePatch(page);
 
