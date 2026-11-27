@@ -2642,7 +2642,7 @@ Continues the Supervisor 49 section above (same session, `session_01RAEPnFW2pNAR
 - **#873:** render-check FAIL, then PASS on re-captures (callout above the caption).
 - **#877 (boss camera):** render-check FAIL on `8b41f85` (the iPad picker card hid the team), then PASS on `3a78fae` (feet cap at the band bottom via `teamFeet`).
 - Beat push-ins cutting the end friends 10–25 % on iPhone are **accepted as designed**.
-- Captures live on `captures-190-boss-hud` (`pr2-8b41f85/`, `pr2b-3a78fae/`) and `captures-37-christmas` (`m0-christmas/`, at `21a7b81`). M0 render-check notes for the Christmas client PRs: night snow must be lifted and the off-map ground snowed; lights must be real emissive bulbs spread across the patch; the tree must be a 3D toy-style building that does not cover labels; the advent sheet needs distinct "today" and "catch-up" looks and more charm on locked days.
+- Captures live on `captures-190-boss-hud` (`pr2-8b41f85/`, `pr2b-3a78fae/`) and `captures-37-christmas` (`m0-christmas/`, at `21a7b81`). M0 render-check notes for the Christmas client PRs: night snow must be lifted and the off-map ground snowed; lights must be real emissive bulbs spread across the patch; the tree sprite must not cover labels (it covered the Lantern Post label in M0); the advent sheet needs distinct "today" and "catch-up" looks and more charm on locked days.
 
 **Process**
 - Lanes over budget get finish-only orders and handoff comments (the #876 lane handed off at the budget line). A narrow round 5 was allowed on #877 after the render-check reopened it.
