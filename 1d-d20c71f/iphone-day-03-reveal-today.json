@@ -1,0 +1,42 @@
+{
+ "days": [
+  "catch-up",
+  "catch-up",
+  "catch-up",
+  "catch-up",
+  "opened",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked"
+ ],
+ "sheet": {
+  "top": 382,
+  "bottom": 806,
+  "left": 12,
+  "right": 381
+ },
+ "inner": {
+  "w": 393,
+  "h": 852
+ },
+ "smallText": [],
+ "minTarget": 44,
+ "targets": 2
+}
