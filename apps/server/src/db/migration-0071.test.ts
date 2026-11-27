@@ -107,9 +107,9 @@ describe('migration 0071 (Christmas Eve contracts)', () => {
 
             const bar = (windowId: string) =>
               tx.execute(sql`insert into boss_bars
-                (map_id, window_id, goal, chipped, head_start, head_start_lights, head_start_star,
+                (id, map_id, window_id, goal, chipped, head_start, head_start_lights, head_start_star,
                   opens_at, closes_at)
-                values (${map!.id}, ${windowId}, 360, 46, 46, 3, true,
+                values (gen_random_uuid(), ${map!.id}, ${windowId}, 360, 46, 46, 3, true,
                   '2026-12-24T16:00:00Z', '2026-12-25T10:00:00Z')`);
             await bar('2026-12-21');
             await refusedBy('boss_bars_map_id_window_id_pk', () => bar('2026-12-21'));
@@ -135,6 +135,11 @@ describe('migration 0071 (Christmas Eve contracts)', () => {
             );
             await refusedBy('boss_bars_dozed_when_short', () =>
               setBar(sql`state = 'dozed', chipped = 360`),
+            );
+            await refusedBy('boss_bars_id_key', () =>
+              tx.execute(sql`insert into boss_bars (id, map_id, window_id, goal, opens_at, closes_at)
+                select id, map_id, '2027-12-20', goal, opens_at, closes_at from boss_bars
+                where map_id = ${map!.id} and window_id = '2026-12-21'`),
             );
             await setBar(sql`state = 'dozed'`);
             await setBar(sql`state = 'fell', chipped = 362, fell_at = now()`);

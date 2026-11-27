@@ -82,6 +82,8 @@ export type BossThanksItems = z.infer<typeof BossThanksItemsSchema>;
  */
 export const BossBarRowSchema = z
   .strictObject({
+    /** The `christmas-boss` ledger's ref for every thanks this bar pays. */
+    id: z.uuid(),
     mapId: z.uuid(),
     windowId: LocalDateSchema,
     goal: z.number().int().min(1),
@@ -94,7 +96,7 @@ export const BossBarRowSchema = z
     closesAt: z.iso.datetime(),
     fellAt: z.iso.datetime().nullable(),
   })
-  .refine((row) => row.closesAt > row.opensAt, {
+  .refine((row) => Date.parse(row.closesAt) > Date.parse(row.opensAt), {
     path: ['closesAt'],
     message: 'a bar closes after it opens',
   })

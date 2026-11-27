@@ -11,6 +11,7 @@ CREATE TABLE "boss_bar_chips" (
 );
 --> statement-breakpoint
 CREATE TABLE "boss_bars" (
+	"id" uuid NOT NULL,
 	"map_id" uuid NOT NULL,
 	"window_id" date NOT NULL,
 	"goal" integer NOT NULL,
@@ -23,6 +24,7 @@ CREATE TABLE "boss_bars" (
 	"closes_at" timestamp with time zone NOT NULL,
 	"fell_at" timestamp with time zone,
 	CONSTRAINT "boss_bars_map_id_window_id_pk" PRIMARY KEY("map_id","window_id"),
+	CONSTRAINT "boss_bars_id_key" UNIQUE("id"),
 	CONSTRAINT "boss_bars_state_known" CHECK ("boss_bars"."state" in ('open', 'fell', 'dozed')),
 	CONSTRAINT "boss_bars_goal_positive" CHECK ("boss_bars"."goal" > 0),
 	CONSTRAINT "boss_bars_head_start_in_chipped" CHECK ("boss_bars"."head_start" >= 0 and "boss_bars"."chipped" >= "boss_bars"."head_start"),

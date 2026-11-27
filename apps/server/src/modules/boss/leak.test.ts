@@ -116,6 +116,7 @@ describe.skipIf(!url)('mini-boss secrets stay on the server (#190c, needs DATABA
     const started = await h.fight(kid, mapId);
     const won = await h.playOut(kid, started);
     sent.push(started, won);
+    expect(won.boss).not.toHaveProperty('patchBar');
     // The fight's own view: exactly the documented fields, never a number behind the odds.
     // A weekly fight has no Christmas Eve `patchBar` (#37 C0b; X2 fills it on the Eve visit).
     expect(Object.keys(won.boss!).sort()).toEqual(

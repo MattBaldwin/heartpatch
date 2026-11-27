@@ -2500,6 +2500,10 @@ export const bossEncounters = pgTable(
 export const bossBars = pgTable(
   'boss_bars',
   {
+    // The `christmas-boss` ledger's `ref_id` for every thanks this bar pays.
+    id: uuid('id')
+      .notNull()
+      .$defaultFn(() => uuidv7()),
     mapId: uuid('map_id').notNull(),
     windowId: date('window_id', { mode: 'string' }).notNull(),
     goal: integer('goal').notNull(),
@@ -2514,6 +2518,7 @@ export const bossBars = pgTable(
   },
   (t) => [
     primaryKey({ columns: [t.mapId, t.windowId] }),
+    unique('boss_bars_id_key').on(t.id),
     foreignKey({
       name: 'boss_bars_window_fk',
       columns: [t.mapId, t.windowId],

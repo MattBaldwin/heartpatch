@@ -152,6 +152,7 @@ describe('the visit and the map', () => {
 
 describe('server-only rows', () => {
   const bar = {
+    id: '0190a8c4-0000-7000-8000-0000000000b1',
     mapId,
     windowId: '2026-12-21',
     goal: 360,
@@ -186,6 +187,8 @@ describe('server-only rows', () => {
   it('mirrors the migration CHECKs', () => {
     for (const row of [
       { ...bar, closesAt: OPENS },
+      // The same instant at another precision is not later.
+      { ...bar, closesAt: '2026-12-24T16:00:00Z' },
       { ...bar, chipped: 10 },
       { ...bar, state: 'fell', chipped: 362 },
       { ...bar, state: 'fell', fellAt: CLOSES },
@@ -259,10 +262,11 @@ describe('Christmas Eve rules (server-only data)', () => {
   const species = new Set(SECRET_SPECIES.filter((s) => s.line === 'boss').map((s) => s.id));
   const terrains = new Set(GAME_DATA.terrains.map((t) => t.id));
   const items = new Set(GAME_DATA.resources.map((r) => r.id));
-  const eve = BOSS_EVENTS.christmasEve!;
+  const shipped = BOSS_EVENTS.christmasEve;
+  if (!shipped) throw new Error('BOSS_EVENTS.christmasEve is missing');
+  const eve = shipped;
 
   it('ships a Christmas Eve block that checks clean, with no species until X3', () => {
-    expect(eve).toBeDefined();
     expect(eve.speciesId).toBeNull();
     expect(eve.day).toBe('12-24');
     expect(checkBossEventRules(BOSS_EVENTS, species, terrains, items)).toEqual([]);

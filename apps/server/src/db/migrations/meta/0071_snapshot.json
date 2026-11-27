@@ -1,5 +1,5 @@
 {
-  "id": "b6976373-d965-45d8-8b6c-9ad7b4936da2",
+  "id": "786ddbd0-15e1-47be-9cde-ebb969479c69",
   "prevId": "4e576bfa-e24c-4afa-85a0-5150d85897a0",
   "version": "7",
   "dialect": "postgresql",
@@ -958,6 +958,12 @@
       "name": "boss_bars",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
         "map_id": {
           "name": "map_id",
           "type": "uuid",
@@ -1048,7 +1054,13 @@
           "columns": ["map_id", "window_id"]
         }
       },
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "boss_bars_id_key": {
+          "name": "boss_bars_id_key",
+          "nullsNotDistinct": false,
+          "columns": ["id"]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "boss_bars_state_known": {
