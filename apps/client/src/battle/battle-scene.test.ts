@@ -432,6 +432,30 @@ describe('BattleScene', () => {
       expect(battle.stats.down).toBe(1);
     });
 
+    it("returns the boss's beats for its sound, the same with reduced motion (#190 PR 4)", () => {
+      const move = GAME_DATA.moves.find((m) => m.element === 'frost') ?? GAME_DATA.moves[0]!;
+      for (const reducedMotion of [false, true]) {
+        const battle = team([0, 1, 2], { reducedMotion });
+        expect(battle.perform(step('move', 'b', { move: move.id, charge: true }), 0)).toBeNull();
+        expect(battle.perform(step('effect', 'b', { windup: true }), 500)).toEqual({
+          kind: 'windup',
+          element: move.element,
+        });
+        expect(
+          battle.perform(step('move', 'b', { move: move.id, landing: true }), 1500),
+        ).toBeNull();
+        expect(
+          battle.perform(step('hit', 'a', { slot: 1, effectiveness: 'normal' }), 2100),
+        ).toEqual({
+          kind: 'landing',
+          element: move.element,
+        });
+        // My squishy's hit back on the boss is an ordinary hit.
+        battle.perform(step('move', 'a', { slot: 0, move: move.id }), 3000);
+        expect(battle.perform(step('hit', 'b', { effectiveness: 'normal' }), 3600)).toBeNull();
+      }
+    });
+
     it('frames the boss HUD band with nothing to fade (#190 PR 1), the hook keeping what captures measure', () => {
       // The notched iPhone's rest band under the strip and above the chip handle.
       const band: SafeRegion = { top: 0.142, bottom: 0.876 };

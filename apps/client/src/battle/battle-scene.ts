@@ -49,6 +49,7 @@ import {
   TEAM_ARENA,
 } from './battle-config.js';
 import type { PlaybackStep } from './battle-playback.js';
+import { bossBeat, type BossBeat } from './boss-beat.js';
 import type { BattleContent } from './battle-view.js';
 import {
   battleScale,
@@ -687,12 +688,16 @@ export class BattleScene {
     this.#apply(rig, heldPose('faint', 0, this.#options.reducedMotion));
   }
 
-  /** Acts a step of the log out, starting at `now` (choreography.ts). */
+  /**
+   * Acts a step of the log out, starting at `now` (choreography.ts). Returns
+   * the boss's beat in a boss fight (#190 PR 4: its sound and buzz go with
+   * the camera's), else null. Reduced motion never changes it.
+   */
   perform(
     step: PlaybackStep,
     now: number,
     extra: { incoming?: TeamMember; captured?: boolean } = {},
-  ): void {
+  ): BossBeat | null {
     this.#now = now;
     const other = step.side === 'a' ? 'b' : 'a';
     if ((step.kind === 'move' || step.kind === 'miss') && step.move) {
@@ -712,15 +717,21 @@ export class BattleScene {
         : this.#rigAt(side, last?.user === side ? last.slot : null);
     const moveId = step.kind === 'move' || step.kind === 'miss' ? step.move : this.#lastMove?.move;
     const user = step.kind === 'move' || step.kind === 'miss' ? step.side : this.#lastMove?.user;
+    const move = moveId ? (this.#options.content.moves.get(moveId) ?? null) : null;
+    const boss = this.#options.mySide === 'a' ? ('b' as const) : ('a' as const);
+    const beat =
+      this.#options.team !== undefined
+        ? bossBeat(step, { boss, lastMove: this.#lastMove, element: move?.element ?? null })
+        : null;
     const plan = planStep(step, {
-      move: moveId ? (this.#options.content.moves.get(moveId) ?? null) : null,
+      move,
       user: user ?? null,
       mySide: this.#options.mySide,
       reduced: this.#options.reducedMotion,
       ...(extra.captured !== undefined ? { captured: extra.captured } : {}),
       // The boss's beats (#190 PR 2): the camera's windup push-in, landing thump and slow pull-back.
       ...(this.#options.team !== undefined && {
-        boss: this.#options.mySide === 'a' ? ('b' as const) : ('a' as const),
+        boss,
         landing: step.kind === 'hit' && this.#lastMove?.landing === true,
       }),
     });
@@ -779,7 +790,7 @@ export class BattleScene {
     this.#camera.cue(plan.camera, now, focus ? rigOf(focus).home : undefined);
     // Anyone left at arm's length by a dash that landed nothing hops home
     // (in a team battle, any squishy this step doesn't move, #190).
-    if (step.kind === 'hit') return;
+    if (step.kind === 'hit') return beat;
     const cued = new Set(plan.acts.map((a) => rigOf(a.side)));
     const bystanders = this.#options.team
       ? this.#all.filter((r) => !cued.has(r))
@@ -796,6 +807,7 @@ export class BattleScene {
         strength: 1,
       });
     }
+    return beat;
   }
 
   /** The Keeper cheers or reacts (`keeperReaction`); a no-op without one. */

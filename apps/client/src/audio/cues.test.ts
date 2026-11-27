@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { PlaybackStep } from '../battle/battle-playback.js';
+import { FALLBACK_ELEMENT } from '../battle/element-fx.js';
 import {
+  BOSS_ELEMENTS,
+  BOSS_FALLBACK_ELEMENT,
   battleCue,
   careCue,
   CUE_NAMES,
@@ -60,6 +63,44 @@ describe('cues', () => {
     expect(battleCue({ kind: 'hit', squish: 'wobble', effectiveness: 'good' })).toBe('thwack');
   });
 
+  it("plays the boss's beats in a boss fight, the move's element under its voice (#190 PR 4)", () => {
+    const hit = { kind: 'hit', squish: 'wobble', effectiveness: 'super' } as const;
+    expect(
+      battleCue({ kind: 'effect', squish: 'bounce' }, false, { kind: 'windup', element: 'fire' }),
+    ).toBe('boss-windup-fire');
+    expect(battleCue(hit, false, { kind: 'landing', element: 'frost' })).toBe('boss-landing-frost');
+    expect(
+      battleCue({ kind: 'move', squish: null }, false, { kind: 'backup', element: 'fire' }),
+    ).toBe('boss-backup');
+    // The boss tuckered out (my win) gets its sigh; a loss stays the kind "aww".
+    const end = { kind: 'end', element: null } as const;
+    expect(battleCue({ kind: 'end', squish: 'bounce' }, false, end)).toBe('boss-tuckered');
+    expect(battleCue({ kind: 'end', squish: null }, false, end)).toBe('aww');
+    // No element: the arena's fallback element's stinger.
+    expect(battleCue(hit, false, { kind: 'landing', element: null })).toBe(
+      `boss-landing-${BOSS_FALLBACK_ELEMENT}`,
+    );
+    expect(BOSS_FALLBACK_ELEMENT).toBe(FALLBACK_ELEMENT);
+    // No beat: the ordinary cues, as before.
+    expect(battleCue(hit, false, null)).toBe('thwack');
+  });
+
+  it('has a windup and a landing voice for every element, and they dip the music', () => {
+    for (const element of BOSS_ELEMENTS) {
+      for (const beat of ['windup', 'landing'] as const) {
+        const cue = battleCue({ kind: 'hit', squish: null }, false, { kind: beat, element });
+        expect(cue).toBe(`boss-${beat}-${element}`);
+        expect(isCueName(cue!)).toBe(true);
+        expect(DUCKING_CUES.has(cue!)).toBe(true);
+      }
+    }
+  });
+
+  it('dips the music for the boss tuckering out, not for its backup call', () => {
+    expect(DUCKING_CUES.has('boss-tuckered')).toBe(true);
+    expect(DUCKING_CUES.has('boss-backup')).toBe(false);
+  });
+
   it('maps touches up close and care moments', () => {
     expect(touchCue('boop')).toBe('boop');
     expect(touchCue('stroke')).toBe('squeak');
@@ -69,8 +110,8 @@ describe('cues', () => {
     expect(careCue('evolve')).toBe('evolve');
   });
 
-  it('dips the music for his visit, his sting, the peekaboo, a new friend, an evolution, a win, a rare find, the title card and the Crooked House moments', () => {
-    expect([...DUCKING_CUES].sort()).toEqual([
+  it('dips the music for his visit, his sting, the peekaboo, a new friend, an evolution, a win, a rare find, the title card, the Crooked House moments and the boss', () => {
+    expect([...DUCKING_CUES].filter((c) => !c.startsWith('boss-')).sort()).toEqual([
       'charm',
       'chest',
       'chest-big',

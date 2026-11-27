@@ -74,6 +74,7 @@ import { revealPlan, showRareReveal, wildOf, type RareReveal } from './rare-reve
 import { FENCE_RESULTS, fenceResult, resultLine } from './result-line.js';
 import { coinLine, xpLines } from './result-card.js';
 import { keepGoing, KEEP_GOING_TEXT, type KeepGoingApi } from './keep-going.js';
+import type { BossBeat } from './boss-beat.js';
 import { createBossBattle } from './boss-battle.js';
 import { BOSS_TEXT, bossSlot, bossXp, isTeamBattle, slotsOut } from './boss-view.js';
 import { mapApi } from '../map/map-api.js';
@@ -142,8 +143,10 @@ export interface BattleScreenOptions {
   /**
    * A step of the log starts playing (sound, #25). `rareFriend`: the battle
    * ended in befriending a rare-or-better squishy (its win cheers louder, #391).
+   * `beat`: the boss's beat in a boss fight (#190 PR 4), from the scene on the
+   * same frame its camera moves; null otherwise.
    */
-  onStep?: (step: PlaybackStep, rareFriend: boolean) => void;
+  onStep?: (step: PlaybackStep, rareFriend: boolean, beat: BossBeat | null) => void;
   /** A rare-or-better wild squishy's moment starts in full (its chime, #391): its tier's size step. */
   onRareFind?: (scale: number) => void;
   /** Heart Charms in the player's bag on a map (the wild battle's button shows it). */
@@ -672,7 +675,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     if (!current || !content || waiting || queue.length > 0) return;
     sipped = id;
     const step = sipStep(current, content, id);
-    options.onStep?.(step, false);
+    options.onStep?.(step, false, null);
     scene3d?.perform(step, now(), { captured: false });
     hud.callout('mine', SIPPED_CALLOUT);
     plate(current.mySide);
@@ -1384,7 +1387,6 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     }
     const t = now();
     hud.setCaption(step.text);
-    options.onStep?.(step, cheerFor(battle, content.species)?.rare != null);
     shown = applyStep(shown, step);
     // The arena acts it out (choreography.ts): a swap brings out `to` once
     // the old squishy has hopped away; a new friend bounces along at the end.
@@ -1392,7 +1394,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       step.kind === 'swap' && step.to !== null
         ? battle.view.sides[step.side].squishies[step.to]
         : undefined;
-    scene3d.perform(step, t, {
+    const beat = scene3d.perform(step, t, {
       ...(incoming
         ? {
             incoming: {
@@ -1404,6 +1406,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         : {}),
       captured: battle.view.phase.type === 'over' && battle.view.phase.result.reason === 'captured',
     });
+    // The sound goes with the scene's beat, on the frame it starts (#190 PR 4).
+    options.onStep?.(step, cheerFor(battle, content.species)?.rare != null, beat);
     const reaction = keeperReaction(step, battle.mySide);
     if (reaction && scene3d.hasKeeper) {
       scene3d.cheer(reaction.move, t, reaction.strength);
