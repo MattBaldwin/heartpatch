@@ -1,0 +1,145 @@
+{
+ "file": "iphone-05b-windup-mid-day.png",
+ "device": "iphone",
+ "tz": "Asia/Dubai",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "squishies": 4,
+  "meshes": 12,
+  "instances": 56,
+  "shadowLook": 0,
+  "accessories": 0,
+  "lod": "high",
+  "keeper": true,
+  "arena": {
+   "terrain": "meadow",
+   "timeOfDay": "day",
+   "known": true,
+   "props": 83,
+   "meshes": 15,
+   "shadowMap": true,
+   "lowTier": false
+  },
+  "effects": {
+   "live": 15,
+   "meshes": 1,
+   "spawned": 2
+  },
+  "acts": 1,
+  "down": 0,
+  "reducedMotion": false,
+  "drawCalls": 55,
+  "camera": {
+   "x": 8.375858468347026,
+   "y": 6.539624120096047,
+   "z": -33.809942597435715
+  },
+  "framing": {
+   "distance": 36.40700258748282,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.142018779342723,
+    "bottom": 0.8755868544600939
+   },
+   "face": {
+    "top": 0.5678749168121598,
+    "bottom": 0.6332468401550126
+   },
+   "team": [
+    {
+     "top": 0.698745630142585,
+     "bottom": 0.742452332068172
+    },
+    {
+     "top": 0.698197328730415,
+     "bottom": 0.7414099924654252
+    },
+    {
+     "top": 0.6930049651371145,
+     "bottom": 0.7367226276528434
+    }
+   ],
+   "bossFacing": 0.989199794256185
+  },
+  "playing": {
+   "kind": "effect",
+   "at": 685.7479999999268
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": "Puddlepuff is winding up Count to Three… watch out next round!",
+ "rects": {
+  "strip": {
+   "top": 67,
+   "bottom": 111,
+   "left": 12,
+   "right": 329
+  },
+  "handle": {
+   "top": 754,
+   "bottom": 818,
+   "left": 16,
+   "right": 377
+  },
+  "friends": {
+   "top": 758,
+   "bottom": 814,
+   "left": 96.5,
+   "right": 296.5
+  },
+  "sheet": {
+   "top": 754,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "caption": {
+   "top": 689,
+   "bottom": 740,
+   "left": 16,
+   "right": 377
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  }
+ },
+ "friendRects": [
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 96.5,
+   "right": 152.5
+  },
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 168.5,
+   "right": 224.5
+  },
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 240.5,
+   "right": 296.5
+  }
+ ]
+}

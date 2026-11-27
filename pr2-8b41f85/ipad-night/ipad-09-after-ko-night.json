@@ -1,0 +1,126 @@
+{
+ "file": "ipad-09-after-ko-night.png",
+ "device": "ipad",
+ "tz": "America/Denver",
+ "inner": {
+  "w": 1024,
+  "h": 1366,
+  "dpr": 2
+ },
+ "battle": {
+  "squishies": 4,
+  "meshes": 12,
+  "instances": 56,
+  "shadowLook": 0,
+  "accessories": 0,
+  "lod": "high",
+  "keeper": true,
+  "arena": {
+   "terrain": "meadow",
+   "timeOfDay": "night",
+   "known": true,
+   "props": 84,
+   "meshes": 16,
+   "shadowMap": true,
+   "lowTier": false
+  },
+  "effects": {
+   "live": 0,
+   "meshes": 0,
+   "spawned": 82
+  },
+  "acts": 58,
+  "down": 1,
+  "reducedMotion": false,
+  "drawCalls": 55,
+  "camera": {
+   "x": 6.966586947797366,
+   "y": 6.118504891876583,
+   "z": -28.61872398053888
+  },
+  "framing": {
+   "distance": 30.370011242934968,
+   "fogEnd": 85,
+   "band": {
+    "top": 0.08052708638360176,
+    "bottom": 0.6000297401171303
+   },
+   "face": null,
+   "team": [],
+   "bossFacing": 0.9909556042671513
+  },
+  "playing": null,
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": "",
+ "rects": {
+  "strip": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "handle": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "friends": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "sheet": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "caption": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "result": {
+   "top": 847.640625,
+   "bottom": 1354,
+   "left": 332,
+   "right": 692
+  }
+ },
+ "friendRects": [
+  {
+   "status": "ok",
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  {
+   "status": "ok",
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  {
+   "status": "ok",
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  }
+ ]
+}

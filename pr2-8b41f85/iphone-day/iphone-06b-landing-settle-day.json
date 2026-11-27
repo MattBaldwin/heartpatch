@@ -1,0 +1,145 @@
+{
+ "file": "iphone-06b-landing-settle-day.png",
+ "device": "iphone",
+ "tz": "Asia/Dubai",
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "squishies": 4,
+  "meshes": 12,
+  "instances": 56,
+  "shadowLook": 0,
+  "accessories": 0,
+  "lod": "high",
+  "keeper": true,
+  "arena": {
+   "terrain": "meadow",
+   "timeOfDay": "day",
+   "known": true,
+   "props": 83,
+   "meshes": 15,
+   "shadowMap": true,
+   "lowTier": false
+  },
+  "effects": {
+   "live": 16,
+   "meshes": 3,
+   "spawned": 26
+  },
+  "acts": 17,
+  "down": 0,
+  "reducedMotion": false,
+  "drawCalls": 57,
+  "camera": {
+   "x": 9.282676305970558,
+   "y": 6.910620832562771,
+   "z": -40.472026743250765
+  },
+  "framing": {
+   "distance": 41.72545824548501,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.142018779342723,
+    "bottom": 0.8755868544600939
+   },
+   "face": {
+    "top": 0.5775752300167039,
+    "bottom": 0.6323098742160469
+   },
+   "team": [
+    {
+     "top": 0.6803578697051762,
+     "bottom": 0.716725459332025
+    },
+    {
+     "top": 0.6852776663800514,
+     "bottom": 0.7195545280414708
+    },
+    {
+     "top": 0.6832565711598892,
+     "bottom": 0.7182990530017122
+    }
+   ],
+   "bossFacing": 0.9913753743518705
+  },
+  "playing": {
+   "kind": "hit",
+   "at": 814.0319999999338
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": "Puddlepuff lost some energy.",
+ "rects": {
+  "strip": {
+   "top": 67,
+   "bottom": 111,
+   "left": 12,
+   "right": 329
+  },
+  "handle": {
+   "top": 754,
+   "bottom": 818,
+   "left": 16,
+   "right": 377
+  },
+  "friends": {
+   "top": 758,
+   "bottom": 814,
+   "left": 96.5,
+   "right": 296.5
+  },
+  "sheet": {
+   "top": 754,
+   "bottom": 852,
+   "left": 0,
+   "right": 393
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "caption": {
+   "top": 708.5,
+   "bottom": 740,
+   "left": 74.9921875,
+   "right": 318.0078125
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  }
+ },
+ "friendRects": [
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 96.5,
+   "right": 152.5
+  },
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 168.5,
+   "right": 224.5
+  },
+  {
+   "status": "ok",
+   "top": 758,
+   "bottom": 814,
+   "left": 240.5,
+   "right": 296.5
+  }
+ ]
+}

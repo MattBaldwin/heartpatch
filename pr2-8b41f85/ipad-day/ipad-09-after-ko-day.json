@@ -1,0 +1,126 @@
+{
+ "file": "ipad-09-after-ko-day.png",
+ "device": "ipad",
+ "tz": "Asia/Dubai",
+ "inner": {
+  "w": 1024,
+  "h": 1366,
+  "dpr": 2
+ },
+ "battle": {
+  "squishies": 4,
+  "meshes": 12,
+  "instances": 56,
+  "shadowLook": 0,
+  "accessories": 0,
+  "lod": "high",
+  "keeper": true,
+  "arena": {
+   "terrain": "meadow",
+   "timeOfDay": "day",
+   "known": true,
+   "props": 82,
+   "meshes": 15,
+   "shadowMap": true,
+   "lowTier": false
+  },
+  "effects": {
+   "live": 0,
+   "meshes": 0,
+   "spawned": 82
+  },
+  "acts": 58,
+  "down": 1,
+  "reducedMotion": false,
+  "drawCalls": 54,
+  "camera": {
+   "x": 6.845013451161313,
+   "y": 6.079764088357631,
+   "z": -28.24444184924597
+  },
+  "framing": {
+   "distance": 29.814639082623977,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.08052708638360176,
+    "bottom": 0.6000297401171303
+   },
+   "face": null,
+   "team": [],
+   "bossFacing": 0.9911027096019599
+  },
+  "playing": null,
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": "",
+ "rects": {
+  "strip": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "handle": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "friends": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "sheet": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "caption": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "result": {
+   "top": 847.640625,
+   "bottom": 1354,
+   "left": 332,
+   "right": 692
+  }
+ },
+ "friendRects": [
+  {
+   "status": "ok",
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  {
+   "status": "ok",
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  {
+   "status": "ok",
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  }
+ ]
+}

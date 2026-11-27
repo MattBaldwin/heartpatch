@@ -1,0 +1,129 @@
+{
+ "file": "ipad-08b-ko-pullback-late-day.png",
+ "device": "ipad",
+ "tz": "Asia/Dubai",
+ "inner": {
+  "w": 1024,
+  "h": 1366,
+  "dpr": 2
+ },
+ "battle": {
+  "squishies": 4,
+  "meshes": 12,
+  "instances": 56,
+  "shadowLook": 0,
+  "accessories": 0,
+  "lod": "high",
+  "keeper": true,
+  "arena": {
+   "terrain": "meadow",
+   "timeOfDay": "day",
+   "known": true,
+   "props": 82,
+   "meshes": 15,
+   "shadowMap": true,
+   "lowTier": false
+  },
+  "effects": {
+   "live": 0,
+   "meshes": 0,
+   "spawned": 82
+  },
+  "acts": 58,
+  "down": 1,
+  "reducedMotion": false,
+  "drawCalls": 54,
+  "camera": {
+   "x": 6.7094063178755885,
+   "y": 6.057270677893621,
+   "z": -27.120552533059566
+  },
+  "framing": {
+   "distance": 29.492182839401032,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.04538799414348463,
+    "bottom": 0.9472913616398243
+   },
+   "face": null,
+   "team": [],
+   "bossFacing": 0.9907582407667027
+  },
+  "playing": {
+   "kind": "tuckered",
+   "at": 3410.935999999987
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": "Puddlepuff is all tuckered out!",
+ "rects": {
+  "strip": {
+   "top": 8,
+   "bottom": 52,
+   "left": 206,
+   "right": 766
+  },
+  "handle": {
+   "top": 1302,
+   "bottom": 1366,
+   "left": 248,
+   "right": 776
+  },
+  "friends": {
+   "top": 1306,
+   "bottom": 1362,
+   "left": 412,
+   "right": 612
+  },
+  "sheet": {
+   "top": 1302,
+   "bottom": 1366,
+   "left": 232,
+   "right": 792
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "caption": {
+   "top": 1256.5,
+   "bottom": 1288,
+   "left": 388.6015625,
+   "right": 635.3984375
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  }
+ },
+ "friendRects": [
+  {
+   "status": "ok",
+   "top": 1306,
+   "bottom": 1362,
+   "left": 412,
+   "right": 468
+  },
+  {
+   "status": "ok",
+   "top": 1306,
+   "bottom": 1362,
+   "left": 484,
+   "right": 540
+  },
+  {
+   "status": "ok",
+   "top": 1306,
+   "bottom": 1362,
+   "left": 556,
+   "right": 612
+  }
+ ]
+}

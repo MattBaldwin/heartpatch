@@ -1,0 +1,145 @@
+{
+ "file": "ipad-06-landing-day.png",
+ "device": "ipad",
+ "tz": "Asia/Dubai",
+ "inner": {
+  "w": 1024,
+  "h": 1366,
+  "dpr": 2
+ },
+ "battle": {
+  "squishies": 4,
+  "meshes": 12,
+  "instances": 56,
+  "shadowLook": 0,
+  "accessories": 0,
+  "lod": "high",
+  "keeper": true,
+  "arena": {
+   "terrain": "meadow",
+   "timeOfDay": "day",
+   "known": true,
+   "props": 82,
+   "meshes": 15,
+   "shadowMap": true,
+   "lowTier": false
+  },
+  "effects": {
+   "live": 0,
+   "meshes": 0,
+   "spawned": 26
+  },
+  "acts": 17,
+  "down": 0,
+  "reducedMotion": false,
+  "drawCalls": 54,
+  "camera": {
+   "x": 5.805666319773172,
+   "y": 5.8805640318175225,
+   "z": -25.96983829653505
+  },
+  "framing": {
+   "distance": 26.958989336468544,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.04538799414348463,
+    "bottom": 0.9472913616398243
+   },
+   "face": {
+    "top": 0.55812642334598,
+    "bottom": 0.6374488056539196
+   },
+   "team": [
+    {
+     "top": 0.721031780444447,
+     "bottom": 0.7692982315509876
+    },
+    {
+     "top": 0.7177844892743472,
+     "bottom": 0.7672370611542698
+    },
+    {
+     "top": 0.7156615786650214,
+     "bottom": 0.7703102781908269
+    }
+   ],
+   "bossFacing": 0.9271431310120989
+  },
+  "playing": {
+   "kind": "hit",
+   "at": 1511.4039999999804
+  },
+  "shields": {
+   "a": false,
+   "b": false
+  }
+ },
+ "caption": "Puddlepuff lost some energy.",
+ "rects": {
+  "strip": {
+   "top": 8,
+   "bottom": 52,
+   "left": 206,
+   "right": 766
+  },
+  "handle": {
+   "top": 1302,
+   "bottom": 1366,
+   "left": 248,
+   "right": 776
+  },
+  "friends": {
+   "top": 1306,
+   "bottom": 1362,
+   "left": 412,
+   "right": 612
+  },
+  "sheet": {
+   "top": 1302,
+   "bottom": 1366,
+   "left": 232,
+   "right": 792
+  },
+  "picker": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  },
+  "caption": {
+   "top": 1256.5,
+   "bottom": 1288,
+   "left": 390.4921875,
+   "right": 633.5078125
+  },
+  "result": {
+   "top": 0,
+   "bottom": 0,
+   "left": 0,
+   "right": 0
+  }
+ },
+ "friendRects": [
+  {
+   "status": "ok",
+   "top": 1306,
+   "bottom": 1362,
+   "left": 412,
+   "right": 468
+  },
+  {
+   "status": "ok",
+   "top": 1306,
+   "bottom": 1362,
+   "left": 484,
+   "right": 540
+  },
+  {
+   "status": "ok",
+   "top": 1306,
+   "bottom": 1362,
+   "left": 556,
+   "right": 612
+  }
+ ]
+}
