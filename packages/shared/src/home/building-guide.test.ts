@@ -129,6 +129,13 @@ describe('buildingGuide (#715)', () => {
     expect(g.place).toContainEqual({ kind: 'patch', patchTypes: ['wild-isle'] });
   });
 
+  it('names only the patch type being looked at (#874: the Bridge crosses both isles)', () => {
+    const patch = (patchType: 'wild-isle' | 'clockwork-isle') =>
+      guide('bridge', { patchType }).place.filter((p) => p.kind === 'patch');
+    expect(patch('wild-isle')).toEqual([{ kind: 'patch', patchTypes: ['wild-isle'] }]);
+    expect(patch('clockwork-isle')).toEqual([{ kind: 'patch', patchTypes: ['clockwork-isle'] }]);
+  });
+
   it('canal carries water; shelters keep storms off; the vane forecasts', () => {
     expect(kinds(guide('canal').value)).toContain('carries-water');
     expect(guide('canal').group).toBe('water');
@@ -172,13 +179,13 @@ describe('buildingGuide (#715)', () => {
   });
 
   it('lists shelf by shelf, and every building is in some patch type', () => {
-    for (const patchType of ['cozy', 'wild-isle'] as const) {
+    for (const patchType of ['cozy', 'wild-isle', 'clockwork-isle'] as const) {
       const all = buildingsGuide(BUILDINGS, ctx({ patchType }));
       const order = all.map((e) => GUIDE_GROUPS.indexOf(e.group));
       expect(order).toEqual([...order].sort((a, b) => a - b));
     }
     const ids = new Set(
-      (['cozy', 'wild-isle'] as const).flatMap((patchType) =>
+      (['cozy', 'wild-isle', 'clockwork-isle'] as const).flatMap((patchType) =>
         buildingsGuide(BUILDINGS, ctx({ patchType })).map((e) => e.id),
       ),
     );

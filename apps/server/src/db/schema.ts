@@ -38,7 +38,7 @@ export const mapKind = pgEnum('map_kind', ['multiplayer', 'tutorial']);
 export const userKind = pgEnum('user_kind', ['player', 'computer']);
 // A patch's type (#621), chosen when it's made and never changed. Every rule
 // that differs reads it through shared `patchRules`; existing patches are cozy.
-export const patchType = pgEnum('patch_type', ['cozy', 'wild-isle']);
+export const patchType = pgEnum('patch_type', ['cozy', 'wild-isle', 'clockwork-isle']);
 export const mapMemberRole = pgEnum('map_member_role', ['owner', 'member']);
 /** Removed players are archived by status, never deleted (tech spec §4). */
 export const mapMemberStatus = pgEnum('map_member_status', ['active', 'removed']);
@@ -344,8 +344,8 @@ export const maps = pgTable(
     // The patch owner's friendly-battle switch (#29): off, nobody can ask
     // "Battle me?" on this patch. Live land defense follows the PvP mode instead.
     friendlyChallenges: boolean('friendly_challenges').notNull().default(true),
-    // Cozy Patch or Wild Isle (#621): fixed at creation; `HP_WILD_ISLE` gates
-    // making a Wild Isle.
+    // Cozy Patch, Wild Isle (#621) or Clockwork Isle (#874): fixed at
+    // creation; `HP_WILD_ISLE` and `HP_CLOCKWORK_ISLE` gate making one.
     patchType: patchType('patch_type').notNull().default('cozy'),
     // The Long Night's weekday (#727, 0 is Sunday): that day's nightfall
     // comes at full strength. Null is Off; the owner changes it. The default
@@ -489,8 +489,13 @@ export const tiles = pgTable(
     // Which offshore isle (#621, Wild Isle) this tile is part of, numbered
     // from 1 by the generator; null on the main island and on every cozy tile.
     isle: smallint('isle'),
+    // Clockwork Isle (#874): the tile's wind (1 still, 2 breezy, 3 blowy),
+    // set by the generator from the seed and never changed; public. Null on
+    // Cozy and Wild tiles, and on a Clockwork Isle's water.
+    wind: smallint('wind'),
   },
   (t) => [
+    check('tiles_wind_range', sql`${t.wind} between 1 and 3`),
     unique('tiles_map_id_q_r_key').on(t.mapId, t.q, t.r),
     index('tiles_community_id_idx').on(t.communityId),
     foreignKey({
@@ -557,6 +562,11 @@ export const buildings = pgTable(
     // rolled for (seeded, so rolling again changes nothing). Null reads as
     // `placed_at`.
     weatherCheckedThrough: timestamptz('weather_checked_through'),
+    // Clockwork Isle (#874): a `needsPower` building cut off from its
+    // owner's generators since this instant; it works again once rejoined.
+    // Null: powered, or it needs no power. Written in the same transaction
+    // as the line, placement or removal that changed it.
+    unpoweredSince: timestamptz('unpowered_since'),
   },
   (t) => [
     foreignKey({
@@ -1469,6 +1479,98 @@ export const tileRoads = pgTable(
     }),
     index('tile_roads_map_id_owner_user_id_idx').on(t.mapId, t.ownerUserId),
     check('tile_roads_level', sql`${t.level} between 1 and 3`),
+  ],
+);
+
+/**
+ * Clockwork Isle lines (#874): wires and rails, tile attributes like roads
+ * (owner answer Q3), not buildings, so a line and a building share a tile;
+ * one line of each kind per tile. `kind` is the shared `LineKindSchema`;
+ * `level` 1–2 (`RAIL_RULES.levels`; a wire is always 1). Owner-only: it
+ * counts only while its owner holds the tile. Locked in step 6 (tech spec
+ * §7) right after `tile_roads`, in `(tile_id, kind)` order.
+ */
+export const tileLines = pgTable(
+  'tile_lines',
+  {
+    tileId: uuid('tile_id')
+      .notNull()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    mapId: uuid('map_id').notNull(),
+    ownerUserId: uuid('owner_user_id').notNull(),
+    level: smallint('level').notNull().default(1),
+    builtAt: timestamptz('built_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tileId, t.kind] }),
+    // Laying one takes the member row first (step 2), as `tile_roads`.
+    foreignKey({
+      name: 'tile_lines_owner_member_fk',
+      columns: [t.mapId, t.ownerUserId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    index('tile_lines_map_id_owner_user_id_idx').on(t.mapId, t.ownerUserId),
+    check('tile_lines_kind_known', sql`${t.kind} in ('wire', 'rail')`),
+    check('tile_lines_level', sql`${t.level} between 1 and 2`),
+  ],
+);
+
+/**
+ * Clockwork Isle research (#874): one row per node a player started on a
+ * patch's Research Bench, paid up front; `ready_at` is when it's done (a
+ * timestamp, nothing ticks) and `claimed_at` when a read claimed it
+ * (made it known and granted its Blueprints; lazily, no settle hook). The
+ * partial unique index keeps one going per player per patch.
+ */
+export const researchJobs = pgTable(
+  'research_jobs',
+  {
+    id: id(),
+    mapId: uuid('map_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    // The bench it runs on; a bench taken down leaves the job to finish.
+    buildingId: uuid('building_id').references(() => buildings.id, { onDelete: 'set null' }),
+    nodeId: text('node_id').notNull(),
+    startedAt: timestamptz('started_at').notNull(),
+    readyAt: timestamptz('ready_at').notNull(),
+    claimedAt: timestamptz('claimed_at'),
+  },
+  (t) => [
+    foreignKey({
+      name: 'research_jobs_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }).onDelete('cascade'),
+    uniqueIndex('research_jobs_one_going_key')
+      .on(t.mapId, t.userId)
+      .where(sql`${t.claimedAt} is null`),
+    // Every building's take-down sets its jobs' bench to null: keep that a lookup.
+    index('research_jobs_building_id_idx').on(t.buildingId),
+    check('research_jobs_ready_after_start', sql`${t.readyAt} >= ${t.startedAt}`),
+    check(
+      'research_jobs_claimed_when_ready',
+      sql`${t.claimedAt} is null or ${t.claimedAt} >= ${t.readyAt}`,
+    ),
+  ],
+);
+
+/** Clockwork Isle research (#874): the nodes a player knows on a patch, once each. */
+export const researchKnown = pgTable(
+  'research_known',
+  {
+    mapId: uuid('map_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    nodeId: text('node_id').notNull(),
+    knownAt: timestamptz('known_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.mapId, t.userId, t.nodeId] }),
+    foreignKey({
+      name: 'research_known_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }).onDelete('cascade'),
   ],
 );
 

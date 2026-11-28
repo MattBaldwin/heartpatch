@@ -193,9 +193,17 @@ describe('new kinds', () => {
     // Christmas Eve head start (X2 counts `buildings.kind = 'lights'`) stays 0.
     const twinkle = BUILDINGS.find((b) => b.id === 'twinkle-lights');
     expect(twinkle?.kind).toBe('lights');
-    expect(BUILDINGS.filter((b) => b.kind === 'lights').map((b) => b.id)).toEqual([
-      'twinkle-lights',
-    ]);
+    // The Clockwork Beacon (#874 C0) is a `lights` row too, but a Clockwork
+    // Isle one (`patchTypes`), never on a Cozy Patch or a Wild Isle.
+    expect(
+      BUILDINGS.filter((b) => b.kind === 'lights' && b.patchTypes === undefined).map((b) => b.id),
+    ).toEqual(['twinkle-lights']);
+    expect(
+      BUILDINGS.filter((b) => b.kind === 'lights' && b.patchTypes !== undefined).map((b) => [
+        b.id,
+        b.patchTypes,
+      ]),
+    ).toEqual([['clockwork-beacon', ['clockwork-isle']]]);
     expect((HOME_BASE_RULES.buildableKinds as readonly string[]).includes('lights')).toBe(true);
     if (twinkle?.kind !== 'lights') throw new Error('no Twinkle Lights');
     expect(twinkle.season).toBe('christmas');

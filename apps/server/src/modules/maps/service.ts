@@ -75,6 +75,11 @@ import { defaultGuardianData, tileGuardians } from '../territory/service.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { createMapsRepo, type JoinRequestRow, type MemberRow, type TileViewRow } from './repo.js';
 import { WILD_ISLE_OFF, wildIsleOpenFor, type WildIsleSwitch } from './wild-isle-switch.js';
+import {
+  CLOCKWORK_ISLE_OFF,
+  clockworkIsleOpenFor,
+  type ClockworkIsleSwitch,
+} from './clockwork-isle-switch.js';
 import { keeperOfTheNightOn, longNightWeekdayOn } from '../long-night/service.js';
 import { LONG_NIGHT_OFF, type LongNightSwitch } from '../long-night/switch.js';
 
@@ -115,6 +120,8 @@ export interface MapsServiceOptions {
   keeperRequired: boolean;
   /** `HP_WILD_ISLE` (#621): who can make a Wild Isle; off when left out. */
   wildIsle?: WildIsleSwitch;
+  /** `HP_CLOCKWORK_ISLE` (#874): who can make a Clockwork Isle; off when left out. */
+  clockworkIsle?: ClockworkIsleSwitch;
   /** `HP_LONG_NIGHT` (#727): the weekday in details, the night crown in stats; off when left out. */
   longNight?: LongNightSwitch;
   /** `HP_HOUSE` (#381): whose views say whether a House gift waits (#731c); off when left out. */
@@ -171,6 +178,8 @@ const MESSAGES = {
   notReady: (username: string) => `${username} is still getting ready. Try again soon!`,
   wildIsleClosed: "Wild Isles aren't open yet. Make a Cozy Patch for now!",
   wildIsleSeats: 'A Wild Isle is made for 6 Keepers. Try a Cozy Patch!',
+  clockworkIsleClosed: "Clockwork Isles aren't open yet. Make a Cozy Patch for now!",
+  clockworkIsleSeats: "Clockwork Isles aren't quite ready yet. Make a Cozy Patch for now!",
 } as const;
 
 /** How many times to retry on the (very unlikely) chance a new code is taken. */
@@ -237,6 +246,8 @@ function toPublicTile(
     explored: explore.explored ?? false,
     homestead: explore.homestead ?? null,
     communityId: tile.communityId ?? null,
+    // Clockwork Isle (#874): left out when null, so Cozy and Wild tiles are as before.
+    ...(tile.wind != null ? { wind: tile.wind } : {}),
   };
 }
 
@@ -269,6 +280,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
   const store = createMapsRepo(db);
   const keepersRepo = createKeepersRepo(db);
   const wildIsle = options.wildIsle ?? WILD_ISLE_OFF;
+  const clockworkIsle = options.clockworkIsle ?? CLOCKWORK_ISLE_OFF;
   const longNight = options.longNight ?? LONG_NIGHT_OFF;
   const miniBosses = options.miniBosses ?? MINIBOSSES_OFF;
   const house = options.house ?? HOUSE_OFF;
@@ -408,6 +420,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         maps,
         requests: requests.map(toRequest),
         canMakeWildIsle: wildIsleOpenFor(wildIsle, user),
+        canMakeClockworkIsle: clockworkIsleOpenFor(clockworkIsle, user),
       };
     },
 
@@ -429,6 +442,17 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
           throw new AppError('FORBIDDEN', MESSAGES.wildIsleSeats);
         }
       }
+      // A Clockwork Isle (#874) the same way, on its own switch and layouts
+      // (lane C1 adds `mapGen.clockworkIsle`; until then none can be made).
+      if (patchType === 'clockwork-isle') {
+        if (!clockworkIsleOpenFor(clockworkIsle, user)) {
+          throw new AppError('FORBIDDEN', MESSAGES.clockworkIsleClosed);
+        }
+        const layouts = GAME_DATA.mapGen.clockworkIsle?.island.layouts ?? [];
+        if (!layouts.some((l) => l.players === maxPlayers)) {
+          throw new AppError('FORBIDDEN', MESSAGES.clockworkIsleSeats);
+        }
+      }
 
       // Generate once and store it all (design doc §3): every seat's home base
       // exists from the start, so joining never resizes the map. The seed is
@@ -440,7 +464,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         playerCount: maxPlayers,
         cellarKeys: CELLAR_RULES.keyFromVillage,
         // Left out for a Cozy Patch, so it stays byte for byte as before.
-        ...(patchType === 'wild-isle' ? { patchType } : {}),
+        ...(patchType !== 'cozy' ? { patchType } : {}),
       });
       const homeSlot = 0;
 

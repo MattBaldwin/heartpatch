@@ -58,7 +58,8 @@ describe('resource buildings and the Warehouse (#601)', () => {
     for (const b of economy) {
       // Wild Isle works pay upkeep too (#621 W1-8), built by the patch type.
       expect(isBuildable(HOME_BASE_RULES, b), b.id).toBe(b.kind !== 'works');
-      expect(isBuildableOn(HOME_BASE_RULES, b, 'wild-isle'), b.id).toBe(true);
+      // Clockwork Isle works (#874) go up on a Clockwork Isle only.
+      expect(isBuildableOn(HOME_BASE_RULES, b, b.patchTypes?.[0] ?? 'wild-isle'), b.id).toBe(true);
     }
   });
 });

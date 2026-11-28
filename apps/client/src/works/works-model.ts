@@ -35,9 +35,12 @@ const HOMESTEAD_KINDS: ReadonlySet<Building['kind']> = new Set([
   'vane',
 ]);
 
-/** Every Wild Isle homestead building, in data order. */
+/**
+ * Every Wild Isle homestead building, in data order. Clockwork Isle works
+ * (#874) get their cards with lane C5.
+ */
 export const WORKS_BUILDINGS: readonly Building[] = GAME_DATA.buildings.filter(
-  (b) => HOMESTEAD_KINDS.has(b.kind) && b.patchTypes !== undefined,
+  (b) => HOMESTEAD_KINDS.has(b.kind) && b.patchTypes?.includes('wild-isle') === true,
 );
 
 /** How far canals carry water: the Canal's `maxRun`, as the server reads it. */

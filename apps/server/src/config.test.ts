@@ -38,6 +38,21 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ DATABASE_URL, HP_WILD_ISLE: 'yes' })).toThrow(/HP_WILD_ISLE/);
   });
 
+  it('keeps Clockwork Isle switched off unless set (#874)', () => {
+    expect(loadConfig({ DATABASE_URL }).HP_CLOCKWORK_ISLE).toBe('off');
+    expect(loadConfig({ DATABASE_URL }).HP_CLOCKWORK_ISLE_TESTERS).toEqual([]);
+    const testers = loadConfig({
+      DATABASE_URL,
+      HP_CLOCKWORK_ISLE: 'testers',
+      HP_CLOCKWORK_ISLE_TESTERS: ' Matt, lee ,,',
+    });
+    expect(testers.HP_CLOCKWORK_ISLE).toBe('testers');
+    expect(testers.HP_CLOCKWORK_ISLE_TESTERS).toEqual(['matt', 'lee']);
+    expect(() => loadConfig({ DATABASE_URL, HP_CLOCKWORK_ISLE: 'yes' })).toThrow(
+      /HP_CLOCKWORK_ISLE/,
+    );
+  });
+
   it('keeps the Long Night switched off unless set (#727)', () => {
     expect(loadConfig({ DATABASE_URL }).HP_LONG_NIGHT).toBe('off');
     expect(loadConfig({ DATABASE_URL }).HP_LONG_NIGHT_TESTERS).toEqual([]);

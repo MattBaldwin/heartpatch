@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ContentIdSchema } from './common.js';
+import { PatchTypeSchema } from '../../patch-types/patch-type.js';
 import { TRADING_POST_TERRAIN } from '../../territory/reach.js';
 
 /**
@@ -21,6 +22,11 @@ export const SpawnTableSchema = z.strictObject({
     .min(1),
   season: ContentIdSchema.optional(),
   timeOfDay: z.enum(['day', 'dusk', 'night']).optional(),
+  /**
+   * The patch types it spawns on (#874: a Clockwork Isle's tech squishies);
+   * left out, every type (as before). Server-only, like the whole table.
+   */
+  patchTypes: z.array(PatchTypeSchema).min(1).optional(),
   entries: z
     .array(
       z.strictObject({

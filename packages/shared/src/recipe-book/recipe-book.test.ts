@@ -28,8 +28,12 @@ const unlocked = (collected: string[]) => unlockedPageKeys(PAGES, new Set(collec
 
 describe('recipe book pages', () => {
   it('lists every recipe in the game, then every buildable building, in data order', () => {
-    const buildable = GAME_DATA.buildings.filter((b) =>
-      (HOME_BASE_RULES.buildableKinds as readonly string[]).includes(b.kind),
+    // A patch-typed row (#874: the Clockwork Beacon, a `lights` row) has no
+    // page: the book is the account's, read on every patch type.
+    const buildable = GAME_DATA.buildings.filter(
+      (b) =>
+        (HOME_BASE_RULES.buildableKinds as readonly string[]).includes(b.kind) &&
+        b.patchTypes === undefined,
     );
     expect(PAGES.map((p) => p.key)).toEqual([
       ...GAME_DATA.recipes.filter(isAvailableRecipe).map((r) => `recipe:${r.id}`),
@@ -208,10 +212,23 @@ describe('whereToFind', () => {
         'turkey-feathers',
         'presents',
         'fireworks',
+        // Clockwork Isle (#874): Parts from Scrap Heaps (lane C1 places
+        // them) and explore finds; Blueprints from the Research Bench.
+        'parts',
+        'blueprints',
         ...HIDDEN.map((h) => h.output.resource),
       ];
       expect(found, r.id).toBe(!elsewhere.includes(r.id));
     }
+  });
+
+  it('names a Clockwork Isle machine only for what nothing else makes (#874)', () => {
+    expect(whereToFind('spark').madeAt).toEqual(['windmill']);
+    // Treats have recipes and Presents a season: their pages read as before.
+    expect(whereToFind('treats').madeAt).toEqual([]);
+    expect(whereToFind('presents').madeAt).toEqual([]);
+    // A Wild Isle works still shows wherever it makes something.
+    expect(whereToFind('fish').madeAt).toEqual(['fishing-pier']);
   });
 
   it('points at terrains, home rings, bonuses and recipes', () => {

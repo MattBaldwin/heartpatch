@@ -2,6 +2,7 @@ import { TERRAINS } from '../data/terrains.js';
 import { hexKey, hexNeighbors, type Hex, type HexKey } from '../hex/index.js';
 import {
   buildsOnPatchType,
+  CLOCKWORK_BUILDING_KINDS,
   WILD_ISLE_BUILDING_KINDS,
   type Building,
   type NeedsWaterSchema,
@@ -124,8 +125,16 @@ export function waterRefusalOf(
   return 'water';
 }
 
-/** The Wild Isle kinds placed through `isBuildableOn` (travel's Waystation still waits). */
-const PLACED_BY_PATCH: readonly Building['kind'][] = WILD_ISLE_BUILDING_KINDS;
+/**
+ * The kinds placed through `isBuildableOn`: the Wild Isle kinds (travel's
+ * Waystation still waits) and the Clockwork Isle ones (#874). A Clockwork
+ * `works` row lists `['clockwork-isle']`, so it goes up only there; the
+ * Beacon (`lights`) goes up through `buildableKinds` like Twinkle Lights.
+ */
+const PLACED_BY_PATCH: readonly Building['kind'][] = [
+  ...WILD_ISLE_BUILDING_KINDS,
+  ...CLOCKWORK_BUILDING_KINDS,
+];
 
 /**
  * Can this building go up on a patch of this type? Today's buildable kinds

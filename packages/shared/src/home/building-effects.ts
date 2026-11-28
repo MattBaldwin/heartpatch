@@ -80,6 +80,11 @@ export function buildingEffects(building: Building, level = 1): BuildingEffect[]
       // Christmas (#37 C0): the kind only; its glow-night effect lands with
       // the lights lane (2a), with the safe-tile rule.
       return [];
+    case 'depot':
+    case 'research':
+      // Clockwork Isle kinds (#874 C0): their effects land with the lane
+      // that words them (C5), so an older build menu stays exhaustive.
+      return [];
   }
 }
 

@@ -10,6 +10,7 @@ import { ContentIdSchema, DisplayNameSchema, RaritySchema } from './data/common.
 import { FeelingIdSchema } from './data/elements.js';
 import { LongNightWeekdaySchema } from './data/long-night.js';
 import { PublicKeeperSchema } from './data/keepers.js';
+import { WindSchema } from './data/power.js';
 import { SpeciesVisualSchema } from './data/species.js';
 import { TimeZoneSchema } from './time.js';
 import { WsSeqSchema } from './ws.js';
@@ -88,8 +89,10 @@ export const CreateMapRequestSchema = z.object({
   /** IANA zone for nightfall and daily resets; the client sends the device's. */
   timeZone: TimeZoneSchema,
   /**
-   * Cozy Patch (left out) or Wild Isle (#621). A Wild Isle is FORBIDDEN while
-   * `HP_WILD_ISLE` is off for the player (`MyMapsResponse.canMakeWildIsle`).
+   * Cozy Patch (left out), Wild Isle (#621) or Clockwork Isle (#874). A Wild
+   * Isle is FORBIDDEN while `HP_WILD_ISLE` is off for the player
+   * (`MyMapsResponse.canMakeWildIsle`), a Clockwork Isle while
+   * `HP_CLOCKWORK_ISLE` is (`canMakeClockworkIsle`).
    */
   patchType: PatchTypeSchema.optional(),
 });
@@ -230,6 +233,12 @@ export const MyMapsResponseSchema = z.object({
    * `HP_WILD_ISLE`). Left out (older servers, the switch off) hides it.
    */
   canMakeWildIsle: z.boolean().optional(),
+  /**
+   * Whether the create form offers a Clockwork Isle to this player (#874,
+   * `HP_CLOCKWORK_ISLE`): false while the switch is off for them. Left out
+   * (older servers) hides it too.
+   */
+  canMakeClockworkIsle: z.boolean().optional(),
 });
 export type MyMapsResponse = z.infer<typeof MyMapsResponseSchema>;
 
@@ -443,6 +452,12 @@ export const PublicTileSchema = z.object({
    * older fixtures and servers parse.
    */
   communityId: z.uuid().nullable().optional(),
+  /**
+   * A Clockwork Isle land tile's wind (#874): 1 still, 2 breezy, 3 blowy,
+   * from the generator and never changed (a Windmill's pace). Public; never
+   * the seed. Left out on every other tile, patch type and older server.
+   */
+  wind: WindSchema.optional(),
 });
 export type PublicTile = z.infer<typeof PublicTileSchema>;
 /** A gatherer's look on a tile (`PublicTile.workerLook`), when the viewer may see it. */

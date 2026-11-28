@@ -65,6 +65,17 @@ const buildingBase = {
   patchTypes: z.array(PatchTypeSchema).min(1).optional(),
   /** A storm never knocks it and its own pace ignores the weather (Wild Isle, #621; the Greenhouse, owner answer Q4). */
   weatherproof: z.literal(true).optional(),
+  /**
+   * Clockwork Isle (#874): it works only while powered, joined to one of its
+   * owner's generators by `POWER_RULES` (unpowered time is
+   * `buildings.unpowered_since`). Only on Clockwork rows (`checkGameData`).
+   */
+  needsPower: z.literal(true).optional(),
+  /**
+   * Clockwork Isle (#874): its owner builds it only once this research node
+   * (`RESEARCH_TREE`) is known on the patch (`checkResearchTree`).
+   */
+  requiresResearch: ContentIdSchema.optional(),
 };
 
 /**
@@ -177,7 +188,9 @@ export const NeedsWaterSchema = z.enum([...WaterKindSchema.options, 'canal']);
  * pace), eating `eats` from its owner's bag each cycle. `needsWater`: it
  * only stands next to one of these. `weather`: its pace under a front of
  * that kind (left out: 100 %). `onlyWhile`: it only works under a front of
- * that kind (the Rain Barrel). Levels work as a resource building's.
+ * that kind (the Rain Barrel). `wind` (Clockwork Isle, #874): its pace
+ * follows `POWER_RULES.windPace` at its tile's wind (a Windmill). Levels work
+ * as a resource building's.
  */
 export const WorksBuildingSchema = z.strictObject({
   ...buildingBase,
@@ -195,6 +208,13 @@ export const WorksBuildingSchema = z.strictObject({
   needsWater: z.array(NeedsWaterSchema).min(1).optional(),
   weather: z.partialRecord(WeatherKindSchema, z.number().int().min(0).max(1000)).optional(),
   onlyWhile: WeatherKindSchema.exclude(['clear']).optional(),
+  wind: z.literal(true).optional(),
+  /**
+   * Clockwork Isle (#874): it powers its owner's `needsPower` buildings
+   * joined to it by `POWER_RULES` (a Windmill; Wave 2's Solar Pane). Only on
+   * Clockwork rows (`checkGameData`).
+   */
+  generator: z.literal(true).optional(),
   levels: levels({
     pacePercent: z.number().int().min(100).max(1000),
     storageHours: z.number().int().min(1).max(240),
@@ -234,7 +254,7 @@ export const ShelterBuildingSchema = z.strictObject({
  * Lights (#37 C0, owner answer 4): a fuel-free building that glows at night.
  * On a `glowNights` night (map-local `MM-DD`, the night that starts that day) it counts as light against the
  * Hollow Man within `safeRadius` tiles (0: its own tile); other nights it
- * is cosmetic. Twinkle Lights are the first; a Clockwork beacon (#874) is a
+ * is cosmetic. Left out (#874), every night counts. Twinkle Lights are the first; a Clockwork beacon (#874) is a
  * later one with `safeRadius` 2, needing no second rule. The safe-tile rule
  * itself lands with the lights lane (`home/safe-tiles.ts`), not here.
  */
@@ -242,11 +262,11 @@ export const LightsBuildingSchema = z
   .strictObject({
     ...buildingBase,
     kind: z.literal('lights'),
-    glowNights: z.array(MonthDaySchema).min(1).max(31),
+    glowNights: z.array(MonthDaySchema).min(1).max(31).optional(),
     safeRadius: z.number().int().min(0).max(2),
     levels: levels({}),
   })
-  .refine((b) => new Set(b.glowNights).size === b.glowNights.length, {
+  .refine((b) => b.glowNights === undefined || new Set(b.glowNights).size === b.glowNights.length, {
     message: 'list each glow night once',
     path: ['glowNights'],
   });
@@ -296,6 +316,31 @@ export const TravelBuildingSchema = z
     path: ['reach'],
   });
 
+/**
+ * A Clockwork Isle Rail Depot (#874): with one standing, its owner's squishy
+ * gatherers on rail-joined land deliver straight to the bag, holding up to
+ * `waitingCycles` gathers for the settle (instead of `JOB_RULES`' cap).
+ */
+export const DepotBuildingSchema = z.strictObject({
+  ...buildingBase,
+  kind: z.literal('depot'),
+  levels: levels({
+    waitingCycles: z.number().int().min(1).max(96),
+    /** This level is built only once its owner knows this `RESEARCH_TREE` node. */
+    requiresResearch: ContentIdSchema.optional(),
+  }),
+});
+
+/**
+ * A Clockwork Isle Research Bench (#874): works on one `RESEARCH_TREE` node
+ * at a time for its owner, at `pacePercent` of the node's `seconds`.
+ */
+export const ResearchBuildingSchema = z.strictObject({
+  ...buildingBase,
+  kind: z.literal('research'),
+  levels: levels({ pacePercent: z.number().int().min(100).max(1000) }),
+});
+
 export const BuildingSchema = z.discriminatedUnion('kind', [
   HearthfireBuildingSchema,
   HabitatBuildingSchema,
@@ -310,6 +355,8 @@ export const BuildingSchema = z.discriminatedUnion('kind', [
   VaneBuildingSchema,
   TravelBuildingSchema,
   LightsBuildingSchema,
+  DepotBuildingSchema,
+  ResearchBuildingSchema,
 ]);
 export type Building = z.infer<typeof BuildingSchema>;
 export type BuildingKind = Building['kind'];
@@ -331,9 +378,25 @@ export type CanalBuilding = z.infer<typeof CanalBuildingSchema>;
 export type ShelterBuilding = z.infer<typeof ShelterBuildingSchema>;
 export type VaneBuilding = z.infer<typeof VaneBuildingSchema>;
 export type TravelBuilding = z.infer<typeof TravelBuildingSchema>;
+export type LightsBuilding = z.infer<typeof LightsBuildingSchema>;
+export type DepotBuilding = z.infer<typeof DepotBuildingSchema>;
+export type ResearchBuilding = z.infer<typeof ResearchBuildingSchema>;
 
-/** The Wild Isle building kinds (#621): each lists `patchTypes: ['wild-isle']` (`checkGameData`). */
+/**
+ * The Wild Isle building kinds (#621): each lists `patchTypes: ['wild-isle']`
+ * (`checkGameData`), except a Clockwork Isle `works` row (#874), which lists
+ * `['clockwork-isle']`.
+ */
 export const WILD_ISLE_BUILDING_KINDS = ['works', 'canal', 'shelter', 'vane', 'travel'] as const;
+
+/**
+ * The Clockwork Isle building kinds (#874): each lists
+ * `patchTypes: ['clockwork-isle']`. Clockwork `works` and `lights` rows do
+ * too (`checkGameData`), and every Clockwork row is one of these four kinds.
+ */
+export const CLOCKWORK_BUILDING_KINDS = ['depot', 'research'] as const;
+/** The kinds a Clockwork Isle row may be (#874). */
+export const CLOCKWORK_ROW_KINDS = ['works', 'lights', ...CLOCKWORK_BUILDING_KINDS] as const;
 
 /** Can this building be built on a patch of this type? (Its `patchTypes`, if it lists any.) */
 export function buildsOnPatchType(

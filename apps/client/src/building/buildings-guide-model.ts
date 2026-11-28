@@ -49,7 +49,11 @@ const WEATHER_WORDS: Record<WeatherKind, string> = {
   fog: 'fog',
   drought: 'a drought',
 };
-const PATCH_NAMES: Record<PatchType, string> = { cozy: 'Cozy Patch', 'wild-isle': 'Wild Isle' };
+const PATCH_NAMES: Record<PatchType, string> = {
+  cozy: 'Cozy Patch',
+  'wild-isle': 'Wild Isle',
+  'clockwork-isle': 'Clockwork Isle', // #874: the working name (owner answer Q4)
+};
 
 // Player-facing text (style guide: cozy, short, kid-readable).
 export const GUIDE_TEXT = {

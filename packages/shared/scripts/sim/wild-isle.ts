@@ -178,10 +178,11 @@ export interface WorksLevelDay {
   readonly upkeepPercent: number;
 }
 
-/** Every works at every level: a day's output (weather averaged), its sale value and its upkeep's share. */
+/** Every Wild Isle works at every level: a day's output (weather averaged), its sale value and its upkeep's share. */
 export function worksLevelDays(island: WildIsland, days: number): WorksLevelDay[] {
   return BUILDINGS.flatMap((b) => {
-    if (b.kind !== 'works') return [];
+    // Clockwork Isle works (#874) are `pnpm sim:clockwork`'s (lane C6).
+    if (b.kind !== 'works' || b.patchTypes?.includes('wild-isle') !== true) return [];
     const site = island.sites.get(b.id) ?? island.home;
     const source = worksSource(b);
     const pace = paceAt(b, site, island);

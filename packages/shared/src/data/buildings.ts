@@ -511,7 +511,8 @@ export const BUILDINGS: Building[] = [
     role: 'bridge',
     name: 'Bridge',
     description: 'Hop across the river! Every Keeper on the patch can use it.',
-    patchTypes: ['wild-isle'],
+    // Clockwork Isles have rivers too (#874): the same bridge crosses them.
+    patchTypes: ['wild-isle', 'clockwork-isle'],
     placement: 'land', // it stands on a river tile (`onWater`), not owned land
     onWater: 'river',
     maxPerTile: 1,
@@ -780,5 +781,133 @@ export const BUILDINGS: Building[] = [
     maxPerTile: 1,
     slot: 'ring',
     levels: [{ cost: { timber: 15, glimmer: 2 } }], // TUNE:
+  },
+  // Clockwork Isle (#874 plan §6): a Wild Isle you wire up. Built on a
+  // Clockwork Isle only, by the map's patch type (`isBuildableOn`), never
+  // from `buildableKinds`; nothing builds them until lanes C2 and C3 wire
+  // the server. No upkeep in Wave 1 (`pnpm sim:clockwork`, C6, sets it).
+  {
+    // The generator: makes Spark, faster on a blowy tile (`POWER_RULES.windPace`).
+    id: 'windmill',
+    kind: 'works',
+    name: 'Windmill',
+    description: 'Brrr! The colder the wind, the faster it spins. Makes Spark Jars.',
+    patchTypes: ['clockwork-isle'],
+    placement: 'homestead',
+    maxPerTile: 1,
+    slot: 'ring',
+    wind: true,
+    generator: true,
+    makes: { resource: 'spark', quantity: 1, seconds: 15 * 60 }, // TUNE: 4 an hour at wind 2
+    levels: [
+      { cost: { timber: 12, stone: 6, parts: 4 }, pacePercent: 100, storageHours: 24, upkeep: 0 }, // TUNE:
+      { cost: { timber: 24, stone: 12, parts: 10 }, pacePercent: 150, storageHours: 48, upkeep: 0 }, // TUNE:
+    ],
+  },
+  {
+    // One machine for Wave 1: the cooking pot's Treats, hands-free, on Spark.
+    id: 'sorter',
+    kind: 'works',
+    name: 'Sorter',
+    description: 'Whirr, clank! Sorts Greens into yummy Treats, all by itself.',
+    patchTypes: ['clockwork-isle'],
+    placement: 'homestead',
+    maxPerTile: 1,
+    slot: 'ring',
+    needsPower: true,
+    requiresResearch: 'sorting',
+    eats: { spark: 1, greens: 2 }, // TUNE: per cycle, from the bag at the settle
+    makes: { resource: 'treats', quantity: 3, seconds: 15 * 60 }, // TUNE:
+    levels: [
+      {
+        cost: { timber: 8, parts: 10, blueprints: 1 },
+        pacePercent: 100,
+        storageHours: 24,
+        upkeep: 0,
+      }, // TUNE:
+      {
+        cost: { timber: 16, parts: 20, blueprints: 2 },
+        pacePercent: 150,
+        storageHours: 48,
+        upkeep: 0,
+      }, // TUNE:
+    ],
+  },
+  {
+    id: 'research-bench',
+    kind: 'research',
+    name: 'Research Bench',
+    description: 'Tinker with Parts and Spark Jars to dream up new builds!',
+    patchTypes: ['clockwork-isle'],
+    placement: 'homestead',
+    maxPerHome: 1, // one bench a Keeper's patch; one research at a time anyway
+    maxPerTile: 1,
+    slot: 'ring',
+    levels: [
+      { cost: { timber: 10, stone: 8, parts: 6 }, pacePercent: 100 }, // TUNE:
+      { cost: { timber: 20, stone: 16, parts: 12, blueprints: 1 }, pacePercent: 150 }, // TUNE:
+    ],
+  },
+  {
+    // Rail-joined gatherers deliver straight to the bag, holding more for it.
+    id: 'rail-depot',
+    kind: 'depot',
+    name: 'Rail Depot',
+    description: 'Little carts roll what your squishies gather all the way home.',
+    patchTypes: ['clockwork-isle'],
+    placement: 'homestead',
+    maxPerHome: 1,
+    maxPerTile: 1,
+    slot: 'ring',
+    levels: [
+      { cost: { timber: 14, parts: 8 }, waitingCycles: 12 }, // TUNE:
+      {
+        cost: { timber: 28, parts: 16, blueprints: 1 },
+        waitingCycles: 24,
+        requiresResearch: 'tidy-rails',
+      }, // TUNE:
+    ],
+  },
+  {
+    // A powered light (plan §6): every night (no `glowNights`), no fuel. A
+    // `lights` row, so a lit one warms the Christmas Eve bar too (supervisor
+    // ruling 2026-11-28: a lit tile is a lit tile).
+    id: 'clockwork-beacon',
+    kind: 'lights',
+    name: 'Clockwork Beacon',
+    description: 'The Beacon hums. The Hollow Man keeps his distance.',
+    patchTypes: ['clockwork-isle'],
+    placement: 'homestead',
+    maxPerTile: 1,
+    slot: 'ring',
+    needsPower: true,
+    requiresResearch: 'bright-bulbs',
+    safeRadius: 2,
+    levels: [{ cost: { stone: 10, glimmer: 1, parts: 12, blueprints: 2 } }], // TUNE:
+  },
+  {
+    // The presents tie-in (plan R1.1, owner yes 2026-11-28): a machine-made
+    // present opens with the same roll as a gifted one. Built in December.
+    id: 'gift-wrapper',
+    kind: 'works',
+    name: 'Gift Wrapper',
+    description: 'Snip, fold, ribbon! Wraps Treats and Parts into a present.',
+    season: 'christmas',
+    patchTypes: ['clockwork-isle'],
+    placement: 'homestead',
+    maxPerTile: 1,
+    slot: 'ring',
+    needsPower: true,
+    requiresResearch: 'wrapping',
+    eats: { spark: 1, parts: 2, treats: 2 }, // TUNE: per cycle, from the bag at the settle
+    makes: { resource: 'presents', quantity: 1, seconds: 8 * 3600 }, // TUNE:
+    levels: [
+      {
+        cost: { timber: 10, parts: 10, blueprints: 1 },
+        pacePercent: 100,
+        storageHours: 24,
+        upkeep: 0,
+      }, // TUNE:
+    ],
   },
 ];
