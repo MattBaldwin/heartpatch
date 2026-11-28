@@ -91,8 +91,8 @@ export interface BulbCounts {
  */
 export function bulbCounts(eaves: number, posts: number, budget: number, edges = 6): BulbCounts {
   const room = Math.max(0, Math.floor(budget));
-  const keepPost = Math.min(B.perPost, B.keep);
-  const keepEave = Math.min(B.perEave, B.keep);
+  const keepPost = Math.min(B.perPost, B.keep.post);
+  const keepEave = Math.min(B.perEave, B.keep.eave);
   const kept = keepPost * posts + keepEave * eaves;
   if (edges > 0 && room < kept + edges * 2) {
     const perEdge = Math.min(B.perEdge, Math.floor(room / edges));
@@ -108,6 +108,16 @@ export function bulbCounts(eaves: number, posts: number, budget: number, edges =
   left -= (perPost - keepPost) * posts;
   const perEave = eaves === 0 ? 0 : Math.min(B.perEave, keepEave + Math.floor(left / eaves));
   return { perEdge, perEave, perPost };
+}
+
+/** True when a tile's own buildings cover the middle of its `edge` (no string there). */
+export function edgeCovered(tile: BulbTile, edge: number, size: number): boolean {
+  const c = hexToWorld(tile, size);
+  const a = (Math.PI / 3) * edge;
+  const reach = size * FENCE_INSET * (Math.sqrt(3) / 2);
+  const x = c.x + Math.cos(a) * reach;
+  const z = c.z + Math.sin(a) * reach;
+  return tile.eaves.some((e) => Math.hypot(x - e.x, z - e.z) < e.footprint + B.size * B.core);
 }
 
 /** How many of a tile's buildings get a swag (not the flat ones). */
@@ -184,13 +194,15 @@ export function bulbLayout(tiles: readonly BulbTile[], size: number, cap: number
   const share = Math.floor(cap / tiles.length);
   // Two lit tiles side by side share one string on their edge: the one
   // whose key sorts first strings it, so it never doubles into a thick band.
-  const lit = new Set(tiles.map((t) => hexKey(t)));
+  // A tile can't string an edge its own building covers, so the other one does.
+  const byKey = new Map(tiles.map((t) => [hexKey(t), t]));
   const bulbs = tiles.flatMap((tile) => {
     const own = hexKey(tile);
     const skip = new Set(
       HEX_EDGES.filter((e) => {
-        const other = hexKey(edgeNeighbor(tile, e));
-        return lit.has(other) && other < own;
+        const otherKey = hexKey(edgeNeighbor(tile, e));
+        const other = byKey.get(otherKey);
+        return other !== undefined && otherKey < own && !edgeCovered(other, (e + 3) % 6, size);
       }),
     );
     const t = skip.size > 0 ? { ...tile, skip } : tile;

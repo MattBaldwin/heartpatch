@@ -7,7 +7,14 @@ import {
   MAP_MAX_PLAYERS,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { bulbCounts, bulbLayout, litTiles, tileBulbs, type BulbTile } from './bulb-layout.js';
+import {
+  bulbCounts,
+  bulbLayout,
+  edgeCovered,
+  litTiles,
+  tileBulbs,
+  type BulbTile,
+} from './bulb-layout.js';
 import { FENCE_INSET } from './fence-layout.js';
 import { CHRISTMAS } from './map-config.js';
 import { testView } from './test-view.js';
@@ -171,10 +178,10 @@ describe('bulb layout (#37 2a)', () => {
   it('gives every string its full count while the patch fits, and respaces past it', () => {
     expect(bulbCounts(1, 1, 1000)).toEqual(FULL);
     // Swags and coils keep a few, the edges share the rest, then the coil and swags top up.
-    expect(bulbCounts(2, 1, 30)).toEqual({ perEdge: 3, perEave: 3, perPost: 5 });
-    expect(bulbCounts(2, 1, 40)).toEqual({ perEdge: 5, perEave: 3, perPost: 4 });
+    expect(bulbCounts(2, 1, 30)).toEqual({ perEdge: 3, perEave: 4, perPost: 4 });
+    expect(bulbCounts(2, 1, 40)).toEqual({ perEdge: 4, perEave: 5, perPost: 5 });
     // A busy patch (600 over 24 tiles) still swags its house and coils its post.
-    expect(bulbCounts(1, 1, 25)).toEqual({ perEdge: 3, perEave: 3, perPost: 4 });
+    expect(bulbCounts(1, 1, 25)).toEqual({ perEdge: 3, perEave: 4, perPost: 3 });
     // A tile sharing two edges with lit neighbours strings four.
     expect(bulbCounts(1, 1, 25, 4)).toEqual({ perEdge: 4, perEave: 4, perPost: 5 });
     // Too little room even for that: edges first.
@@ -194,6 +201,20 @@ describe('bulb layout (#37 2a)', () => {
     // No two bulbs hang in the same spot.
     const spots = new Set(both.map((p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`));
     expect(spots.size).toBe(both.length);
+  });
+
+  it('lets the neighbour string a shared edge its own building covers', () => {
+    const a = tile(0, 0);
+    const cb = hexToWorld(hex(1, 0), SIZE);
+    // b (key "1,0" sorts after "0,0") has a building over its edge 3, the one shared with a.
+    const big = { x: cb.x - SIZE * 0.5, z: cb.z, y: 0.8, radius: 0.2, footprint: SIZE * 0.3 };
+    const b = tile(1, 0, { eaves: [big] });
+    expect(edgeCovered(b, 3, SIZE)).toBe(true);
+    const both = bulbLayout([a, b], SIZE);
+    const ca = hexToWorld(a, SIZE);
+    // a keeps its edge 0 string (its bulbs lie east of its middle, near b).
+    const edge0 = both.filter((p) => p.x - ca.x > SIZE * 0.6);
+    expect(edge0.length).toBeGreaterThan(0);
   });
 
   it('never passes the cap, and draws nothing with no lit tile', () => {

@@ -765,8 +765,8 @@ export const CHRISTMAS = {
     perEave: 5, // TUNE
     /** Round the Twinkle Lights' own post. */
     perPost: 5, // TUNE
-    /** Each swag and coil keeps this many on a busy patch before the edges share the rest. */
-    keep: 3, // TUNE
+    /** Each coil and swag keeps this many on a busy patch before the edges share the rest. */
+    keep: { post: 3, eave: 4 }, // TUNE
     /** Warm white, red, green, gold (the approved M0 colours, green lifted). sRGB. */
     colors: ['#fff0c4', '#ff5d52', '#7dffb2', '#ffcc4d'], // TUNE: a bright mint green (deeper reads murky at night)
     /** By day the same bulbs are unlit glass in these (pale cream, red, green, bright gold). sRGB. */
