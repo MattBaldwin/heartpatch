@@ -684,14 +684,7 @@ export const BOSS_SPECIES: Species[] = [
     visual: {
       body: 'blob',
       palette: SNOW_PALETTE,
-      parts: [
-        'sleepy-eyes',
-        'tiny-smile',
-        'blush-cheeks',
-        'belly-patch',
-        'acorn-cup',
-        'lure-beads',
-      ],
+      parts: ['sleepy-eyes', 'tiny-smile', 'blush-cheeks', 'acorn-cup', 'lure-beads'],
       size: 1,
       finish: 'iridescent',
       glow: 'accent',
