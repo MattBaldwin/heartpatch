@@ -193,7 +193,20 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 61 → supervisor 62, 2026-11-28 ~08:40 UTC): read this first; every block below is history.** Decisions are in DECISIONS "Supervisor 61 (2026-11-28)". Supervisor 61 (`session_01RAEPnEU6hfueSeLBaQoRek`, lineage depth 4) handed off at ~200k context after only an hour. Three MCP reconnects (~20k each) and one full read of #874's comments (~10k) used most of it. Don't read #874's comments yourself: they're huge. Send a helper.
+- **State (supervisor 62 → supervisor 63, 2026-11-28 ~09:20 UTC): read this first; every block below is history.** Decisions are in DECISIONS "Supervisor 62 (2026-11-28)". Supervisor 62 (`session_01RAEPnDDCzKv7XHvzdiEAyJ`, lineage depth 5) handed off at ~195k context after 50 minutes. **Four worker restarts** each reloaded ~20k of MCP schemas, and each one also killed the pending AskUserQuestion. Keep owner questions short, and ask them early in a turn.
+  - **Main** is `b1b3d69` (#931) or later. Supervisor 62 merged #933 (`e3f2fbe`) and #931 (C2a, `b1b3d69`). Supervisor 61 and lane C2 are archived.
+  - **Running lanes** all confirmed supervisor 62; re-route each to you (§8):
+    - **C1** `session_01RAEPnErLBEdRwZEVg8NjdE`: **PR #928**, reviewer round 2 APPROVE. Supervisor 62 ran update_pull_request_branch, and the fresh CI on c0c1e07 is running. The earlier red was `home.spec.ts:269` on ipad-webkit 6; if it fails again, C1 fixes it as real. **Merging #928 unblocks C4:** message C4 when it merges.
+    - **C2b** `session_01RAEPnHWYt5UbApc4X9dF8W`: **PR #932** (Rail Depot), reviewer round 2 APPROVE. It's still a draft at 8c8072c. Supervisor 62 told it to retarget to main, merge main and mark the PR ready. Its fast red (`communities/restore.test.ts`, the `tests/road-join.ts` helper fails on some random seeds) isn't C2b's. **Cut rule: not merged by Nov 29 ~14:00 UTC → Depot to Wave 2.**
+    - **C3** `session_01RAEPnFHAAhWEDVRwRQfbyN`: told #931 merged. It's adding the buildings gate and `PublicBuilding.research` on `issue-874-c3-research-bench`, then opens its PR.
+    - **C4** `session_01RAEPnDcQFLR6tgN9fQQM9S`: reviewer APPROVE, and a round-3 delta review was running. It opens its PR after #928 merges. Captures: `captures-874-clockwork/c4-ac0fbd7`. **Render-check them with an Opus helper before the owner sees them.**
+    - **C6** `session_01RAEPnF5RidFi2PHFYU7mLS`: standing by for G5 answers (one data PR, plus the Windmill comment fix).
+    - **6b-3** `session_01RAEPnDJUjEce29W1aCTXTQ`: **PR #925** at 1d6899d, `check` green. Reviewer round 3 was running. Verify the APPROVE comment yourself, then merge, then X3c.
+    - **2d** `session_01RAEPnE4uCYEuFuHLdiKxsv`: **PR #929** at 32987f4, reviewer round 2 running. The red on c15abb5 was `roads.spec.ts:33` ("Target page closed"), the known #784 flake. **Render-check the night frames at 0, 6 and 12 ornaments (iPhone and iPad)** before the owner sees them.
+  - **G5 owner questions are still unasked.** Supervisor 62's three tries were all lost to worker restarts. The wording is in supervisor 61's block below. Ask question 1 first, then question 2.
+  - **C5** isn't started. Brief it after C4 and C2a/C3 merge (plan row C5, R2.3).
+  - **Follow-ups (queued):** everything in supervisor 61's list, plus a `Fix:` lane to make `tests/road-join.ts` (used by `communities/restore.test.ts`) deterministic across map seeds.
+- **State (supervisor 61 → supervisor 62, 2026-11-28 ~08:40 UTC):** Decisions are in DECISIONS "Supervisor 61 (2026-11-28)". Supervisor 61 (`session_01RAEPnEU6hfueSeLBaQoRek`, lineage depth 4) handed off at ~200k context after only an hour. Three MCP reconnects (~20k each) and one full read of #874's comments (~10k) used most of it. Don't read #874's comments yourself: they're huge. Send a helper.
   - **Main** is `0379893` (#930) or later. Supervisor 61 merged #927 (C6, `680f17a`) and #930. Supervisor 60 is archived.
   - **Running lanes** all confirmed supervisor 61; re-route each to you (§8):
     - **C1** `session_01RAEPnErLBEdRwZEVg8NjdE`: **PR #928** (map generator). It's in reviewer round 2, and CI was red on 24db1cb in `e2e (ipad-webkit, 6)`; C1 is fixing it. Merging #928 unblocks C4.
