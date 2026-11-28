@@ -192,8 +192,12 @@ test('See all buildings lists every building, what fits here, and builds from it
   } else {
     await expect(jumpRow).not.toHaveAttribute('data-fade-right', '');
   }
-  await guide.getByTestId('guide-entry').last().scrollIntoViewIfNeeded();
-  expect(await picturesDrawn(page)).toContain(state.ids.at(-1));
+  // The last card on the shelves (Coming later sits after them, in its own
+  // shelf: in the suite's October, Twinkle Lights wait there, #37 2a).
+  await guide.locator('.guide-entry:not(.guide-entry-later)').last().scrollIntoViewIfNeeded();
+  expect(await picturesDrawn(page)).toContain(
+    state.ids.filter((id) => !state.later.includes(id)).at(-1),
+  );
   if (state.later.length > 0) {
     await guide.locator('[data-jump="later"]').tap();
     expect(await picturesDrawn(page)).toContain(state.later[0]);

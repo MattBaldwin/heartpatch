@@ -141,7 +141,9 @@ describe('Wild Isle works models (#621 W1-10)', () => {
       (b) => b.patchTypes?.includes('wild-isle') && b.id !== 'bridge' && b.id !== 'ferry-dock',
     )
     .map((b) => b.id);
-  const WORKS = GAME_DATA.buildings.filter((b) => b.kind === 'works').map((b) => b.id);
+  const WORKS = GAME_DATA.buildings
+    .filter((b) => b.kind === 'works' && b.patchTypes?.includes('wild-isle'))
+    .map((b) => b.id);
   /** TUNE: about the Greenhouse's; a homestead shows a handful at once. */
   const TRIANGLE_CAP = 6000;
 
@@ -315,6 +317,9 @@ describe('every building has a model (#715)', () => {
   it('gives every building in BUILDINGS its own model, not the plain marker', () => {
     const scene = new Scene(engine);
     for (const b of GAME_DATA.buildings) {
+      // Clockwork Isle rows (#874 C0) get their models with lane C5 (mockup
+      // M3); C5 takes this skip out.
+      if (b.patchTypes?.includes('clockwork-isle')) continue;
       const { body, glow } = buildBuildingModel(scene, b.id, 'plain', 1);
       body.dispose();
       glow?.dispose();

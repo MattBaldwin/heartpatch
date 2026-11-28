@@ -341,6 +341,8 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
       'building:pumpkin-barn',
       // The Warehouse (#601 PR 9) needs Stone and Glimmer.
       'building:warehouse',
+      // Twinkle Lights (#37 2a) need Glimmer too.
+      'building:twinkle-lights',
       'recipe:cook-treats',
       'recipe:freeze-water',
       'building:hedge',

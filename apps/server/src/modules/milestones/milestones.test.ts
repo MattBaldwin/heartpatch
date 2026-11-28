@@ -376,6 +376,7 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
       seeker: 0, // searches count in the explore tests (#199)
       halloween: 2, // the pumpkins and the Witch Hat
       'cozy-harvest': 0, // Thanksgiving only (#34); this runs in the Halloween window
+      christmas: 0, // Christmas only (#37), below
       'lantern-keeper': 0, // the far Hollow's attic (#306 6b)
       'set-rekindled': 0, // found in the Hollows (#306 PR 5)
       'big-friend': 0, // mini-boss wins (#190), below
@@ -799,6 +800,73 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
     await append(gathered(mapId, kid));
     await run(mapId);
     expect(trackOf(await milestones(server, kid), 'halloween')?.progress).toBe(1);
+  });
+
+  it('counts advent, bag presents, Eve chips and the lit star only in the Christmas window (#37)', async () => {
+    const server = await start();
+    const kid = await player();
+    const pal = await player();
+    const mapId = await patch([kid, pal]);
+    const december = (): NewGameEvent[] => [
+      {
+        mapId,
+        type: 'advent.claimed',
+        actorUserId: kid.id,
+        payload: {
+          userId: kid.id,
+          claimId: randomUUID(),
+          day: '2026-12-05',
+          catchUp: false,
+          items: { treats: 2 },
+        },
+      },
+      {
+        mapId,
+        type: 'present.opened',
+        actorUserId: kid.id,
+        payload: { userId: kid.id, openingId: randomUUID(), items: { pies: 1 } },
+      },
+      {
+        mapId,
+        type: 'boss.chipped',
+        actorUserId: kid.id,
+        payload: {
+          window: '2026-12-24',
+          userId: kid.id,
+          battleId: randomUUID(),
+          points: 0,
+          chipped: 40,
+          goal: 200,
+        },
+      },
+      // The Patch Tree (#37 2c): the gift that lights the star counts for its
+      // giver; an ornament that doesn't light it counts for nobody.
+      ...[true, false].map((starLit) => ({
+        mapId,
+        type: 'tree.decorated' as const,
+        actorUserId: pal.id,
+        payload: {
+          offerId: randomUUID(),
+          postTileId: randomUUID(),
+          postIndex: 0,
+          fromUserId: kid.id,
+          toUserId: pal.id,
+          source: 'gift' as const,
+          added: 1,
+          ornaments: starLit ? 12 : 13,
+          starLit,
+        },
+      })),
+    ];
+    clock = new Date('2026-10-20T12:00:00Z');
+    for (const event of december()) await append(event);
+    await run(mapId);
+    expect(trackOf(await milestones(server, kid), 'christmas')?.progress).toBe(0);
+    clock = new Date('2026-12-05T12:00:00Z');
+    for (const event of december()) await append(event);
+    await run(mapId);
+    expect(trackOf(await milestones(server, kid), 'christmas')?.progress).toBe(4);
+    expect(trackOf(await milestones(server, pal), 'christmas')?.progress).toBe(0);
   });
 
   it('marks news seen, for my own rewards only', async () => {

@@ -65,7 +65,8 @@ function ownerOnlyView(
     | 'post.bought'
     | 'advent.claimed'
     | 'present.opened'
-    | 'boss.thanked',
+    | 'boss.thanked'
+    | 'research.started',
 ): PublicView {
   return definePublicView({
     schema: GAME_EVENTS[type].public,
@@ -211,6 +212,8 @@ export const PUBLIC_VIEWS: PublicViews = {
   // the Keeper's own. `boss.fell` is the registry view: the whole patch cheers.
   'boss.chipped': bossChippedView,
   'boss.thanked': ownerOnlyView('boss.thanked'),
+  // Clockwork Isle (#874): what I'm researching is mine; the patch hears `research.done`.
+  'research.started': ownerOnlyView('research.started'),
   // A village's key hunt is its winner's own (#306 PR 2c).
   'key.found': ownerOnlyView('key.found'),
   'cellar.opened': ownerOnlyView('cellar.opened'),

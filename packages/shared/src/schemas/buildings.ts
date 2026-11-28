@@ -35,8 +35,11 @@ export const BuildingKindSchema = z.enum([
   'shelter',
   'vane',
   'travel',
-  /** Christmas (#37 C0): Twinkle Lights; buildable once the lights lane (2a) adds it to `buildableKinds`. */
+  /** Christmas (#37): Twinkle Lights (C0 shape; buildable since lane 2a). */
   'lights',
+  /** Clockwork Isle (#874): the Rail Depot and the Research Bench, only ever on a Clockwork Isle. */
+  'depot',
+  'research',
 ]);
 export type BuildingRowKind = z.infer<typeof BuildingKindSchema>;
 
@@ -69,6 +72,19 @@ export const PublicBuildingSchema = z.object({
    * never knocks, on a Cozy Patch, and by older servers.
    */
   knocked: z.boolean().optional(),
+  /**
+   * Clockwork Isle (#874): a `needsPower` building cut off from its owner's
+   * generators; it waits for a wire. Left out while powered, for kinds that
+   * need no power, on every other patch type, and by older servers.
+   */
+  unpowered: z.literal(true).optional(),
+  /**
+   * Clockwork Isle (#874): a Research Bench's node going now and when it's
+   * ready. Sent only to the bench's owner (research is theirs, like
+   * `research.started`); left out for everyone else, while idle, on every
+   * other kind, and by older servers.
+   */
+  research: z.object({ nodeId: ContentIdSchema, readyAt: z.iso.datetime() }).optional(),
 });
 export type PublicBuilding = z.infer<typeof PublicBuildingSchema>;
 

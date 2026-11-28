@@ -156,9 +156,11 @@ describe('Wild Isle building effects (#621 W1-8)', () => {
     expect(wildIsleEffects(byId('weather-vane'))).toEqual([{ kind: 'forecast' }]);
     expect(wildIsleEffects(byId('greenhouse'))).toEqual([{ kind: 'weatherproof' }]);
     expect(wildIsleEffects(byId('hearthfire'))).toEqual([]);
-    // Every Wild Isle building but the crossings says something.
+    // Every Wild Isle building but the crossings says something. Clockwork
+    // Isle ones (#874) get their words with lane C5.
     for (const b of BUILDINGS) {
       if (b.patchTypes === undefined || b.kind === 'travel') continue;
+      if (b.patchTypes.includes('clockwork-isle')) continue;
       const said = wildIsleEffects(b).length + economyEffects(b, 1, rules).length;
       expect(said, b.id).toBeGreaterThan(0);
     }

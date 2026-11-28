@@ -7,6 +7,9 @@ import { HOUSE_DATA } from './house.js';
 import { MAP_GEN } from './map-gen.js';
 import { MOVES, SPECIES } from './species.js';
 import { RECIPES } from './recipes.js';
+import { RESEARCH_TREE } from './research.js';
+import { POWER_RULES } from './power.js';
+import { RAIL_RULES } from './rails.js';
 import { RESOURCES, RETIRED_RESOURCES as RETIRED } from './resources.js';
 import { SEASONS } from './seasons.js';
 import { GLIMMER_SWAP, SELL_RULES, TRADE_VALUES } from './trading.js';
@@ -152,6 +155,8 @@ describe('every resource has a way in and a way out (#735)', () => {
     ...RESOURCES.flatMap((r) => r.gather?.extras?.map((e) => e.resource) ?? []),
     ...BUILDINGS.flatMap((b) => (b.kind === 'works' ? [b.makes.resource] : [])),
     ...RECIPES.map((r) => r.output.resource),
+    // Clockwork Isle (#874): a finished research node's Blueprints.
+    ...RESEARCH_TREE.nodes.flatMap((n) => Object.keys(n.grants)),
     ...idsIn(
       EXPLORE_FINDS,
       HOLLOWED_FINDS,
@@ -176,6 +181,12 @@ describe('every resource has a way in and a way out (#735)', () => {
     ...RECIPES.flatMap((r) => Object.keys(r.inputs)),
     ...BUILDINGS.flatMap((b) => b.levels.flatMap((l) => Object.keys(l.cost))),
     ...BUILDINGS.flatMap((b) => (b.kind === 'hearthfire' ? [b.fuelResource] : [])),
+    // What works eat each cycle (#621's Watermill; #874's Sorter eats Spark).
+    ...BUILDINGS.flatMap((b) => (b.kind === 'works' ? Object.keys(b.eats ?? {}) : [])),
+    // Clockwork Isle (#874): research, wires and rails.
+    ...RESEARCH_TREE.nodes.flatMap((n) => Object.keys(n.cost)),
+    ...Object.keys(POWER_RULES.wire.cost),
+    ...RAIL_RULES.levels.flatMap((l) => Object.keys(l.cost)),
     ...CARE_ACTIONS.flatMap((c) => Object.keys(c.cost ?? {})),
     ...Object.keys(CARE_RULES.foods ?? {}),
     ...RESOURCES.filter((r) => r.battleEffect || r.tool || r.clearTool).map((r) => r.id),
@@ -222,9 +233,10 @@ describe('every season has something of its own (#735)', () => {
       x.season ? [x.season] : [],
     ),
   );
-  // TODO(#735, 2026-10-30): Christmas and New Year have a window but no
-  // species, recipe or clothing yet. Drop each from here as its lane ships.
-  const empty = new Set(['christmas', 'new-year']);
+  // TODO(#735, 2026-10-30): New Year has a window but no species, recipe or
+  // clothing yet. Drop it from here when its lane ships (Christmas has the
+  // Jolly Elf Costume, #37).
+  const empty = new Set(['new-year']);
 
   for (const season of SEASONS) {
     it.skipIf(empty.has(season.id))(season.id, () => {

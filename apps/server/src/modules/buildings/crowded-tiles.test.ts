@@ -103,6 +103,9 @@ const LATER_COLUMNS: readonly (readonly [table: string, column: string, type: st
   ['buildings', 'damaged_at', 'timestamptz'],
   ['buildings', 'damaged_by', 'text'],
   ['buildings', 'weather_checked_through', 'timestamptz'],
+  // Clockwork Isle (#874, migration 0072): a tile's wind, a building's power.
+  ['tiles', 'wind', 'smallint'],
+  ['buildings', 'unpowered_since', 'timestamptz'],
 ];
 /**
  * Tables later migrations add that the pack-up reads (a gatherer's job joins

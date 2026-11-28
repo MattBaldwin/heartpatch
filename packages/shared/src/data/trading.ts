@@ -48,6 +48,10 @@ export const TRADE_VALUES: TradeValues = {
     salt: 5, // TUNE:
     pies: 8, // TUNE: a third of 2 Flour, 1 Fish and 1 Salt, plus the baking
     'frosty-treats': 7, // TUNE: a third of 2 Ice and 1 Treat (6), plus the mixing
+    // Clockwork Isle (#874): `pnpm sim:clockwork` (C6) sets them.
+    spark: 4, // TUNE: a Windmill's quarter hour
+    parts: 6, // TUNE: like Flour: a slow gather
+    blueprints: 20, // TUNE: hours of research, like a Heart Charm
     heartdust: 15, // TUNE:
     treats: 6, // TUNE:
     pumpkins: 8, // TUNE:
@@ -111,6 +115,10 @@ export const SELL_RULES: SellRules = {
     salt: { lot: 3, coins: 1 }, // TUNE:
     pies: { lot: 1, coins: 1 }, // TUNE: a bake's 3 beat its Flour, Fish and Salt's ~2
     'frosty-treats': { lot: 2, coins: 1 }, // TUNE: a mix's 1.5 beats its Ice and Treat's ~1
+    // Clockwork Isle (#874): `pnpm sim:clockwork` (C6) sets them.
+    spark: { lot: 5, coins: 1 }, // TUNE:
+    parts: { lot: 3, coins: 1 }, // TUNE:
+    blueprints: { lot: 1, coins: 2 }, // TUNE: a way out for spares
     emberwood: { lot: 3, coins: 1 }, // TUNE:
     pumpkins: { lot: 3, coins: 1 }, // TUNE:
     glimmer: { lot: 1, coins: 2 }, // TUNE:

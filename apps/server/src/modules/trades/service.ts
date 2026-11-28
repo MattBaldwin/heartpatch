@@ -29,6 +29,7 @@ import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { localDayStart, MINUTE_MS, type Clock } from '../../lib/time.js';
 import { consumeItems, grantItems, lockGrantRows } from '../inventory/service.js';
+import { decorateForGifts } from '../tree/service.js';
 import { leaveHouse } from '../house/service.js';
 import { checkpointContentment } from '../jobs/contentment.js';
 import { requirePostAccess } from '../journeys/service.js';
@@ -63,7 +64,9 @@ import {
  * squishies in one id-ordered lock (10) and, on a yes or a gift's pickup,
  * their residency rows under those locks (`leaveHouse`, #381: squishies
  * changing hands leave the house), clothing pieces (10b, id order),
- * inventory rows (11, `lockGrantRows`), `species_seen`, then `maps` last.
+ * inventory rows (11, `lockGrantRows`), `species_seen`, on a December
+ * gift's pickup the pair's `keeper_warmth` row then `patch_trees` (12c,
+ * #37 2c), then `maps` last.
  */
 
 // Kid-readable messages (style guide §6).
@@ -1042,6 +1045,18 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
     }
     const spawns = createSpawnsRepo(tx);
     for (const pet of heldPets) await spawns.markCaught(mapId, user.id, pet.speciesId, at);
+    // December gifts hang ornaments and warm the pair (#37 2c, step 12c).
+    await decorateForGifts(tx, events, {
+      mapId,
+      at,
+      actorUserId: user.id,
+      gifts: gifts.map((g) => ({
+        offerId: g.id,
+        fromUserId: g.fromUserId,
+        toUserId: g.toUserId,
+        lines: rows.filter((m) => m.offerId === g.id).flatMap((m) => m.lines),
+      })),
+    });
 
     await repo.pickedUp(
       rows.map((m) => m.id),

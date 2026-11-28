@@ -45,6 +45,7 @@ import { seedHomeRingNodes, type HomeRingLog } from '../buildings/home-ring.js';
 import { listPublicBuildings } from '../buildings/service.js';
 import { christmasOn, presentWaitingOn } from '../advent/service.js';
 import { christmasEveViewFor } from '../boss/eve-view.js';
+import { plantTree, treeViewFor } from '../tree/service.js';
 import { MINIBOSSES_OFF, type MinibossSwitch } from '../boss/switch.js';
 import { giftWaitingOn } from '../house/service.js';
 import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from '../house/switch.js';
@@ -75,6 +76,11 @@ import { defaultGuardianData, tileGuardians } from '../territory/service.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { createMapsRepo, type JoinRequestRow, type MemberRow, type TileViewRow } from './repo.js';
 import { WILD_ISLE_OFF, wildIsleOpenFor, type WildIsleSwitch } from './wild-isle-switch.js';
+import {
+  CLOCKWORK_ISLE_OFF,
+  clockworkIsleOpenFor,
+  type ClockworkIsleSwitch,
+} from './clockwork-isle-switch.js';
 import { keeperOfTheNightOn, longNightWeekdayOn } from '../long-night/service.js';
 import { LONG_NIGHT_OFF, type LongNightSwitch } from '../long-night/switch.js';
 
@@ -115,6 +121,8 @@ export interface MapsServiceOptions {
   keeperRequired: boolean;
   /** `HP_WILD_ISLE` (#621): who can make a Wild Isle; off when left out. */
   wildIsle?: WildIsleSwitch;
+  /** `HP_CLOCKWORK_ISLE` (#874): who can make a Clockwork Isle; off when left out. */
+  clockworkIsle?: ClockworkIsleSwitch;
   /** `HP_LONG_NIGHT` (#727): the weekday in details, the night crown in stats; off when left out. */
   longNight?: LongNightSwitch;
   /** `HP_HOUSE` (#381): whose views say whether a House gift waits (#731c); off when left out. */
@@ -171,6 +179,8 @@ const MESSAGES = {
   notReady: (username: string) => `${username} is still getting ready. Try again soon!`,
   wildIsleClosed: "Wild Isles aren't open yet. Make a Cozy Patch for now!",
   wildIsleSeats: 'A Wild Isle is made for 6 Keepers. Try a Cozy Patch!',
+  clockworkIsleClosed: "Clockwork Isles aren't open yet. Make a Cozy Patch for now!",
+  clockworkIsleSeats: "Clockwork Isles aren't quite ready yet. Make a Cozy Patch for now!",
 } as const;
 
 /** How many times to retry on the (very unlikely) chance a new code is taken. */
@@ -237,6 +247,8 @@ function toPublicTile(
     explored: explore.explored ?? false,
     homestead: explore.homestead ?? null,
     communityId: tile.communityId ?? null,
+    // Clockwork Isle (#874): left out when null, so Cozy and Wild tiles are as before.
+    ...(tile.wind != null ? { wind: tile.wind } : {}),
   };
 }
 
@@ -269,6 +281,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
   const store = createMapsRepo(db);
   const keepersRepo = createKeepersRepo(db);
   const wildIsle = options.wildIsle ?? WILD_ISLE_OFF;
+  const clockworkIsle = options.clockworkIsle ?? CLOCKWORK_ISLE_OFF;
   const longNight = options.longNight ?? LONG_NIGHT_OFF;
   const miniBosses = options.miniBosses ?? MINIBOSSES_OFF;
   const house = options.house ?? HOUSE_OFF;
@@ -408,6 +421,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         maps,
         requests: requests.map(toRequest),
         canMakeWildIsle: wildIsleOpenFor(wildIsle, user),
+        canMakeClockworkIsle: clockworkIsleOpenFor(clockworkIsle, user),
       };
     },
 
@@ -429,6 +443,17 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
           throw new AppError('FORBIDDEN', MESSAGES.wildIsleSeats);
         }
       }
+      // A Clockwork Isle (#874) the same way, on its own switch and layouts
+      // (lane C1 adds `mapGen.clockworkIsle`; until then none can be made).
+      if (patchType === 'clockwork-isle') {
+        if (!clockworkIsleOpenFor(clockworkIsle, user)) {
+          throw new AppError('FORBIDDEN', MESSAGES.clockworkIsleClosed);
+        }
+        const layouts = GAME_DATA.mapGen.clockworkIsle?.island.layouts ?? [];
+        if (!layouts.some((l) => l.players === maxPlayers)) {
+          throw new AppError('FORBIDDEN', MESSAGES.clockworkIsleSeats);
+        }
+      }
 
       // Generate once and store it all (design doc §3): every seat's home base
       // exists from the start, so joining never resizes the map. The seed is
@@ -440,7 +465,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         playerCount: maxPlayers,
         cellarKeys: CELLAR_RULES.keyFromVillage,
         // Left out for a Cozy Patch, so it stays byte for byte as before.
-        ...(patchType === 'wild-isle' ? { patchType } : {}),
+        ...(patchType !== 'cozy' ? { patchType } : {}),
       });
       const homeSlot = 0;
 
@@ -504,13 +529,15 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     view: async (user, mapId) => {
       // Older maps get their seasonal home nodes first (a write, so outside
       // the read-only snapshot); a member check runs again inside it.
-      await requireViewer(db, user, mapId);
+      const viewed = await requireViewer(db, user, mapId);
       // A building moved out of the way is a live event for everyone else.
       if (await seedHomeRingNodes(db, mapId, now(), options.log)) published(mapId);
       // Water, Greens and Ice on a map made before them (#238), once.
       await seedExtraNodes(db, mapId);
       // My hunted keys off claimed land on a patch with no challenges (#306), before I see them.
       await settleKeys(db, mapId, user.id);
+      // The Patch Tree (#37 2c): planted on the patch's first Christmas read.
+      await plantTree(db, viewed, now());
       return store.snapshot(async (repo, tx) => {
         const map = await requireViewer(tx, user, mapId);
         const at = now();
@@ -589,12 +616,18 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
             map.kind === 'multiplayer' && houseOpenFor(house, user)
               ? await giftWaitingOn(tx, map, user.id, at)
               : false,
-          // Christmas (#37): whether today's advent present waits for me, and
-          // the Christmas Eve visit and its bar while it's out (X1, X2). The
-          // Patch Tree (`tree`) and warmth come with 2c.
+          // Christmas (#37): the Patch Tree and my warmth with patch-mates
+          // (2c), whether today's advent present waits for me, and the
+          // Christmas Eve visit and its bar while it's out (X1, X2).
           ...(map.kind === 'multiplayer' && christmasOn(at, map.timeZone)
             ? {
                 christmas: {
+                  ...(await treeViewFor(
+                    tx,
+                    mapId,
+                    user.id,
+                    new Set(members.map((m) => m.user.id)),
+                  )),
                   presentWaiting: await presentWaitingOn(tx, map, user.id, at),
                   ...(await christmasEveView(tx, miniBosses, map, user.id, at)),
                 },

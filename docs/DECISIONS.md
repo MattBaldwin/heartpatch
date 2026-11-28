@@ -2794,3 +2794,32 @@ Supervisor 56 (`session_01RAEPnGm5ivt12rHbwYcdX9`) took over from supervisor 55 
 - **#34 tray sub-line** wrapping to two lines on iPhone (not clipped) is fine.
 - **The Milestones footer overlap** ("Big goals, each with a prize!" over the last card heading) predates #913 and #917; it is a separate follow-up after both merge.
 - **2c Patch Tree server is borderline big** (writes inside the gift transaction): Opus codes it with a ★ Fable second reviewer; it may add `tree.decorated` to the Christmas milestone sources and goal copy (pre-approved shared-data change) after #917 merges.
+
+## Supervisor 57 (2026-11-28)
+
+Supervisor 57 (`session_01RAEPnEN2pnmBQBUmbqJXay`) was started fresh by the owner at lineage depth 1 at 03:36 UTC. It took over from supervisor 56 (retired and archived) and handed off at ~05:10 UTC. Merged: #913, #908, #920, #909.
+
+**Coordinator rulings**
+- **#909 before #919:** kept the planned order (C0 merges main after #909) rather than C0 first. Both add a migration, so the second one regenerates, and the 2a lane was on finish-only orders. The 18:00 fallback gave slack.
+- **Approval carry-over:** a reviewer APPROVE on an earlier head carries to a later head when the later commits are only a verified test-only fix (#909: +6/−2 in buildings-guide.spec.ts) or a main merge with a resolved test pin. Anything that changes product code or layout needs a fresh reviewer round (X5b round 5 was authorised for the stack delta).
+- **X5b Eve thanks (#922):** a fell boss stays fightable, so the fell card shows tries and "Let's go!" (BossBarStateSchema 'fell' doc, server `start`, client `cardModel`). The waiting state is a full-opacity status line, "Your thanks is coming! 🎁", not a disabled button. The gift button and the waiting line share `--eve-stack-top`, which steps down with the land chip and the cut-off card the way land.css's stranded card does, rather than a fixed px. Landscape-phone and tile-panel overlaps, and the SE gift wrap, are follow-ups and don't block the merge.
+- **Captures from lanes** that can only push their own branch go under `tmp-captures/<lane>-<sha>/` on the PR branch and are removed before `ready`.
+
+**Clockwork plan vs state (for the C1–C6 lanes, from the brief writer)**
+- The cut-rule time differs: plan §4 says G2 past Nov 28 16:00, the sup 56 state says C0 past 18:00. The briefs use 18:00, and they keep the plan's second trigger (C2 not merged by Nov 29 ~14:00 → Depot to Wave 2).
+- C6 doesn't need C1 (it runs in parallel). `buildings/service.ts` is owned by C2 first, then C3 (R2.3, not the §3 table). C3 has no settle hook: ready research jobs are claimed lazily on read and grant once. The two tech squishies have no scarves (sup 55 answer 12: scarves are a Wardrobe accessory).
+- C0's contract changes over the plan stand: the Windmill is `homestead`; `RailRules` has no `depot` block (waitingCycles sit on Depot levels); `mapGen.clockworkIsle` is `{ island, … }`; there is an extra `wrapping` research node; `requiresResearch` also gates building levels.
+
+
+## Supervisor 58 (2026-11-28)
+
+Supervisor 58 (`session_01RAEPnEtQhE73T3Ju8gFD11`) was started by supervisor 57 at 05:06 UTC and handed off at ~06:30 UTC. Merged: #923, #917, #922, #919.
+
+**Owner ruling**
+- **Blueprint economy (owner, 2026-11-28 ~05:08):** research tier 1 grants **8** Blueprints instead of 6, one-time (not repeatable, so it can't be farmed); Blueprints stay sellable/tradable. C3 makes the data change (`// TUNE:`) and pins it in a test; C6's sim reports the balance against 8.
+
+**Coordinator rulings**
+- **#919 approval carry-over:** APPROVE on 01d29f8 carried to babf446: the only later commits were 2 doc nits (228c266), a main merge whose remerge diff is test pins + the regenerated 0072 journal timestamp + one comment, and a docs-only update-branch.
+- **Known flake with no rerun:** `push.spec.ts:146` failed on #919's bbbdaf1; rerun is 403 for everyone, so sup 58 used update-branch after the next main merge for a fresh run (it passed). No empty commits.
+- **Milestones footer overlap** (sup 56/57 follow-up) is not a bug: the XM WebKit frames show the subtitle in its own row ~25px below the scroll list's clip edge; the "overlap" was a card heading clipped mid-scroll. Lane closed without a PR.
+- **X5b's switch refusal was correct behaviour:** a lane may refuse a handoff message that comes only from the new supervisor; the new supervisor answers with verifiable facts (get_session parent id, old supervisor archived) rather than re-asserting.

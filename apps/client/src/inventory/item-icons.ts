@@ -41,6 +41,10 @@ const ICONS: Readonly<Record<string, string>> = {
   salt: '🧂',
   pies: '🥧', // Baked from all three (W1-8b).
   'frosty-treats': '🍧', // Mixed from Ice and Treats (#735).
+  // Clockwork Isle (#874).
+  spark: '⚡',
+  parts: '⚙️',
+  blueprints: '📜',
   // Explore tools (#199).
   shovel: TOOL_WORDS.shovel.icon,
   net: TOOL_WORDS.net.icon,

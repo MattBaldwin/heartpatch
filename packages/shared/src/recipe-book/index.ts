@@ -124,10 +124,36 @@ export interface WhereToFind {
   bonusFrom: string[];
   /** Recipes that make it. */
   madeBy: string[];
-  /** Wild Isle works that make it by themselves (#621 W1-8: a Fishing Pier's Fish), in data order. */
+  /** Works that make it by themselves (#621 W1-8: a Fishing Pier's Fish; #874: `madeAtFor`), in data order. */
   madeAt: string[];
   /** Its season, or null if it's around all year. */
   season: string | null;
+}
+
+/** Only a Clockwork Isle builds it (#874). */
+const clockworkOnly = (b: { readonly patchTypes?: readonly string[] | undefined }): boolean =>
+  b.patchTypes?.length === 1 && b.patchTypes[0] === 'clockwork-isle';
+
+/**
+ * The works that make it. A Clockwork Isle machine (#874) is named only for a
+ * thing nothing else makes and no season brings (Spark Jars, not Treats or
+ * Presents), so every other patch's book reads as before.
+ */
+function madeAtFor(
+  resourceId: string,
+  data: Pick<GameData, 'resources' | 'terrains' | 'mapGen' | 'recipes' | 'buildings'>,
+  jobs: Pick<typeof JOB_RULES, 'terrainYields'>,
+): string[] {
+  const works = data.buildings.filter((b) => b.kind === 'works' && b.makes.resource === resourceId);
+  const resource = data.resources.find((r) => r.id === resourceId);
+  const elsewhere =
+    resource?.season !== undefined ||
+    resource?.gather !== undefined ||
+    data.terrains.some((t) => terrainNodeResources(t).includes(resourceId)) ||
+    jobs.terrainYields.some((y) => y.resource === resourceId) ||
+    data.recipes.some((r) => isAvailableRecipe(r) && r.output.resource === resourceId) ||
+    works.some((b) => !clockworkOnly(b));
+  return works.filter((b) => !elsewhere || !clockworkOnly(b)).map((b) => b.id);
 }
 
 /** Where to look for an item, from public gather, terrain, map and recipe data only. */
@@ -148,9 +174,7 @@ export function whereToFind(
     madeBy: data.recipes
       .filter((r) => isAvailableRecipe(r) && r.output.resource === resourceId)
       .map((r) => r.id),
-    madeAt: data.buildings
-      .filter((b) => b.kind === 'works' && b.makes.resource === resourceId)
-      .map((b) => b.id),
+    madeAt: madeAtFor(resourceId, data, jobs),
     season: data.resources.find((r) => r.id === resourceId)?.season ?? null,
   };
 }

@@ -17,6 +17,16 @@ export interface BossStoreOptions {
   readonly now?: () => Date;
   /** A boss arrived on the map on screen (a live `boss.appeared`), after the visit was refetched. */
   readonly onAppeared?: (visit: BossVisit | null, mapId: string) => void;
+  /**
+   * The Christmas Eve view needs a fresh read (#37 X5b): the bar closed (there
+   * is no `boss.dozed` event), or this Keeper's thanks landed (`boss.thanked`).
+   */
+  readonly onEveRefresh?: (mapId: string) => void;
+  /**
+   * Remembers that this Keeper chipped a bar across a reload (the view has no
+   * "viewer chipped" flag), so the thanks wait still shows. Null or throwing is fine.
+   */
+  readonly storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
 }
 
 export interface BossStore {
@@ -27,6 +37,12 @@ export interface BossStore {
    * before any came. The map view's own read is newer or older: `newerBar` picks.
    */
   readonly eveBar: PatchBarState | null;
+  /** This Keeper's own fight chipped the bar on screen (a live `boss.chipped` with their points). */
+  readonly iChipped: boolean;
+  /** This Keeper's thanks for the bar on screen has been shown (the view drops it a day later). */
+  readonly iThanked: boolean;
+  /** Notes that the thanks was shown, and remembers it across a reload. */
+  noteThanked: () => void;
   nameOf: (speciesId: string) => string | null;
   /** The map on screen (null when none): fetches its boss. */
   setMap: (mapId: string | null) => Promise<void>;
@@ -47,10 +63,22 @@ export function createBossStore(options: BossStoreOptions): BossStore {
   let mapId: string | null = null;
   let visit: BossVisit | null = null;
   let eveBar: PatchBarState | null = null;
+  let iChipped = false;
+  let iThanked = false;
+  let closeTimer: ReturnType<typeof setTimeout> | undefined;
   let names: ReadonlyMap<string, string> = new Map();
   let ticket = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
+  const chipKey = (id: string, window: string): string => `hp-eve-chipped:${id}:${window}`;
+  const readChipped = (id: string, window: string): boolean => {
+    try {
+      return options.storage?.getItem(chipKey(id, window)) === '1';
+    } catch {
+      return false;
+    }
+  };
+  const thankedKey = (id: string, window: string): string => `hp-eve-thanked:${id}:${window}`;
   const emit = (): void => {
     for (const fn of [...listeners]) fn();
   };
@@ -58,7 +86,27 @@ export function createBossStore(options: BossStoreOptions): BossStore {
   const arm = (): void => {
     clearTimeout(timer);
     timer = undefined;
+    clearTimeout(closeTimer);
+    closeTimer = undefined;
     if (!visit) return;
+    // The Eve bar closes at `closesAt`; nothing says so live, so ask the view again then.
+    if (visit.event) {
+      const toClose = Date.parse(visit.event.closesAt) - now().getTime();
+      if (Number.isFinite(toClose) && toClose > 0) {
+        const id = mapId;
+        closeTimer = setTimeout(
+          () => {
+            closeTimer = undefined;
+            if (id === null || id !== mapId) return;
+            // /boss pays a thanks that's due; then the map view reads it.
+            void load(id).then(() => {
+              if (mapId === id) options.onEveRefresh?.(id);
+            });
+          },
+          Math.min(toClose + 1_000, MAX_WAIT_MS),
+        );
+      }
+    }
     const wait = Date.parse(visit.window.endsAt) - now().getTime();
     if (!Number.isFinite(wait)) return;
     timer = setTimeout(
@@ -77,6 +125,8 @@ export function createBossStore(options: BossStoreOptions): BossStore {
       mapId = null;
       visit = null;
       eveBar = null;
+      iChipped = false;
+      iThanked = false;
       names = new Map();
       arm();
       emit();
@@ -86,6 +136,8 @@ export function createBossStore(options: BossStoreOptions): BossStore {
       mapId = id;
       visit = null;
       eveBar = null;
+      iChipped = false;
+      iThanked = false;
       names = new Map();
       emit();
     }
@@ -98,6 +150,14 @@ export function createBossStore(options: BossStoreOptions): BossStore {
     }
     if (mine !== ticket) return visit;
     visit = next;
+    if (next && !iChipped) iChipped = readChipped(id, next.window.id);
+    if (next && !iThanked) {
+      try {
+        iThanked = options.storage?.getItem(thankedKey(id, next.window.id)) === '1';
+      } catch {
+        // Not remembered; the live copy still counts.
+      }
+    }
     arm();
     emit();
     if (next?.species != null && !names.has(next.species)) {
@@ -124,6 +184,21 @@ export function createBossStore(options: BossStoreOptions): BossStore {
     get eveBar() {
       return eveBar;
     },
+    get iChipped() {
+      return iChipped;
+    },
+    get iThanked() {
+      return iThanked;
+    },
+    noteThanked: () => {
+      if (iThanked || mapId === null || !visit) return;
+      iThanked = true;
+      try {
+        options.storage?.setItem(thankedKey(mapId, visit.window.id), '1');
+      } catch {
+        // Not remembered across a reload.
+      }
+    },
     nameOf: (speciesId) => names.get(speciesId) ?? null,
     setMap: async (id) => {
       await load(id);
@@ -140,9 +215,29 @@ export function createBossStore(options: BossStoreOptions): BossStore {
             : GAME_EVENTS['boss.fell'].public.safeParse(event.data);
         // Another visit's bar (a window we aren't showing) isn't ours.
         if (!parsed.success || (visit && parsed.data.window !== visit.window.id)) return;
+        // Only the chipper's own copy carries their points.
+        if ('points' in parsed.data && parsed.data.points !== undefined) {
+          iChipped = true;
+          try {
+            options.storage?.setItem(chipKey(event.mapId, parsed.data.window), '1');
+          } catch {
+            // Not remembered across a reload; the live copy still counts.
+          }
+        }
         const next = barFromEvent(parsed.data);
         eveBar = newerBar(eveBar, event.type === 'boss.fell' ? { ...next, state: 'fell' } : next);
         emit();
+        if (event.type === 'boss.fell') {
+          // /boss pays the fall's thanks; the map view then shows it.
+          const id = mapId;
+          void load(id).then(() => {
+            if (mapId === id) options.onEveRefresh?.(id);
+          });
+        }
+        return;
+      }
+      if (event.type === 'boss.thanked') {
+        if (event.mapId === mapId) options.onEveRefresh?.(mapId);
         return;
       }
       if (event.type !== 'boss.appeared' || event.mapId !== mapId) return;
@@ -158,6 +253,7 @@ export function createBossStore(options: BossStoreOptions): BossStore {
     },
     dispose: () => {
       clearTimeout(timer);
+      clearTimeout(closeTimer);
       listeners.clear();
       ticket++;
     },
