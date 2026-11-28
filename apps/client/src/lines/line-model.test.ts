@@ -63,7 +63,7 @@ describe('wire and rail cards (#874 C4)', () => {
     if (!mine) throw new Error('no tile');
     const cards = lineCards({ tile: mine, me: ME, wire: true, rail: 1, supplied: true });
     expect(cards.map((c) => c.id)).toEqual(['line-rail-2']);
-    expect(cards[0]?.name).toBe('Brass rail');
+    expect(cards[0]?.name).toBe('Tidy rail');
     expect(cards[0]?.cost).toEqual(RAIL_RULES.levels[1]?.cost);
     // Brass waits on the Tidy Rails blueprint: the card says so; the server checks.
     expect(cards[0]?.hint).toBe('Needs the Tidy Rails blueprint first.');
@@ -115,7 +115,7 @@ describe('wire and rail cards (#874 C4)', () => {
     expect(linePath('m', 'build')).toBe('/maps/m/lines');
     expect(linePath('m', 'remove')).toBe('/maps/m/lines/remove');
     expect(railName(1)).toBe('Rail');
-    expect(railName(9)).toBe('Brass rail');
+    expect(railName(9)).toBe('Tidy rail');
     expect(railEffect(1)).toContain(`${String(RAIL_RULES.levels[0]?.reach)} tiles`);
   });
 
@@ -138,6 +138,19 @@ describe('wire and rail cards (#874 C4)', () => {
       lineRefund('wire', 1, { ...POWER_RULES, wire: { ...POWER_RULES.wire, cost: { parts: 1 } } }),
     ).toEqual({});
     expect(refundText({})).toBe('');
+  });
+
+  it("pins the take-up preview to the server's lineRefund values (supervisor 61)", () => {
+    // modules/lines/service.ts lineRefund on today's data: half of all spent, floored.
+    expect(HOME_BASE_RULES.removeRefundPercent).toBe(50);
+    expect(RAIL_RULES.levels.map((l) => l.cost)).toEqual([
+      { timber: 2, parts: 1 },
+      { timber: 4, stone: 2, parts: 2 },
+    ]);
+    expect(POWER_RULES.wire.cost).toEqual({ parts: 1 });
+    expect(lineRefund('wire', 1)).toEqual({});
+    expect(lineRefund('rail', 1)).toEqual({ timber: 1 });
+    expect(lineRefund('rail', 2)).toEqual({ timber: 3, stone: 1, parts: 1 });
   });
 
   it('keeps every word kind and short (STYLE_GUIDE)', () => {

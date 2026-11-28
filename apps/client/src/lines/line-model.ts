@@ -14,7 +14,7 @@ import { isWaterTile } from '../map/map-dressing.js';
 
 // What the Build sheet and the tile panel say about a Clockwork Isle's
 // wires and rails (#874 C4, mockup M2): a Wire carries Spark from a
-// Windmill to a machine; a Rail (then a Brass rail) carries goodies home.
+// Windmill to a machine; a Rail (then a Tidy rail) carries goodies home.
 // Both are laid on my land and taken up for half back. Pure, so every case
 // is unit-tested; the server checks every cost, reach and rule (CLAUDE.md
 // rule 1) and works out which wires carry power.
@@ -27,13 +27,14 @@ export const LINE_TEXT = {
   wireIcon: '⚡',
   railIcon: '🛤️',
   wireName: 'Wire',
-  railNames: ['Rail', 'Brass rail'],
+  // The level names follow the shared data (`RAIL_RULES`: Rail, Tidy rail; supervisor 61).
+  railNames: ['Rail', 'Tidy rail'],
   /** The cards' one-line effects (mockup M2). */
   wireEffect: (maxRun: number) => `Carries Spark. Up to ${String(maxRun)} tiles.`,
   railEffects: ['Carts carry goodies home.', 'Shinier! Carts roll faster.'],
   /** The sheet's top line while a card is picked. */
   wireHint: 'A wire hops from post to post. ⚡',
-  railHints: ['Lay a rail, then join it up! 🛤️', 'Polish the rail into brass!'],
+  railHints: ['Lay a rail, then join it up! 🛤️', 'Tidy the rail into shiny brass!'],
   /** A rail level that waits on a blueprint (the server says no until then). */
   needsResearch: (node: string) => `Needs the ${node} blueprint first.`,
   /** The server's FORBIDDEN for land that's cut off, said before the tap (plan §7). */
@@ -41,7 +42,7 @@ export const LINE_TEXT = {
   railCutOff: "Lay rails from land that's joined up to home!",
   wireBuilt: 'Zap! A wire is up. ⚡',
   railBuilt: (level: number) =>
-    level <= 1 ? 'Clickety-clack! A rail is down. 🛤️' : 'Shiny! Now it’s a brass rail.',
+    level <= 1 ? 'Clickety-clack! A rail is down. 🛤️' : 'Shiny! Now it’s a tidy rail.',
   /** The tile panel's lines. */
   wireLit: '⚡ A wire hums here. It carries Spark!',
   wireDark: '⚡ A quiet wire. Join it to a Windmill!',

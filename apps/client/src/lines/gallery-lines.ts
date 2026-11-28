@@ -13,7 +13,7 @@ import {
 // Sample wires and rails for the dev island gallery and the render budget
 // (#874 C4): on each of the first `keepers` Keepers' land, a wire chain out
 // from their home (the first half carrying power, the rest dark, as M2's
-// lit and unlit chains) and a rail chain beside it (Rail, then Brass rail).
+// lit and unlit chains) and a rail chain beside it (Rail, then Tidy rail).
 // The same lines every run for the same map. Dev and tests only.
 
 /** A chain of `length` of `owner`'s land tiles, each next to the last, out from `from`; never a home tile or `used`. */
