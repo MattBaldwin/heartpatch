@@ -9,6 +9,7 @@ import {
   tileAttacks,
   tileDefenders,
   tileExplore,
+  tileLines,
   tileRoads,
   tiles,
   tileTending,
@@ -32,6 +33,8 @@ export interface JobTileRow {
   homestead?: { joinedAt: Date | null; pausedAt: Date | null; resumedAt: Date | null } | null;
   /** The working squishy's owner's road level here (Wild Isle #621); null: none. Work tiles only. */
   roadLevel?: number | null;
+  /** The working squishy's owner's rail level here (Clockwork Isle #874); null: none. Work tiles only. */
+  railLevel?: number | null;
 }
 
 /** One of a player's squishies with everything its job depends on. */
@@ -266,6 +269,7 @@ function queries(db: Executor): SquishyJobsRepo {
         workPausedAt: tileExplore.pausedAt,
         workResumedAt: tileExplore.resumedAt,
         workRoad: tileRoads.level,
+        workRail: tileLines.level,
         postTileId: postTile.id,
         postQ: postTile.q,
         postR: postTile.r,
@@ -306,6 +310,16 @@ function queries(db: Executor): SquishyJobsRepo {
           eq(tileRoads.ownerUserId, squishies.ownerUserId),
           // A road counts only while its owner holds the tile (`listLive`).
           eq(tileRoads.ownerUserId, workTile.ownerUserId),
+        ),
+      )
+      // The owner's rail on the work tile (Clockwork Isle #874), counted the same way.
+      .leftJoin(
+        tileLines,
+        and(
+          eq(tileLines.tileId, squishies.workTileId),
+          eq(tileLines.kind, 'rail'),
+          eq(tileLines.ownerUserId, squishies.ownerUserId),
+          eq(tileLines.ownerUserId, workTile.ownerUserId),
         ),
       )
       .leftJoin(tileDefenders, eq(tileDefenders.squishyId, squishies.id))
@@ -351,6 +365,7 @@ function queries(db: Executor): SquishyJobsRepo {
             homeSlot: r.workHomeSlot,
             ownerUserId: r.workOwner,
             roadLevel: r.workRoad,
+            railLevel: r.workRail,
             homestead:
               r.workExplored === null
                 ? null

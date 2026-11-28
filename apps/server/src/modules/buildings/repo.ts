@@ -4,6 +4,7 @@ import {
   ElementIdSchema,
   FeelingIdSchema,
   ItemCountsSchema,
+  POWER_BUILDING_IDS,
   type BuildingRowKind,
   type ElementId,
   type FeelingId,
@@ -87,6 +88,17 @@ export interface BuildingRow {
   damagedBy: string | null;
   /** Storm fronts ending over its tile by here are rolled for; null reads as `placedAt`. */
   weatherCheckedThrough: Date | null;
+  /**
+   * Clockwork Isle (#874): a `needsPower` building cut off from its owner's
+   * generators since this instant (`refreshPower`), or null.
+   */
+  unpoweredSince: Date | null;
+}
+
+/** Whose power rows (generators and `needsPower` rows, #874) a lock takes with its own. */
+export interface PowerOwners {
+  mapId: string;
+  userIds: readonly string[];
 }
 
 export type NewBuilding = Pick<
@@ -197,9 +209,14 @@ export interface BuildingsRepo {
    * `lockOnTiles` for lost land (#601 PR 8): also the upkeep buildings
    * (resource, Warehouse) elsewhere of each owner who has one on these
    * tiles, so a lost Warehouse can bank what it delivered and a lost hut can
-   * read its owner's Warehouse. One statement, id order (step 8).
+   * read its owner's Warehouse. One statement, id order (step 8). With
+   * `power` (Clockwork Isle #874), those owners' generators and `needsPower`
+   * rows join the same statement, for `refreshPower`.
    */
-  lockOnTilesWithUpkeep: (tileIds: readonly string[]) => Promise<BuildingRow[]>;
+  lockOnTilesWithUpkeep: (
+    tileIds: readonly string[],
+    power?: PowerOwners,
+  ) => Promise<BuildingRow[]>;
   /** Every building's spot, by map, owner and id: the #204 re-layout's scan (no locks). */
   listPlacements: () => Promise<
     {
@@ -306,14 +323,39 @@ export interface BuildingsRepo {
    * on river tiles nobody owns: #621 W1-5b), by tile then spot.
    */
   listOnMap: (mapId: string) => Promise<BuildingRow[]>;
-  lockBuilding: (buildingRowId: string) => Promise<BuildingRow | null>;
+  /**
+   * Locks one building (step 8). With `power` (Clockwork Isle #874), that
+   * owner's generators and `needsPower` rows on the map join it in one
+   * id-ordered statement, for `refreshPower`; only the asked row comes back.
+   */
+  lockBuilding: (
+    buildingRowId: string,
+    power?: { mapId: string; userId: string },
+  ) => Promise<BuildingRow | null>;
+  /**
+   * Locks these players' generators and `needsPower` rows on the map
+   * (Clockwork Isle #874), id order (step 8): for a path with no other
+   * buildings lock (a placement, nightfall).
+   */
+  lockPowerRows: (owners: PowerOwners) => Promise<BuildingRow[]>;
+  /** These players' generators and `needsPower` rows on the map, read (no lock). */
+  listPowerRows: (owners: PowerOwners) => Promise<BuildingRow[]>;
+  /** Writes a building's power state (#874) and, on repowering, its moved-on count. Lock it first. */
+  setPower: (
+    buildingRowId: string,
+    update: { unpoweredSince: Date | null; producedSince?: Date | null },
+  ) => Promise<void>;
   /**
    * A tile's land (#601): its terrain, and for cleared land the terrain its
    * latest finished clear started from (owner decision Q2), else null.
    */
   landOf: (tileId: string) => Promise<{ terrain: string; clearedFrom: string | null } | null>;
   /** Locks the player's buildings that pay upkeep (#601: resource, Warehouse; #621: works), in id order (step 8). */
-  lockUpkeepBuildings: (mapId: string, userId: string) => Promise<BuildingRow[]>;
+  lockUpkeepBuildings: (
+    mapId: string,
+    userId: string,
+    options?: { withPower?: boolean },
+  ) => Promise<BuildingRow[]>;
   /** Writes a resource building's output count and upkeep state (#601). */
   setProduction: (buildingRowId: string, update: ProductionUpdate) => Promise<void>;
   /** Writes a building's storm knock and how far its weather is rolled (#621). Lock it first. */
@@ -396,6 +438,7 @@ const buildingColumns = {
   damagedAt: buildings.damagedAt,
   damagedBy: buildings.damagedBy,
   weatherCheckedThrough: buildings.weatherCheckedThrough,
+  unpoweredSince: buildings.unpoweredSince,
 };
 
 const squishyColumns = {
@@ -421,6 +464,14 @@ const toSquishy = <T extends { element: string; feeling: string }>(row: T) => ({
   element: ElementIdSchema.parse(row.element),
   feeling: FeelingIdSchema.parse(row.feeling),
 });
+
+/** These owners' generators and `needsPower` rows on the map (#874): none on other patch types. */
+const powerRowsOf = ({ mapId, userIds }: PowerOwners) =>
+  and(
+    eq(buildings.mapId, mapId),
+    inArray(buildings.ownerUserId, [...userIds]),
+    inArray(buildings.buildingId, [...POWER_BUILDING_IDS]),
+  );
 
 export function createBuildingsRepo(db: Executor): BuildingsRepo {
   return queries(db);
@@ -515,7 +566,7 @@ function queries(db: Executor): BuildingsRepo {
               .for('update', { of: buildings })
           ).map(toBuilding),
 
-    lockOnTilesWithUpkeep: async (tileIds) => {
+    lockOnTilesWithUpkeep: async (tileIds, power) => {
       if (tileIds.length === 0) return [];
       const ids = sql.join(
         tileIds.map((id) => sql`${id}`),
@@ -537,6 +588,7 @@ function queries(db: Executor): BuildingsRepo {
                   select lost.map_id, lost.owner_user_id from buildings lost
                   where lost.tile_id in (${ids}) and lost.kind in (${kinds}))`,
               ),
+              power && power.userIds.length > 0 ? powerRowsOf(power) : undefined,
             ),
           )
           .orderBy(asc(buildings.id))
@@ -844,19 +896,46 @@ function queries(db: Executor): BuildingsRepo {
       };
     },
 
-    lockUpkeepBuildings: async (mapId, userId) =>
+    lockUpkeepBuildings: async (mapId, userId, options = {}) =>
       (
         await selectBuildings()
           .where(
-            and(
-              eq(buildings.mapId, mapId),
-              eq(buildings.ownerUserId, userId),
-              inArray(buildings.kind, [...UPKEEP_KINDS]),
+            or(
+              and(
+                eq(buildings.mapId, mapId),
+                eq(buildings.ownerUserId, userId),
+                inArray(buildings.kind, [...UPKEEP_KINDS]),
+              ),
+              options.withPower ? powerRowsOf({ mapId, userIds: [userId] }) : undefined,
             ),
           )
           .orderBy(asc(buildings.id))
           .for('update', { of: buildings })
-      ).map(toBuilding),
+      )
+        .map(toBuilding)
+        // The power rows lock with them; the caller's upkeep rows are only those.
+        .filter((r) => (UPKEEP_KINDS as readonly string[]).includes(r.kind)),
+
+    lockPowerRows: async (owners) =>
+      owners.userIds.length === 0
+        ? []
+        : (
+            await selectBuildings()
+              .where(powerRowsOf(owners))
+              .orderBy(asc(buildings.id))
+              .for('update', { of: buildings })
+          ).map(toBuilding),
+
+    listPowerRows: async (owners) =>
+      owners.userIds.length === 0
+        ? []
+        : (await selectBuildings().where(powerRowsOf(owners)).orderBy(asc(buildings.id))).map(
+            toBuilding,
+          ),
+
+    setPower: async (buildingRowId, update) => {
+      await db.update(buildings).set(update).where(eq(buildings.id, buildingRowId));
+    },
 
     setProduction: async (buildingRowId, update) => {
       if (Object.keys(update).length === 0) return;
@@ -884,10 +963,17 @@ function queries(db: Executor): BuildingsRepo {
       }
     },
 
-    lockBuilding: async (buildingRowId) => {
-      const [row] = await selectBuildings()
-        .where(eq(buildings.id, buildingRowId))
+    lockBuilding: async (buildingRowId, power) => {
+      const rows = await selectBuildings()
+        .where(
+          or(
+            eq(buildings.id, buildingRowId),
+            power ? powerRowsOf({ mapId: power.mapId, userIds: [power.userId] }) : undefined,
+          ),
+        )
+        .orderBy(asc(buildings.id))
         .for('update', { of: buildings });
+      const row = rows.find((r) => r.id === buildingRowId);
       return row ? toBuilding(row) : null;
     },
 

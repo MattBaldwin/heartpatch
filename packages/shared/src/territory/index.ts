@@ -133,3 +133,5 @@ export * from './journeys.js';
 export * from './watch-level.js';
 export * from './roads.js';
 export * from './buildable-on.js';
+export * from './power.js';
+export * from './rails.js';
