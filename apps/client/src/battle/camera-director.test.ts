@@ -987,6 +987,7 @@ describe('the boss camera: a low hero shot (#190 PR 2)', () => {
       'mouthClear',
       'pitch',
       'riseMax',
+      'sideKeep',
     ]);
     // The 1-v-1 never rises to clear a mouth (#190 PR 6b).
     expect(BATTLE_CAMERA.riseMax).toBe(0);
@@ -1450,7 +1451,9 @@ describe('the boss beats in the camera (#190 PR 2)', () => {
     let d = base.distance;
     for (let now = 0; now <= 1500; now += 1000 / 60)
       d = director.shot(now, 0.46, safe, row).distance;
-    expect(d).toBeGreaterThanOrEqual(Math.min(base.distance, side * 0.97) - 1e-6);
+    expect(d).toBeGreaterThanOrEqual(
+      Math.min(base.distance, side * cameraFor(true).sideKeep) - 1e-6,
+    );
     expect(d).toBeLessThan(base.distance);
   });
 

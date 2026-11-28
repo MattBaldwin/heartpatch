@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CHOREO, PLAYBACK } from './battle-config.js';
 import type { PlaybackStep } from './battle-playback.js';
 import { BattleScene } from './battle-scene.js';
-import type { SafeRegion } from './camera-director.js';
+import { cameraFor, type SafeRegion } from './camera-director.js';
 import { BattleContent } from './battle-view.js';
 
 // The contact shadow paints a 2D canvas, which NullEngine hasn't got: a plain quad stands in.
@@ -479,6 +479,13 @@ describe('BattleScene', () => {
       ]);
       expect(framing.band).toEqual({ top: 0.142, bottom: 0.876 });
       expect(framing.team.length).toBeGreaterThan(0);
+      // Each friend's top (#190 PR 6b): drawn, and over its eyes (smaller is higher).
+      for (const t of framing.team) {
+        expect(t.head).not.toBeNull();
+        expect(t.head!).toBeLessThan(t.top);
+      }
+      expect(framing.rise).toBeGreaterThanOrEqual(0);
+      expect(framing.rise).toBeLessThanOrEqual(cameraFor(true).riseMax);
       // The team's lowest body row (#190 PR 2): over the band's bottom.
       expect(framing.teamFeet).not.toBeNull();
       expect(framing.teamFeet!).toBeLessThanOrEqual(band.bottom + 1e-6);

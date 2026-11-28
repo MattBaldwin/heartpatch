@@ -26,7 +26,8 @@ interface BattleDebug {
       fogEnd: number;
       band: { top: number; bottom: number };
       face: { top: number; bottom: number } | null;
-      team: { top: number; bottom: number }[];
+      team: { top: number; bottom: number; head: number | null }[];
+      rise: number;
       teamFeet: number | null;
       bossFacing: number | null;
     } | null;
@@ -563,6 +564,7 @@ test.describe('a mini-boss fight (#190)', () => {
         'distance',
         'face',
         'fogEnd',
+        'rise',
         'team',
         'teamFeet',
       ]);

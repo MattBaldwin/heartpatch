@@ -169,6 +169,7 @@ export interface BattleCameraConfig {
   mouthClear: number;
   mouthWidth: number;
   riseMax: number;
+  sideKeep: number;
   narrowSheetFrom: number;
   feetRoom: number;
   fitFrom: number;
@@ -219,7 +220,6 @@ const BOSS_PROFILE = {
   fitFrom: 4, // TUNE: = aim.y
   /** A 1.8× boss's box (the 1-v-1's 3.6 × 1.8); the row's width binds first on a phone. */
   fitHeight: 6.5, // TUNE
-  /** The picker's lean towards the friend picking (the team fight's is 0.35). */
   /**
    * The near friend's head stays under the boss's mouth (#190 PR 6b, 5b): the
    * camera rises (`clearRise`, camera-director.ts) until a friend standing in
@@ -231,6 +231,12 @@ const BOSS_PROFILE = {
   mouthWidth: 0.55, // TUNE
   /** The most the boss camera ever rises to clear the mouth (world units; the aim is 4 up). */
   riseMax: 3, // TUNE
+  /**
+   * A push-in may close to this share of the distance that just fits the row's width (#190 PR 6b):
+   * the fit already leaves a margin, so a small push never crops an end friend (an 18% windup push did).
+   */
+  sideKeep: 0.97, // TUNE
+  /** The picker's lean towards the friend picking (the team fight's is 0.35). */
   focusShift: 0.12, // TUNE: the picker's lean keeps every end friend on screen (worst edge 0.958; 0.15 reached 0.975, 0.35 clipped up to 17%)
   beats: {
     /** A windup: a slow push-in across the step, with a little lean. */
@@ -309,8 +315,10 @@ export const BATTLE_CAMERA: BattleCamera = {
   faceFacingMin: 0.3, // TUNE
   /** Clearing the boss's mouth (`BATTLE_CAMERA.boss`, #190 PR 6b): off outside a boss fight. */
   mouthClear: 0,
-  mouthWidth: 0.55,
+  mouthWidth: 0.55, // inert here (riseMax 0): only the boss profile's is read
   riseMax: 0,
+  /** Off: a push-in closes as far as it asks (only the boss fight keeps the row's width). */
+  sideKeep: 0,
   /** From this window width (CSS px) the sheet is a centred card (battle.css), so the screen's bottom shows. */
   narrowSheetFrom: 900,
   /** The aim lands at least this far (a fraction of the screen height) above the band's bottom. */

@@ -24,14 +24,10 @@ export function cameraFor(boss: boolean): Readonly<BattleCameraConfig> {
 const BOSS_FIGHT_CAMERA: Readonly<BattleCameraConfig> = (() => {
   const { boss, ...base } = BATTLE_CAMERA;
   const { pitch, aim, feetY, feetRoom, fitFrom, fitHeight, focusShift } = boss;
-  const { mouthClear, mouthWidth, riseMax } = boss;
+  const { mouthClear, mouthWidth, riseMax, sideKeep } = boss;
   const framing = { pitch, aim, feetY, feetRoom, fitFrom, fitHeight, focusShift };
-  return { ...base, ...framing, mouthClear, mouthWidth, riseMax };
+  return { ...base, ...framing, mouthClear, mouthWidth, riseMax, sideKeep };
 })();
-
-// TUNE: a boss push-in may close to this share of the distance that just fits the row's width: the
-// fit already leaves a margin, so a small push never crops an end friend (an 18% windup push did).
-const BOSS_FIGHT_CAMERA_SIDE_KEEP = 0.97;
 
 export interface Point3 {
   x: number;
@@ -496,10 +492,7 @@ export class CameraDirector {
     // A push-in never crops an end friend (#190 PR 6b): in a boss fight it stops where the row's
     // width meets the screen's edges (a windup's push reached 0.18 and clipped the left one).
     const pushed = frame.distance * (1 - this.#push);
-    const distance =
-      this.#config === BOSS_FIGHT_CAMERA
-        ? Math.max(pushed, Math.min(frame.distance, frame.side * BOSS_FIGHT_CAMERA_SIDE_KEEP))
-        : pushed;
+    const distance = Math.max(pushed, Math.min(frame.distance, frame.side * this.#config.sideKeep));
     const tx = aim.x + this.#focus.x;
     const tz = aim.z + this.#focus.z;
     const age = now - this.#shake.at;
@@ -610,7 +603,9 @@ export class CameraDirector {
  * Raising the camera and its aim by Δh lowers a point `depth` away by
  * Δh / (2·depth·tan(fov/2)) of the screen, so a near head drops faster than the
  * far mouth: the gap grows by Δh·(1/dn − 1/df) / (2·tan). The answer is that
- * linear step from where the camera is (each frame refines it); with no friend
+ * linear step from where the camera is (each frame refines it, which also
+ * absorbs what the step leaves out: the up axis's cos(pitch)·cos(roll) and the
+ * small change in depth as it rises); with no friend
  * in front of the mouth the camera comes back down.
  */
 export function clearRise(
