@@ -1,0 +1,46 @@
+{
+ "days": [
+  "catch-up",
+  "catch-up",
+  "catch-up",
+  "catch-up",
+  "today",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked",
+  "locked"
+ ],
+ "sheet": {
+  "top": 119.03125,
+  "bottom": 806,
+  "left": 12,
+  "right": 381
+ },
+ "inner": {
+  "w": 393,
+  "h": 852
+ },
+ "scrolls": 0,
+ "contrastMin": 4.9457807102550335,
+ "contrastUnder45": [],
+ "contrastNotMeasured": 0,
+ "smallText": [],
+ "minTarget": 44,
+ "targets": 29
+}
