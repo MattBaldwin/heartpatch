@@ -10,7 +10,7 @@ import { NIGHT_LOOK } from '../../hollow/hollow-config.js';
 import { CHRISTMAS, HEX_SIZE } from '../map-config.js';
 import { maxZoomFor } from '../map-layout.js';
 import { MapScene, type MapSceneStats } from '../map-scene.js';
-import { testPatch, testWildIsle } from '../test-view.js';
+import { testPatch, testWildIsle, withHomeBuildings, withTwinkleLights } from '../test-view.js';
 import { galleryWeather, galleryWeatherKind } from '../../weather/gallery-weather.js';
 import {
   createWeatherLayer,
@@ -36,6 +36,11 @@ setPerfReports(false);
  * `&season=christmas` dresses it in snow (#37); with `&snow=0.5` the first
  * snow's fade stops halfway (the clock ticks once to that point of the fade;
  * `&snow=1` is the whole fade, with the snowfall showing).
+ * `&lights=N` puts Twinkle Lights (#37 2a) on N of each Keeper's tiles (from
+ * their Heart Seed's out; `&lightsAt=land` only out past the home ring;
+ * `&built=1` first puts an Ember Den and Training Grounds by each Heart Seed), and
+ * `&motion=1` turns reduced motion off so they twinkle, and `&t=` (seconds)
+ * moves the terrain clock there once, so two shots show the twinkle move.
  * Nothing moves (the terrain clock never ticks), so a shot is the same every time.
  */
 
@@ -59,7 +64,13 @@ const snowAt = params.has('snow')
   ? Math.min(1, Math.max(0, Number(params.get('snow')) || 0))
   : null;
 
-const view: MapView = patch === 'cozy' ? testPatch() : testWildIsle();
+const lightsPerKeeper = Math.max(0, Math.floor(Number(params.get('lights')) || 0));
+const motion = params.get('motion') === '1';
+const patchView: MapView = patch === 'cozy' ? testPatch() : testWildIsle();
+const bare = params.get('built') === '1' ? withHomeBuildings(patchView) : patchView;
+const lightsAt = params.get('lightsAt') === 'land' ? 'land' : 'home';
+const view: MapView =
+  lightsPerKeeper > 0 ? withTwinkleLights(bare, lightsPerKeeper, lightsAt) : bare;
 
 let stage: Stage | null = null;
 let weather: WeatherLayer | null = null;
@@ -85,10 +96,15 @@ await boot(canvas, {
           tier,
           seasons,
           // Mid-fade (#37): ambient time has to run for the fade; it ticks once, below.
-          reducedMotion: snowAt === null,
+          reducedMotion: snowAt === null && !motion,
           snowFade: snowAt !== null,
         });
         map.setNight(night);
+        const at = Number(params.get('t'));
+        if (motion && Number.isFinite(at) && at > 0) {
+          map.tick(0);
+          map.tick(at * 1000);
+        }
         if (snowAt !== null) {
           // Smoothstep's inverse, so the cover lands on `snowAt`.
           const t = 0.5 - Math.sin(Math.asin(1 - 2 * snowAt) / 3);

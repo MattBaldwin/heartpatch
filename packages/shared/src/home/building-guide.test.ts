@@ -37,6 +37,13 @@ const guide = (id: string, over: Partial<BuildingGuideContext> = {}) => {
 const kinds = (xs: readonly { kind: string }[]) => xs.map((x) => x.kind);
 
 describe('buildingGuide (#715)', () => {
+  it('Twinkle Lights (#37 2a): twinkle in their season, two a Keeper, Christmas only', () => {
+    const g = guide('twinkle-lights', { patchType: 'cozy', seasons: ['christmas'] });
+    expect(g.value).toEqual([{ kind: 'twinkles', season: 'christmas' }]);
+    expect(g.gate).toBeNull();
+    expect(kinds(g.place)).toEqual(['placement', 'per-home', 'per-tile', 'season']);
+  });
+
   it('hearthfire: keeps squishies safe, burns fuel, on my land, one a tile', () => {
     const g = guide('hearthfire');
     expect(g.group).toBe('fires');
