@@ -371,7 +371,7 @@ describe('Clockwork Isle contracts (#874 C0)', () => {
       }
     });
 
-    it('lets a spawn table name its patch types, and every table so far leaves them out', () => {
+    it('lets a spawn table name its patch types, and only Clockwork tables do', () => {
       const table = {
         id: 'clockwork-meadow',
         terrains: ['meadow'],
@@ -381,8 +381,11 @@ describe('Clockwork Isle contracts (#874 C0)', () => {
       expect(SpawnTableSchema.parse(table)).toEqual(table);
       expect(SpawnTableSchema.safeParse({ ...table, patchTypes: [] }).success).toBe(false);
       expect(SpawnTableSchema.safeParse({ ...table, patchTypes: ['volcano'] }).success).toBe(false);
-      // Nothing reads `patchTypes` until the spawn filter lands (lane C6).
-      expect(SPAWN_TABLES.filter((t) => t.patchTypes !== undefined).map((t) => t.id)).toEqual([]);
+      // Lane C6: the tech squishies' tables are the only ones that name a patch type.
+      for (const t of SPAWN_TABLES.filter((t) => t.patchTypes !== undefined)) {
+        expect(t.id).toMatch(/^clockwork-/);
+        expect(t.patchTypes).toEqual(['clockwork-isle']);
+      }
     });
   });
 });

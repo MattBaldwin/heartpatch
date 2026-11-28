@@ -4,6 +4,8 @@ import type { SpawnTable } from '../../schemas/data/spawn-tables.js';
  * Wild squishy spawn tables. Secret (CLAUDE.md rule 6): server-only. A table
  * matches a tile's terrain, and its season and time of day when it names one
  * (`resolveWildSpawn`); a seasonal species only spawns in its own season too.
+ * A table naming `patchTypes` only spawns on maps of those types (#874; the
+ * spawns service filters by the map's patch type); left out, every type.
  * Content only: new rows need no engine change.
  *
  * Launch roster (#10): every terrain has an everyday table, so there's
@@ -335,6 +337,30 @@ export const SPAWN_TABLES: SpawnTable[] = [
     terrains: ['junipers-gap'],
     timeOfDay: 'night',
     entries: [{ species: 'heartlet', weight: 1 }], // TUNE:
+  },
+  // Clockwork Isle (#874 C6): the tech squishies live only on a Clockwork
+  // Isle (`patchTypes`), on top of whatever else lives on that terrain.
+  {
+    // Gearbit potters about the open meadows and hills every day.
+    id: 'clockwork-gearbit',
+    terrains: ['meadow', 'hills'],
+    patchTypes: ['clockwork-isle'],
+    entries: [{ species: 'gearbit', weight: 8 }], // TUNE: about 1 in 4 isle meadow spawns
+  },
+  {
+    // Bulbun comes out when its nose starts to glow: dusk and night.
+    id: 'clockwork-bulbun-dusk',
+    terrains: ['forest', 'coast'],
+    patchTypes: ['clockwork-isle'],
+    timeOfDay: 'dusk',
+    entries: [{ species: 'bulbun', weight: 8 }], // TUNE:
+  },
+  {
+    id: 'clockwork-bulbun-night',
+    terrains: ['forest', 'coast'],
+    patchTypes: ['clockwork-isle'],
+    timeOfDay: 'night',
+    entries: [{ species: 'bulbun', weight: 8 }], // TUNE:
   },
 ];
 

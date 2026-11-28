@@ -2348,6 +2348,62 @@ export const PARTS: Part[] = [
     sink: 0.45,
     jitter: 0.03,
   },
+  // Clockwork Isle (#874 C6), drawn to the owner-approved M4 frames.
+  // Gearbit's gear ears: flat brass discs standing up from the top of its head.
+  {
+    id: 'gear-ears',
+    slot: 'ears',
+    shape: 'ellipsoid',
+    size: [0.34, 0.34, 0.09],
+    color: 'accent',
+    layout: pair,
+    around: 34,
+    up: 62,
+    tilt: -4,
+    splay: 22,
+    sink: 0.2,
+    jitter: 0.04,
+  },
+  // Gearbit's wind-up key: a flat bow sticking out of its back.
+  {
+    id: 'windup-key',
+    slot: 'back',
+    shape: 'ellipsoid',
+    size: [0.3, 0.32, 0.08],
+    color: 'accent',
+    layout: single,
+    around: 180,
+    up: 22,
+    tilt: 20,
+    sink: 0.15,
+    jitter: 0.04,
+  },
+  // Cogwhirl's cog crown: a ring of little gear teeth round the top of its head.
+  {
+    id: 'cog-crown',
+    slot: 'crown',
+    shape: 'box',
+    size: [0.1, 0.14, 0.1],
+    color: 'detail',
+    layout: { kind: 'ring', count: 8, spread: 180 },
+    around: 0,
+    up: 76,
+    sink: 0.35,
+    jitter: 0.03,
+  },
+  // Bulbun's bulb nose: a soft round bulb on the front of its face.
+  {
+    id: 'bulb-nose',
+    slot: 'horns',
+    shape: 'ellipsoid',
+    size: [0.2, 0.18, 0.2],
+    color: 'accent',
+    layout: single,
+    around: 0,
+    up: -10,
+    sink: 0.35,
+    jitter: 0.03,
+  },
 ];
 
 /**
