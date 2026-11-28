@@ -1424,7 +1424,8 @@ export class BattleScene {
       if (here) {
         here.x = rig.root.position.x;
         here.z = rig.root.position.z;
-        here.r = r;
+        // A friend rolled over (a flop) sweeps its height sideways: the row's ends stay on screen (#190 PR 6b).
+        here.r = r + Math.abs(Math.sin(rig.pose.roll)) * (rig.out?.height ?? 2) * rig.pose.scale;
         here.h = h + Math.max(0, rig.pose.lift);
       }
     }

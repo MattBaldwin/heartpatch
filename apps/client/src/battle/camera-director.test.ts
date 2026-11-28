@@ -1320,7 +1320,7 @@ describe('the boss beats in the camera (#190 PR 2)', () => {
     let d = base.distance;
     for (let now = 0; now <= 1500; now += 1000 / 60)
       d = director.shot(now, 0.46, safe, row).distance;
-    expect(d).toBeGreaterThanOrEqual(Math.min(base.distance, side * 0.94) - 1e-6);
+    expect(d).toBeGreaterThanOrEqual(Math.min(base.distance, side * 0.97) - 1e-6);
     expect(d).toBeLessThan(base.distance);
   });
 

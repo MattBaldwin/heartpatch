@@ -29,7 +29,7 @@ const BOSS_FIGHT_CAMERA: Readonly<BattleCameraConfig> = (() => {
 
 // TUNE: a boss push-in may close to this share of the distance that just fits the row's width: the
 // fit already leaves a margin, so a small push never crops an end friend (an 18% windup push did).
-const BOSS_FIGHT_CAMERA_SIDE_KEEP = 0.94;
+const BOSS_FIGHT_CAMERA_SIDE_KEEP = 0.97;
 
 export interface Point3 {
   x: number;
