@@ -222,9 +222,10 @@ describe('every season has something of its own (#735)', () => {
       x.season ? [x.season] : [],
     ),
   );
-  // TODO(#735, 2026-10-30): Christmas and New Year have a window but no
-  // species, recipe or clothing yet. Drop each from here as its lane ships.
-  const empty = new Set(['christmas', 'new-year']);
+  // TODO(#735, 2026-10-30): New Year has a window but no species, recipe or
+  // clothing yet. Drop it from here when its lane ships (Christmas has the
+  // Jolly Elf Costume, #37).
+  const empty = new Set(['new-year']);
 
   for (const season of SEASONS) {
     it.skipIf(empty.has(season.id))(season.id, () => {
