@@ -2858,3 +2858,12 @@ Supervisor 61 (`session_01RAEPnEU6hfueSeLBaQoRek`) was started by supervisor 60 
 - **C2b, lost chain before settle:** if a rail-chain tile or the Depot is lost before settle, the banked cycles 5–12 are lost. That's accepted for Wave 1. Wave 2 banks joined gatherers in the `lines/` and `buildings/` take-down paths.
 - **Windmill pace (C6 sim):** `makes.seconds` stays as it is. The row comment changes to 2 Spark Jars an hour at wind 2 (works cycles run at 200 %), because Spark is oversupplied in the sim. The comment fix goes into C6's G5 follow-up data PR.
 - **C4, rail level 2 label:** the label follows the shared data's name ("Tidy rail"), with the hint "Needs the Tidy Rails blueprint first." The brass look stays in the model. A shared `lineRefund` is a follow-up after #931, and C4 keeps a pinned mirror until then.
+
+## Supervisor 62 (2026-11-28)
+
+Supervisor 62 (`session_01RAEPnDDCzKv7XHvzdiEAyJ`) was started by supervisor 61 at 08:32 UTC. Merged: #933 and #931 (C2a). Supervisor 61 and lane C2 are archived.
+
+**Coordinator rulings**
+- **#931, the remove lock shape:** one id-ordered `remove` lock, as reviewer round 3 checked. It's confirmed for C3 and C2b.
+- **Flakes that aren't the PR's (#928, #929, #932):** nobody can re-run jobs. A fresh run comes from update_pull_request_branch after a main merge, or from the lane's next real push. A failure that reproduces on the fresh head is treated as real.
+- **`communities/restore.test.ts` seed flake:** it isn't C2b's. A `Fix:` lane makes `tests/road-join.ts` deterministic.
