@@ -2810,3 +2810,16 @@ Supervisor 57 (`session_01RAEPnEN2pnmBQBUmbqJXay`) was started fresh by the owne
 - C6 doesn't need C1 (it runs in parallel). `buildings/service.ts` is owned by C2 first, then C3 (R2.3, not the §3 table). C3 has no settle hook: ready research jobs are claimed lazily on read and grant once. The two tech squishies have no scarves (sup 55 answer 12: scarves are a Wardrobe accessory).
 - C0's contract changes over the plan stand: the Windmill is `homestead`; `RailRules` has no `depot` block (waitingCycles sit on Depot levels); `mapGen.clockworkIsle` is `{ island, … }`; there is an extra `wrapping` research node; `requiresResearch` also gates building levels.
 
+
+## Supervisor 58 (2026-11-28)
+
+Supervisor 58 (`session_01RAEPnEtQhE73T3Ju8gFD11`) was started by supervisor 57 at 05:06 UTC and handed off at ~06:30 UTC. Merged: #923, #917, #922, #919.
+
+**Owner ruling**
+- **Blueprint economy (owner, 2026-11-28 ~05:08):** research tier 1 grants **8** Blueprints instead of 6, one-time (not repeatable, so it can't be farmed); Blueprints stay sellable/tradable. C3 makes the data change (`// TUNE:`) and pins it in a test; C6's sim reports the balance against 8.
+
+**Coordinator rulings**
+- **#919 approval carry-over:** APPROVE on 01d29f8 carried to babf446: the only later commits were 2 doc nits (228c266), a main merge whose remerge diff is test pins + the regenerated 0072 journal timestamp + one comment, and a docs-only update-branch.
+- **Known flake with no rerun:** `push.spec.ts:146` failed on #919's bbbdaf1; rerun is 403 for everyone, so sup 58 used update-branch after the next main merge for a fresh run (it passed). No empty commits.
+- **Milestones footer overlap** (sup 56/57 follow-up) is not a bug: the XM WebKit frames show the subtitle in its own row ~25px below the scroll list's clip edge; the "overlap" was a card heading clipped mid-scroll. Lane closed without a PR.
+- **X5b's switch refusal was correct behaviour:** a lane may refuse a handoff message that comes only from the new supervisor; the new supervisor answers with verifiable facts (get_session parent id, old supervisor archived) rather than re-asserting.
