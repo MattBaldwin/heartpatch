@@ -144,3 +144,11 @@ export const WAVE_3_SPECIES: Species[] = [
     habitatPreferences: { elements: ['light'], feelings: ['cozy', 'sleepy'] },
   },
 ];
+
+/**
+ * Every Clockwork Isle squishy's id (#874): found only on a Clockwork Isle,
+ * so goals every Keeper can reach (the Every Common track) leave them out.
+ * Public: the isle shows them anyway; where and when they spawn stays
+ * server-only. `milestones.test.ts` checks every isle-only spawn is here.
+ */
+export const CLOCKWORK_ISLE_SPECIES: ReadonlySet<string> = new Set(WAVE_3_SPECIES.map((s) => s.id));

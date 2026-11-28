@@ -907,7 +907,8 @@ describe('the boss camera: a low hero shot (#190 PR 2)', () => {
   // `TEAM_ARENA.bossScale` × the team's mean height (battle-scene.ts
   // `#bossScale`), so its size follows the team, whichever boss it is. The
   // #234 fixture (Rakelet against three, 6.86 tall) is the fourth.
-  const median = fighters[Math.floor(fighters.length / 2)]!;
+  // #874 C6: pinned to the pre-#874 median kind so new content can't move the guard.
+  const median = fighters.find((f) => f.id === 'wickwhisker')!;
   const TEAMS = [
     { name: 'small team', friends: fighters.slice(-3) },
     { name: 'ordinary team', friends: [median, median, median] },

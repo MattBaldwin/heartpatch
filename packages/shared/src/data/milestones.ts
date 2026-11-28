@@ -3,6 +3,7 @@ import type { MilestoneRules, MilestoneTrack } from '../schemas/data/milestones.
 import { CLOTHING } from './clothing.js';
 import { FOUND_SETS } from './found-sets.js';
 import { SPECIES } from './species.js';
+import { CLOCKWORK_ISLE_SPECIES } from './species-wave-3.js';
 
 /**
  * Keeper milestones everyone can see (design doc §24; issue #44). Secret ones
@@ -33,11 +34,16 @@ const THANKSGIVING_CLOTHING = CLOTHING.filter(
  * Every everyday common (#732 B2): the all-year, common-rarity base forms, the
  * ones a kid can actually befriend. Evolved forms never spawn wild (only base
  * forms do, `data/server/spawn-tables.ts`), so a kid form would make the track
- * unreachable; seasonal ones would too, off-season. Derived, never hand-copied.
+ * unreachable; seasonal ones would too, off-season. Clockwork Isle kinds
+ * (#874) are left out: only an isle has them. Derived, never hand-copied.
  */
 const EVOLVED_INTO = new Set(SPECIES.flatMap((s) => s.evolutions.map((e) => e.into)));
 export const EVERYDAY_COMMON_SPECIES: string[] = SPECIES.filter(
-  (s) => s.rarity === 'common' && s.season === undefined && !EVOLVED_INTO.has(s.id),
+  (s) =>
+    s.rarity === 'common' &&
+    s.season === undefined &&
+    !EVOLVED_INTO.has(s.id) &&
+    !CLOCKWORK_ISLE_SPECIES.has(s.id),
 ).map((s) => s.id);
 
 /** A found set's milestone track id: its counted keys are the pieces found (#306 PR 5). */
