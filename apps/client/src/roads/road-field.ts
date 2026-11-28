@@ -21,7 +21,7 @@ import {
   topOf,
   vinyl,
 } from '../map/map-scene.js';
-import { armArrays, clampLevel, hubArrays } from './road-meshes.js';
+import { ARM_LENGTH, armArrays, clampLevel, hubArrays, ringArrays } from './road-meshes.js';
 import { armYaw, maskSides, roadPieces } from './road-layout.js';
 
 // Roads on the map (#621 W1-6): per level one hub mesh and one arm mesh, both
@@ -32,6 +32,11 @@ import { armYaw, maskSides, roadPieces } from './road-layout.js';
 
 const LIFT = DOME + 0.008; // TUNE: a hair above the tile's domed top
 const FERRY_LIFT = 0.02; // TUNE
+/**
+ * A Clockwork Isle's road loop round a building (#874): its middle line,
+ * as a share of the way from the tile's middle to a side. TUNE
+ */
+export const ROAD_RING = 0.6;
 const FERRY_FILL = [0.1, 0.78, 0.95, 0.5] as const; // TUNE: a strong watery aqua, unlike any forest
 const FERRY_RIM = [0.92, 1, 1, 0.95] as const; // TUNE: a pale rim, so each far-shore tile has an edge
 const FERRY_INSET = 0.94; // TUNE: of the tile's radius
@@ -86,14 +91,18 @@ export interface RoadFieldStats {
   /** Roads drawn, by level (index 0 is level 1). */
   readonly roads: readonly [number, number, number];
   readonly arms: number;
+  /** Clockwork Isle loops round buildings (#874). */
+  readonly rings: number;
   readonly ferry: number;
 }
 
 export class RoadField {
   private readonly hubs: Mesh[];
   private readonly arms: Mesh[];
+  /** A Clockwork Isle's loops round buildings (#874), per level. */
+  private readonly rings: Mesh[];
   private readonly ferry: Mesh;
-  private stats: RoadFieldStats = { roads: [0, 0, 0], arms: 0, ferry: 0 };
+  private stats: RoadFieldStats = { roads: [0, 0, 0], arms: 0, rings: 0, ferry: 0 };
 
   constructor(scene: Scene) {
     const material = vinyl(scene, 'road-mat', { color: '#ffffff' });
@@ -107,6 +116,9 @@ export class RoadField {
     };
     this.hubs = [1, 2, 3].map((level) => make(`road-hub-${String(level)}`, hubArrays(level)));
     this.arms = [1, 2, 3].map((level) => make(`road-arm-${String(level)}`, armArrays(level)));
+    this.rings = [1, 2, 3].map((level) =>
+      make(`road-ring-${String(level)}`, ringArrays(level, ARM_LENGTH * ROAD_RING)),
+    );
     this.ferry = meshFrom(
       scene,
       'ferry-reach',
@@ -121,15 +133,20 @@ export class RoadField {
   /**
    * Draws `roads`: each tile's hub, and an arm to every side that joins
    * another road or one of `joins` (bridges and docks, which a road meets
-   * end on).
+   * end on). With `ringed` (a Clockwork Isle, #874), a road on a tile with
+   * a building loops round it, and its arms start from the loop.
    */
   drawRoads(
     roads: readonly PublicRoad[],
     tiles: ReadonlyMap<HexKey, PublicTile>,
     joins: Iterable<HexKey>,
+    ringed = false,
   ): void {
     const hubs: Matrix[][] = [[], [], []];
     const arms: Matrix[][] = [[], [], []];
+    const rings: Matrix[][] = [[], [], []];
+    const from = ARM_LENGTH * ROAD_RING;
+    const short = new Vector3((ARM_LENGTH - from) / ARM_LENGTH, 1, 1);
     const turn = new Quaternion();
     const one = new Vector3(1, 1, 1);
     // Only roads on tiles we know: a road on a tile the view dropped isn't drawn.
@@ -140,10 +157,20 @@ export class RoadField {
       const p = hexToWorld(piece, HEX_SIZE);
       const y = topOf(tile) + LIFT;
       const i = clampLevel(piece.level) - 1;
-      hubs[i]?.push(placeAt(p.x, y, p.z));
+      const loop = ringed && tile.buildings.length > 0;
+      (loop ? rings : hubs)[i]?.push(placeAt(p.x, y, p.z));
       for (const side of maskSides(piece.mask)) {
-        Quaternion.RotationYawPitchRollToRef(armYaw(side), 0, 0, turn);
-        arms[i]?.push(Matrix.Compose(one, turn.clone(), new Vector3(p.x, y, p.z)));
+        const yaw = armYaw(side);
+        Quaternion.RotationYawPitchRollToRef(yaw, 0, 0, turn);
+        arms[i]?.push(
+          loop
+            ? Matrix.Compose(
+                short,
+                turn.clone(),
+                new Vector3(p.x + Math.cos(yaw) * from, y, p.z - Math.sin(yaw) * from),
+              )
+            : Matrix.Compose(one, turn.clone(), new Vector3(p.x, y, p.z)),
+        );
       }
     }
     this.hubs.forEach((mesh, i) => {
@@ -152,8 +179,13 @@ export class RoadField {
     this.arms.forEach((mesh, i) => {
       setInstances(mesh, arms[i] ?? [], true);
     });
+    this.rings.forEach((mesh, i) => {
+      setInstances(mesh, rings[i] ?? [], true);
+    });
+    const count = (i: number) => (hubs[i]?.length ?? 0) + (rings[i]?.length ?? 0);
     this.stats = {
-      roads: [hubs[0]?.length ?? 0, hubs[1]?.length ?? 0, hubs[2]?.length ?? 0],
+      roads: [count(0), count(1), count(2)],
+      rings: rings.reduce((n, list) => n + list.length, 0),
       arms: arms.reduce((n, list) => n + list.length, 0),
       ferry: this.stats.ferry,
     };

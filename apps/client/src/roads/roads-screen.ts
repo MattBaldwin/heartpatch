@@ -141,7 +141,8 @@ export function createRoads(options: RoadsOptions): Roads {
   function draw(): void {
     if (!field || !view || !isWildIsleView(view)) return;
     const joins = [...bridgesOf(view.tiles), ...docksOf(view.tiles)].map(hexKey);
-    field.drawRoads(feed.roads, byKey(view), joins);
+    // A Clockwork Isle's roads loop round its centred buildings (#874).
+    field.drawRoads(feed.roads, byKey(view), joins, view.map.patchType === 'clockwork-isle');
     field.drawFerry(ferry?.tiles ?? []);
     options.invalidate();
   }

@@ -6,6 +6,7 @@ import {
   type HexKey,
   type MapView,
   type PublicLine,
+  type PublicRoad,
   type PublicTile,
 } from '@heartpatch/shared';
 
@@ -74,4 +75,27 @@ export function galleryLines(view: MapView, keepers = 6, length = 6): PublicLine
     });
   }
   return lines;
+}
+
+/**
+ * Sample roads for the gallery (#874): every Keeper's building tile and the
+ * land tiles beside it, so a Clockwork Isle's loops round buildings show
+ * joined up. Dev and tests only.
+ */
+export function galleryRoads(view: MapView): PublicRoad[] {
+  const tiles = new Map(view.tiles.map((t) => [hexKey(t), t]));
+  const roads = new Map<HexKey, PublicRoad>();
+  for (const tile of view.tiles) {
+    const owner = tile.ownerUserId;
+    if (!owner || tile.buildings.length === 0) continue;
+    for (const h of [tile, ...hexNeighbors(tile)]) {
+      const t = tiles.get(hexKey(h));
+      if (!t || t.ownerUserId !== owner || isWaterTerrain(t.terrain)) continue;
+      const near = t.buildings.length > 0 || hexKey(t) === hexKey(tile);
+      if (near || roads.size % 3 === 0) {
+        roads.set(hexKey(t), { q: t.q, r: t.r, ownerUserId: owner, level: 2 });
+      }
+    }
+  }
+  return [...roads.values()];
 }

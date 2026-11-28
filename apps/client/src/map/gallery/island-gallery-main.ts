@@ -17,7 +17,8 @@ import {
   withHomeBuildings,
   withTwinkleLights,
 } from '../test-view.js';
-import { galleryLines } from '../../lines/gallery-lines.js';
+import { galleryLines, galleryRoads } from '../../lines/gallery-lines.js';
+import { RoadField } from '../../roads/road-field.js';
 import { LineField, type LineFieldStats } from '../../lines/line-field.js';
 import { createWindLayer, type WindLayer, type WindStats } from '../wind-layer.js';
 import { galleryWeather, galleryWeatherKind } from '../../weather/gallery-weather.js';
@@ -52,7 +53,8 @@ setPerfReports(false);
  * moves the terrain clock there once, so two shots show the twinkle move.
  * `?patch=clockwork` is a Clockwork Isle (#874, `testClockworkIsle`): the
  * frost tint is on; `&lines=1` lays sample wires (half lit) and rails on
- * every Keeper's land, `&wind=1` shows the wind layer.
+ * every Keeper's land (with `&built=1`, roads loop round the buildings),
+ * `&wind=1` shows the wind layer.
  * Nothing moves (the terrain clock never ticks), so a shot is the same every time.
  */
 
@@ -161,7 +163,12 @@ await boot(canvas, {
         if (showLines) {
           // A Clockwork Isle's wires and rails (#874), as the lines layer draws them.
           lineField = new LineField(scene);
-          lineField.draw(galleryLines(view), new Map(view.tiles.map((t) => [hexKey(t), t])));
+          const byKey = new Map(view.tiles.map((t) => [hexKey(t), t]));
+          lineField.draw(galleryLines(view), byKey);
+          // With `&built=1`, roads loop round the buildings by each Heart Seed.
+          if (params.get('built') === '1') {
+            new RoadField(scene).drawRoads(galleryRoads(view), byKey, [], true);
+          }
         }
         if (showWind) {
           const host = map;

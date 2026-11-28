@@ -27,7 +27,7 @@ import { postArrays, RAIL_TINT, railArmArrays, spanArrays, WIRE_TINT } from './l
 
 const LIFT = DOME + 0.006; // TUNE: a hair above the tile's domed top (under the roads' LIFT)
 /** On a tile with a building, posts and rails start this far out (a share of the way to the side). TUNE */
-export const LINE_RING = 0.62;
+export const LINE_RING = 0.8;
 
 /** What the field draws now (the dev hook and tests). */
 export interface LineFieldStats {

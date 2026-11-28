@@ -164,6 +164,63 @@ export function hubArrays(level: number): MeshArrays {
   return b.arrays();
 }
 
+/**
+ * A Clockwork Isle's road loop round a building (#874, supervisor 56: every
+ * building tile leaves room for a road to wrap round it): a flat ring of
+ * the level's road at `radius` (its middle line) on y = 0, as wide as the
+ * level's arm, with the edge colour on its rims when the level has one.
+ */
+export function ringArrays(level: number, radius: number): MeshArrays {
+  const look = ROAD_LOOK[clampLevel(level) - 1] ?? ROAD_LOOK[0];
+  const w = look.width / 2;
+  const h = look.height;
+  const top = linearRgb(look.top);
+  const side = linearRgb(look.side);
+  const b = new Builder();
+  const sides = RING_SIDES;
+  const at = (a: number, r: number, y: number): Rgb3 => [Math.cos(a) * r, y, Math.sin(a) * r];
+  for (let i = 0; i < sides; i++) {
+    const a0 = (i / sides) * Math.PI * 2;
+    const a1 = ((i + 1) / sides) * Math.PI * 2;
+    // Top (the edge colour across the whole width, if any), outer and inner walls.
+    b.quad(
+      at(a0, radius - w, h),
+      at(a0, radius + w, h),
+      at(a1, radius + w, h),
+      at(a1, radius - w, h),
+      look.edge ? linearRgb(look.edge) : top,
+    );
+    b.quad(
+      at(a0, radius + w, 0),
+      at(a1, radius + w, 0),
+      at(a1, radius + w, h),
+      at(a0, radius + w, h),
+      side,
+    );
+    b.quad(
+      at(a1, radius - w, 0),
+      at(a0, radius - w, 0),
+      at(a0, radius - w, h),
+      at(a1, radius - w, h),
+      side,
+    );
+    if (look.edge) {
+      const inner = w * (1 - look.edgeFrac);
+      const y = h + EDGE_LIFT;
+      b.quad(
+        at(a0, radius - inner, y),
+        at(a0, radius + inner, y),
+        at(a1, radius + inner, y),
+        at(a1, radius - inner, y),
+        top,
+      );
+    }
+  }
+  return b.arrays();
+}
+
+const RING_SIDES = 24;
+
 export function clampLevel(level: number): 1 | 2 | 3 {
   return Math.max(1, Math.min(3, Math.round(level))) as 1 | 2 | 3;
 }
