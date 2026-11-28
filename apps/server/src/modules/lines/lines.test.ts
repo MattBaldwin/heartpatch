@@ -61,7 +61,6 @@ const TEST_KEEPER = {
 };
 const ZONE = 'America/Denver';
 const START = '2026-10-02T18:00:00Z';
-const PLENTY = { timber: 80, stone: 80, glimmer: 6 };
 const DIRECTIONS: Hex[] = [
   { q: 1, r: 0 },
   { q: 1, r: -1 },
@@ -192,9 +191,6 @@ describe.skipIf(!url)('wires, rails and power (needs DATABASE_URL)', () => {
         set: { tendedAt: clock, strandedSince: null },
       });
   }
-  const strandedOf = async (tileId: string) =>
-    (await db.query.tileTending.findFirst({ where: (t, { eq }) => eq(t.tileId, tileId) }))
-      ?.strandedSince ?? null;
   const eventsOf = (mapId: string, type: string) =>
     db.query.gameEvents.findMany({
       where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.type, type)),
@@ -209,9 +205,6 @@ describe.skipIf(!url)('wires, rails and power (needs DATABASE_URL)', () => {
     for (const r of rows) total[r.itemId] = (total[r.itemId] ?? 0) + r.delta;
     return total;
   };
-  const negate = (items: Record<string, number>) =>
-    Object.fromEntries(Object.entries(items).map(([id, n]) => [id, -n]));
-
   /**
    * A straight line of tiles out from `who`'s Heart Seed: `line[k]` is k
    * steps away (`line[1]` is in the home ring). Every tile on it is plain
@@ -284,7 +277,7 @@ describe.skipIf(!url)('wires, rails and power (needs DATABASE_URL)', () => {
     const kid = await player();
     const mapId = await patch(server, kid);
     const [, ring] = await lineFrom(mapId, kid);
-    for (const step of [async () => undefined, () => makeWild(mapId)]) {
+    for (const step of [() => Promise.resolve(), () => makeWild(mapId)]) {
       await step();
       expect((await call(server, 'GET', `/maps/${mapId}/lines`, kid)).statusCode).toBe(404);
       for (const kind of ['wire', 'rail'] as const) {
