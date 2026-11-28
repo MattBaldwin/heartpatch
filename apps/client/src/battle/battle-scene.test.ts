@@ -473,6 +473,7 @@ describe('BattleScene', () => {
         'distance',
         'face',
         'fogEnd',
+        'rise',
         'team',
         'teamFeet',
       ]);

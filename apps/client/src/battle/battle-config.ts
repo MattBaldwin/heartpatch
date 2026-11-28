@@ -166,6 +166,9 @@ export interface BattleCameraConfig {
   fogReference: number;
   faceMargin: number;
   faceFacingMin: number;
+  mouthClear: number;
+  mouthWidth: number;
+  riseMax: number;
   narrowSheetFrom: number;
   feetRoom: number;
   fitFrom: number;
@@ -217,6 +220,17 @@ const BOSS_PROFILE = {
   /** A 1.8× boss's box (the 1-v-1's 3.6 × 1.8); the row's width binds first on a phone. */
   fitHeight: 6.5, // TUNE
   /** The picker's lean towards the friend picking (the team fight's is 0.35). */
+  /**
+   * The near friend's head stays under the boss's mouth (#190 PR 6b, 5b): the
+   * camera rises (`clearRise`, camera-director.ts) until a friend standing in
+   * front of the boss's face has its top (ears, tuft and hat in) this far (a
+   * fraction of the screen height) under the boss's mouth, rising no more than `riseMax`.
+   */
+  mouthClear: 0.012, // TUNE
+  /** The boss's face's half width as a share of its body radius: a friend is in front of the mouth when they overlap. */
+  mouthWidth: 0.55, // TUNE
+  /** The most the boss camera ever rises to clear the mouth (world units; the aim is 4 up). */
+  riseMax: 3, // TUNE
   focusShift: 0.12, // TUNE: the picker's lean keeps every end friend on screen (worst edge 0.958; 0.15 reached 0.975, 0.35 clipped up to 17%)
   beats: {
     /** A windup: a slow push-in across the step, with a little lean. */
@@ -293,6 +307,10 @@ export const BATTLE_CAMERA: BattleCamera = {
    * back of its head.
    */
   faceFacingMin: 0.3, // TUNE
+  /** Clearing the boss's mouth (`BATTLE_CAMERA.boss`, #190 PR 6b): off outside a boss fight. */
+  mouthClear: 0,
+  mouthWidth: 0.55,
+  riseMax: 0,
   /** From this window width (CSS px) the sheet is a centred card (battle.css), so the screen's bottom shows. */
   narrowSheetFrom: 900,
   /** The aim lands at least this far (a fraction of the screen height) above the band's bottom. */

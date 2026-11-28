@@ -24,7 +24,9 @@ export function cameraFor(boss: boolean): Readonly<BattleCameraConfig> {
 const BOSS_FIGHT_CAMERA: Readonly<BattleCameraConfig> = (() => {
   const { boss, ...base } = BATTLE_CAMERA;
   const { pitch, aim, feetY, feetRoom, fitFrom, fitHeight, focusShift } = boss;
-  return { ...base, pitch, aim, feetY, feetRoom, fitFrom, fitHeight, focusShift };
+  const { mouthClear, mouthWidth, riseMax } = boss;
+  const framing = { pitch, aim, feetY, feetRoom, fitFrom, fitHeight, focusShift };
+  return { ...base, ...framing, mouthClear, mouthWidth, riseMax };
 })();
 
 // TUNE: a boss push-in may close to this share of the distance that just fits the row's width: the
@@ -77,6 +79,14 @@ export interface FacePoint {
    * front edge, the lowest row it draws, stays above the band's bottom.
    */
   r?: number;
+  /**
+   * A team friend's top as drawn (#190 PR 6b, 5b), world units above the
+   * ground: the head, ears, tuft and hat, which the eyes-only box leaves out.
+   * Given, the camera keeps it under the boss's mouth (`clearRise`).
+   */
+  top?: number;
+  /** The boss face's half width across the view (#190 PR 6b), world units; left out, 0. */
+  w?: number;
 }
 
 export interface CameraShot {
@@ -303,6 +313,9 @@ export class CameraDirector {
   /** The face-first slide (#868), eased like the push so a windup never jolts the frame. */
   #drop = 0;
   #dropWant = 0;
+  /** How far the camera has risen to keep the near friends under the boss's mouth (#190 PR 6b), eased. */
+  #rise = 0;
+  #riseWant = 0;
   /** The band the face and the team's eyes may use this shot, reused (#868). */
   readonly #band = { top: 0, bottom: 1 };
   /**
@@ -311,7 +324,11 @@ export class CameraDirector {
    */
   readonly face = { high: Number.NaN, low: Number.NaN };
   /** Where the last shot put the near team's faces (#868), like `face`. */
-  readonly team: { high: number; low: number }[] = [];
+  readonly team: { high: number; low: number; top: number }[] = [];
+  /** How far the last shot rose to clear the boss's mouth (#190 PR 6b), world units: the dev hook's check. */
+  get rise(): number {
+    return this.#rise;
+  }
   /** The lowest row the near team's bodies draw in the last shot (`teamFeet`), NaN with no team: the dev hook's check. */
   feet = Number.NaN;
   /** Reused every frame, so following the fight allocates nothing. */
@@ -428,7 +445,8 @@ export class CameraDirector {
       shaking.x !== 0 ||
       now < this.#ramp.at + this.#ramp.ms ||
       Math.abs(this.#tilt - this.#tiltWant) > 0.0005 ||
-      Math.abs(this.#drop - this.#dropWant) > 0.001
+      Math.abs(this.#drop - this.#dropWant) > 0.001 ||
+      Math.abs(this.#rise - this.#riseWant) > 0.001
     );
   }
 
@@ -494,10 +512,10 @@ export class CameraDirector {
     const up = Math.sin(pitch) * distance;
     const shot = this.#shot;
     shot.position.x = tx - Math.sin(yaw) * back + shake.x;
-    shot.position.y = aim.y + up + shake.y;
+    shot.position.y = aim.y + up + shake.y + this.#rise;
     shot.position.z = tz - Math.cos(yaw) * back;
     shot.target.x = tx + shake.x;
-    shot.target.y = aim.y + shake.y;
+    shot.target.y = aim.y + shake.y + this.#rise;
     shot.target.z = tz;
     shot.up.x = Math.sin(roll);
     shot.up.y = Math.cos(roll);
@@ -521,6 +539,15 @@ export class CameraDirector {
       Number.isFinite(screenY(shot, face.x, face.low, face.z));
     // Turned away (a taunt's twirl): no eyes to frame, so hold the last target.
     const away = seen && (face.facing ?? 1) < this.#config.faceFacingMin;
+    // The near friends' heads stay under the boss's mouth (#190 PR 6b, 5b): the camera rises,
+    // which lowers a near head more than the far mouth. Turned away, it holds; no boss, it settles.
+    if (!face) this.#riseWant = 0;
+    else if (seen && !away) this.#riseWant = clearRise(shot, face, team, this.#rise, this.#config);
+    const rose = this.#rise;
+    this.#rise += (this.#riseWant - this.#rise) * k;
+    if (Math.abs(this.#rise) < 1e-5) this.#rise = 0;
+    shot.position.y += this.#rise - rose;
+    shot.target.y += this.#rise - rose;
     if (face && seen) {
       high = screenY(shot, face.x, face.high, face.z);
       low = screenY(shot, face.x, face.low, face.z);
@@ -564,12 +591,79 @@ export class CameraDirector {
     for (let i = 0; i < team.length; i++) {
       const t = team[i];
       if (!t) continue;
-      const box = (this.team[i] ??= { high: 0, low: 0 });
+      const box = (this.team[i] ??= { high: 0, low: 0, top: 0 });
       box.high = screenY(shot, t.x, t.high, t.z);
       box.low = screenY(shot, t.x, t.low, t.z);
+      box.top = t.top === undefined ? Number.NaN : screenY(shot, t.x, t.top, t.z);
     }
     return shot;
   }
+}
+
+/**
+ * How far the camera should rise (world units, from 0 to `riseMax`) so every
+ * near friend standing in front of the boss's face has its `top` at least
+ * `mouthClear` under the boss's mouth (#190 PR 6b, 5b: the middle friend's
+ * head hid it). `shot` is this frame's camera, already risen by `rise`.
+ * Raising the camera and its aim by Δh lowers a point `depth` away by
+ * Δh / (2·depth·tan(fov/2)) of the screen, so a near head drops faster than the
+ * far mouth: the gap grows by Δh·(1/dn − 1/df) / (2·tan). The answer is that
+ * linear step from where the camera is (each frame refines it); with no friend
+ * in front of the mouth the camera comes back down.
+ */
+export function clearRise(
+  shot: CameraShot,
+  face: FacePoint,
+  team: readonly FacePoint[],
+  rise: number,
+  config: BattleCameraConfig = BATTLE_CAMERA,
+): number {
+  if (!(config.riseMax > 0)) return 0;
+  const tan = Math.tan(shot.fov / 2);
+  const df = depthOf(shot, face.x, face.low, face.z);
+  if (!(df > 1e-6)) return rise;
+  const mouth = screenY(shot, face.x, face.low, face.z);
+  const mx = screenX(shot, face.x, face.z, df);
+  const mw = (face.w ?? 0) / (df * tan);
+  let need = -Infinity;
+  for (let i = 0; i < team.length; i++) {
+    const t = team[i];
+    if (!t || t.top === undefined) continue;
+    const dn = depthOf(shot, t.x, t.top, t.z);
+    // Only a friend nearer than the face can cover it.
+    if (!(dn > 1e-6) || dn >= df) continue;
+    const x = screenX(shot, t.x, t.z, dn);
+    if (Math.abs(x - mx) > mw + (t.r ?? 0) / (dn * tan)) continue;
+    const deficit = mouth + config.mouthClear - screenY(shot, t.x, t.top, t.z);
+    need = Math.max(need, (2 * tan * deficit) / (1 / dn - 1 / df));
+  }
+  if (need === -Infinity) return 0;
+  return Math.min(config.riseMax, Math.max(0, rise + need));
+}
+
+/** How far ahead of the camera (along its view) the world point (x, y, z) is. */
+function depthOf(shot: CameraShot, x: number, y: number, z: number): number {
+  const fx = shot.target.x - shot.position.x;
+  const fy = shot.target.y - shot.position.y;
+  const fz = shot.target.z - shot.position.z;
+  const fl = Math.hypot(fx, fy, fz) || 1;
+  return (
+    ((x - shot.position.x) * fx + (y - shot.position.y) * fy + (z - shot.position.z) * fz) / fl
+  );
+}
+
+/**
+ * Where the world point lands across the screen, in half screen heights from
+ * the middle (+ right; the roll is ignored, a small lean doesn't move a head
+ * off the mouth), `depth` ahead of the camera.
+ */
+function screenX(shot: CameraShot, x: number, z: number, depth: number): number {
+  const fx = shot.target.x - shot.position.x;
+  const fz = shot.target.z - shot.position.z;
+  const fl = Math.hypot(fx, fz) || 1;
+  // Right on the ground: forward turned a quarter clockwise seen from above.
+  const across = ((x - shot.position.x) * fz - (z - shot.position.z) * fx) / fl;
+  return across / (depth * Math.tan(shot.fov / 2));
 }
 
 /**

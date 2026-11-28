@@ -135,7 +135,9 @@ export interface BattleSceneStats {
     /** The boss's eyes-and-mouth box on screen (#868), fractions of the height from the top. */
     face: { top: number; bottom: number } | null;
     /** The player's row's eyes-and-mouth boxes (#868), the same way; empty outside a boss fight. */
-    team: { top: number; bottom: number }[];
+    team: { top: number; bottom: number; head: number | null }[];
+    /** How far the camera rose to keep the near friends' heads under the boss's mouth (#190 PR 6b), world units. */
+    rise: number;
     /** The lowest row the team's bodies draw (#190 PR 2, `teamFeet`), or null outside a boss fight. */
     teamFeet: number | null;
     /** How squarely the boss faces the camera (1 straight on, 0 side-on, below 0 away), or null. */
@@ -1167,7 +1169,12 @@ export class BattleScene {
             // Whenever the camera framed the team (a boss fight), even while the boss is turned away.
             team: this.#camera.team
               .filter((t) => Number.isFinite(t.high) && Number.isFinite(t.low))
-              .map((t) => ({ top: t.high, bottom: t.low })),
+              .map((t) => ({
+                top: t.high,
+                bottom: t.low,
+                head: Number.isFinite(t.top) ? t.top : null,
+              })),
+            rise: this.#camera.rise,
             teamFeet: Number.isNaN(this.#camera.feet) ? null : this.#camera.feet,
             // The facing the last shot framed with, so it matches `face` (a twirl turns fast).
             bossFacing: Number.isNaN(this.#facingShot) ? this.#bossFacing() : this.#facingShot,
@@ -1489,6 +1496,8 @@ export class BattleScene {
     const point = posedFace(this.#bossFacePoint, rig.home, rig.fx, rig.fz, pose, face);
     // Turned away (a taunt's twirl), the camera doesn't chase its face.
     point.facing = this.#bossFacing() ?? 1;
+    // How wide the face is across the view: a friend overlapping it covers the mouth (#190 PR 6b).
+    point.w = (rig.out?.radius ?? 1) * Math.max(0, pose.scale) * this.#camera.config.mouthWidth;
     return point;
   }
 
@@ -1504,6 +1513,10 @@ export class BattleScene {
       posedFace(point, rig.home, rig.fx, rig.fz, rig.pose, face);
       // The body's front edge on the ground: the camera keeps it over the band's bottom.
       point.r = (rig.out?.radius ?? 1) * Math.max(0, rig.pose.scale);
+      // The body's top (head, ears, tuft, hat), posed like the face: it stays under the boss's mouth (#190 PR 6b).
+      const pose = rig.pose;
+      const tall = (rig.out?.height ?? 0) * Math.max(0, pose.scale) * pose.squash;
+      point.top = pose.lift + tall * Math.cos(pose.lean);
       faces.push(point);
     }
     return faces;
