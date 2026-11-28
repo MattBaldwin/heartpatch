@@ -63,6 +63,7 @@ import { createBossMarker } from './map/boss-marker.js';
 import { bossTileInfo, createBossPicker, exceptBossTile } from './map/boss-picker.js';
 import { createBossStore } from './map/boss-store.js';
 import { createEveLayer } from './map/eve-layer.js';
+import { createTreeLayer } from './map/tree-layer.js';
 import { bossPatchLine } from './map/boss-view.js';
 import { seasonsOn } from './map/map-dressing.js';
 import { createTileMarks } from './map/tile-marks.js';
@@ -1411,6 +1412,12 @@ const eveLayer = createEveLayer({
     });
   },
 });
+// The Patch Tree's line when an ornament goes up or its star lights (#37 2d).
+const treeLayer = createTreeLayer({
+  say: (text) => {
+    patchLine.say(text);
+  },
+});
 const bossPicker = createBossPicker({
   store: bossStore,
   fight: async (mapId) => {
@@ -1603,6 +1610,7 @@ const maps = createMapScreen({
     postFlags,
     bossMarker,
     eveLayer,
+    treeLayer,
     communityFlags,
     villageWins,
     keyHunt.layer,

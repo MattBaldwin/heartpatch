@@ -35,6 +35,23 @@ interface MapDebug {
   bulbs?: number;
   bulbsLit?: boolean;
   bulbsTwinkle?: boolean;
+  /** The Patch Tree (#37 2d), null until planted: see src/map/map-scene.ts `MapSceneStats`. */
+  tree?: {
+    postIndex: number;
+    ornaments: number;
+    starLit: boolean;
+    lit: boolean;
+    twinkle: boolean;
+    rect: Box | null;
+    tileRect: Box | null;
+  } | null;
+}
+
+interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 /**
@@ -506,6 +523,78 @@ test('strings Twinkle Lights inside the Christmas ceilings, lit only on December
   expect(after.bulbsLit).toBe(false);
   expect(shaderErrors).toEqual([]);
   test.info().annotations.push({ type: 'twinkle draw calls', description: JSON.stringify(seen) });
+});
+
+test('plants the Patch Tree inside the Christmas ceilings as one draw call, lit only at night (#37 2d)', async ({
+  page,
+}) => {
+  test.setTimeout(300_000); // shader compiles; CI renders in software
+  const shaderErrors: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error' && /compil/i.test(m.text())) shaderErrors.push(m.text().slice(0, 200));
+  });
+  const seen: Record<string, number> = {};
+  for (const patch of ['cozy', 'wild'] as const) {
+    const base = `patch=${patch}&tier=medium&season=christmas&focus=tree`;
+    const bare = await islandStats(page, `${base}&night=1`);
+    expect(bare.tree ?? null).toBeNull();
+    seen[`${patch} bare`] = bare.drawCalls;
+    for (const [ornaments, star] of [
+      [0, false],
+      [6, false],
+      [12, true],
+    ] as const) {
+      for (const night of [false, true]) {
+        const label = `${patch} ${String(ornaments)}${star ? '★' : ''} ${night ? 'night' : 'day'}`;
+        const shot = await islandStats(
+          page,
+          `${base}&tree=${String(ornaments)}${star ? '&star=1' : ''}${night ? '&night=1' : ''}`,
+        );
+        seen[label] = shot.drawCalls;
+        expect(shot.tree, label).toMatchObject({ ornaments, starLit: star, lit: night });
+        // Steady under reduced motion (the gallery's default).
+        expect(shot.tree?.twinkle, label).toBe(false);
+        // The whole tree (body, ornaments, star) is one draw call (plan §1).
+        expect(shot.drawCalls, label).toBeLessThanOrEqual(bare.drawCalls + 1);
+        expect(shot.drawCalls, label).toBeLessThanOrEqual(CHRISTMAS_CEILING[patch]);
+      }
+    }
+  }
+  // With motion on, lit ornaments twinkle (on the GPU clock).
+  const live = await islandStats(
+    page,
+    'patch=cozy&tier=medium&season=christmas&focus=tree&tree=6&night=1&motion=1',
+  );
+  expect(live.tree).toMatchObject({ lit: true, twinkle: true });
+  // The low tier keeps them lit but steady, as the Twinkle Lights (#909).
+  const low = await islandStats(
+    page,
+    'patch=cozy&tier=low&season=christmas&focus=tree&tree=6&night=1&motion=1',
+  );
+  expect(low.tree).toMatchObject({ lit: true, twinkle: false });
+  expect(shaderErrors).toEqual([]);
+  test.info().annotations.push({ type: 'tree draw calls', description: JSON.stringify(seen) });
+});
+
+test("keeps the Patch Tree off its tile's flag and mark corner at every zoom (#37 2d, M0)", async ({
+  page,
+}) => {
+  test.setTimeout(240_000); // shader compiles; CI renders in software
+  // The post's flag sits on its tile's top edge on screen (flag-spot.ts) and a
+  // tile mark's middle at 78% across, 30% down (TILE_MARK, 24 px): the lit,
+  // starred tree stays under the one and left of the other, close in and far out.
+  for (const dist of [7, 12, 20, 30]) {
+    const { tree } = await islandStats(
+      page,
+      `patch=cozy&tier=medium&season=christmas&focus=tree&tree=12&star=1&night=1&dist=${String(dist)}`,
+    );
+    const label = `distance ${String(dist)}`;
+    const rect = tree?.rect;
+    const tile = tree?.tileRect;
+    if (!rect || !tile) throw new Error(`no tree on screen at ${label}`);
+    expect(rect.y, label).toBeGreaterThanOrEqual(tile.y);
+    expect(rect.x + rect.width, label).toBeLessThanOrEqual(tile.x + tile.width * 0.78 - 12);
+  }
 });
 
 test('keeps a Wild Isle in its draw-call and triangle budget, up close and zoomed out (#621)', async ({

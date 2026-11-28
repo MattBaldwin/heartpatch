@@ -24,7 +24,7 @@ import {
   tileScreenRectOf,
   type MapSceneOptions,
 } from './map-scene.js';
-import { testPatch, testView, testWildIsle, userId } from './test-view.js';
+import { testPatch, testView, testWildIsle, userId, withPatchTree } from './test-view.js';
 import { wildMarkers } from './wild-markers.js';
 
 describe('MapScene', () => {
@@ -502,6 +502,65 @@ describe('MapScene', () => {
     expect(on.instances('jack-o-lantern')).toBeGreaterThan(0);
     expect(on.map.stats.motes.bats ?? 0).toBeGreaterThan(0);
     expect(on.map.stats.motes.fog ?? 0).toBeGreaterThan(0);
+  });
+
+  describe('the Patch Tree (#37 2d)', () => {
+    const enabled = (scene: Scene) =>
+      scene.meshes.filter((m) => m.isEnabled() && m.isVisible && m.material !== null).length;
+
+    it('draws nothing until the server plants it', () => {
+      const { map, mesh } = build(testView(1));
+      expect(map.stats.tree).toBeNull();
+      expect(mesh('patch-tree')).toBeNull();
+    });
+
+    it("stands at the server's post as one mesh, its ornaments and star in it", () => {
+      const bare = build(testView(1));
+      const planted = withPatchTree(testView(1), 6, false);
+      const { scene, map, mesh } = build(planted);
+      const tree = planted.christmas?.tree;
+      expect(map.stats.tree).toMatchObject({
+        postIndex: tree?.postIndex,
+        ornaments: 6,
+        starLit: false,
+        lit: false,
+      });
+      // One more mesh to draw than the same map without it: +1 draw call (plan §1).
+      expect(enabled(scene)).toBe(enabled(bare.scene) + 1);
+      const post = planted.posts?.find((p) => p.index === tree?.postIndex);
+      const at = hexToWorld(post ?? { q: 0, r: 0 }, HEX_SIZE);
+      const m = mesh('patch-tree');
+      expect(m?.isEnabled()).toBe(true);
+      expect(Math.hypot((m?.position.x ?? 0) - at.x, (m?.position.z ?? 0) - at.z)).toBeLessThan(
+        HEX_SIZE * 0.5,
+      );
+      expect(m?.isVerticesDataPresent('treeGlow')).toBe(true);
+    });
+
+    it('grows with live decorations, lights the star when the server says, and glows at night', () => {
+      const view = withPatchTree(testView(1), 0, false);
+      const { map } = build(view);
+      expect(map.stats.tree?.ornaments).toBe(0);
+      const tree = view.christmas?.tree;
+      if (!tree) throw new Error('no tree');
+      map.update({
+        ...view,
+        christmas: { presentWaiting: false, tree: { ...tree, ornaments: 12 } },
+      });
+      // 12 ornaments but the server hasn't lit it: no star yet.
+      expect(map.stats.tree).toMatchObject({ ornaments: 12, starLit: false });
+      map.update({
+        ...view,
+        christmas: { presentWaiting: false, tree: { ...tree, ornaments: 40, starLit: true } },
+      });
+      expect(map.stats.tree).toMatchObject({ ornaments: 18, starLit: true, lit: false });
+      map.setNight(true);
+      // Reduced motion here (no ambient life under NullEngine's clock): lit, steady.
+      expect(map.stats.tree?.lit).toBe(true);
+      // Taken away (a view with no tree): nothing drawn.
+      map.update({ ...view, christmas: { presentWaiting: false } });
+      expect(map.stats.tree).toBeNull();
+    });
   });
 
   describe('Christmas snow (#37)', () => {

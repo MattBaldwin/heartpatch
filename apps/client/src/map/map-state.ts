@@ -10,6 +10,7 @@ import {
   type WsEventMessage,
 } from '@heartpatch/shared';
 import { BRIDGE_ID, DOCK_ID } from '../roads/travel-model.js';
+import { decorate } from './tree-model.js';
 
 // The client's copy of one map (tech spec §6 "State"): exactly what the
 // server sent, plus live events applied in seq order. The server is the
@@ -321,6 +322,26 @@ export class MapState {
         const parsed = GAME_EVENTS[event.type].public.safeParse(event.data);
         if (!parsed.success) return 'resync';
         return this.dropFence(hexKey(parsed.data), parsed.data.fenceId) ? 'redraw' : 'none';
+      }
+      case 'tree.decorated': {
+        // A December gift hung ornaments on the Patch Tree (#37 2d): the new
+        // total and star, in place (no refetch). The gift's own later
+        // `gift.collected` doesn't touch the tree, and `decorate` never counts
+        // down, so nothing is clobbered or counted twice.
+        const parsed = GAME_EVENTS['tree.decorated'].public.safeParse(event.data);
+        if (!parsed.success) return 'resync';
+        const christmas = this.current.christmas ?? { presentWaiting: false };
+        const before = christmas.tree ?? null;
+        const tree = decorate(before, parsed.data);
+        if (
+          before?.postIndex === tree.postIndex &&
+          before.ornaments === tree.ornaments &&
+          before.starLit === tree.starLit
+        ) {
+          return 'none';
+        }
+        this.current = { ...this.current, christmas: { ...christmas, tree } };
+        return 'redraw';
       }
       default:
         // Types this map doesn't draw (yet).

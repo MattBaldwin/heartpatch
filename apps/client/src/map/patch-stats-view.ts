@@ -1,4 +1,11 @@
-import { GAME_DATA, type KeeperStats, type PatchCrown, type PatchStats } from '@heartpatch/shared';
+import {
+  GAME_DATA,
+  type KeeperStats,
+  type MapViewChristmas,
+  type PatchCrown,
+  type PatchStats,
+} from '@heartpatch/shared';
+import { heartsFor } from './tree-model.js';
 
 // What the patch stats sheet says (#573), worked out from the server's
 // numbers so it's unit-tested apart from the DOM. Cozy and celebratory
@@ -42,6 +49,11 @@ export interface KeeperCard {
   readonly lines: readonly StatLine[];
   /** "Hearthfire ×2", most first; empty with nothing built. */
   readonly buildings: readonly string[];
+  /**
+   * Hearts of warmth between me and this patch-mate (#37 2d, December gifts),
+   * at most `HEARTS_MAX`; 0 shows no row (my own card, or no warmth yet).
+   */
+  readonly hearts: number;
 }
 
 export interface StatsPage {
@@ -54,7 +66,12 @@ const count = (n: number | null): string => (n === null ? SOON : String(n));
 const buildingName = (id: string): string =>
   GAME_DATA.buildings.find((b) => b.id === id)?.name ?? id;
 
-function keeperCard(k: KeeperStats, userId: string | null, nightKeeper: string | null): KeeperCard {
+function keeperCard(
+  k: KeeperStats,
+  userId: string | null,
+  nightKeeper: string | null,
+  warmth: MapViewChristmas['warmth'] | undefined,
+): KeeperCard {
   const mine = k.user.id === userId;
   const crowns = [
     ...(k.user.id === nightKeeper ? [NIGHT_CROWN] : []),
@@ -76,11 +93,19 @@ function keeperCard(k: KeeperStats, userId: string | null, nightKeeper: string |
       { emoji: '🏘️', label: 'Hollows', value: count(k.villages) },
     ],
     buildings: k.buildings.map((b) => `${buildingName(b.buildingId)} ×${String(b.count)}`),
+    hearts: heartsFor(warmth, k.user.id, userId),
   };
 }
 
-/** The sheet's page for these stats, as `userId` sees it. */
-export function statsPage(stats: PatchStats, userId: string | null): StatsPage {
+/**
+ * The sheet's page for these stats, as `userId` sees it, with my `warmth`
+ * with each patch-mate from the map view (`MapView.christmas.warmth`, #37).
+ */
+export function statsPage(
+  stats: PatchStats,
+  userId: string | null,
+  warmth?: MapViewChristmas['warmth'],
+): StatsPage {
   const { totals } = stats;
   return {
     totals: [
@@ -90,7 +115,7 @@ export function statsPage(stats: PatchStats, userId: string | null): StatsPage {
       { emoji: '🏘️', label: 'Hollows restored', value: count(totals.villages) },
     ],
     keepers: stats.keepers.map((k) =>
-      keeperCard(k, userId, stats.keeperOfTheNight?.userId ?? null),
+      keeperCard(k, userId, stats.keeperOfTheNight?.userId ?? null, warmth),
     ),
   };
 }

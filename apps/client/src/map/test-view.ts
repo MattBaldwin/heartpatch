@@ -348,3 +348,36 @@ export function withHomeBuildings(view: MapView): MapView {
     ),
   };
 }
+
+/**
+ * `view` with its trading posts listed (`MapView.posts`, index by distance
+ * from the middle) and the Patch Tree (#37 2d) planted at the nearest, as the
+ * server plants it (2c), with `ornaments` on it and the star lit or not.
+ * For tests and the dev island page only: the game always reads the post
+ * from the server (rule 1).
+ */
+export function withPatchTree(view: MapView, ornaments: number, starLit: boolean): MapView {
+  const centre = { q: 0, r: 0 };
+  const posts = view.tiles
+    .filter((t) => t.terrain === 'trading-post')
+    .sort((a, b) => hexDistance(a, centre) - hexDistance(b, centre) || a.q - b.q || a.r - b.r)
+    .map((t, index) => ({
+      q: t.q,
+      r: t.r,
+      index,
+      reach: null,
+      distance: null,
+      level: null,
+      teamSize: null,
+      visitUntil: null,
+    }));
+  const first = posts[0];
+  return {
+    ...view,
+    posts,
+    christmas: {
+      ...(view.christmas ?? { presentWaiting: false }),
+      ...(first ? { tree: { postIndex: first.index, ornaments, starLit } } : {}),
+    },
+  };
+}

@@ -215,6 +215,14 @@
   color: #6b4a6a;
 }
 
+/* Hearts of warmth with this patch-mate (#37 2d): hearts only, never a number to rank by. */
+.patch-stats-hearts {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.2;
+  letter-spacing: 2px;
+}
+
 /* The legend card's way in (#573): a full-width pill above the Keepers. */
 .map-legend-stats {
   display: block;

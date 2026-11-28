@@ -355,7 +355,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   statsButton.addEventListener('click', () => {
     const state = sync.state;
     setLegend(false);
-    if (state) stats.show(state.id, user?.id ?? null);
+    if (state) stats.show(state.id, user?.id ?? null, state.view.christmas?.warmth);
   });
   legend.card.prepend(statsButton);
   // Once for the app's life: the map screen is made once (main.ts).
