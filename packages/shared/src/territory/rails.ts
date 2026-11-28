@@ -1,6 +1,7 @@
-import { hexKey, type Hex } from '../hex/index.js';
+import { hexKey, type Hex, type HexKey } from '../hex/index.js';
 import type { RailRules } from '../schemas/data/rails.js';
 import type { TravelRules } from '../schemas/data/travel.js';
+import { powerReach, type PowerTile } from './power.js';
 import type { RoadSpot } from './reach.js';
 
 // Clockwork Isle rails (#874): a rail is a road with its own levels
@@ -65,4 +66,37 @@ export function railSpeedPercent(level: number | null, rules: RailRules | null):
 export function railCost(level: number, rules: RailRules) {
   if (level < 1) return null;
   return rules.levels[level - 1]?.cost ?? null;
+}
+
+/** A standing Rail Depot (`buildings` kind `depot`): where, whose, and its level. */
+export interface DepotSpot extends Hex {
+  readonly ownerUserId: string;
+  readonly level: number;
+}
+
+/** No run limit on a rail line: it carries as far as it goes. */
+const UNLIMITED_RUN = { wire: { cost: {}, maxRun: Number.MAX_SAFE_INTEGER } };
+
+/**
+ * Which of the player's rail tiles are rail-joined to one of their Rail
+ * Depots (#874, supervisor 61 ruling): a chain of their own rails, each next
+ * to the last, from the tile to one on or next to the Depot's tile. The
+ * same chain rule as power (`powerReach`, with the Depot as the source and
+ * no run limit), so only their rails and Depots on land they hold count.
+ * Each tile maps to the highest Depot level it reaches.
+ */
+export function depotJoined(
+  tiles: readonly PowerTile[],
+  rails: readonly RailSpot[],
+  depots: readonly DepotSpot[],
+  userId: string,
+): Map<HexKey, number> {
+  const joined = new Map<HexKey, number>();
+  for (const depot of depots) {
+    if (depot.ownerUserId !== userId) continue;
+    for (const key of powerReach(tiles, rails, [depot], userId, UNLIMITED_RUN).keys()) {
+      joined.set(key, Math.max(joined.get(key) ?? 0, depot.level));
+    }
+  }
+  return joined;
 }

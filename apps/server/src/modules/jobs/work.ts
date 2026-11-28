@@ -45,22 +45,22 @@ const DEPOT_WAITING = GAME_DATA.buildings.flatMap((b) =>
 )[0];
 
 /**
- * How many finished cycles a gatherer holds (#874): its owner's Rail Depot
- * level's `waitingCycles` when its work tile has their live rail (the tile is
- * rail-joined) and they have a depot; else `JOB_RULES`' four. Never fewer
- * than four. `depot`: the higher cap applies.
+ * How many finished cycles a gatherer holds (#874): when its owner's rails
+ * join its work tile to one of their Rail Depots (`depotLevel`, filled by
+ * the jobs repo from `depotJoined`), that Depot level's `waitingCycles`;
+ * else `JOB_RULES`' four. Never fewer than four. `depot`: the higher cap
+ * applies.
  */
-export function workCapOf(tile: Pick<JobTileRow, 'railLevel' | 'depotLevel'>): {
+export function workCapOf(tile: Pick<JobTileRow, 'depotLevel'>): {
   maxStoredCycles: number;
   depot: boolean;
 } {
   const base = JOB_RULES.work.maxStoredCycles;
-  const rail = tile.railLevel ?? null;
   const depot = tile.depotLevel ?? null;
   const cap =
-    rail === null || depot === null || !DEPOT_WAITING
+    depot === null || !DEPOT_WAITING
       ? null
-      : (DEPOT_WAITING[Math.min(depot, DEPOT_WAITING.length) - 1] ?? null);
+      : (DEPOT_WAITING[Math.min(Math.max(depot, 1), DEPOT_WAITING.length) - 1] ?? null);
   return cap === null || cap <= base
     ? { maxStoredCycles: base, depot: false }
     : { maxStoredCycles: cap, depot: true };

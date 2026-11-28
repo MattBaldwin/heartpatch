@@ -14,6 +14,7 @@ import {
   type PublicTile,
   extraNodes,
   GAME_DATA,
+  hexNeighbors,
 } from '@heartpatch/shared';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -484,18 +485,64 @@ describe.skipIf(!url)(
         return { server, kid, mapId };
       }
 
-      /** A Rail Depot at `level`, put straight in on a homestead (its command's checks aren't the point). */
-      async function depot(mapId: string, who: Player, level = 1) {
-        const plot = await makeHomestead(db, mapId, who.id, clock);
+      /** A Rail Depot at `level`, put straight in (its command's checks aren't the point). */
+      async function depot(mapId: string, who: Player, tileId: string, level = 1) {
         await db.insert(buildings).values({
           mapId,
           ownerUserId: who.id,
-          tileId: plot.id,
+          tileId,
           buildingId: 'rail-depot',
           kind: 'depot',
           level,
           spot: 0,
         });
+      }
+
+      /** A Rail Depot far from `work`, on a homestead: no rail line reaches it. */
+      const farDepot = async (mapId: string, who: Player, level = 1) =>
+        depot(mapId, who, (await makeHomestead(db, mapId, who.id, clock)).id, level);
+
+      /**
+       * A rail line of mine from `work` to a Rail Depot: rails on `work` and
+       * the next tile along, and the Depot on the one after (all made mine).
+       */
+      async function railLineToDepot(
+        server: FastifyInstance,
+        who: Player,
+        mapId: string,
+        work: PublicTile,
+        level = 1,
+        skip: readonly PublicTile[] = [],
+      ) {
+        const all = await tilesOf(server, who, mapId);
+        const free = (h: { q: number; r: number }) =>
+          all.find(
+            (t) =>
+              t.q === h.q &&
+              t.r === h.r &&
+              t.ownerUserId === null &&
+              t.homeSlot === null &&
+              !skip.some((x) => x.q === t.q && x.r === t.r),
+          );
+        const step = hexNeighbors({ q: 0, r: 0 })
+          .map(
+            (d) =>
+              [
+                free({ q: work.q + d.q, r: work.r + d.r }),
+                free({ q: work.q + 2 * d.q, r: work.r + 2 * d.r }),
+              ] as const,
+          )
+          .find(([a, b]) => a && b);
+        expect(step).toBeDefined();
+        const [next, end] = step! as readonly [PublicTile, PublicTile];
+        for (const t of [next, end]) {
+          await run(
+            `update tiles set owner_user_id = '${who.id}' where id = '${await tileIdAt(mapId, t)}'`,
+          );
+        }
+        await rail(mapId, who, work);
+        await rail(mapId, who, next);
+        await depot(mapId, who, await tileIdAt(mapId, end), level);
       }
 
       const rail = async (mapId: string, who: Player, at: PublicTile) =>
@@ -534,8 +581,7 @@ describe.skipIf(!url)(
         async (level) => {
           const { server, kid, mapId } = await isle();
           const forest = await farLand(server, kid, mapId, 'forest');
-          await rail(mapId, kid, forest);
-          await depot(mapId, kid, level);
+          await railLineToDepot(server, kid, mapId, forest, level);
           const cap = waitingAt(level);
           expect(cap).toBeGreaterThan(JOB_RULES.work.maxStoredCycles);
           const { pet, one } = await awayFor(server, kid, mapId, forest, cap + 10);
@@ -563,7 +609,7 @@ describe.skipIf(!url)(
       it('a gatherer off the rails still naps at four, depot or not', async () => {
         const { server, kid, mapId } = await isle();
         const forest = await farLand(server, kid, mapId, 'forest');
-        await depot(mapId, kid);
+        await farDepot(mapId, kid);
         const { one } = await awayFor(server, kid, mapId, forest, waitingAt(1) + 10);
         const settled = await settle(server, kid, mapId);
         expect(settled.landed.find((l) => l.kind === 'work')!.items).toEqual({
@@ -573,10 +619,11 @@ describe.skipIf(!url)(
         expect(reasons).toEqual(['work']);
       });
 
-      it('a rail with no depot naps at four too', async () => {
+      it('a rail on the work tile with no rail line to the Depot naps at four too', async () => {
         const { server, kid, mapId } = await isle();
         const forest = await farLand(server, kid, mapId, 'forest');
         await rail(mapId, kid, forest);
+        await farDepot(mapId, kid);
         const { one } = await awayFor(server, kid, mapId, forest, waitingAt(1) + 10);
         const settled = await settle(server, kid, mapId);
         expect(settled.landed.find((l) => l.kind === 'work')!.items).toEqual({
@@ -589,9 +636,8 @@ describe.skipIf(!url)(
         const user = { id: kid.id, username: kid.username } as never;
         const forest = await farLand(server, kid, mapId, 'forest');
         const hills = await farLand(server, kid, mapId, 'hills', [forest]);
-        await rail(mapId, kid, forest);
-        await rail(mapId, kid, hills);
-        await depot(mapId, kid);
+        await railLineToDepot(server, kid, mapId, forest, 1, [hills]);
+        await railLineToDepot(server, kid, mapId, hills, 1, [forest]);
         // The Timber gatherer banks first (lower squishy id); Stone's grant fails.
         const [low, high] = [randomUUID(), randomUUID()].sort();
         await squishy(mapId, kid, { id: low });
