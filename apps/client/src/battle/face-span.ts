@@ -91,11 +91,11 @@ export function topSpan(params: SquishyParams, registry: VisualRegistry): number
   let top = params.height;
   for (const part of params.parts) {
     if (part.surface) continue;
-    const onHead = part.host === 'head' && params.head && headBody;
-    const host = onHead ? headBody : body;
+    const head = part.host === 'head' && headBody ? params.head : undefined;
+    const host = head ? headBody : body;
     if (!host) continue;
-    const scale = onHead && params.head ? params.head.scale : params.body.scale;
-    const at: Vec3 = onHead && params.head ? params.head.offset : [0, params.lift, 0];
+    const scale = head ? head.scale : params.body.scale;
+    const at: Vec3 = head ? head.offset : [0, params.lift, 0];
     for (const p of part.placements) {
       const m = partMatrix(host, scale, part, p, at);
       // The unit box's highest corner: the centre plus half of each axis's rise.
