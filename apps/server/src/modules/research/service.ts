@@ -1,5 +1,7 @@
 import {
   GAME_DATA,
+  RESEARCH_TREE,
+  researchGateProblem,
   researchReadyAt,
   type PublicUser,
   type ResearchBuilding,
@@ -54,7 +56,11 @@ export interface ResearchService {
   /** What I know and what's going; claims a ready job first. */
   view: (user: PublicUser, mapId: string) => Promise<ResearchView>;
   /** Starts a node on one of my benches, paid up front. */
-  start: (user: PublicUser, mapId: string, request: StartResearchRequest) => Promise<ResearchResponse>;
+  start: (
+    user: PublicUser,
+    mapId: string,
+    request: StartResearchRequest,
+  ) => Promise<ResearchResponse>;
   /** Claims my ready job: the node is known, its Blueprints in my bag. */
   claim: (user: PublicUser, mapId: string) => Promise<ResearchResponse>;
 }
@@ -120,6 +126,25 @@ export async function claimResearchJob(
     actorUserId: claimed.userId,
     payload: { userId: claimed.userId, jobId: claimed.id, nodeId: claimed.nodeId, grants },
   };
+}
+
+/**
+ * The research gate for a build or a level (#874 C3): `CONFLICT` with kid
+ * text ("Tinker first! Research Sorting at your Bench.") until `owner`
+ * knows `requiresResearch` on this patch. Nothing to check without one. A
+ * plain read of `research_known` (insert-only, never locked), so it adds no
+ * lock to the caller's order. The node's name comes from the shared tree:
+ * a gated row only exists on a Clockwork Isle (`checkGameData`).
+ */
+export async function requireResearch(
+  db: Executor,
+  owner: ResearchOwner,
+  requiresResearch: string | undefined,
+): Promise<void> {
+  if (requiresResearch === undefined) return;
+  const known = new Set(await createResearchRepo(db).known(owner));
+  const problem = researchGateProblem(requiresResearch, known, RESEARCH_TREE);
+  if (problem) throw new AppError('CONFLICT', problem);
 }
 
 /** My research now, read in `db` (inside a transaction or not). */
@@ -208,7 +233,9 @@ export function createResearchService(options: ResearchServiceOptions): Research
           if (going && going.readyAt > at) throw new AppError('CONFLICT', MESSAGES.busy);
           // Step 11 once: a ready job's grant and the new node's cost together.
           await lockGrantRows(tx, mapId, [
-            ...(going ? [{ userId: user.id, items: nodeIn(tree, going.nodeId)?.grants ?? {} }] : []),
+            ...(going
+              ? [{ userId: user.id, items: nodeIn(tree, going.nodeId)?.grants ?? {} }]
+              : []),
             { userId: user.id, items: node.cost },
           ]);
           // A ready job frees the bench: it's claimed first (and its node known).

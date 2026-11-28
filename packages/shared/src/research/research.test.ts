@@ -110,7 +110,7 @@ describe('RESEARCH_TEXT', () => {
 
 describe('the Blueprint economy (owner ruling 2026-11-28)', () => {
   const tier1 = RESEARCH_TREE.nodes.filter((n) => n.tier === 1);
-  const granted = tier1.reduce((sum, n) => sum + (n.grants.blueprints ?? 0), 0);
+  const granted = tier1.reduce((sum, n) => sum + (n.grants['blueprints'] ?? 0), 0);
 
   it('grants 8 Blueprints across tier 1', () => {
     expect(granted).toBe(8);
@@ -120,13 +120,8 @@ describe('the Blueprint economy (owner ruling 2026-11-28)', () => {
     const clockwork = GAME_DATA.buildings.filter((b) => b.patchTypes?.includes('clockwork-isle'));
     expect(clockwork.length).toBeGreaterThan(0);
     const needed =
-      clockwork
-        .flatMap((b) => b.levels)
-        .reduce((sum, l) => sum + ((l.cost as Record<string, number>).blueprints ?? 0), 0) +
-      RAIL_RULES.levels.reduce(
-        (sum, l) => sum + ((l.cost as Record<string, number>).blueprints ?? 0),
-        0,
-      );
+      clockwork.flatMap((b) => b.levels).reduce((sum, l) => sum + (l.cost['blueprints'] ?? 0), 0) +
+      RAIL_RULES.levels.reduce((sum, l) => sum + (l.cost['blueprints'] ?? 0), 0);
     expect(needed).toBeGreaterThan(0);
     expect(granted).toBeGreaterThanOrEqual(needed);
   });

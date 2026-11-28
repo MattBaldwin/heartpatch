@@ -75,7 +75,11 @@ describe.skipIf(!url)('the Research Bench (needs DATABASE_URL)', () => {
   });
 
   async function start(): Promise<FastifyInstance> {
-    const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url!, HP_DEV_SQUISHY_GRANTS: 'true' });
+    const config = loadConfig({
+      NODE_ENV: 'test',
+      DATABASE_URL: url!,
+      HP_DEV_SQUISHY_GRANTS: 'true',
+    });
     app = await buildApp({ config, db, clock: () => clock, logger: false });
     return app;
   }
@@ -116,7 +120,12 @@ describe.skipIf(!url)('the Research Bench (needs DATABASE_URL)', () => {
    * A patch with `others` joined. Made Cozy (the generator has no Clockwork
    * layout until C1), then turned into a Clockwork Isle unless `cozy`.
    */
-  async function patch(server: FastifyInstance, owner: Player, others: Player[] = [], cozy = false) {
+  async function patch(
+    server: FastifyInstance,
+    owner: Player,
+    others: Player[] = [],
+    cozy = false,
+  ) {
     const res = await call(server, 'POST', '/maps', owner, { name: 'Bench Patch', timeZone: ZONE });
     expect(res.statusCode, res.body).toBe(201);
     const map: MapDetail = MapResponseSchema.parse(res.json()).map;
@@ -125,10 +134,16 @@ describe.skipIf(!url)('the Research Bench (needs DATABASE_URL)', () => {
         code: map.admin!.invite!.code,
       });
       const request = JoinMapResponseSchema.parse(join.json()).request;
-      const ok = await call(server, 'POST', `/maps/${map.id}/requests/${request.id}/approve`, owner);
+      const ok = await call(
+        server,
+        'POST',
+        `/maps/${map.id}/requests/${request.id}/approve`,
+        owner,
+      );
       expect(ok.statusCode).toBe(204);
     }
-    if (!cozy) await db.execute(`update maps set patch_type = 'clockwork-isle' where id = '${map.id}'`);
+    if (!cozy)
+      await db.execute(`update maps set patch_type = 'clockwork-isle' where id = '${map.id}'`);
     return map.id;
   }
 
@@ -162,8 +177,13 @@ describe.skipIf(!url)('the Research Bench (needs DATABASE_URL)', () => {
       where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.type, type)),
       orderBy: (t, { asc }) => [asc(t.seq)],
     });
-  const begin = (server: FastifyInstance, who: Player, mapId: string, buildingId: string, nodeId: string) =>
-    call(server, 'POST', `/maps/${mapId}/research`, who, { buildingId, nodeId });
+  const begin = (
+    server: FastifyInstance,
+    who: Player,
+    mapId: string,
+    buildingId: string,
+    nodeId: string,
+  ) => call(server, 'POST', `/maps/${mapId}/research`, who, { buildingId, nodeId });
   const view = async (server: FastifyInstance, who: Player, mapId: string) => {
     const res = await call(server, 'GET', `/maps/${mapId}/research`, who);
     expect(res.statusCode, res.body).toBe(200);
@@ -211,8 +231,8 @@ describe.skipIf(!url)('the Research Bench (needs DATABASE_URL)', () => {
       startedAt: new Date(START).toISOString(),
       readyAt: new Date(Date.parse(START) + sorting.seconds * 1000).toISOString(),
     });
-    expect(body.items.parts).toBe(PLENTY.parts - sorting.cost.parts!);
-    expect(body.items.spark).toBe(PLENTY.spark - sorting.cost.spark!);
+    expect(body.items['parts']).toBe(PLENTY['parts'] - sorting.cost['parts']!);
+    expect(body.items['spark']).toBe(PLENTY['spark'] - sorting.cost['spark']!);
 
     const [started] = await eventsOf(mapId, 'research.started');
     expect(parseGameEventPayload('research.started', started!.payload)).toMatchObject({
@@ -270,7 +290,13 @@ describe.skipIf(!url)('the Research Bench (needs DATABASE_URL)', () => {
     const res = await begin(server, kid, mapId, palBench, 'sorting');
     expect(res.statusCode).toBe(404);
     expect(errorOf(res).message).toBe("That isn't one of your Research Benches.");
-    const missing = await begin(server, kid, mapId, '00000000-0000-4000-8000-000000000000', 'sorting');
+    const missing = await begin(
+      server,
+      kid,
+      mapId,
+      '00000000-0000-4000-8000-000000000000',
+      'sorting',
+    );
     expect(missing.statusCode).toBe(404);
     expect((await begin(server, kid, mapId, palBench, 'not-a-node')).statusCode).toBe(404);
   });
@@ -308,7 +334,7 @@ describe.skipIf(!url)('the Research Bench (needs DATABASE_URL)', () => {
     expect(res.statusCode, res.body).toBe(200);
     const body = ResearchResponseSchema.parse(res.json());
     expect(body.research).toMatchObject({ known: ['sorting'], going: null });
-    expect(body.items.blueprints).toBe(node('sorting').grants.blueprints);
+    expect(body.items['blueprints']).toBe(node('sorting').grants['blueprints']);
     expect((await claim()).statusCode).toBe(409);
   });
 
@@ -325,7 +351,7 @@ describe.skipIf(!url)('the Research Bench (needs DATABASE_URL)', () => {
     const [a, b] = await Promise.all([view(server, kid, mapId), view(server, kid, mapId)]);
     for (const v of [a, b]) expect(v).toMatchObject({ known: ['sorting'], going: null });
     expect(await view(server, kid, mapId)).toMatchObject({ known: ['sorting'], going: null });
-    expect((await bag(mapId, kid)).blueprints).toBe(node('sorting').grants.blueprints);
+    expect((await bag(mapId, kid))['blueprints']).toBe(node('sorting').grants['blueprints']);
     const done = await eventsOf(mapId, 'research.done');
     expect(done.length).toBe(1);
     expect(parseGameEventPayload('research.done', done[0]!.payload)).toMatchObject({
@@ -351,7 +377,7 @@ describe.skipIf(!url)('the Research Bench (needs DATABASE_URL)', () => {
     const later = () => new Date(Date.parse(START) + 5 * HOUR_MS);
     const services = [1, 2, 3].map(() => createResearchService({ db, clock: later }));
     await Promise.all(services.map((s) => s.view(kid, mapId)));
-    expect((await bag(mapId, kid)).blueprints).toBe(node('tidy-rails').grants.blueprints);
+    expect((await bag(mapId, kid))['blueprints']).toBe(node('tidy-rails').grants['blueprints']);
     expect((await eventsOf(mapId, 'research.done')).length).toBe(1);
   });
 
@@ -368,13 +394,13 @@ describe.skipIf(!url)('the Research Bench (needs DATABASE_URL)', () => {
     expect(again.statusCode).toBe(409);
     expect(errorOf(again).message).toBe('You already know that one! ✨');
     // …but the refusal rolled the claim back too; the next read claims it.
-    expect((await bag(mapId, kid)).blueprints ?? 0).toBe(0);
+    expect((await bag(mapId, kid))['blueprints'] ?? 0).toBe(0);
     const next = await begin(server, kid, mapId, benchId, 'wrapping');
     expect(next.statusCode, next.body).toBe(201);
     const body = ResearchResponseSchema.parse(next.json());
     expect(body.research.known).toEqual(['sorting']);
     expect(body.research.going?.nodeId).toBe('wrapping');
-    expect(body.items.blueprints).toBe(node('sorting').grants.blueprints);
+    expect(body.items['blueprints']).toBe(node('sorting').grants['blueprints']);
     expect((await eventsOf(mapId, 'research.done')).length).toBe(1);
   });
 
