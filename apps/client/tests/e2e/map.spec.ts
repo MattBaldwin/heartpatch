@@ -566,6 +566,12 @@ test('plants the Patch Tree inside the Christmas ceilings as one draw call, lit 
     'patch=cozy&tier=medium&season=christmas&focus=tree&tree=6&night=1&motion=1',
   );
   expect(live.tree).toMatchObject({ lit: true, twinkle: true });
+  // The low tier keeps them lit but steady, as the Twinkle Lights (#909).
+  const low = await islandStats(
+    page,
+    'patch=cozy&tier=low&season=christmas&focus=tree&tree=6&night=1&motion=1',
+  );
+  expect(low.tree).toMatchObject({ lit: true, twinkle: false });
   expect(shaderErrors).toEqual([]);
   test.info().annotations.push({ type: 'tree draw calls', description: JSON.stringify(seen) });
 });

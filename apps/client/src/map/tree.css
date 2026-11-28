@@ -4,11 +4,11 @@
   display: none;
 }
 
-/* The Eve beat's spot (eve.css): under the map's name and the gathering chip. */
+/* Under the Eve notice chip and beat's spot (eve.css, +164px), so the two never stack on Dec 24. */
 .tree-beat {
   position: fixed;
   z-index: 4;
-  top: calc(env(safe-area-inset-top) + 164px);
+  top: calc(env(safe-area-inset-top) + 216px);
   left: 0;
   right: 0;
   width: max-content;

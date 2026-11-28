@@ -349,8 +349,10 @@ export class TreeField {
       this.built = want;
       this.applyLight();
     }
+    // It stands still: frozen like the map's other static meshes, thawed only to move.
+    this.mesh.unfreezeWorldMatrix();
     this.mesh.position.set(tree.x, tree.y, tree.z);
-    this.mesh.computeWorldMatrix(true);
+    this.mesh.freezeWorldMatrix();
     this.mesh.setEnabled(true);
   }
 
