@@ -56,6 +56,8 @@ export function toPublicBuilding(row: BuildingRow, local: MapLocalTime): PublicB
       : {}),
     // Knocked about by a storm (Wild Isle #621): only ever set there.
     ...(row.damagedAt !== null ? { knocked: true } : {}),
+    // Cut off from its owner's generators (Clockwork Isle #874): only ever set there.
+    ...(row.unpoweredSince !== null ? { unpowered: true as const } : {}),
   };
 }
 

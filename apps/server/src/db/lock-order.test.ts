@@ -76,6 +76,7 @@ import { createMapsService } from '../modules/maps/service.js';
 import { createStartersService } from '../modules/starters/service.js';
 import { createTerritoryService, createTileBattlePort } from '../modules/territory/service.js';
 import { createRoadsRepo } from '../modules/roads/repo.js';
+import { createLinesRepo } from '../modules/lines/repo.js';
 import { createTendingRepo, createTerritoryRepo } from '../modules/territory/repo.js';
 import { createTradesRepo } from '../modules/trades/repo.js';
 import { createTradesService } from '../modules/trades/service.js';
@@ -106,6 +107,7 @@ import {
   gameEvents,
   tileExplore,
   tileRoads,
+  tileLines,
   tileTending,
   gatherJobs,
   heartCoinLedger,
@@ -3983,5 +3985,177 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', { timeout: 30_0
       );
       expect(sent).toMatchObject({ status: 'accepted', toUserId: mate });
     });
+  });
+
+  /*
+   * Clockwork Isle (#874 C2): a line row is step 6 right after its tile's
+   * road; power rows join the path's one buildings lock (plan R2.2).
+   */
+  it("takes a lost tile's line after its road, in (tile_id, kind) order (lines `lockOnTiles`, #874 step 6)", async () => {
+    const { mapId, userId, tileIds } = await fires();
+    await db
+      .insert(tileRoads)
+      .values(tileIds.map((tileId) => ({ tileId, mapId, ownerUserId: userId, level: 1 })));
+    await db.insert(tileLines).values(
+      [...tileIds].reverse().flatMap((tileId) =>
+        (['wire', 'rail'] as const).map((kind) => ({
+          tileId,
+          kind,
+          mapId,
+          ownerUserId: userId,
+        })),
+      ),
+    );
+    let locked: string[] = [];
+    let running: Promise<unknown> | undefined;
+    // Holds the first road; once the take-down waits there, takes that tile's lines.
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '10s'`);
+      await tx.select().from(tileRoads).where(eq(tileRoads.tileId, tileIds[0]!)).for('update');
+      const pid = await backendPid(tx);
+      running = unplanned(async (inner) => {
+        await createRoadsRepo(inner).lockOnTiles([...tileIds].reverse());
+        locked = (await createLinesRepo(inner).lockOnTiles([...tileIds].reverse())).map(
+          (l) => `${l.tileId}|${l.kind}`,
+        );
+      });
+      await waitUntilBlockedBy(db, pid);
+      await tx.select().from(tileLines).where(eq(tileLines.tileId, tileIds[0]!)).for('update');
+    });
+    await running;
+    expect(locked).toEqual(tileIds.flatMap((id) => [`${id}|rail`, `${id}|wire`]));
+  });
+
+  /**
+   * One winning move from capturing a rival's tile on a Clockwork Isle: the
+   * rival's Windmill stands on it and powers their Sorter next door, and
+   * they have an explored homestead row and some Greens.
+   */
+  async function poweredCapture(prefix: string) {
+    const won = await oneMoveFromWinning(prefix);
+    const { mapId, target } = won;
+    await db.execute(sql`update maps set patch_type = 'clockwork-isle' where id = ${mapId}`);
+    const rival = await player(`${prefix}_rival`);
+    await db.insert(mapMembers).values({ mapId, userId: rival.id, role: 'member' });
+    const all = await db.select().from(tiles).where(eq(tiles.mapId, mapId));
+    const at = new Map(all.map((t) => [hexKey(t), t]));
+    const next = hexNeighbors(target)
+      .map((n) => at.get(hexKey(n)))
+      .find((t) => t && t.ownerUserId === null && t.homeSlot === null && t.communityId === null)!;
+    for (const t of [target, next]) {
+      await db.update(tiles).set({ ownerUserId: rival.id }).where(eq(tiles.id, t.id));
+    }
+    // The attack began on neutral land; it's the rival's now (a capture checks its defender).
+    await db.execute(
+      sql`update tile_attacks set defender_user_id = ${rival.id} where tile_id = ${target.id}`,
+    );
+    const put = async (tileId: string, buildingId: string) => {
+      const [row] = await db
+        .insert(buildings)
+        .values({ mapId, ownerUserId: rival.id, tileId, buildingId, kind: 'works', spot: 0 })
+        .returning({ id: buildings.id });
+      return row!.id;
+    };
+    await put(target.id, 'windmill');
+    const sorterId = await put(next.id, 'sorter');
+    await db.insert(tileExplore).values({
+      userId: rival.id,
+      tileId: next.id,
+      mapId,
+      layout: 0,
+      terrain: next.terrain,
+      spotCount: 1,
+      completedAt: new Date(),
+    });
+    await withTransaction(db, (tx) =>
+      grantItems(tx, { mapId, userId: rival.id }, { greens: 3 }, 'dev-grant'),
+    );
+    return { ...won, rival, next, sorterId };
+  }
+
+  const lockBuildingRowById = (tx: Transaction, id: string) =>
+    tx.select({ id: buildings.id }).from(buildings).where(eq(buildings.id, id)).for('update');
+  const unpoweredOf = async (id: string) =>
+    (await db.select().from(buildings).where(eq(buildings.id, id)))[0]?.unpoweredSince ?? null;
+
+  it("a capture that unpowers a Sorter takes the rival's explored rows before their buildings (#874 R2.2, steps 6 then 8)", async () => {
+    const { kid, battle, fights, finishing, rival, next, sorterId } =
+      await poweredCapture('powercap_a');
+    await holdThen(
+      (tx) =>
+        tx
+          .select()
+          .from(tileExplore)
+          .where(and(eq(tileExplore.userId, rival.id), eq(tileExplore.tileId, next.id)))
+          .for('update'),
+      () => fights.act(kid, battle.id, finishing),
+      (tx) => lockBuildingRowById(tx, sorterId),
+    );
+    expect(await unpoweredOf(sorterId)).not.toBeNull();
+  });
+
+  it("a capture that unpowers a Sorter takes the rival's buildings before their bag, as a machine settle does (#874 R2.2, steps 8 then 11)", async () => {
+    const { kid, mapId, battle, fights, finishing, rival, sorterId } =
+      await poweredCapture('powercap_b');
+    await holdThen(
+      (tx) => lockBuildingRowById(tx, sorterId),
+      () => fights.act(kid, battle.id, finishing),
+      (tx) => createInventoryRepo(tx).lockItems({ mapId, userId: rival.id }, ['greens']),
+    );
+    expect(await unpoweredOf(sorterId)).not.toBeNull();
+  });
+
+  it('taking a Sorter down locks it with the power rows in one id-ordered statement (buildings `remove`, #874 R2.2)', async () => {
+    const { mapId, userId } = await patch();
+    await db.execute(sql`update maps set patch_type = 'clockwork-isle' where id = ${mapId}`);
+    const tileIds = [randomUUID(), randomUUID()].sort();
+    await db.insert(tiles).values(
+      tileIds.map((id, i) => ({
+        id,
+        mapId,
+        q: 20 + i,
+        r: 0,
+        terrain: 'meadow',
+        ownerUserId: userId,
+        homeSlot: i,
+      })),
+    );
+    // The Windmill's id sorts below the Sorter's.
+    const [windmillId, sorterId] = [randomUUID(), randomUUID()].sort() as [string, string];
+    const row = (id: string, tileId: string, buildingId: string) => ({
+      id,
+      mapId,
+      ownerUserId: userId,
+      tileId,
+      buildingId,
+      kind: 'works' as const,
+      spot: 0,
+    });
+    await db
+      .insert(buildings)
+      .values([row(sorterId, tileIds[1]!, 'sorter'), row(windmillId, tileIds[0]!, 'windmill')]);
+    const service = createBuildingsService({ db });
+    let running: Promise<unknown> | undefined;
+    let sorterFree = false;
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '10s'`);
+      await lockBuildingRowById(tx, windmillId);
+      const pid = await backendPid(tx);
+      running = service.remove({ id: userId, username: 'locker' }, mapId, sorterId);
+      await waitUntilBlockedBy(db, pid);
+      // Waiting on the Windmill, the take-down holds no buildings row yet: a
+      // separate lock of the Sorter first (a second lock call) would hold it here.
+      sorterFree = await db.transaction(async (other) => {
+        const free = await other
+          .select({ id: buildings.id })
+          .from(buildings)
+          .where(eq(buildings.id, sorterId))
+          .for('update', { skipLocked: true });
+        return free.length === 1;
+      });
+    });
+    await running;
+    expect(sorterFree).toBe(true);
+    expect(await db.select().from(buildings).where(eq(buildings.id, sorterId))).toEqual([]);
   });
 });

@@ -9,10 +9,12 @@ import {
   type PatchRules,
   type Supply,
   type TravelRules,
+  withRails,
 } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
+import { createLinesRepo } from '../lines/repo.js';
 import { createRoadsRepo } from '../roads/repo.js';
 import { createTendingRepo, createTerritoryRepo, type TendingTileRow } from './repo.js';
 
@@ -49,25 +51,34 @@ export async function mapPatchRules(tx: Executor, mapId: string): Promise<PatchR
 
 /**
  * What every supply line on the map is worked out from: the tiles, live
- * roads, bridges and ferry docks. The one loader, so `supplyFor`,
+ * roads, bridges and ferry docks, and on a Clockwork Isle (#874) live rails
+ * with the map's rail rules. The one loader, so `supplyFor`,
  * `refreshSupply` and `crossersOf` can't drift.
  */
 async function supplyInputs(tx: Executor, mapId: string) {
   const roads = createRoadsRepo(tx);
-  const [tiles, live, bridges, docks] = await Promise.all([
+  const [tiles, live, bridges, docks, rules, rails] = await Promise.all([
     createTerritoryRepo(tx).listTiles(mapId),
     roads.listLive(mapId),
     roads.bridges(mapId),
     roads.docks(mapId),
+    mapPatchRules(tx, mapId),
+    createLinesRepo(tx).listLive(mapId, 'rail'),
   ]);
-  return { tiles, live, bridges, docks };
+  return { tiles, live, bridges, docks, rails, railRules: rules?.rails ?? null };
 }
 
 type SupplyInputs = Awaited<ReturnType<typeof supplyInputs>>;
 
-/** One player's supply line from the loaded inputs. */
-const lineOf = (inputs: SupplyInputs, userId: string, travel: TravelRules): Supply =>
-  supplyMap(inputs.tiles, inputs.live, inputs.bridges, userId, travel, inputs.docks);
+/**
+ * One player's supply line from the loaded inputs. Rails (#874) count as
+ * road spots at their own levels (`withRails`); with no rail rules (Cozy
+ * and Wild) the roads and rules go in untouched.
+ */
+const lineOf = (inputs: SupplyInputs, userId: string, travel: TravelRules): Supply => {
+  const { roads, rules } = withRails(inputs.live, inputs.rails, travel, inputs.railRules);
+  return supplyMap(inputs.tiles, roads, inputs.bridges, userId, rules, inputs.docks);
+};
 
 /** A player's supply line home on a Wild Isle, read in `tx`. */
 export async function supplyFor(

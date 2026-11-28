@@ -15,6 +15,7 @@ import {
   hexKey,
   hexNeighbors,
   HOME_BASE_RULES,
+  POWER_BUILDING_IDS,
   houseTile,
   hearthfireState,
   inSeason,
@@ -88,6 +89,7 @@ import { createMapsRepo, type MapRow, type MemberNamingRow } from '../maps/repo.
 import { requireMember } from '../maps/members.js';
 import { travelIds } from '../roads/repo.js';
 import { createTerritoryRepo } from '../territory/repo.js';
+import { lockAndRefreshPower, refreshPower } from '../territory/power-refresh.js';
 import { crossersOf, mapPatchRules, refreshSupply, supplyFor } from '../territory/supply.js';
 import { wornAccessories } from '../wardrobe/accessories.js';
 import { seedHomeRingNodes, type HomeRingLog } from './home-ring.js';
@@ -739,13 +741,21 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     return row && row.homeSlot === null ? { q: row.q, r: row.r } : null;
   }
 
+  /**
+   * Locks one of my buildings (step 8). With `withPower` (Clockwork Isle
+   * #874, a generator or `needsPower` row moving or coming down), my
+   * generator and `needsPower` rows join it in the one id-ordered
+   * statement, so `refreshPower` runs under it: never a second buildings
+   * lock (plan R2.2).
+   */
   async function lockMine(
     repo: BuildingsRepo,
     mapId: string,
     userId: string,
     buildingRowId: string,
+    withPower = false,
   ): Promise<BuildingRow> {
-    const row = await repo.lockBuilding(buildingRowId);
+    const row = await repo.lockBuilding(buildingRowId, withPower ? { mapId, userId } : undefined);
     if (!row || row.mapId !== mapId || row.ownerUserId !== userId) {
       throw new AppError('NOT_FOUND', MESSAGES.noBuilding);
     }
@@ -763,10 +773,21 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     mapId: string,
     userId: string,
     buildingRowId: string,
+    withPower = false,
   ): Promise<BuildingRow[] | null> {
     const before = (await repo.listOwned(mapId, userId)).find((b) => b.id === buildingRowId);
     if (!before || upkeepOf(before) === null) return null;
-    return repo.lockUpkeepBuildings(mapId, userId);
+    // My power rows join this first lock (#874), so `lockMine` after it takes nothing new.
+    return repo.lockUpkeepBuildings(mapId, userId, { withPower });
+  }
+
+  /**
+   * Is this one of my generator or `needsPower` rows (Clockwork Isle #874)?
+   * Read before the locks: a row's content id never changes.
+   */
+  async function isPowerRow(mapId: string, userId: string, buildingRowId: string) {
+    const row = (await store.listOwned(mapId, userId)).find((b) => b.id === buildingRowId);
+    return row !== undefined && POWER_BUILDING_IDS.includes(row.buildingId);
   }
 
   /**
@@ -912,6 +933,12 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           const supply = travel
             ? await refreshSupply(tx, mapId, await crossersOf(tx, mapId, [tile]), at)
             : [];
+          // A generator or `needsPower` row (Clockwork Isle #874, plan R2.2):
+          // my power rows lock (this path's one buildings lock) and my power
+          // is worked out with the new row, before my bag.
+          if (POWER_BUILDING_IDS.includes(building.id)) {
+            supply.push(...(await lockAndRefreshPower(tx, mapId, [user.id], at)));
+          }
           // Short of anything: CONFLICT, and the row rolls back with it.
           const cost = buildCost(building);
           await consumeItems(tx, { mapId, userId: user.id }, cost, 'build', row.id);
@@ -928,9 +955,10 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       );
     },
 
-    move: (user, mapId, buildingRowId, request) =>
-      command(user, mapId, async ({ repo, tx, at, local, timeZone, mapKind, home }) => {
-        const row = await lockMine(repo, mapId, user.id, buildingRowId);
+    move: async (user, mapId, buildingRowId, request) => {
+      const powered = await isPowerRow(mapId, user.id, buildingRowId);
+      return command(user, mapId, async ({ repo, tx, at, local, timeZone, mapKind, home }) => {
+        const row = await lockMine(repo, mapId, user.id, buildingRowId, powered);
         // A building out on my land stays put (#202, #277); home ones move within home.
         const building = requireBuildingData(row.buildingId);
         if (!home.some((t) => t.id === row.tileId))
@@ -949,6 +977,8 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         );
         if (tile.id !== row.tileId || request.spot !== row.spot) {
           await repo.moveBuilding(row.id, { tileId: tile.id, spot: request.spot });
+          // Clockwork Isle (#874): its power from where it stands now, under lockMine's lock.
+          const power = powered ? await refreshPower(tx, mapId, [user.id], at) : [];
           await repo.appendEvent({
             mapId,
             type: 'building.moved',
@@ -962,17 +992,22 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
               ),
             },
           });
+          for (const event of power) await repo.appendEvent(event);
         }
         return homeView(repo, tx, mapId, user, at, { timeZone, kind: mapKind });
-      }),
+      });
+    },
 
-    remove: async (user, mapId, buildingRowId) =>
-      command(
+    remove: async (user, mapId, buildingRowId) => {
+      const powered = await isPowerRow(mapId, user.id, buildingRowId);
+      return command(
         user,
         mapId,
         async ({ repo, tx, at, local, timeZone, mapKind }) => {
-          const upkeepRows = await lockForUpkeep(repo, mapId, user.id, buildingRowId);
-          const locked = await lockMine(repo, mapId, user.id, buildingRowId);
+          const upkeepRows = await lockForUpkeep(repo, mapId, user.id, buildingRowId, powered);
+          // A generator or `needsPower` row (#874): my power rows join this
+          // one lock (plan R2.2; nothing new after `lockForUpkeep`'s).
+          const locked = await lockMine(repo, mapId, user.id, buildingRowId, powered);
           const refund = takeDownRefund(locked, local);
           // A resource building's stored output lands first (#601): its rows
           // lock with the refund's (a pause only makes less). Taking the
@@ -1001,6 +1036,11 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           // A bridge or dock (#621 W1-5b): whose supply line runs over it,
           // read before it comes down.
           const crossers = locked.kind === 'travel' ? await crossersOf(tx, mapId, [locked]) : [];
+          // Clockwork Isle (#874, plan R2.2): my power without it, inside the
+          // locked section and before `moveOutAll` (squishies, step 10).
+          const power = powered
+            ? await refreshPower(tx, mapId, [user.id], at, { exclude: [locked.id] })
+            : [];
           const movedOut = await repo.moveOutAll(locked.id);
           const trainees = await repo.lockTrainees(locked.id);
           // Inventory rows before `species_seen` (tech spec §7 step 11): the
@@ -1057,13 +1097,15 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           for (const event of training?.events ?? []) await repo.appendEvent(event);
           for (const event of stopped.events) await repo.appendEvent(event);
           for (const event of supply) await repo.appendEvent(event);
+          for (const event of power) await repo.appendEvent(event);
           return {
             refund,
             home: await homeView(repo, tx, mapId, user, at, { timeZone, kind: mapKind }),
           };
         },
         await tileOf(mapId, user.id, buildingRowId),
-      ),
+      );
+    },
 
     fuel: (user, mapId, buildingRowId, nights) =>
       command(user, mapId, async ({ repo, tx, at, local, timeZone, mapKind }) => {
@@ -1540,6 +1582,7 @@ export async function takeDownOnLostLand(
   at: Date,
   timeZone: string,
   lost: 'captured' | 'wild',
+  powerOwners: readonly string[] = [],
 ): Promise<LostBuilding[]> {
   const repo = createBuildingsRepo(tx);
   const local = mapLocalTime(at, timeZone);
@@ -1549,7 +1592,10 @@ export async function takeDownOnLostLand(
   // lost hut reads its owner's Warehouse, and a lost Warehouse banks what
   // it delivered.
   const lostTiles = new Set(tileIds);
-  const locked = await repo.lockOnTilesWithUpkeep(tileIds);
+  // Clockwork Isle (#874): the players whose power the land moves lock
+  // their generator and `needsPower` rows in the same statement, so the
+  // caller's `refreshPower` runs under this one buildings lock (plan R2.2).
+  const locked = await repo.lockOnTilesWithUpkeep(tileIds, { mapId, userIds: powerOwners });
   const warehouseOf = (userId: string) =>
     warehouseIn(locked.filter((r) => r.ownerUserId === userId));
   for (const row of locked.filter((r) => lostTiles.has(r.tileId))) {

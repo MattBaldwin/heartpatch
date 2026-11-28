@@ -21,6 +21,7 @@ import { createInventoryRepo } from '../inventory/repo.js';
 import { consumeItems, grantItems } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
+import { lockAndRefreshPower } from '../territory/power-refresh.js';
 import { mapPatchRules, refreshSupply, supplyFor } from '../territory/supply.js';
 import { createRoadsRepo, type RoadRow, type RoadsTxRepo, type RoadTileRow } from './repo.js';
 
@@ -129,9 +130,15 @@ export function createRoadsService(options: RoadsServiceOptions): RoadsService {
     return { q: tile.q, r: tile.r, road: level === null ? null : { level }, items, refund };
   }
 
-  /** The supply line moved: strand or join up my land, events to append. */
-  const resupply = (tx: Executor, mapId: string, userId: string, at: Date) =>
-    refreshSupply(tx, mapId, [userId], at);
+  /**
+   * The supply line moved: strand or join up my land, events to append.
+   * Then my power afresh (Clockwork Isle #874, plan R2.2: after the supply
+   * line, before my bag; nothing on other patch types).
+   */
+  const resupply = async (tx: Executor, mapId: string, userId: string, at: Date) => [
+    ...(await refreshSupply(tx, mapId, [userId], at)),
+    ...(await lockAndRefreshPower(tx, mapId, [userId], at)),
+  ];
 
   return {
     view: async (user, mapId) => {
