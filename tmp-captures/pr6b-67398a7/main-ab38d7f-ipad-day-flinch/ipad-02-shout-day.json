@@ -1,0 +1,99 @@
+{
+ "file": "ipad-02-shout-day.png",
+ "device": "ipad",
+ "tz": "Asia/Dubai",
+ "reduced": false,
+ "inner": {
+  "w": 820,
+  "h": 1180,
+  "dpr": 2
+ },
+ "safeArea": {
+  "top": 24,
+  "bottom": 20
+ },
+ "nameBar": {
+  "top": 0.02711864406779661,
+  "bottom": 0.06440677966101695,
+  "left": 104,
+  "right": 664,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "endCard": null,
+ "battle": {
+  "effects": {
+   "live": 62,
+   "meshes": 4,
+   "spawned": 5
+  },
+  "drawCalls": 58,
+  "playing": {
+   "kind": "move",
+   "at": 260
+  },
+  "framing": {
+   "distance": 32.4825103629951,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.07288135593220339,
+    "bottom": 0.9220338983050848
+   },
+   "face": {
+    "top": 0.6159801165875579,
+    "bottom": 0.6614776389200256
+   },
+   "team": [
+    {
+     "top": 0.6966360368743425,
+     "bottom": 0.749089351365303
+    },
+    {
+     "top": 0.7018079191892608,
+     "bottom": 0.749938217325036
+    },
+    {
+     "top": 0.7024736302843109,
+     "bottom": 0.7477539877538455
+    }
+   ],
+   "teamFeet": 0.8197200109321938,
+   "bossFacing": 0.9906575568614012
+  },
+  "camera": {
+   "x": 7.464977742585263,
+   "y": 6.265865381279546,
+   "z": -30.41670739103796
+  }
+ },
+ "peakLiveThisRound": 21,
+ "caption": "Puddlepuff used Full Name Shout!",
+ "sticker": {
+  "top": 0.07663225723525226,
+  "bottom": 0.1182829905364473,
+  "left": 12.311532020568848,
+  "right": 124.32909488677979,
+  "text": "Everyone!"
+ },
+ "strip": {
+  "top": 0.02711864406779661,
+  "bottom": 0.06440677966101695,
+  "left": 104,
+  "right": 664,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "handle": {
+  "top": 0.9288135593220339,
+  "bottom": 0.9830508474576272,
+  "left": 16,
+  "right": 804,
+  "text": "Round 1PPP"
+ },
+ "friendCallout": null,
+ "captionPill": {
+  "top": 0.8902542372881356,
+  "bottom": 0.9169491525423729,
+  "left": 271.890625,
+  "right": 548.109375,
+  "text": "Puddlepuff used Full Name Shout!"
+ }
+}

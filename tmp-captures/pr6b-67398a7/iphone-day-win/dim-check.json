@@ -1,0 +1,12 @@
+{
+ "onAppear": {
+  "opacity": "0",
+  "animMs": 0,
+  "state": "running"
+ },
+ "atOldShotTime": {
+  "opacity": "0.691625",
+  "animMs": 600,
+  "state": "running"
+ }
+}

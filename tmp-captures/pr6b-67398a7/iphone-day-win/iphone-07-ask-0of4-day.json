@@ -1,0 +1,81 @@
+{
+ "file": "iphone-07-ask-0of4-day.png",
+ "device": "iphone",
+ "tz": "Asia/Dubai",
+ "reduced": false,
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "safeArea": {
+  "top": 59,
+  "bottom": 34
+ },
+ "nameBar": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "endCard": {
+  "top": 0.4643669307511737,
+  "bottom": 0.9460093896713615,
+  "left": 16.5,
+  "right": 376.5,
+  "text": "You did it! 🎉Puddlepuff sat down, puffing. It looks… friendly?Puddlepuff, Puddlepuff and Puddlepuff each earned 180 XP!Puddlepuff35%Puddlepuff35%Puddlepuff35%You won 3 Heart Charms, 5 Heartdust, 3 Treats, 5 Patch Coins and 💛 5!Ask Puddlepuff to be your friend? 💗💗💗💗 You have 6 Heart CharmsAsks left this win Give 3 Heart Charms 💗Back to patch"
+ },
+ "battle": {
+  "effects": {
+   "live": 0,
+   "meshes": 0,
+   "spawned": 33
+  },
+  "drawCalls": 54,
+  "playing": null,
+  "framing": {
+   "distance": 67.00628551497623,
+   "fogEnd": 112.00628551497623,
+   "band": {
+    "top": 0.1983568075117371,
+    "bottom": 0.4549772593896714
+   },
+   "face": null,
+   "team": [],
+   "rise": 0.01510695182294206,
+   "teamFeet": null,
+   "bossFacing": 0.98884248238922
+  },
+  "camera": {
+   "x": 15.599511563863107,
+   "y": 11.600433814768186,
+   "z": -64.40003796231193
+  }
+ },
+ "peakLiveThisRound": 58,
+ "caption": "",
+ "sticker": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Everyone!"
+ },
+ "strip": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "handle": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Round 1PPP"
+ },
+ "friendCallout": null,
+ "captionPill": null
+}

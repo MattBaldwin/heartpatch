@@ -1,0 +1,84 @@
+{
+ "file": "ipad-06b-loss-twirl-late-day.png",
+ "device": "ipad",
+ "tz": "Asia/Dubai",
+ "reduced": false,
+ "inner": {
+  "w": 820,
+  "h": 1180,
+  "dpr": 2
+ },
+ "safeArea": {
+  "top": 24,
+  "bottom": 20
+ },
+ "nameBar": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Puddlepuff👣⏳"
+ },
+ "endCard": {
+  "top": 0.737989936440678,
+  "bottom": 0.9728813559322034,
+  "left": 230,
+  "right": 590,
+  "text": "Puddlepuff stomped off.Back tomorrow!Puddlepuff, Puddlepuff and Puddlepuff each earned 40 XP!Puddlepuff will be here again. Your squishies can have a snack and a nap first. 🍪Back to patch"
+ },
+ "battle": {
+  "effects": {
+   "live": 4,
+   "meshes": 1,
+   "spawned": 18
+  },
+  "drawCalls": 55,
+  "playing": null,
+  "framing": {
+   "distance": 37.40095271474594,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.1135593220338983,
+    "bottom": 0.7142611228813559
+   },
+   "face": {
+    "top": 0.536814830135965,
+    "bottom": 0.5978796937566323
+   },
+   "team": [],
+   "rise": 0,
+   "teamFeet": null,
+   "bossFacing": 0.9410999527861046
+  },
+  "camera": {
+   "x": 8.717302013249116,
+   "y": 8.233908045290756,
+   "z": -35.74530309120104
+  }
+ },
+ "peakLiveThisRound": 56,
+ "caption": "",
+ "sticker": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Everyone!"
+ },
+ "strip": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Puddlepuff👣⏳"
+ },
+ "handle": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Round 1P💤P💤P💤"
+ },
+ "friendCallout": null,
+ "captionPill": null
+}

@@ -1,0 +1,103 @@
+{
+ "file": "ipad-02b-flinched-day.png",
+ "device": "ipad",
+ "tz": "Asia/Dubai",
+ "reduced": false,
+ "inner": {
+  "w": 820,
+  "h": 1180,
+  "dpr": 2
+ },
+ "safeArea": {
+  "top": 24,
+  "bottom": 20
+ },
+ "nameBar": {
+  "top": 0.02711864406779661,
+  "bottom": 0.06440677966101695,
+  "left": 104,
+  "right": 664,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "endCard": null,
+ "battle": {
+  "effects": {
+   "live": 7,
+   "meshes": 1,
+   "spawned": 15
+  },
+  "drawCalls": 55,
+  "playing": {
+   "kind": "effect",
+   "at": 250
+  },
+  "framing": {
+   "distance": 34.90818423154146,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.07288135593220339,
+    "bottom": 0.9220338983050848
+   },
+   "face": {
+    "top": 0.5618158936291968,
+    "bottom": 0.6279779898693465
+   },
+   "team": [
+    {
+     "top": 0.702896516028847,
+     "bottom": 0.7452873665099207,
+     "head": 0.6327443837529012
+    },
+    {
+     "top": 0.7197856130956257,
+     "bottom": 0.7607455454832994,
+     "head": 0.6571781762363582
+    },
+    {
+     "top": 0.7031435104248976,
+     "bottom": 0.7417046916925525,
+     "head": 0.6310329962095602
+    }
+   ],
+   "rise": 0.29767838059835666,
+   "teamFeet": 0.814958286070643,
+   "bossFacing": 0.9705874574783477
+  },
+  "camera": {
+   "x": 8.318503956309538,
+   "y": 8.249397022411015,
+   "z": -33.63277065441661
+  }
+ },
+ "peakLiveThisRound": 62,
+ "caption": "Puddlepuff flinched! No move this round.",
+ "sticker": {
+  "top": 0.07663225723525226,
+  "bottom": 0.1182829905364473,
+  "left": 12.311532020568848,
+  "right": 124.32909488677979,
+  "text": "Everyone!"
+ },
+ "strip": {
+  "top": 0.02711864406779661,
+  "bottom": 0.06440677966101695,
+  "left": 104,
+  "right": 664,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "handle": {
+  "top": 0.9288135593220339,
+  "bottom": 0.9830508474576272,
+  "left": 16,
+  "right": 804,
+  "text": "Round 1PPFlinched!P"
+ },
+ "friendCallout": null,
+ "captionPill": {
+  "top": 0.8902542372881356,
+  "bottom": 0.9169491525423729,
+  "left": 245.8828125,
+  "right": 574.1171875,
+  "text": "Puddlepuff flinched! No move this round."
+ }
+}
