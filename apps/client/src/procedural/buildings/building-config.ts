@@ -108,6 +108,13 @@ export const BUILDING_COLORS = {
   brass: '#e6b85c', // TUNE: the Rain Barrel's tap
   napZ: '#e4dcff', // TUNE: the lilac "z z" over a napping works
   napDusk: '#6f6a8f', // TUNE: what a napping works' colours dim towards
+  // Twinkle Lights (#37 2a): a candy-striped post with a garland and a gold
+  // star, its string coiled at its foot. The bulbs are the map's BulbField.
+  lightsPost: '#fff4ef', // TUNE
+  lightsStripe: '#ef5a5a', // TUNE
+  lightsGarland: '#3f8c4a', // TUNE
+  lightsStar: '#ffcc4d', // TUNE
+  lightsCord: '#2f6b3b', // TUNE
 } as const;
 
 /** TUNE: how far a napping works' colours dim towards `napDusk` (0 none, 1 all). */

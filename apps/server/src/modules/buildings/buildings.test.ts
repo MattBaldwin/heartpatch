@@ -492,6 +492,38 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       expect((await home(server, kid, mapId)).items).toEqual({});
     });
 
+    it("builds Twinkle Lights (kind 'lights') in December only, two a Keeper (#37 2a)", async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await give(mapId, kid, { timber: 60, glimmer: 10 });
+      const lands = await landFor(mapId, kid, 3);
+      const body = (i: number) => ({
+        buildingId: 'twinkle-lights',
+        q: lands[i]!.q,
+        r: lands[i]!.r,
+        spot: 0,
+      });
+
+      // October (the suite's clock): out of season.
+      const early = await place(server, kid, mapId, body(0));
+      expect(early.statusCode).toBe(409);
+      expect(errorOf(early).message).toBe('Twinkle Lights can only be built around Christmas!');
+
+      clock.setTime(Date.parse('2026-12-05T18:00:00Z'));
+      const lights = await placed(server, kid, mapId, body(0));
+      // X2's Christmas Eve head start counts `buildings.kind = 'lights'`.
+      expect(lights).toMatchObject({ buildingId: 'twinkle-lights', kind: 'lights', level: 1 });
+      await placed(server, kid, mapId, body(1));
+      const third = await place(server, kid, mapId, body(2));
+      expect(third.statusCode).toBe(409);
+      const cost = building('twinkle-lights').levels[0]!.cost;
+      expect((await home(server, kid, mapId)).items).toEqual({
+        timber: 60 - 2 * (cost['timber'] ?? 0),
+        glimmer: 10 - 2 * (cost['glimmer'] ?? 0),
+      });
+    });
+
     it('replays a retried build (Idempotency-Key) without paying twice', async () => {
       const server = await start();
       const kid = await player();

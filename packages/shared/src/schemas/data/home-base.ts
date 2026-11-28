@@ -9,8 +9,9 @@ import { DEFAULT_PATCH_TYPE, type PatchType } from '../../patch-types/patch-type
 /**
  * Building kinds a player can put up today (Training Grounds: owner decision
  * 2026-10-06; the Crafting Factory: #294; resource buildings: #601 PR 7; the
- * Warehouse: #601 PR 9). The Wild Isle kinds (#621) join here, and in
- * `HOME_BASE_RULES.buildableKinds`, with the lane that builds each one.
+ * Warehouse: #601 PR 9; Twinkle Lights: #37 2a). The Wild Isle kinds (#621)
+ * join here, and in `HOME_BASE_RULES.buildableKinds`, with the lane that
+ * builds each one.
  */
 export const BuildableKindSchema = z.enum([
   'hearthfire',
@@ -20,6 +21,7 @@ export const BuildableKindSchema = z.enum([
   'factory',
   'resource',
   'warehouse',
+  'lights',
 ]);
 export type BuildableKind = z.infer<typeof BuildableKindSchema>;
 

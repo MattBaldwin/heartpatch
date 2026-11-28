@@ -41,6 +41,14 @@ import { BuildingField, type BuildingPlacement } from '../procedural/buildings/b
 import { BorderField } from './border-field.js';
 import { BuildAreaField, type BuildAreaView } from './build-area.js';
 import { buildAreaAt, type BuildAreaHit } from './build-area-layout.js';
+import { BulbField } from './bulb-field.js';
+import {
+  bulbLayout,
+  litTiles,
+  type BulbEave,
+  type BulbPost,
+  type BulbTile,
+} from './bulb-layout.js';
 import { FenceField } from './fence-field.js';
 import { fenceLength, fencePlacements } from './fence-layout.js';
 import { KEEPER_PLACES } from '../procedural/keeper/keeper-config.js';
@@ -148,6 +156,8 @@ const FAR_SEGMENTS = 2;
 const TINT_LIFT = 0.012;
 /** Fences stand near a tile's rim, where its rounded top has dropped a little. TUNE */
 const FENCE_LIFT = DOME * 0.2;
+/** How far out from a Twinkle Lights post its coil of bulbs hangs, in model units. TUNE */
+const BULB_COIL = 0.09;
 /** Highest a tap can land, for the first guess when picking a tile. */
 const PICK_HEIGHT = 0.25;
 
@@ -178,6 +188,15 @@ export interface MapSceneStats {
   readonly porchLanterns: number;
   /** Fence segments on hex edges (#203). */
   readonly fences: number;
+  /**
+   * Twinkle Lights (#37 2a): tiles holding one, the bulbs strung round them
+   * (one draw call for all), and whether they're lit (a December night) and
+   * twinkling (lit, with ambient life live).
+   */
+  readonly lightsTiles: number;
+  readonly bulbs: number;
+  readonly bulbsLit: boolean;
+  readonly bulbsTwinkle: boolean;
   /** Tiles under a lit Hearthfire's soft glow (its safe radius, #18). */
   readonly safeTiles: number;
   /** Clothing ids each drawn Keeper wears (#43), by drawing order. */
@@ -434,6 +453,9 @@ export class MapScene {
   private porchCount = 0;
   /** Fence segments along tile edges (#203). */
   private readonly fences: FenceField;
+  /** Twinkle Lights' bulbs (#37 2a): one thin-instanced quad, lit on December nights. */
+  private readonly bulbs: BulbField;
+  private lightsTiles = 0;
   /** What the Build sheet lights on a tile (#371). */
   private readonly buildArea: BuildAreaField;
   /** The soft glow over tiles a lit Hearthfire keeps safe (#18). */
@@ -573,6 +595,8 @@ export class MapScene {
       // The backdrop and clouds sit out past the sea, if there is one.
       islandRadius: sea ?? mapRadius(view.tiles, HEX_SIZE) + ISLAND.margin,
     });
+    // Before `applyAmbient`, which says whether they're lit and twinkle.
+    this.bulbs = new BulbField(scene, this.clock);
     // Start as the tier and motion setting say, so nothing shows for a frame
     // that would then be hidden (drifting motes under reduced motion).
     const tier = options.tier ?? 'high';
@@ -683,6 +707,10 @@ export class MapScene {
       litFires: this.buildings.stats.lit - this.porchCount,
       porchLanterns: this.porchCount,
       fences: this.fences.count,
+      lightsTiles: this.lightsTiles,
+      bulbs: this.bulbs.count,
+      bulbsLit: this.bulbs.count > 0 && this.bulbs.state.lit,
+      bulbsTwinkle: this.bulbs.count > 0 && this.bulbs.state.twinkle,
       keepersWearing: this.keepers.handles.map((h) => h.params.worn),
       props: this.propCount,
       propKinds: this.propGroups.length,
@@ -886,6 +914,50 @@ export class MapScene {
     this.porchCount = porches.length;
   }
 
+  /**
+   * Twinkle Lights' bulbs (#37 2a), from the view and the buildings as just
+   * placed: round each lit tile's edges (on its fences' tops), under its
+   * other buildings' eaves (from each model's own height and reach), and
+   * coiled round the lights' own post.
+   */
+  private stringBulbs(view: MapView): void {
+    const lit = litTiles(view);
+    this.lightsTiles = lit.length;
+    if (lit.length === 0) {
+      this.bulbs.set([]);
+      return;
+    }
+    const keys = new Set(lit.map((t) => hexKey(t)));
+    const onTile = new Map<HexKey, { eaves: BulbEave[]; posts: BulbPost[] }>();
+    for (const [i, { tile, building }] of mapBuildings(view, HEX_SIZE).entries()) {
+      const key = hexKey(tile);
+      const p = this.placed[i];
+      if (!keys.has(key) || !p) continue;
+      const box = this.buildings.modelBounds(p);
+      if (!box) continue;
+      const s = p.scale ?? 1;
+      const y = p.y ?? 0;
+      const reach = Math.max(-box.min.x, box.max.x, -box.min.z, box.max.z) * s;
+      const list = onTile.get(key) ?? { eaves: [], posts: [] };
+      if (building.kind === 'lights') {
+        list.posts.push({ x: p.x, z: p.z, y, height: box.max.y * s, radius: BULB_COIL * s });
+      } else {
+        // TUNE: under the roof's edge, a little out from the walls.
+        list.eaves.push({ x: p.x, z: p.z, y: y + box.max.y * s * 0.72, radius: reach * 0.9 });
+      }
+      onTile.set(key, list);
+    }
+    const tiles: BulbTile[] = lit.map((tile) => ({
+      q: tile.q,
+      r: tile.r,
+      rim: topOf(tile) + FENCE_LIFT,
+      fenced: new Set((tile.fences ?? []).map((f) => f.edge)),
+      eaves: onTile.get(hexKey(tile))?.eaves ?? [],
+      posts: onTile.get(hexKey(tile))?.posts ?? [],
+    }));
+    this.bulbs.set(bulbLayout(tiles, HEX_SIZE));
+  }
+
   /** Where the camera starts: this player's Heart Seed, else the map centre. */
   homeOf(view: MapView, userId: string | null): GroundPoint {
     const slot = view.members.find((m) => m.user.id === userId)?.homeSlot ?? null;
@@ -993,6 +1065,7 @@ export class MapScene {
         yaw,
       })),
     );
+    this.stringBulbs(view);
     const safe: Matrix[] = [];
     for (const key of mapSafeTiles(view)) {
       const tile = this.tiles.get(key);
@@ -1677,6 +1750,10 @@ export class MapScene {
     // the first snow is just there.
     if (this.snowFading && this.mode !== 'live' && this.tileGroups.length > 0) this.applySnow(1);
     this.ambient.set({ night: this.night, mode: this.mode, share: this.share });
+    // Twinkle Lights (#37 2a): lit every December night, glass by day; they
+    // twinkle only while ambient life is live (steady under reduced motion).
+    const lit = this.night && this.christmas;
+    this.bulbs.setLight(lit, lit && this.mode === 'live');
     if (this.lanternMat) {
       const glow = this.night ? HALLOWEEN.glow.night : HALLOWEEN.glow.day;
       this.lanternMat.emissiveColor = linear(HALLOWEEN.glowColor).scale(glow);

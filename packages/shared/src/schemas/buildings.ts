@@ -35,7 +35,7 @@ export const BuildingKindSchema = z.enum([
   'shelter',
   'vane',
   'travel',
-  /** Christmas (#37 C0): Twinkle Lights; buildable once the lights lane (2a) adds it to `buildableKinds`. */
+  /** Christmas (#37): Twinkle Lights (C0 shape; buildable since lane 2a). */
   'lights',
 ]);
 export type BuildingRowKind = z.infer<typeof BuildingKindSchema>;

@@ -158,6 +158,12 @@ export function valueLines(value: readonly GuideValue[]): string[] {
         return [`Keeps land up to ${plural(v.reach ?? 1, 'tile', 'tiles')} away joined to home`];
       case 'refund-all':
         return ['Pack it up and get the whole thing back'];
+      case 'twinkles':
+        return [
+          v.season === 'christmas'
+            ? 'Strings twinkly bulbs round its tile every December night'
+            : 'Strings twinkly bulbs round its tile at night',
+        ];
     }
   });
 }

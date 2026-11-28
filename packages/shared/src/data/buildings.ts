@@ -461,6 +461,28 @@ export const BUILDINGS: Building[] = [
     ],
   },
   {
+    // Christmas (#37 2a, owner answer 4): bulbs strung round an owned tile's
+    // edges and its buildings' eaves, lit every December night. On
+    // `glowNights` (Dec 24-25) a tile holding one counts as light against the
+    // Hollow Man (its own tile, lane 2b) and towards the Christmas Eve patch
+    // bar's head start (X2 counts `buildings.kind = 'lights'`). The kind id
+    // must stay `lights` (pinned in christmas.test.ts).
+    id: 'twinkle-lights',
+    kind: 'lights',
+    name: 'Twinkle Lights',
+    description: 'Twinkly bulbs for your land. So cozy on a snowy night!',
+    season: 'christmas', // built Dec 1-31 only; one built stays
+    placement: 'owned',
+    // TUNE: two a Keeper keeps a full patch under the map's bulb cap (600,
+    // `CHRISTMAS.bulbs` on the client; checked in bulb-layout.test.ts).
+    maxPerHome: 2,
+    maxPerTile: 1,
+    slot: 'ring',
+    glowNights: ['12-24', '12-25'], // TUNE:
+    safeRadius: 0, // its own tile only
+    levels: [{ cost: { timber: 12, glimmer: 2 } }], // TUNE:
+  },
+  {
     // #601: with one paid and standing, level 3+ resource buildings deliver
     // straight to the bag and never fill up. Costly to build on purpose. A
     // month of its upkeep is about what one 5-day trip's saved output is

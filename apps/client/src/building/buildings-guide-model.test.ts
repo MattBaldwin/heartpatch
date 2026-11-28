@@ -82,6 +82,18 @@ describe('buildings guide words (#715)', () => {
     expect(placeChips(g.place)).toEqual(['Your land', 'Middle spot', '1 per tile']);
   });
 
+  it('Twinkle Lights (#37 2a): twinkly bulbs every December night, two a Keeper, Christmas only', () => {
+    const g = entry('twinkle-lights', ['christmas'], 'cozy');
+    expect(valueLines(g.value)).toEqual([
+      'Strings twinkly bulbs round its tile every December night',
+    ]);
+    expect(g.gate).toBeNull();
+    expect(entry('twinkle-lights', [], 'cozy').gate).toEqual({
+      kind: 'season',
+      season: 'christmas',
+    });
+  });
+
   it('a Joy Lantern names its fuel too', () => {
     const g = entry('joy-lantern');
     expect(valueLines(g.value)).toContain('Burns 1 Emberwood a night, holds 8 nights');

@@ -1725,6 +1725,45 @@ function buildModel(
       part(windowList, sphere(0.08, 8), lampColor, [-0.28, 0.42, -0.24]);
       break;
     }
+    case 'twinkle-lights': {
+      // A candy-striped post on a snowy step, a garland ring and a gold star
+      // on top, the bulb string coiled at its foot. The bulbs themselves are
+      // the map's BulbField (#37 2a: strung round the tile, lit at night).
+      part(body, cylinder(0.08, 0.46, 0.5, 18), C.wellStone, [0, 0.04, 0]);
+      for (let i = 0; i < 6; i++) {
+        part(body, cylinder(0.12, 0.1, 0.1, 12), i % 2 === 0 ? C.lightsPost : C.lightsStripe, [
+          0,
+          0.14 + i * 0.12,
+          0,
+        ]);
+      }
+      part(
+        body,
+        CreateTorus(`${name}-garland`, { diameter: 0.2, thickness: 0.07, tessellation: 18 }, scene),
+        C.lightsGarland,
+        [0, 0.8, 0],
+      );
+      part(
+        body,
+        CreateTorus(`${name}-coil`, { diameter: 0.3, thickness: 0.045, tessellation: 20 }, scene),
+        C.lightsCord,
+        [0.02, 0.1, 0],
+        [1, 0.8, 1],
+      );
+      // The star: two crossed flat diamonds, gold.
+      for (const turn of [0, Math.PI / 2]) {
+        part(
+          body,
+          cylinder(0.08, 0, 0.2, 4),
+          C.lightsStar,
+          [0, 0.98, 0],
+          [1, 1, 0.35],
+          [Math.PI / 2, turn, 0],
+        );
+      }
+      part(body, sphere(0.1, 10), C.lightsStar, [0, 0.98, 0], [1, 1, 0.6]);
+      break;
+    }
     default:
       if (FENCES.has(buildingId)) {
         // The map's own fence look (`fence-props.ts`), one hex edge long.

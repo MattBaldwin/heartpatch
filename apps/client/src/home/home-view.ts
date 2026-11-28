@@ -60,6 +60,9 @@ export function buildingIcon(buildingId: string): string {
       return '🎯';
     case 'crafting-factory':
       return '🏭';
+    // Christmas (#37 2a).
+    case 'twinkle-lights':
+      return '💡';
     // Resource buildings (#601): what each one works.
     case 'woodcutters-hut':
       return '🌲';
@@ -499,8 +502,14 @@ export function effectChips(building: Building, level = 1): string[] {
   return [
     ...buildingEffects(building, level).map(effectChip),
     ...economyEffects(building, level, ECONOMY_RULES).flatMap(economyChips),
+    // Twinkle Lights (#37 2a): cosmetic every night; their Christmas-nights
+    // light (lane 2b) comes as a `buildingEffects` chip.
+    ...(building.kind === 'lights' ? [TWINKLE_CHIP] : []),
   ];
 }
+
+/** Twinkle Lights' chip on the build card and its recipe book page (#37 2a). */
+export const TWINKLE_CHIP = '✨ Twinkles every December night';
 
 const ECONOMY_RULES = {
   jobs: JOB_RULES,

@@ -750,6 +750,38 @@ export const CHRISTMAS = {
     day: { inner: '#f3f7ff', mid: '#dfe7fb', cloud: '#ffffff' }, // TUNE
     night: { inner: '#56649f', mid: '#2c3262', cloud: '#8e9bd0' }, // TUNE
   },
+  /**
+   * Twinkle Lights (#37 2a): bulbs strung round a tile holding one, along its
+   * six edges (on a fence's top where it has one) and in swags under its
+   * buildings' eaves, plus a few round the lights' own post. One
+   * thin-instanced quad each (2 triangles), one draw call for the patch.
+   */
+  bulbs: {
+    /** Most bulbs on the map; a busy patch respaces every string to fit. */
+    cap: 600,
+    /** Bulbs along each hex edge (corners left free), at most. */
+    perEdge: 5, // TUNE
+    /** In one swag under a building's eaves, at most. */
+    perEave: 5, // TUNE
+    /** Round the Twinkle Lights' own post. */
+    perPost: 5, // TUNE
+    /** Warm white, red, green, gold (the approved M0 colours). sRGB. */
+    colors: ['#fff0c4', '#ff5d52', '#5fe39a', '#ffcc4d'], // TUNE
+    /** Over the rim, over a fence's top, and the dip between two corners (world units). */
+    rimLift: 0.07, // TUNE
+    fenceLift: 0.2, // TUNE: over the tallest fence (0.17)
+    sag: 0.03, // TUNE
+    /** The bulb's quad, world units across (its halo fills it; the glass is `core` of it). */
+    size: 0.3, // TUNE
+    core: 0.12, // TUNE: the glass's radius, a share of the quad (0.5 is its edge)
+    /** Lit: the halo's strength and the glass's white-hot middle. */
+    halo: 1, // TUNE
+    hot: 0.6, // TUNE
+    /** By day, unlit: the glass's colour, darker (coloured glass), with a small shine. */
+    glass: 0.62, // TUNE
+    /** The twinkle: how far a bulb dims (0-1) and how fast (radians a second). Still under reduced motion. */
+    twinkle: { amount: 0.4, speed: 1.8 }, // TUNE
+  },
 } as const;
 
 /** Juniper's Gap's crystals glow softly, day and night (sRGB colour, strength). */

@@ -30,6 +30,11 @@ interface MapDebug {
   /** Christmas snow (#37): how far the first snow has faded in, null out of season. */
   snow?: number | null;
   motes?: Record<string, number>;
+  /** Twinkle Lights (#37 2a): lit tiles, bulbs drawn, and whether they're lit and twinkling. */
+  lightsTiles?: number;
+  bulbs?: number;
+  bulbsLit?: boolean;
+  bulbsTwinkle?: boolean;
 }
 
 /**
@@ -403,26 +408,29 @@ test('an open home says it is saved for the next Keeper, and offers nothing to t
  */
 const CHRISTMAS_CEILING = { cozy: 78, wild: 85 } as const;
 
+/** The dev island page's map stats once it has drawn (`/island.html?<query>`). */
+async function islandStats(page: Page, query: string): Promise<MapDebug> {
+  await page.goto(`/island.html?${query}`);
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const hook = (window as IslandHooks).__islandMap;
+          return hook?.ready() === true ? (hook.stats()?.drawCalls ?? 0) : 0;
+        }),
+      { timeout: 60_000 },
+    )
+    .toBeGreaterThan(30);
+  const stats = await page.evaluate(() => (window as IslandHooks).__islandMap?.stats() ?? null);
+  if (!stats) throw new Error('the island page drew no map');
+  return stats;
+}
+
 test('snows on every patch inside the Christmas ceilings, day and night (#37)', async ({
   page,
 }) => {
   test.setTimeout(300_000); // shader compiles; CI renders in software
-  const measure = async (query: string) => {
-    await page.goto(`/island.html?${query}`);
-    await expect
-      .poll(
-        () =>
-          page.evaluate(() => {
-            const hook = (window as IslandHooks).__islandMap;
-            return hook?.ready() === true ? (hook.stats()?.drawCalls ?? 0) : 0;
-          }),
-        { timeout: 60_000 },
-      )
-      .toBeGreaterThan(30);
-    const stats = await page.evaluate(() => (window as IslandHooks).__islandMap?.stats() ?? null);
-    if (!stats) throw new Error('the island page drew no map');
-    return stats;
-  };
+  const measure = (query: string) => islandStats(page, query);
   const seen: Record<string, number> = {};
   for (const patch of ['cozy', 'wild'] as const) {
     for (const tier of ['high', 'medium'] as const) {
@@ -445,6 +453,59 @@ test('snows on every patch inside the Christmas ceilings, day and night (#37)', 
     }
   }
   test.info().annotations.push({ type: 'christmas draw calls', description: JSON.stringify(seen) });
+});
+
+/** The most bulbs the map draws (`CHRISTMAS.bulbs.cap`, #37 2a). */
+const BULB_CAP = 600;
+
+test('strings Twinkle Lights inside the Christmas ceilings, lit only on December nights (#37 2a)', async ({
+  page,
+}) => {
+  test.setTimeout(300_000); // shader compiles; CI renders in software
+  // A bulb shader that fails to compile draws nothing but still counts as a drawn map.
+  const shaderErrors: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error' && /compil/i.test(m.text())) shaderErrors.push(m.text().slice(0, 200));
+  });
+  const seen: Record<string, number> = {};
+  for (const patch of ['cozy', 'wild'] as const) {
+    const bare = await islandStats(
+      page,
+      `patch=${patch}&tier=medium&season=christmas&built=1&night=1`,
+    );
+    expect(bare.bulbs ?? 0).toBe(0);
+    // A busy patch: four Keepers with Twinkle Lights on four tiles each (twice the per-Keeper cap).
+    for (const night of [false, true]) {
+      const label = `${patch} ${night ? 'night' : 'day'}`;
+      const lit = await islandStats(
+        page,
+        `patch=${patch}&tier=medium&season=christmas&lights=4&built=1${night ? '&night=1' : ''}`,
+      );
+      seen[label] = lit.drawCalls;
+      expect(lit.lightsTiles ?? 0, label).toBeGreaterThan(0);
+      expect(lit.bulbs ?? 0, label).toBeGreaterThan(0);
+      expect(lit.bulbs ?? 0, label).toBeLessThanOrEqual(BULB_CAP);
+      // Lit at night, coloured glass by day; steady under reduced motion (the gallery's default).
+      expect(lit.bulbsLit, label).toBe(night);
+      expect(lit.bulbsTwinkle, label).toBe(false);
+      expect(lit.drawCalls, label).toBeLessThanOrEqual(CHRISTMAS_CEILING[patch]);
+      // One draw call for every bulb, plus the Twinkle Lights' post (one building look).
+      expect(lit.drawCalls, label).toBeLessThanOrEqual(bare.drawCalls + 2);
+    }
+  }
+  // With motion on, the lit bulbs twinkle (on the GPU clock).
+  const live = await islandStats(
+    page,
+    'patch=cozy&tier=medium&season=christmas&lights=1&night=1&motion=1',
+  );
+  expect(live.bulbsLit).toBe(true);
+  expect(live.bulbsTwinkle).toBe(true);
+  // Out of December a Twinkle Lights already built stays, unlit.
+  const after = await islandStats(page, 'patch=cozy&tier=medium&lights=1&night=1');
+  expect(after.bulbs ?? 0).toBeGreaterThan(0);
+  expect(after.bulbsLit).toBe(false);
+  expect(shaderErrors).toEqual([]);
+  test.info().annotations.push({ type: 'twinkle draw calls', description: JSON.stringify(seen) });
 });
 
 test('keeps a Wild Isle in its draw-call and triangle budget, up close and zoomed out (#621)', async ({
