@@ -4,6 +4,8 @@ import {
   gameplayOverrides,
   homesteadQuantity,
   JOB_RULES,
+  patchRules,
+  railSpeedPercent,
   roadSpeedPercent,
   trainingProgressAround,
   TRAVEL_RULES,
@@ -29,6 +31,13 @@ import type { JobRow } from './repo.js';
 const SPECIES = new Map(
   [...GAME_DATA.species, ...SERVER_GAME_DATA.secretSpecies].map((s) => [s.id, s]),
 );
+
+/**
+ * The rail rules (#874). A rail row exists only on a Clockwork Isle (the
+ * lines module refuses every other patch), so reading them whenever a work
+ * tile has one is the patch's own rule.
+ */
+const RAIL_RULES_ON_ISLE = patchRules('clockwork-isle').rails;
 
 /** What to call one of my squishies in a message: its nickname, else its species. */
 export const squishyName = (s: Pick<OwnedSquishy, 'nickname' | 'speciesId'>): string =>
@@ -68,12 +77,15 @@ export function workAt(row: JobRow, map: JobMap, at: Date, justTaken = false) {
   // A road of its owner's on the tile (Wild Isle #621) quickens it. Read at
   // the instant like the homestead bonus: a road laid mid-gather counts for
   // the whole unbanked stretch.
+  // A rail of its owner's (Clockwork Isle #874) the same way; with both, the quicker.
   const road = roadSpeedPercent(row.workTile.roadLevel ?? null, TRAVEL_RULES);
+  const rail = railSpeedPercent(row.workTile.railLevel ?? null, RAIL_RULES_ON_ISLE);
+  const pace = Math.max(road ?? 0, rail ?? 0);
   const speedPercent = workSpeedPercent(
     traitsOf(row.squishy),
     source.resource,
     JOB_RULES,
-    road === null ? [] : [road],
+    pace === 0 ? [] : [pace],
   );
   const cycleSeconds = workCycleSeconds(
     source.seconds,

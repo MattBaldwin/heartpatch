@@ -30,6 +30,8 @@ import { fencesRoutes } from './modules/fences/routes.js';
 import { createFencesService } from './modules/fences/service.js';
 import { researchRoutes } from './modules/research/routes.js';
 import { createResearchService } from './modules/research/service.js';
+import { linesRoutes } from './modules/lines/routes.js';
+import { createLinesService } from './modules/lines/service.js';
 import { roadsRoutes } from './modules/roads/routes.js';
 import { createRoadsService } from './modules/roads/service.js';
 import { careRoutes } from './modules/care/routes.js';
@@ -511,6 +513,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // The Research Bench on a Clockwork Isle (#874).
         await api.register(
           researchRoutes(createResearchService({ db, clock, ...publish }), {
+        // Wires and rails on my Clockwork Isle land (#874).
+        await api.register(
+          linesRoutes(createLinesService({ db, clock, ...publish }), {
             hooks: authHooks,
             idempotency,
           }),

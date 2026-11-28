@@ -89,11 +89,17 @@ export const homesteadPauseOf = (row: Pick<BuildingRow, 'homestead'>): WorkPause
 
 /**
  * Where a building's output stops (epoch ms), or null while it works: the
- * morning it paused for upkeep (#601) or the instant a storm knocked it
- * about (Wild Isle #621), whichever came first.
+ * morning it paused for upkeep (#601), the instant a storm knocked it
+ * about (Wild Isle #621) or the instant it lost its power (Clockwork Isle
+ * #874), whichever came first. Repowering moves its count on past the
+ * unpowered stretch (`refreshPower`), so that stretch never pays.
  */
-export function stoppedAtMs(row: Pick<BuildingRow, 'pausedAt' | 'damagedAt'>): number | null {
-  const stops = [row.pausedAt, row.damagedAt].flatMap((d) => (d ? [d.getTime()] : []));
+export function stoppedAtMs(
+  row: Pick<BuildingRow, 'pausedAt' | 'damagedAt'> & { unpoweredSince?: Date | null },
+): number | null {
+  const stops = [row.pausedAt, row.damagedAt, row.unpoweredSince ?? null].flatMap((d) =>
+    d ? [d.getTime()] : [],
+  );
   return stops.length === 0 ? null : Math.min(...stops);
 }
 
@@ -399,6 +405,8 @@ export function canWorkAt(row: BuildingRow, instant: Date, timeZone: string): bo
   const pause = homesteadPauseOf(row);
   const t = instant.getTime();
   if (knockedAt(row, t)) return false;
+  // Unpowered then (Clockwork Isle #874): it can't work, so it owes nothing.
+  if (row.unpoweredSince !== null && row.unpoweredSince.getTime() <= t) return false;
   if (pause && pause.fromMs <= t && (pause.toMs === null || t < pause.toMs)) return false;
   const building = BUILDING_DATA.get(row.buildingId);
   if (building?.kind !== 'resource') return true;
