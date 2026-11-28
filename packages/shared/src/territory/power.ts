@@ -39,7 +39,7 @@ export const needsPower = (buildingId: string): boolean => NEEDS_POWER_IDS.has(b
 /** Every content id whose row power touches: generators and `needsPower` rows. Sorted. */
 export const POWER_BUILDING_IDS: readonly string[] = [
   ...new Set([...GENERATOR_IDS, ...NEEDS_POWER_IDS]),
-].sort((a, b) => a.localeCompare(b));
+].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 /** The player's land tiles, by key. */
 function landOf(tiles: readonly PowerTile[], userId: string): Map<HexKey, PowerTile> {

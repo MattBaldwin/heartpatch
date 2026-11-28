@@ -25,7 +25,7 @@ function tiles(n: number): SupplyTile[] {
 const reachOn = (
   rails: { level: number }[],
   roads: { level: number }[] = [],
-): Map<string, number> => {
+): ReadonlyMap<string, number> => {
   const spot = (level: number) => ({ q: 3, r: 0, ownerUserId: ME, level });
   const folded = withRails(
     roads.map((r) => spot(r.level)),
@@ -39,7 +39,7 @@ const reachOn = (
 describe('rails (Clockwork Isle, #874)', () => {
   it('claims reach along a rail by its level', () => {
     const [one, two] = RAIL_RULES.levels;
-    const far = (reach: Map<string, number>) =>
+    const far = (reach: ReadonlyMap<string, number>) =>
       Math.max(...[...reach.keys()].map((k) => Number(k.split(',')[0])));
     expect(far(reachOn([{ level: 1 }]))).toBe(3 + (one?.reach ?? 0));
     expect(far(reachOn([{ level: 2 }]))).toBe(3 + (two?.reach ?? 0));
