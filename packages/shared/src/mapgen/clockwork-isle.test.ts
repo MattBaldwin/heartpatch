@@ -58,9 +58,9 @@ describe('generateMap: Clockwork Isle', () => {
     expect(isle.homes).toEqual(island.homes);
     expect(isle.communities).toEqual(island.communities);
     const bare = (t: MapTile) => {
-      const copy: Partial<MapTile> = { ...t };
-      delete copy.wind;
-      delete copy.nodeResource;
+      const copy: Record<string, unknown> = { ...t };
+      delete copy['wind'];
+      delete copy['nodeResource'];
       return copy;
     };
     expect(isle.tiles.map(bare)).toEqual(island.tiles.map(bare));
