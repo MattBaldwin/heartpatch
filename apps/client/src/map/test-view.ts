@@ -14,6 +14,8 @@ import {
   type MapMember,
   type MapView,
   type PublicTile,
+  placeScrapHeaps,
+  SCRAP_HEAP_RESOURCE,
   windMap,
 } from '@heartpatch/shared';
 import { isWaterTile } from './map-dressing.js';
@@ -260,37 +262,54 @@ export function testWildIsle(players = 6, extra = 30): MapView {
 
 /**
  * A Clockwork Isle (#874) for unit tests and C4's isle map: `testWildIsle`
- * with no offshore isles (they're ocean again), every land tile's `wind`
- * from the real wind pass, and a Scrap Heap (a Parts node) two steps from
- * each Heart Seed, as the server would send them. The same map every run.
+ * with no offshore isles (they're plain ocean again), every land tile's
+ * `wind` from the real wind pass, and the real Scrap Heap pass's Parts
+ * nodes (`scrapHeaps.perHome` per Heart Seed), as the server would send
+ * them. The same map every run.
  */
 export function testClockworkIsle(players = 6, extra = 30): MapView {
   const wild = testWildIsle(players, extra);
   const rules = GAME_DATA.mapGen.clockworkIsle;
   if (rules === undefined) throw new Error('no Clockwork Isle settings in mapGen');
-  const tiles = wild.tiles.map((t) =>
+  const tiles = wild.tiles.map((t): PublicTile =>
     hexDistance(t, { q: 0, r: 0 }) >= WILD_RADIUS - 1 && t.terrain !== 'ocean'
-      ? { ...t, terrain: 'ocean', nodeResource: null }
+      ? {
+          q: t.q,
+          r: t.r,
+          terrain: 'ocean',
+          ownerUserId: null,
+          nodeResource: null,
+          homeSlot: null,
+          gathering: null,
+          cooldownUntil: null,
+          defenders: 0,
+          guardianHint: null,
+          buildings: [],
+          post: null,
+          communityId: null,
+        }
       : t,
   );
   const terrains = new Map(GAME_DATA.terrains.map((t) => [t.id, t]));
-  const wind = windMap(tiles, terrains, rules, 'clockwork-test-view');
-  const byKey = new Map(tiles.map((t) => [hexKey(t), t]));
-  const heaps = new Set<string>();
-  for (const { seed } of findHomeBases(tiles)) {
-    const spot = hexRing(seed, 2)
-      .map((h) => byKey.get(hexKey(h)))
-      .find(
-        (t) =>
-          t !== undefined &&
-          t.homeSlot === null &&
-          t.post === null &&
-          t.communityId === null &&
-          t.buildings.length === 0 &&
-          !isWaterTile(t),
-      );
-    if (spot) heaps.add(hexKey(spot));
+  const seed = 'clockwork-test-view';
+  const wind = windMap(tiles, terrains, rules, seed);
+  // Villages, posts and built tiles keep clear of heaps, as on a real isle.
+  const villages = new Map<string, PublicTile[]>();
+  for (const t of tiles) {
+    const id = t.communityId ?? (t.post !== null || t.buildings.length > 0 ? 'taken' : null);
+    if (id !== null) villages.set(id, [...(villages.get(id) ?? []), t]);
   }
+  const heaps = placeScrapHeaps(
+    {
+      tiles,
+      homes: findHomeBases(tiles).map((h) => h.seed),
+      communities: [...villages.values()].map((v) => ({ tiles: v })),
+    },
+    terrains,
+    rules,
+    GAME_DATA.mapGen.gapTerrain,
+    seed,
+  );
   return {
     ...wild,
     map: { ...wild.map, name: 'Clockwork Isle', patchType: 'clockwork-isle' },
@@ -298,7 +317,7 @@ export function testClockworkIsle(players = 6, extra = 30): MapView {
       const key = hexKey(t);
       const w = wind.get(key);
       const withWind = w === undefined ? t : { ...t, wind: w };
-      return heaps.has(key) ? { ...withWind, nodeResource: 'parts' } : withWind;
+      return heaps.has(key) ? { ...withWind, nodeResource: SCRAP_HEAP_RESOURCE } : withWind;
     }),
   };
 }

@@ -145,6 +145,9 @@ describe('generateMap: Clockwork Isle', () => {
       const hills = land.filter((t) => t.terrain === 'hills');
       const plain = land.filter((t) => ['meadow', 'forest'].includes(t.terrain));
       expect(mean(coast)).toBeGreaterThan(mean(plain));
+      // The nudges never make inland all calm: meadows and forests keep windy
+      // spots (about 17 % over 30 seeds), so a Windmill needn't stand on the coast.
+      expect(plain.filter((t) => t.wind === 3).length / plain.length).toBeGreaterThan(0.08);
       if (hills.length >= 20) expect(mean(hills)).toBeGreaterThan(mean(plain));
     }
     // Unsmoothed, neighbours would match about 15² + 50² + 35² ≈ 39 % of the time.

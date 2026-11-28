@@ -3,6 +3,7 @@ import { generateWildIsle } from './wild-isle.js';
 import { hexBfs, hexDistance, hexKey, hexNeighbors, type Hex, type HexKey } from '../hex/index.js';
 import { deriveSeed, Rng } from '../rng/index.js';
 import type { ClockworkIsleMapGen } from '../schemas/data/map-gen.js';
+import type { Wind } from '../schemas/data/power.js';
 import { isWater, type Terrain } from '../schemas/data/terrains.js';
 import { TRADING_POST_TERRAIN } from '../territory/reach.js';
 
@@ -75,6 +76,9 @@ export function generateClockworkIsle(data: MapGenData, options: GenerateMapOpti
 /** What the wind pass reads of a tile. */
 export type WindTile = Pick<MapTile, 'q' | 'r' | 'terrain'>;
 
+/** What the Scrap Heap pass reads of a tile (a `MapTile` or a view's tile). */
+export type ScrapHeapTile = WindTile & Pick<MapTile, 'homeSlot' | 'nodeResource' | 'isle'>;
+
 /** Is this tile land (anything but water: a post, the Gap and the coast count)? */
 function isLandTile(t: WindTile, terrainById: ReadonlyMap<string, Terrain>): boolean {
   return !isWater(terrainById.get(t.terrain));
@@ -93,7 +97,7 @@ export function windMap(
   terrainById: ReadonlyMap<string, Terrain>,
   rules: ClockworkIsleMapGen,
   seed: string,
-): Map<HexKey, 1 | 2 | 3> {
+): Map<HexKey, Wind> {
   const land = tiles.filter((t) => isLandTile(t, terrainById));
   const index = new Map(land.map((t, i) => [hexKey(t), i]));
   const rng = Rng.fromSeed(deriveSeed(seed, 'clockwork-isle-wind'));
@@ -124,7 +128,7 @@ export function windMap(
     .sort((a, b) => (bonused[a] ?? 0) - (bonused[b] ?? 0) || a - b);
   const calm = Math.round((land.length * WIND_SPLIT.calm) / 100);
   const breezy = Math.round((land.length * (WIND_SPLIT.calm + WIND_SPLIT.breezy)) / 100);
-  const out = new Map<HexKey, 1 | 2 | 3>();
+  const out = new Map<HexKey, Wind>();
   ranked.forEach((i, rank) => {
     const t = land[i] as WindTile; // i indexes land
     out.set(hexKey(t), rank < calm ? 1 : rank < breezy ? 2 : 3);
@@ -141,7 +145,11 @@ export function windMap(
  * a heap instead. A home with no room at all is a `RangeError`.
  */
 export function placeScrapHeaps(
-  map: Pick<GeneratedMap, 'tiles' | 'homes' | 'communities'>,
+  map: {
+    readonly tiles: readonly ScrapHeapTile[];
+    readonly homes: readonly Hex[];
+    readonly communities: readonly { readonly tiles: readonly Hex[] }[];
+  },
   terrainById: ReadonlyMap<string, Terrain>,
   rules: ClockworkIsleMapGen,
   gapTerrain: string,
@@ -159,7 +167,7 @@ export function placeScrapHeaps(
   };
   map.homes.forEach((home, slot) => {
     const steps = hexBfs([home], walkable);
-    const fits = (t: MapTile) => {
+    const fits = (t: ScrapHeapTile) => {
       const d = steps.get(hexKey(t));
       return (
         d !== undefined &&

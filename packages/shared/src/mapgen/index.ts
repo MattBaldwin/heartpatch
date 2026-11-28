@@ -24,6 +24,7 @@ import {
 import { Rng, type Seed } from '../rng/index.js';
 import type { GameData } from '../schemas/data/game-data.js';
 import type { MapLayout } from '../schemas/data/map-gen.js';
+import type { Wind } from '../schemas/data/power.js';
 import type { Terrain } from '../schemas/data/terrains.js';
 
 /** One generated tile, ready to persist as a `tiles` row. */
@@ -54,9 +55,9 @@ export interface MapTile {
   /**
    * Clockwork Isle (#874): the land tile's wind, 1 (calm) to 3 (windy),
    * stored as `tiles.wind`. Absent on water and on every Cozy Patch and
-   * Wild Isle.
+   * Wild Isle. `WindSchema` (C0) is its contract.
    */
-  readonly wind?: 1 | 2 | 3;
+  readonly wind?: Wind;
 }
 
 export interface GeneratedMap {
