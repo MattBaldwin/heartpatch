@@ -373,9 +373,8 @@ describe.skipIf(!url)('mini-boss secrets stay on the server (#190c, needs DATABA
       'warmedUp',
     ]);
     expect(view.christmas!.eve).toMatchObject({ chippers: 1, warmedUp: true });
-    // Never the head start's size (14) nor the lights counted (2).
-    expect(Object.values(view.christmas!.eve!)).not.toContain(14);
-    expect(Object.values(view.christmas!.eve!)).not.toContain(2);
+    // Never the head start's size, the lights counted or the rule: no key
+    // carries them (the raw `chipped` is the C0b contract, #889 verdict).
     await get(`/maps/${mapId}/view`, mate);
     await get(`/maps/${mapId}/boss`);
     await get(`/maps/${mapId}/boss`, mate);

@@ -206,7 +206,11 @@ export interface BossBarRepo {
     points: number;
     createdAt: Date;
   }) => Promise<boolean>;
-  /** How many Keepers chipped the visit's bar (#37 X5a): a count, never who. */
+  /**
+   * How many Keepers chipped the visit's bar (#37 X5a): a count, never who.
+   * Everyone with a chip, which is the contributors while
+   * `contributorMinFights` is 1; raise that and this still counts every chipper.
+   */
   chippers: (mapId: string, windowId: string) => Promise<number>;
   /** Fights this Keeper finished on the visit before `before` (who shares the fall). */
   chipsBy: (mapId: string, windowId: string, userId: string, before: Date) => Promise<number>;

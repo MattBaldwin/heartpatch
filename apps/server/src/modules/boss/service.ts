@@ -202,18 +202,26 @@ export function createMinibossBattlePort(rules: BossEventRules = BOSS_EVENTS): M
 /**
  * The Eve's own opening for a `christmas-eve` row: the planned one in the
  * map's zone (a converted weekly row keeps its earlier `opens_at`), else
- * the row's own (a dev pin).
+ * the row's own (a dev pin). Pure, given the map.
  */
+export function eveOpeningOf(
+  map: Pick<BossMapRow, 'seed' | 'timeZone' | 'longNightWeekday'> | null,
+  window: Pick<BossWindowRow, 'windowId' | 'opensAt'>,
+  rules: BossEventRules,
+): Date {
+  const plan = map ? plannedBossVisit(map, window.windowId, rules) : null;
+  return plan?.kind === 'christmas-eve' && plan.opensAt > window.opensAt
+    ? plan.opensAt
+    : window.opensAt;
+}
+
+/** `eveOpeningOf`, reading the row's map. */
 async function eveOpensAt(
   repo: BossRepo,
   window: BossWindowRow,
   rules: BossEventRules,
 ): Promise<Date> {
-  const map = await repo.findMap(window.mapId);
-  const plan = map ? plannedBossVisit(map, window.windowId, rules) : null;
-  return plan?.kind === 'christmas-eve' && plan.opensAt > window.opensAt
-    ? plan.opensAt
-    : window.opensAt;
+  return eveOpeningOf(await repo.findMap(window.mapId), window, rules);
 }
 
 /**

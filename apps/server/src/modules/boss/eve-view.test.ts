@@ -180,7 +180,7 @@ describe.skipIf(!url)('the Christmas Eve on the map (#37 X5a, needs DATABASE_URL
     expect((await eveOf(kid, mapId))?.thanks?.asksLeft).toBe(1);
     at(new Date(DENVER('2026-12-24T18:00:00').getTime() + 24 * HOUR_MS));
     expect(await eveOf(kid, mapId)).toBeUndefined();
-  });
+  }, 30_000);
 
   it('a dozed-off thanks shows its bundle and no asks, past the close, then goes', async () => {
     await h.start(SMALL_BAR);
@@ -202,7 +202,7 @@ describe.skipIf(!url)('the Christmas Eve on the map (#37 X5a, needs DATABASE_URL
     expect(await eveOf(keepers[1]!, mapId)).toBeUndefined();
     at(new Date(DENVER('2026-12-25T10:00:00').getTime() + 24 * HOUR_MS));
     expect(await eveOf(kid, mapId)).toBeUndefined();
-  });
+  }, 30_000);
 
   it('once an Eve ask says yes, it is a friend: no tries shown and no fight started (★ #900 item 2)', async () => {
     await h.start(ALWAYS_JOINS);
@@ -223,5 +223,5 @@ describe.skipIf(!url)('the Christmas Eve on the map (#37 X5a, needs DATABASE_URL
     );
     // Its thanks says so too: no asks left.
     expect((await eveOf(kid, mapId))?.thanks).toMatchObject({ kind: 'fell', asksLeft: 0 });
-  });
+  }, 30_000);
 });

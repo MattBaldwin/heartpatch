@@ -8,8 +8,14 @@ import type { Executor } from '../../db/client.js';
 import { localDate } from '../../lib/time.js';
 import { eveAsksLeft } from './befriend.js';
 import { barView, thanksOf } from './patch-bar.js';
-import { createBossRepo, type BossBarDbRow, type BossRepo, type BossWindowRow } from './repo.js';
-import { bossGatesFor, plannedBossVisit } from './service.js';
+import {
+  createBossRepo,
+  type BossBarDbRow,
+  type BossMapRow,
+  type BossRepo,
+  type BossWindowRow,
+} from './repo.js';
+import { bossGatesFor, eveOpeningOf, plannedBossVisit } from './service.js';
 import { minibossOpenFor, type MinibossSwitch } from './switch.js';
 
 const HOUR_MS = 3_600_000;
@@ -46,13 +52,13 @@ export async function christmasEveViewFor(
   if (!map || !minibossOpenFor(miniBosses, map.ownerUsername)) return null;
 
   const out = await repo.findChristmasEve(mapId, at);
-  if (out) return visitView(repo, rules, out, userId, at);
+  if (out) return visitView(repo, rules, map, out, userId, at);
 
   // Past its close, for this Keeper only while their thanks' asks are open.
   const since = new Date(at.getTime() - rules.befriend.askHours * HOUR_MS);
   const thanked = await repo.findThankedEve(mapId, userId, since);
   if (thanked) {
-    const view = await visitView(repo, rules, thanked, userId, at);
+    const view = await visitView(repo, rules, map, thanked, userId, at);
     return view?.thanks ? view : null;
   }
 
@@ -73,12 +79,14 @@ export async function christmasEveViewFor(
 async function visitView(
   repo: BossRepo,
   rules: BossEventRules,
+  map: BossMapRow,
   window: BossWindowRow,
   userId: string,
   at: Date,
 ): Promise<MapViewChristmasEve | null> {
   const bar = await repo.findBar(window.mapId, window.windowId);
-  if (!bar) return { opensAt: await eveOpening(repo, rules, window) };
+  // A visit pinned before X2 with no bar yet: the Eve's own opening alone.
+  if (!bar) return { opensAt: eveOpeningOf(map, window, rules).toISOString() };
   const thanks = await thanksView(repo, rules, window, bar, userId, at);
   return {
     opensAt: bar.opensAt.toISOString(),
@@ -87,23 +95,6 @@ async function visitView(
     warmedUp: bar.headStart > 0,
     ...(thanks ? { thanks } : {}),
   };
-}
-
-/**
- * A visit pinned before X2 with no bar yet: the Eve's own opening in the
- * patch's zone, or the row's if that's later (a converted weekly row keeps
- * its earlier `opens_at`).
- */
-async function eveOpening(
-  repo: BossRepo,
-  rules: BossEventRules,
-  window: BossWindowRow,
-): Promise<string> {
-  const map = await repo.findMap(window.mapId);
-  const plan = map ? plannedBossVisit(map, window.windowId, rules) : null;
-  const opensAt =
-    plan?.kind === 'christmas-eve' && plan.opensAt > window.opensAt ? plan.opensAt : window.opensAt;
-  return opensAt.toISOString();
 }
 
 /**
