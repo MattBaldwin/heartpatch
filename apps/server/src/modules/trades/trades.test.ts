@@ -1395,6 +1395,37 @@ describe.skipIf(!url)('trades, gifts and the mailbox (#271, needs DATABASE_URL)'
       expect(await warmthRows(mapId)).toHaveLength(1);
     });
 
+    it('counts every ornament when different pairs pick up at once on a planted tree (its row lock)', async () => {
+      clock.setTime(Date.parse(DECEMBER));
+      const server = await start();
+      const [lee, sam, kai, ari] = [await player(), await player(), await player(), await player()];
+      const { mapId, postOf } = await patch(server, lee, sam, kai, ari);
+      await viewOf(server, mapId, lee); // planted: only the tree row is shared
+      await grant(mapId, lee, { timber: 1 });
+      await grant(mapId, kai, { timber: 1 });
+      for (const [from, to] of [
+        [lee, sam],
+        [kai, ari],
+      ] as const) {
+        const sent = await offer(server, mapId, from, postOf(from), {
+          kind: 'gift',
+          toUserId: to.id,
+          give: [{ kind: 'item', itemId: 'timber', quantity: 1 }],
+          want: [],
+        });
+        expect(sent.statusCode, sent.body).toBe(201);
+      }
+      const picked = await Promise.all(
+        [sam, ari].map((to) =>
+          call(server, 'POST', `/maps/${mapId}/mailbox/pickup`, to, postOf(to)),
+        ),
+      );
+      expect(picked.map((r) => r.statusCode)).toEqual([200, 200]);
+      expect((await treeRow(mapId))?.ornaments).toBe(2);
+      expect((await treeEvents(mapId)).map((e) => e.payload.ornaments).sort()).toEqual([1, 2]);
+      expect(await warmthRows(mapId)).toHaveLength(2);
+    });
+
     it('rolls the ornaments and warmth back with the pickup', async () => {
       clock.setTime(Date.parse(DECEMBER));
       const server = await start();
