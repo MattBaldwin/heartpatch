@@ -272,9 +272,12 @@ Recommended **Wave 2**, not Wave 1: contentment is a checkpoint that drifts (`co
 | Q | Answer | Plan |
 |---|---|---|
 | 1 Christmas coupling | frosty Christmas headline; season-neutral look is Wave 2; Clockwork code stays out of Christmas lanes' files | R1.1 |
-| 2 Automation depth | haul and sort only; only squishies gather; happy squishies make machines faster | §0, R1.2 (bonus recommended for Wave 2; owner call pending) |
+| 2 Automation depth | haul and sort only; only squishies gather; happy squishies make machines faster | §0, R1.2 (the bonus is Wave 2, owner answer below) |
 | 3 Power model | wires like roads, reusing Wild Isle road and supply rules | §0, `POWER_RULES.model = 'wires'` |
 | 4 Name | **Clockwork Isle**, working name; the owner may still change it at the mockups | code id `clockwork-isle` fixed; display name in text tables |
 | 5 Existing patches; patch count | **new patches only**: the type is chosen when creating a patch and existing patches never change; **no limit on how many patches a Keeper creates or joins is added or changed** | §0; no `maps` rule change anywhere in the plan |
 
-With these, the plan is final for gate G1. Open for the owner: the two R1 questions (machine-made presents open with the gifted roll; the happy-squishies bonus wave).
+| R1 Gift Wrapper | **yes**: a machine-made present opens with the same roll as a gifted one | R1.1; C0 adds the `gift-wrapper` row and the `wrapping` node |
+| R1 happy squishies make machines faster | **Wave 2** | R1.2; nothing in Wave 1 |
+
+With these, every owner question is answered and the plan is final for gate G1 (supervisor 55, 2026-11-28 ~02:00 UTC). Owner approvals still to come are the mockup frames M1–M4 (G3) and the balance sim report (G5).
