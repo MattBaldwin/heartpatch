@@ -3,10 +3,12 @@ export * from './extra-nodes.js';
 export * from './trading-posts.js';
 export * from './communities.js';
 export * from './wild-isle.js';
+export * from './clockwork-isle.js';
 import { extraNodes } from './extra-nodes.js';
 import { placeCommunities, type CellarKeyRange, type PlacedCommunity } from './communities.js';
 import { placeTradingPosts } from './trading-posts.js';
 import { generateWildIsle } from './wild-isle.js';
+import { generateClockworkIsle } from './clockwork-isle.js';
 import type { PatchType } from '../patch-types/patch-type.js';
 import { TRADING_POST_TERRAIN } from '../territory/reach.js';
 
@@ -49,6 +51,12 @@ export interface MapTile {
    * as `tiles.isle`. Absent on the main island and on every Cozy Patch.
    */
   readonly isle?: number;
+  /**
+   * Clockwork Isle (#874): the land tile's wind, 1 (calm) to 3 (windy),
+   * stored as `tiles.wind`. Absent on water and on every Cozy Patch and
+   * Wild Isle.
+   */
+  readonly wind?: 1 | 2 | 3;
 }
 
 export interface GeneratedMap {
@@ -162,6 +170,7 @@ function fairestRotations(
  */
 export function generateMap(data: MapGenData, options: GenerateMapOptions): GeneratedMap {
   if (options.patchType === 'wild-isle') return generateWildIsle(data, options);
+  if (options.patchType === 'clockwork-isle') return generateClockworkIsle(data, options);
   const map = generateMapBeforePosts(data, options);
   // Trading posts (#269): the last pass, with its own seed, so every pass
   // before it stays as it was. A post's tile keeps no node and no guardians.
