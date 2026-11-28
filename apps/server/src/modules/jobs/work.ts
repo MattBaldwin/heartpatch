@@ -22,7 +22,7 @@ import type { BuildingRow } from '../buildings/repo.js';
 import { homesteadOf, workPauseOf } from '../explore/homesteads.js';
 import { seasonsOn } from '../inventory/service.js';
 import type { MapRow } from '../maps/repo.js';
-import type { JobRow } from './repo.js';
+import type { JobRow, JobTileRow } from './repo.js';
 
 // A squishy's job worked out from its stored row at an instant (CLAUDE.md
 // rule 4): a gatherer's cycles and a trainee's XP. The jobs service and the
@@ -38,6 +38,33 @@ const SPECIES = new Map(
  * tile has one is the patch's own rule.
  */
 const RAIL_RULES_ON_ISLE = patchRules('clockwork-isle').rails;
+
+/** The Rail Depot's levels' waiting caps (#874, C0 Decision 7: on the building levels). */
+const DEPOT_WAITING = GAME_DATA.buildings.flatMap((b) =>
+  b.kind === 'depot' ? [b.levels.map((l) => l.waitingCycles)] : [],
+)[0];
+
+/**
+ * How many finished cycles a gatherer holds (#874): its owner's Rail Depot
+ * level's `waitingCycles` when its work tile has their live rail (the tile is
+ * rail-joined) and they have a depot; else `JOB_RULES`' four. Never fewer
+ * than four. `depot`: the higher cap applies.
+ */
+export function workCapOf(tile: Pick<JobTileRow, 'railLevel' | 'depotLevel'>): {
+  maxStoredCycles: number;
+  depot: boolean;
+} {
+  const base = JOB_RULES.work.maxStoredCycles;
+  const rail = tile.railLevel ?? null;
+  const depot = tile.depotLevel ?? null;
+  const cap =
+    rail === null || depot === null || !DEPOT_WAITING
+      ? null
+      : (DEPOT_WAITING[Math.min(depot, DEPOT_WAITING.length) - 1] ?? null);
+  return cap === null || cap <= base
+    ? { maxStoredCycles: base, depot: false }
+    : { maxStoredCycles: cap, depot: true };
+}
 
 /** What to call one of my squishies in a message: its nickname, else its species. */
 export const squishyName = (s: Pick<OwnedSquishy, 'nickname' | 'speciesId'>): string =>
@@ -93,11 +120,16 @@ export function workAt(row: JobRow, map: JobMap, at: Date, justTaken = false) {
     JOB_RULES,
     gameplayOverrides(map.kind),
   );
+  // A Rail Depot (#874) raises what a rail-joined gatherer holds, read at
+  // the instant like the rail itself.
+  const cap = workCapOf(row.workTile);
   const progress = workProgressAround(
     row.workSince.getTime(),
     at.getTime(),
     cycleSeconds,
-    JOB_RULES,
+    cap.depot
+      ? { ...JOB_RULES, work: { ...JOB_RULES.work, maxStoredCycles: cap.maxStoredCycles } }
+      : JOB_RULES,
     homestead ? workPauseOf(homestead) : null,
   );
   const ready = workYield(
@@ -106,7 +138,15 @@ export function workAt(row: JobRow, map: JobMap, at: Date, justTaken = false) {
     GAME_DATA.resources,
     seasonsAtFor(map.timeZone),
   );
-  return { tile: row.workTile, source, speedPercent, cycleSeconds, progress, ready };
+  return {
+    tile: row.workTile,
+    source,
+    speedPercent,
+    cycleSeconds,
+    progress,
+    ready,
+    depot: cap.depot,
+  };
 }
 
 /** Training Grounds levels by content id (owner decision 2026-10-06). */

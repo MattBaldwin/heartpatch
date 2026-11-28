@@ -35,6 +35,12 @@ export interface JobTileRow {
   roadLevel?: number | null;
   /** The working squishy's owner's rail level here (Clockwork Isle #874); null: none. Work tiles only. */
   railLevel?: number | null;
+  /**
+   * The working squishy's owner's Rail Depot level on this map (Clockwork
+   * Isle #874); null: none. Work tiles only. With a rail here too, the
+   * gatherer holds the depot level's `waitingCycles` instead of four.
+   */
+  depotLevel?: number | null;
 }
 
 /** One of a player's squishies with everything its job depends on. */
@@ -236,6 +242,23 @@ export function createSquishyJobsTxRepo(tx: Transaction): SquishyJobsTxRepo {
   return { ...queries(tx), appendEvent: (event) => appendGameEvent(tx, event) };
 }
 
+/**
+ * The squishy's owner's highest Rail Depot level on its map (#874), or null.
+ * A plain read: the settle never writes the depot row, so it takes no lock
+ * (a depot placed or upgraded mid-settle counts from the next one).
+ */
+const ownerDepotLevel = () => {
+  const outer = (column: AnyPgColumn) =>
+    sql`${sql.identifier(getTableName(column.table))}.${sql.identifier(column.name)}`;
+  const depot = (column: AnyPgColumn) => sql`owner_depot.${sql.identifier(column.name)}`;
+  return sql<number | null>`(
+    select max(${depot(buildings.level)}) from ${buildings} as owner_depot
+    where ${depot(buildings.mapId)} = ${outer(squishies.mapId)}
+      and ${depot(buildings.ownerUserId)} = ${outer(squishies.ownerUserId)}
+      and ${depot(buildings.kind)} = 'depot'
+  )`;
+};
+
 function queries(db: Executor): SquishyJobsRepo {
   const selectJobs = () =>
     db
@@ -270,6 +293,7 @@ function queries(db: Executor): SquishyJobsRepo {
         workResumedAt: tileExplore.resumedAt,
         workRoad: tileRoads.level,
         workRail: tileLines.level,
+        workDepot: ownerDepotLevel(),
         postTileId: postTile.id,
         postQ: postTile.q,
         postR: postTile.r,
@@ -366,6 +390,7 @@ function queries(db: Executor): SquishyJobsRepo {
             ownerUserId: r.workOwner,
             roadLevel: r.workRoad,
             railLevel: r.workRail,
+            depotLevel: r.workDepot,
             homestead:
               r.workExplored === null
                 ? null
