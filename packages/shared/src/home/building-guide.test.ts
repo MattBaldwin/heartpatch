@@ -165,13 +165,13 @@ describe('buildingGuide (#715)', () => {
   });
 
   it('lists shelf by shelf, and every building is in some patch type', () => {
-    for (const patchType of ['cozy', 'wild-isle'] as const) {
+    for (const patchType of ['cozy', 'wild-isle', 'clockwork-isle'] as const) {
       const all = buildingsGuide(BUILDINGS, ctx({ patchType }));
       const order = all.map((e) => GUIDE_GROUPS.indexOf(e.group));
       expect(order).toEqual([...order].sort((a, b) => a - b));
     }
     const ids = new Set(
-      (['cozy', 'wild-isle'] as const).flatMap((patchType) =>
+      (['cozy', 'wild-isle', 'clockwork-isle'] as const).flatMap((patchType) =>
         buildingsGuide(BUILDINGS, ctx({ patchType })).map((e) => e.id),
       ),
     );

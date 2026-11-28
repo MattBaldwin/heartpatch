@@ -97,10 +97,13 @@ describe('itemEffects (#241)', () => {
   });
 
   it("names no building a player can't build yet (the Warehouse's gate opened in #601 PR 9)", () => {
-    // A Wild Isle building counts as buildable where it stands (#621 W1-8).
+    // A Wild Isle or Clockwork Isle building counts as buildable where it
+    // stands (#621 W1-8, #874).
     const gated = new Set(
       BUILDINGS.filter(
-        (b) => !isBuildable(HOME_BASE_RULES, b) && !isBuildableOn(HOME_BASE_RULES, b, 'wild-isle'),
+        (b) =>
+          !isBuildable(HOME_BASE_RULES, b) &&
+          !(b.patchTypes ?? []).some((t) => isBuildableOn(HOME_BASE_RULES, b, t)),
       ).map((b) => b.id),
     );
     expect(gated.has('warehouse') || gated.has('woodcutters-hut')).toBe(false);

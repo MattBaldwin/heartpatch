@@ -78,6 +78,14 @@ const ConfigSchema = z.object({
   // Usernames who can make a Wild Isle while `HP_WILD_ISLE=testers`,
   // comma-separated (case doesn't matter), as `HP_HOUSE_TESTERS`.
   HP_WILD_ISLE_TESTERS: usernameList(),
+  // Clockwork Isle (#874) feature switch, as `HP_WILD_ISLE`: `off` refuses
+  // `clockwork-isle` patches for everyone (creating one is FORBIDDEN and the
+  // lobby hides the choice), `testers` lets only `HP_CLOCKWORK_ISLE_TESTERS`
+  // make one, `on` every player. Off by default (lane C7 turns it on).
+  HP_CLOCKWORK_ISLE: z.enum(['off', 'testers', 'on']).default('off'),
+  // Usernames who can make a Clockwork Isle while `HP_CLOCKWORK_ISLE=testers`,
+  // comma-separated (case doesn't matter), as `HP_WILD_ISLE_TESTERS`.
+  HP_CLOCKWORK_ISLE_TESTERS: usernameList(),
   // The Long Night (#727) feature switch: `off` runs every nightfall as an
   // ordinary night and leaves the Long Night out of every reply, `testers`
   // runs it only on patches with an `HP_LONG_NIGHT_TESTERS` member (the

@@ -57,6 +57,9 @@ const GROUP_OF: Record<BuildingKind, GuideGroup> = {
   shelter: 'shelters',
   travel: 'travel',
   fence: 'fences',
+  // Clockwork Isle (#874): the Bench helps; the Depot hauls along the rails.
+  research: 'helpers',
+  depot: 'travel',
 };
 
 /** Why build one: what it does at level 1. */

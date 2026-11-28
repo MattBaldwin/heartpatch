@@ -137,6 +137,14 @@ app.log.info(
   { wildIsle: config.HP_WILD_ISLE, wildIsleTesters: config.HP_WILD_ISLE_TESTERS.length },
   'the Wild Isle switch',
 );
+// The Clockwork Isle switch (#874), logged the same way.
+app.log.info(
+  {
+    clockworkIsle: config.HP_CLOCKWORK_ISLE,
+    clockworkIsleTesters: config.HP_CLOCKWORK_ISLE_TESTERS.length,
+  },
+  'the Clockwork Isle switch',
+);
 // The mini-boss switch (#234), logged like the house's: the mode and how
 // many testers, never their names.
 app.log.info(

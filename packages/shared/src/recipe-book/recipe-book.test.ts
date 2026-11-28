@@ -208,6 +208,10 @@ describe('whereToFind', () => {
         'turkey-feathers',
         'presents',
         'fireworks',
+        // Clockwork Isle (#874): Parts from Scrap Heaps (lane C1 places
+        // them) and explore finds; Blueprints from the Research Bench.
+        'parts',
+        'blueprints',
         ...HIDDEN.map((h) => h.output.resource),
       ];
       expect(found, r.id).toBe(!elsewhere.includes(r.id));

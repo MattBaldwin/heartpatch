@@ -23,6 +23,7 @@ import { TrickOrTreatPrizeSchema } from './trick-or-treat.js';
 import { JourneyKindSchema } from './journeys.js';
 import { AdventDaySchema, AdventResultSchema, OrnamentSourceSchema } from './christmas.js';
 import { BossThanksItemsSchema, BossThanksKindSchema } from './boss-bar.js';
+import { LineKindSchema, LineLevelSchema } from './data/rails.js';
 
 /**
  * The game-event type registry (tech spec §5, §7): every `game_events.type`,
@@ -633,6 +634,49 @@ export const GAME_EVENTS = {
       lost: z.enum(['captured', 'wild', 'left']).optional(),
     }),
     public: z.object({ userId: z.uuid(), ...coords }),
+  },
+  /**
+   * Clockwork Isle (#874): a player laid a wire or a rail on one of their
+   * tiles (level 1). Lines are a tile attribute (`tile_lines`), like roads.
+   * Members see it; the bill stays internal.
+   */
+  'line.built': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      ...coords,
+      kind: LineKindSchema,
+      level: LineLevelSchema,
+      cost: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({ userId: z.uuid(), ...coords, kind: LineKindSchema, level: LineLevelSchema }),
+  },
+  /** Clockwork Isle (#874): a rail went up a level. The bill stays internal. */
+  'line.upgraded': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      ...coords,
+      kind: LineKindSchema,
+      fromLevel: LineLevelSchema,
+      level: LineLevelSchema,
+      cost: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({ userId: z.uuid(), ...coords, kind: LineKindSchema, level: LineLevelSchema }),
+  },
+  /**
+   * Clockwork Isle (#874): a line came up. Its owner took it up, or (`lost`)
+   * its tile was won by a rival, went wild or its owner left. The refund
+   * stays internal.
+   */
+  'line.removed': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      ...coords,
+      kind: LineKindSchema,
+      level: LineLevelSchema,
+      refund: z.record(z.string(), z.number().int().min(1)),
+      lost: z.enum(['captured', 'wild', 'left']).optional(),
+    }),
+    public: z.object({ userId: z.uuid(), ...coords, kind: LineKindSchema }),
   },
   /**
    * Trading posts (#269) came to an older map: the boot pass turned these
@@ -1301,6 +1345,62 @@ export const GAME_EVENTS = {
       q: z.number().int(),
       r: z.number().int(),
     }),
+  },
+  /**
+   * Clockwork Isle (#874): a `needsPower` building was joined back to one of
+   * its owner's generators (`buildings.unpowered_since` cleared) and works
+   * again. Members see whose building and where.
+   */
+  'building.powered': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      ...coords,
+    }),
+    public: z.object({ userId: z.uuid(), buildingRowId: z.uuid(), ...coords }),
+  },
+  /**
+   * Clockwork Isle (#874): a `needsPower` building lost its power (a wire
+   * came up, a generator went, land changed hands; `unpowered_since` set) and
+   * stops working until it's joined again. Members see whose and where.
+   */
+  'building.unpowered': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      ...coords,
+    }),
+    public: z.object({ userId: z.uuid(), buildingRowId: z.uuid(), ...coords }),
+  },
+  /**
+   * Clockwork Isle (#874): a player started a research node on their
+   * Research Bench, paid up front (`research_jobs`). Only they hear it
+   * (`ownerOnlyView`); the bill stays internal.
+   */
+  'research.started': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      jobId: z.uuid(),
+      buildingRowId: z.uuid(),
+      nodeId: ContentIdSchema,
+      readyAt: z.iso.datetime(),
+      cost: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({ userId: z.uuid(), nodeId: ContentIdSchema, readyAt: z.iso.datetime() }),
+  },
+  /**
+   * Clockwork Isle (#874): a player's research finished and was claimed: the
+   * node is known and its Blueprints are in their bag. The patch hears who
+   * learned what; the grant stays internal.
+   */
+  'research.done': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      jobId: z.uuid(),
+      nodeId: ContentIdSchema,
+      grants: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({ userId: z.uuid(), nodeId: ContentIdSchema }),
   },
   /** Wild Isle (#621): a knocked building was fixed and works again. The bill stays internal. */
   'building.repaired': {

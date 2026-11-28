@@ -9,6 +9,7 @@ import { isBuildable } from '../schemas/data/home-base.js';
 import type { GameData } from '../schemas/data/game-data.js';
 import { isAvailableRecipe } from '../schemas/data/recipes.js';
 import { fedWith } from '../care/contentment.js';
+import { isBuildableOn } from './water-works.js';
 import { buildingEffects, type BuildingEffect } from './building-effects.js';
 
 // What a bag item is for (#241), worked out from its data alone like
@@ -138,6 +139,22 @@ export function itemEffects(resourceId: string, data: ItemData = GAME_DATA): Ite
   const onlyRecipes = !effects.some((e) => e.kind !== 'recipes');
   if (onlyRecipes && works.length > 0) {
     effects.push({ kind: 'made-at', buildings: works.map((b) => b.id) });
+  }
+
+  // A thing only a patch type's buildings use (#874: Clockwork Isle Parts
+  // and Blueprints) says which, for an item with nothing else to say, so
+  // every Cozy and Wild Isle Bag reads as before.
+  if (effects.length === 0) {
+    const typed = data.buildings.filter(
+      (b) => b.patchTypes?.some((t) => isBuildableOn(HOME_BASE_RULES, b, t)) === true,
+    );
+    const builds = typed.filter((b) => (firstCost(b)[item.id] ?? 0) > 0);
+    if (builds.length > 0) effects.push({ kind: 'build-with', buildings: builds.map((b) => b.id) });
+    const raises = typed.filter(
+      (b) =>
+        !builds.includes(b) && b.levels.slice(1).some((level) => (level.cost[item.id] ?? 0) > 0),
+    );
+    if (raises.length > 0) effects.push({ kind: 'upgrades', buildings: raises.map((b) => b.id) });
   }
 
   if (effects.length === 0 && item.season) effects.push({ kind: 'keepsake', season: item.season });

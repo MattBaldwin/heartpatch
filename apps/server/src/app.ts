@@ -108,6 +108,7 @@ import { signupCodesRoutes } from './modules/signup-codes/routes.js';
 import { createSignupCodesService } from './modules/signup-codes/service.js';
 import { createMapsService } from './modules/maps/service.js';
 import { wildIsleSwitchOf } from './modules/maps/wild-isle-switch.js';
+import { clockworkIsleSwitchOf } from './modules/maps/clockwork-isle-switch.js';
 import { computerMatesRoutes } from './modules/computer-mates/routes.js';
 import { createComputerMatesService } from './modules/computer-mates/service.js';
 import { computerMatesSwitchOf } from './modules/computer-mates/switch.js';
@@ -332,6 +333,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           keeperRequired: config.HP_KEEPER_REQUIRED,
           // Who can make a Wild Isle (#621), off by default.
           wildIsle: wildIsleSwitchOf(config),
+          // Who can make a Clockwork Isle (#874), off by default.
+          clockworkIsle: clockworkIsleSwitchOf(config),
           longNight,
           // `MapView.christmas.eve` follows `/boss` (#37 X2).
           miniBosses: minibossSwitchOf(config),

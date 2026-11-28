@@ -53,6 +53,8 @@ export interface NewTile {
   homeSlot: number | null;
   /** Wild Isle (#621): which offshore isle (1 up); left out or null on the main island. */
   isle?: number | null;
+  /** Clockwork Isle (#874): the land tile's wind, 1–3; left out or null everywhere else. */
+  wind?: number | null;
 }
 
 /** A tile for the map view, before the service makes it a `PublicTile`. */
@@ -521,7 +523,9 @@ function queries(db: Executor): MapsRepo {
     },
 
     insertTiles: async (mapId, rows) => {
-      await db.insert(tiles).values(rows.map((t) => ({ mapId, ...t, isle: t.isle ?? null })));
+      await db
+        .insert(tiles)
+        .values(rows.map((t) => ({ mapId, ...t, isle: t.isle ?? null, wind: t.wind ?? null })));
     },
 
     findMap: async (mapId) => {

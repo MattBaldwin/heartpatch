@@ -102,6 +102,16 @@ export const ItemChangeReasonSchema = z.enum([
    * One per Keeper per visit (`boss_encounters.thanked_at`).
    */
   'christmas-boss',
+  /** Laying or raising a wire or a rail (Clockwork Isle #874), ledgered against its `tile_lines` row. */
+  'line',
+  /** What comes back when a wire or a rail comes up (Clockwork Isle #874), against the same row. */
+  'line-refund',
+  /** Starting a research node (Clockwork Isle #874), paid up front, against its `research_jobs` row. */
+  'research',
+  /** A finished research node's Blueprints (Clockwork Isle #874), against the same row. */
+  'research-grant',
+  /** What a rail-joined gatherer hauled straight to the bag by a Rail Depot (Clockwork Isle #874). */
+  'depot',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 

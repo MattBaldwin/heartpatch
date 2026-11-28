@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { BuildingSchema, buildsAtHome, WILD_ISLE_BUILDING_KINDS } from './buildings.js';
+import {
+  BuildingSchema,
+  buildsAtHome,
+  CLOCKWORK_BUILDING_KINDS,
+  CLOCKWORK_ROW_KINDS,
+  WILD_ISLE_BUILDING_KINDS,
+} from './buildings.js';
 import { CareActionSchema } from './care-actions.js';
 import { ElementIdSchema, ElementSchema, FeelingIdSchema, FeelingSchema } from './elements.js';
 import { MapGenSettingsSchema } from './map-gen.js';
@@ -237,8 +243,51 @@ export const GameDataSchema = z
       if ((b.slot === 'edge') !== (b.kind === 'fence')) {
         report(['buildings', i, 'slot'], `"${b.id}": fences go on edges, and only fences`);
       }
+      // Clockwork Isle rows (#874): `['clockwork-isle']` alone, one of its
+      // kinds; only they need power, research or wind.
+      const clockwork = b.patchTypes?.includes('clockwork-isle') === true;
+      if (clockwork) {
+        if (b.patchTypes?.length !== 1) {
+          report(
+            ['buildings', i, 'patchTypes'],
+            `"${b.id}" is a Clockwork Isle building: ['clockwork-isle']`,
+          );
+        }
+        if (!(CLOCKWORK_ROW_KINDS as readonly string[]).includes(b.kind)) {
+          report(
+            ['buildings', i, 'kind'],
+            `"${b.id}": a Clockwork Isle building is works, lights, depot or research`,
+          );
+        }
+      } else {
+        if ((CLOCKWORK_BUILDING_KINDS as readonly string[]).includes(b.kind)) {
+          report(
+            ['buildings', i, 'patchTypes'],
+            `"${b.id}" is a Clockwork Isle building: ['clockwork-isle']`,
+          );
+        }
+        if (b.needsPower) {
+          report(
+            ['buildings', i, 'needsPower'],
+            `"${b.id}": only Clockwork Isle buildings need power`,
+          );
+        }
+        if (b.requiresResearch !== undefined) {
+          report(
+            ['buildings', i, 'requiresResearch'],
+            `"${b.id}": only Clockwork Isle buildings need research`,
+          );
+        }
+        if (b.kind === 'works' && b.wind) {
+          report(
+            ['buildings', i, 'wind'],
+            `"${b.id}": only Clockwork Isle buildings feel the wind`,
+          );
+        }
+      }
       // Wild Isle kinds (#621) are never on a Cozy Patch's Build sheet.
       if (
+        !(clockwork && b.kind === 'works') &&
         (WILD_ISLE_BUILDING_KINDS as readonly string[]).includes(b.kind) &&
         (b.patchTypes?.length !== 1 || b.patchTypes[0] !== 'wild-isle')
       ) {

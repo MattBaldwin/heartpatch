@@ -291,6 +291,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
         ],
         requests: [],
         canMakeWildIsle: false,
+        canMakeClockworkIsle: false,
       });
     });
 
@@ -521,6 +522,76 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
     });
   });
 
+  describe('Clockwork Isle (#874)', () => {
+    let server: FastifyInstance | undefined;
+    const clockworkIsle = (who: Player) =>
+      call(server!, 'POST', '/maps', who, {
+        name: 'Tick Tock Bay',
+        timeZone: 'UTC',
+        patchType: 'clockwork-isle',
+      });
+    const canMake = async (who: Player) =>
+      MyMapsResponseSchema.parse((await call(server!, 'GET', '/maps', who)).json())
+        .canMakeClockworkIsle;
+    const mapsOwnedBy = async (who: Player) =>
+      (
+        await db.query.mapMembers.findMany({
+          where: (t, { and, eq }) => and(eq(t.userId, who.id), eq(t.role, 'owner')),
+        })
+      ).length;
+
+    it('refuses a Clockwork Isle while the switch is off, before making anything', async () => {
+      // The Wild Isle switch on changes nothing for a Clockwork Isle.
+      server = await start({ HP_WILD_ISLE: 'on' });
+      const owner = await player();
+      expect(await canMake(owner)).toBe(false);
+      const res = await clockworkIsle(owner);
+      expect(res.statusCode).toBe(403);
+      expect(errorOf(res)).toMatchObject({
+        code: 'FORBIDDEN',
+        message: "Clockwork Isles aren't open yet. Make a Cozy Patch for now!",
+      });
+      expect(await mapsOwnedBy(owner)).toBe(0);
+      // A Cozy Patch still works, exactly as before.
+      expect((await createMap(server, owner)).patchType).toBe('cozy');
+    });
+
+    it('opens the choice to the testers only, and makes none until the isle has a layout', async () => {
+      const tester = await player();
+      const other = await player();
+      server = await start({
+        HP_CLOCKWORK_ISLE: 'testers',
+        HP_CLOCKWORK_ISLE_TESTERS: ` someone_else , ${tester.username.toUpperCase()} `,
+      });
+      expect(await canMake(tester)).toBe(true);
+      expect(await canMake(other)).toBe(false);
+      expect(errorOf(await clockworkIsle(other))).toMatchObject({
+        code: 'FORBIDDEN',
+        message: /aren't open yet/,
+      });
+      // The generator's layout lands with lane C1: until then even a tester
+      // is refused before a seed is drawn.
+      expect(GAME_DATA.mapGen.clockworkIsle).toBeUndefined();
+      const res = await clockworkIsle(tester);
+      expect(res.statusCode).toBe(403);
+      expect(errorOf(res)).toMatchObject({
+        code: 'FORBIDDEN',
+        message: 'A Clockwork Isle is made for 6 Keepers. Try a Cozy Patch!',
+      });
+      expect(await mapsOwnedBy(tester)).toBe(0);
+    });
+
+    it('offers it to every player when the switch is on', async () => {
+      server = await start({ HP_CLOCKWORK_ISLE: 'on' });
+      const owner = await player();
+      expect(await canMake(owner)).toBe(true);
+      expect(
+        MyMapsResponseSchema.parse((await call(server, 'GET', '/maps', owner)).json())
+          .canMakeWildIsle,
+      ).toBe(false);
+    });
+  });
+
   describe('invites and join requests', () => {
     it('code → request → approve: both players see the map (acceptance)', async () => {
       const server = await start();
@@ -541,7 +612,12 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       const waiting = MyMapsResponseSchema.parse(
         (await call(server, 'GET', '/maps', friend)).json(),
       );
-      expect(waiting).toEqual({ maps: [], requests: [request], canMakeWildIsle: false });
+      expect(waiting).toEqual({
+        maps: [],
+        requests: [request],
+        canMakeWildIsle: false,
+        canMakeClockworkIsle: false,
+      });
       // The owner's patch list says someone is waiting (#144).
       const ownerLobby = MyMapsResponseSchema.parse(
         (await call(server, 'GET', '/maps', owner)).json(),
@@ -776,6 +852,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
         maps: [],
         requests: [],
         canMakeWildIsle: false,
+        canMakeClockworkIsle: false,
       });
       // They can ask again.
       await requestJoin(server, friend, inviteOf(map));

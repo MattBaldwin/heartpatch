@@ -153,6 +153,29 @@ export const WildIsleMapGenSchema = z
   );
 export type WildIsleMapGen = z.infer<typeof WildIsleMapGenSchema>;
 
+/**
+ * The Clockwork Isle generator (#874, lane C1): a Wild Isle's island (its
+ * layouts and water rules, `island`), then a wind map and Scrap Heaps.
+ * Cozy and Wild patches never read it. `wind`: the tile wind (1–3) is
+ * smoothed from a seed sub-stream over `smoothing` passes, with `coastBonus`
+ * and `hillBonus` (percent) towards blowy on coast-side and hill tiles.
+ * `scrapHeaps`: Parts nodes, `perHome` within reach of each Heart Seed and
+ * no nearer than `minFromSeed` steps.
+ */
+export const ClockworkIsleMapGenSchema = z.strictObject({
+  island: WildIsleMapGenSchema,
+  wind: z.strictObject({
+    smoothing: z.number().int().min(0).max(8),
+    coastBonus: z.number().int().min(0).max(100),
+    hillBonus: z.number().int().min(0).max(100),
+  }),
+  scrapHeaps: z.strictObject({
+    perHome: z.number().int().min(1).max(6),
+    minFromSeed: z.number().int().min(1),
+  }),
+});
+export type ClockworkIsleMapGen = z.infer<typeof ClockworkIsleMapGenSchema>;
+
 /** The outermost ring of a Wild Isle that's neither coast nor sea. */
 export function landRadius(
   rules: { readonly coastRing: number },
@@ -185,6 +208,8 @@ export const MapGenSettingsSchema = z
     communities: CommunityPlacementRulesSchema,
     /** The Wild Isle generator (#621); absent: no Wild Isles. */
     wildIsle: WildIsleMapGenSchema.optional(),
+    /** The Clockwork Isle generator (#874, lane C1 fills it); absent: no Clockwork Isles. */
+    clockworkIsle: ClockworkIsleMapGenSchema.optional(),
   })
   .refine(
     (m) =>
