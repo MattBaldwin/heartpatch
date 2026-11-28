@@ -177,6 +177,29 @@ describe('server-only data split (tech spec §2)', () => {
     expect(exported).not.toMatch(/"(trigger|evolutionOdds|weights|pity)"/);
   });
 
+  // #874 C6: which patch types a spawn table names (a Clockwork Isle's tech
+  // squishies) is a spawn rule, so it stays on the server with the tables.
+  it('keeps spawn tables’ patch types and the filter off the root entry and the client', () => {
+    const typed = server.SPAWN_TABLES.filter((t) => t.patchTypes !== undefined);
+    expect(typed.length).toBeGreaterThan(0);
+    expect(Object.keys(server)).toContain('spawnTablesFor');
+    expect(Object.keys(root)).not.toContain('spawnTablesFor');
+    // Buildings name patch types too (public); the tables' own ids never ship.
+    const exported = JSON.stringify(root);
+    expect(typed.filter((t) => exported.includes(`"${t.id}"`)).map((t) => t.id)).toEqual([]);
+    const fromRoot = importGraph(resolve(srcDir, 'index.ts'));
+    const fromClient = importGraph(...clientEntries());
+    for (const reachable of [fromRoot, fromClient]) {
+      const files = [...reachable];
+      expect(files).not.toContain(resolve(srcDir, 'spawns/resolve.ts'));
+      const named = files.flatMap((file) => {
+        const source = readFileSync(file, 'utf8');
+        return typed.filter((t) => source.includes(t.id)).map((t) => `${file}: ${t.id}`);
+      });
+      expect(named).toEqual([]);
+    }
+  });
+
   it('never reaches data/server or a secret id from a client entry point', () => {
     const entries = clientEntries();
     expect(entries.map((file) => file.slice(clientDir.length + 1)).sort()).toEqual([

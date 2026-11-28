@@ -1,5 +1,6 @@
 import { activeSeasons } from '../data/season-windows.js';
 import { deriveSeed, Rng, type Seed } from '../rng/index.js';
+import type { PatchType } from '../patch-types/patch-type.js';
 import type { Rarity } from '../schemas/data/common.js';
 import type { Season } from '../schemas/data/seasons.js';
 import type { SpawnRules, TimeOfDay } from '../schemas/data/spawn-rules.js';
@@ -47,6 +48,16 @@ export interface SpawnData {
   readonly rules: SpawnRules;
   /** The top level a squishy can reach (`GROWTH_RULES.maxLevel`): Partner-scaled levels stop there. */
   readonly maxLevel: number;
+}
+
+/**
+ * The tables that spawn on a patch of this type (#874): a table naming
+ * `patchTypes` only on those types (a Clockwork Isle's tech squishies), one
+ * naming none on every type. Leaving a table out never moves which tiles
+ * have a squishy: that's `resolveWildSpawn`'s first draw, before any table.
+ */
+export function spawnTablesFor(tables: readonly SpawnTable[], patchType: PatchType): SpawnTable[] {
+  return tables.filter((t) => t.patchTypes === undefined || t.patchTypes.includes(patchType));
 }
 
 /** The window's time of day, judged at its middle (spawn rules `timesOfDay`). */

@@ -261,11 +261,13 @@ describe.skipIf(!url)('advent presents, #37 1c (needs DATABASE_URL)', () => {
     const mapId = await newMap(server, kid);
     const christmas = async () =>
       MapViewSchema.parse((await call(server, 'GET', `/maps/${mapId}/view`, kid)).json()).christmas;
-    expect(await christmas()).toEqual({ presentWaiting: true });
+    // The Patch Tree (#37 2c) rides along: planted, no warmth yet.
+    const tree = { ornaments: 0, starLit: false };
+    expect(await christmas()).toMatchObject({ presentWaiting: true, tree, warmth: [] });
     await claim(server, kid, mapId, '2026-12-05');
-    expect(await christmas()).toEqual({ presentWaiting: false });
+    expect(await christmas()).toMatchObject({ presentWaiting: false, tree, warmth: [] });
     clock.setTime(Date.parse('2026-12-27T12:00:00Z'));
-    expect(await christmas()).toEqual({ presentWaiting: false });
+    expect(await christmas()).toMatchObject({ presentWaiting: false, tree, warmth: [] });
     clock.setTime(Date.parse('2026-11-27T12:00:00Z'));
     expect(await christmas()).toBeUndefined();
   });
