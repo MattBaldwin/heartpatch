@@ -39,8 +39,8 @@ setPerfReports(false);
  * `&lights=N` puts Twinkle Lights (#37 2a) on N of each Keeper's tiles (from
  * their Heart Seed's out; `&lightsAt=land` only out past the home ring;
  * `&built=1` first puts an Ember Den and Training Grounds by each Heart Seed), and
- * `&motion=1` turns reduced motion off so they twinkle (the clock still never
- * ticks, so they hold one twinkle's frame).
+ * `&motion=1` turns reduced motion off so they twinkle, and `&t=` (seconds)
+ * moves the terrain clock there once, so two shots show the twinkle move.
  * Nothing moves (the terrain clock never ticks), so a shot is the same every time.
  */
 
@@ -100,6 +100,11 @@ await boot(canvas, {
           snowFade: snowAt !== null,
         });
         map.setNight(night);
+        const at = Number(params.get('t'));
+        if (motion && Number.isFinite(at) && at > 0) {
+          map.tick(0);
+          map.tick(at * 1000);
+        }
         if (snowAt !== null) {
           // Smoothstep's inverse, so the cover lands on `snowAt`.
           const t = 0.5 - Math.sin(Math.asin(1 - 2 * snowAt) / 3);

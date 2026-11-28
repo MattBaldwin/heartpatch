@@ -315,7 +315,7 @@ export function withTwinkleLights(
   };
 }
 
-/** An Ember Den and Training Grounds beside each Keeper's Heart Seed (spots 2 and 4), as built. */
+/** An Ember Den and Training Grounds behind and left of each Keeper's Heart Seed (spots 3 and 5), clear of the Keeper. */
 export function withHomeBuildings(view: MapView): MapView {
   const seeds = new Set(
     findHomeBases(view.tiles)
@@ -340,8 +340,8 @@ export function withHomeBuildings(view: MapView): MapView {
             ...t,
             buildings: [
               ...t.buildings,
-              row('ember-den', 'habitat', 2),
-              row('training-grounds', 'training-grounds', 4),
+              row('ember-den', 'habitat', 3),
+              row('training-grounds', 'training-grounds', 5),
             ],
           }
         : t,

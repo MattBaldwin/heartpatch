@@ -47,7 +47,7 @@ describe('Twinkle Lights data (#37 2a)', () => {
       footprint: 0.1,
     }));
     const tiles = Array.from({ length: worst }, (_, i) =>
-      tile(i, -i, { eaves: heavy, posts: [{ x: 0, z: 0, y: 0.3, height: 0.3, radius: 0.04 }] }),
+      tile(3 * i, 0, { eaves: heavy, posts: [{ x: 0, z: 0, y: 0.3, height: 0.3, radius: 0.04 }] }),
     );
     const bulbs = bulbLayout(tiles, SIZE);
     expect(bulbs.length).toBeLessThanOrEqual(B.cap);
@@ -178,6 +178,17 @@ describe('bulb layout (#37 2a)', () => {
     // Fewer bulbs on a string still span its whole edge, evenly.
     const few = tileBulbs(tile(0, 0), SIZE, { perEdge: 2, perEave: 0, perPost: 0 });
     expect(few).toHaveLength(12);
+  });
+
+  it('strings a shared edge once between two lit neighbours', () => {
+    const a = tile(0, 0);
+    const b = tile(1, 0); // across edge 0 of a
+    const both = bulbLayout([a, b], SIZE);
+    const alone = tileBulbs(a, SIZE, FULL).length;
+    expect(both).toHaveLength(alone * 2 - B.perEdge);
+    // No two bulbs hang in the same spot.
+    const spots = new Set(both.map((p) => `${p.x.toFixed(2)},${p.z.toFixed(2)}`));
+    expect(spots.size).toBe(both.length);
   });
 
   it('never passes the cap, and draws nothing with no lit tile', () => {

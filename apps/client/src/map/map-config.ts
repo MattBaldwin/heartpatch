@@ -765,8 +765,8 @@ export const CHRISTMAS = {
     perEave: 5, // TUNE
     /** Round the Twinkle Lights' own post. */
     perPost: 5, // TUNE
-    /** Warm white, red, green, gold (the approved M0 colours). sRGB. */
-    colors: ['#fff0c4', '#ff5d52', '#5fe39a', '#ffcc4d'], // TUNE
+    /** Warm white, red, green, gold (the approved M0 colours, green lifted). sRGB. */
+    colors: ['#fff0c4', '#ff5d52', '#7dffb2', '#ffcc4d'], // TUNE: a bright mint green (deeper reads murky at night)
     /** By day the same bulbs are unlit glass in these (pale cream, red, green, bright gold). sRGB. */
     glassColors: ['#f2e8cc', '#ff6f66', '#6fe3a4', '#f0c24f'], // TUNE
     /** Over the rim, over a fence's top, and the dip between two corners (world units). */

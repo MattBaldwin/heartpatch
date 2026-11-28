@@ -1,4 +1,12 @@
-import { hexToWorld, type Hex, type MapView, type PublicTile } from '@heartpatch/shared';
+import {
+  edgeNeighbor,
+  hexKey,
+  hexToWorld,
+  HEX_EDGES,
+  type Hex,
+  type MapView,
+  type PublicTile,
+} from '@heartpatch/shared';
 import { FENCE_INSET } from './fence-layout.js';
 import { hash01 } from './map-layout.js';
 import { CHRISTMAS } from './map-config.js';
@@ -12,7 +20,8 @@ import { CHRISTMAS } from './map-config.js';
 // Every bulb is a thin instance of one quad, so the patch's bulbs are one
 // draw call however many; `CHRISTMAS.bulbs.cap` bounds them, and a busy
 // patch respaces each string with fewer bulbs rather than dropping tiles.
-// Edge bulbs under a building's footprint are left out (they'd sit on it).
+// Edge bulbs under a building's footprint are left out (they'd sit on it),
+// and two lit tiles side by side share one string on their common edge.
 
 const B = CHRISTMAS.bulbs;
 
@@ -56,6 +65,8 @@ export interface BulbTile extends Hex {
   readonly fenced: ReadonlySet<number>;
   readonly eaves: readonly BulbEave[];
   readonly posts: readonly BulbPost[];
+  /** Edges another lit tile strings instead (one string per shared edge, `bulbLayout`). */
+  readonly skip?: ReadonlySet<number>;
 }
 
 /** Tiles holding a `lights` building (the kind X2's head start counts), once each. */
@@ -109,6 +120,7 @@ export function tileBulbs(tile: BulbTile, size: number, counts: BulbCounts): Bul
   // pulled in like the fences (`FENCE_INSET`) so a fenced edge's bulbs sit on it.
   const reach = size * FENCE_INSET;
   for (let edge = 0; edge < 6; edge++) {
+    if (tile.skip?.has(edge) === true) continue;
     const a0 = ((60 * edge - 30) * Math.PI) / 180;
     const a1 = ((60 * edge + 30) * Math.PI) / 180;
     const lift = tile.fenced.has(edge) ? B.fenceLift : B.rimLift;
@@ -156,8 +168,19 @@ export function tileBulbs(tile: BulbTile, size: number, counts: BulbCounts): Bul
 export function bulbLayout(tiles: readonly BulbTile[], size: number, cap: number = B.cap): Bulb[] {
   if (tiles.length === 0 || cap <= 0) return [];
   const share = Math.floor(cap / tiles.length);
-  const bulbs = tiles.flatMap((tile) =>
-    tileBulbs(tile, size, bulbCounts(swags(tile), tile.posts.length, share)),
-  );
+  // Two lit tiles side by side share one string on their edge: the one
+  // whose key sorts first strings it, so it never doubles into a thick band.
+  const lit = new Set(tiles.map((t) => hexKey(t)));
+  const bulbs = tiles.flatMap((tile) => {
+    const own = hexKey(tile);
+    const skip = new Set(
+      HEX_EDGES.filter((e) => {
+        const other = hexKey(edgeNeighbor(tile, e));
+        return lit.has(other) && other < own;
+      }),
+    );
+    const t = skip.size > 0 ? { ...tile, skip } : tile;
+    return tileBulbs(t, size, bulbCounts(swags(tile), tile.posts.length, share));
+  });
   return bulbs.slice(0, cap);
 }
