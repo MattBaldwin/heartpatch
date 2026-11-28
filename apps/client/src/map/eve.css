@@ -1,0 +1,180 @@
+/* The Christmas Eve visit on the map (#37 X5b): the notice chip, the fall beat and the thanks sheet. */
+
+.eve-chip[hidden],
+.eve-gift[hidden],
+.eve-beat[hidden],
+.eve-sheet[hidden] {
+  display: none;
+}
+
+.eve-chip,
+.eve-gift,
+.eve-beat,
+.eve-sheet {
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+}
+
+/* The land chip's spot (under the map's name and the gathering chip); a patch line steps it aside. */
+.eve-chip,
+.eve-gift {
+  position: fixed;
+  z-index: 3;
+  top: calc(env(safe-area-inset-top) + 164px);
+  left: calc(env(safe-area-inset-left) + 16px);
+  right: calc(env(safe-area-inset-right) + 16px);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 3px solid #bfe3f5;
+  border-radius: 24px;
+  background: #f4fbff;
+  box-shadow: 0 4px 12px rgb(74 44 67 / 20%);
+  color: #2b4a66;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.eve-gift {
+  min-height: 44px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.eve-gift:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+:root[data-patch-line='on'] .eve-chip,
+:root[data-patch-line='on'] .eve-gift {
+  visibility: hidden;
+}
+
+/* The fall beat: a soft sparkly banner that drifts in, holds and fades (a still fade under Reduce Motion). */
+.eve-beat {
+  position: fixed;
+  z-index: 4;
+  top: calc(env(safe-area-inset-top) + 164px);
+  left: 0;
+  right: 0;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin: 0 auto;
+  padding: var(--hp-pad-y) 20px;
+  border-radius: 999px;
+  background: #2b4a66;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  text-align: center;
+  pointer-events: none;
+  animation: eve-beat 3.2s ease-in-out both;
+}
+
+.eve-beat-still {
+  animation: eve-beat-fade 3.2s linear both;
+}
+
+@keyframes eve-beat {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.92);
+  }
+  12%,
+  80% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes eve-beat-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  10%,
+  85% {
+    opacity: 1;
+  }
+}
+
+/* The thanks sheet: a bottom card over a dim scrim. */
+.eve-sheet {
+  position: fixed;
+  z-index: 6;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgb(43 74 102 / 45%);
+  padding: 16px calc(env(safe-area-inset-right) + 16px) calc(env(safe-area-inset-bottom) + 16px)
+    calc(env(safe-area-inset-left) + 16px);
+  box-sizing: border-box;
+}
+
+.eve-sheet-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 20px 16px 16px;
+  border: 3px solid #bfe3f5;
+  border-radius: 24px;
+  background: #f4fbff;
+  color: #2b4a66;
+  text-align: center;
+}
+
+.eve-sheet-card .hp-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.eve-sheet-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.eve-sheet-line,
+.eve-sheet-note,
+.eve-asks {
+  margin: 0;
+  font-size: 16px;
+}
+
+.eve-sheet-head {
+  margin: 4px 0 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.eve-bundle {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.eve-sheet-note {
+  font-weight: 800;
+}
+
+/* The card's one line under the bar: small and tight, so the card stays short. */
+.eve-card-line {
+  font-size: 15px;
+  line-height: 1.25;
+}

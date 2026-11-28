@@ -220,6 +220,12 @@ export interface MapScreen {
    * window closing), it's built again in the new dressing.
    */
   reseason: () => void;
+  /**
+   * Asks the server for the map again and redraws from it (#37 X5b: the
+   * Christmas Eve bar closed, or a thanks is due; neither has a live event).
+   * Ignored with no map open.
+   */
+  refresh: () => void;
   /** My land that misses me (owner decision 2026-10-06): each fading tile's share, 0–1. */
   setLandFade: (fade: ReadonlyMap<HexKey, number>) => void;
   /**
@@ -659,6 +665,9 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       night = next;
       scene3d?.setNight(next);
       options.invalidate();
+    },
+    refresh: () => {
+      sync.resync();
     },
     reseason: () => {
       const state = sync.state;

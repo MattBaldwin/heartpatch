@@ -4,6 +4,7 @@ import type { TileActions } from './map-screen.js';
 import type { BossStore } from './boss-store.js';
 import { eveCardBar, newerBar, type PatchBarState } from '../battle/patch-bar.js';
 import { BOSS_TEXT, cardModel, markerModel } from './boss-view.js';
+import { cardLines, eveOf } from './eve-model.js';
 
 /*
  * The tile card for the boss's tile (#190, 190f): "A BIG squishy! Bring your
@@ -88,6 +89,8 @@ export function createBossPicker(options: BossPickerOptions): BossPicker {
   let working = false;
   /** The Eve's bar as the map view last said (`MapView.christmas.eve`); live events may be newer. */
   let viewBar: PatchBarState | null = null;
+  /** The lines under the bar: "N chipped in", "The lights warmed it up already!" (#37 X5b). */
+  let viewLines: string[] = [];
 
   const render = (): void => {
     if (!panel) return;
@@ -106,7 +109,18 @@ export function createBossPicker(options: BossPickerOptions): BossPicker {
     if (card.chip)
       children.push(el('span', { class: 'boss-chip', 'data-testid': 'boss-tries' }, card.chip));
     const eve = eveBarOf(viewBar, store.eveBar);
-    if (eve) children.push(eveCardBar(eve));
+    if (eve) {
+      children.push(eveCardBar(eve));
+      // One compact line, so "Let's go!" stays on a short phone's card.
+      if (viewLines.length > 0)
+        children.push(
+          el(
+            'p',
+            { class: 'boss-card-body eve-card-line', 'data-testid': 'eve-card-line' },
+            viewLines.join(' · '),
+          ),
+        );
+    }
     if (problem) children.push(el('p', { class: 'boss-card-body', role: 'status' }, problem));
     if (card.canFight) {
       const go = el(
@@ -146,6 +160,7 @@ export function createBossPicker(options: BossPickerOptions): BossPicker {
     },
     show: (container, tile, view) => {
       viewBar = barOfView(view);
+      viewLines = cardLines(eveOf(view));
       if (!panel || panel.q !== tile.q || panel.r !== tile.r) problem = null;
       panel = { container, q: tile.q, r: tile.r };
       render();

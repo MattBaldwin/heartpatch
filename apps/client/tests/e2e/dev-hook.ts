@@ -13,6 +13,7 @@ export type HookName =
   | 'recipeBook'
   | 'tutorial'
   | 'boss'
+  | 'eve'
   | 'updatesHeld'
   | 'battle'
   | 'keeper'

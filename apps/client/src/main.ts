@@ -62,6 +62,7 @@ import { mapApi } from './map/map-api.js';
 import { createBossMarker } from './map/boss-marker.js';
 import { bossTileInfo, createBossPicker, exceptBossTile } from './map/boss-picker.js';
 import { createBossStore } from './map/boss-store.js';
+import { createEveLayer } from './map/eve-layer.js';
 import { bossPatchLine } from './map/boss-view.js';
 import { seasonsOn } from './map/map-dressing.js';
 import { createTileMarks } from './map/tile-marks.js';
@@ -1369,6 +1370,10 @@ communityActions.wireGift(async (community) => {
 // Meet it on a tile with a rustling tuft (#209): the battle screen starts it.
 // The week's mini-boss (#190, 190f): the marker, the tile card and the patch line share one visit.
 const bossStore = createBossStore({
+  // The Christmas Eve bar closed, or a thanks is due: the map view reads it again (#37 X5b).
+  onEveRefresh: (mapId) => {
+    if (maps.view?.map.id === mapId) maps.refresh();
+  },
   fetchBoss: (mapId) => mapApi.boss(mapId),
   // The server sends a boss's def only to a Keeper who has met it, so the catalog is where a name comes from.
   fetchNames: async (mapId) =>
@@ -1384,6 +1389,17 @@ const bossStore = createBossStore({
   },
 });
 const bossMarker = createBossMarker(document.body, bossStore);
+// The Christmas Eve visit's notice chip, fall beat and thanks sheet (#37 X5b).
+const eveLayer = createEveLayer({
+  root: document.body,
+  store: bossStore,
+  ask: async (battleId, ask) =>
+    (await battleApi.befriend(battleId, ask, newIdempotencyKey())).outcome,
+  refresh: () => {
+    maps.refresh();
+    void bossStore.refresh();
+  },
+});
 const bossPicker = createBossPicker({
   store: bossStore,
   fight: async (mapId) => {
@@ -1572,6 +1588,7 @@ const maps = createMapScreen({
     strandedLayer,
     postFlags,
     bossMarker,
+    eveLayer,
     communityFlags,
     villageWins,
     keyHunt.layer,
@@ -2534,6 +2551,9 @@ if (import.meta.env.DEV) {
       replay: (event) => {
         maps.replay(event);
       },
+      refresh: () => {
+        maps.refresh();
+      },
     }),
     keeper: () => keeper.debug,
     cinematic: () => cinematic.debug,
@@ -2621,6 +2641,18 @@ if (import.meta.env.DEV) {
     whatsNew: () => whatsNew.debug,
     patchLine: () => ({ ...patchLine.debug, busy: patchLineBusy() }),
     boss: () => bossMarker.shown,
+    eve: () => {
+      const d = eveLayer.debug;
+      return {
+        stage: d.stage,
+        notice: d.notice,
+        sheetOpen: d.sheetOpen,
+        waiting: d.waiting,
+        beat: d.beat,
+        asksLeft: d.thanks?.asksLeft ?? null,
+        items: d.thanks?.items ?? null,
+      };
+    },
     push: () => ({ offer: pushOffer.debug.state, card: pushOfferCard.isOpen }),
     audio: () => audio.debug,
   };
