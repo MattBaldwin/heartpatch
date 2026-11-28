@@ -94,8 +94,8 @@ export function bulbCounts(eaves: number, posts: number, budget: number, edges =
   const keepPost = Math.min(B.perPost, B.keep.post);
   const keepEave = Math.min(B.perEave, B.keep.eave);
   const kept = keepPost * posts + keepEave * eaves;
-  if (edges > 0 && room < kept + edges * 2) {
-    const perEdge = Math.min(B.perEdge, Math.floor(room / edges));
+  if (room < kept + edges * 2) {
+    const perEdge = edges === 0 ? 0 : Math.min(B.perEdge, Math.floor(room / edges));
     let left = room - perEdge * edges;
     const perPost = posts === 0 ? 0 : Math.min(B.perPost, Math.floor(left / posts));
     left -= perPost * posts;
@@ -202,7 +202,12 @@ export function bulbLayout(tiles: readonly BulbTile[], size: number, cap: number
       HEX_EDGES.filter((e) => {
         const otherKey = hexKey(edgeNeighbor(tile, e));
         const other = byKey.get(otherKey);
-        return other !== undefined && otherKey < own && !edgeCovered(other, (e + 3) % 6, size);
+        if (other === undefined) return false;
+        // Exactly one of the two strings it: the side that isn't covered, or
+        // (both or neither covered) the one whose key sorts first.
+        const mine = edgeCovered(tile, e, size);
+        const theirs = edgeCovered(other, (e + 3) % 6, size);
+        return mine !== theirs ? mine : otherKey < own;
       }),
     );
     const t = skip.size > 0 ? { ...tile, skip } : tile;

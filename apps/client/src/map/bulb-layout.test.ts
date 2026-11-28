@@ -203,18 +203,43 @@ describe('bulb layout (#37 2a)', () => {
     expect(spots.size).toBe(both.length);
   });
 
-  it('lets the neighbour string a shared edge its own building covers', () => {
-    const a = tile(0, 0);
-    const cb = hexToWorld(hex(1, 0), SIZE);
-    // b (key "1,0" sorts after "0,0") has a building over its edge 3, the one shared with a.
-    const big = { x: cb.x - SIZE * 0.5, z: cb.z, y: 0.8, radius: 0.2, footprint: SIZE * 0.3 };
-    const b = tile(1, 0, { eaves: [big] });
-    expect(edgeCovered(b, 3, SIZE)).toBe(true);
-    const both = bulbLayout([a, b], SIZE);
-    const ca = hexToWorld(a, SIZE);
-    // a keeps its edge 0 string (its bulbs lie east of its middle, near b).
-    const edge0 = both.filter((p) => p.x - ca.x > SIZE * 0.6);
-    expect(edge0.length).toBeGreaterThan(0);
+  it('hands a shared edge to the neighbour when one side covers it, and strings it once', () => {
+    const a = tile(0, 0); // key "0,0" sorts first
+    const ca = hexToWorld(hex(0, 0), SIZE);
+    const cb = hexToWorld(hex(1, 0), SIZE); // across a's edge 0 (b's edge 3)
+    const inset = SIZE * FENCE_INSET * (Math.sqrt(3) / 2);
+    // Bulbs on a's side of the edge stand near x = ca + inset; b's near x = cb - inset.
+    const near = (bulbs: readonly { x: number; z: number }[], x: number) =>
+      bulbs.filter((p) => Math.abs(p.x - x) < 0.03 && Math.abs(p.z - ca.z) < SIZE * 0.4);
+    // A small pad over the middle of a's edge 0.
+    const pad = { x: ca.x + inset, z: ca.z, y: 0.4, radius: 0.05, footprint: 0.06, flat: true };
+    const covered = { ...a, eaves: [pad] };
+    expect(edgeCovered(covered, 0, SIZE)).toBe(true);
+    const handed = bulbLayout([covered, tile(1, 0)], SIZE);
+    expect(near(handed, ca.x + inset)).toHaveLength(0);
+    expect(near(handed, cb.x - inset)).toHaveLength(B.perEdge);
+    // Neither covered: the first key strings it, once.
+    const plain = bulbLayout([a, tile(1, 0)], SIZE);
+    expect(near(plain, ca.x + inset)).toHaveLength(B.perEdge);
+    expect(near(plain, cb.x - inset)).toHaveLength(0);
+    // Both covered: the first key keeps it (its uncovered ends), the other leaves it.
+    const padB = { ...pad, x: cb.x - inset };
+    const both = bulbLayout([covered, tile(1, 0, { eaves: [padB] })], SIZE);
+    expect(near(both, cb.x - inset)).toHaveLength(0);
+    expect(near(both, ca.x + inset).length).toBeGreaterThan(0);
+  });
+
+  it('never spends more than its room, even with no edge of its own to string', () => {
+    for (const [eaves, posts, room] of [
+      [1, 1, 0],
+      [6, 1, 5],
+      [2, 1, 9],
+    ] as const) {
+      const c = bulbCounts(eaves, posts, room, 0);
+      expect(c.perEave).toBeGreaterThanOrEqual(0);
+      expect(c.perPost).toBeGreaterThanOrEqual(0);
+      expect(c.perEave * eaves + c.perPost * posts).toBeLessThanOrEqual(room);
+    }
   });
 
   it('never passes the cap, and draws nothing with no lit tile', () => {
