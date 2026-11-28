@@ -193,6 +193,46 @@ describe('the Christmas Eve bits (#37 X5b)', () => {
     store.dispose();
   });
 
+  it('asks for the view once at the close, not again after it', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-12-25T09:59:00Z'));
+    const onEveRefresh = vi.fn();
+    const store = createBossStore({
+      fetchBoss: () => Promise.resolve(eveVisit()),
+      fetchNames: () => Promise.resolve(new Map<string, string>()),
+      onEveRefresh,
+    });
+    await store.setMap('m1');
+    await vi.advanceTimersByTimeAsync(70_000);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(onEveRefresh).toHaveBeenCalledTimes(1);
+    store.dispose();
+  });
+
+  it('remembers across a reload that I chipped', async () => {
+    const kept = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => kept.get(k) ?? null,
+      setItem: (k: string, v: string) => void kept.set(k, v),
+    };
+    const make = () =>
+      createBossStore({
+        fetchBoss: () => Promise.resolve(eveVisit()),
+        fetchNames: () => Promise.resolve(new Map<string, string>()),
+        storage,
+      });
+    const first = make();
+    await first.setMap('m1');
+    first.liveEvent(
+      event('boss.chipped', { window: '2026-12-24', points: 9, chipped: 9, goal: 200 }),
+    );
+    first.dispose();
+    const second = make();
+    await second.setMap('m1');
+    expect(second.iChipped).toBe(true);
+    second.dispose();
+  });
+
   it('asks again when the Keeper is thanked, and when it falls', async () => {
     const onEveRefresh = vi.fn();
     const store = createBossStore({

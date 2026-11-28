@@ -1370,6 +1370,13 @@ communityActions.wireGift(async (community) => {
 // Meet it on a tile with a rustling tuft (#209): the battle screen starts it.
 // The week's mini-boss (#190, 190f): the marker, the tile card and the patch line share one visit.
 const bossStore = createBossStore({
+  storage: (() => {
+    try {
+      return window.localStorage;
+    } catch {
+      return null;
+    }
+  })(),
   // The Christmas Eve bar closed, or a thanks is due: the map view reads it again (#37 X5b).
   onEveRefresh: (mapId) => {
     if (maps.view?.map.id === mapId) maps.refresh();
@@ -1395,9 +1402,11 @@ const eveLayer = createEveLayer({
   store: bossStore,
   ask: async (battleId, ask) =>
     (await battleApi.befriend(battleId, ask, newIdempotencyKey())).outcome,
+  // /boss pays a thanks that's due; then the map view reads it.
   refresh: () => {
-    maps.refresh();
-    void bossStore.refresh();
+    void bossStore.refresh().then(() => {
+      maps.refresh();
+    });
   },
 });
 const bossPicker = createBossPicker({
@@ -1420,7 +1429,10 @@ bossStore.onChange(() => {
 });
 // Back from the background (a new day, a new visit): ask again.
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) void bossStore.refresh();
+  if (document.hidden) return;
+  void bossStore.refresh();
+  // The Christmas Eve bar closes with no live event, and a backgrounded app's timers sleep (#37 X5b).
+  if (maps.view?.christmas?.eve) maps.refresh();
 });
 const wildPicker = createWildPicker({ meet: (mapId, tile) => battles.meetWild(mapId, tile) });
 // One Build sheet for my land (#371): fires, lanterns, Training Grounds and

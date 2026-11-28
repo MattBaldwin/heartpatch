@@ -22,6 +22,11 @@ export interface BossStoreOptions {
    * is no `boss.dozed` event), or this Keeper's thanks landed (`boss.thanked`).
    */
   readonly onEveRefresh?: (mapId: string) => void;
+  /**
+   * Remembers that this Keeper chipped a bar across a reload (the view has no
+   * "viewer chipped" flag), so the thanks wait still shows. Null or throwing is fine.
+   */
+  readonly storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
 }
 
 export interface BossStore {
@@ -60,6 +65,14 @@ export function createBossStore(options: BossStoreOptions): BossStore {
   let ticket = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
+  const chipKey = (id: string, window: string): string => `hp-eve-chipped:${id}:${window}`;
+  const readChipped = (id: string, window: string): boolean => {
+    try {
+      return options.storage?.getItem(chipKey(id, window)) === '1';
+    } catch {
+      return false;
+    }
+  };
   const emit = (): void => {
     for (const fn of [...listeners]) fn();
   };
@@ -73,7 +86,7 @@ export function createBossStore(options: BossStoreOptions): BossStore {
     // The Eve bar closes at `closesAt`; nothing says so live, so ask the view again then.
     if (visit.event) {
       const toClose = Date.parse(visit.event.closesAt) - now().getTime();
-      if (Number.isFinite(toClose) && toClose > -MAX_WAIT_MS) {
+      if (Number.isFinite(toClose) && toClose > 0) {
         const id = mapId;
         closeTimer = setTimeout(
           () => {
@@ -84,7 +97,7 @@ export function createBossStore(options: BossStoreOptions): BossStore {
               if (mapId === id) options.onEveRefresh?.(id);
             });
           },
-          Math.min(Math.max(toClose, 0) + 1_000, MAX_WAIT_MS),
+          Math.min(toClose + 1_000, MAX_WAIT_MS),
         );
       }
     }
@@ -129,6 +142,7 @@ export function createBossStore(options: BossStoreOptions): BossStore {
     }
     if (mine !== ticket) return visit;
     visit = next;
+    if (next && !iChipped) iChipped = readChipped(id, next.window.id);
     arm();
     emit();
     if (next?.species != null && !names.has(next.species)) {
@@ -175,7 +189,14 @@ export function createBossStore(options: BossStoreOptions): BossStore {
         // Another visit's bar (a window we aren't showing) isn't ours.
         if (!parsed.success || (visit && parsed.data.window !== visit.window.id)) return;
         // Only the chipper's own copy carries their points.
-        if ('points' in parsed.data && parsed.data.points !== undefined) iChipped = true;
+        if ('points' in parsed.data && parsed.data.points !== undefined) {
+          iChipped = true;
+          try {
+            options.storage?.setItem(chipKey(event.mapId, parsed.data.window), '1');
+          } catch {
+            // Not remembered across a reload; the live copy still counts.
+          }
+        }
         const next = barFromEvent(parsed.data);
         eveBar = newerBar(eveBar, event.type === 'boss.fell' ? { ...next, state: 'fell' } : next);
         emit();

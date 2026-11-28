@@ -51,6 +51,8 @@ export interface EveLayer extends MapLayer {
 
 /** How often the map is asked again while a settled bar's thanks hasn't landed (it pays within ~5 min). */
 export const THANKS_POLL_MS = 15_000; // TUNE:
+/** …and how many times, so a thanks that never comes isn't asked for forever (~10 min). */
+export const THANKS_POLLS_MAX = 40; // TUNE:
 /** How long the fall beat stays up. */
 export const BEAT_MS = 3_200; // TUNE:
 
@@ -72,6 +74,7 @@ export function createEveLayer(options: EveLayerOptions): EveLayer {
   /** The beat plays once per bar on a patch. */
   let beatPlayed = false;
   let beatTimer: ReturnType<typeof setTimeout> | undefined;
+  let polls = 0;
   let pollTimer: ReturnType<typeof setInterval> | undefined;
 
   const chip = el('div', {
@@ -205,7 +208,10 @@ export function createEveLayer(options: EveLayerOptions): EveLayer {
 
     // While a thanks is still on its way, ask the view again every so often.
     if (waiting && pollTimer === undefined) {
+      polls = 0;
       pollTimer = setInterval(() => {
+        // A thanks that never lands (nothing was due) stops being asked for.
+        if (++polls > THANKS_POLLS_MAX) return;
         options.refresh();
       }, THANKS_POLL_MS);
     } else if (!waiting && pollTimer !== undefined) {
