@@ -42,13 +42,15 @@ const testDir = './tests/e2e';
  * (local runs) runs everything.
  */
 const E2E_GROUPS = [
-  // ~20.3 iPhone, ~24.2 iPad (spec-timing, c006b78), minus tutorial-flow (its own group below).
+  // ~20.3 iPhone, ~24.2 iPad (spec-timing, c006b78), minus tutorial-flow (its own group below);
+  // eve-thanks adds about 3 min (#37 X5b).
   [
     'accessory-everywhere',
     'admin',
     'boutique',
     'care',
     'dress-up',
+    'eve-thanks',
     'explore',
     'hollow',
     'hollowed-explore',
