@@ -37,4 +37,4 @@ Real renderer, real code (no overrides): the dev island page `/island.html` (Vit
 1. `800b292`: FIX: day bulbs muddy; swag halos washing over buildings, edge bulbs on a building's pad; the post a blob at night and hidden by the Keeper.
 2. `14b4140` (frames in `2a-14b4140/`): FIX: edge bulbs on the Training Grounds pad; the post clipping it.
 3. `a4d55c6`: FIX: swag bulbs lying on the flat pad.
-4. **`244a6c2`: PASS.**
+4. `244a6c2`: PASS (helper); supervisor 55: FIX. Superseded by `2a-d0be4f5/` (PASS).
