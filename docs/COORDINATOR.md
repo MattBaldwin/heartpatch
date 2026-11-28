@@ -193,7 +193,23 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 59 → supervisor 60, 2026-11-28 ~07:00 UTC): read this first; every block below is history.** Decisions are in DECISIONS "Supervisor 59 (2026-11-28)". Supervisor 59 (`session_01RAEPnHvbFEHhKmvrzRZUuG`, started by sup 58, lineage depth 2) handed off at ~200k context. Three MCP reconnects in its first 30 minutes reloaded about 10–25k of tool schemas each, so budget for them.
+- **State (supervisor 60 → supervisor 61, 2026-11-28 ~07:45 UTC): read this first; every block below is history.** Decisions are in DECISIONS "Supervisor 60 (2026-11-28)". Supervisor 60 (`session_01RAEPnEJfBWim9YuLkAssUA`, lineage depth 3) handed off at ~200k context. Two MCP reconnects in 45 minutes and one long `list_events` read (limit 100 on a fresh lane, about 25k) used most of it: keep `list_events` at limit 10 and let helpers verify briefs.
+  - **Main** is `ab38d7f` (#926) or later. Supervisor 60 merged #926. Supervisor 59, the 2c session and the 6b-2 session are archived.
+  - **Running lanes.** All report to supervisor 60 by id; re-route each one to you (§8). All six original lanes confirmed supervisor 60.
+    - **C1** `session_01RAEPnErLBEdRwZEVg8NjdE`: **PR #928** (#874 map generator) is open and in its reviewer loop. Merging it unblocks C4.
+    - **C2** `session_01RAEPnFEVgDhsn5bv2VRXD4` (~300k, finish-only): split. **C2a** (lines, power, unpowered intervals, rails in supply, rail speed-up) is on `issue-874-c2-power-rails`, and its PR opens when the gate is green. **C2b** (Rail Depot banking) gets a Lane handoff on #874. **Check #874 for that comment and start a fresh C2b lane from it** (brief: `docs/plans/clockwork-wave-1-briefs/c2.md` plus the handoff). **Cut rule: C2b not merged by Nov 29 ~14:00 UTC → Depot to Wave 2.**
+    - **C3** `session_01RAEPnFHAAhWEDVRwRQfbyN`: needs only **C2a**'s merge, then opens its PR (DECISIONS Supervisor 60).
+    - **C4** `session_01RAEPnDcQFLR6tgN9fQQM9S` (new, Opus): isle map client, brief `docs/plans/clockwork-wave-1-briefs/c4.md`. It builds on C1's branch and opens its PR after #928 merges. It never got a confirm request because it was started with supervisor 60's id.
+    - **C6** `session_01RAEPnF5RidFi2PHFYU7mLS`: **PR #927**. CI was red on bd5a485 (the camera fog guard and the kit pin), and it is fixing per the two rulings in DECISIONS Supervisor 60. Its sim findings go to the owner as **G5** after reviewer APPROVE, one AskUserQuestion at a time:
+      - the Windmill makes half the planned Spark Jars, because works cycles run at 200 % (coordinator call with C2a: fix the comment or `makes.seconds`);
+      - Wave 1 is bought out by day 3–4 (owner: lane suggests (c) accept, plus optionally (a) slower Parts);
+      - the proposed upkeep numbers.
+      The Blueprints = 8 ruling stands.
+    - **6b-3** `session_01RAEPnDJUjEce29W1aCTXTQ` (new, Opus): finishing **PR #925** from 6b-2's Lane handoff (#925 comment 7235866713, head f175144). Brief: `docs/plans/lane-briefs/190-6b-3.md`. It owes the iPad safe-area reshoot, the purple half-sphere, the joining-dim cause, then reviewer rounds 2–4 and green CI. **X3c follows #925's merge.**
+    - **2d** `session_01RAEPnE4uCYEuFuHLdiKxsv`: **PR #929** (#37 Patch Tree client) is open. **Render-check its WebKit night frames at 0, 6 and 12 ornaments, iPhone and iPad, with an Opus helper**, and put the key frames on the Mockup Board and in chat. The 2c coordinator questions (gift-farming loophole, no per-season reset, the star lighting from Dec 1) are still open; 2d flags them, and doesn't change them.
+  - **Follow-ups:** unchanged from supervisor 59's block.
+
+- **State (supervisor 59 → supervisor 60, 2026-11-28 ~07:00 UTC): history.** Decisions are in DECISIONS "Supervisor 59 (2026-11-28)". Supervisor 59 (`session_01RAEPnHvbFEHhKmvrzRZUuG`, started by sup 58, lineage depth 2) handed off at ~200k context. Three MCP reconnects in its first 30 minutes reloaded about 10–25k of tool schemas each, so budget for them.
   - **Main** is `b0fd6bc` (#924) or later. Supervisor 59 merged #921 (2c Patch Tree server) and #924 (sup 58 docs). Supervisor 58 is retired and archived.
   - **Running lanes.** All were told to report to supervisor 59 by id; re-route each one to you.
     - **C1** `session_01RAEPnErLBEdRwZEVg8NjdE` (#874 isle generator, data, test view): confirmed. At 06:44 it had committed locally (5654fe8) and was running the gate and reviewer round 1; no PR yet. **Brief C4 (isle map client) from `docs/plans/clockwork-wave-1-briefs/` when C1 is near ready.**
