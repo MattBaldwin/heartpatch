@@ -40,12 +40,12 @@
     ipad() { // all five at once, 3 states
       const W = 1024, H = 1366;
       const items = [
-        ['Windmill · L1', (s) => K.windmill({ level: 1, state: s }), 1.0],
-        ['Windmill · L2', (s) => K.windmill({ level: 2, state: s }), 0.8],
-        ['Sorter', (s) => K.sorter({ state: s }), 1.0],
-        ['Rail Depot', (s) => K.railDepot({ level: 1, state: s }), 0.68],
-        ['Research Bench', (s) => K.bench({ state: s }), 1.15],
-        ['Clockwork Beacon', (s) => K.beacon({ state: s }), 0.95],
+        ['Windmill · L1', (s) => K.windmill({ level: 1, state: s }), 1.45],
+        ['Windmill · L2', (s) => K.windmill({ level: 2, state: s }), 1.15],
+        ['Sorter', (s) => K.sorter({ state: s }), 1.25],
+        ['Rail Depot', (s) => K.railDepot({ level: 1, state: s }), 0.76],
+        ['Research Bench', (s) => K.bench({ state: s }), 1.5],
+        ['Clockwork Beacon', (s) => K.beacon({ state: s }), 1.3],
       ];
       let inner = title(W, 'Clockwork Isle machines', 'Working · Resting · Needs power');
       items.forEach(([n, fn, sc], i) => {

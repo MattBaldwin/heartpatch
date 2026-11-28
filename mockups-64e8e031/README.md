@@ -1,4 +1,4 @@
-# Clockwork Isle mockups (#874), frames M1 and M2
+# Clockwork Isle mockups (#874), frames M1 to M4
 
 Throwaway mockups for the owner's Mockup Board. **No feature code.** Frosty Christmas headline: brass, copper, wood and wool with warm bulbs, plus frost, snow and winter wind. Cozy tinker-town, never a factory.
 
@@ -23,6 +23,24 @@ Throwaway mockups for the owner's Mockup Board. **No feature code.** Frosty Chri
 | `m2-needs-a-wire-card.png` | The tile card for an unpowered Sorter: the need line "Needs a wire to a Windmill ⚡", hint, "Lay a wire" button | "Cold and quiet. Needs a wire!" |
 | `m2-ipad-overlay.png` | iPad version of the overlay | |
 
+## M3 three machines (original SVG, vinyl-toy brass, copper, wood, wool; snow on every roof)
+Every machine has three states: **Working** (warm glow, steam, blades turn), **Resting** (powered but idle: dim bulb, still), **Needs power** (cold glass, dangling wire, ⚡ badge). Phone frames are 3x.
+| File | Shows | Caption |
+|---|---|---|
+| `m3-windmill-and-sorter.png` | Windmill L1 (four woolly sails) and L2 (taller, six sails, brass band), each in 3 states with a wind chip ("Brrr! Fast" / "Slow wind"); Sorter with hopper, three coloured sweets, gears, chimney steam, a little belt | "Windmills catch the winter wind." / "The Sorter sorts, all by itself." |
+| `m3-depot-bench-beacon.png` | Rail Depot with clock, rail stub and a loaded cart; Research Bench with blueprint, magnifier, gear and bulb lamp; Clockwork Beacon (brass post, gear, big bulb) | "Carts bring goodies home." / "Tinker up a blueprint." / "The Beacon hums." |
+| `m3-ipad-all-machines.png` | All six looks (two Windmills, Sorter, Depot, Bench, Beacon) in all 3 states | |
+
+## M4 two tech squishies (draft names Gearbit and Bulbun; Spark-leaning, soft and cute)
+| File | Shows | Caption |
+|---|---|---|
+| `m4-idle.png` | Gearbit (golden, gear ears, wind-up key peeking out, red wool scarf, Spark/Joy) and Bulbun (lilac bunny, glass bulb nose that glows, teal scarf, Light/Cozy) idling in the snow | "Gearbit's ears spin when it's happy. Bulbun's nose glows at dusk." |
+| `m4-battle.png` | A battle: Bulbun (far) and Gearbit (near) in brave poses, sparkle stars, HP bars, the move banner "Gearbit used Whirly Spin! ⚡" and four move cards | "Whirly Spin!" |
+| `m4-part-sheet.png` | Part sheet: gear ears, bulb nose, wind-up key, frosty scarf, with a "same parts, new looks" strip | "Mix and match the tinker parts." |
+| `m4-ipad.png` | iPad: idle pair and the battle in one frame | |
+
+Move names here (Whirly Spin, Cozy Hum, Gear Hug, Tickle Tackle) are only placeholders for the picture; nothing in them is final.
+
 ## Look choices to react to
 - **Frost** is a cool wash plus an icy vignette and a few sparkles over the terrain (the real build: one tint uniform when `patchType === 'clockwork-isle'`), warm brass and bulb glow against it. Snow caps sit on every roof, sail and sleeper.
 - **Wind** is a separate layer, blue tint plus arrows, bigger and deeper at strength 3. It is off in the default map frames.
@@ -32,5 +50,7 @@ Throwaway mockups for the owner's Mockup Board. **No feature code.** Frosty Chri
 ## Draft names (the owner settles these)
 Isle: **Clockwork Isle**. Buildings: Windmill, Sorter, Rail Depot, Research Bench, Clockwork Beacon. Squishies (M4): Gearbit, Bulbun. Alternatives if you want a more frosty edge: Frostcog, Glowbun.
 
-## Still to come
-M3 (three machines), M4 (two tech squishies) land in this same folder.
+## Questions for the owner (names settle here)
+- Keep **Gearbit** and **Bulbun**, or take the frosty pair **Frostcog** and **Glowbun**? Evolutions planned: Cogwhirl and Lanternbun.
+- Scarves are a Christmas touch. Should they be part of the species, or an accessory from the Wardrobe so the look can go season-neutral in Wave 2?
+- Keep the "Clockwork Isle" name, or Tinker Isle or Gearwild?
