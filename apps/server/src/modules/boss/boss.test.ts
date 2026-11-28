@@ -731,6 +731,33 @@ describe.skipIf(!url)('the mini-boss switch over the real bag (#234, needs DATAB
     expect(friend?.speciesId).toBe(baseFormOf(bossId, EVOLUTION_STEPS));
   });
 
+  it('the Christmas Eve boss befriends as Bundlebit, held below its growing-up level (#37 X3)', async () => {
+    // A test-only bag of Snowbundle: the same befriend path the Eve's asks take.
+    const snowOnly: BossEventRules = {
+      ...SURE_REAL,
+      bag: [{ speciesId: 'snowbundle', terrains: REAL_BAG_RULES.christmasEve!.terrains }],
+    };
+    await h.start(snowOnly, { miniBosses: 'on' });
+    const kid = await h.player();
+    const mapId = await h.patch(kid);
+    await h.grow(mapId, kid, 20);
+    await h.toVisit(mapId, snowOnly);
+    const started = await h.fight(kid, mapId);
+    expect((await windowsOf(mapId))[0]!.speciesId).toBe('snowbundle');
+    const won = await h.playOut(kid, started);
+    expect(won.view.phase).toMatchObject({ type: 'over', result: { winner: 'a' } });
+    await grantItems(db, { mapId, userId: kid.id }, { 'heart-charm': 3 }, 'dev-grant');
+    const yes = await h.call('POST', `/battles/${won.id}/befriend`, kid, { ask: 1 });
+    expect(yes.statusCode, yes.body).toBe(200);
+    const { squishyId } = yes.json<{ squishyId: string }>();
+    const friend = await db.query.squishies.findFirst({
+      where: (t, { eq }) => eq(t.id, squishyId),
+    });
+    expect(friend?.speciesId).toBe('bundlebit');
+    // Bundlebit grows into Snowbundle at 50 (owner yes), so it joins below that.
+    expect(friend!.level).toBeLessThan(50);
+  });
+
   it('a fight already going still finishes after the switch closes, and can still befriend', async () => {
     await h.start(SURE_REAL, { miniBosses: 'on' });
     const kid = await h.player();

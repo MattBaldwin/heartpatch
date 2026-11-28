@@ -13,6 +13,8 @@ import {
   simBosses,
   standInBosses,
 } from './boss.js';
+import { bossLevelFor } from '../../src/boss/schedule.js';
+import { GROWTH_RULES } from '../../src/data/care.js';
 import { BOSS_EVENTS } from '../../src/data/server/boss-events.js';
 import { hiddenUntilSeen } from '../../src/schemas/data/species.js';
 
@@ -134,10 +136,11 @@ describe('pnpm sim:boss (#190)', () => {
     };
     const tally = runPatchTally(tiny, content)!;
     const eve = BOSS_EVENTS.christmasEve!;
-    expect(tally.rows.map((r) => [r.partnerLevel, r.bossLevel, r.fights])).toEqual([
-      [5, eve.gates.minLevel, 6],
-      [30, 30 + eve.gates.levelBonus, 6],
-    ]);
+    expect(tally.rows.map((r) => [r.partnerLevel, r.bossLevel, r.fights])).toEqual(
+      [5, 30].map((p) => [p, bossLevelFor(p, eve.gates, GROWTH_RULES.maxLevel), 6]),
+    );
+    // At the Eve floor for a little Partner, Partner + bonus above it.
+    expect(tally.rows.map((r) => r.bossLevel)).toEqual([eve.gates.minLevel, 32]);
     for (const row of tally.rows) {
       expect(row.pointsPerFight).toBeGreaterThanOrEqual(0);
       expect(row.pointsPerFight).toBeLessThanOrEqual(eve.bar.pointsPerWin);

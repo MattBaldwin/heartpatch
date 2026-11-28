@@ -45,7 +45,7 @@ const DAD_PALETTE = ['#a9d4f5', '#f4fbff', '#e2574c', '#f7f1ea'];
 const KART_PALETTE = ['#ffd84a', '#bff0ff', '#3f8fe8', '#4a3a5c'];
 // #37 X3 (docs/art/37-frost-briefs.md): ice-blue, snow white, a gold lit
 // star (the accent, so `glow: 'accent'` lights only it) and the cranberry
-// cap (the detail colour, so it never glows).
+// cap band (the detail colour, so it never glows).
 const SNOW_PALETTE = ['#d9eefc', '#ffffff', '#ffd25a', '#d9485a'];
 
 /** The boss forms' signature moves (and two the middle forms learn first). */
@@ -211,7 +211,7 @@ export const BOSS_MOVES: Move[] = [
   {
     id: 'snug-scarf-wrap',
     name: 'Snug Scarf Wrap',
-    description: 'Wraps up in its long, cozy scarf. Feels better and a bit sturdier.',
+    description: 'Snuggles up all warm and cozy. Feels better and a bit sturdier.',
     element: 'frost',
     power: 0,
     accuracy: 100,
@@ -684,7 +684,7 @@ export const BOSS_SPECIES: Species[] = [
     visual: {
       body: 'blob',
       palette: SNOW_PALETTE,
-      parts: ['oval-eyes', 'tiny-smile', 'blush-cheeks', 'belly-patch', 'acorn-cup', 'lure-beads'],
+      parts: ['oval-eyes', 'tiny-smile', 'blush-cheeks', 'belly-oval', 'acorn-cup', 'lure-beads'],
       size: 1,
       finish: 'iridescent',
       glow: 'accent',
@@ -698,7 +698,7 @@ export const BOSS_SPECIES: Species[] = [
     id: 'snowbundle',
     name: 'Snowbundle',
     description:
-      'A great big, sleepy snow-heap with a star on its cap. It came down from the hills to see the lights.',
+      'A great big, sleepy snow-heap with a twinkly gold star on top. It came down from the hills to see the lights.',
     element: 'frost',
     feeling: 'cozy',
     // Legendary, not mythic: its finish is iridescent, never the shimmer (#866).
@@ -711,21 +711,21 @@ export const BOSS_SPECIES: Species[] = [
     moves: ['snow-puff-flop', 'twinkle-twinkle', 'snug-scarf-wrap', 'big-chilly-sneeze'],
     evolutions: [],
     visual: {
-      body: 'tiered',
+      body: 'mochi',
       palette: SNOW_PALETTE,
       parts: [
         'oval-eyes',
         'tiny-smile',
         'blush-cheeks',
-        'belly-patch',
-        'acorn-cup',
-        'sun-crown',
-        'stubby-arms',
+        'belly-oval',
+        'fringe',
+        'crystal-crown',
+        'round-hands',
       ],
       size: 1.4,
       finish: 'iridescent',
       glow: 'accent',
-      stance: 0.3,
+      head: { body: 'orb', size: 1.05, forward: 0.02, up: 0.82 },
       pose: 'sit',
       attackPart: 'arms',
     },
@@ -751,7 +751,6 @@ export const BOSS_EVOLUTIONS: SecretEvolution[] = [
   { from: 'revvy', into: 'rickeyride', level: 50 }, // TUNE: kid + 20
   // #37 X3: the server joins a befriended boss as its line's base form
   // (`baseFormOf`), so this row is what makes Snowbundle join as Bundlebit.
-  // Owner question (PR): the owner asked for "no evolution"; is growing back
-  // into Snowbundle at 50 OK?
+  // Owner answer (2026-11-28, #37): yes, Bundlebit can grow into Snowbundle at 50.
   { from: 'bundlebit', into: 'snowbundle', level: 50 }, // TUNE:
 ];

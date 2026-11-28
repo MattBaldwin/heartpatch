@@ -283,17 +283,31 @@ describe('the Christmas Eve BIG squishy (#37 X3)', () => {
       const accents = visual.parts.filter((p) => registry.parts.get(p)?.color === 'accent');
       expect(accents, id).toHaveLength(1);
     }
-    // The cranberry cap is the detail colour, so it never glows.
-    expect(get(bossForm).visual.parts).toContain('acorn-cup');
-    expect(registry.parts.get('acorn-cup')?.color).toBe('detail');
+    // The cranberry cap (Bundlebit) and cap band (Snowbundle) are the detail colour: never lit.
+    expect(get(befriendForm).visual.parts).toContain('acorn-cup');
+    expect(get(bossForm).visual.parts).toContain('fringe');
+    for (const part of ['acorn-cup', 'fringe']) {
+      expect(registry.parts.get(part)?.color, part).toBe('detail');
+    }
   });
 
-  it('reads apart from Papa Brrr: another body and hue, a cranberry accent', () => {
+  it('reads apart from Papa Brrr by shape, accent and finish (the ice-blue body hue is shared)', () => {
     const brrr = get('papa-brrr').visual;
     const snow = get(bossForm).visual;
+    // The two tiers: a wide, low base with a round head sat on it (the brief's gumdrop on a pillow).
+    expect(snow.body).toBe('mochi');
+    expect(snow.head?.body).toBe('orb');
     expect(snow.body).not.toBe(brrr.body);
-    expect(snow.palette[0]).not.toBe(brrr.palette[0]);
+    // None of the dad's signature parts.
+    for (const part of ['moustache', 'ball-cap', 'cap-brim', 'sneakers', 'dad-arms']) {
+      expect(snow.parts, part).not.toContain(part);
+    }
+    // A gold accent (the lit star) where his is red; the cranberry is the detail colour.
+    expect(snow.palette[2]).toBe('#ffd25a');
+    expect(brrr.palette[2]).toBe('#e2574c');
     expect(snow.palette[3]).toBe('#d9485a');
+    expect(snow.finish).toBe('iridescent');
+    expect(brrr.finish).toBe('shimmer');
   });
 
   it('is the bigger one, inside the evolution scale', () => {

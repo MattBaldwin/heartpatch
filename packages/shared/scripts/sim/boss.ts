@@ -1,6 +1,8 @@
 import { createBattleContent, type BattleContent } from '../../src/battle/content.js';
+import { bossLevelFor } from '../../src/boss/schedule.js';
 import { autoplayBattle } from '../../src/battle/engine.js';
 import { BATTLE_RULES } from '../../src/data/battle.js';
+import { GROWTH_RULES } from '../../src/data/care.js';
 import { GAME_DATA } from '../../src/data/index.js';
 import { serverBattleData } from '../../src/data/server/battle-data.js';
 import { BOSS_EVENTS } from '../../src/data/server/boss-events.js';
@@ -332,8 +334,10 @@ export function runPatchTally(
   if (!boss) throw new Error(`the Eve boss "${eve.speciesId}" is not a species`);
   const { patches, tries, partnerLevels } = config.christmas.patch;
   const rows = partnerLevels.map((partnerLevel): PatchTally => {
-    const bossLevel = Math.max(eve.gates.minLevel, partnerLevel + eve.gates.levelBonus);
-    // The team is the Partner's level less each member's gap (bonus below the boss).
+    // The server's own boss level for this Partner at the Eve gates.
+    const bossLevel = bossLevelFor(partnerLevel, eve.gates, GROWTH_RULES.maxLevel);
+    // `bossSetup` puts the boss at `level` and each member at `level + bonus - below`,
+    // so a bonus of `partnerLevel - bossLevel` (zero or less) gives the Partner its own level.
     const at = { ...config, level: bossLevel, seed: `${config.seed}-patch` };
     let wins = 0;
     let points = 0;
