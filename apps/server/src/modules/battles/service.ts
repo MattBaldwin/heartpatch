@@ -393,6 +393,12 @@ export interface MinibossBattlePort {
   ) => Promise<NewGameEvent[]>;
   /** The guaranteed bundle a won fight pays (server-only rules), granted at step 11. */
   bundle: () => ItemCounts;
+  /**
+   * Whether this won fight pays its bundle, boss drop and win coins (#37 X2b): always
+   * on a weekly visit; on Christmas Eve only the Keeper's first win. Called
+   * after `ended`, whose locks it relies on, so two wins can't both pay.
+   */
+  winPays: (tx: Executor, battle: BattleRow) => Promise<boolean>;
   /** No step for this long and the Keeper has left (#190 plan §12): a loss, the try used. */
   readonly abandonAfterMs: number;
   /** When the Keeper last started or stepped this fight, or null (then its start counts). */
@@ -1589,14 +1595,14 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       }
     }
     // A won mini-boss fight's sure bundle (#190): its inventory rows (step
-    // 11) after the squishy locks, before coins and the events. A scoot pays none.
-    const bundle =
-      row.kind === 'miniboss' &&
-      options.minibosses &&
-      result.winner === PLAYER_SIDE &&
-      result.reason !== 'forfeit'
-        ? options.minibosses.bundle()
-        : null;
+    // 11) after the squishy locks, before coins and the events. A scoot pays
+    // none, and a Keeper's later Eve wins pay neither it, a drop nor the
+    // win's coins (#37 X2b, owner decisions 2026-11-27): they only chip.
+    const bosses = row.kind === 'miniboss' ? options.minibosses : undefined;
+    const bossWin = bosses !== undefined && result.winner === PLAYER_SIDE;
+    const bossRepeat = bossWin && !(await bosses.winPays(tx, row));
+    const bossWinPays = bossWin && !bossRepeat;
+    const bundle = bossWinPays && result.reason !== 'forfeit' ? bosses.bundle() : null;
     if (bundle) {
       const owner = { mapId: row.mapId, userId: row.playerUserId };
       await lockGrantRows(tx, row.mapId, [{ userId: owner.userId, items: bundle }]);
@@ -1709,9 +1715,11 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         refId: row.id,
         source: 'battle',
         patch:
-          won && !aUnpaid && !aComputer ? share(COIN_RULES.battleWin[row.kind], tile.xpPercent) : 0,
+          won && !aUnpaid && !aComputer && !bossRepeat
+            ? share(COIN_RULES.battleWin[row.kind], tile.xpPercent)
+            : 0,
         heart:
-          won && !aUnpaid && !aComputer
+          won && !aUnpaid && !aComputer && !bossRepeat
             ? share(HEART_COIN_RULES.battleWin[row.kind], tile.xpPercent)
             : 0,
       },
@@ -1787,7 +1795,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         rival: tile.drop.fromRival === true,
         at,
       });
-    } else if ((row.kind === 'wild' || row.kind === 'miniboss') && result.winner === PLAYER_SIDE) {
+    } else if ((row.kind === 'wild' && result.winner === PLAYER_SIDE) || bossWinPays) {
       await rollFoundDrop(tx, {
         source: 'battle',
         refId: row.id,

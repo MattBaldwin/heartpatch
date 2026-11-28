@@ -96,6 +96,18 @@ export interface BossRepo extends BossBarRepo {
   homes: (mapId: string) => Promise<Hex[]>;
   /** Mini-boss fights the Keeper started since `since` that weren't called off (tries). */
   triesSince: (mapId: string, userId: string, since: Date) => Promise<number>;
+  /**
+   * Whether the Keeper already won another mini-boss fight that started in
+   * `[from, until)` on this patch (#37 X2b: the Eve pays its win once). Reads
+   * finished battles, so the caller holds the lock that orders those finishes.
+   */
+  wonOtherSince: (
+    mapId: string,
+    userId: string,
+    from: Date,
+    until: Date,
+    battleId: string,
+  ) => Promise<boolean>;
   findEncounter: (
     mapId: string,
     userId: string,
@@ -415,6 +427,26 @@ export function createBossRepo(db: Executor): BossRepo {
           ),
         );
       return row?.n ?? 0;
+    },
+
+    wonOtherSince: async (mapId, userId, from, until, battleId) => {
+      const [row] = await db
+        .select({ id: battles.id })
+        .from(battles)
+        .where(
+          and(
+            eq(battles.mapId, mapId),
+            eq(battles.playerUserId, userId),
+            eq(battles.kind, 'miniboss'),
+            eq(battles.status, 'finished'),
+            ne(battles.id, battleId),
+            gte(battles.startedAt, from),
+            lt(battles.startedAt, until),
+            sql`${battles.result}->>'winner' = 'a'`,
+          ),
+        )
+        .limit(1);
+      return row !== undefined;
     },
 
     findEncounter: async (mapId, userId, windowId) => {

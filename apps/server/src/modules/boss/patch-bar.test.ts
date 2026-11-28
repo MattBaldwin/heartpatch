@@ -1,16 +1,33 @@
 import {
+  COIN_RULES,
+  HEART_COIN_RULES,
   BossBefriendResponseSchema,
   BattleResponseSchema,
   MapViewSchema,
 } from '@heartpatch/shared';
 import { BOSS_EVENTS, type BossEventRules } from '@heartpatch/shared/server';
-import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
-import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
+import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
+import {
+  createDbClient,
+  withTransaction,
+  type Database,
+  type DbClient,
+  type Executor,
+} from '../../db/client.js';
 import { bossWindows, buildings, patchTrees } from '../../db/schema.js';
+import type * as Drops from '../wardrobe/drops.js';
+import { rollFoundDrop } from '../wardrobe/drops.js';
 import { createBattlesRepo, type BattleRow } from '../battles/repo.js';
 import { BOSS_RULES, STAND_IN_BOSS, bossHarness, type BossPlayer } from '../../../tests/boss.js';
 import { thankKeeper } from './patch-bar.js';
 import { createMinibossBattlePort } from './service.js';
+
+// The finish's found-drop roll, passed through: the battle table holds only
+// Halloween pieces, so a December roll finds nothing to see (#37 X2b).
+vi.mock('../wardrobe/drops.js', async (original) => {
+  const real = await original<typeof Drops>();
+  return { ...real, rollFoundDrop: vi.fn(real.rollFoundDrop) };
+});
 
 // The Christmas Eve patch bar (#37 X2).
 const EVE = BOSS_EVENTS.christmasEve!;
@@ -132,6 +149,131 @@ describe.skipIf(!url)('the Christmas Eve patch bar (#37 X2, needs DATABASE_URL)'
       await withTransaction(db, (tx) => port.ended(tx, bossOut(rows[0]!), 'a', h.clock)),
     ).toEqual([]);
     expect((await bar(mapId)).chipped).toBe(500);
+  });
+
+  /** The weekly win bundle's ledger lines (`boss`) for this Keeper, by battle. */
+  const bundleLedger = async (mapId: string, userId: string) =>
+    db.query.resourceLedger.findMany({
+      where: (t, { and: all, eq: is }) =>
+        all(is(t.mapId, mapId), is(t.userId, userId), is(t.reason, 'boss')),
+    });
+  /** A mini-boss win's coins, Patch and Heart (`COIN_RULES` / `HEART_COIN_RULES.battleWin`). */
+  const WIN_COINS = {
+    patch: COIN_RULES.battleWin.miniboss,
+    heart: HEART_COIN_RULES.battleWin.miniboss,
+  };
+  /** The battles this Keeper's win coins were credited against (Patch and Heart). */
+  const coinLedger = async (mapId: string, userId: string) => {
+    const patch = await db.query.coinLedger.findMany({
+      where: (t, { and: all, eq: is }) =>
+        all(is(t.mapId, mapId), is(t.userId, userId), is(t.source, 'battle')),
+    });
+    const heart = await db.query.heartCoinLedger.findMany({
+      where: (t, { and: all, eq: is }) =>
+        all(is(t.mapId, mapId), is(t.userId, userId), is(t.source, 'battle')),
+    });
+    return [...new Set([...patch, ...heart].map((l) => l.refId))];
+  };
+  /** The finish's boss-drop rolls for this battle. */
+  const bossRollsFor = (battleId: string) =>
+    vi
+      .mocked(rollFoundDrop)
+      .mock.calls.filter(([, event]) => event.refId === battleId && event.boss === true);
+
+  it('pays the weekly bundle and drop on a Keeper’s first Eve win only; later wins still chip (#37 X2b)', async () => {
+    await h.start();
+    h.clock.setTime(DENVER('2026-12-24T12:00:00').getTime());
+    const { mapId, keepers } = await patchOf(2);
+    const [kid, mate] = keepers as [BossPlayer, BossPlayer];
+    await toEve(mapId);
+
+    const first = await h.playOut(kid, await h.fight(kid, mapId));
+    const firstRewards = (await battleOf(kid, first.id)).rewards;
+    expect(firstRewards?.bundle).toEqual(BOSS_RULES.bundle);
+    expect(firstRewards?.coins).toEqual(WIN_COINS);
+    expect(bossRollsFor(first.id)).toHaveLength(1);
+
+    const second = await h.playOut(kid, await h.fight(kid, mapId));
+    const repeat = await battleOf(kid, second.id);
+    expect((await createBattlesRepo(db).findBattle(second.id))?.result?.winner).toBe('a');
+    // No bundle on the result card, in the bag or the ledger, no win coins
+    // (nor a reason line: the card just shows none) and no drop…
+    expect(repeat.rewards?.bundle).toBeNull();
+    expect(repeat.rewards?.coins).toEqual({ patch: 0, heart: 0 });
+    expect(repeat.rewards?.unpaid).toBeNull();
+    expect(await coinLedger(mapId, kid.id)).toEqual([first.id]);
+    const ledger = await bundleLedger(mapId, kid.id);
+    expect(new Set(ledger.map((l) => l.refId))).toEqual(new Set([first.id]));
+    expect(Object.fromEntries(ledger.map((l) => [l.itemId, l.delta]))).toEqual(BOSS_RULES.bundle);
+    expect(bossRollsFor(second.id)).toEqual([]);
+    // …but it still chips the bar and counts as one of their fights.
+    const mine = (await chips(mapId)).filter((c) => c.userId === kid.id);
+    expect(mine.map((c) => c.battleId).sort()).toEqual([first.id, second.id].sort());
+    expect(repeat.boss?.patchBar?.chipped).toBe((await bar(mapId)).chipped);
+
+    // It's once per Keeper: the mate's first Eve win still pays.
+    const theirs = await h.playOut(mate, await h.fight(mate, mapId));
+    const theirRewards = (await battleOf(mate, theirs.id)).rewards;
+    expect(theirRewards?.bundle).toEqual(BOSS_RULES.bundle);
+    expect(theirRewards?.coins).toEqual(WIN_COINS);
+    expect((await bundleLedger(mapId, mate.id)).every((l) => l.refId === theirs.id)).toBe(true);
+  });
+
+  it('two Eve wins by one Keeper finishing at once pay one bundle (#37 X2b)', async () => {
+    await h.start();
+    h.clock.setTime(DENVER('2026-12-24T12:00:00').getTime());
+    const { mapId, keepers } = await patchOf(1);
+    const kid = keepers[0]!;
+    await toEve(mapId);
+    // Two of the kid's Eve fights, set aside unfinished (only one can be
+    // active at a time), then finished together as `finish` would: the
+    // boss's `ended`, then `winPays`, then the battle row, one transaction each.
+    const repo = createBattlesRepo(db);
+    const rows: BattleRow[] = [];
+    const closeOut = (tx: Executor, row: BattleRow, won: boolean) =>
+      createBattlesRepo(tx).finish(row.id, {
+        status: won ? 'finished' : 'no-contest',
+        actions: [],
+        state: row.state,
+        result: won
+          ? { winner: 'a', reason: 'tuckered-out', contentHash: row.contentHash, turns: 1, xp: [] }
+          : null,
+        log: [],
+        rewards: null,
+        endedAt: h.clock,
+      });
+    for (let i = 0; i < 2; i++) {
+      const row = (await repo.findBattle((await h.fight(kid, mapId)).id))!;
+      await closeOut(db, row, false);
+      rows.push(row);
+    }
+    const port = createMinibossBattlePort(BOSS_RULES);
+    // Both transactions open before either reaches the boss, and each holds
+    // its read a moment before committing: without the bar's row lock both
+    // would read "no earlier win" and both would pay.
+    let arrive!: () => void;
+    let arrived = 0;
+    const together = new Promise<void>((done) => {
+      arrive = () => {
+        if (++arrived === 2) done();
+      };
+    });
+    const pays = await Promise.all(
+      rows.map((row) =>
+        withTransaction(db, async (tx) => {
+          await createBattlesRepo(tx).findBattle(row.id);
+          arrive();
+          await together;
+          await port.ended(tx, bossOut(row), 'a', h.clock);
+          const paid = await port.winPays(tx, row);
+          await new Promise((settle) => setTimeout(settle, 100));
+          await closeOut(tx, row, true);
+          return paid;
+        }),
+      ),
+    );
+    expect(pays.filter(Boolean)).toHaveLength(1);
+    expect(await chips(mapId)).toHaveLength(2);
   });
 
   it('normalises across boss energy: a win is 100 for a small Partner and a big one', async () => {
