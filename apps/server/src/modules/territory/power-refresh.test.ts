@@ -25,4 +25,19 @@ describe('repowering (Clockwork Isle #874)', () => {
     const since = repoweredSinceMs(0, 10 * H, 15 * H, pause);
     expect(worked(since, 20 * H, pause)).toBe(worked(0, 10 * H, pause) + 5 * H);
   });
+
+  it('keeps a short worked stretch across a long cut-off, ended or still going', () => {
+    const cases: [number, number, number, { fromMs: number; toMs: number | null }][] = [
+      // Worked 7h–10h, cut off and unpowered at 10h, rejoined and repowered at 34h.
+      [7 * H, 10 * H, 34 * H, { fromMs: 10 * H, toMs: 34 * H }],
+      // The same, still cut off when repowered (its own Windmill on the homestead).
+      [7 * H, 10 * H, 34 * H, { fromMs: 10 * H, toMs: null }],
+      // Ten minutes worked, a cut-off ending just before the repower.
+      [0, H / 6, 15 * H, { fromMs: 10 * H, toMs: 14.9 * H }],
+    ];
+    for (const [since, off, at, pause] of cases) {
+      const start = repoweredSinceMs(since, off, at, pause);
+      expect(worked(start, at, pause)).toBe(worked(since, off, pause));
+    }
+  });
 });
