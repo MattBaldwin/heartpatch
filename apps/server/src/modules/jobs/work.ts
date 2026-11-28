@@ -14,6 +14,7 @@ import {
   workSource,
   workSpeedPercent,
   workYield,
+  type JobRules,
   type JobTraits,
   type OwnedSquishy,
 } from '@heartpatch/shared';
@@ -65,6 +66,14 @@ export function workCapOf(tile: Pick<JobTileRow, 'depotLevel'>): {
     ? { maxStoredCycles: base, depot: false }
     : { maxStoredCycles: cap, depot: true };
 }
+
+/** `JOB_RULES` with a gatherer's cap (`workCapOf`) in, for the job rules' count helpers. */
+export const workRulesFor = (tile: Pick<JobTileRow, 'depotLevel'>): Pick<JobRules, 'work'> => {
+  const cap = workCapOf(tile);
+  return cap.depot
+    ? { work: { ...JOB_RULES.work, maxStoredCycles: cap.maxStoredCycles } }
+    : JOB_RULES;
+};
 
 /** What to call one of my squishies in a message: its nickname, else its species. */
 export const squishyName = (s: Pick<OwnedSquishy, 'nickname' | 'speciesId'>): string =>
@@ -127,9 +136,7 @@ export function workAt(row: JobRow, map: JobMap, at: Date, justTaken = false) {
     row.workSince.getTime(),
     at.getTime(),
     cycleSeconds,
-    cap.depot
-      ? { ...JOB_RULES, work: { ...JOB_RULES.work, maxStoredCycles: cap.maxStoredCycles } }
-      : JOB_RULES,
+    workRulesFor(row.workTile),
     homestead ? workPauseOf(homestead) : null,
   );
   const ready = workYield(
