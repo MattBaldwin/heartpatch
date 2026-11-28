@@ -352,7 +352,7 @@ describe('battle content hash (pinned on purpose, #37 C0b)', () => {
       // Re-pinned on purpose by #37 X3: Snowbundle and Bundlebit, their four
       // moves and the evolution row are new server battle content (was
       // 73742c3adf689cad4491470975ac3536).
-      '1fb9683908a8973c7714de65ec7d08a4',
+      'e6506a67040d6ebd093bbe2f02e1b5da',
     );
   });
 });

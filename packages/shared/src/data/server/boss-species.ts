@@ -209,8 +209,8 @@ export const BOSS_MOVES: Move[] = [
     effects: [{ type: 'status', status: 'dizzy', chance: 30 }], // TUNE:
   },
   {
-    id: 'snug-scarf-wrap',
-    name: 'Snug Scarf Wrap',
+    id: 'snug-snow-wrap',
+    name: 'Snug Snow Wrap',
     description: 'Snuggles up all warm and cozy. Feels better and a bit sturdier.',
     element: 'frost',
     power: 0,
@@ -708,7 +708,7 @@ export const BOSS_SPECIES: Species[] = [
     // where little Keepers fight; lower than the weekly bosses because the
     // sim's at-level team there is small (Partner 10 with friends at 7 and 4).
     baseStats: { hp: 95, attack: 70, defense: 88, speed: 56 },
-    moves: ['snow-puff-flop', 'twinkle-twinkle', 'snug-scarf-wrap', 'big-chilly-sneeze'],
+    moves: ['snow-puff-flop', 'twinkle-twinkle', 'snug-snow-wrap', 'big-chilly-sneeze'],
     evolutions: [],
     visual: {
       body: 'mochi',
