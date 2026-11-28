@@ -12,3 +12,10 @@ Opus render check, round 1: ONE MORE ROUND (base shirt at the neck and shoulders
 skirt and belt a platter at eye level, base shoe soles showing). Round 2 on these
 frames: SHIP-OK. Nits: a few-pixel shoulder fleck at 3/4 on rowan and maple,
 pip's skirt hem flat-ish at eye level, the curly toe barely reads.
+
+## Milestones card (iPhone 15, 393×852, 3x)
+
+`milestones-card-top.png`, `milestones-card-christmas.png` (scrolled to the track),
+`milestones-christmas-track.png` (the track alone). Dev server at
+`HP_DEV_NOW=2026-12-05`, a fresh account with Christmas progress seeded at 3 steps
+(a `milestone_progress` row), so the card shows the first tier's goal, "3 of 5".
