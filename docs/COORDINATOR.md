@@ -193,7 +193,29 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 60 → supervisor 61, 2026-11-28 ~07:45 UTC): read this first; every block below is history.** Decisions are in DECISIONS "Supervisor 60 (2026-11-28)". Supervisor 60 (`session_01RAEPnEJfBWim9YuLkAssUA`, lineage depth 3) handed off at ~200k context. Two MCP reconnects in 45 minutes and one long `list_events` read (limit 100 on a fresh lane, about 25k) used most of it: keep `list_events` at limit 10 and let helpers verify briefs.
+- **State (supervisor 61 → supervisor 62, 2026-11-28 ~08:40 UTC): read this first; every block below is history.** Decisions are in DECISIONS "Supervisor 61 (2026-11-28)". Supervisor 61 (`session_01RAEPnEU6hfueSeLBaQoRek`, lineage depth 4) handed off at ~200k context after only an hour. Three MCP reconnects (~20k each) and one full read of #874's comments (~10k) used most of it. Don't read #874's comments yourself: they're huge. Send a helper.
+  - **Main** is `0379893` (#930) or later. Supervisor 61 merged #927 (C6, `680f17a`) and #930. Supervisor 60 is archived.
+  - **Running lanes** all confirmed supervisor 61; re-route each to you (§8):
+    - **C1** `session_01RAEPnErLBEdRwZEVg8NjdE`: **PR #928** (map generator). It's in reviewer round 2, and CI was red on 24db1cb in `e2e (ipad-webkit, 6)`; C1 is fixing it. Merging #928 unblocks C4.
+    - **C2** `session_01RAEPnFEVgDhsn5bv2VRXD4` (~300k, finish-only): **PR #931** (C2a: lines, power, unpowered intervals, rails in supply, rail speed-up), head 82a7b4a, reviewer round 2 next. Its "Coordinator notes" describe the `buildings/service.ts` shape changes for C3. Archive C2 once #931 merges.
+    - **C2b** `session_01RAEPnHWYt5UbApc4X9dF8W` (new, Opus): **PR #932** is a draft stacked on #931 (Rail Depot banking). Its Lane handoff is #874 comment 7236161558. **Cut rule: C2b not merged by Nov 29 ~14:00 UTC → Depot to Wave 2.**
+    - **C3** `session_01RAEPnFHAAhWEDVRwRQfbyN`: the research module is pushed on `issue-874-c3-research-bench`. It waits for #931 to merge, then adds the buildings gate and `PublicBuilding.research`, then opens its PR.
+    - **C4** `session_01RAEPnDcQFLR6tgN9fQQM9S`: code-complete, reviewer round 2 APPROVE on e645e56. It opens its PR after #928 and #931 merge. Captures: `captures-874-clockwork/c4-ac0fbd7`. **Render-check them with an Opus helper before the owner sees them.**
+    - **C6** `session_01RAEPnF5RidFi2PHFYU7mLS`: #927 is merged. It's standing by for the **G5** answers, which go into one small follow-up data PR along with the Windmill comment fix.
+    - **6b-3** `session_01RAEPnDJUjEce29W1aCTXTQ`: **PR #925**. The iPad reshoot is done. The purple half-sphere is main's droop puffs (unlinearised fx colours, `effects.ts:281`), not this PR. Still to do: the join-dim check and reviewer round 2. **X3c follows #925's merge.**
+    - **2d** `session_01RAEPnE4uCYEuFuHLdiKxsv`: **PR #929** (#37 Patch Tree client). CI was red on d9893a4 because `patch-tree.spec.ts` is missing from `E2E_GROUPS`; 2d is fixing it. **Render-check the night frames at 0, 6 and 12 ornaments (iPhone and iPad) with an Opus helper**, then post them to the Mockup Board and in chat.
+  - **G5, owner questions not yet asked** (an AskUserQuestion was lost to a worker restart; ask again, one at a time, recommended option first). Read the numbers in `reports/sim/clockwork-report.md` on main.
+    1. Wave 1 is bought out fast: an engaged kid by day 2, a casual kid by about day 4. Parts are oversupplied: 1580 in against 169 spent for the engaged kid. Recommended: accept, and slow Parts gathering (`parts.gather.seconds` 1800 → 3600 **TUNE**). The alternatives are accept as is, or raise build costs.
+    2. Upkeep: the proposed numbers are Windmill L1 1–2 💛, L2 2–4; Sorter L1 3–5, L2 4–7; the Gift Wrapper none. Recommended: keep Wave 1 upkeep-free and add upkeep in Wave 2.
+  - **C5** isn't started. Brief it after C4 and C2a/C3 merge, using plan row C5 and R2.3. Its models and blade shader can start now (M3 is approved).
+  - **Follow-ups (queued, no lane yet):**
+    - Shared: move `PRESENT_ITEM` out of `advent.ts` into a client-safe module, so the client can import `PATCH_TREE`. 2d mirrors `STAR_AT=12` with a pinned test meanwhile.
+    - Patch Tree warmth hearts refresh only on the next map view. Add the pair's warmth to the public `tree.decorated` data or to `PatchStats`.
+    - #37 owner answer 4 (the lit star lights radius 2 on Dec 24–25) has no lane yet.
+    - Fix: main's droop puffs use unlinearised fx colours (`effects.ts:281`). Verify it, then give it a small `Fix:` lane.
+    - A shared `lineRefund` for the client and server (C4 keeps a pinned mirror for now). Do it after #931.
+    - Wave 2: bank depot gatherers in the `lines/` and `buildings/` take-down paths (C2b ruling 3).
+- **State (supervisor 60 → supervisor 61, 2026-11-28 ~07:45 UTC).** Decisions are in DECISIONS "Supervisor 60 (2026-11-28)". Supervisor 60 (`session_01RAEPnEJfBWim9YuLkAssUA`, lineage depth 3) handed off at ~200k context. Two MCP reconnects in 45 minutes and one long `list_events` read (limit 100 on a fresh lane, about 25k) used most of it: keep `list_events` at limit 10 and let helpers verify briefs.
   - **Main** is `ab38d7f` (#926) or later. Supervisor 60 merged #926. Supervisor 59, the 2c session and the 6b-2 session are archived.
   - **Running lanes.** All report to supervisor 60 by id; re-route each one to you (§8). All six original lanes confirmed supervisor 60.
     - **C1** `session_01RAEPnErLBEdRwZEVg8NjdE`: **PR #928** (#874 map generator) is open and in its reviewer loop. Merging it unblocks C4.

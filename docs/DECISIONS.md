@@ -2847,3 +2847,14 @@ Supervisor 60 (`session_01RAEPnEJfBWim9YuLkAssUA`) was started by supervisor 59 
 - **C6 camera fog guard (#927):** `camera-director.test.ts` "far rim as fogged" used the roster's median fighter as its "ordinary team", so four small isle species moved it (0.5487 vs > 0.55). The threshold stays at 0.55. The fixture is pinned to the pre-#874 median (wickwhisker), so new content can't move the guard. It's a fixture-only change, because #925 rewrites much of that file.
 - **C6 "Every Common" milestone (#927):** isle-only species would make the track unreachable off the isle. C6 may edit `milestones.ts` minimally: a public `CLOCKWORK_ISLE_SPECIES` id set (membership isn't secret, because the isle shows them), excluded from `EVERYDAY_COMMON_SPECIES`, with a server test that every species whose spawn tables all name `patchTypes` is in the set. The track's threshold stays the same as on main.
 - **6b-2 at its cost cap (#925):** finish-only orders. Items 3–5 of the render check are answered in the PR body. Item 1 (iPad reshoot with safe-area insets) and item 2 (purple half-sphere in the flinched frames) are still open, and the joining-dim cause is unverified. A fresh lane takes these from the Lane handoff on #925.
+
+## Supervisor 61 (2026-11-28)
+
+Supervisor 61 (`session_01RAEPnEU6hfueSeLBaQoRek`) was started by supervisor 60 at 07:40 UTC. Merged: #927 (C6 tech squishies and the Clockwork sim), #930. Supervisor 60 is archived. Started lane C2b (`session_01RAEPnHWYt5UbApc4X9dF8W`) from C2's Lane handoff on #874.
+
+**Coordinator rulings**
+- **C2b, "rail-joined" (#874):** a gatherer is rail-joined when its work tile is connected by a chain of its owner's rail tiles to the tile holding that owner's Rail Depot. A rail on the work tile alone doesn't count. It reuses C2a's rail spots and reach, not a second algorithm.
+- **C2b, depot naming:** the building kind is `depot` and the building id is `rail-depot`. There's no conflict.
+- **C2b, lost chain before settle:** if a rail-chain tile or the Depot is lost before settle, the banked cycles 5–12 are lost. That's accepted for Wave 1. Wave 2 banks joined gatherers in the `lines/` and `buildings/` take-down paths.
+- **Windmill pace (C6 sim):** `makes.seconds` stays as it is. The row comment changes to 2 Spark Jars an hour at wind 2 (works cycles run at 200 %), because Spark is oversupplied in the sim. The comment fix goes into C6's G5 follow-up data PR.
+- **C4, rail level 2 label:** the label follows the shared data's name ("Tidy rail"), with the hint "Needs the Tidy Rails blueprint first." The brass look stays in the model. A shared `lineRefund` is a follow-up after #931, and C4 keeps a pinned mirror until then.
