@@ -1,0 +1,148 @@
+// THROWAWAY (#37 1d captures): not committed. Real server on a December clock (HP_DEV_NOW), real sheet.
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+const mark = (m: string) => appendFileSync('/tmp/claude-0/mark.log', `${new Date().toISOString()} ${m}\n`);
+import type { Page } from '@playwright/test';
+import { expect, test } from './test.js';
+import { api, hook } from './dev-hook.js';
+import { newPlayer, visitPatch } from './players.js';
+import { trayButton, traySettled, traysState } from './trays.js';
+
+const OUT = process.env['CAPTURE_OUT'] ?? 'captures';
+const TZ = process.env['CAPTURE_TZ'] ?? 'America/Sao_Paulo';
+const DEVICE = (process.env['CAPTURE_DEVICE'] ?? 'iphone') as 'iphone' | 'ipad';
+const TAG = process.env['CAPTURE_TAG'] ?? 'night';
+const LEAD_MS = Number(process.env['CAPTURE_LEAD_MS'] ?? '0');
+const SIZES = { iphone: { width: 393, height: 852 }, ipad: { width: 820, height: 1180 } } as const;
+const HIDE_DEV = '.dev-status { display: none !important; }';
+
+test(`advent captures ${DEVICE} ${TAG}`, async ({ browser }) => {
+  test.setTimeout(15 * 60_000);
+  mkdirSync(OUT, { recursive: true });
+  Object.assign(test.info().project.use, {
+    viewport: SIZES[DEVICE],
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+  });
+  mark('start');
+  const name = 'cap' + Math.random().toString(36).slice(2, 7);
+  const page = await newPlayer(browser, name, undefined, { timezoneId: TZ });
+  if (DEVICE === 'iphone') {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setSafeAreaInsetsOverride' as never, {
+      insets: { top: 59, topMax: 59, bottom: 34, bottomMax: 34, left: 0, leftMax: 0, right: 0, rightMax: 0 },
+    } as never);
+  }
+  await page.context().addInitScript(`(() => {
+    const D = Date, lead = ${LEAD_MS};
+    class F extends D { constructor(...a) { if (a.length === 0) super(D.now() + lead); else super(...a); } static now() { return D.now() + lead; } }
+    window.Date = F;
+  })();`);
+  mark('signed up');
+  await page.goto('/?tier=high');
+  await page.addStyleTag({ content: HIDE_DEV });
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Snowy Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
+  await page.addStyleTag({ content: HIDE_DEV });
+  const hint = page.getByTestId('tray-hint-ok');
+  if (await hint.isVisible().catch(() => false)) await hint.tap();
+  await page.waitForTimeout(3000);
+
+  const state = (p: Page) => hook<{ days: string[] | null; waiting: boolean; mapId: string; presents: number }>(p, 'advent');
+  await expect.poll(async () => (await state(page))?.waiting, { timeout: 30_000 }).toBe(true);
+  const prefix = `${OUT}/${DEVICE}-${TAG}`;
+  const shot = async (file: string) => {
+    mark('shot ' + file);
+    await page.waitForTimeout(900);
+    await page.screenshot({ path: `${prefix}-${file}.png` });
+    const meta = await page.evaluate(() => {
+      const sheet = document.querySelector('[data-testid="advent-sheet"]');
+      const r = sheet?.getBoundingClientRect();
+      const small = [...(sheet?.querySelectorAll('*') ?? [])]
+        .filter((n) => [...n.childNodes].some((c) => c.nodeType === 3 && c.textContent?.trim()))
+        .map((n) => ({ t: n.textContent?.trim().slice(0, 24), px: parseFloat(getComputedStyle(n).fontSize) }))
+        .filter((x) => x.px < 14);
+      const targets = [...(sheet?.querySelectorAll('button') ?? [])].map((b) => {
+        const br = b.getBoundingClientRect();
+        return { t: b.textContent?.trim().slice(0, 24), w: Math.round(br.width), h: Math.round(br.height) };
+      });
+      const lum = (c: number[]) => {
+        const f = (v: number) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+        return 0.2126 * f(c[0]!) + 0.7152 * f(c[1]!) + 0.0722 * f(c[2]!);
+      };
+      const rgba = (v: string) => (v.match(/[\d.]+/g) ?? []).map(Number);
+      const solidBg = (n: Element | null): number[] | null => {
+        for (let e = n; e; e = e.parentElement) {
+          const c = rgba(getComputedStyle(e).backgroundColor);
+          if (c.length >= 3 && (c[3] ?? 1) > 0.9) return c;
+          if (getComputedStyle(e).backgroundImage !== 'none' && e !== n) return null;
+        }
+        return null;
+      };
+      const contrasts = [...(sheet?.querySelectorAll('*') ?? [])]
+        .filter((n) => [...n.childNodes].some((c) => c.nodeType === 3 && c.textContent?.trim()))
+        .filter((n) => n.getBoundingClientRect().width > 2)
+        .map((n) => {
+          const bg = solidBg(n); const fg = rgba(getComputedStyle(n).color);
+          if (!bg) return { t: n.textContent?.trim().slice(0, 20), ratio: null as number | null };
+          const l1 = lum(fg), l2 = lum(bg);
+          return { t: n.textContent?.trim().slice(0, 20), ratio: (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05) };
+        });
+      const measured = contrasts.filter((c) => c.ratio !== null);
+      return {
+        sheet: r && { top: r.top, bottom: r.bottom, left: r.left, right: r.right },
+        inner: { w: innerWidth, h: innerHeight },
+        scrolls: sheet ? sheet.scrollHeight - sheet.clientHeight : null,
+        contrastMin: measured.length ? Math.min(...measured.map((c) => c.ratio as number)) : null,
+        contrastUnder45: measured.filter((c) => (c.ratio as number) < 4.5),
+        contrastNotMeasured: contrasts.length - measured.length,
+        smallText: small,
+        minTarget: Math.min(...targets.map((t) => Math.min(t.w, t.h))),
+        targets: targets.length,
+      };
+    });
+    writeFileSync(`${prefix}-${file}.json`, JSON.stringify({ days: (await state(page))?.days, ...meta }, null, 1));
+  };
+
+  mark('waiting true');
+  const mapId = (await state(page))!.mapId;
+  const granted = await api(page, 'POST', `/maps/${mapId}/dev/items`, { items: { presents: 2 } });
+  expect(granted.status).toBe(201);
+  await page.reload();
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
+  await page.addStyleTag({ content: HIDE_DEV });
+  if (await hint.isVisible().catch(() => false)) await hint.tap();
+  await page.waitForTimeout(3000);
+  await expect.poll(async () => (await state(page))?.presents, { timeout: 30_000 }).toBe(2);
+  mark('reloaded with presents');
+  // The bag reads again when the sheet opens.
+  await (await trayButton(page, 'advent-open')).evaluate(() => undefined);
+  await traySettled(page, 'heartpatch');
+  await page.waitForTimeout(500);
+  mark('tray settled');
+  await page.getByTestId('advent-open').tap();
+  const sheet = page.getByTestId('advent-sheet');
+  await expect(sheet).toBeVisible();
+  await expect.poll(async () => (await traysState(page))?.open, { timeout: 15_000 }).toBeNull();
+  await page.waitForTimeout(1200);
+  await expect(sheet.getByTestId('advent-open-present')).toBeVisible({ timeout: 15_000 });
+  await shot('01-sheet-with-present');
+
+  await sheet.getByTestId('advent-open-present').tap();
+  await expect(sheet.getByTestId('advent-reveal')).toBeVisible();
+  await shot('02-reveal-present-1-left');
+  await sheet.getByTestId('advent-yay').tap();
+  await expect(sheet.getByTestId('advent-open-present')).toHaveText('Open a wrapped present');
+  await shot('03-sheet-last-present');
+
+  await sheet.getByTestId('advent-open-present').tap();
+  await expect(sheet.getByTestId('advent-reveal')).toBeVisible();
+  await shot('04-reveal-last-present');
+  await sheet.getByTestId('advent-yay').tap();
+  await expect(sheet.getByTestId('advent-open-present')).toHaveCount(0);
+  await shot('05-sheet-no-present');
+});
