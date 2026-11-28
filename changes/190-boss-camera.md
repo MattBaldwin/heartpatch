@@ -1,7 +1,7 @@
 ---
-title: Look up at the BIG squishy
+title: The BIG squishy looks you in the eye
 area: battles
 ---
 
-The camera now crouches down low beside your team, so the BIG squishy really towers over you! It leans in slowly while the BIG squishy winds up, and the screen goes *thump* when the big move lands.
-**Try it:** fight a BIG squishy and watch the camera when it says it's winding up.
+In a BIG squishy fight it now faces your team the whole time, your friends stay on screen, and nobody's head hides its mouth. The sun stays low so it never peeks out behind the name bar.
+**Try it:** start a BIG squishy fight and watch it wind up its Count to Three.
