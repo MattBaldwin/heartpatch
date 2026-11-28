@@ -22,7 +22,7 @@ export const RESEARCH_TREE: ResearchRules = {
       id: 'bright-bulbs',
       tier: 1,
       name: 'Bright Bulbs',
-      description: 'A bulb that glows all night on Spark. Unlocks the Clockwork Beacon.',
+      description: 'A bulb that glows all night long. Unlocks the Clockwork Beacon.',
       cost: { parts: 8, spark: 6 }, // TUNE:
       seconds: 3 * 3600, // TUNE:
       requires: [],
@@ -34,6 +34,17 @@ export const RESEARCH_TREE: ResearchRules = {
       name: 'Tidy Rails',
       description: 'Straighter, speedier rails. Unlocks Tidy Rails and a bigger Depot.',
       cost: { parts: 6, spark: 2 }, // TUNE:
+      seconds: 2 * 3600, // TUNE:
+      requires: [],
+      grants: { blueprints: 1 }, // TUNE:
+    },
+    {
+      // The presents tie-in (plan R1.1, owner yes 2026-11-28): unlocks the Gift Wrapper.
+      id: 'wrapping',
+      tier: 1,
+      name: 'Wrapping',
+      description: 'Paper, ribbon and a clever fold. Unlocks the Gift Wrapper.',
+      cost: { parts: 6, spark: 4 }, // TUNE:
       seconds: 2 * 3600, // TUNE:
       requires: [],
       grants: { blueprints: 1 }, // TUNE:

@@ -169,12 +169,13 @@ export const RESOURCES: Resource[] = [
     tradable: false,
   },
   // Clockwork Isle (#874): only a Clockwork Isle's buildings make or use these.
-  // Spark: a Windmill makes it; machines and research use it. Parts: gathered
+  // Spark Jars: a Windmill makes them; machines and research use it. Parts: gathered
   // from Scrap Heaps (C1) and found exploring; builds and research use them.
   // Blueprints: research grants them; Tier 1 builds use them.
   {
     id: 'spark',
-    name: 'Spark',
+    // "Spark Jar", never just "Spark": kid text must not mix it up with the Spark element (plan R2).
+    name: 'Spark Jar',
     description: 'Fizzy power in a jar. Windmills make it.',
     kind: 'crafted',
   },

@@ -109,6 +109,8 @@ describe('patch types (#621)', () => {
       'sorter',
       'research-bench',
       'rail-depot',
+      'clockwork-beacon',
+      'gift-wrapper',
     ]);
     for (const b of BUILDINGS) {
       const kinds: readonly string[] = CLOCKWORK_BUILDING_KINDS;
@@ -119,6 +121,9 @@ describe('patch types (#621)', () => {
         expect(buildsOnPatchType(b, type), b.id).toBe(false);
         expect(isBuildableOn(HOME_BASE_RULES, b, type), b.id).toBe(false);
       }
+      // The Beacon is a `lights` row: buildable once `lights` is (#37 2a, #909),
+      // through `buildableKinds` like Twinkle Lights, still only on its patch type.
+      if (b.kind === 'lights') continue;
       expect(isBuildableOn(HOME_BASE_RULES, b, 'clockwork-isle'), b.id).toBe(true);
       // Never through `buildableKinds`, so the client's kind names stay whole.
       expect(isBuildable(HOME_BASE_RULES, b, 'clockwork-isle'), b.id).toBe(false);

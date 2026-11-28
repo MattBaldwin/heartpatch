@@ -189,7 +189,8 @@ describe('new kinds', () => {
     };
     expect(BuildingSchema.parse(lights)).toEqual(lights);
     // Not in the data, and not buildable, until 2a.
-    expect(BUILDINGS.some((b) => b.kind === 'lights')).toBe(false);
+    // The Clockwork Beacon (#874 C0) is a Clockwork Isle row, not a Cozy one.
+    expect(BUILDINGS.some((b) => b.kind === 'lights' && b.patchTypes === undefined)).toBe(false);
     expect((HOME_BASE_RULES.buildableKinds as readonly string[]).includes('lights')).toBe(false);
     // A Clockwork beacon (#874) is the same kind with a wider reach.
     const beacon = { ...lights, id: 'clockwork-beacon', safeRadius: 2 };

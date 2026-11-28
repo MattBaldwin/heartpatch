@@ -176,7 +176,11 @@ describe('buildingGuide (#715)', () => {
       ),
     );
     // The Waystation waits until the server builds it (#735).
-    expect(BUILDINGS.filter((b) => !ids.has(b.id)).map((b) => b.id)).toEqual(['waystation']);
+    // The Clockwork Beacon (#874) waits for `lights` to be buildable (#37 2a, #909).
+    expect(BUILDINGS.filter((b) => !ids.has(b.id)).map((b) => b.id)).toEqual([
+      'waystation',
+      'clockwork-beacon',
+    ]);
   });
 
   it('a new building shows up with no guide code (rule 5)', () => {

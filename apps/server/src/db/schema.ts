@@ -1487,8 +1487,8 @@ export const tileRoads = pgTable(
  * (owner answer Q3), not buildings, so a line and a building share a tile;
  * one line of each kind per tile. `kind` is the shared `LineKindSchema`;
  * `level` 1–2 (`RAIL_RULES.levels`; a wire is always 1). Owner-only: it
- * counts only while its owner holds the tile. Locked at step 6c (tech spec
- * §7), after `tile_roads`.
+ * counts only while its owner holds the tile. Locked in step 6 (tech spec
+ * §7) right after `tile_roads`, in `(tile_id, kind)` order.
  */
 export const tileLines = pgTable(
   'tile_lines',

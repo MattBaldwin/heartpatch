@@ -206,7 +206,6 @@ describe('whereToFind', () => {
         'joy-ember',
         'heart-petals',
         'turkey-feathers',
-        'presents',
         'fireworks',
         // Clockwork Isle (#874): Parts from Scrap Heaps (lane C1 places
         // them) and explore finds; Blueprints from the Research Bench.

@@ -93,6 +93,7 @@ describe('Clockwork Isle contracts (#874 C0)', () => {
         ['sorting', 1],
         ['bright-bulbs', 1],
         ['tidy-rails', 1],
+        ['wrapping', 1],
       ]);
       // Paid in Parts and Spark, paid back in Blueprints.
       for (const n of RESEARCH_TREE.nodes) {
@@ -100,6 +101,17 @@ describe('Clockwork Isle contracts (#874 C0)', () => {
         expect(Object.keys(n.grants), n.id).toEqual(['blueprints']);
       }
       expect(BUILDINGS.find((b) => b.id === 'sorter')?.requiresResearch).toBe('sorting');
+      expect(BUILDINGS.find((b) => b.id === 'clockwork-beacon')?.requiresResearch).toBe(
+        'bright-bulbs',
+      );
+      // The presents tie-in (plan R1.1): a powered machine that wraps presents in December.
+      expect(BUILDINGS.find((b) => b.id === 'gift-wrapper')).toMatchObject({
+        kind: 'works',
+        season: 'christmas',
+        needsPower: true,
+        requiresResearch: 'wrapping',
+        makes: { resource: 'presents', quantity: 1 },
+      });
     });
 
     it('catches a broken tree', () => {
