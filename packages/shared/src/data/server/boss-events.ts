@@ -43,6 +43,7 @@ export const BOSS_EVENTS: BossEventRules = {
     speciesId: null, // X3: the new Christmas-only frost BIG squishy (owner answer 1)
     terrains: ['meadow', 'hills', 'mountains'], // TUNE: fallback when the tree's post can't be used
     day: '12-24', // TUNE: Christmas Eve, patch time
+    noticeDays: 3, // TUNE: the notice from Dec 21, like "Long Night in 3 days"
     opensAtHour: 16, // TUNE: after school, like the weekly visit
     closesAtHour: 10, // TUNE: 10:00 on Dec 25, a Christmas-morning catch-up (owner answer 2)
     // Owner answer 3: every Keeper can chip in, with the usual level scaling.

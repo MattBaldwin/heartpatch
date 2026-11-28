@@ -95,6 +95,11 @@ export const ChristmasEveBossRulesSchema = z.strictObject({
   terrains: z.array(ContentIdSchema).min(1),
   /** The patch-local day it opens on. */
   day: MonthDaySchema,
+  /**
+   * The map shows its notice (`MapView.christmas.eve { opensAt }`) from the
+   * start of the patch-local day this many days before `day` (#37 X5a).
+   */
+  noticeDays: z.number().int().min(0).max(6),
   /** The patch-local hour it opens on `day`… */
   opensAtHour: z.number().int().min(0).max(23),
   /** …and the hour it closes on the morning after; the bar falls or dozes off then. */

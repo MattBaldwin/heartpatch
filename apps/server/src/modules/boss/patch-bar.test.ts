@@ -344,7 +344,16 @@ describe.skipIf(!url)('the Christmas Eve patch bar (#37 X2, needs DATABASE_URL)'
       state: 'open',
       chipped: 60,
       goal: 200,
+      chippers: 0,
+      warmedUp: true,
     });
+    // No lights or star: not warmed up (#37 X5a).
+    h.clock.setTime(DENVER('2026-12-24T12:00:00').getTime());
+    const dark = await patchOf(1);
+    h.clock.setTime(DENVER('2026-12-24T16:01:00').getTime());
+    await h.sweep([dark.mapId]);
+    const cold = await h.call('GET', `/maps/${dark.mapId}/view`, dark.keepers[0]!);
+    expect(MapViewSchema.parse(cold.json()).christmas?.eve).toMatchObject({ warmedUp: false });
   });
 
   it('thanks each contributor once when it falls, with two asks, and fights after still count', async () => {
