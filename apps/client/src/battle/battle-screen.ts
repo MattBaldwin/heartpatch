@@ -238,6 +238,8 @@ export interface BattleDevControls {
   readonly manual: boolean;
   set: (t: number) => void;
   advance: (ms: number) => void;
+  /** Plays one live event as if the socket delivered it (the patch bar's e2e). */
+  emit: (event: WsEventMessage) => void;
 }
 
 export interface BattleScreen {
@@ -1884,6 +1886,11 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     },
     liveEvent: (event) => {
       const current = battle;
+      // The Christmas Eve patch bar moves for every fight on the patch (#37 X4), live or not.
+      if (current && (event.type === 'boss.chipped' || event.type === 'boss.fell')) {
+        bossFight.patchEvent(current, event);
+        return;
+      }
       if (!current?.live || event.mapId !== current.mapId) return;
       if (event.type === 'battle.cheered') {
         const parsed = GAME_EVENTS['battle.cheered'].public.safeParse(event.data);
@@ -1973,6 +1980,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
           manual.advance(ms);
           scene3d?.update(manual.now());
           options.invalidate();
+        },
+        emit: (event) => {
+          // The fight's own map, so a spec needn't know its id.
+          this.liveEvent({ ...event, mapId: battle?.mapId ?? event.mapId });
         },
       };
     },

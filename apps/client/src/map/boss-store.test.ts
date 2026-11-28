@@ -115,3 +115,54 @@ describe('createBossStore', () => {
     store.dispose();
   });
 });
+
+describe('the Christmas Eve bar from live events (#37 X4)', () => {
+  const event = (type: string, mapId: string, data: object): WsEventMessage =>
+    ({ type, mapId, seq: 2, at: '2026-12-24T18:00:00Z', data }) as unknown as WsEventMessage;
+  const storeOnMap = async () => {
+    const store = createBossStore({
+      fetchBoss: () => Promise.resolve(visit()),
+      fetchNames: () => Promise.resolve(new Map<string, string>()),
+    });
+    await store.setMap('m1');
+    return store;
+  };
+
+  it('moves with boss.chipped and tells listeners', async () => {
+    const store = await storeOnMap();
+    const seen = vi.fn();
+    store.onChange(seen);
+    store.liveEvent(event('boss.chipped', 'm1', { window: '2026-11-09', chipped: 80, goal: 200 }));
+    expect(store.eveBar).toEqual({ goal: 200, chipped: 80, state: 'open' });
+    expect(seen).toHaveBeenCalledTimes(1);
+  });
+  it('never goes back, and a fall stays a fall', async () => {
+    const store = await storeOnMap();
+    store.liveEvent(
+      event('boss.fell', 'm1', {
+        window: '2026-11-09',
+        fellAt: '2026-12-24T19:00:00Z',
+        chipped: 205,
+        goal: 200,
+      }),
+    );
+    store.liveEvent(event('boss.chipped', 'm1', { window: '2026-11-09', chipped: 120, goal: 200 }));
+    expect(store.eveBar).toEqual({ goal: 200, chipped: 205, state: 'fell' });
+  });
+  it("ignores another visit's window", async () => {
+    const store = await storeOnMap();
+    store.liveEvent(event('boss.chipped', 'm1', { window: '2026-12-21', chipped: 80, goal: 200 }));
+    expect(store.eveBar).toBeNull();
+  });
+  it('ignores another map, junk, and forgets the bar when the map changes', async () => {
+    const store = await storeOnMap();
+    store.liveEvent(
+      event('boss.chipped', 'other', { window: '2026-11-09', chipped: 80, goal: 200 }),
+    );
+    store.liveEvent(event('boss.chipped', 'm1', { nope: true }));
+    expect(store.eveBar).toBeNull();
+    store.liveEvent(event('boss.chipped', 'm1', { window: '2026-11-09', chipped: 80, goal: 200 }));
+    await store.setMap('m2');
+    expect(store.eveBar).toBeNull();
+  });
+});

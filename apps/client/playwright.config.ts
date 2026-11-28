@@ -58,7 +58,7 @@ const E2E_GROUPS = [
     'recipe-book',
     'squishy-gallery',
   ],
-  // ~21.0 iPhone, ~24.1 iPad.
+  // ~21.0 iPhone, ~24.1 iPad; patch-bar adds about 2 min (#37 X4).
   [
     'auth',
     'battle-ui',
@@ -69,6 +69,7 @@ const E2E_GROUPS = [
     'hollowed-cellar',
     'house',
     'lobby',
+    'patch-bar',
     'patch-line',
     'perf-report',
     'pwa',
