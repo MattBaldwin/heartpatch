@@ -1,0 +1,53 @@
+// Captures for #37 2a Twinkle Lights: the dev island page (real renderer, no server), DPR 2.
+const { chromium } = require('playwright');
+const out = process.argv[2];
+const base = process.argv[3] || 'http://localhost:5199';
+const only = process.argv[4] || '';
+const DEVICES = {
+  iphone: { width: 393, height: 852, insets: { top: 59, bottom: 34 } },
+  ipad: { width: 1024, height: 1366, insets: { top: 24, bottom: 20 } },
+};
+// name: [device, query]
+const SHOTS = [];
+const add = (dev, name, q) => SHOTS.push({ dev, name: `${dev}-${name}`, q });
+for (const dev of ['iphone', 'ipad']) {
+  for (const time of ['day', 'night']) {
+    const n = time === 'night' ? '&night=1' : '';
+    add(dev, `tile-${time}`, `patch=cozy&tier=medium&season=christmas&lights=1&lightsAt=land${n}`);
+    add(dev, `home-${time}`, `patch=cozy&tier=medium&season=christmas&lights=1&built=1${n}`);
+    add(dev, `busy-${time}`, `patch=cozy&tier=medium&season=christmas&lights=4&built=1${n}`);
+  }
+  add(dev, 'busy-night-far', 'patch=cozy&tier=medium&season=christmas&lights=4&built=1&night=1&far=1');
+  add(dev, 'wild-busy-night', 'patch=wild&tier=medium&season=christmas&lights=4&built=1&night=1');
+}
+add('iphone', 'home-night-high', 'patch=cozy&tier=high&season=christmas&lights=1&built=1&night=1');
+add('iphone', 'home-night-low', 'patch=cozy&tier=low&season=christmas&lights=1&built=1&night=1');
+add('iphone', 'home-night-motion', 'patch=cozy&tier=medium&season=christmas&lights=1&night=1&motion=1');
+(async () => {
+  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+  const results = [];
+  for (const s of SHOTS) {
+    if (only && !s.name.includes(only)) continue;
+    const d = DEVICES[s.dev];
+    const ctx = await browser.newContext({ viewport: { width: d.width, height: d.height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    try {
+      const cdp = await ctx.newCDPSession(page);
+      await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: d.insets.top, bottom: d.insets.bottom, left: 0, right: 0 } });
+    } catch (e) { /* older chromium: the island page has no HUD anyway */ }
+    const errors = [];
+    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    await page.goto(`${base}/island.html?${s.q}`);
+    await page.waitForFunction(() => window.__islandMap?.ready() === true && (window.__islandMap.stats()?.drawCalls ?? 0) > 20, null, { timeout: 180000 });
+    await page.waitForTimeout(1500);
+    const stats = await page.evaluate(() => window.__islandMap.stats());
+    const tier = await page.evaluate(() => window.__islandMap.tier());
+    await page.screenshot({ path: `${out}/${s.name}.png` });
+    const r = { name: s.name, query: s.q, tier, drawCalls: stats.drawCalls, lightsTiles: stats.lightsTiles, bulbs: stats.bulbs, bulbsLit: stats.bulbsLit, bulbsTwinkle: stats.bulbsTwinkle, night: stats.night, ambient: stats.ambient, errors: errors.slice(0, 3) };
+    results.push(r);
+    console.log(JSON.stringify(r));
+    await ctx.close();
+  }
+  require('fs').writeFileSync(`${out}/stats.json`, JSON.stringify(results, null, 1));
+  await browser.close();
+})();
