@@ -1972,6 +1972,10 @@ const battles = createBattleScreen({
   onRareFind: (scale) => {
     audio.cue(findCue(scale));
   },
+  // A BIG squishy says yes to an ask (#190 PR 6): the friend fanfare.
+  onBossAnswer: (answer) => {
+    if (answer === 'yes') audio.cue('friend-fanfare');
+  },
 });
 // Friendly battles (#29): "Who's here now" and "Battle me?" from the Friends
 // button beside Chat (top right; the Adventure tray is full on short

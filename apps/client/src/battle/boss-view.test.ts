@@ -26,6 +26,10 @@ import {
   wonLine,
   goTo,
   hereUntil,
+  askAnswer,
+  bossDisplayName,
+  bossWon,
+  lossLine,
   isAreaMove,
   isTeamBattle,
   lastDayOf,
@@ -754,5 +758,91 @@ describe('signature stickers (#190 PR 5)', () => {
         expect(at, id).toBeLessThan(1);
       }
     }
+  });
+});
+
+describe('the end beats (#190 PR 6)', () => {
+  const at = (iso: string) => Date.parse(iso);
+  const zone = 'America/New_York';
+  const visit = { eventWindow: { id: '2026-11-14', endsAt: '2026-11-16T21:00:00.000Z' } };
+  const boss0 = battle().boss!;
+
+  it('the team tuckered out: the loss line names the day from the visit window', () => {
+    const line = lossLine({ ...boss0, ...visit }, 'Rakelet', at('2026-11-14T16:00:00.000Z'), zone);
+    expect(line).toBe(
+      'Your team is all tuckered out! Rakelet is here until Monday. Come back stronger!',
+    );
+  });
+
+  it('on the last day it leaves today; nothing is taken and nothing is red', () => {
+    const line = lossLine({ ...boss0, ...visit }, 'Rakelet', at('2026-11-16T14:00:00.000Z'), zone);
+    expect(line).toBe('Your team is all tuckered out! Rakelet leaves today. Come back stronger!');
+    expect(line).not.toMatch(/lost|took|taken|failed|game over/i);
+  });
+
+  it('the Christmas Eve fight says the visit ends Christmas morning', () => {
+    const eve = {
+      ...boss0,
+      eventWindow: { id: '2026-12-24', endsAt: '2026-12-25T13:00:00.000Z' },
+      patchBar: {} as never,
+    };
+    expect(lossLine(eve, 'Snowbundle', at('2026-12-24T20:00:00.000Z'), zone)).toBe(
+      "Your team is all tuckered out! Snowbundle's visit ends Christmas morning. Come back stronger!",
+    );
+  });
+
+  it('the words pass the avoided-words check', () => {
+    const lines = [
+      BOSS_TEXT.tuckeredOut('Rakelet'),
+      BOSS_TEXT.lostLine('Rakelet', 'here until Monday'),
+      BOSS_TEXT.lostLineLast('Rakelet'),
+      BOSS_TEXT.lostLineEve('Rakelet'),
+      BOSS_TEXT.wonSubEve('Rakelet'),
+    ];
+    for (const line of lines) expect(findAvoidedWords(line), line).toEqual([]);
+  });
+
+  it('the BIG squishy is named only when its species is known', () => {
+    const known = new Map([['rakelet', {}]]);
+    const name = (id: string) => id.toUpperCase();
+    expect(bossDisplayName(known, 'rakelet', name)).toBe('RAKELET');
+    expect(bossDisplayName(known, 'secret', name)).toBe('The BIG squishy');
+    expect(bossDisplayName(known, undefined, name)).toBe('The BIG squishy');
+  });
+
+  it('only a loss to the boss is the taunt twirl, not a win, a scoot or a draw', () => {
+    expect(bossWon(lost())).toBe(true);
+    expect(bossWon(won())).toBe(false);
+    expect(bossWon(lost({}, 'forfeit'))).toBe(false);
+    expect(bossWon(battle())).toBe(false);
+  });
+
+  it('an Eve win with no ask on the card never hints at one', () => {
+    const eve = { ...boss0, patchBar: {} as never, befriend: 'none' as const };
+    const card = bossResult(won({ boss: eve }), 'Snowbundle', 0, zone);
+    expect(card?.subtitle).toBe(BOSS_TEXT.wonSubEve('Snowbundle'));
+    expect(card?.subtitle).not.toMatch(/friend/i);
+    // A weekly win keeps its friendly look.
+    expect(
+      bossResult(won({ boss: { ...boss0, befriend: 'offer' } }), 'Rakelet', 0, zone),
+    ).toMatchObject({ subtitle: BOSS_TEXT.wonSub('Rakelet') });
+  });
+
+  describe('the ask answered', () => {
+    const asking = { ...boss0, befriend: 'offer' as const, asksLeft: 2 };
+    it('a yes is the offer becoming joined', () => {
+      expect(askAnswer(asking, { ...asking, befriend: 'joined', warmth: 3 })).toEqual({
+        answer: 'yes',
+        warmth: 3,
+      });
+    });
+    it('a not-yet moves the asks or the warmth on', () => {
+      const notYet = { ...asking, befriend: 'not-yet' as const, asksLeft: 1, warmth: 1 };
+      expect(askAnswer(asking, notYet)).toEqual({ answer: 'not-yet', warmth: 1 });
+      // The same card redrawn is no answer.
+      expect(askAnswer(notYet, notYet)).toBeNull();
+      expect(askAnswer(undefined, notYet)).toBeNull();
+      expect(askAnswer({ ...boss0, befriend: 'none' }, notYet)).toBeNull();
+    });
   });
 });
