@@ -86,6 +86,22 @@ export interface BossRepo extends BossBarRepo {
   ) => Promise<BossWindowRow | null>;
   /** The patch's Christmas Eve visit out at `at` (`MapView.christmas.eve`), or null. */
   findChristmasEve: (mapId: string, at: Date) => Promise<BossWindowRow | null>;
+  /**
+   * The latest Christmas Eve visit on the patch whose thanks this Keeper was
+   * paid after `since` (#37 X5a: their thanks outlives the visit's close
+   * while its asks are open), or null.
+   */
+  findThankedEve: (mapId: string, userId: string, since: Date) => Promise<BossWindowRow | null>;
+  /**
+   * The Keeper's latest finished mini-boss fight that started in `[from,
+   * until)` (#37 X5a: the Eve fight their thanks' asks go on), or null.
+   */
+  lastFinishedFight: (
+    mapId: string,
+    userId: string,
+    from: Date,
+    until: Date,
+  ) => Promise<string | null>;
   /** The highest Partner level among the patch's active members, or null. */
   topPartnerLevel: (mapId: string) => Promise<number | null>;
   /** Neutral land a boss could stand on, and Juniper's Gap's tiles as the fallback. */
@@ -101,7 +117,7 @@ export interface BossRepo extends BossBarRepo {
    * `[from, until)` on this patch (#37 X2b: the Eve pays its win once). Reads
    * finished battles, so the caller holds the lock that orders those finishes.
    */
-  wonOtherSince: (
+  wonOtherBetween: (
     mapId: string,
     userId: string,
     from: Date,
@@ -190,6 +206,8 @@ export interface BossBarRepo {
     points: number;
     createdAt: Date;
   }) => Promise<boolean>;
+  /** How many Keepers chipped the visit's bar (#37 X5a): a count, never who. */
+  chippers: (mapId: string, windowId: string) => Promise<number>;
   /** Fights this Keeper finished on the visit before `before` (who shares the fall). */
   chipsBy: (mapId: string, windowId: string, userId: string, before: Date) => Promise<number>;
   /** Keepers with at least `minFights` chips before `before` whose thanks isn't paid yet. */
@@ -366,6 +384,49 @@ export function createBossRepo(db: Executor): BossRepo {
       return row ?? null;
     },
 
+    findThankedEve: async (mapId, userId, since) => {
+      const [row] = await db
+        .select({ window: bossWindows })
+        .from(bossWindows)
+        .innerJoin(
+          bossEncounters,
+          and(
+            eq(bossEncounters.mapId, bossWindows.mapId),
+            eq(bossEncounters.windowId, bossWindows.windowId),
+            eq(bossEncounters.userId, userId),
+          ),
+        )
+        .where(
+          and(
+            eq(bossWindows.mapId, mapId),
+            eq(bossWindows.kind, 'christmas-eve'),
+            gt(bossEncounters.thankedAt, since),
+          ),
+        )
+        .orderBy(desc(bossWindows.opensAt))
+        .limit(1);
+      return row?.window ?? null;
+    },
+
+    lastFinishedFight: async (mapId, userId, from, until) => {
+      const [row] = await db
+        .select({ id: battles.id })
+        .from(battles)
+        .where(
+          and(
+            eq(battles.mapId, mapId),
+            eq(battles.playerUserId, userId),
+            eq(battles.kind, 'miniboss'),
+            eq(battles.status, 'finished'),
+            gte(battles.startedAt, from),
+            lt(battles.startedAt, until),
+          ),
+        )
+        .orderBy(desc(battles.endedAt), desc(battles.id))
+        .limit(1);
+      return row?.id ?? null;
+    },
+
     topPartnerLevel: async (mapId) => {
       const [row] = await db
         .select({ level: max(squishies.level) })
@@ -429,7 +490,7 @@ export function createBossRepo(db: Executor): BossRepo {
       return row?.n ?? 0;
     },
 
-    wonOtherSince: async (mapId, userId, from, until, battleId) => {
+    wonOtherBetween: async (mapId, userId, from, until, battleId) => {
       const [row] = await db
         .select({ id: battles.id })
         .from(battles)
@@ -626,6 +687,14 @@ export function createBossRepo(db: Executor): BossRepo {
         .onConflictDoNothing({ target: bossBarChips.battleId })
         .returning({ id: bossBarChips.id });
       return inserted.length > 0;
+    },
+
+    chippers: async (mapId, windowId) => {
+      const [row] = await db
+        .select({ n: countDistinct(bossBarChips.userId) })
+        .from(bossBarChips)
+        .where(and(eq(bossBarChips.mapId, mapId), eq(bossBarChips.windowId, windowId)));
+      return row?.n ?? 0;
     },
 
     chipsBy: async (mapId, windowId, userId, before) => {

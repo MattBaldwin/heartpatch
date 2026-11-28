@@ -150,6 +150,50 @@ describe('the visit and the map', () => {
   });
 });
 
+describe('MapView.christmas.eve chippers, warmedUp and thanks (#37 X5a)', () => {
+  const open = { opensAt: OPENS, state: 'open', chipped: 46, goal: 360 } as const;
+  const fell = { opensAt: OPENS, state: 'fell', chipped: 362, goal: 360 } as const;
+  const dozed = { opensAt: OPENS, state: 'dozed', chipped: 200, goal: 360 } as const;
+  const fellThanks = {
+    kind: 'fell',
+    items: { 'heart-charm': 6, heartdust: 10 },
+    asksLeft: 2,
+    battleId,
+  } as const;
+
+  it('round-trips the count, the yes/no and a Keeper’s own thanks; older payloads still parse', () => {
+    for (const eve of [
+      open,
+      { ...open, chippers: 0, warmedUp: false },
+      { ...open, chippers: 3, warmedUp: true },
+      { ...fell, chippers: 3, warmedUp: true, thanks: fellThanks },
+      { ...fell, thanks: { ...fellThanks, asksLeft: 0 } },
+      { ...dozed, chippers: 1, thanks: { ...fellThanks, kind: 'dozed', asksLeft: 0 } },
+    ]) {
+      expect(MapViewChristmasEveSchema.parse(eve)).toEqual(eve);
+    }
+  });
+
+  it('refuses them without the bar, a mismatched or empty thanks, and asks after a doze', () => {
+    for (const eve of [
+      { opensAt: OPENS, chippers: 2 },
+      { opensAt: OPENS, warmedUp: true },
+      { opensAt: OPENS, thanks: fellThanks },
+      { ...open, chippers: -1 },
+      { ...open, chippers: 1.5 },
+      { ...open, thanks: fellThanks },
+      { ...dozed, thanks: fellThanks },
+      { ...dozed, thanks: { ...fellThanks, kind: 'dozed' } },
+      { ...fell, thanks: { ...fellThanks, items: {} } },
+      { ...fell, thanks: { ...fellThanks, asksLeft: -1 } },
+      { ...fell, thanks: { ...fellThanks, battleId: 'the-last-one' } },
+      { ...fell, thanks: { kind: 'fell', items: fellThanks.items, asksLeft: 2 } },
+    ]) {
+      expect(() => MapViewChristmasEveSchema.parse(eve), JSON.stringify(eve)).toThrow();
+    }
+  });
+});
+
 describe('server-only rows', () => {
   const bar = {
     id: '0190a8c4-0000-7000-8000-0000000000b1',

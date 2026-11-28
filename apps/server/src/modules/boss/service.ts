@@ -33,6 +33,8 @@ const MESSAGES = {
   gone: 'No big squishy around right now. Keep an eye out!',
   tooBig: 'Too big for now! Grow your team and come back.',
   beaten: 'You already beat this big squishy! It’ll stomp back another week.',
+  // Christmas Eve (#37 X5a): it said yes, so it's a friend now, not a fight.
+  friend: 'It’s your friend now! Thanks for helping. 💙',
   noTries: 'Phew, that’s enough stomping for today. Try again tomorrow!',
   // The visit's last patch day: it won't be here tomorrow.
   noTriesLastDay: 'Phew, that’s enough stomping for today!',
@@ -164,7 +166,7 @@ export function createMinibossBattlePort(rules: BossEventRules = BOSS_EVENTS): M
       if (!bar || battle.startedAt < bar.opensAt) return true;
       // The Eve pays its win once per Keeper (owner decision, #37): only the
       // first won Eve fight of this visit, however many they win after.
-      return !(await repo.wonOtherSince(
+      return !(await repo.wonOtherBetween(
         battle.mapId,
         battle.playerUserId,
         bar.opensAt,
@@ -417,11 +419,8 @@ export function createBossService(options: BossServiceOptions): BossService {
         tile: { q: window.q, r: window.r },
         species: met ? window.speciesId : null,
         state,
-        // On the Eve a Keeper who befriended it can still chip in (#37 X2).
-        triesLeftToday:
-          state === 'here' || (state === 'friend' && window.kind === 'christmas-eve')
-            ? await triesLeft(db, map, window, user.id, at)
-            : 0,
+        // A friend is never fought, on the Eve too (★ #900 item 2: `start` refuses it).
+        triesLeftToday: state === 'here' ? await triesLeft(db, map, window, user.id, at) : 0,
         ...(event ? { event } : {}),
       };
     },
@@ -446,6 +445,8 @@ export function createBossService(options: BossServiceOptions): BossService {
         if (partner < gates.minPlayerLevel) throw new AppError('CONFLICT', MESSAGES.tooBig);
         const encounter = await repo.findEncounter(mapId, user.id, window.windowId);
         if (encounter?.wonBattleId != null) throw new AppError('CONFLICT', MESSAGES.beaten);
+        // An Eve ask said yes (★ #900 item 2): as the `friend` view, no more fights.
+        if (joinedOn(encounter, window.kind)) throw new AppError('CONFLICT', MESSAGES.friend);
         if ((await triesLeft(tx, map, window, user.id, at)) === 0) {
           // Tomorrow's patch-local start (+30 h from today's lands in it on a DST day too).
           const today = localDayStart(at, map.timeZone);

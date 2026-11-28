@@ -11,6 +11,7 @@ import {
 } from '@heartpatch/shared/server';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
+import { buildings, patchTrees } from '../../db/schema.js';
 import type { GameEvent } from '../../db/game-events.js';
 import {
   BOSS_RULES,
@@ -104,6 +105,7 @@ const EVE_SECRET_KEYS = [
   'headStartLightsMaxPercent',
   'headStartStarPercent',
   'contributorMinFights',
+  'noticeDays',
   'fallBundle',
   'fallAsks',
   'dozedBundle',
@@ -326,6 +328,23 @@ describe.skipIf(!url)('mini-boss secrets stay on the server (#190c, needs DATABA
     await h.join(mapId, kid, mate);
     await h.grow(mapId, kid, 20);
     await h.grow(mapId, mate, 20);
+    // Two lit lights and the star (#37 X5a): a head start whose size and rule
+    // must never show, only that it warmed the bar up.
+    const tiles = await db.query.tiles.findMany({
+      where: (t, { eq }) => eq(t.mapId, mapId),
+      limit: 3,
+    });
+    for (const tile of tiles.slice(1)) {
+      await db.insert(buildings).values({
+        mapId,
+        ownerUserId: kid.id,
+        tileId: tile.id,
+        buildingId: 'twinkle-lights',
+        kind: 'lights',
+        spot: 0,
+      });
+    }
+    await db.insert(patchTrees).values({ mapId, postTileId: tiles[0]!.id, starLitAt: h.clock });
     h.clock.setTime(new Date('2026-12-24T16:01:00-07:00').getTime());
     const sent: unknown[] = [];
     const get = async (path: string, who = kid) => {
@@ -340,19 +359,32 @@ describe.skipIf(!url)('mini-boss secrets stay on the server (#190c, needs DATABA
     sent.push(started, won);
     // The fight's bar: exactly the three documented fields.
     expect(Object.keys(started.boss!.patchBar!).sort()).toEqual(['chipped', 'goal', 'state']);
-    expect(won.boss!.patchBar).toEqual({ goal: 100, chipped: 100, state: 'fell' });
-    // The map's Eve: the opening and the bar, nothing else.
+    // 4 % from two lights and 10 % for the star, of 100: 14 to start, 114 after the win.
+    expect(won.boss!.patchBar).toEqual({ goal: 100, chipped: 114, state: 'fell' });
+    // The map's Eve: the opening, the bar, a count of chippers and a yes/no
+    // for the head start (#37 X5a), nothing else.
     const view = MapViewSchema.parse(await get(`/maps/${mapId}/view`));
     expect(Object.keys(view.christmas!.eve!).sort()).toEqual([
       'chipped',
+      'chippers',
       'goal',
       'opensAt',
       'state',
+      'warmedUp',
     ]);
+    expect(view.christmas!.eve).toMatchObject({ chippers: 1, warmedUp: true });
+    // Never the head start's size (14) nor the lights counted (2).
+    expect(Object.values(view.christmas!.eve!)).not.toContain(14);
+    expect(Object.values(view.christmas!.eve!)).not.toContain(2);
     await get(`/maps/${mapId}/view`, mate);
     await get(`/maps/${mapId}/boss`);
     await get(`/maps/${mapId}/boss`, mate);
     await get(`/battles/${won.id}`);
+    // The kid's thanks, once paid (their /boss read): theirs alone, never odds.
+    const thanked = MapViewSchema.parse(await get(`/maps/${mapId}/view`)).christmas!.eve!;
+    expect(Object.keys(thanked.thanks!).sort()).toEqual(['asksLeft', 'battleId', 'items', 'kind']);
+    const mates = MapViewSchema.parse(await get(`/maps/${mapId}/view`, mate)).christmas!.eve!;
+    expect(mates.thanks).toBeUndefined();
     for (const reply of sent) expect(eveLeaks(reply), JSON.stringify(reply)).toEqual([]);
     // The boss routes and the map's Christmas block never say who else chipped
     // (the map's member list names the mate, as always), and the boss routes

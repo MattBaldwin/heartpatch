@@ -162,19 +162,28 @@ export async function chipOnFinish(
  * Where a Keeper's tries on this visit start counting (#37 X2, keyed by
  * window): a Christmas Eve visit's own opening, so weekly fights earlier on
  * December 24 leave the Eve's tries whole; any other visit's `opens_at`.
- * Tries are still per patch-local day from there.
+ * Tries are still per patch-local day from there. Pure, given the visit's
+ * bar (or null).
  */
+export function triesFromBar(
+  window: Pick<BossWindowRow, 'kind' | 'opensAt'>,
+  bar: Pick<BossBarDbRow, 'opensAt'> | null,
+): Date {
+  if (window.kind !== 'christmas-eve') return window.opensAt;
+  return bar && bar.opensAt > window.opensAt ? bar.opensAt : window.opensAt;
+}
+
+/** `triesFromBar`, reading the visit's bar. */
 export async function triesFrom(
   db: Executor,
   window: Pick<BossWindowRow, 'mapId' | 'windowId' | 'kind' | 'opensAt'>,
 ): Promise<Date> {
   if (window.kind !== 'christmas-eve') return window.opensAt;
-  const bar = await createBossRepo(db).findBar(window.mapId, window.windowId);
-  return bar && bar.opensAt > window.opensAt ? bar.opensAt : window.opensAt;
+  return triesFromBar(window, await createBossRepo(db).findBar(window.mapId, window.windowId));
 }
 
 /** What a settled bar thanks its contributors with: the fall's bundle and asks, or the doze's. */
-function thanksOf(state: 'fell' | 'dozed', eve: EveRules) {
+export function thanksOf(state: 'fell' | 'dozed', eve: EveRules) {
   return state === 'fell'
     ? { kind: 'fell' as BossThanksKind, items: { ...eve.fallBundle }, asks: eve.fallAsks }
     : { kind: 'dozed' as BossThanksKind, items: { ...eve.dozedBundle }, asks: 0 };
