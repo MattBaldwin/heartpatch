@@ -20,7 +20,6 @@ import {
   type MapDetail,
 } from '@heartpatch/shared';
 import { GUARDIAN_RULES, hintForGuardians } from '@heartpatch/shared/server';
-import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -34,7 +33,6 @@ import {
   maps,
   sessions,
   speciesSeen,
-  tiles,
   users,
 } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -511,27 +509,18 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       const list = MyMapsResponseSchema.parse((await call(server, 'GET', '/maps', owner)).json());
       expect(list.maps.map((m) => m.patchType)).toEqual(['wild-isle']);
       expect((await getMap(server, map.id, owner)).patchType).toBe('wild-isle');
-      const raw = (await call(server, 'GET', `/maps/${map.id}/view`, owner)).json() as {
-        tiles: object[];
-      };
-      const view = MapViewSchema.parse(raw);
+      const viewRes = await call(server, 'GET', `/maps/${map.id}/view`, owner);
+      const view = MapViewSchema.parse(viewRes.json());
       expect(view.map.patchType).toBe('wild-isle');
       expect(view.tiles).toHaveLength(1027);
       // No Clockwork wind on a Wild Isle's tiles (#874): the key is left out.
-      expect(raw.tiles.filter((t) => 'wind' in t)).toEqual([]);
+      expect(viewRes.body).not.toContain('"wind"');
       // A tile with wind shows it (the read path a Clockwork Isle uses).
-      const [windy] = await db
-        .update(tiles)
-        .set({ wind: 3 })
-        .where(and(eq(tiles.mapId, map.id), eq(tiles.terrain, 'meadow')))
-        .returning({ q: tiles.q, r: tiles.r });
-      const windyView = MapViewSchema.parse(
+      await db.execute(`update tiles set wind = 3 where map_id = '${map.id}' and q = 0 and r = 0`);
+      const windy = MapViewSchema.parse(
         (await call(server, 'GET', `/maps/${map.id}/view`, owner)).json(),
-      );
-      const shown = windyView.tiles.filter((t) => t.wind !== undefined);
-      expect(shown.length).toBeGreaterThan(0);
-      expect(shown.every((t) => t.wind === 3)).toBe(true);
-      expect(shown).toContainEqual(expect.objectContaining({ q: windy!.q, r: windy!.r, wind: 3 }));
+      ).tiles.filter((t) => t.wind !== undefined);
+      expect(windy.map((t) => [t.q, t.r, t.wind])).toEqual([[0, 0, 3]]);
       // Reading it plants no node on the water (the extra-nodes top-up).
       const after = await tilesOf(map.id);
       for (const t of after.filter((x) => ['ocean', 'river', 'wild-lake'].includes(x.terrain))) {
