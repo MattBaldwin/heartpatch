@@ -79,11 +79,13 @@ describe('milestone data', () => {
       'seeker',
       'halloween',
       'cozy-harvest',
+      'christmas',
       'lantern-keeper',
       'set-rekindled',
     ]);
     expect(track('halloween').season).toBe('halloween');
     expect(track('cozy-harvest').season).toBe('thanksgiving');
+    expect(track('christmas').season).toBe('christmas');
     expect(SECRET_MILESTONES.length).toBeGreaterThan(0);
   });
 
@@ -285,6 +287,100 @@ describe('milestoneCredits', () => {
     });
     // It dresses the Keeper rather than replacing the body (the face shows in the renders).
     expect(costume?.visual.replacesBody).toBeUndefined();
+  });
+
+  it('counts Christmas things only in the Christmas window (#37)', () => {
+    const advent = {
+      userId: KID,
+      claimId: KID,
+      day: '2026-12-03',
+      catchUp: false,
+      items: { treats: 2 },
+    };
+    const present = { userId: KID, openingId: KID, items: { pies: 1 } };
+    const chip = (points: number) => ({
+      window: '2026-12-24',
+      userId: KID,
+      battleId: KID,
+      points,
+      chipped: 40,
+      goal: 200,
+    });
+    const step = { trackId: 'christmas', userId: KID, amount: MILESTONE_UNIT, key: null };
+    for (const [type, payload] of [
+      ['advent.claimed', advent],
+      ['present.opened', present],
+      ['boss.chipped', chip(38)],
+      // A fight that barely tickled still "helped" (the card says so): it counts.
+      ['boss.chipped', chip(0)],
+    ] as const) {
+      expect(credits(type, payload, ['christmas']), type).toEqual([step]);
+      expect(credits(type, payload), type).toEqual([]);
+      expect(credits(type, payload, ['thanksgiving']), type).toEqual([]);
+    }
+    // Left out on purpose (see the track's comment): gifts and the Patch Tree.
+    const gift = { offerId: KID, fromUserId: PAL, toUserId: KID };
+    expect(credits('gift.collected', gift, ['christmas'])).toEqual([]);
+    expect(track('christmas').progress).toMatchObject({
+      sources: [
+        { eventType: 'advent.claimed' },
+        { eventType: 'present.opened' },
+        { eventType: 'boss.chipped' },
+      ],
+    });
+  });
+
+  it('gives the Jolly Elf Costume at the Christmas top tier (#37)', () => {
+    const tiers = track('christmas').tiers;
+    expect(tiers.map((t) => [t.threshold, t.title.name, t.coins, t.clothing])).toEqual([
+      [5, 'Jingle Pal', 25, undefined],
+      [15, 'Cocoa Cuddler', 50, undefined],
+      [30, 'Merry Helper', 100, 'jolly-elf-costume'],
+    ]);
+    const costume = CLOTHING_BY_ID.get('jolly-elf-costume');
+    expect(costume).toMatchObject({
+      slot: 'costume',
+      rarity: 'legendary',
+      season: 'christmas',
+      sources: ['milestone'],
+      tradable: false,
+    });
+    // It dresses the Keeper rather than replacing the body (the face shows in the renders).
+    expect(costume?.visual.replacesBody).toBeUndefined();
+    expect(findAvoidedWords(costume?.name ?? '')).toEqual([]);
+    expect(findAvoidedWords(costume?.description ?? '')).toEqual([]);
+  });
+
+  it("names every Christmas activity in every tier's goal, never just a count (#37)", () => {
+    // Owner decision 2026-11-28: the card shows only the next tier's goal, so
+    // each one lists what a kid can do. One word per source the track counts.
+    const named: Record<string, RegExp> = {
+      'advent.claimed': /\badvent\b/i,
+      'present.opened': /\bbag\b/i,
+      'boss.chipped': /\bchip in on Christmas Eve\b/,
+    };
+    const christmas = track('christmas');
+    if (christmas.progress.from !== 'events') throw new Error('christmas counts events');
+    const sources = christmas.progress.sources.map((s) => s.eventType);
+    expect(sources.toSorted()).toEqual(Object.keys(named).toSorted());
+    for (const tier of christmas.tiers) {
+      for (const type of sources)
+        expect(tier.goal, `${tier.title.name}: ${type}`).toMatch(named[type]!);
+      expect(tier.goal).not.toMatch(/\bthings\b/);
+      // Short enough for the iPhone Milestones card and the Next-up sheet.
+      expect(tier.goal.length, tier.title.name).toBeLessThanOrEqual(64);
+    }
+  });
+
+  it('never names or hints at a Christmas BIG squishy in the Christmas track (rule 6)', () => {
+    // The Eve's species is a secret until December 24: no squishy name,
+    // public or secret, appears anywhere in the track or its prize.
+    const christmas = track('christmas');
+    const costume = CLOTHING_BY_ID.get('jolly-elf-costume');
+    const text = JSON.stringify([christmas, costume?.name, costume?.description]).toLowerCase();
+    for (const species of [...SPECIES, ...SECRET_SPECIES]) {
+      expect(text, species.id).not.toContain(species.name.toLowerCase());
+    }
   });
 
   it('checks the secret conditions on the payload', () => {

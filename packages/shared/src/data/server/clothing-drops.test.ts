@@ -77,6 +77,15 @@ describe('clothing drop tables (server-only)', () => {
     expect(capture.entries.find((e) => e.item === 'leaf-crown')?.terrains).toBeUndefined();
   });
 
+  it('never drops a milestone prize (the Leaf Pile and Jolly Elf costumes, #34, #37)', () => {
+    const prizes = new Set(CLOTHING.filter((i) => !i.sources.includes('found')).map((i) => i.id));
+    expect(prizes.has('leaf-pile-costume')).toBe(true);
+    expect(prizes.has('jolly-elf-costume')).toBe(true);
+    for (const table of CLOTHING_DROPS) {
+      for (const entry of table.entries) expect(prizes.has(entry.item), entry.item).toBe(false);
+    }
+  });
+
   it('makes rarer costumes much rarer, the Mythic rarest of all', () => {
     for (const table of CLOTHING_DROPS) {
       const weight = (id: string) => table.entries.find((e) => e.item === id)?.weight;
