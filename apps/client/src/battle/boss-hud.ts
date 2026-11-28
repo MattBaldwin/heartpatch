@@ -12,6 +12,7 @@ import {
   type FriendPlate,
   type PickerState,
 } from './boss-view.js';
+import { mountPatchBar, patchBarVars, type PatchBarLine } from './patch-bar.js';
 
 // The mini-boss fight's own HUD pieces (#190 PR 1, the phone-first boss HUD,
 // owner option 1): a slim strip at the top (the boss's name, energy, the
@@ -43,8 +44,10 @@ export interface PickerHandlers {
 export interface BossHud {
   /** Over the fight (the strip and the stage stickers): goes in the HUD's root. */
   readonly top: HTMLElement;
-  /** The strip: the stage starts under it (`safe()`). */
+  /** The strip: the stage starts under it (`safe()`), or under the patch bar's line when one shows. */
   readonly strip: HTMLElement;
+  /** The Christmas Eve patch bar's line under the strip (#37 X4); its box ends where the stage starts. */
+  readonly patchBar: PatchBarLine;
   /** In the sheet: the chip handle on top, the picker under it. */
   readonly dock: HTMLElement;
   /** The chip handle: the stage ends above it (`safe()`). */
@@ -174,7 +177,8 @@ export function mountBossHud(): BossHud {
     'data-testid': 'boss-callout',
   });
   bossCallout.hidden = true;
-  const top = el('div', { class: 'boss-top' }, strip, bossCallout);
+  const patchBar = mountPatchBar();
+  const top = el('div', { class: 'boss-top' }, strip, patchBar.el, bossCallout);
 
   // ── The chip handle and the picker, in the sheet ──
   const round = el('span', { class: 'boss-round', 'data-testid': 'boss-round' });
@@ -292,9 +296,10 @@ export function mountBossHud(): BossHud {
   const hud: BossHud = {
     top,
     strip,
+    patchBar,
     dock,
     handle,
-    vars: bossHudVars(),
+    vars: { ...bossHudVars(), ...patchBarVars() },
     setPlates: (plates) => {
       bossName.textContent = plates.boss.name;
       winding.hidden = !plates.boss.windup;

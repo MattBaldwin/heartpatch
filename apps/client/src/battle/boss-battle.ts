@@ -1,12 +1,14 @@
 import {
   BATTLE_RULES,
   ELEMENTS,
+  GAME_EVENTS,
   speciesMoveKinds,
   type BattleSideId,
   type BossBefriendResponse,
   type MoveKind,
   type PlayerBattle,
   type PlayerBattleAction,
+  type WsEventMessage,
 } from '@heartpatch/shared';
 import { ApiRequestError } from '../net/api.js';
 import type { BattleHud } from './battle-hud.js';
@@ -33,6 +35,7 @@ import {
   type PickerState,
 } from './boss-view.js';
 import { describeMove } from './move-info.js';
+import { barFromEvent, chippedSticker, newerBar, type PatchBarState } from './patch-bar.js';
 import { NO_TRAIL, signatureCue, trailAfter, type MoveTrail } from './choreography.js';
 
 // A mini-boss fight's screen parts (#190): the team HUD, the picker's round,
@@ -81,6 +84,11 @@ export interface BossBattle {
     b: PlayerBattle,
     names: BattleContent,
   ) => (BossResultCard & { extra: HTMLElement | null }) | null;
+  /**
+   * A live `boss.chipped` / `boss.fell` on this fight's map (#37 X4): the patch
+   * bar's line and the "Chipped!" sticker move without a refetch.
+   */
+  patchEvent: (b: PlayerBattle, event: WsEventMessage) => void;
   /** The dev hook (Playwright reads it, not pixels). */
   readonly debug: {
     readonly picker: PickerState | null;
@@ -111,7 +119,8 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
   const slots = {
     top: ui.top,
     sheet: ui.dock,
-    topEdge: ui.strip,
+    // The stage starts under the patch bar's line when one shows (its box is 0 tall when not).
+    topEdge: ui.patchBar.el,
     bottomEdge: ui.handle,
     vars: ui.vars,
   };
@@ -131,6 +140,12 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
   let moving = -1;
   let asks = 0;
   let warmth = 0;
+  /** The Christmas Eve patch bar (#37 X4): the newest read, the server's view or a live event. */
+  let bar: PatchBarState | null = null;
+  /** What my own last chip added (`boss.chipped`'s `points`, sent to me alone). */
+  let ownPoints: number | null = null;
+  /** The "Chipped!" sticker on the card now, redrawn in place when a live event moves it. */
+  let sticker: HTMLElement | null = null;
   let busy = false;
   let problem: string | null = null;
   /**
@@ -156,12 +171,22 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     moving = -1;
     asks = 0;
     warmth = 0;
+    bar = null;
+    ownPoints = null;
+    sticker = null;
     busy = false;
     problem = null;
     counted = false;
     recounts = 0;
     latest = null;
     keys.clear();
+  };
+
+  /** The line under the strip follows the bar; the stage band is measured again when it comes or goes. */
+  const showBar = (b: PlayerBattle) => {
+    const server = b.boss?.patchBar ?? null;
+    bar = server ? newerBar(bar, server) : null;
+    if (ui.patchBar.set(bar)) sheetMoved();
   };
 
   const movesFor = (b: PlayerBattle, names: BattleContent, slot: number): PickerMove[] => {
@@ -308,14 +333,20 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
     open: (b) => {
       if (battleId !== b.id) reset(b.id);
       deps.hud.setTeam(slots);
+      showBar(b);
     },
     close: () => {
       deps.hud.setTeam(null);
+      bar = null;
+      ownPoints = null;
+      sticker = null;
+      ui.patchBar.set(null);
       ui.reset();
       drawn = null;
       battleId = null;
     },
     plates: (b, shown, names) => {
+      showBar(b);
       ui.setPlates(bossPlates(b, shown, names, (side, slot) => deps.nameOf(b, side, slot)));
       // "Round 1" while the first is picked; the round's own number while it plays.
       // The tries and "here until" stay off the fight (#190 PR 1): the result card has the tries.
@@ -400,7 +431,35 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
         note.textContent = problem;
         panel.append(note);
       }
-      return { ...card, extra: panel };
+      const chipped = chippedSticker(bar, ownPoints);
+      sticker = chipped;
+      if (!chipped) return { ...card, extra: panel };
+      const extra = document.createElement('div');
+      extra.append(chipped, ...(panel ? [panel] : []));
+      return { ...card, extra };
+    },
+    patchEvent: (b, event) => {
+      if (b.mapId !== event.mapId || !b.boss?.patchBar) return;
+      let next: PatchBarState;
+      if (event.type === 'boss.chipped') {
+        const parsed = GAME_EVENTS['boss.chipped'].public.safeParse(event.data);
+        if (!parsed.success || parsed.data.window !== b.boss.eventWindow.id) return;
+        // Only the chipper's own copy carries the points.
+        if (parsed.data.points !== undefined) ownPoints = parsed.data.points;
+        next = barFromEvent(parsed.data);
+      } else {
+        const parsed = GAME_EVENTS['boss.fell'].public.safeParse(event.data);
+        if (!parsed.success || parsed.data.window !== b.boss.eventWindow.id) return;
+        next = { ...barFromEvent(parsed.data), state: 'fell' };
+      }
+      bar = newerBar(bar, next);
+      if (ui.patchBar.set(bar)) sheetMoved();
+      const redrawn = sticker ? chippedSticker(bar, ownPoints) : null;
+      if (sticker && redrawn) {
+        // In place, so a screen reader still hears the status node change.
+        sticker.className = redrawn.className;
+        sticker.replaceChildren(...redrawn.childNodes);
+      }
     },
     get debug() {
       return { picker, asks, warmth, recounts };
