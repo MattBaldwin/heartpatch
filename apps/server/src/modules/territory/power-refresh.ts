@@ -43,11 +43,12 @@ function pausedWithin(fromMs: number, toMs: number, pause: WorkPause | null): nu
 /**
  * Where a repowered building's count starts again (epoch ms): early enough
  * before `atMs` that its worked time from there to `atMs` equals the
- * worked time it had from `sinceMs` to `offAtMs`, so a machine unpowered
- * at T1 and repowered at T2 banks exactly `[T0, T1) ∪ [T2, now)`. Worked
- * time leaves out its homestead's cut-off (`pause`), which `productionAt`
- * cuts by absolute time, so the start walks back over any cut-off it now
- * spans (a single interval: it settles in a step or two).
+ * worked time `W` it had from `sinceMs` to `offAtMs`, so a machine
+ * unpowered at T1 and repowered at T2 banks exactly `[T0, T1) ∪ [T2, now)`.
+ * Worked time leaves out its homestead's cut-off (`pause`, one interval,
+ * open while it lasts), which `productionAt` cuts by absolute time. Closed
+ * form: with no cut-off before `atMs`, or `W` fitting in the stretch after
+ * it ends (`tail`), `atMs - W`; else the rest of `W` before the cut-off.
  */
 export function repoweredSinceMs(
   sinceMs: number,
@@ -56,13 +57,9 @@ export function repoweredSinceMs(
   pause: WorkPause | null,
 ): number {
   const worked = Math.max(0, offAtMs - sinceMs - pausedWithin(sinceMs, offAtMs, pause));
-  let start = atMs - worked;
-  for (let i = 0; i < 4; i++) {
-    const next = atMs - worked - pausedWithin(start, atMs, pause);
-    if (next === start) break;
-    start = next;
-  }
-  return start;
+  if (!pause || pause.fromMs >= atMs) return atMs - worked;
+  const tail = atMs - Math.min(pause.toMs ?? atMs, atMs);
+  return worked <= tail ? atMs - worked : pause.fromMs - (worked - tail);
 }
 
 /**

@@ -14,6 +14,8 @@ import {
   parseGameEventPayload,
   POWER_RULES,
   RAIL_RULES,
+  roadSpeedPercent,
+  TRAVEL_RULES,
   TERRITORY_RULES,
   type Hex,
   type MapDetail,
@@ -478,8 +480,9 @@ describe.skipIf(!url)('wires, rails and power (needs DATABASE_URL)', () => {
     expect(removed).toHaveLength(2);
     expect(removed.every((p) => p.lost === 'captured' && p.userId === rival.id)).toBe(true);
     // Its Windmill went with the land: the Sorter is cut off from the capture's instant.
+    // At the capture's own instant (plan R2.2), never a later now().
     const row = await buildingRow(sorter);
-    expect(row?.unpoweredSince).not.toBeNull();
+    expect(row?.unpoweredSince).toEqual(clock);
     const [off] = await eventsOf(mapId, 'building.unpowered');
     expect(parseGameEventPayload('building.unpowered', off!.payload)).toMatchObject({
       userId: rival.id,
@@ -516,6 +519,7 @@ describe.skipIf(!url)('wires, rails and power (needs DATABASE_URL)', () => {
     const rail = RAIL_RULES.levels[0]!.speedPercent;
     expect(await speedOf()).toBe(Math.max(100, combinePercents([before, rail])));
     // A Path (slower than a Rail) on the same tile changes nothing.
+    expect(roadSpeedPercent(1, TRAVEL_RULES)!).toBeLessThan(rail);
     expect(
       (await call(server, 'POST', `/maps/${mapId}/roads`, kid, { q: node.q, r: node.r }))
         .statusCode,
