@@ -476,6 +476,8 @@ export const BUILDINGS: Building[] = [
     // TUNE: two a Keeper keeps a full patch under the map's bulb cap (600,
     // `CHRISTMAS.bulbs` on the client; checked in bulb-layout.test.ts).
     maxPerHome: 2,
+    // Out on the land; at home only the home count is checked, so both may
+    // share a home tile (the map lights that tile once).
     maxPerTile: 1,
     slot: 'ring',
     glowNights: ['12-24', '12-25'], // TUNE:
