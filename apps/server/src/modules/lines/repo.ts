@@ -1,4 +1,4 @@
-import type { LineKind } from '@heartpatch/shared';
+import { LineKindSchema, type LineKind } from '@heartpatch/shared';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
@@ -59,10 +59,10 @@ const lineColumns = {
   tileOwnerUserId: tiles.ownerUserId,
 };
 
-/** The DB CHECK keeps `kind` to the two; this narrows the text column's type. */
+/** Parses the text column's `kind` (the DB CHECK keeps it to the two), as the buildings repo does. */
 const toLine = (row: Omit<LineRow, 'kind'> & { kind: string }): LineRow => ({
   ...row,
-  kind: row.kind as LineKind,
+  kind: LineKindSchema.parse(row.kind),
 });
 
 export function createLinesRepo(db: Executor): LinesRepo {

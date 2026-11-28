@@ -522,4 +522,47 @@ describe.skipIf(!url)('wires, rails and power (needs DATABASE_URL)', () => {
     ).toBe(201);
     expect(await speedOf()).toBe(Math.max(100, combinePercents([before, rail])));
   });
+
+  it('taking a Windmill down unpowers the Sorter it joined, at that instant', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    await makeClockwork(mapId);
+    await give(mapId, kid, { parts: 40 });
+    const tiles = await lineFrom(mapId, kid);
+    for (const t of tiles.slice(2, 4)) await own(mapId, t, kid.id);
+    const windmill = await put(mapId, kid, tiles[2]!, 'windmill');
+    const sorter = await put(mapId, kid, tiles[3]!, 'sorter');
+    clock.setTime(clock.getTime() + HOUR_MS);
+    const res = await call(server, 'POST', `/maps/${mapId}/buildings/${windmill}/remove`, kid);
+    expect(res.statusCode, res.body).toBe(200);
+    expect((await buildingRow(sorter))?.unpoweredSince).toEqual(clock);
+    const [off] = await eventsOf(mapId, 'building.unpowered');
+    expect(parseGameEventPayload('building.unpowered', off!.payload)).toMatchObject({
+      buildingRowId: sorter,
+    });
+  });
+
+  it('claims along a rail, as far as its level reaches', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    await makeClockwork(mapId);
+    await give(mapId, kid, { timber: 40, parts: 40 });
+    const granted = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, {
+      level: 20,
+      speciesId: 'emberbun',
+    });
+    expect(granted.statusCode, granted.body).toBe(201);
+    const tiles = await lineFrom(mapId, kid);
+    await own(mapId, tiles[2]!, kid.id);
+    const attack = (h: Hex) =>
+      call(server, 'POST', `/maps/${mapId}/attacks`, kid, { q: h.q, r: h.r });
+    // A Rail reaches 2 past its tile: line[4] is out of reach without it.
+    expect(RAIL_RULES.levels[0]!.reach).toBe(2);
+    expect((await attack(tiles[4]!)).statusCode).toBe(403);
+    expect((await line(server, kid, mapId, tiles[2]!, 'rail')).statusCode).toBe(201);
+    const claim = await attack(tiles[4]!);
+    expect(claim.statusCode, claim.body).toBe(201);
+  });
 });

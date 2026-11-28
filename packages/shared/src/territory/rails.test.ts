@@ -46,7 +46,7 @@ describe('rails (Clockwork Isle, #874)', () => {
   });
 
   it('a road and a rail on one tile: the further reach wins', () => {
-    // A Paved road reaches 3, a Rail 2: the road wins; a Tidy rail ties, and wins too.
+    // A Paved road (3) beats a Rail (2); a Tidy rail (3) beats a Path (1).
     expect(reachOn([{ level: 1 }], [{ level: 3 }]).has(hexKey({ q: 6, r: 0 }))).toBe(true);
     expect(reachOn([{ level: 2 }], [{ level: 1 }]).has(hexKey({ q: 6, r: 0 }))).toBe(true);
   });

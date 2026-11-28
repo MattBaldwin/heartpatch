@@ -1,4 +1,4 @@
-import { hexKey, isGenerator, needsPower, poweredSet, resumeSinceMs } from '@heartpatch/shared';
+import { hexKey, isGenerator, needsPower, poweredSet, type WorkPause } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { homesteadPauseOf } from '../buildings/production.js';
@@ -34,11 +34,39 @@ const powerEvent = (
   payload: { userId: row.ownerUserId, buildingRowId: row.id, q: row.q, r: row.r },
 });
 
+/** How much of `[fromMs, toMs)` a homestead cut-off (`WorkPause`) covers. */
+function pausedWithin(fromMs: number, toMs: number, pause: WorkPause | null): number {
+  if (!pause) return 0;
+  return Math.max(0, Math.min(toMs, pause.toMs ?? Infinity) - Math.max(fromMs, pause.fromMs));
+}
+
 /**
- * Where a repowered building's count starts again: the unpowered stretch
- * is left out and its part-done work carries on (`resumeSinceMs`, as an
- * upkeep wake), so a machine unpowered at T1 and repowered at T2 banks
- * exactly `[T0, T1) ∪ [T2, now)`. An earlier stop (an upkeep pause, a
+ * Where a repowered building's count starts again (epoch ms): early enough
+ * before `atMs` that its worked time from there to `atMs` equals the
+ * worked time it had from `sinceMs` to `offAtMs`, so a machine unpowered
+ * at T1 and repowered at T2 banks exactly `[T0, T1) ∪ [T2, now)`. Worked
+ * time leaves out its homestead's cut-off (`pause`), which `productionAt`
+ * cuts by absolute time, so the start walks back over any cut-off it now
+ * spans (a single interval: it settles in a step or two).
+ */
+export function repoweredSinceMs(
+  sinceMs: number,
+  offAtMs: number,
+  atMs: number,
+  pause: WorkPause | null,
+): number {
+  const worked = Math.max(0, offAtMs - sinceMs - pausedWithin(sinceMs, offAtMs, pause));
+  let start = atMs - worked;
+  for (let i = 0; i < 4; i++) {
+    const next = atMs - worked - pausedWithin(start, atMs, pause);
+    if (next === start) break;
+    start = next;
+  }
+  return start;
+}
+
+/**
+ * A repowered row's new count start. An earlier stop (an upkeep pause, a
  * storm) owns the count and is left to its own wake. Known edge: a stop
  * that came while it was unpowered is not shifted with it; Clockwork rows
  * pay no upkeep and the isle has no weather, so neither happens there.
@@ -48,7 +76,7 @@ function repoweredSince(row: BuildingRow, offAt: Date, at: Date): Date | null {
   const earlier = [row.pausedAt, row.damagedAt].some((d) => d !== null && d <= offAt);
   if (earlier) return row.producedSince;
   return new Date(
-    resumeSinceMs(
+    repoweredSinceMs(
       row.producedSince.getTime(),
       offAt.getTime(),
       at.getTime(),
