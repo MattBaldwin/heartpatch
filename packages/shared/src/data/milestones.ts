@@ -434,19 +434,19 @@ export const MILESTONE_TRACKS: MilestoneTrack[] = [
     tiers: [
       {
         threshold: 5,
-        goal: 'Befriend Halloween squishies, gather Pumpkins or find spooky clothes: 5 in all!',
+        goal: 'Befriend Halloween squishies, gather Pumpkins or find spooky clothes.',
         title: { id: 'pumpkin-pal', name: 'Pumpkin Pal' },
         coins: 25,
       },
       {
         threshold: 15,
-        goal: 'Befriend Halloween squishies, gather Pumpkins or find spooky clothes: 15 in all!',
+        goal: 'Befriend Halloween squishies, gather Pumpkins or find spooky clothes.',
         title: { id: 'spooky-sweetie', name: 'Spooky Sweetie' },
         coins: 50,
       },
       {
         threshold: 40,
-        goal: 'Befriend Halloween squishies, gather Pumpkins or find spooky clothes: 40 in all!',
+        goal: 'Befriend Halloween squishies, gather Pumpkins or find spooky clothes.',
         title: { id: 'harvest-moon', name: 'Moonlit Pumpkin' },
         coins: 100,
         clothing: 'harvest-moon-costume',
@@ -484,19 +484,19 @@ export const MILESTONE_TRACKS: MilestoneTrack[] = [
     tiers: [
       {
         threshold: 4, // TUNE:
-        goal: 'Befriend harvest squishies, gather Magic Fallen Leaves or find harvest clothes: 4 in all!',
+        goal: 'Befriend harvest squishies, gather Magic Fallen Leaves or find harvest clothes.',
         title: { id: 'leaf-lover', name: 'Leaf Lover' },
         coins: 25, // TUNE:
       },
       {
         threshold: 10, // TUNE:
-        goal: 'Befriend harvest squishies, gather Magic Fallen Leaves or find harvest clothes: 10 in all!',
+        goal: 'Befriend harvest squishies, gather Magic Fallen Leaves or find harvest clothes.',
         title: { id: 'cozy-crunch', name: 'Cozy Crunch' },
         coins: 50, // TUNE:
       },
       {
         threshold: 20, // TUNE:
-        goal: 'Befriend harvest squishies, gather Magic Fallen Leaves or find harvest clothes: 20 in all!',
+        goal: 'Befriend harvest squishies, gather Magic Fallen Leaves or find harvest clothes.',
         title: { id: 'pile-pal', name: 'Pile Pal' },
         coins: 100, // TUNE:
         clothing: 'leaf-pile-costume',

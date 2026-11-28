@@ -101,7 +101,7 @@ describe('milestone data', () => {
     // The card shows only the next tier's goal, so each tier has to say what counts.
     const kind = {
       'squishy.captured': /befriend/i,
-      'resource.gathered': /gather|harvest/i,
+      'resource.gathered': /gather/i,
       'clothing.found': /find/i,
     };
     for (const id of ['halloween', 'cozy-harvest']) {
@@ -112,7 +112,6 @@ describe('milestone data', () => {
         expect(words, `${id} source ${source.eventType} has copy words`).toBeDefined();
         for (const tier of t.tiers) {
           expect(tier.goal, `${id} ${String(tier.threshold)}`).toMatch(words);
-          expect(tier.goal, `${id} ${String(tier.threshold)}`).toContain(String(tier.threshold));
         }
       }
     }
