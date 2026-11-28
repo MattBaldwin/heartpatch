@@ -47,7 +47,7 @@ const LABELS = [
   '[data-testid="map-legend-button"]',
   '[data-testid="night-chips"]',
   '.eve-chip',
-  '.tree-beat',
+  '[data-testid="patch-line"]',
 ].join(', ');
 
 const MATE = '0190a8c4-0000-7000-8000-00000000a7e1';
@@ -257,15 +257,16 @@ test.describe('the Patch Tree (#37 2d)', () => {
     expect(tap.socket).not.toBeNull();
     tap.socket!.send(decorated(map.viewSeq + 1, 11, false));
     await expect.poll(async () => (await mapState(page))?.tree?.ornaments).toBe(11);
-    // The line names the fun, never who gave whom.
-    const beat = page.getByTestId('tree-beat');
+    // The line names the fun, never who gave whom (on the patch line, in its turn).
+    const beat = page.getByTestId('patch-line');
     await expect(beat).toHaveText(
       'An ornament went up on the Patch Tree! 🎄 1 more to light the star!',
+      { timeout: 15_000 },
     );
     expect(await beat.textContent()).not.toContain('pip');
     tap.socket!.send(decorated(map.viewSeq + 2, 12, true));
     await expect.poll(async () => (await mapState(page))?.tree?.starLit).toBe(true);
-    await expect(beat).toHaveText('The star on the Patch Tree is lit! ⭐');
+    await expect(beat).toHaveText('The star on the Patch Tree is lit! ⭐', { timeout: 15_000 });
     // No refetch for either.
     expect(views.length).toBe(asked);
     await page.context().close();

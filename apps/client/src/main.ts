@@ -1413,7 +1413,11 @@ const eveLayer = createEveLayer({
   },
 });
 // The Patch Tree's line when an ornament goes up or its star lights (#37 2d).
-const treeLayer = createTreeLayer({ root: document.body });
+const treeLayer = createTreeLayer({
+  say: (text) => {
+    patchLine.say(text);
+  },
+});
 const bossPicker = createBossPicker({
   store: bossStore,
   fight: async (mapId) => {
@@ -2677,7 +2681,6 @@ if (import.meta.env.DEV) {
         items: d.thanks?.items ?? null,
       };
     },
-    tree: () => treeLayer.debug,
     push: () => ({ offer: pushOffer.debug.state, card: pushOfferCard.isOpen }),
     audio: () => audio.debug,
   };

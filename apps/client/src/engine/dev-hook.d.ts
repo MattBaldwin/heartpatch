@@ -239,11 +239,6 @@ declare global {
         asksLeft: number | null;
         items: readonly string[] | null;
       };
-      /** The Patch Tree's line on the map (#37 2d), and the tree as the view has it. */
-      tree?(): {
-        line: string | null;
-        tree: { postIndex: number; ornaments: number; starLit: boolean } | null;
-      };
       /** Push nudges (#726): the offer's state and whether its card is up. */
       push?(): { offer: 'idle' | 'checking' | 'waiting' | 'showing' | 'done'; card: boolean };
     };
