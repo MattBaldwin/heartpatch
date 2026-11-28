@@ -17,6 +17,30 @@ export interface BossTeamShape {
   readonly mix: 'mixed' | 'good' | 'bad';
 }
 
+/**
+ * The Christmas Eve run (#37 X3): the Eve boss (`BOSS_EVENTS.christmasEve`)
+ * fought with the same shapes and gates at `gatedLevel`, its spread read
+ * against the bag bosses' balanced rates at `level`; `referenceLevels` are
+ * reported without gates.
+ */
+export interface ChristmasSimConfig {
+  /** Partner and boss level the Eve gates are read at (the Eve floor). */
+  readonly gatedLevel: number;
+  /** More levels to report, ungated. */
+  readonly referenceLevels: readonly number[];
+  /**
+   * The `--patch` tally (addendum risks): `patches` patches of one Keeper
+   * per entry in `partnerLevels`, each fighting `tries` times with the
+   * first shape's team, the boss at the Eve gates (Partner + `levelBonus`,
+   * at least `minLevel`). Points are the bar's (`chipPoints`).
+   */
+  readonly patch: {
+    readonly patches: number;
+    readonly tries: number;
+    readonly partnerLevels: readonly number[];
+  };
+}
+
 export interface BossSimConfig {
   /** Seeded battles per cell (team shape × boss × level bonus). */
   readonly games: number;
@@ -28,6 +52,7 @@ export interface BossSimConfig {
   /** The team's level over the boss's, per cell. */
   readonly levelBonuses: readonly number[];
   readonly shapes: readonly BossTeamShape[];
+  readonly christmas: ChristmasSimConfig;
   /** The team's AI stance in the sim (a kid's picks, roughly). */
   readonly policy: 'balanced';
   readonly gates: {
@@ -57,6 +82,16 @@ export const BOSS_SIM_CONFIG: BossSimConfig = {
     { key: 'team of 2', levelsBelow: [0, 3], mix: 'mixed' },
     { key: 'team of 1', levelsBelow: [0], mix: 'mixed' },
   ],
+  christmas: {
+    gatedLevel: 10, // TUNE: the Eve floor (`christmasEve.gates.minLevel`), where little Keepers fight
+    referenceLevels: [25], // TUNE: the weekly sim level
+    patch: {
+      patches: 250, // TUNE:
+      tries: 3, // TUNE: the addendum's "3 tries" (`triesPerDay`)
+      // TUNE: a mixed patch, little siblings to grown-ups (the Eve gate is player 5).
+      partnerLevels: [5, 8, 12, 16, 20, 25, 30, 40],
+    },
+  },
   policy: 'balanced',
   // Plan §9 (owner-approved, #190).
   gates: {

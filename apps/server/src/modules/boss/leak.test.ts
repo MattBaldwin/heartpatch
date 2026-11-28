@@ -393,6 +393,57 @@ describe.skipIf(!url)('mini-boss secrets stay on the server (#190c, needs DATABA
     }
   });
 
+  it('the Christmas Eve boss (#37 X3): Snowbundle is never named before the fight, nor Bundlebit', async () => {
+    const eve = REAL_BAG_RULES.christmasEve!;
+    expect(eve.speciesId).toBe('snowbundle');
+    const line = SECRET_SPECIES.filter((s) => s.id === 'snowbundle' || s.id === 'bundlebit');
+    expect(line).toHaveLength(2);
+    const lineMoves = SECRET_MOVES.filter((m) => line.some((s) => s.moves.includes(m.id)));
+    const words = [...line, ...lineMoves].flatMap((r) => [r.id, r.name.toLowerCase()]);
+    const named = (value: unknown) => {
+      const text = JSON.stringify(value).toLowerCase();
+      return words.filter((w) => text.includes(w));
+    };
+
+    await h.start(REAL_BAG_RULES, { miniBosses: 'on' });
+    h.clock.setTime(new Date('2026-12-24T12:00:00-07:00').getTime());
+    const kid = await h.player();
+    const mapId = await h.patch(kid);
+    await h.grow(mapId, kid, 20);
+    h.clock.setTime(new Date('2026-12-24T16:01:00-07:00').getTime());
+    expect(await h.sweep([mapId])).toBe(1);
+
+    const visit = await h.call('GET', `/maps/${mapId}/boss`, kid);
+    expect(visit.statusCode, visit.body).toBe(200);
+    expect(visit.json<{ boss: unknown }>().boss).not.toBeNull();
+    const view = await h.call('GET', `/maps/${mapId}/view`, kid);
+    expect(view.statusCode, view.body).toBe(200);
+    expect(MapViewSchema.parse(view.json()).christmas?.eve).toBeDefined();
+    for (const reply of [visit.json(), view.json()]) expect(named(reply)).toEqual([]);
+    const events: GameEvent[] = await db.query.gameEvents.findMany({
+      where: (t, { eq }) => eq(t.mapId, mapId),
+    });
+    expect(events.map((e) => e.type)).toContain('boss.appeared');
+    for (const event of events) {
+      const shown = publicViewFor(PUBLIC_VIEWS, event, { userId: kid.id });
+      expect(named(shown), event.type).toEqual([]);
+    }
+
+    // The fight is the meeting: it names Snowbundle, with its moves as public move data.
+    const battle = await h.fight(kid, mapId);
+    const boss = battle.speciesDefs.find((s) => s.id === 'snowbundle')!;
+    expect(boss.name).toBe('Snowbundle');
+    for (const id of boss.moves) {
+      const secret = SECRET_MOVES.find((m) => m.id === id);
+      if (secret)
+        expect(
+          battle.moveDefs.find((m) => m.id === id),
+          id,
+        ).toEqual(secret);
+    }
+    expect(leaks(battle)).toEqual([]);
+  });
+
   it('the switch closed (#234): nothing about the visit is sent', async () => {
     await h.start(REAL_BAG_RULES, { miniBosses: 'off' });
     const kid = await h.player();

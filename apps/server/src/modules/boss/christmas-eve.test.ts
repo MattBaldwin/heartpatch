@@ -121,9 +121,9 @@ describe.skipIf(!url)('the Christmas Eve visit (#37 X1, needs DATABASE_URL)', ()
     });
     const row = (await windowRow(mapId, '2026-12-21'))!;
     expect(row.kind).toBe('christmas-eve');
-    // Until X3 lands the species, the week's bag boss stands in.
-    expect(EVE.speciesId).toBeNull();
-    expect(row.speciesId).toBe(STAND_IN_BOSS.id);
+    // The Eve's own boss (#37 X3), not the week's bag draw.
+    expect(EVE.speciesId).toBe('snowbundle');
+    expect(row.speciesId).toBe(EVE.speciesId);
 
     // The fight's boss level: Partner + 2, floored at the Eve's 10.
     const battle = await h.fight(owner, mapId);

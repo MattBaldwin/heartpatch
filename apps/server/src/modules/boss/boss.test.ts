@@ -31,7 +31,7 @@ import { defaultBattleContent } from '../battles/service.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { EVOLUTION_STEPS } from '../care/service.js';
 import { grantItems } from '../inventory/service.js';
-import { BOSS_START, REAL_BAG_IS_REAL, REAL_BAG_RULES, bossHarness } from '../../../tests/boss.js';
+import { REAL_BAG_IS_REAL, REAL_BAG_RULES, bossHarness } from '../../../tests/boss.js';
 import { BossLooksResponseSchema } from './routes.js';
 
 const url = inject('testDatabaseUrl');
@@ -578,6 +578,8 @@ const SURE_REAL: BossEventRules = {
   befriend: { ...REAL_BAG_RULES.befriend, basePercent: 100 },
 };
 const bagIds = REAL_BAG_RULES.bag.map((b) => b.speciesId);
+/** A Monday evening after the Christmas weeks, so a 7-week walk meets no Eve (#37 X3). */
+const WEEKLY_WALK_START = '2027-01-04T19:00:00Z';
 const BOSS_LINE = SECRET_SPECIES.filter((s) => s.line === 'boss');
 
 /*
@@ -662,13 +664,17 @@ describe.skipIf(!url)('the mini-boss switch over the real bag (#234, needs DATAB
 
   it('on: every boss in the bag visits before one comes back', async () => {
     await h.start(REAL_BAG_RULES, { miniBosses: 'on' });
-    const kid = await h.player();
+    // The walk starts in January (#37 X3): from BOSS_START its sixth week is
+    // Christmas Eve's, whose own boss (never in the bag) stands in for the draw.
+    const walkStart = Date.parse(WEEKLY_WALK_START);
+    h.clock.setTime(walkStart);
+    const kid = await h.player(new Date(walkStart + 90 * 24 * 3_600_000));
     const mapId = await h.patch(kid);
     await h.grow(mapId, kid, 20);
     // A shuffle bag per cycle: any 2n − 1 weeks in a row hold one whole cycle.
     const weeks = 2 * bagIds.length - 1;
     for (let week = 0; week < weeks; week++) {
-      h.clock.setTime(Date.parse(BOSS_START) + week * WEEK_MS);
+      h.clock.setTime(walkStart + week * WEEK_MS);
       await h.toVisit(mapId, REAL_BAG_RULES);
       expect(await h.sweep([mapId])).toBe(1);
     }

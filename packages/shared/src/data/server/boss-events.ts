@@ -37,10 +37,10 @@ export const BOSS_EVENTS: BossEventRules = {
     minJoinLevel: 5, // TUNE: …at least 5
   },
   // Christmas Eve (#37 C0b; addendum on #37, owner answers 2026-11-27).
-  // X1 schedules it, X2 runs the bar. Until X3 adds the species (null here)
-  // the week's bag draw stands in on Christmas Eve's timing and gates.
+  // X1 schedules it, X2 runs the bar, X3 adds the species: Snowbundle, the
+  // Christmas-only frost BIG squishy (owner answer 1), never in `bag`.
   christmasEve: {
-    speciesId: null, // X3: the new Christmas-only frost BIG squishy (owner answer 1)
+    speciesId: 'snowbundle',
     terrains: ['meadow', 'hills', 'mountains'], // TUNE: fallback when the tree's post can't be used
     day: '12-24', // TUNE: Christmas Eve, patch time
     opensAtHour: 16, // TUNE: after school, like the weekly visit
@@ -56,7 +56,10 @@ export const BOSS_EVENTS: BossEventRules = {
     contributorMinFights: 1, // TUNE
     bar: {
       pointsPerWin: 100, // TUNE: one full win is 100 however strong the boss
-      goalPerKeeper: 120, // TUNE: X3's sim:boss --patch sets it before X7
+      // TUNE: kept by `pnpm sim:boss --patch` (X3): a Keeper chips ~74 a
+      // fight and ~221 over 3 tries, so about half the patch using its tries
+      // (or everyone fighting twice, less the lights' head start) fills it.
+      goalPerKeeper: 120,
       minGoal: 200, // TUNE
       maxGoal: 1200, // TUNE
       headStartPerLightPercent: 2, // TUNE: per lit Twinkle Lights tile…

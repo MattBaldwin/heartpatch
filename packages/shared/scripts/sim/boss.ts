@@ -7,7 +7,7 @@ import { BOSS_EVENTS } from '../../src/data/server/boss-events.js';
 import { SERVER_GAME_DATA } from '../../src/data/server/index.js';
 import { deriveSeed, Rng } from '../../src/rng/index.js';
 import type { BattleSetup, BattleSquishySetup } from '../../src/schemas/battle.js';
-import type { BossBagEntry } from '../../src/schemas/data/boss-events.js';
+import type { BossBagEntry, BossEventRules } from '../../src/schemas/data/boss-events.js';
 import { hiddenUntilSeen, type Species } from '../../src/schemas/data/species.js';
 import type { BossSimConfig, BossTeamShape } from './boss-config.js';
 
@@ -23,6 +23,8 @@ export interface BossCell {
   readonly boss: string;
   readonly bonus: number;
   readonly games: number;
+  /** Partner and boss level. */
+  readonly level: number;
   /** Team wins, a whole percent (rounded down). */
   readonly winPercent: number;
   /** The median fight, in rounds. */
@@ -163,6 +165,7 @@ export function runBossSim(
           boss: boss.id,
           bonus,
           games: config.games,
+          level: config.level,
           winPercent: Math.floor((wins * 100) / config.games),
           medianRounds: median(rounds),
         });
@@ -172,14 +175,24 @@ export function runBossSim(
   return cells;
 }
 
-/** The plan's gates (§9), read off the cells. */
-export function bossGates(cells: readonly BossCell[], config: BossSimConfig): BossGate[] {
+/**
+ * The plan's gates (§9), read off the cells. `spreadWith` adds other
+ * bosses' cells to the spread gate only (the Eve boss against the bag).
+ */
+export function bossGates(
+  cells: readonly BossCell[],
+  config: BossSimConfig,
+  spreadWith: readonly BossCell[] = [],
+): BossGate[] {
   const [first] = config.shapes;
   const balanced = cells.filter((c) => c.shape === first?.key && c.bonus === 0);
   const lone = cells.filter((c) => c.shape === 'team of 1' && c.bonus === 0);
   const over = cells.filter((c) => c.shape === first?.key && c.bonus === 5);
   const g = config.gates;
-  const rates = balanced.map((c) => c.winPercent);
+  const rates = [
+    ...balanced,
+    ...spreadWith.filter((c) => c.shape === first?.key && c.bonus === 0),
+  ].map((c) => c.winPercent);
   const all = (list: readonly BossCell[], ok: (c: BossCell) => boolean) =>
     list.length > 0 && list.every(ok);
   const show = (list: readonly BossCell[], pick: (c: BossCell) => number) =>
@@ -209,7 +222,10 @@ export function bossGates(cells: readonly BossCell[], config: BossSimConfig): Bo
       ),
     },
     {
-      name: `bosses within ${String(g.bossSpread)} points of each other`,
+      name:
+        spreadWith.length > 0
+          ? `within ${String(g.bossSpread)} points of the bag bosses`
+          : `bosses within ${String(g.bossSpread)} points of each other`,
       value: `${String(Math.max(...rates) - Math.min(...rates))} points`,
       pass: rates.length > 0 && Math.max(...rates) - Math.min(...rates) <= g.bossSpread,
     },
@@ -243,5 +259,160 @@ export function renderBossSim(
     ...gates.map((g) => `| ${g.name} | ${g.value} | ${g.pass ? 'PASS' : 'FAIL'} |`),
     '',
   ];
+  return lines.join('\n');
+}
+
+/** The Christmas Eve boss as a one-entry bag, or none before it has a species (#37 X3). */
+export function christmasBag(rules: BossEventRules = BOSS_EVENTS): BossBagEntry[] {
+  const eve = rules.christmasEve;
+  if (!eve?.speciesId) return [];
+  return [{ speciesId: eve.speciesId, terrains: eve.terrains }];
+}
+
+export interface ChristmasRun {
+  readonly level: number;
+  readonly cells: BossCell[];
+  /** Empty at a reference level. */
+  readonly gates: BossGate[];
+}
+
+/**
+ * The Eve boss at `config.christmas.gatedLevel`, gated like the bag, its
+ * spread read against the bag's cells (`bagCells`, at `config.level`), then
+ * at each reference level, ungated.
+ */
+export function runChristmasSim(
+  config: BossSimConfig,
+  bagCells: readonly BossCell[],
+  content = bossContent(),
+  rules: BossEventRules = BOSS_EVENTS,
+): ChristmasRun[] {
+  const bag = christmasBag(rules);
+  if (bag.length === 0) return [];
+  const { gatedLevel, referenceLevels } = config.christmas;
+  return [gatedLevel, ...referenceLevels].map((level) => {
+    const at = { ...config, level, seed: `${config.seed}-christmas` };
+    const cells = runBossSim(at, content, bag);
+    return { level, cells, gates: level === gatedLevel ? bossGates(cells, at, bagCells) : [] };
+  });
+}
+
+export interface PatchTally {
+  readonly partnerLevel: number;
+  readonly bossLevel: number;
+  readonly fights: number;
+  readonly winPercent: number;
+  /** Mean bar points from one fight. */
+  readonly pointsPerFight: number;
+}
+
+export interface PatchSummary {
+  readonly rows: PatchTally[];
+  readonly keepers: number;
+  /** Mean bar points one Keeper chips from a single fight, across the patch's levels. */
+  readonly pointsPerFight: number;
+  /** Mean bar points one Keeper chips over all `tries`. */
+  readonly pointsPerKeeper: number;
+}
+
+/**
+ * The `--patch` tally (#37 addendum, risks): Keepers at mixed Partner levels
+ * each fight the Eve boss `tries` times at the Eve gates; what the bar gets
+ * (`pointsPerWin × energy taken ÷ full`, as the server's `chipPoints`).
+ */
+export function runPatchTally(
+  config: BossSimConfig,
+  content = bossContent(),
+  rules: BossEventRules = BOSS_EVENTS,
+): PatchSummary | null {
+  const eve = rules.christmasEve;
+  const [shape] = config.shapes;
+  if (!eve?.speciesId || !shape) return null;
+  const boss = content.species.get(eve.speciesId);
+  if (!boss) throw new Error(`the Eve boss "${eve.speciesId}" is not a species`);
+  const { patches, tries, partnerLevels } = config.christmas.patch;
+  const rows = partnerLevels.map((partnerLevel): PatchTally => {
+    const bossLevel = Math.max(eve.gates.minLevel, partnerLevel + eve.gates.levelBonus);
+    // The team is the Partner's level less each member's gap (bonus below the boss).
+    const at = { ...config, level: bossLevel, seed: `${config.seed}-patch` };
+    let wins = 0;
+    let points = 0;
+    const fights = patches * tries;
+    for (let game = 0; game < fights; game++) {
+      const setup = bossSetup(content, at, shape, boss, partnerLevel - bossLevel, game);
+      const { state } = autoplayBattle(content, setup);
+      if (state.phase.type === 'over' && state.phase.result.winner === 'a') wins += 1;
+      const fought = state.sides.b.squishies[0];
+      if (!fought) throw new Error('a patch tally fight has no boss');
+      const full = fought.stats.hp;
+      const taken = Math.max(0, Math.min(full, full - fought.energy));
+      points += full > 0 ? Math.round((eve.bar.pointsPerWin * taken) / full) : 0;
+    }
+    return {
+      partnerLevel,
+      bossLevel,
+      fights,
+      winPercent: Math.floor((wins * 100) / fights),
+      pointsPerFight: Math.round(points / fights),
+    };
+  });
+  const perFight = rows.reduce((sum, r) => sum + r.pointsPerFight, 0) / Math.max(1, rows.length);
+  return {
+    rows,
+    keepers: partnerLevels.length,
+    pointsPerFight: Math.round(perFight),
+    pointsPerKeeper: Math.round(perFight * tries),
+  };
+}
+
+export function renderChristmasSim(
+  runs: readonly ChristmasRun[],
+  tally: PatchSummary | null,
+  config: BossSimConfig,
+  rules: BossEventRules = BOSS_EVENTS,
+): string {
+  const eve = rules.christmasEve;
+  if (!eve?.speciesId) return '';
+  const lines = ['## Christmas Eve (`BOSS_EVENTS.christmasEve`, #37 X3)', ''];
+  for (const run of runs) {
+    const gated = run.gates.length > 0;
+    lines.push(
+      `### ${eve.speciesId} at level ${String(run.level)}${gated ? ' (the Eve floor, gated)' : ' (reference, not gated)'}`,
+      '',
+      '| Team | Levels over | Win % | Median rounds |',
+      '| --- | ---: | ---: | ---: |',
+      ...run.cells.map(
+        (c) =>
+          `| ${c.shape} | +${String(c.bonus)} | ${String(c.winPercent)} | ${String(c.medianRounds)} |`,
+      ),
+      '',
+    );
+    if (gated) {
+      lines.push(
+        '| Gate | Value | Result |',
+        '| --- | --- | --- |',
+        ...run.gates.map((g) => `| ${g.name} | ${g.value} | ${g.pass ? 'PASS' : 'FAIL'} |`),
+        '',
+      );
+    }
+  }
+  if (tally) {
+    const p = config.christmas.patch;
+    lines.push(
+      `### Patch tally (\`--patch\`): ${String(p.patches)} patches of ${String(tally.keepers)} Keepers, ${String(p.tries)} tries each`,
+      '',
+      `Boss at Partner + ${String(eve.gates.levelBonus)}, at least ${String(eve.gates.minLevel)}; team of 3 a Partner and two members 3 and 6 levels under. Points as the bar's (\`pointsPerWin\` ${String(eve.bar.pointsPerWin)} a full win).`,
+      '',
+      '| Partner level | Boss level | Fights | Win % | Points a fight |',
+      '| ---: | ---: | ---: | ---: | ---: |',
+      ...tally.rows.map(
+        (r) =>
+          `| ${String(r.partnerLevel)} | ${String(r.bossLevel)} | ${String(r.fights)} | ${String(r.winPercent)} | ${String(r.pointsPerFight)} |`,
+      ),
+      '',
+      `A Keeper chips **${String(tally.pointsPerFight)}** points a fight and **${String(tally.pointsPerKeeper)}** over ${String(p.tries)} tries. \`goalPerKeeper\` is ${String(eve.bar.goalPerKeeper)}.`,
+      '',
+    );
+  }
   return lines.join('\n');
 }
