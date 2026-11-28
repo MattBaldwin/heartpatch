@@ -96,6 +96,7 @@ export * from './data/journeys.js';
 export * from './data/live-battles.js';
 export * from './data/challenges.js';
 export * from './data/trading.js';
+export * from './data/patch-tree.js';
 export * from './data/post-shop.js';
 export * from './trading/index.js';
 export * from './data/fences.js';

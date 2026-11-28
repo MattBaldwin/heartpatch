@@ -8,6 +8,9 @@ import {
   JobsViewSchema,
   JoinMapResponseSchema,
   MapResponseSchema,
+  MapViewSchema,
+  parseGameEventPayload,
+  PATCH_TREE,
   PostAtRequestSchema,
   postReach,
   STARTERS,
@@ -28,6 +31,7 @@ import type { GameEvent } from '../../db/game-events.js';
 import {
   buildings,
   keepers,
+  patchTrees,
   sessions,
   squishies,
   squishyAccessories,
@@ -38,6 +42,7 @@ import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
 import { createWardrobeRepo, insertClothing, WORN } from '../wardrobe/repo.js';
+import { treePostOf } from '../tree/service.js';
 import { createTradesRepo } from './repo.js';
 
 const url = inject('testDatabaseUrl');
@@ -1058,6 +1063,287 @@ describe.skipIf(!url)('trades, gifts and the mailbox (#271, needs DATABASE_URL)'
       expect(await residencyOf(pip)).toBeUndefined();
       expect(await snugOf(server, mapId, lee)).toEqual([]);
       expect(await snugOf(server, mapId, sam)).toEqual([]);
+    });
+  });
+  describe('the Patch Tree (#37 2c)', () => {
+    // A December patch day in Denver (the season is on), and one in November.
+    const DECEMBER = '2026-12-05T18:00:00Z';
+    const NOVEMBER = '2026-11-28T18:00:00Z';
+
+    const viewOf = async (server: FastifyInstance, mapId: string, kid: Player) => {
+      const res = await call(server, 'GET', `/maps/${mapId}/view`, kid);
+      expect(res.statusCode, res.body).toBe(200);
+      return MapViewSchema.parse(res.json());
+    };
+    const treeRow = async (mapId: string) =>
+      (await db.query.patchTrees.findFirst({ where: (t, { eq }) => eq(t.mapId, mapId) })) ?? null;
+    const warmthRows = (mapId: string) =>
+      db.query.keeperWarmth.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) });
+    const treeEvents = async (mapId: string) =>
+      (await eventsOf(mapId))
+        .filter((e) => e.type === 'tree.decorated')
+        .map((e) => ({ ...e, payload: parseGameEventPayload('tree.decorated', e.payload) }));
+
+    /** Lee gifts Sam `give` at Lee's post; Sam picks it up at theirs. */
+    async function giftAndPickUp(
+      server: FastifyInstance,
+      mapId: string,
+      postOf: (kid: PublicUser) => { q: number; r: number },
+      from: Player,
+      to: Player,
+      give: TradeLine[],
+    ) {
+      const sent = await offer(server, mapId, from, postOf(from), {
+        kind: 'gift',
+        toUserId: to.id,
+        give,
+        want: [],
+      });
+      expect(sent.statusCode, sent.body).toBe(201);
+      const picked = await call(server, 'POST', `/maps/${mapId}/mailbox/pickup`, to, postOf(to));
+      expect(picked.statusCode, picked.body).toBe(200);
+      return tradesOf(sent).offers.find((o) => o.toUserId === to.id && o.kind === 'gift')!.id;
+    }
+
+    it('plants the tree at the post nearest the centre on the first December read, and shows it', async () => {
+      clock.setTime(Date.parse(NOVEMBER));
+      const server = await start();
+      const [lee, sam] = [await player(), await player()];
+      const { mapId } = await patch(server, lee, sam);
+      // Not in November: no tree, no Christmas block.
+      expect((await viewOf(server, mapId, lee)).christmas).toBeUndefined();
+      expect(await treeRow(mapId)).toBeNull();
+
+      clock.setTime(Date.parse(DECEMBER));
+      const view = await viewOf(server, mapId, lee);
+      const posts = (await tilesOf(mapId)).filter((t) => t.terrain === 'trading-post');
+      const chosen = treePostOf(posts)!;
+      // Nearest the centre, ties to the lowest (q, r): the rule, checked by hand.
+      const nearest = Math.min(...posts.map((p) => hexDistance(p, { q: 0, r: 0 })));
+      const ties = posts
+        .filter((p) => hexDistance(p, { q: 0, r: 0 }) === nearest)
+        .sort((a, b) => a.q - b.q || a.r - b.r);
+      expect(chosen.id).toBe(ties[0]!.id);
+      expect((await treeRow(mapId))?.postTileId).toBe(chosen.id);
+      const index = view.posts!.find((p) => p.q === chosen.q && p.r === chosen.r)!.index;
+      expect(view.christmas).toMatchObject({
+        tree: { postIndex: index, ornaments: 0, starLit: false },
+        warmth: [],
+      });
+      // Every read after shows the same tree (planted once).
+      expect((await viewOf(server, mapId, sam)).christmas?.tree).toEqual(view.christmas?.tree);
+      expect(
+        await db.query.patchTrees.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) }),
+      ).toHaveLength(1);
+    });
+
+    it('hangs an ornament and warms the pair for a December gift, once, and the patch hears it nameless of what', async () => {
+      clock.setTime(Date.parse(DECEMBER));
+      const server = await start();
+      const [lee, sam, kai] = [await player(), await player(), await player()];
+      const { mapId, postOf } = await patch(server, lee, sam, kai);
+      await grant(mapId, lee, { timber: 4 });
+      // No read yet: the pickup plants the tree itself.
+      expect(await treeRow(mapId)).toBeNull();
+      const giftId = await giftAndPickUp(server, mapId, postOf, lee, sam, [
+        { kind: 'item', itemId: 'timber', quantity: 4 },
+      ]);
+      expect(await treeRow(mapId)).toMatchObject({ ornaments: 1, starLitAt: null });
+      const [a, b] = [lee.id, sam.id].sort();
+      expect(await warmthRows(mapId)).toMatchObject([{ userAId: a, userBId: b, warmth: 1 }]);
+
+      const [decorated] = await treeEvents(mapId);
+      expect(decorated?.payload).toMatchObject({
+        offerId: giftId,
+        fromUserId: lee.id,
+        toUserId: sam.id,
+        source: 'gift',
+        added: 1,
+        ornaments: 1,
+        starLit: false,
+      });
+      // Everyone hears it, without the offer or the tile's id (or what it held).
+      const shown = viewFor(decorated!, kai);
+      expect(shown).toEqual({
+        postIndex: decorated!.payload.postIndex,
+        fromUserId: lee.id,
+        toUserId: sam.id,
+        source: 'gift',
+        added: 1,
+        ornaments: 1,
+        starLit: false,
+      });
+      // The event and the commit are one: it comes before `mailbox.collected`.
+      const types = (await eventsOf(mapId)).map((e) => e.type);
+      expect(types.indexOf('tree.decorated')).toBeLessThan(types.indexOf('mailbox.collected'));
+
+      // A second pickup tap finds nothing and hangs nothing.
+      const again = await call(server, 'POST', `/maps/${mapId}/mailbox/pickup`, sam, postOf(sam));
+      expect(again.statusCode).toBe(200);
+      expect((await treeRow(mapId))?.ornaments).toBe(1);
+      expect(await treeEvents(mapId)).toHaveLength(1);
+
+      // Hearts on each other's cards; Kai has none with anyone.
+      expect((await viewOf(server, mapId, lee)).christmas?.warmth).toEqual([
+        { userId: sam.id, warmth: 1 },
+      ]);
+      expect((await viewOf(server, mapId, sam)).christmas?.warmth).toEqual([
+        { userId: lee.id, warmth: 1 },
+      ]);
+      expect((await viewOf(server, mapId, kai)).christmas).toMatchObject({
+        tree: { ornaments: 1, starLit: false },
+        warmth: [],
+      });
+      await reconcile(mapId);
+    });
+
+    it('hangs two for a present gifted unopened, and warms the pair twice', async () => {
+      clock.setTime(Date.parse(DECEMBER));
+      const server = await start();
+      const [lee, sam] = [await player(), await player()];
+      const { mapId, postOf } = await patch(server, lee, sam);
+      await grant(mapId, sam, { [PATCH_TREE.presentItemId]: 1, timber: 1 });
+      await giftAndPickUp(server, mapId, postOf, sam, lee, [
+        { kind: 'item', itemId: PATCH_TREE.presentItemId, quantity: 1 },
+        { kind: 'item', itemId: 'timber', quantity: 1 },
+      ]);
+      expect((await treeRow(mapId))?.ornaments).toBe(PATCH_TREE.ornaments['present-gift']);
+      expect((await warmthRows(mapId))[0]?.warmth).toBe(PATCH_TREE.warmth['present-gift']);
+      expect((await treeEvents(mapId))[0]?.payload).toMatchObject({
+        source: 'present-gift',
+        added: PATCH_TREE.ornaments['present-gift'],
+      });
+    });
+
+    it('lights the star once, on the gift that reaches the threshold', async () => {
+      clock.setTime(Date.parse(DECEMBER));
+      const server = await start();
+      const [lee, sam] = [await player(), await player()];
+      const { mapId, postOf } = await patch(server, lee, sam);
+      await viewOf(server, mapId, lee); // plants it
+      await db.execute(
+        `update patch_trees set ornaments = ${String(PATCH_TREE.starAt - 1)} where map_id = '${mapId}'`,
+      );
+      await grant(mapId, lee, { timber: 2 });
+      await giftAndPickUp(server, mapId, postOf, lee, sam, [
+        { kind: 'item', itemId: 'timber', quantity: 1 },
+      ]);
+      const lit = await treeRow(mapId);
+      expect(lit?.ornaments).toBe(PATCH_TREE.starAt);
+      expect(lit?.starLitAt?.getTime()).toBe(Date.parse(DECEMBER));
+      clock.setTime(Date.parse(DECEMBER) + 60_000);
+      await giftAndPickUp(server, mapId, postOf, lee, sam, [
+        { kind: 'item', itemId: 'timber', quantity: 1 },
+      ]);
+      // It stays lit from the first time; the later gift doesn't light it again.
+      expect((await treeRow(mapId))?.starLitAt?.getTime()).toBe(Date.parse(DECEMBER));
+      expect((await treeEvents(mapId)).map((e) => e.payload.starLit)).toEqual([true, false]);
+      expect((await viewOf(server, mapId, sam)).christmas?.tree).toMatchObject({
+        ornaments: PATCH_TREE.starAt + 1,
+        starLit: true,
+      });
+      expect((await warmthRows(mapId))[0]?.warmth).toBe(2);
+    });
+
+    it('counts nothing outside December, for a trade, or for a gift said no to', async () => {
+      clock.setTime(Date.parse(NOVEMBER));
+      const server = await start();
+      const [lee, sam] = [await player(), await player()];
+      const { mapId, postOf } = await patch(server, lee, sam);
+      await grant(mapId, lee, { timber: 6 });
+      await grant(mapId, sam, { stone: 2 });
+      await giftAndPickUp(server, mapId, postOf, lee, sam, [
+        { kind: 'item', itemId: 'timber', quantity: 1 },
+      ]);
+      expect(await treeRow(mapId)).toBeNull();
+      expect(await warmthRows(mapId)).toEqual([]);
+
+      clock.setTime(Date.parse(DECEMBER));
+      // A trade's yes isn't a gift.
+      const traded = await offer(server, mapId, lee, postOf(lee), {
+        kind: 'trade',
+        toUserId: sam.id,
+        give: [{ kind: 'item', itemId: 'timber', quantity: 1 }],
+        want: [{ kind: 'item', itemId: 'stone', quantity: 1 }],
+        noteId: null,
+      });
+      expect(traded.statusCode, traded.body).toBe(201);
+      const tradeId = tradesOf(traded).offers.find((o) => o.kind === 'trade')!.id;
+      const yes = await call(
+        server,
+        'POST',
+        `/maps/${mapId}/trades/${tradeId}/accept`,
+        sam,
+        postOf(sam),
+      );
+      expect(yes.statusCode, yes.body).toBe(200);
+      // Lee picks up the stone from the mailbox: still a trade, not a gift.
+      expect(
+        (await call(server, 'POST', `/maps/${mapId}/mailbox/pickup`, lee, postOf(lee))).statusCode,
+      ).toBe(200);
+      // A gift said no to goes home and hangs nothing.
+      const sent = await offer(server, mapId, lee, postOf(lee), {
+        kind: 'gift',
+        toUserId: sam.id,
+        give: [{ kind: 'item', itemId: 'timber', quantity: 1 }],
+        want: [],
+      });
+      const giftId = tradesOf(sent).offers.find((o) => o.kind === 'gift')!.id;
+      expect(
+        (await call(server, 'POST', `/maps/${mapId}/trades/${giftId}/decline`, sam)).statusCode,
+      ).toBe(200);
+      // Lee picks up the returned timber note: not a gift either.
+      await call(server, 'POST', `/maps/${mapId}/mailbox/pickup`, lee, postOf(lee));
+      expect((await treeRow(mapId))?.ornaments ?? 0).toBe(0);
+      expect(await warmthRows(mapId)).toEqual([]);
+      expect(await treeEvents(mapId)).toEqual([]);
+    });
+
+    it('hangs every ornament when two pickups land at once (one tree row, locked)', async () => {
+      clock.setTime(Date.parse(DECEMBER));
+      const server = await start();
+      const [lee, sam, kai] = [await player(), await player(), await player()];
+      const { mapId, postOf } = await patch(server, lee, sam, kai);
+      await viewOf(server, mapId, lee);
+      await grant(mapId, lee, { timber: 2 });
+      for (const to of [sam, kai]) {
+        const sent = await offer(server, mapId, lee, postOf(lee), {
+          kind: 'gift',
+          toUserId: to.id,
+          give: [{ kind: 'item', itemId: 'timber', quantity: 1 }],
+          want: [],
+        });
+        expect(sent.statusCode, sent.body).toBe(201);
+      }
+      const picked = await Promise.all(
+        [sam, kai].map((to) =>
+          call(server, 'POST', `/maps/${mapId}/mailbox/pickup`, to, postOf(to)),
+        ),
+      );
+      expect(picked.map((r) => r.statusCode)).toEqual([200, 200]);
+      expect((await treeRow(mapId))?.ornaments).toBe(2);
+      expect((await treeEvents(mapId)).map((e) => e.payload.ornaments).sort()).toEqual([1, 2]);
+      expect(await warmthRows(mapId)).toHaveLength(2);
+    });
+
+    it('hangs nothing on, and shows no, tree whose post is on another patch', async () => {
+      clock.setTime(Date.parse(DECEMBER));
+      const server = await start();
+      const [lee, sam, ari] = [await player(), await player(), await player()];
+      const { mapId, postOf } = await patch(server, lee, sam);
+      const other = await patch(server, ari);
+      const elsewhere = (await tilesOf(other.mapId)).find((t) => t.terrain === 'trading-post')!;
+      await db.insert(patchTrees).values({ mapId, postTileId: elsewhere.id, ornaments: 3 });
+      await grant(mapId, lee, { timber: 1 });
+      await giftAndPickUp(server, mapId, postOf, lee, sam, [
+        { kind: 'item', itemId: 'timber', quantity: 1 },
+      ]);
+      expect((await treeRow(mapId))?.ornaments).toBe(3);
+      expect(await treeEvents(mapId)).toEqual([]);
+      const christmas = (await viewOf(server, mapId, lee)).christmas;
+      expect(christmas?.tree).toBeUndefined();
+      // Warmth is the pair's, not the tree's: it still counts.
+      expect(christmas?.warmth).toEqual([{ userId: sam.id, warmth: 1 }]);
     });
   });
 });

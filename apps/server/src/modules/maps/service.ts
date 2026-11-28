@@ -45,6 +45,7 @@ import { seedHomeRingNodes, type HomeRingLog } from '../buildings/home-ring.js';
 import { listPublicBuildings } from '../buildings/service.js';
 import { christmasOn, presentWaitingOn } from '../advent/service.js';
 import { christmasEveViewFor } from '../boss/eve-view.js';
+import { plantTree, treeViewFor } from '../tree/service.js';
 import { MINIBOSSES_OFF, type MinibossSwitch } from '../boss/switch.js';
 import { giftWaitingOn } from '../house/service.js';
 import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from '../house/switch.js';
@@ -504,13 +505,15 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     view: async (user, mapId) => {
       // Older maps get their seasonal home nodes first (a write, so outside
       // the read-only snapshot); a member check runs again inside it.
-      await requireViewer(db, user, mapId);
+      const viewed = await requireViewer(db, user, mapId);
       // A building moved out of the way is a live event for everyone else.
       if (await seedHomeRingNodes(db, mapId, now(), options.log)) published(mapId);
       // Water, Greens and Ice on a map made before them (#238), once.
       await seedExtraNodes(db, mapId);
       // My hunted keys off claimed land on a patch with no challenges (#306), before I see them.
       await settleKeys(db, mapId, user.id);
+      // The Patch Tree (#37 2c): planted on the patch's first Christmas read.
+      await plantTree(db, viewed, now());
       return store.snapshot(async (repo, tx) => {
         const map = await requireViewer(tx, user, mapId);
         const at = now();
@@ -589,12 +592,18 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
             map.kind === 'multiplayer' && houseOpenFor(house, user)
               ? await giftWaitingOn(tx, map, user.id, at)
               : false,
-          // Christmas (#37): whether today's advent present waits for me, and
-          // the Christmas Eve visit and its bar while it's out (X1, X2). The
-          // Patch Tree (`tree`) and warmth come with 2c.
+          // Christmas (#37): the Patch Tree and my warmth with patch-mates
+          // (2c), whether today's advent present waits for me, and the
+          // Christmas Eve visit and its bar while it's out (X1, X2).
           ...(map.kind === 'multiplayer' && christmasOn(at, map.timeZone)
             ? {
                 christmas: {
+                  ...(await treeViewFor(
+                    tx,
+                    mapId,
+                    user.id,
+                    new Set(members.map((m) => m.user.id)),
+                  )),
                   presentWaiting: await presentWaitingOn(tx, map, user.id, at),
                   ...(await christmasEveView(tx, miniBosses, map, user.id, at)),
                 },
