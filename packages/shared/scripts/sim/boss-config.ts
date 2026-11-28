@@ -1,4 +1,3 @@
-import { BOSS_EVENTS } from '../../src/data/server/boss-events.js';
 /**
  * Mini-boss team battle settings (`pnpm sim:boss`, #190). Like the other
  * sims, the model only reads game data and reports; it never changes a
@@ -7,6 +6,7 @@ import { BOSS_EVENTS } from '../../src/data/server/boss-events.js';
  * flagged `boss`, so the gates test the team rules (`rules.team`,
  * `rules.boss`), not a boss's own moves.
  */
+import { BOSS_EVENTS } from '../../src/data/server/boss-events.js';
 export interface BossTeamShape {
   readonly key: string;
   /** Each member's level below the Partner's (0 is the Partner). */
@@ -84,8 +84,9 @@ export const BOSS_SIM_CONFIG: BossSimConfig = {
     { key: 'team of 1', levelsBelow: [0], mix: 'mixed' },
   ],
   christmas: {
-    gatedLevel: 10, // TUNE: the Eve floor (`christmasEve.gates.minLevel`), where little Keepers fight
-    referenceLevels: [25], // TUNE: the weekly sim level
+    // The Eve floor, where little Keepers fight (10 while the Eve has no rules: none to gate).
+    gatedLevel: BOSS_EVENTS.christmasEve?.gates.minLevel ?? 10,
+    referenceLevels: [25], // TUNE: the weekly sim level (`level` below)
     patch: {
       patches: 250, // TUNE:
       tries: BOSS_EVENTS.triesPerDay, // the addendum's "3 tries": one patch-local day's (Christmas morning gives 3 more)

@@ -44,7 +44,7 @@ const MOM_PALETTE = ['#ff8a6a', '#fff0e6', '#ffd166', '#8a3550'];
 const DAD_PALETTE = ['#a9d4f5', '#f4fbff', '#e2574c', '#f7f1ea'];
 const KART_PALETTE = ['#ffd84a', '#bff0ff', '#3f8fe8', '#4a3a5c'];
 // #37 X3 (docs/art/37-frost-briefs.md): ice-blue, snow white, a gold lit
-// star (the accent, so `glow: 'accent'` lights only it) and the cranberry
+// crown (the accent, so `glow: 'accent'` lights only it) and the cranberry
 // cap band (the detail colour, so it never glows).
 const SNOW_PALETTE = ['#c2e2f9', '#f4fbff', '#ffd25a', '#d9485a']; // TUNE: a touch deeper than the brief's #d9eefc so the white belly reads; still lighter than Papa Brrr's #a9d4f5
 
@@ -724,7 +724,7 @@ export const BOSS_SPECIES: Species[] = [
         'sleepy-eyes',
         'tiny-smile',
         'blush-cheeks',
-        'belly-oval',
+        'dad-belly-patch',
         'fringe',
         'crystal-crown',
         'round-hands',

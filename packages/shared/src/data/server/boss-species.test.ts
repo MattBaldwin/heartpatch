@@ -276,7 +276,7 @@ describe('the Christmas Eve BIG squishy (#37 X3)', () => {
     }
   });
 
-  it('lights only its star (or bead): one accent part, and that part glows', () => {
+  it('lights only its crown (or bead): one accent part, and that part glows', () => {
     for (const id of EVE) {
       const { visual } = get(id);
       expect(visual.glow, id).toBe('accent');
@@ -302,7 +302,7 @@ describe('the Christmas Eve BIG squishy (#37 X3)', () => {
     for (const part of ['moustache', 'ball-cap', 'cap-brim', 'sneakers', 'dad-arms']) {
       expect(snow.parts, part).not.toContain(part);
     }
-    // A gold accent (the lit star) where his is red; the cranberry is the detail colour.
+    // A gold accent (the lit crown) where his is red; the cranberry is the detail colour.
     expect(snow.palette[2]).toBe('#ffd25a');
     expect(brrr.palette[2]).toBe('#e2574c');
     expect(snow.palette[3]).toBe('#d9485a');
