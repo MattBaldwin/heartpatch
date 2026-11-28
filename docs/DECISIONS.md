@@ -2836,3 +2836,14 @@ Supervisor 59 (`session_01RAEPnHvbFEHhKmvrzRZUuG`) was started by supervisor 58 
   - Tags: `heartpatch:phase-1`, `heartpatch:phase-3`, `heartpatch:lane` and `issue-37`, with no batch tag.
   - The `map.spec` draw-call ceilings (75/82 on main) may rise only by the measured amount, with the numbers in the PR.
 - **Lane over limits at PR merge:** 2c was past $20 and 200k when #921 merged. Instead of continuing to 2d it posted a Lane handoff, and a fresh lane took 2d (§6).
+
+## Supervisor 60 (2026-11-28)
+
+Supervisor 60 (`session_01RAEPnEJfBWim9YuLkAssUA`) was started by supervisor 59 at 06:55 UTC. Merged: #926. Supervisor 59 and the finished 2c session are archived (auto mode allowed both).
+
+**Coordinator rulings**
+- **C2 split (#874):** C2 split itself at its context limit. **C2a** is lines, power, unpowered intervals, rails in supply and the rail speed-up (`issue-874-c2-power-rails`). **C2b** is Rail Depot banking, handed to a fresh lane through a Lane handoff on #874. **C3 needs only C2a's merge** (its buildings gate places and upgrades the Clockwork rows, including `research` and `depot` kinds). If C2a doesn't make those placeable, C3 adds that in its one-call change and flags it. The cut rule (Depot to Wave 2 if not merged by Nov 29 ~14:00 UTC) now applies to C2b only.
+- **C4 brief:** written to `docs/plans/clockwork-wave-1-briefs/c4.md`. C4 runs on Opus, because a big feature's UI is coded on Opus (§6). It builds against C1's branch, opens its PR only after C1 merges, and builds `line-api.ts` against C2a's contract.
+- **C6 camera fog guard (#927):** `camera-director.test.ts` "far rim as fogged" used the roster's median fighter as its "ordinary team", so four small isle species moved it (0.5487 vs > 0.55). The threshold stays at 0.55. The fixture is pinned to the pre-#874 median (wickwhisker), so new content can't move the guard. It's a fixture-only change, because #925 rewrites much of that file.
+- **C6 "Every Common" milestone (#927):** isle-only species would make the track unreachable off the isle. C6 may edit `milestones.ts` minimally: a public `CLOCKWORK_ISLE_SPECIES` id set (membership isn't secret, because the isle shows them), excluded from `EVERYDAY_COMMON_SPECIES`, with a server test that every species whose spawn tables all name `patchTypes` is in the set. The track's threshold stays the same as on main.
+- **6b-2 at its cost cap (#925):** finish-only orders. Items 3–5 of the render check are answered in the PR body. Item 1 (iPad reshoot with safe-area insets) and item 2 (purple half-sphere in the flinched frames) are still open, and the joining-dim cause is unverified. A fresh lane takes these from the Lane handoff on #925.
