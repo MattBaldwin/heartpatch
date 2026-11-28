@@ -1982,10 +1982,12 @@ const MILESTONE: ClothingItem[] = [
   {
     // The Christmas track's top tier (#37): a little helper elf, with the
     // face showing. A red knit sweater with a string of glowing bulbs (the
-    // owner's "Christmas lights" pillar), a green tunic and belt, a floppy
-    // green hat with a fluffy brim and pompom, candy-stripe socks and curly
+    // owner's "Christmas lights" pillar), a green tunic and belt with a red
+    // bow at the back, a green hat whose tip droops to a white fluffy poof
+    // (owner, 2026-11-28: "like Santa's hat"), candy-stripe socks and curly
     // toes with gold bells. Its hat, socks and toes sit on the sockets the
-    // Moonbroom Witch uses. Shapes are first guesses (shape round 3).
+    // Moonbroom Witch uses. At the 24-piece cap. Shapes are first guesses
+    // (shape round 3).
     id: 'jolly-elf-costume',
     name: 'Jolly Elf Costume',
     description: 'A twinkly sweater, a floppy hat and very curly toes. Jingle!',
