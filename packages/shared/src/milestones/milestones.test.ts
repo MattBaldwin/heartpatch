@@ -338,14 +338,30 @@ describe('milestoneCredits', () => {
       expect(credits(type, payload), type).toEqual([]);
       expect(credits(type, payload, ['thanksgiving']), type).toEqual([]);
     }
-    // Left out on purpose (see the track's comment): gifts and the Patch Tree.
+    // Left out on purpose (see the track's comment): gifts.
     const gift = { offerId: KID, fromUserId: PAL, toUserId: KID };
     expect(credits('gift.collected', gift, ['christmas'])).toEqual([]);
+    // The Patch Tree (#37 2c): only the gift that lights the star, for its giver.
+    const decorated = (starLit: boolean) => ({
+      offerId: PAL,
+      postTileId: PAL,
+      postIndex: 0,
+      fromUserId: KID,
+      toUserId: PAL,
+      source: 'gift',
+      added: 1,
+      ornaments: 12,
+      starLit,
+    });
+    expect(credits('tree.decorated', decorated(true), ['christmas'])).toEqual([step]);
+    expect(credits('tree.decorated', decorated(false), ['christmas'])).toEqual([]);
+    expect(credits('tree.decorated', decorated(true))).toEqual([]);
     expect(track('christmas').progress).toMatchObject({
       sources: [
         { eventType: 'advent.claimed' },
         { eventType: 'present.opened' },
         { eventType: 'boss.chipped' },
+        { eventType: 'tree.decorated' },
       ],
     });
   });
@@ -377,7 +393,8 @@ describe('milestoneCredits', () => {
     const named: Record<string, RegExp> = {
       'advent.claimed': /\badvent\b/i,
       'present.opened': /\bbag\b/i,
-      'boss.chipped': /\bchip in on Christmas Eve\b/,
+      'boss.chipped': /\bhelp on Eve\b/,
+      'tree.decorated': /\blight the star\b/,
     };
     const christmas = track('christmas');
     if (christmas.progress.from !== 'events') throw new Error('christmas counts events');
