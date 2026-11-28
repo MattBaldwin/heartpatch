@@ -47,6 +47,15 @@ export const ADVENT_TEXT = {
   tapMissedUsed: 'One missed day a day. More tomorrow! ❄️',
   tapMissedOver: "That one's gone. See you next December ❄️",
   bag: 'Safe in your bag!',
+  // A present from the bag (#37 1d2). One line each, like the rest.
+  presentMightHold: 'A present might hold:',
+  openPresent: (n: number) =>
+    n > 1 ? `Open a wrapped present (${String(n)})` : 'Open a wrapped present',
+  revealPresent: 'Your present had…',
+  presentsLeft: (n: number) =>
+    n === 1
+      ? 'Safe in your bag! 1 more to open 🎁'
+      : `Safe in your bag! ${String(n)} more to open 🎁`,
 } as const;
 
 /** The fixed days that name their present on the grid (data lives on the server). */
@@ -152,4 +161,16 @@ export function stuckNote(day: AdventDayView, view: AdventView): string | null {
     return phaseOf(view) === 'live' ? ADVENT_TEXT.tapMissedUsed : ADVENT_TEXT.tapMissedOver;
   }
   return null;
+}
+
+/** The reveal's last line after a present from the bag: how many are still wrapped. */
+export function bagLine(presentsLeft: number | null): string {
+  return presentsLeft !== null && presentsLeft > 0
+    ? ADVENT_TEXT.presentsLeft(presentsLeft)
+    : ADVENT_TEXT.bag;
+}
+
+/** "🍬 🥧 ✨": what a wrapped present can hold, pictures only (one line; names go in the label). */
+export function contentsIcons(ids: readonly string[]): string {
+  return ids.map(itemIcon).join(' ');
 }

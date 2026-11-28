@@ -42,6 +42,9 @@ interface BattleDebug {
   } | null;
 }
 
+/** `BOSS_ENTRANCE.clickGraceMs`: how long the click after a skipping tap's lift is swallowed. */
+const CLICK_GRACE_MS = 350;
+
 const battleState = (page: Page) => hook<BattleDebug>(page, 'battle');
 
 /** Moves the held battle clock on (`BattleScreen.dev`, `?battle-clock=manual`), as rare-reveal.spec.ts. */
@@ -742,6 +745,93 @@ test.describe('a mini-boss fight (#190)', () => {
     const after = await battleState(page);
     expect(after?.boss?.picking).toBe(0);
     expect(after?.boss?.picks).toEqual({});
+    // Past the click's grace window, the picker is the player's again (#890: it was
+    // only covered before; now it is inert while the entrance plays and free after).
+    await page.waitForTimeout(CLICK_GRACE_MS + 150);
+    await expect(page.locator('.boss-dock')).toHaveJSProperty('inert', false);
+    await realTap(move);
+    await expect.poll(async () => (await battleState(page))?.boss?.picking).toBe(1);
+  });
+
+  test('the picker is inert while the entrance plays (#190 PR 6)', async ({ browser }) => {
+    const page = await newPlayer(browser, uniqueName('stomp'));
+    await bossFight(page, { entrance: 'keep', clock: 'manual' });
+    await expect(page.locator('.boss-entrance')).toBeVisible();
+    const dock = page.locator('.boss-dock');
+    await expect(dock).toHaveJSProperty('inert', true);
+    await advance(page, 3000);
+    await expect.poll(async () => (await battleState(page))?.entrance ?? null).toBeNull();
+    await expect(dock).toHaveJSProperty('inert', false);
+  });
+
+  /** Records every caption the fight shows (each step's words are up for under a second). */
+  async function recordCaptions(page: Page): Promise<() => Promise<string[]>> {
+    await page.evaluate(() => {
+      const seen: string[] = [];
+      (window as unknown as { __captions: string[] }).__captions = seen;
+      const watch = () => {
+        const node = document.querySelector('.battle-caption');
+        if (!node) return;
+        const text = node.textContent;
+        if (text && seen[seen.length - 1] !== text) seen.push(text);
+      };
+      new MutationObserver(watch).observe(document.body, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+      });
+    });
+    return () =>
+      page.evaluate(() => (window as unknown as { __captions: string[] }).__captions.slice());
+  }
+
+  test('the BIG squishy tuckers out, and an ask is answered with hearts and a sparkle (#190 PR 6)', async ({
+    browser,
+  }) => {
+    const page = await newPlayer(browser, uniqueName('stomp'));
+    const stub = await bossFight(page, { befriend: ['not-yet', 'joined'], warmth: 4 });
+    const captions = await recordCaptions(page);
+    await playRound(page);
+    const card = page.getByTestId('battle-result');
+    await expect(card).toBeVisible({ timeout: 60_000 });
+    expect((await captions()).some((c) => /is all tuckered out! 💤$/.test(c))).toBe(true);
+    // A "not yet": a blush and no sparkle, and no number or odds anywhere on the card.
+    await realTap(card.getByTestId('boss-ask'));
+    await expect(page.locator('.befriend-blush')).toHaveCount(1);
+    await expect(page.locator('.befriend-dim')).toHaveCount(0);
+    await expect(card.getByTestId('boss-befriend-ask')).toContainText('A little warmer');
+    expect(await card.getByTestId('boss-befriend-ask').innerText()).not.toMatch(
+      /\d+\s*%|odds|chance/i,
+    );
+    // A yes: the dim and sparkles where the BIG squishy shrinks, then it joins.
+    await realTap(card.getByTestId('boss-ask'));
+    await expect(page.locator('.befriend-dim')).toHaveCount(1);
+    await expect(card.getByTestId('boss-befriend-joined')).toContainText(
+      `${STUB_BASE_NAME} joined your patch! 💗`,
+    );
+    expect(stub.asks).toHaveLength(2);
+    await expect(page.locator('.befriend-beat')).toHaveCount(0, { timeout: 5000 });
+  });
+
+  test('the team tuckers out: the BIG squishy twirls, and the caption names the day (#190 PR 6)', async ({
+    browser,
+  }) => {
+    const page = await newPlayer(browser, uniqueName('stomp'));
+    await bossFight(page, { outcome: 'lost', triesLeftToday: 1 });
+    const captions = await recordCaptions(page);
+    await playRound(page);
+    const card = page.getByTestId('battle-result');
+    await expect(card).toBeVisible({ timeout: 60_000 });
+    const all = await captions();
+    expect(all).toContainEqual(
+      expect.stringMatching(
+        /^Your team is all tuckered out! .+ is here until [A-Z][a-z]+day\. Come back stronger!$/,
+      ),
+    );
+    const line = all.find((c) => /Come back stronger!$/.test(c)) ?? '';
+    // Nothing is taken: the usual loss card follows (its tries line is the stub's).
+    await expect(card.locator('#battle-result-title')).toBeVisible();
+    expect(line).not.toMatch(/lost|took|failed/i);
   });
 
   test('a duplicate never joins: no ask, no charms', async ({ browser }) => {

@@ -42,6 +42,7 @@ import { arenaPlan, arenaSeed } from './arena-layout.js';
 import { buildArena, type Arena, type ArenaStats } from './arena.js';
 import {
   BATTLE_CAMERA,
+  BEFRIEND_BEAT,
   CHOREO,
   FIGHTER,
   HOMES,
@@ -705,7 +706,7 @@ export class BattleScene {
   perform(
     step: PlaybackStep,
     now: number,
-    extra: { incoming?: TeamMember; captured?: boolean } = {},
+    extra: { incoming?: TeamMember; captured?: boolean; bossWon?: boolean } = {},
   ): BossBeat | null {
     this.#now = now;
     const other = step.side === 'a' ? 'b' : 'a';
@@ -739,6 +740,7 @@ export class BattleScene {
       mySide: this.#options.mySide,
       reduced: this.#options.reducedMotion,
       ...(extra.captured !== undefined ? { captured: extra.captured } : {}),
+      ...(extra.bossWon === true ? { bossWon: true } : {}),
       // The boss's beats (#190 PR 2): the camera's windup push-in, landing thump and slow pull-back.
       ...(this.#options.team !== undefined && {
         boss,
@@ -833,6 +835,45 @@ export class BattleScene {
     if (this.#keeper) this.#keepers.play(this.#keeper, move, now, strength);
   }
 
+  /**
+   * The BIG squishy's answer to an ask (#190 PR 6): heart bursts that grow with
+   * its warmth step, a happy bounce, and for a yes the shrink to its base form
+   * (its rig stands up out of the sit first). Reduced motion keeps the hearts
+   * and drops the shrink.
+   */
+  befriendBeat(answer: 'yes' | 'not-yet', bursts: number, now: number): void {
+    this.#now = now;
+    const bossSide = this.#options.mySide === 'a' ? ('b' as const) : ('a' as const);
+    const rig = this.#rigAt(bossSide);
+    const mine = this.#rigAt(this.#options.mySide);
+    for (let i = 0; i < bursts; i += 1) {
+      const delay = i * BEFRIEND_BEAT.burstGapMs;
+      this.#effectCues.push({
+        cue: { kind: 'confetti', side: bossSide, delay, element: null, strength: 1 },
+        rig,
+        other: mine,
+        at: now + delay,
+        duration: 0,
+      });
+    }
+    this.#squishCues.push({
+      cue: { side: bossSide, move: 'bounce', delay: 0, strength: answer === 'yes' ? 1 : 0.6 },
+      rig,
+      at: now,
+    });
+    if (answer === 'yes' && !this.#options.reducedMotion) {
+      // It stands up out of its sit, then shrinks small and hovers (the Heart Charm's pose).
+      rig.down = false;
+      this.#actCues.push({
+        rig,
+        kind: 'charmed',
+        at: now + BEFRIEND_BEAT.burstGapMs,
+        ms: BEFRIEND_BEAT.ms * 0.6,
+        strength: 1,
+      });
+    }
+  }
+
   /** Back to framing both fighters (the log has played out). */
   restCamera(): void {
     this.#camera.rest();
@@ -886,6 +927,7 @@ export class BattleScene {
         rig.act &&
         (running ||
           rig.act.kind === 'faint' ||
+          rig.act.kind === 'sit-down' ||
           rig.act.kind === 'swap-out' ||
           rig.act.kind === 'scoot' ||
           rig.act.kind === 'charmed' ||
@@ -1183,7 +1225,7 @@ export class BattleScene {
     // never asks a down squishy to cheer, pop out or return, so nothing is lost).
     if (rig.down && cue.kind !== 'swap-in' && cue.kind !== 'swap-out') return;
     this.#acts += 1;
-    if (cue.kind === 'faint') rig.down = true;
+    if (cue.kind === 'faint' || cue.kind === 'sit-down') rig.down = true;
     if (cue.kind === 'swap-in' || cue.kind === 'pop-out') rig.down = false;
     rig.act = {
       kind: cue.kind,

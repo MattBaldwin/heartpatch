@@ -285,6 +285,7 @@ export function showBossEntrance(host: HTMLElement, options: EntranceOptions): B
   let last = -1;
   let done = false;
   let frame = 0;
+  let cardHeight = 0;
   /** A finger is down on the layer; `due`: the entrance ran out meanwhile (it ends on the lift). */
   let pressed = false;
   let due = false;
@@ -318,7 +319,9 @@ export function showBossEntrance(host: HTMLElement, options: EntranceOptions): B
     options.pose(state);
     if (state.card > 0) {
       const box = options.layout();
-      const top = cardTop({ ...box, cardHeight: card.offsetHeight || 64 });
+      // Measured once, when it first shows (its words never change): not a layout read per frame.
+      if (cardHeight === 0) cardHeight = card.offsetHeight || 64;
+      const top = cardTop({ ...box, cardHeight });
       card.style.transform = `translate(-50%, ${top}px) scale(${state.cardScale})`;
     }
     card.style.opacity = String(state.card);

@@ -56,6 +56,20 @@ export const BOSS_TEXT = {
   // The result (mockup frames 3 and 5).
   wonTitle: 'You did it! 🎉',
   wonSub: (name: string) => `${name} sat down, puffing. It looks… friendly?`,
+  /** The win on a Christmas Eve fight (#37): its asks come from the patch's thanks, not from this win. */
+  wonSubEve: (name: string) => `${name} sat down, puffing. Great teamwork!`,
+  /** A name the client doesn't know yet (CLAUDE.md rule 6): the BIG squishy stays a surprise. */
+  unknownName: 'The BIG squishy',
+  /** The BIG squishy tuckered out (#190 PR 6). */
+  tuckeredOut: (name: string) => `${name} is all tuckered out! 💤`,
+  /** The team tuckered out: nothing is taken; the day it leaves, then "come back stronger". */
+  lostLine: (name: string, until: string) =>
+    `Your team is all tuckered out! ${name} is ${until}. Come back stronger!`,
+  lostLineLast: (name: string) =>
+    `Your team is all tuckered out! ${name} leaves today. Come back stronger!`,
+  /** Christmas Eve's visit closes on Christmas morning (`eventWindow.endsAt`). */
+  lostLineEve: (name: string) =>
+    `Your team is all tuckered out! ${name}'s visit ends Christmas morning. Come back stronger!`,
   lostTitle: 'So close! 💪',
   lostSub: (name: string) => `${name} is still stomping about.`,
   outTitle: (name: string) => `${name} stomped off.`,
@@ -677,6 +691,49 @@ export function bossXp(
   return out;
 }
 
+/**
+ * A Christmas Eve fight (#37, `patchBar` present) whose asks come from the
+ * patch's fall, not from this win: the card never hints at an ask.
+ */
+function eveNoAsk(boss: PlayerBattleBoss | undefined): boolean {
+  return boss !== undefined && boss.patchBar !== undefined && boss.befriend === 'none';
+}
+
+/** The BIG squishy's name, or "The BIG squishy" while the client doesn't know its species. */
+export function bossDisplayName(
+  species: ReadonlyMap<string, unknown>,
+  speciesId: string | undefined,
+  nameOf: (id: string) => string,
+): string {
+  return speciesId !== undefined && species.has(speciesId)
+    ? nameOf(speciesId)
+    : BOSS_TEXT.unknownName;
+}
+
+/** The caption when the team is all tuckered out: the day the visit ends, kindly (nothing is taken). */
+export function lossLine(
+  boss: PlayerBattleBoss | undefined,
+  name: string,
+  now: number,
+  timeZone: string | null = null,
+): string {
+  if (!boss) return BOSS_TEXT.lostLineLast(name);
+  if (boss.patchBar !== undefined) return BOSS_TEXT.lostLineEve(name);
+  if (lastDayOf(boss, now, timeZone)) return BOSS_TEXT.lostLineLast(name);
+  return BOSS_TEXT.lostLine(name, hereUntil(boss, now, timeZone));
+}
+
+/** True when the BIG squishy beat the team (not a scoot): its end step is the taunt twirl. */
+export function bossWon(b: Pick<PlayerBattle, 'view' | 'mySide'>): boolean {
+  const phase = b.view.phase;
+  return (
+    phase.type === 'over' &&
+    phase.result.reason !== 'forfeit' &&
+    phase.result.winner !== 'draw' &&
+    phase.result.winner !== b.mySide
+  );
+}
+
 export interface BossResultCard {
   readonly title: string;
   readonly subtitle: string;
@@ -705,7 +762,7 @@ export function bossResult(
     const lines = line ? [line] : [];
     return {
       title: BOSS_TEXT.wonTitle,
-      subtitle: BOSS_TEXT.wonSub(bossName),
+      subtitle: eveNoAsk(boss) ? BOSS_TEXT.wonSubEve(bossName) : BOSS_TEXT.wonSub(bossName),
       lines,
       outcome: 'won',
     };
@@ -833,4 +890,28 @@ export function befriendView(input: {
       };
     }
   }
+}
+
+// ── The ask's answer ────────────────────────────────────────────────────
+
+/**
+ * What the server's answer to an ask was, from the fight before and after
+ * (#190 PR 6): a yes (it joined), or a "not yet" that moved on. Null for
+ * anything else (a redraw, a resumed card).
+ */
+export function askAnswer(
+  before: PlayerBattleBoss | undefined,
+  after: PlayerBattleBoss | undefined,
+): { readonly answer: 'yes' | 'not-yet'; readonly warmth: number } | null {
+  if (!before || !after) return null;
+  const asking = before.befriend === 'offer' || before.befriend === 'not-yet';
+  if (!asking) return null;
+  if (after.befriend === 'joined') return { answer: 'yes', warmth: after.warmth };
+  if (
+    after.befriend === 'not-yet' &&
+    (after.asksLeft < before.asksLeft || after.warmth !== before.warmth)
+  ) {
+    return { answer: 'not-yet', warmth: after.warmth };
+  }
+  return null;
 }

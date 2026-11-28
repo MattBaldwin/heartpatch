@@ -83,7 +83,16 @@ import { coinLine, xpLines } from './result-card.js';
 import { keepGoing, KEEP_GOING_TEXT, type KeepGoingApi } from './keep-going.js';
 import type { BossBeat } from './boss-beat.js';
 import { createBossBattle } from './boss-battle.js';
-import { BOSS_TEXT, bossSlot, bossXp, isTeamBattle, slotsOut } from './boss-view.js';
+import {
+  askAnswer,
+  BOSS_TEXT,
+  bossSlot,
+  bossWon,
+  bossXp,
+  isTeamBattle,
+  slotsOut,
+} from './boss-view.js';
+import { showBefriendBeat, warmthCue, type BefriendBeat } from './befriend-beat.js';
 import { mapApi } from '../map/map-api.js';
 import { territoryApi } from '../territory/territory-api.js';
 import { COMMAND_RETRY_MS } from '../inventory/send-command.js';
@@ -154,6 +163,8 @@ export interface BattleScreenOptions {
    * same frame its camera moves; null otherwise.
    */
   onStep?: (step: PlaybackStep, rareFriend: boolean, beat: BossBeat | null) => void;
+  /** A BIG squishy's ask is answered (#190 PR 6): a yes is its fanfare. */
+  onBossAnswer?: (answer: 'yes' | 'not-yet') => void;
   /** A rare-or-better wild squishy's moment starts in full (its chime, #391): its tier's size step. */
   onRareFind?: (scale: number) => void;
   /** Heart Charms in the player's bag on a map (the wild battle's button shows it). */
@@ -411,6 +422,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   let opponentLabel: string | null = null;
   /** The rare-find moment on screen (#391), if any. */
   let reveal: RareReveal | null = null;
+  /** The answer to a boss's ask, while it plays (#190 PR 6). */
+  let befriendBeat: BefriendBeat | null = null;
   /** The boss's entrance on screen (#190 PR 3), if any; playback waits for it (`gate`). */
   let entrance: BossEntrance | null = null;
   const gate = new EntranceGate();
@@ -660,9 +673,12 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     newKey: newIdempotencyKey,
     replace: (b) => {
       if (battle?.id !== b.id) return;
+      const before = battle.boss;
       battle = b;
       content = new BattleContent(b);
       showResult(b);
+      const answered = askAnswer(before, b.boss);
+      if (answered) startBefriendBeat(b, answered.answer, answered.warmth);
     },
     home: () => {
       close();
@@ -1398,7 +1414,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       return;
     }
     const t = now();
-    hud.setCaption(step.text);
+    // The BIG squishy's end beats have their own words (#190 PR 6).
+    hud.setCaption(
+      (isTeamBattle(battle) ? bossFight.caption(battle, step, content) : null) ?? step.text,
+    );
     shown = applyStep(shown, step);
     // The arena acts it out (choreography.ts): a swap brings out `to` once
     // the old squishy has hopped away; a new friend bounces along at the end.
@@ -1417,6 +1436,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
           }
         : {}),
       captured: battle.view.phase.type === 'over' && battle.view.phase.result.reason === 'captured',
+      bossWon: step.kind === 'end' && isTeamBattle(battle) && bossWon(battle),
     });
     // The sound goes with the scene's beat, on the frame it starts (#190 PR 4).
     options.onStep?.(step, cheerFor(battle, content.species)?.rare != null, beat);
@@ -1628,6 +1648,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const wasOpen = battle !== null;
     reveal?.dispose();
     reveal = null;
+    befriendBeat?.dispose();
+    befriendBeat = null;
     entrance?.dispose();
     entrance = null;
     gate.drop();
@@ -1696,6 +1718,34 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   }
 
   /**
+   * The BIG squishy's answer to an ask (#190 PR 6): hearts and a blush that grow
+   * with its warmth step, and for a yes the shrink in a sparkle. The scene plays
+   * its own hearts; the page gets the glow, the dim and the sparkles.
+   */
+  function startBefriendBeat(b: PlayerBattle, answer: 'yes' | 'not-yet', warmth: number): void {
+    const cue = warmthCue(warmth);
+    const bossSide = b.mySide === 'a' ? 'b' : 'a';
+    befriendBeat?.dispose();
+    scene3d?.befriendBeat(answer, cue.bursts, clock.now());
+    options.onBossAnswer?.(answer);
+    const h = window.innerHeight || 1;
+    befriendBeat = showBefriendBeat(options.root, {
+      answer,
+      warmth,
+      layout: {
+        spot: scene3d?.screenSpot(bossSide) ?? null,
+        sheetTop: hud.sheetTop(),
+        pillsBottom: hud.safe().top * h,
+        width: window.innerWidth || 1,
+        height: h,
+      },
+      reducedMotion: reducedMotion.matches,
+      clock,
+    });
+    options.invalidate();
+  }
+
+  /**
    * A rare-or-better wild squishy's moment (#391), once the arena is drawn:
    * the squishy has to be on screen to dim around it and sparkle.
    */
@@ -1747,6 +1797,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     // The picker stays drawn (inert under the entrance's layer), so the sheet and
     // the stage band don't move: the entrance ends on the fight's rest framing.
     gate.hold();
+    bossFight.inert(true);
     let frames = 0;
     const begin = (): void => {
       if (battle?.id !== next.id || entrance || !gate.waiting) return;
@@ -1781,6 +1832,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         },
         onDone: () => {
           entrance = null;
+          bossFight.inert(false);
           if (battle?.id !== next.id) return;
           // Held playback plays now. Nothing else to do: the picker never went
           // away and its lean is still on (no settle, which rests the camera).
@@ -1796,6 +1848,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const closedMap = returnToMap ? (battle?.mapId ?? null) : null;
     reveal?.dispose();
     reveal = null;
+    befriendBeat?.dispose();
+    befriendBeat = null;
     entrance?.dispose();
     entrance = null;
     gate.drop();

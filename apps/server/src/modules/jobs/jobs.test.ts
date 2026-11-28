@@ -33,6 +33,7 @@ import {
   speciesSeen,
   squishies,
   tileAttacks,
+  tileClears,
   tileDefenders,
   tiles,
   users,
@@ -381,6 +382,59 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       expect(spotAt(await jobs(server, kid, mapId), node)).toBeDefined();
       const ring = await setJob(server, kid, mapId, pet, { job: 'gatherer', q: node.q, r: node.r });
       expect(ring.statusCode).toBe(200);
+    });
+
+    it('lists no spot it would refuse: a napping homestead or land being cleared (#912)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const napper = await farLand(server, kid, mapId, 'forest');
+      const clearing = await farLand(server, kid, mapId, 'forest', [napper]);
+      const pet = await squishy(mapId, kid, { element: 'leaf' });
+      const spotAt = (view: JobsView, t: { q: number; r: number }) =>
+        view.spots.find((s) => s.q === t.q && s.r === t.r);
+      const before = await jobs(server, kid, mapId);
+      expect(spotAt(before, napper)).toMatchObject({ resource: 'timber' });
+      expect(spotAt(before, clearing)).toMatchObject({ resource: 'timber' });
+
+      // A homestead cut off from home naps (#199).
+      const at = clock.toISOString();
+      await run(
+        `insert into tile_explore (user_id, tile_id, map_id, layout, terrain, searched, spot_count, completed_at, joined_at, paused_at)
+         values ('${kid.id}', '${await tileIdAt(mapId, napper)}', '${mapId}', 1, 'forest', 7, 3, '${at}', '${at}', '${at}')`,
+      );
+      // Land being cleared (#242).
+      await db.insert(tileClears).values({
+        mapId,
+        userId: kid.id,
+        tileId: await tileIdAt(mapId, clearing),
+        fromTerrain: 'forest',
+        tool: 'axe',
+        drop: {},
+        startedAt: new Date(clock),
+        readyAt: new Date(clock.getTime() + DAY_MS),
+      });
+
+      // Both still refuse (what the board used to offer, then turn down)...
+      const napping = await setJob(server, kid, mapId, pet, {
+        job: 'gatherer',
+        q: napper.q,
+        r: napper.r,
+      });
+      expect(napping.statusCode).toBe(409);
+      expect(errorOf(napping).message).toContain('napping');
+      const cleared = await setJob(server, kid, mapId, pet, {
+        job: 'gatherer',
+        q: clearing.q,
+        r: clearing.r,
+      });
+      expect(cleared.statusCode).toBe(409);
+      expect(errorOf(cleared).message).toContain('clearing');
+      // ...and neither is offered any more.
+      const after = await jobs(server, kid, mapId);
+      expect(spotAt(after, napper)).toBeUndefined();
+      expect(spotAt(after, clearing)).toBeUndefined();
+      expect(after.spots.length).toBe(before.spots.length - 2);
     });
 
     it('works a node on its own, lazily, up to the cap, and collects once', async () => {

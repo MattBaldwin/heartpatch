@@ -11,6 +11,7 @@ import { expect, test } from './test.js';
 import { api, hook, waitForLiveMap } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { bigMoveButton } from './big-move.js';
+import { trayButton } from './trays.js';
 
 /** The dev squishy's level: strong enough to beat the guardians next to home. */
 const STRONG_LEVEL = 40;
@@ -41,6 +42,11 @@ interface BattleDebug {
   pending: number;
   waiting: boolean;
   winner: 'a' | 'b' | 'draw' | null;
+}
+
+/** The part of `JobsDebug` (src/squishies/jobs/index.ts) this spec reads. */
+interface JobsBoardDebug {
+  board: { jobs: Record<string, string> };
 }
 
 const territoryState = (page: Page) => hook<TerritoryDebug>(page, 'territory');
@@ -236,11 +242,26 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
   await page.getByTestId('territory-pick').tap();
   const picker = page.getByTestId('territory-picker');
   await expect(picker.getByRole('button')).toHaveCount(2);
-  await picker.getByRole('button').first().tap();
-  await expect(picker.getByRole('button').first()).toHaveAttribute('aria-pressed', 'true');
+  const guard = picker.getByRole('button').first();
+  const guardId = (await guard.getAttribute('data-squishy'))!;
+  await guard.tap();
+  await expect(guard).toHaveAttribute('aria-pressed', 'true');
   await page.getByTestId('territory-save').tap();
   await expect.poll(() => territoryState(page)).toMatchObject({ onWatch: 1, picking: false });
   await expect(page.getByTestId('territory-watch')).toContainText('On watch: 1 of 3');
+  // Named, like a gatherer (#912), and the picker says it's on watch here.
+  await expect(page.getByTestId('territory-guards')).toContainText(/^🛡️ .+ is on watch here$/);
+  await page.getByTestId('territory-pick').tap();
+  await expect(
+    picker.locator(`[data-squishy="${guardId}"]`).getByTestId('territory-pick-job'),
+  ).toHaveText('on watch here');
+  await page.getByRole('button', { name: 'Never mind' }).tap();
+  // The job board says so too.
+  await (await trayButton(page, 'jobs-open')).tap();
+  await expect
+    .poll(async () => (await hook<JobsBoardDebug>(page, 'jobs'))?.board.jobs[guardId])
+    .toBe('guard');
+  await page.getByTestId('jobs').getByRole('button', { name: 'Close' }).tap();
   expect(findAvoidedWords((await panel.textContent()) ?? '')).toEqual([]);
 
   expect(errors).toEqual([]);

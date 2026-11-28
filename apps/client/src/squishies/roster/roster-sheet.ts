@@ -103,6 +103,8 @@ export interface RosterDebug {
   readonly filter: RosterFilter;
   readonly expanded: string | null;
   readonly note: string;
+  /** What the last tap in a row's detail said, there (#912), or ''. */
+  readonly rowNote: string;
 }
 
 export interface RosterSheet {
@@ -191,6 +193,13 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     revealing = null;
   }
   let working = false;
+  /**
+   * What the last tap in a row's detail said, shown there (#912): under the
+   * title it was off-screen, and a CONFLICT's reload wiped it anyway.
+   */
+  let rowNote: { id: string; text: string } | null = null;
+  /** The row note just changed: scroll it into sight after the next render. */
+  let revealRowNote = false;
   let ticker: number | undefined;
   /** When a landed countdown last asked for fresh views (device ms), 0 for never. */
   let askedAt = 0;
@@ -264,19 +273,30 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     render();
   }
 
-  /** Runs one command from a row's detail, one at a time; a CONFLICT reads everything again. */
-  async function act(run: (id: string, send: Send) => Promise<void>): Promise<void> {
+  /** Says `text` in this row's detail. */
+  const noteRow = (rowId: string, text: string) => {
+    rowNote = { id: rowId, text };
+    revealRowNote = true;
+  };
+
+  /**
+   * Runs one command from a row's detail, one at a time. What it says shows
+   * in that row; a CONFLICT also closes its picker and reads everything again.
+   */
+  async function act(rowId: string, run: (id: string, send: Send) => Promise<void>): Promise<void> {
     const id = mapId;
     if (!id || working) return;
     const mine = ticket;
     working = true;
+    rowNote = null;
     render();
     try {
       await run(id, (command) => sendCommand(sendDeps, command, () => mine === ticket));
     } catch (err) {
       if (mine !== ticket) return;
-      say(messageOf(err));
+      noteRow(rowId, messageOf(err));
       if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
+        picking = null;
         working = false;
         await load(id, mine);
         return;
@@ -293,26 +313,26 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
   type Send = <T>(command: (key: string) => Promise<T>) => Promise<T | null>;
 
   const assign = (squishy: JobSquishy, job: SetJobRequest, done: string) =>
-    act(async (id, send) => {
+    act(squishy.squishy.id, async (id, send) => {
       const res = await send((key) => jobCalls.setJob(id, squishy.squishy.id, job, key));
       if (!res) return;
       jobs = res;
       clock.sync(res.now);
       picking = null;
-      say(done);
+      noteRow(squishy.squishy.id, done);
     });
 
   const house = (squishyId: string, habitatId: string | null, done: string) =>
-    act(async (id, send) => {
+    act(squishyId, async (id, send) => {
       const res = await send((key) => homeCalls.house(id, squishyId, habitatId, key));
       if (!res) return;
       home = res;
-      say(done);
+      noteRow(squishyId, done);
     });
 
   /** Moves a resident out of the Keeper's house (#381); home's tags follow the reply. */
   const leaveHouse = (squishyId: string, name: string) =>
-    act(async (id, send) => {
+    act(squishyId, async (id, send) => {
       const res = await send((key) => houseCalls.moveResident(id, squishyId, null, key));
       if (!res) return;
       const rooms = residentRooms(res);
@@ -328,7 +348,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
         };
       }
       confirmOut = null;
-      say(RESIDENT_TEXT.movedOut(name));
+      noteRow(squishyId, RESIDENT_TEXT.movedOut(name));
     });
 
   const actionContext = (current: JobsView): JobActionsContext => ({
@@ -340,14 +360,17 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     },
     pickSpot: (squishy) => {
       picking = { id: squishy.squishy.id, what: 'spot' };
+      rowNote = null;
       render();
     },
     pickGrounds: (squishy) => {
       picking = { id: squishy.squishy.id, what: 'grounds' };
+      rowNote = null;
       render();
     },
     cancel: () => {
       picking = null;
+      rowNote = null;
       render();
     },
   });
@@ -571,6 +594,20 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
         ),
       );
       parts.push(view);
+      // What the last tap here said, above the buttons it came from (#912).
+      if (rowNote?.id === row.id) {
+        parts.push(
+          el(
+            'p',
+            {
+              class: 'roster-note roster-row-note',
+              role: 'status',
+              'data-testid': 'roster-row-note',
+            },
+            rowNote.text,
+          ),
+        );
+      }
       if (row.job && jobs) {
         const ctx = actionContext(jobs);
         parts.push(
@@ -709,6 +746,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     head.addEventListener('click', () => {
       expanded = open ? null : row.id;
       picking = null;
+      rowNote = null;
       confirmOut = null;
       render();
     });
@@ -864,6 +902,10 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     } else {
       list.replaceChildren(...shown.map((row) => rowEl(row, nowMs)));
     }
+    if (revealRowNote) {
+      revealRowNote = false;
+      list.querySelector('[data-testid="roster-row-note"]')?.scrollIntoView({ block: 'nearest' });
+    }
     tick();
   }
 
@@ -904,6 +946,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     rows = [];
     expanded = null;
     picking = null;
+    rowNote = null;
     confirmOut = null;
     menu = null;
     say('');
@@ -927,6 +970,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       mapId = id;
       expanded = null;
       picking = null;
+      rowNote = null;
       if (sheet.hidden) {
         const active = document.activeElement;
         returnFocus = active instanceof HTMLElement && active !== document.body ? active : null;
@@ -962,6 +1006,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
         filter,
         expanded,
         note: note.textContent,
+        rowNote: rowNote?.text ?? '',
       };
     },
   };
