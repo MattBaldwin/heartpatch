@@ -86,6 +86,8 @@ import { refreshHomesteads } from '../explore/homesteads.js';
 import { createLandTending, type LandTendingService } from './tending.js';
 import { lostDockOwners, mapPatchRules, refreshSupply, supplyFor } from './supply.js';
 import { grantLostRoads, lostRoadGrants, takeDownRoadsOnLostLand } from '../roads/service.js';
+import { grantLostLines, lostLineGrants, takeDownLinesOnLostLand } from '../lines/service.js';
+import { refreshPower } from './power-refresh.js';
 
 /*
  * Territory (#15; design doc §11; decisions B and C). Players claim neutral
@@ -1029,11 +1031,35 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
         new Map([[tile.id, tile.ownerUserId]]),
         'captured',
       );
+      // Its wires and rails too (Clockwork Isle #874, step 6 after the road), half back.
+      const lostLines = await takeDownLinesOnLostLand(
+        tx,
+        attack.mapId,
+        new Map([[tile.id, tile.ownerUserId]]),
+        'captured',
+      );
       // The defender's fire comes down with the land (#202, step 8); the
       // rival never gets it. Battles grants the refund after its squishy locks.
+      // Both players' generator and `needsPower` rows lock with it (#874).
+      const powerOwners = [attack.attackerUserId, ...(tile.ownerUserId ? [tile.ownerUserId] : [])];
       const map = await createMapsRepo(tx).findMap(attack.mapId);
       const lostFires = map
-        ? await takeDownOnLostLand(tx, attack.mapId, [tile.id], at, map.timeZone, 'captured')
+        ? await takeDownOnLostLand(
+            tx,
+            attack.mapId,
+            [tile.id],
+            at,
+            map.timeZone,
+            'captured',
+            powerOwners,
+          )
+        : [];
+      // Clockwork Isle (#874, plan R2.2): power after the take-down, under
+      // that same buildings lock, before the fence segments (step 8 order).
+      const power = map
+        ? await refreshPower(tx, attack.mapId, powerOwners, at, {
+            exclude: lostFires.map((l) => l.event.payload.buildingRowId),
+          })
         : [];
       // The Challenge report's line: a fire and Training Grounds (#277) on
       // the tile come back together.
@@ -1082,7 +1108,9 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
           ...supply,
           ...homesteads,
           ...lostRoads.map((l) => l.event),
+          ...lostLines.map((l) => l.event),
           ...lostFires.map((l) => l.event),
+          ...power,
           ...fences.broken,
           ...fences.inner.map((l) => l.event),
         ],
@@ -1112,12 +1140,15 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
           ...lostOutputGrants(lostFires),
           // And a lost road's take-down share (#621), granted below.
           ...lostRoadGrants(lostRoads),
+          // And a lost wire's or rail's (#874).
+          ...lostLineGrants(lostLines),
         ],
         // Trainees at Training Grounds that came down land what they earned (#277).
         squishies: lostFires.flatMap((l) => l.trainees),
         guards,
         afterRefunds: async (inner, when) => {
           await grantLostRoads(inner, attack.mapId, lostRoads);
+          await grantLostLines(inner, attack.mapId, lostLines);
           return finishLostBuildings(inner, attack.mapId, lostFires, when);
         },
       };

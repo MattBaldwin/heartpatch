@@ -20,6 +20,7 @@ import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { createTendingRepo, createTerritoryRepo, type TendingTileRow } from './repo.js';
 import { rewildTiles } from './rewild.js';
+import { lockAndRefreshPower } from './power-refresh.js';
 import { heartSeeds, mapPatchRules, refreshSupply } from './supply.js';
 
 /*
@@ -168,7 +169,11 @@ export function createLandTending(options: LandTendingOptions): LandTendingServi
       if (strandedRules) {
         const supplied = await store.transaction(async (repo, tx) => {
           const owners = [...new Set((await repo.outerTiles(mapId)).map((t) => t.ownerUserId))];
-          const events = await refreshSupply(tx, mapId, owners, now(), { wait: true });
+          const at = now();
+          const events = await refreshSupply(tx, mapId, owners, at, { wait: true });
+          // Clockwork Isle (#874, plan R2.2): their power afresh too, the
+          // first step-8 lock here (this transaction holds no other).
+          events.push(...(await lockAndRefreshPower(tx, mapId, owners, at)));
           for (const event of events) await repo.appendEvent(event);
           return events.length;
         });

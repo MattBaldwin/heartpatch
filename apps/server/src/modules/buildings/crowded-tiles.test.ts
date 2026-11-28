@@ -114,6 +114,11 @@ const LATER_COLUMNS: readonly (readonly [table: string, column: string, type: st
  */
 const LATER_TABLES: readonly (readonly [table: string, columns: string])[] = [
   ['tile_roads', 'tile_id uuid primary key, map_id uuid, owner_user_id uuid, level smallint'],
+  // Clockwork Isle lines (#874, migration 0072): a gatherer's job joins its rail.
+  [
+    'tile_lines',
+    'tile_id uuid, kind text, map_id uuid, owner_user_id uuid, level smallint, primary key (tile_id, kind)',
+  ],
   // Computer patch-mates (#386, migration 0064): a patch's member list joins it.
   [
     'computer_mates',

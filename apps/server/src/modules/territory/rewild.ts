@@ -13,6 +13,8 @@ import type { MapRow } from '../maps/repo.js';
 import { grantLostRoads, lostRoadGrants, takeDownRoadsOnLostLand } from '../roads/service.js';
 import { createTendingRepo, createTerritoryRepo, type TendingTileRow } from './repo.js';
 import { lostDockOwners, refreshSupply } from './supply.js';
+import { grantLostLines, lostLineGrants, takeDownLinesOnLostLand } from '../lines/service.js';
+import { refreshPower } from './power-refresh.js';
 
 /**
  * Land goes wild (#194's path, shared with the Hollow Man's reclaims, #277):
@@ -95,9 +97,18 @@ export async function rewildTiles(
     new Map(going.map((t) => [t.id, t.ownerUserId])),
     'wild',
   );
+  // Its wires and rails too (Clockwork Isle #874, step 6 after the roads).
+  const lostLines = await takeDownLinesOnLostLand(
+    tx,
+    mapId,
+    new Map(going.map((t) => [t.id, t.ownerUserId])),
+    'wild',
+  );
   // Fires and Training Grounds (#277) on that land come down too (#202,
   // step 8). What they give back goes in their owners' bags with the
   // gatherers' banking below, the inventory rows locked together (step 11).
+  // The owners' generator and `needsPower` rows lock with them (#874).
+  const powerOwners = owned.map(([userId]) => userId);
   const lostFires = await takeDownOnLostLand(
     tx,
     mapId,
@@ -105,7 +116,14 @@ export async function rewildTiles(
     at,
     map.timeZone,
     'wild',
+    powerOwners,
   );
+  // Clockwork Isle (#874, plan R2.2): power after the take-down, under that
+  // same buildings lock, before the fence segments. Hollow Man takeovers
+  // reach here too.
+  const power = await refreshPower(tx, mapId, powerOwners, at, {
+    exclude: lostFires.map((l) => l.event.payload.buildingRowId),
+  });
   // The welcome-back line's refund, per tile: a fire and Training Grounds
   // on one tile come back together.
   const byTile = new Map<string, Record<string, number>>();
@@ -146,6 +164,7 @@ export async function rewildTiles(
     ...planGrants(lostFires.flatMap((l) => l.batches)),
     ...lostOutputGrants(lostFires),
     ...lostRoadGrants(lostRoads),
+    ...lostLineGrants(lostLines),
   ];
   const events: NewGameEvent[] =
     workers.length > 0 ? await leaveWork(tx, map, workers, 'resting', at, toLock) : [];
@@ -154,6 +173,7 @@ export async function rewildTiles(
     await grantItems(tx, { mapId, userId }, items, 'build-refund', refId);
   }
   await grantLostRoads(tx, mapId, lostRoads);
+  await grantLostLines(tx, mapId, lostLines);
   // A lost Factory's batches bank and give back (#295); trainees land what
   // they earned and stop, then their Training Grounds go (#277).
   const training = await finishLostBuildings(tx, mapId, lostFires, at);
@@ -161,7 +181,9 @@ export async function rewildTiles(
     ...supply,
     ...homesteads,
     ...lostRoads.map((l) => l.event),
+    ...lostLines.map((l) => l.event),
     ...lostFires.map((l) => l.event),
+    ...power,
     ...lostFences.map((l) => l.event),
     ...training,
   );
