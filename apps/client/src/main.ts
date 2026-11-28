@@ -1639,6 +1639,8 @@ const advent = createAdvent({
   onOpened: () => {
     void inventory.refresh();
   },
+  presentsInBag: () => inventory.bag?.items['presents'] ?? 0,
+  onPresentOpened: () => inventory.refresh(),
   cue: (name) => {
     audio.cue(name);
   },
