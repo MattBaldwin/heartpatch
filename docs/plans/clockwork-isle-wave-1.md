@@ -266,3 +266,15 @@ Recommended **Wave 2**, not Wave 1: contentment is a checkpoint that drifts (`co
 - Timeline unchanged. The frost tint is a shader uniform and the Wrapper is a data row, so no gate moves.
 - Risks: one more collision class, **the presents economy** (#37, PRs #905 and the advent module). The Wrapper's output rate is capped by `storageHours` and the sim guard "an engaged kid wraps at most 2 presents a day" **TUNE** keeps it from swamping advent presents.
 - Decisions to record, added: 7. Clockwork Isle ships as the Phase 3 Christmas headline with a frosty look; the season-neutral look is Wave 2. 8. The Gift Wrapper is the one presents tie-in; machine-made presents open like gifted ones.
+
+## R1.4 Owner answers, final (2026-11-28)
+
+| Q | Answer | Plan |
+|---|---|---|
+| 1 Christmas coupling | frosty Christmas headline; season-neutral look is Wave 2; Clockwork code stays out of Christmas lanes' files | R1.1 |
+| 2 Automation depth | haul and sort only; only squishies gather; happy squishies make machines faster | §0, R1.2 (bonus recommended for Wave 2; owner call pending) |
+| 3 Power model | wires like roads, reusing Wild Isle road and supply rules | §0, `POWER_RULES.model = 'wires'` |
+| 4 Name | **Clockwork Isle**, working name; the owner may still change it at the mockups | code id `clockwork-isle` fixed; display name in text tables |
+| 5 Existing patches; patch count | **new patches only**: the type is chosen when creating a patch and existing patches never change; **no limit on how many patches a Keeper creates or joins is added or changed** | §0; no `maps` rule change anywhere in the plan |
+
+With these, the plan is final for gate G1. Open for the owner: the two R1 questions (machine-made presents open with the gifted roll; the happy-squishies bonus wave).
