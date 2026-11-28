@@ -95,6 +95,10 @@ export type ActKind =
   | 'stomp'
   /** A big shrug with a wobble (#190: a BIG squishy calling for backup). */
   | 'shrug'
+  /** The BIG squishy tuckered out (#190 PR 6): sits down with a puff and dozes (held, no flop). */
+  | 'sit-down'
+  /** The BIG squishy won (#190 PR 6): one slow, gentle taunt twirl, then back home. */
+  | 'taunt-twirl'
   /** Scooted away (forfeit): turns tail and hops off (held). */
   | 'scoot'
   /** Back home from wherever the last act left it. */
@@ -121,6 +125,8 @@ export const ACT_END: Readonly<Record<ActKind, ActEnd>> = {
   victory: 'home',
   stomp: 'home',
   shrug: 'home',
+  'sit-down': 'down',
+  'taunt-twirl': 'home',
   scoot: 'gone',
   return: 'home',
 };
@@ -198,6 +204,8 @@ export const FEELING_TRAITS: Readonly<Record<FeelingId, FeelingTraits>> = {
 
 /** The pose a held act leaves (for an act that ends away from home). */
 export function heldPose(kind: ActKind, reach: number, reduced: boolean): Pose {
+  // A BIG squishy that's all tuckered out sits upright (#190 PR 6), never flops over.
+  if (kind === 'sit-down') return pose({ lift: -CHOREO.sit.sink, squash: CHOREO.sit.squash });
   switch (ACT_END[kind]) {
     case 'contact':
       return pose({ forward: reduced ? reach * CHOREO.reduced.reach : reach });
@@ -452,6 +460,29 @@ function curve(act: Act, u: number): Pose {
         roll: 0.12 * big * Math.sin(span(u, 0.15, 0.85) * Math.PI * 4) * up,
       });
     }
+    case 'sit-down': {
+      // Slows, sags and settles onto its bottom with a soft puff, then nods off.
+      const sag = easeInOut(span(u, 0.1, 0.6));
+      const settled = span(u, 0.6, 1);
+      const down = heldPose('sit-down', act.reach, r);
+      return pose({
+        lift: lerp(0, down.lift, sag),
+        squash: lerp(1, down.squash, sag) - 0.05 * big * settle(settled, 1) * (settled > 0 ? 1 : 0),
+        lean:
+          -0.08 * big * arc(span(u, 0, 0.5)) + CHOREO.sit.nod * big * Math.sin(settled * Math.PI),
+      });
+    }
+    case 'taunt-twirl': {
+      // One slow, gentle twirl with a cheeky wag; reduced motion keeps the wag, not the spin.
+      const turn = easeInOut(span(u, 0.12, 0.88));
+      const wag = arc(span(u, 0.12, 0.88));
+      return pose({
+        spin: twirl * Math.PI * 2 * turn,
+        lift: CHOREO.twirl.lift * big * wag,
+        squash: 1 + 0.05 * big * wag,
+        roll: 0.1 * big * Math.sin(span(u, 0.12, 0.88) * Math.PI * 2) * wag,
+      });
+    }
     case 'scoot': {
       const t = easeIn(span(u, 0.2, 1));
       return pose({
@@ -694,6 +725,8 @@ export interface PlanContext {
   readonly reduced: boolean;
   /** At the end: the battle ended with a new friend. */
   readonly captured?: boolean;
+  /** The BIG squishy beat the team (#190 PR 6): the end step is its taunt twirl. */
+  readonly bossWon?: boolean;
   /** The boss's side in a boss fight (#190): its beats get the boss camera's. */
   readonly boss?: BattleSideId | null;
   /** A hit from a windup's move landing (#190): the boss camera's thump. */
@@ -920,20 +953,24 @@ export function planStep(step: PlaybackStep, ctx: PlanContext): StepPlan {
           : camera({ focus: step.side });
       break;
     }
-    case 'tuckered':
-      act(step.side, 'faint');
-      fx('dizzy', step.side, ms * 0.6);
+    case 'tuckered': {
+      // The BIG squishy (#190 PR 6) sits down with a Zzz, no flop and no shake;
+      // the push holds, then the camera drifts slowly back.
+      const bossDown = ctx.boss === step.side;
+      act(step.side, bossDown ? 'sit-down' : 'faint');
+      if (bossDown) fx('sleepy', step.side, ms * 0.45, { element: null });
+      else fx('dizzy', step.side, ms * 0.6);
       fx('dust', step.side, ms * 0.65);
       cam = camera({
         focus: step.side,
         push: reduced ? 0 : CHOREO_CAMERA.koPush,
         pushDelay: ms * 0.5,
-        shake: reduced ? 0 : CHOREO_CAMERA.shake * 0.5,
+        shake: reduced || bossDown ? 0 : CHOREO_CAMERA.shake * 0.5,
         shakeDelay: ms * 0.7,
-        // The boss tuckered out (#190): the push holds, then the camera drifts slowly back.
-        ...(ctx.boss === step.side && { relax: BOSS_BEATS.koRelax }),
+        ...(bossDown && { relax: BOSS_BEATS.koRelax }),
       });
       break;
+    }
     case 'swap':
       // Out goes the old squishy, in comes the new one (`to`).
       if (step.to !== null && step.to !== step.slot) {
@@ -972,6 +1009,14 @@ export function planStep(step: PlaybackStep, ctx: PlanContext): StepPlan {
       break;
     case 'end': {
       const won = step.squish === 'bounce';
+      // The team is all tuckered out (#190 PR 6): the BIG squishy gives a gentle
+      // taunt twirl (owner answer 6), kindly: no push, no shake, no flash.
+      if (ctx.boss && ctx.bossWon === true) {
+        act(ctx.boss, 'taunt-twirl');
+        squish.push({ side: ctx.boss, move: 'bounce', delay: ms * 0.4, strength: 0.4 });
+        cam = camera({ focus: null });
+        break;
+      }
       if (won) {
         act(step.side, 'victory');
         fx('confetti', step.side, ms * 0.2, { element: null });

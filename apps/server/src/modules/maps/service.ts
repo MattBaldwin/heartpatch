@@ -39,14 +39,13 @@ import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
 import { assertAllowedText } from '../../lib/filter.js';
 import { newSeed } from '../../lib/rng.js';
-import { canonicalTimeZone, instantOfLocalDate, type Clock } from '../../lib/time.js';
+import { canonicalTimeZone, type Clock } from '../../lib/time.js';
 import { createAuthRepo } from '../auth/repo.js';
 import { seedHomeRingNodes, type HomeRingLog } from '../buildings/home-ring.js';
 import { listPublicBuildings } from '../buildings/service.js';
 import { christmasOn, presentWaitingOn } from '../advent/service.js';
-import { barView } from '../boss/patch-bar.js';
-import { createBossRepo } from '../boss/repo.js';
-import { MINIBOSSES_OFF, minibossOpenFor, type MinibossSwitch } from '../boss/switch.js';
+import { christmasEveViewFor } from '../boss/eve-view.js';
+import { MINIBOSSES_OFF, type MinibossSwitch } from '../boss/switch.js';
 import { giftWaitingOn } from '../house/service.js';
 import { HOUSE_OFF, houseOpenFor, type HouseSwitch } from '../house/switch.js';
 import { listPublicFences } from '../fences/service.js';
@@ -621,7 +620,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
             ? {
                 christmas: {
                   presentWaiting: await presentWaitingOn(tx, map, user.id, at),
-                  ...(await christmasEveView(tx, miniBosses, map, at)),
+                  ...(await christmasEveView(tx, miniBosses, map, user.id, at)),
                 },
               }
             : {}),
@@ -886,32 +885,17 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
 }
 
 /**
- * `MapView.christmas.eve` (#37 X1, X2): the patch's Christmas Eve visit
- * from when it's pinned until it closes, with its bar (`state`, `chipped`,
- * `goal`; never who chipped or the formulas behind them). A plain read: the
- * boss module pins it and opens its bar (rule 4). `opensAt` is the Eve's own
- * opening, the bar's (also on a row converted from the week's weekly visit,
- * which keeps that visit's earlier `opens_at`); `opensAt` alone while a
- * visit pinned before X2 has no bar yet. Nothing while the mini-boss switch
- * is closed for the patch (it follows `/boss`).
+ * `MapView.christmas.eve` (#37 X1, X2, X5a): the patch's Christmas Eve
+ * notice, visit and bar, and this viewer's own thanks while its asks are
+ * open. A plain read; the boss module owns it (`christmasEveViewFor`).
  */
 async function christmasEveView(
   db: Executor,
   miniBosses: MinibossSwitch,
-  map: { id: string; timeZone: string },
+  map: { id: string },
+  userId: string,
   at: Date,
 ): Promise<{ eve?: MapViewChristmasEve }> {
-  const rules = BOSS_EVENTS.christmasEve;
-  if (!rules || miniBosses.mode === 'off') return {};
-  const repo = createBossRepo(db);
-  const eve = await repo.findChristmasEve(map.id, at);
-  if (!eve) return {};
-  const owner = await repo.findMap(map.id);
-  if (!owner || !minibossOpenFor(miniBosses, owner.ownerUsername)) return {};
-  const bar = await repo.findBar(map.id, eve.windowId);
-  if (bar) return { eve: { opensAt: bar.opensAt.toISOString(), ...barView(bar, at) } };
-  // The window's Monday is in the Eve's own December.
-  const day = `${eve.windowId.slice(0, 4)}-${rules.day}`;
-  const opensAt = instantOfLocalDate({ date: day, minute: rules.opensAtHour * 60 }, map.timeZone);
-  return { eve: { opensAt: (opensAt > eve.opensAt ? opensAt : eve.opensAt).toISOString() } };
+  const eve = await christmasEveViewFor(db, BOSS_EVENTS, miniBosses, map.id, userId, at);
+  return eve ? { eve } : {};
 }

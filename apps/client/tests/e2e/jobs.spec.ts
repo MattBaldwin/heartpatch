@@ -85,6 +85,25 @@ test('a squishy gathers on its own, and the picked team goes to battle', async (
   await helper.getByRole('button', { name: /Gather/ }).tap();
   const picker = helper.getByTestId('jobs-picker');
   await expect(picker).toContainText(/firelight|fire tonight/);
+  // A refused tap says why in its own row, not under the title off-screen,
+  // and the stale picker closes (#912). One refusal, then the real server.
+  const refusal = 'This homestead is napping. Join it back up to home first!';
+  const jobRoute = '**/api/v1/maps/*/squishies/*/job';
+  await page.route(jobRoute, (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'CONFLICT', message: refusal } }),
+    }),
+  );
+  await picker.getByTestId('jobs-spot').first().tap();
+  await expect(helper.getByTestId('jobs-row-note')).toHaveText(refusal);
+  await expect(helper.getByTestId('jobs-picker')).toHaveCount(0);
+  await expect(helper.getByTestId('jobs-row-note')).toBeInViewport();
+  expect((await jobsState(page))?.board.jobs[helperId]).toBe('resting');
+  await page.unroute(jobRoute);
+  await helper.getByRole('button', { name: /Gather/ }).tap();
+  await expect(helper.getByTestId('jobs-row-note')).toHaveCount(0);
   await picker.getByTestId('jobs-spot').first().tap();
   await expect.poll(async () => (await jobsState(page))?.board.jobs[helperId]).toBe('gatherer');
   await expect(helper).toContainText('Next in');

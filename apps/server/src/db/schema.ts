@@ -1519,9 +1519,9 @@ export const tileLines = pgTable(
 /**
  * Clockwork Isle research (#874): one row per node a player started on a
  * patch's Research Bench, paid up front; `ready_at` is when it's done (a
- * timestamp, nothing ticks) and `claimed_at` when the settle or a read
- * claimed it (made it known and granted its Blueprints). The partial
- * unique index keeps one going per player per patch.
+ * timestamp, nothing ticks) and `claimed_at` when a read claimed it
+ * (made it known and granted its Blueprints; lazily, no settle hook). The
+ * partial unique index keeps one going per player per patch.
  */
 export const researchJobs = pgTable(
   'research_jobs',

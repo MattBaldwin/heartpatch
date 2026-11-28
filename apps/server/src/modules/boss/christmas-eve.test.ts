@@ -100,9 +100,11 @@ describe.skipIf(!url)('the Christmas Eve visit (#37 X1, needs DATABASE_URL)', ()
     const mapId = await h.patch(owner);
     await h.grow(mapId, owner, 6);
 
-    // Before 16:00: nothing out, nothing on the map.
+    // Before 16:00: nothing out; the map has only the notice (#37 X5a).
     expect(await visitOf(owner, mapId)).toBeNull();
-    expect(await eveOf(owner, mapId)).toBeUndefined();
+    expect(await eveOf(owner, mapId)).toEqual({
+      opensAt: DENVER('2026-12-24T16:00:00').toISOString(),
+    });
 
     h.clock.setTime(DENVER('2026-12-24T16:01:00').getTime());
     expect(await h.sweep([mapId])).toBe(1);
@@ -118,6 +120,8 @@ describe.skipIf(!url)('the Christmas Eve visit (#37 X1, needs DATABASE_URL)', ()
       state: 'open',
       chipped: 0,
       goal: EVE.bar.minGoal,
+      chippers: 0,
+      warmedUp: false,
     });
     const row = (await windowRow(mapId, '2026-12-21'))!;
     expect(row.kind).toBe('christmas-eve');
@@ -244,6 +248,8 @@ describe.skipIf(!url)('the Christmas Eve visit (#37 X1, needs DATABASE_URL)', ()
       state: 'open',
       chipped: 0,
       goal: EVE.bar.minGoal,
+      chippers: 0,
+      warmedUp: false,
     });
     // Once: a second sweep has nothing new.
     expect(await h.sweep([mapId])).toBe(0);
@@ -305,6 +311,8 @@ describe.skipIf(!url)('the Christmas Eve visit (#37 X1, needs DATABASE_URL)', ()
     });
     expect(go?.wonBattleId).toBeNull();
     expect((await visitOf(owner, mapId))?.state).toBe('here');
+    // …it still pays as a weekly win (#37 X2b: only the Eve's own repeat wins skip the pay)…
+    expect(await createMinibossBattlePort(BOSS_RULES).winPays(db, stored)).toBe(true);
     // …and its battle, once won, offers no befriend ask the server would refuse.
     const wonView = await bossBattleView(
       db,

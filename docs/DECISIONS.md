@@ -2736,3 +2736,45 @@ Supervisor 53 (`session_01RAEPnH5P3wa88p6mTS2Jrh`) took over from supervisor 52 
 **Verdict decisions**
 - #904 render note: the empty track was too faint on a blue day sky, so it gets a darker (plum) track with light hairlines. The 4 pt core stays; don't thicken the line.
 - #903: merged on reviewer round 2 APPROVE with owner decision 2 folded in. Repeat Christmas Eve wins pay no mini-boss win coins, no Heart Coin, no weekly bundle and no boss drop. They still chip the patch bar and count toward the Christmas bundle and asks.
+
+## Supervisor 54 (2026-11-28 early)
+
+Supervisor 54 (`session_01RAEPnHD8sctJfWD9ZjYZhq`) took over from supervisor 53 at 00:38 UTC (§8 handoff; supervisor 53 retired and archived). Merged: #907 (handoff docs) → `64e8e03`. #904 was merged by supervisor 53 at the handoff (`0d04f19`).
+
+**Owner decisions (2026-11-28)**
+1. **Seasonal milestone goals list their activities.** "We should list out the activities instead of vaguely alluding to them" (owner, on the Cozy Harvest card). Every tier's goal names what counts (befriend which squishies, gather what, find what); never "Do 20 cozy harvest things". Applies to Cozy Harvest, Halloween and every future seasonal track; a shared test keeps tier goals naming every source kind the track counts.
+2. **A Christmas milestone track with a top-tier prize costume**, the same shape as Halloween's and Cozy Harvest's. It counts only activities that are live (presents opened, advent doors, chipping in on the Eve patch bar; gifts only if they can't be farmed); `tree.decorated` joins when the Patch Tree ships. The costume is milestone-only, untradable, never dropped or sold, and its look gets the owner's OK on the Mockup Board.
+
+**Coordinator rulings**
+- **X3 look:** the part kit has no scarf and `glow: 'accent'` lights every accent part, so Snowbundle ships the kit-only look: cranberry acorn-cup cap as a detail colour (never glows), gold sun-crown (Snowbundle) and lure-beads (Bundlebit) as the only lit parts, no scarf. No part-kit change in X3; a scarf or lone lit star is a separate kit lane if the owner asks.
+- **X3 test lines:** X3 may add the four `mv(...)` lines for its new secret moves to `apps/client/src/battle/signature-fx.test.ts` (test-only; that test hand-copies `SERVER_MOVES` by design).
+- **X5 splits into X5a (server + additive contract, Opus, ★ Fable second review) and X5b (client, Sonnet, after X5a).** Pre-authorised optional fields on `MapViewChristmasEveSchema`: `chippers` (int ≥ 0, a count, never who), `warmedUp` (boolean, never the head-start amount), per-viewer `thanks { kind, items, asksLeft, battleId }` while that Keeper's asks are open (it may outlive the visit's close). **No `boss.dozed` event:** the client refetches the map view at `closesAt` and on foreground. The pre-16:00 notice is a server fix (`BOSS_EVENTS.christmasEve.noticeDays`, `// TUNE:`). X5a writes the TECH_SPEC §5/§7 5e lines with its contract.
+- **#898 FX polish list → a later 5c lane** (`element-fx.ts` only), not boss PR 6. **In-fight "The whole patch did it!" sticker → a follow-up after PR 6**, not X5b (it lives in `battle/**`).
+- **2c waits for X5a** (both touch `apps/server/src/modules/maps/service.ts`).
+
+## Supervisor 55 (2026-11-28)
+
+Supervisor 55 (`session_01RAEPnHAU8pDk6gLHtPzbJQ`) took over from supervisor 54 at 01:24 UTC (§8 handoff; supervisor 54 retired and archived). Merged: #911 (handoff docs) → `5eafa55`.
+
+**Owner decisions (2026-11-28)**
+1. **Jobs bug (#912):** "gather timber flashes but doesn't assign" and "guards don't show they have a job" are fixed as a priority lane (PR #915). The owner wasn't sure which spot failed, so both likely refusals (napping homestead, land being cleared) are covered and every setJob refusal shows next to the tapped row.
+2. **Clockwork Isle (#874): the full Wave 1 by Dec 1, 2026.**
+3. **Clockwork Isle is a frosty Christmas headline** (supersedes the earlier "after Christmas, season-neutral" note): winter-wind machines; the frost is client dressing only; a season-neutral look follows in Wave 2.
+4. **Machines haul and sort only;** only squishies (and Keepers) gather.
+5. **Power runs along wires** following the road pattern (roads are per-tile on main).
+6. **Name: Clockwork Isle** (code id `clockwork-isle`).
+7. **New patches only:** a patch's type never changes; no limit on how many patches a Keeper creates or joins is added or changed.
+8. **Gift Wrapper:** yes; a machine-made present opens with the same roll as a gifted one.
+9. **"Happy squishies make machines faster" is Wave 2.**
+10. **Clockwork look (mockup round 1–2 feedback):** buildings are centred on their tiles like Cozy and Wild; they read as **cozy steampunk** (varied materials and colours: brass, copper with verdigris, dark iron, brick, painted wood, pipes, chimneys, steam, gauges, gears; warm window and lamp light), not all glowing gold; **mixed heights** (squat and tall); **every tile leaves room for a road to wrap around its building**, so a large patch feels like a **cozy metropolis**.
+11. **Tech squishy names: Gearbit** (brass, gear ears) and **Bulbun** (bulb nose).
+12. **Scarves are a Wardrobe accessory,** not part of a species' look.
+13. **Snowbundle (X3):** names Snowbundle and Bundlebit approved; the move "Snug Scarf Wrap" becomes **"Snug Snow Wrap"**; look approved, but **bigger in the fight (~2.5× a Puddlepuff)**.
+
+**Coordinator rulings**
+- **G1 Clockwork plan OK** (#874 plan comment 7231940706 + revisions 1–2). C0 contracts lane and a mockup lane started at once.
+- **Clockwork Beacon is `kind: 'lights'`** and a powered Beacon counts toward the Christmas Eve head start; `christmas.test.ts`'s lights pin filters `patchTypes === undefined` after #909.
+- **#909 server wording:** a third Twinkle Lights uses the existing count message, not "One is plenty". Bloom on high tier not visibly changing bulbs is a follow-up note only.
+- **XM (#917) merges after #905 and #913** and keeps `present.opened`; drop it only if #905 isn't merged by Nov 30 18:00 UTC.
+- **Boss PR 6 splits:** #916 ships beats 1–4 + #890 follow-ups; 5a–5e camera/HUD and captures go to a fresh PR 6b lane after #916 merges.
+- **Mockup Board images are embedded as data URIs** (the owner saw blank boxes for separately published image files).

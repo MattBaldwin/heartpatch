@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ContentIdSchema } from './data/common.js';
 import { LocalDateSchema } from './time.js';
-import { BossBarStateSchema } from './boss-bar.js';
+import { BossBarStateSchema, BossThanksItemsSchema, BossThanksKindSchema } from './boss-bar.js';
 
 /*
  * Christmas (#37 C0): the shared contracts for advent presents, warmth and
@@ -82,10 +82,30 @@ export const PatchTreeRowSchema = z.strictObject({
 export type PatchTreeRow = z.infer<typeof PatchTreeRowSchema>;
 
 /**
+ * A Keeper's own Christmas Eve thanks on `MapView.christmas.eve` (#37 X5a):
+ * what it put in their bag, the fall's befriend asks they have left, and the
+ * Eve fight `POST /battles/:battleId/befriend` takes them on. Sent only to
+ * that Keeper, from when it's paid until its asks close (`befriend.askHours`
+ * from the thanks), even past the visit's close. Never odds.
+ */
+export const MapViewChristmasEveThanksSchema = z.object({
+  kind: BossThanksKindSchema,
+  items: BossThanksItemsSchema,
+  /** The fall's asks left (`fallAsks` minus asks made); always 0 after a doze. */
+  asksLeft: z.number().int().min(0),
+  /** Their latest finished Eve fight: any finished Eve fight of theirs carries an ask. */
+  battleId: z.uuid(),
+});
+export type MapViewChristmasEveThanks = z.infer<typeof MapViewChristmasEveThanksSchema>;
+
+/**
  * `MapView.christmas.eve` (#37 C0b): the Christmas Eve visit as the map
  * shows it, for the notice chip (from three days before) and the event card.
  * `opensAt` alone until the visit opens; then the bar comes whole (`state`,
- * `chipped`, `goal`). Never the species, the head-start rule or who chipped.
+ * `chipped`, `goal`), with how many Keepers chipped in (`chippers`, a count,
+ * never who) and whether the lights and star warmed it up (`warmedUp`, never
+ * by how much), and the viewer's own `thanks` once paid (#37 X5a). Never the
+ * species, the head-start rule or who chipped.
  */
 export const MapViewChristmasEveSchema = z
   .object({
@@ -93,11 +113,19 @@ export const MapViewChristmasEveSchema = z
     state: BossBarStateSchema.optional(),
     chipped: z.number().int().min(0).optional(),
     goal: z.number().int().min(1).optional(),
+    /** Distinct Keepers with a fight on the bar (#37 X5a). Only with the bar. */
+    chippers: z.number().int().min(0).optional(),
+    /** Whether the bar opened with a head start (#37 X5a). Only with the bar. */
+    warmedUp: z.boolean().optional(),
+    /** The viewer's own thanks while its asks are open (#37 X5a). Only with a settled bar. */
+    thanks: MapViewChristmasEveThanksSchema.optional(),
   })
   .refine(
     (eve) =>
       (eve.state === undefined) === (eve.chipped === undefined) &&
-      (eve.state === undefined) === (eve.goal === undefined),
+      (eve.state === undefined) === (eve.goal === undefined) &&
+      (eve.state !== undefined ||
+        (eve.chippers === undefined && eve.warmedUp === undefined && eve.thanks === undefined)),
     { path: ['state'], message: 'the bar comes whole or not at all' },
   )
   .refine((eve) => eve.state !== 'fell' || (eve.chipped ?? 0) >= (eve.goal ?? 0), {
@@ -107,6 +135,14 @@ export const MapViewChristmasEveSchema = z
   .refine((eve) => eve.state !== 'dozed' || (eve.chipped ?? 0) < (eve.goal ?? 0), {
     path: ['state'],
     message: 'a full bar falls; it does not doze off',
+  })
+  .refine((eve) => eve.thanks === undefined || eve.thanks.kind === eve.state, {
+    path: ['thanks', 'kind'],
+    message: 'a thanks is for how the bar settled',
+  })
+  .refine((eve) => eve.thanks?.kind !== 'dozed' || eve.thanks.asksLeft === 0, {
+    path: ['thanks', 'asksLeft'],
+    message: 'a dozed-off bar gives no asks',
   });
 export type MapViewChristmasEve = z.infer<typeof MapViewChristmasEveSchema>;
 

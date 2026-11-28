@@ -624,6 +624,8 @@ const territory = withFences(
       supply: (view) => roads.supply(view),
       // The week of a Long Night, the dark-land line says when he comes (#727).
       darkSoon: () => hollow.darkSoon(),
+      // The guard picker says who does what, and saved guards refresh the jobs (#912).
+      jobs: { viewOf: jobs.viewOf, load: jobs.loadView, onView: jobs.onView },
     }),
     raidReport,
   ),
@@ -1637,6 +1639,8 @@ const advent = createAdvent({
   onOpened: () => {
     void inventory.refresh();
   },
+  presentsInBag: () => inventory.bag?.items['presents'] ?? 0,
+  onPresentOpened: () => inventory.refresh(),
   cue: (name) => {
     audio.cue(name);
   },
@@ -1971,6 +1975,10 @@ const battles = createBattleScreen({
   },
   onRareFind: (scale) => {
     audio.cue(findCue(scale));
+  },
+  // A BIG squishy says yes to an ask (#190 PR 6): the friend fanfare.
+  onBossAnswer: (answer) => {
+    if (answer === 'yes') audio.cue('friend-fanfare');
   },
 });
 // Friendly battles (#29): "Who's here now" and "Battle me?" from the Friends

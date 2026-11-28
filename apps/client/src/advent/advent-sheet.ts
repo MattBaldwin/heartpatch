@@ -6,6 +6,8 @@ import { el, messageOf } from '../ui/dom.js';
 import { adventApi, type AdventApi } from './advent-api.js';
 import {
   ADVENT_TEXT,
+  bagLine,
+  contentsIcons,
   contentsLine,
   dayLook,
   dayNumber,
@@ -36,6 +38,10 @@ export interface AdventOptions {
   isGlade?: (mapId: string) => boolean;
   /** A present landed in this patch's bag: the bag reads again. */
   onOpened?: (mapId: string, opened: ClaimAdventResponse['opened']) => void;
+  /** Wrapped presents in this patch's bag now (the bag's own count; the server still decides). */
+  presentsInBag?: (mapId: string) => number;
+  /** A wrapped present was opened from the bag: the bag reads again. */
+  onPresentOpened?: (mapId: string) => Promise<void> | void;
   /** Sounds for the opening (the game's cue set). */
   cue?: (name: 'pop' | 'twinkle') => void;
   /** Reduce Motion is on (tests pass a fake). */
@@ -55,6 +61,8 @@ export interface AdventDebug {
   /** What the reveal shows (its lines), or null while it isn't up. */
   readonly reveal: readonly string[] | null;
   readonly note: string;
+  /** Wrapped presents the sheet thinks the bag holds. */
+  readonly presents: number;
 }
 
 export interface Advent {
@@ -69,6 +77,8 @@ export interface Advent {
 interface Reveal {
   title: string;
   lines: string[];
+  /** Wrapped presents still in the bag, after one from the bag. */
+  left?: number;
 }
 
 export function createAdvent(options: AdventOptions): Advent {
@@ -207,6 +217,51 @@ export function createAdvent(options: AdventOptions): Advent {
     }
   }
 
+  /** Opens a wrapped present from the bag: the server finds one (or says there's none). */
+  async function openPresent(): Promise<void> {
+    const id = mapId;
+    if (!id || working) return;
+    const at = generation;
+    const stillHere = () => at === generation && mapId === id;
+    working = true;
+    note = '';
+    render();
+    try {
+      const reply = await sendCommand(sendDeps, (key) => api.openPresent(id, key), stillHere);
+      if (!reply || !stillHere()) return;
+      reveal = {
+        title: ADVENT_TEXT.revealPresent,
+        lines: foundLines(reply.items),
+        left: reply.presentsLeft,
+      };
+      options.cue?.('pop');
+      options.cue?.('twinkle');
+      void bagRead(id, at);
+    } catch (err) {
+      if (stillHere()) {
+        note = messageOf(err);
+        // "No wrapped presents" means the bag's count was old: read it again.
+        void bagRead(id, at);
+      }
+    } finally {
+      if (at === generation) working = false;
+      if (stillHere()) render();
+    }
+  }
+
+  /** The bag reads again; the sheet draws what it now holds (unless the map moved on). */
+  async function bagRead(id: string, at: number): Promise<void> {
+    try {
+      await options.onPresentOpened?.(id);
+    } catch {
+      // The bag says why on its own; the sheet keeps what it knows.
+    }
+    if (at === generation && mapId === id) render();
+  }
+
+  /** Wrapped presents in the bag, as far as the sheet knows (never decides: the server does). */
+  const inBag = (): number => (mapId ? (options.presentsInBag?.(mapId) ?? 0) : 0);
+
   // ── Drawing ───────────────────────────────────────────────────────────
 
   function render(): void {
@@ -246,7 +301,7 @@ export function createAdvent(options: AdventOptions): Advent {
         gift,
         el('p', { class: 'advent-reveal-title' }, found.title),
         list,
-        el('p', { class: 'advent-reveal-note' }, ADVENT_TEXT.bag),
+        el('p', { class: 'advent-reveal-note' }, bagLine(found.left ?? null)),
       ),
       yay,
     ];
@@ -328,6 +383,8 @@ export function createAdvent(options: AdventOptions): Advent {
       ),
     );
 
+    // A wrapped present from the bag, only while the bag says it holds one.
+    const bagPresents = inBag();
     // What's in the box: today's day while it waits, else whatever's open to catch up.
     const holds =
       today?.state === 'today'
@@ -373,12 +430,42 @@ export function createAdvent(options: AdventOptions): Advent {
         void open(missed.day, ADVENT_TEXT.revealDay(dayNumber(missed)));
       });
     }
+    const presentBlock: HTMLElement[] = [];
+    if (bagPresents > 0) {
+      const presentButton = hpButton(ADVENT_TEXT.openPresent(bagPresents), {
+        variant: 'secondary',
+        testId: 'advent-open-present',
+      });
+      presentButton.disabled = working;
+      presentButton.addEventListener('click', () => {
+        void openPresent();
+      });
+      // One line of pictures (the sheet is at its height budget); the names are its label.
+      presentBlock.push(
+        el(
+          'div',
+          {
+            class: 'advent-box advent-present-box',
+            'data-testid': 'advent-present-contents',
+            'aria-label': `${ADVENT_TEXT.presentMightHold} ${contentsLine(current.presentContents)}`,
+            role: 'group',
+          },
+          el('b', {}, ADVENT_TEXT.presentMightHold),
+          ' ',
+          el('span', { 'aria-hidden': 'true' }, contentsIcons(current.presentContents)),
+        ),
+      );
+      presentBlock.push(presentButton);
+    }
     // Catch-up is used for today: say so, kindly, instead of a button that can't work.
     const usedNote =
       phase === 'live' && !current.catchUpLeft && current.days.some((d) => d.state === 'missed')
         ? el('p', { class: 'advent-used', 'data-testid': 'advent-used' }, ADVENT_TEXT.catchUpUsed)
         : null;
 
+    // A wrapped present adds a button to a sheet already at its height budget:
+    // the grid sits a little tighter then (rows stay 44 pt or more).
+    body.classList.toggle('advent-tight', bagPresents > 0);
     return [
       el('p', { class: 'advent-lead' }, ADVENT_TEXT.lead),
       grid,
@@ -392,6 +479,7 @@ export function createAdvent(options: AdventOptions): Advent {
       ...(today?.state === 'today' ? [openToday] : []),
       ...(openMissed ? [openMissed] : []),
       ...(usedNote ? [usedNote] : []),
+      ...presentBlock,
     ];
   }
 
@@ -434,6 +522,7 @@ export function createAdvent(options: AdventOptions): Advent {
         waiting: presentWaiting(view),
         days: view ? view.days.map((d) => d.state) : null,
         reveal: reveal ? reveal.lines : null,
+        presents: inBag(),
         note,
       };
     },
