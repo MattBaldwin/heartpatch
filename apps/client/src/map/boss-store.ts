@@ -39,6 +39,10 @@ export interface BossStore {
   readonly eveBar: PatchBarState | null;
   /** This Keeper's own fight chipped the bar on screen (a live `boss.chipped` with their points). */
   readonly iChipped: boolean;
+  /** This Keeper's thanks for the bar on screen has been shown (the view drops it a day later). */
+  readonly iThanked: boolean;
+  /** Notes that the thanks was shown, and remembers it across a reload. */
+  noteThanked: () => void;
   nameOf: (speciesId: string) => string | null;
   /** The map on screen (null when none): fetches its boss. */
   setMap: (mapId: string | null) => Promise<void>;
@@ -60,6 +64,7 @@ export function createBossStore(options: BossStoreOptions): BossStore {
   let visit: BossVisit | null = null;
   let eveBar: PatchBarState | null = null;
   let iChipped = false;
+  let iThanked = false;
   let closeTimer: ReturnType<typeof setTimeout> | undefined;
   let names: ReadonlyMap<string, string> = new Map();
   let ticket = 0;
@@ -73,6 +78,7 @@ export function createBossStore(options: BossStoreOptions): BossStore {
       return false;
     }
   };
+  const thankedKey = (id: string, window: string): string => `hp-eve-thanked:${id}:${window}`;
   const emit = (): void => {
     for (const fn of [...listeners]) fn();
   };
@@ -120,6 +126,7 @@ export function createBossStore(options: BossStoreOptions): BossStore {
       visit = null;
       eveBar = null;
       iChipped = false;
+      iThanked = false;
       names = new Map();
       arm();
       emit();
@@ -130,6 +137,7 @@ export function createBossStore(options: BossStoreOptions): BossStore {
       visit = null;
       eveBar = null;
       iChipped = false;
+      iThanked = false;
       names = new Map();
       emit();
     }
@@ -143,6 +151,13 @@ export function createBossStore(options: BossStoreOptions): BossStore {
     if (mine !== ticket) return visit;
     visit = next;
     if (next && !iChipped) iChipped = readChipped(id, next.window.id);
+    if (next && !iThanked) {
+      try {
+        iThanked = options.storage?.getItem(thankedKey(id, next.window.id)) === '1';
+      } catch {
+        // Not remembered; the live copy still counts.
+      }
+    }
     arm();
     emit();
     if (next?.species != null && !names.has(next.species)) {
@@ -171,6 +186,18 @@ export function createBossStore(options: BossStoreOptions): BossStore {
     },
     get iChipped() {
       return iChipped;
+    },
+    get iThanked() {
+      return iThanked;
+    },
+    noteThanked: () => {
+      if (iThanked || mapId === null || !visit) return;
+      iThanked = true;
+      try {
+        options.storage?.setItem(thankedKey(mapId, visit.window.id), '1');
+      } catch {
+        // Not remembered across a reload.
+      }
     },
     nameOf: (speciesId) => names.get(speciesId) ?? null,
     setMap: async (id) => {

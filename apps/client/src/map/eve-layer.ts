@@ -75,6 +75,7 @@ export function createEveLayer(options: EveLayerOptions): EveLayer {
   let beatPlayed = false;
   let beatTimer: ReturnType<typeof setTimeout> | undefined;
   let polls = 0;
+  let pollsSpent = false;
   let pollTimer: ReturnType<typeof setInterval> | undefined;
 
   const chip = el('div', {
@@ -174,7 +175,10 @@ export function createEveLayer(options: EveLayerOptions): EveLayer {
     chip.hidden = line === null;
 
     const model = eve?.thanks ? thanksModel(eve.thanks) : null;
-    const waiting = waitingForThanks(eve, store.iChipped);
+    if (model) store.noteThanked();
+    // Only for a thanks not yet seen (the view drops one a day after it's paid), and only
+    // while the poll budget lasts, so a thanks that never lands isn't waited on forever.
+    const waiting = waitingForThanks(eve, store.iChipped && !store.iThanked && !pollsSpent);
     // The thanks pops up once, the first time it's there; the chip brings it back.
     if (model && !offered && !beat) {
       offered = true;
@@ -210,8 +214,14 @@ export function createEveLayer(options: EveLayerOptions): EveLayer {
     if (waiting && pollTimer === undefined) {
       polls = 0;
       pollTimer = setInterval(() => {
-        // A thanks that never lands (nothing was due) stops being asked for.
-        if (++polls > THANKS_POLLS_MAX) return;
+        // A thanks that never lands (nothing was due) stops being asked for, and waited on.
+        if (++polls > THANKS_POLLS_MAX) {
+          clearInterval(pollTimer);
+          pollTimer = undefined;
+          pollsSpent = true;
+          render();
+          return;
+        }
         options.refresh();
       }, THANKS_POLL_MS);
     } else if (!waiting && pollTimer !== undefined) {
@@ -233,6 +243,7 @@ export function createEveLayer(options: EveLayerOptions): EveLayer {
       sheetOpen = false;
       beat = false;
       beatPlayed = false;
+      pollsSpent = false;
       note = '';
     } else if (stage === 'fell' && prevStage === 'open') {
       startBeat();
@@ -265,7 +276,7 @@ export function createEveLayer(options: EveLayerOptions): EveLayer {
         notice: noticeLine(eve, now()),
         sheetOpen: !sheet.hidden,
         thanks: eve?.thanks ? thanksModel(eve.thanks) : null,
-        waiting: waitingForThanks(eve, store.iChipped),
+        waiting: waitingForThanks(eve, store.iChipped && !store.iThanked && !pollsSpent),
         beat,
       };
     },

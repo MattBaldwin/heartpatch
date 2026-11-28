@@ -233,6 +233,29 @@ describe('the Christmas Eve bits (#37 X5b)', () => {
     second.dispose();
   });
 
+  it('remembers across a reload that my thanks was shown', async () => {
+    const kept = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => kept.get(k) ?? null,
+      setItem: (k: string, v: string) => void kept.set(k, v),
+    };
+    const make = () =>
+      createBossStore({
+        fetchBoss: () => Promise.resolve(eveVisit()),
+        fetchNames: () => Promise.resolve(new Map<string, string>()),
+        storage,
+      });
+    const first = make();
+    await first.setMap('m1');
+    expect(first.iThanked).toBe(false);
+    first.noteThanked();
+    first.dispose();
+    const second = make();
+    await second.setMap('m1');
+    expect(second.iThanked).toBe(true);
+    second.dispose();
+  });
+
   it('asks again when the Keeper is thanked, and when it falls', async () => {
     const onEveRefresh = vi.fn();
     const store = createBossStore({
