@@ -84,3 +84,60 @@ test('earn The First Patch, celebrate it, then see it and wear its title', async
   await expect(card).toBeHidden();
   await expect(page.getByTestId('wardrobe-items')).toBeVisible();
 });
+
+// The line under the cards ("Big goals, each with a prize!") sits in its own
+// grid row. It once shared a row with the list, so with the long track list it
+// overlapped the last card's heading. Measured as boxes, never pixels.
+const SHEET_VIEWPORTS = [
+  { name: 'iPhone SE portrait', width: 320, height: 568 },
+  { name: 'iPhone portrait', width: 393, height: 852 },
+  { name: 'iPhone landscape', width: 844, height: 390 },
+  { name: 'iPad portrait', width: 834, height: 1194 },
+] as const;
+
+test('the Milestones line sits below the last card, never over it', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const page = await newPlayer(browser, uniqueName('foot'));
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByTestId('wardrobe-open').tap();
+  await page.getByTestId('wardrobe-milestones').tap();
+  const card = page.getByTestId('milestones');
+  await expect(card).toBeVisible();
+  await expect.poll(() => milestones(page).then((m) => m?.loaded)).toBe(true);
+  // The Christmas track (#37) is part of the list that made it long.
+  await expect(card.locator('[data-track="christmas"]')).toHaveCount(1);
+
+  for (const vp of SHEET_VIEWPORTS) {
+    await page.setViewportSize({ width: vp.width, height: vp.height });
+    const list = card.getByTestId('milestones-list');
+    await list.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+    const note = card.getByTestId('milestones-note');
+    await expect(note).toHaveText('Big goals, each with a prize!');
+    const problems = await card.evaluate((root) => {
+      const noteBox = root
+        .querySelector('[data-testid="milestones-note"]')
+        ?.getBoundingClientRect();
+      const listBox = root
+        .querySelector('[data-testid="milestones-list"]')
+        ?.getBoundingClientRect();
+      if (!noteBox || !listBox) return ['missing note or list'];
+      const out: string[] = [];
+      if (listBox.bottom > noteBox.top + 0.5) {
+        out.push(`list runs past the note (${String(listBox.bottom)} > ${String(noteBox.top)})`);
+      }
+      for (const head of root.querySelectorAll('.milestones-track-head')) {
+        const h = head.getBoundingClientRect();
+        const apart = h.bottom <= noteBox.top + 0.5 || h.top >= noteBox.bottom - 0.5;
+        const sideways = h.right <= noteBox.left || h.left >= noteBox.right;
+        if (!apart && !sideways) out.push(`a card heading overlaps the note`);
+      }
+      return out;
+    });
+    expect(problems, vp.name).toEqual([]);
+    // The list still scrolls to its last card.
+    const last = await list.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop);
+    expect(Math.abs(last), vp.name).toBeLessThan(2);
+  }
+});
