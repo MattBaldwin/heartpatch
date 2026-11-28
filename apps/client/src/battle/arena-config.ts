@@ -206,6 +206,8 @@ export const ARENA_STAGE = {
   lakeRadius: 20, // TUNE
   /** Sky dome radius (well inside the camera's far plane). */
   skyRadius: 95, // TUNE
+  /** A boss fight's sun or moon sits no higher than this (radians): in the open sky, not behind the HUD's name bar (#190 PR 6b). */
+  bossSunElev: 0.2, // TUNE
   /** Far hills: how many, how far, their size. */
   hills: { count: 9, distance: [34, 48], width: [14, 26], height: [5, 11] }, // TUNE
   /** Vinyl clouds: how far out, how high, their size. */

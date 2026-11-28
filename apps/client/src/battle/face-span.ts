@@ -1,6 +1,7 @@
 import type { VisualRegistry } from '@heartpatch/shared';
 import { surfacePoint } from '../procedural/body-shape.js';
-import type { SquishyParams } from '../procedural/params.js';
+import type { SquishyParams, Vec3 } from '../procedural/params.js';
+import { partMatrix } from '../procedural/placement.js';
 import type { FacePoint } from './camera-director.js';
 import type { Pose } from './choreography.js';
 
@@ -74,4 +75,34 @@ export function faceAt(
   if (!span) return null;
   const k = params.height * scale;
   return { low: span.low * k, high: span.high * k };
+}
+
+/**
+ * How high a squishy's highest part reaches (#190 PR 6b, 5b): a tuft, ears,
+ * horns or a crown over its head, as a fraction of its height
+ * (`params.height`, which stops at the top of the head), never under 1. Each
+ * placement's box as the renderer places it (`partMatrix`), so a tilted part
+ * counts only as high as it leans; legs and tails reach down or back.
+ */
+export function topSpan(params: SquishyParams, registry: VisualRegistry): number {
+  if (!(params.height > 0)) return 1;
+  const body = registry.bodies.get(params.body.id);
+  const headBody = params.head ? registry.bodies.get(params.head.id) : undefined;
+  let top = params.height;
+  for (const part of params.parts) {
+    if (part.surface) continue;
+    const head = part.host === 'head' && headBody ? params.head : undefined;
+    const host = head ? headBody : body;
+    if (!host) continue;
+    const scale = head ? head.scale : params.body.scale;
+    const at: Vec3 = head ? head.offset : [0, params.lift, 0];
+    for (const p of part.placements) {
+      const m = partMatrix(host, scale, part, p, at);
+      // The unit box's highest corner: the centre plus half of each axis's rise.
+      const y =
+        (m[13] ?? 0) + 0.5 * (Math.abs(m[1] ?? 0) + Math.abs(m[5] ?? 0) + Math.abs(m[9] ?? 0));
+      if (y > top) top = y;
+    }
+  }
+  return top / params.height;
 }

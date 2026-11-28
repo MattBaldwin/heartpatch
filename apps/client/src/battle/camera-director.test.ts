@@ -9,10 +9,12 @@ import {
   battleScale,
   CameraDirector,
   cameraFor,
+  clearRise,
   faceDrop,
   fogFor,
   frameDistance,
   holdDrop,
+  rollReach,
   shakeOffset,
   shortBand,
   slideWant,
@@ -23,7 +25,7 @@ import {
   type SafeRegion,
 } from './camera-director.js';
 import { actPose, FEELING_TRAITS, readyPose, REST, type Act, type Pose } from './choreography.js';
-import { faceSpan, posedFace } from './face-span.js';
+import { faceSpan, posedFace, topSpan } from './face-span.js';
 
 const homes = { a: HOMES.mine, b: HOMES.theirs } as const;
 /** The team fight's camera from #234 to #190 PR 1: the 1-v-1's, tilted down 21°. */
@@ -156,6 +158,36 @@ describe('a boss fight on a notched iPhone (#234)', () => {
   });
 });
 
+describe('rollReach (#190 PR 6b review)', () => {
+  it("never widens a standing fighter's fit for its idle sway, so a 1-v-1 phone camera holds still", () => {
+    const height = 2.7;
+    let swayed = 0;
+    for (const feeling of Object.keys(FEELING_TRAITS) as (keyof typeof FEELING_TRAITS)[]) {
+      const distances = new Set<number>();
+      let rolled = 0;
+      for (let now = 0; now <= 6000; now += 1000 / 60) {
+        const pose = readyPose(now, 0.4, feeling, false);
+        rolled = Math.max(rolled, Math.abs(pose.roll));
+        const idle = fit.map((f) => ({
+          ...f,
+          r: f.r + rollReach(pose.roll, height, pose.scale, false),
+        }));
+        distances.add(frameDistance(390 / 844, safe, idle).distance);
+      }
+      expect(distances.size, feeling).toBe(1);
+      swayed = Math.max(swayed, rolled);
+    }
+    // The sway does roll (cozy about 0.1 rad), so widening on every roll would pump the camera.
+    expect(swayed).toBeGreaterThan(0.05);
+  });
+
+  it("widens a fighter rolled over by an act by its height's sideways sweep", () => {
+    expect(rollReach(Math.PI / 2, 2.7, 1, true)).toBeCloseTo(2.7, 9);
+    expect(rollReach(-Math.PI / 2, 2.7, 0.5, true)).toBeCloseTo(1.35, 9);
+    expect(rollReach(Math.PI / 2, 2.7, 1, false)).toBe(0);
+    expect(rollReach(Math.PI / 2, 2.7, -0.2, true)).toBe(0);
+  });
+});
 describe('fogFor', () => {
   it("keeps the mood's own fog at the usual framing distance or closer", () => {
     expect(fogFor([25, 85], 30)).toEqual([25, 85]);
@@ -984,9 +1016,14 @@ describe('the boss camera: a low hero shot (#190 PR 2)', () => {
       'fitFrom',
       'fitHeight',
       'focusShift',
+      'mouthClear',
       'pitch',
+      'riseMax',
+      'sideKeep',
     ]);
-    expect(boss.pitch).toBeCloseTo((4 * Math.PI) / 180, 12);
+    // The 1-v-1 never rises to clear a mouth (#190 PR 6b).
+    expect(BATTLE_CAMERA.riseMax).toBe(0);
+    expect(boss.pitch).toBeCloseTo((6.5 * Math.PI) / 180, 12);
   });
 
   for (const f of FIGHTS) {
@@ -1256,6 +1293,131 @@ describe('the boss camera: a low hero shot (#190 PR 2)', () => {
       }
     });
   }
+
+  describe("the near friends' heads stay under the boss's mouth (#190 PR 6b, 5b)", () => {
+    // The team's faces with their tops (head, ears, tuft: the whole drawn height) and body radius.
+    const withTops = (friends: readonly { height: number; radius: number }[]): FacePoint[] =>
+      teamFaces(friends).map((t, i) => ({
+        ...t,
+        r: friends[i]!.radius,
+        top: friends[i]!.height,
+      }));
+    const mouthOf = (shot: CameraShot, a: number, face: FacePoint) =>
+      project(shot, a, { x: face.x, y: face.low, z: face.z }).y;
+    const topOf = (shot: CameraShot, a: number, t: FacePoint) =>
+      project(shot, a, { x: t.x, y: t.top!, z: t.z }).y;
+    const settle = (
+      director: CameraDirector,
+      band: (typeof BANDS)[number],
+      f: FacePoint,
+      team: FacePoint[],
+    ) => {
+      let shot = director.shot(0, band.aspect, band.safe, fight.fit, f, team);
+      for (let now = 0; now <= 3000; now += 1000 / 60)
+        shot = director.shot(now, band.aspect, band.safe, fight.fit, f, team);
+      return shot;
+    };
+
+    for (const t of FIGHTS) {
+      for (const band of BANDS) {
+        it(`rises until the middle friend's top clears the mouth, eyes still in (${t.name}, ${band.name})`, () => {
+          const face = { ...bossFace(lowest, t.bossHeight), w: 0.8 };
+          const team = withTops(t.friends);
+          const director = new CameraDirector(homes, false, boss);
+          const shot = settle(director, band, face, team);
+          const mid = team[1]!;
+          const gap = topOf(shot, band.aspect, mid) - mouthOf(shot, band.aspect, face);
+          if (director.rise < boss.riseMax - 1e-6) {
+            expect(gap).toBeGreaterThanOrEqual(boss.mouthClear - 2e-3);
+          }
+          expect(director.rise).toBeGreaterThanOrEqual(0);
+          expect(director.rise).toBeLessThanOrEqual(boss.riseMax);
+          // No more than it needs: a friend already clear doesn't lift it further.
+          if (director.rise > 1e-3) expect(gap).toBeLessThan(boss.mouthClear + 0.01);
+          // The boss's eyes and mouth still sit in the band.
+          const high = project(shot, band.aspect, { x: face.x, y: face.high, z: face.z }).y;
+          expect(high).toBeGreaterThanOrEqual(band.safe.top - 1e-6);
+          expect(mouthOf(shot, band.aspect, face)).toBeLessThanOrEqual(band.safe.bottom + 1e-6);
+        });
+      }
+    }
+
+    it('the eyes-only box alone missed it: a tall team covered the mouth on the phone (5b before)', () => {
+      const t = FIGHTS[2]!; // the tall team
+      const face = { ...bossFace(lowest, t.bossHeight), w: 0.8 };
+      const team = withTops(t.friends);
+      // The middle friend mid-hop (a cheer, a dodge): its head rises over the mouth.
+      const hop = team.map((f, i) => (i === 1 ? { ...f, top: f.top! + 0.8 } : f));
+      for (const row of [team, hop]) {
+        const before = settle(
+          new CameraDirector(homes, false, { ...boss, riseMax: 0 }),
+          rest,
+          face,
+          row,
+        );
+        const gap = topOf(before, rest.aspect, row[1]!) - mouthOf(before, rest.aspect, face);
+        expect(gap).toBeLessThan(boss.mouthClear);
+        if (row === hop) expect(gap).toBeLessThan(0);
+        const director = new CameraDirector(homes, false, boss);
+        const after = settle(director, rest, face, row);
+        expect(director.rise).toBeGreaterThan(0);
+        const clear = topOf(after, rest.aspect, row[1]!) - mouthOf(after, rest.aspect, face);
+        // Standing, it clears by the margin; mid-hop it rises all it may and gains on it.
+        if (row === team) expect(clear).toBeGreaterThanOrEqual(boss.mouthClear - 2e-3);
+        else {
+          expect(director.rise).toBeCloseTo(boss.riseMax, 6);
+          expect(clear).toBeGreaterThan(gap + 0.01);
+        }
+      }
+    });
+
+    it("counts a tuft, ears or horns over the head in a friend's top (topSpan)", () => {
+      const tops = GAME_DATA.species.map((sp) => ({
+        id: sp.id,
+        top: topSpan(squishyParams(sp, `${sp.id}-1`, registry), registry),
+      }));
+      // Never under the head's top, never a giant's reach.
+      for (const t of tops) {
+        expect(t.top, t.id).toBeGreaterThanOrEqual(1);
+        expect(t.top, t.id).toBeLessThan(2);
+      }
+      // Some kinds wear something over the head (the 5b frames: a tuft hid the mouth).
+      expect(tops.filter((t) => t.top > 1.05).length).toBeGreaterThan(0);
+      expect(tops.filter((t) => t.top === 1).length).toBeGreaterThan(0);
+    });
+
+    it('needs no rise without a friend in front of the mouth, outside a boss fight, or with no tops', () => {
+      const t = FIGHTS[2]!;
+      const face = { ...bossFace(lowest, t.bossHeight), w: 0.8 };
+      const shot = { ...new CameraDirector(homes, true, boss).shot(0, aspect, rest.safe, t.fit) };
+      const team = withTops(t.friends);
+      // Far off to the side: not in front of the face.
+      const aside = team.map((f) => ({ ...f, x: f.x + 40 }));
+      expect(clearRise(shot, face, aside, 0, boss)).toBe(0);
+      expect(clearRise(shot, face, team, 0, BATTLE_CAMERA)).toBe(0);
+      expect(clearRise(shot, face, teamFaces(t.friends), 0, boss)).toBe(0);
+      expect(clearRise(shot, face, team, 0, boss)).toBeGreaterThan(0);
+      expect(clearRise(shot, face, team, 0, boss)).toBeLessThanOrEqual(boss.riseMax);
+    });
+
+    it('holds while the boss is turned away and settles back down when the boss leaves', () => {
+      const t = FIGHTS[2]!;
+      const face = { ...bossFace(lowest, t.bossHeight), w: 0.8 };
+      const team = withTops(t.friends);
+      const director = new CameraDirector(homes, false, boss);
+      settle(director, rest, face, team);
+      const risen = director.rise;
+      expect(risen).toBeGreaterThan(0);
+      let now = 3000;
+      for (; now <= 4000; now += 1000 / 60)
+        director.shot(now, rest.aspect, rest.safe, t.fit, { ...face, facing: -1 }, team);
+      expect(director.rise).toBeCloseTo(risen, 6);
+      for (; now <= 7000; now += 1000 / 60)
+        director.shot(now, rest.aspect, rest.safe, t.fit, null, []);
+      expect(director.rise).toBe(0);
+      expect(director.moving(now)).toBe(false);
+    });
+  });
 });
 
 describe('the boss beats in the camera (#190 PR 2)', () => {
@@ -1306,6 +1468,25 @@ describe('the boss beats in the camera (#190 PR 2)', () => {
     director.cue(windup, 316);
     const first = director.shot(316 + 1000 / 60, 0.46, safe, fit).distance;
     expect(Math.abs(first - before)).toBeLessThan(base * 0.01);
+  });
+
+  it("a boss push-in never closes past the row's width, so no end friend is cropped (#190 PR 6b)", () => {
+    // A wide row on a phone: the width binds, so any deep push would clip the ends.
+    const row = [
+      { x: -4.3, z: -3.8, r: 4, h: 4 },
+      { x: 5.1, z: -1.4, r: 4, h: 4 },
+    ];
+    const director = new CameraDirector(homes, false, cameraFor(true));
+    const base = { distance: director.shot(0, 0.46, safe, row).distance };
+    const { side } = frameDistance(0.46, safe, row, cameraFor(true));
+    director.cue({ ...cue, push: 0.5, shake: 0 }, 0);
+    let d = base.distance;
+    for (let now = 0; now <= 1500; now += 1000 / 60)
+      d = director.shot(now, 0.46, safe, row).distance;
+    expect(d).toBeGreaterThanOrEqual(
+      Math.min(base.distance, side * cameraFor(true).sideKeep) - 1e-6,
+    );
+    expect(d).toBeLessThan(base.distance);
   });
 
   it('pulls back slowly after the boss is tuckered out', () => {

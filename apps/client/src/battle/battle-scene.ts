@@ -58,6 +58,7 @@ import {
   cameraFor,
   CameraDirector,
   fogFor,
+  rollReach,
   type CameraShot,
   type FacePoint,
   type FitPoint,
@@ -80,7 +81,7 @@ import {
   type Pose,
   type SquishCue,
 } from './choreography.js';
-import { faceAt, posedFace } from './face-span.js';
+import { faceAt, posedFace, topSpan } from './face-span.js';
 import { EffectPool, type EffectStats } from './effects.js';
 import { emit, type Point } from './element-fx.js';
 
@@ -135,7 +136,9 @@ export interface BattleSceneStats {
     /** The boss's eyes-and-mouth box on screen (#868), fractions of the height from the top. */
     face: { top: number; bottom: number } | null;
     /** The player's row's eyes-and-mouth boxes (#868), the same way; empty outside a boss fight. */
-    team: { top: number; bottom: number }[];
+    team: { top: number; bottom: number; head: number | null }[];
+    /** How far the camera rose to keep the near friends' heads under the boss's mouth (#190 PR 6b), world units. */
+    rise: number;
     /** The lowest row the team's bodies draw (#190 PR 2, `teamFeet`), or null outside a boss fight. */
     teamFeet: number | null;
     /** How squarely the boss faces the camera (1 straight on, 0 side-on, below 0 away), or null. */
@@ -200,6 +203,8 @@ interface Fighter {
   readonly radius: number;
   /** Its eyes and mouth (#868): world heights above its feet at rest, or null with no face. */
   readonly face: { readonly low: number; readonly high: number } | null;
+  /** Its highest point (#190 PR 6b): a tuft, ears or hat over its head, world units above its feet at rest. */
+  readonly top: number;
 }
 
 /**
@@ -354,7 +359,12 @@ export class BattleScene {
     this.#instrumentation = new SceneInstrumentation(scene);
     const plan = arenaPlan(options.terrain, options.timeOfDay, arenaSeed(options.battleId));
     this.#shadowStretch = plan.mood.shadowStretch;
-    this.#arena = buildArena(scene, { plan, lowTier, reducedMotion: options.reducedMotion });
+    this.#arena = buildArena(scene, {
+      plan,
+      lowTier,
+      reducedMotion: options.reducedMotion,
+      bossFight: options.team !== undefined,
+    });
     this.#baseFog = [scene.fogStart, scene.fogEnd];
 
     const mine = options.mySide;
@@ -622,6 +632,10 @@ export class BattleScene {
       height: tall * scale,
       radius: (Math.max((body?.width ?? 1) * sx, (body?.depth ?? 1) * sz) * scale) / 2,
       face: faceAt(handle.params, this.#options.registry, scale),
+      // Its highest point: a tuft or ears over its head, or its hat (#190 PR 6b).
+      top:
+        Math.max(tall, topSpan(handle.params, this.#options.registry) * handle.params.height) *
+        scale,
     };
     rig.bench.set(instanceId, fighter);
     return fighter;
@@ -1162,7 +1176,12 @@ export class BattleScene {
             // Whenever the camera framed the team (a boss fight), even while the boss is turned away.
             team: this.#camera.team
               .filter((t) => Number.isFinite(t.high) && Number.isFinite(t.low))
-              .map((t) => ({ top: t.high, bottom: t.low })),
+              .map((t) => ({
+                top: t.high,
+                bottom: t.low,
+                head: Number.isFinite(t.top) ? t.top : null,
+              })),
+            rise: this.#camera.rise,
             teamFeet: Number.isNaN(this.#camera.feet) ? null : this.#camera.feet,
             // The facing the last shot framed with, so it matches `face` (a twirl turns fast).
             bossFacing: Number.isNaN(this.#facingShot) ? this.#bossFacing() : this.#facingShot,
@@ -1236,6 +1255,7 @@ export class BattleScene {
       strength: cue.strength,
       feeling: rig.out?.feeling ?? 'cozy',
       reduced: this.#options.reducedMotion,
+      steady: rig.boss,
     };
   }
 
@@ -1418,7 +1438,15 @@ export class BattleScene {
       if (here) {
         here.x = rig.root.position.x;
         here.z = rig.root.position.z;
-        here.r = r;
+        // A friend rolled over (a flop) sweeps its height sideways: the row's ends stay on screen (#190 PR 6b).
+        here.r =
+          r +
+          rollReach(
+            rig.pose.roll,
+            rig.out?.height ?? 2,
+            rig.pose.scale,
+            rig.act !== null || rig.down,
+          );
         here.h = h + Math.max(0, rig.pose.lift);
       }
     }
@@ -1482,6 +1510,8 @@ export class BattleScene {
     const point = posedFace(this.#bossFacePoint, rig.home, rig.fx, rig.fz, pose, face);
     // Turned away (a taunt's twirl), the camera doesn't chase its face.
     point.facing = this.#bossFacing() ?? 1;
+    // How wide the face is across the view: a friend overlapping it covers the mouth (#190 PR 6b).
+    point.w = (rig.out?.radius ?? 1) * Math.max(0, pose.scale) * this.#camera.config.mouthWidth;
     return point;
   }
 
@@ -1497,6 +1527,10 @@ export class BattleScene {
       posedFace(point, rig.home, rig.fx, rig.fz, rig.pose, face);
       // The body's front edge on the ground: the camera keeps it over the band's bottom.
       point.r = (rig.out?.radius ?? 1) * Math.max(0, rig.pose.scale);
+      // The body's top (head, ears, tuft, hat), posed like the face: it stays under the boss's mouth (#190 PR 6b).
+      const pose = rig.pose;
+      const tall = (rig.out?.top ?? 0) * Math.max(0, pose.scale) * pose.squash;
+      point.top = pose.lift + tall * Math.cos(pose.lean);
       faces.push(point);
     }
     return faces;
