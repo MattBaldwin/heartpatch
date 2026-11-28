@@ -77,8 +77,7 @@ describe('wind layer (#874 C4)', () => {
   });
 
   it('keeps its words kind and short', () => {
-    const text = [WIND_TEXT.show, WIND_TEXT.hide, ...WIND_TEXT.strengths];
+    const text = [WIND_TEXT.show, WIND_TEXT.hide];
     expect(text.flatMap((t) => findAvoidedWords(t))).toEqual([]);
-    expect(WIND_TEXT.strengths).toEqual(['Little breeze', 'Good breeze', 'Big brrr!']);
   });
 });

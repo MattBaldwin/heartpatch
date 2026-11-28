@@ -1,12 +1,16 @@
 import {
   findAvoidedWords,
+  hexDistance,
   hexKey,
   hexNeighbors,
+  hexRing,
   isLakeTerrain,
+  RAIL_RULES,
   type HexKey,
   type MapView,
   type PublicBuilding,
   type PublicTile,
+  type RailSpot,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { isWaterTile } from '../map/map-dressing.js';
@@ -20,6 +24,7 @@ import {
   ferryReach,
   hasDock,
   nearestFarShore,
+  supplyOf,
   TRAVEL_TEXT,
 } from './travel-model.js';
 
@@ -186,5 +191,50 @@ describe('ferry dock card and reach (#621 W1-6)', () => {
       TRAVEL_TEXT.dockEffect,
     ];
     for (const line of lines) expect(findAvoidedWords(line)).toEqual([]);
+  });
+});
+
+describe('the supply line with rails (#874)', () => {
+  it('joins land home along a rail as far as its reach, as a road does', () => {
+    const view = testWildIsle();
+    const byKey = new Map(view.tiles.map((t) => [hexKey(t), t]));
+    const supplied = (tiles: PublicTile[], rails: RailSpot[]) =>
+      supplyOf({ tiles }, [], ME, rails).supplied;
+    const home = supplied(view.tiles, []);
+    // A dry, unowned tile two steps past my land, with nobody's land around it.
+    const reach = RAIL_RULES.levels[0]?.reach ?? 0;
+    expect(reach).toBeGreaterThanOrEqual(2);
+    const pair = view.tiles
+      .filter((t) => t.ownerUserId === ME && home.has(hexKey(t)) && t.homeSlot === null)
+      .flatMap((from) =>
+        hexRing(from, 2)
+          .map((h) => byKey.get(hexKey(h)))
+          .filter(
+            (t): t is PublicTile =>
+              t !== undefined &&
+              t.ownerUserId === null &&
+              t.homeSlot === null &&
+              !isWaterTile(t) &&
+              hexNeighbors(t).every((n) => byKey.get(hexKey(n))?.ownerUserId == null) &&
+              // A dry step between, so the walk over land is two steps.
+              hexNeighbors(t).some((n) => {
+                const step = byKey.get(hexKey(n));
+                return step !== undefined && !isWaterTile(step) && hexDistance(n, from) === 1;
+              }),
+          )
+          .map((far) => ({ from, far })),
+      )[0];
+    if (!pair) throw new Error('no tile two steps out');
+    const tiles = view.tiles.map((t) =>
+      t.q === pair.far.q && t.r === pair.far.r ? { ...t, ownerUserId: ME } : t,
+    );
+    // Cut off with nothing laid; joined by a Rail on the tile two steps back.
+    expect(supplied(tiles, []).has(hexKey(pair.far))).toBe(false);
+    const rail: RailSpot = { q: pair.from.q, r: pair.from.r, ownerUserId: ME, level: 1 };
+    expect(supplied(tiles, [rail]).has(hexKey(pair.far))).toBe(true);
+    // Someone else's rail does nothing for me.
+    expect(supplied(tiles, [{ ...rail, ownerUserId: userId(2) }]).has(hexKey(pair.far))).toBe(
+      false,
+    );
   });
 });

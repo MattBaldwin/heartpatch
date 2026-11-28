@@ -42,8 +42,6 @@ export const WIND_TEXT = {
   chip: '💨',
   show: 'Show the wind',
   hide: 'Hide the wind',
-  /** Each strength's name (mockup M1). */
-  strengths: ['Little breeze', 'Good breeze', 'Big brrr!'],
 } as const;
 
 /** The look by strength (index 0 is wind 1). TUNE: all of it. */
@@ -173,7 +171,9 @@ export function createWindLayer(): WindLayer {
   let host: MapLayerHost | null = null;
   let meshes: { arrows: Mesh; wash: Mesh } | null = null;
   let counts: [number, number, number] = [0, 0, 0];
-  const motion = { moving: 0 };
+  // Moving only while ambient life is live (not under reduced motion or a low tier);
+  // the plugin asks as it binds, so nothing runs per frame for it.
+  const motion: Motion = { moving: () => host?.mode() === 'live' };
 
   const chip = el(
     'button',
@@ -229,12 +229,7 @@ export function createWindLayer(): WindLayer {
     attach: (scene, next, h) => {
       host = h ?? null;
       meshes = buildMeshes(scene, h?.clock ?? null, motion);
-      // Moving only while ambient life is live (not under reduced motion or a low tier).
-      const watch = scene.onBeforeRenderObservable.add(() => {
-        motion.moving = host?.mode() === 'live' ? 1 : 0;
-      });
       scene.onDisposeObservable.addOnce(() => {
-        scene.onBeforeRenderObservable.remove(watch);
         meshes = null;
         host = null;
       });
@@ -258,7 +253,7 @@ export function createWindLayer(): WindLayer {
       return {
         shown: shown && counts.some((n) => n > 0),
         tiles: [...counts] as [number, number, number],
-        moving: motion.moving === 1,
+        moving: motion.moving(),
       };
     },
   };
@@ -278,7 +273,7 @@ function arrowMatrix(s: WindSpot, scale: number) {
 function buildMeshes(
   scene: Scene,
   clock: TerrainClock | null,
-  motion: { moving: number },
+  motion: Motion,
 ): { arrows: Mesh; wash: Mesh } {
   const arrows = meshFrom(scene, 'wind-arrows', arrowArrays());
   const arrowMat = overlayMaterial(scene, 'wind-arrow-mat');
@@ -294,6 +289,11 @@ function buildMeshes(
   return { arrows, wash };
 }
 
+/** Whether the arrows drift now (read as the material binds). */
+interface Motion {
+  readonly moving: () => boolean;
+}
+
 /** Per instance: its drift phase and loops per second. */
 export const DRIFT_ATTRIBUTE = 'windDrift';
 
@@ -301,7 +301,7 @@ export const DRIFT_ATTRIBUTE = 'windDrift';
 function attachWindPlugin(
   material: Material,
   clock: TerrainClock,
-  motion: { moving: number },
+  motion: Motion,
 ): WindPlugin | null {
   return material.shaderLanguage === ShaderLanguage.GLSL
     ? new WindPlugin(material, clock, motion)
@@ -315,9 +315,9 @@ function attachWindPlugin(
  */
 class WindPlugin extends MaterialPluginBase {
   private readonly clock: TerrainClock;
-  private readonly motion: { moving: number };
+  private readonly motion: Motion;
 
-  constructor(material: Material, clock: TerrainClock, motion: { moving: number }) {
+  constructor(material: Material, clock: TerrainClock, motion: Motion) {
     super(material, 'Wind', 220, { WIND_DRIFT: false });
     this.clock = clock;
     this.motion = motion;
@@ -356,7 +356,7 @@ class WindPlugin extends MaterialPluginBase {
     // x: moving (0/1); y, z: the downwind direction on (x, z); w: how far a loop drifts.
     uniformBuffer.updateFloat4(
       'windMotion',
-      this.motion.moving,
+      this.motion.moving() ? 1 : 0,
       Math.cos(WIND_LOOK.yaw),
       -Math.sin(WIND_LOOK.yaw),
       WIND_LOOK.range * HEX_SIZE * Math.sqrt(3),

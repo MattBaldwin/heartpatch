@@ -31,15 +31,16 @@ export interface LinePiece {
   readonly ringed: boolean;
 }
 
-/** The Rail Depot's content id: a rail runs into it end on. */
+/** A Rail Depot's content id (tests and the gallery); the layout reads its kind. */
 export const DEPOT_ID = 'rail-depot';
 
-/** Does a wire meet this building (a Windmill or a machine that needs power)? */
-const wireMeets = (buildingId: string): boolean =>
-  isGenerator(buildingId) || needsPower(buildingId);
+type Met = Pick<PublicTile['buildings'][number], 'buildingId' | 'kind'>;
 
-/** Does a rail meet this building (the Rail Depot)? */
-const railMeets = (buildingId: string): boolean => buildingId === DEPOT_ID;
+/** Does a wire meet this building (a Windmill or a machine that needs power)? */
+const wireMeets = (b: Met): boolean => isGenerator(b.buildingId) || needsPower(b.buildingId);
+
+/** Does a rail meet this building (a Rail Depot, `kind: 'depot'`)? */
+const railMeets = (b: Met): boolean => b.kind === 'depot';
 
 /**
  * The tiles a line of `kind` owned by `owner` runs into besides its own
@@ -50,7 +51,7 @@ export function lineJoins(tiles: Iterable<PublicTile>, kind: LineKind, owner: st
   const joins = new Set<HexKey>();
   for (const tile of tiles) {
     if (tile.ownerUserId !== owner) continue;
-    if (tile.buildings.some((b) => meets(b.buildingId))) joins.add(hexKey(tile));
+    if (tile.buildings.some(meets)) joins.add(hexKey(tile));
   }
   return joins;
 }

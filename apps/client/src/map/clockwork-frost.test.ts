@@ -23,6 +23,12 @@ describe('Clockwork Isle frost (#874 C4, plan R1.1)', () => {
     expect([tint, rim, on]).toEqual([0, 0, 0]);
   });
 
+  it('hands the shader linear colours (the look is sRGB)', () => {
+    const frost = new ClockworkFrost();
+    expect(frost.color[0]).toBeCloseTo(FROST_LOOK.color[0] ** 2.2);
+    expect(frost.rim[2]).toBeCloseTo(FROST_LOOK.rim[2] ** 2.2);
+  });
+
   it('is cool and soft: blue over red, a light touch', () => {
     const [r, , b] = FROST_LOOK.color;
     expect(b).toBeGreaterThan(r);

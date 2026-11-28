@@ -2,6 +2,7 @@ import {
   HOME_BASE_RULES,
   POWER_RULES,
   RAIL_RULES,
+  RESEARCH_TREE,
   type ItemCounts,
   type LineKind,
   type PowerRules,
@@ -9,7 +10,6 @@ import {
   type RailRules,
 } from '@heartpatch/shared';
 import type { BuildCard } from '../building/build-model.js';
-import { costShort } from '../building/build-model.js';
 import { isWaterTile } from '../map/map-dressing.js';
 
 // What the Build sheet and the tile panel say about a Clockwork Isle's
@@ -35,7 +35,7 @@ export const LINE_TEXT = {
   wireHint: 'A wire hops from post to post. ⚡',
   railHints: ['Lay a rail, then join it up! 🛤️', 'Polish the rail into brass!'],
   /** A rail level that waits on a blueprint (the server says no until then). */
-  needsResearch: 'Needs the Tidy Rails blueprint first.',
+  needsResearch: (node: string) => `Needs the ${node} blueprint first.`,
   /** The server's FORBIDDEN for land that's cut off, said before the tap (plan §7). */
   cutOff: "Lay wires from land that's joined up to home!",
   railCutOff: "Lay rails from land that's joined up to home!",
@@ -57,6 +57,11 @@ export const LINE_TEXT = {
 } as const;
 
 const capital = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** A research node's name from the tree (data), or its id if the tree lacks it. */
+export function researchName(nodeId: string): string {
+  return RESEARCH_TREE.nodes.find((n) => n.id === nodeId)?.name ?? nodeId;
+}
 
 export function railName(level: number): string {
   const names = LINE_TEXT.railNames;
@@ -147,7 +152,7 @@ export function lineCards(input: LineCardInput): BuildCard[] {
       blocked: rail === null && cutOff ? LINE_TEXT.railCutOff : null,
       craft: null,
       hint: row.requiresResearch
-        ? LINE_TEXT.needsResearch
+        ? LINE_TEXT.needsResearch(researchName(row.requiresResearch))
         : (LINE_TEXT.railHints[Math.min(next, LINE_TEXT.railHints.length) - 1] ??
           LINE_TEXT.railHints[0]),
     });
@@ -182,7 +187,5 @@ export function lineRefund(
   return refund;
 }
 
-/** "2 🪵 3 🪨", or '' when nothing comes back. */
-export function refundText(refund: ItemCounts): string {
-  return Object.keys(refund).length === 0 ? '' : costShort(refund);
-}
+/** "2 🪵 3 🪨", or '' when nothing comes back (the roads' own). */
+export { refundText } from '../roads/road-model.js';

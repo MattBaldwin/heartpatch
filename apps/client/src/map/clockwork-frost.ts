@@ -21,6 +21,11 @@ export const FROST_LOOK = {
   rimPower: 3,
 } as const;
 
+/** sRGB (0–1) to linear, as Babylon's `toLinearSpace` does. */
+function toLinear(rgb: readonly [number, number, number]): [number, number, number] {
+  return [rgb[0] ** 2.2, rgb[1] ** 2.2, rgb[2] ** 2.2];
+}
+
 /**
  * The frost's uniform: one per map scene, shared by every frosty material
  * and changed in place, so a change compiles nothing. `amount` 0 turns it
@@ -28,9 +33,10 @@ export const FROST_LOOK = {
  */
 export class ClockworkFrost {
   amount = 1;
-  readonly color: readonly [number, number, number] = FROST_LOOK.color;
+  /** Linear RGB for the shader (the look is sRGB, like the snow caps' `toLinearSpace`). */
+  readonly color: readonly [number, number, number] = toLinear(FROST_LOOK.color);
   readonly tint: number = FROST_LOOK.tint;
-  readonly rim: readonly [number, number, number] = FROST_LOOK.rim;
+  readonly rim: readonly [number, number, number] = toLinear(FROST_LOOK.rim);
   readonly rimStrength: number = FROST_LOOK.rimStrength;
   readonly rimPower: number = FROST_LOOK.rimPower;
 }

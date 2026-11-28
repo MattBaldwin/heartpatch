@@ -66,7 +66,7 @@ describe('wire and rail cards (#874 C4)', () => {
     expect(cards[0]?.name).toBe('Brass rail');
     expect(cards[0]?.cost).toEqual(RAIL_RULES.levels[1]?.cost);
     // Brass waits on the Tidy Rails blueprint: the card says so; the server checks.
-    expect(cards[0]?.hint).toBe(LINE_TEXT.needsResearch);
+    expect(cards[0]?.hint).toBe('Needs the Tidy Rails blueprint first.');
     expect(lineCards({ tile: mine, me: ME, wire: true, rail: 2, supplied: true })).toEqual([]);
   });
 

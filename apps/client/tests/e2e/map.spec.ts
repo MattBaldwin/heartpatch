@@ -736,6 +736,9 @@ test('keeps a Clockwork Isle with wires, rails, wind and frost in its budget (#8
   expect(far.detail).toBe('far');
   expect(far.drawCalls).toBeLessThanOrEqual(near.drawCalls);
   expect(far.activeTriangles).toBeLessThanOrEqual(CLOCKWORK_BUDGET.farTriangles);
+  // A town: the home buildings with roads looping round them (up to 3 more meshes).
+  const town = await measure('patch=clockwork&lines=1&wind=1&built=1');
+  expect(town.drawCalls).toBeLessThanOrEqual(CLOCKWORK_BUDGET.drawCalls);
   // Christmas at night (snow falls through the season, the frost stays).
   const snowy = await measure('patch=clockwork&lines=1&wind=1&season=christmas&night=1');
   expect(snowy.frost).toBe(true);

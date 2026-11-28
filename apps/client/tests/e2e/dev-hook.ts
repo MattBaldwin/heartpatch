@@ -24,6 +24,8 @@ export type HookName =
   | 'tileBuild'
   | 'buildingsGuide'
   | 'roads'
+  | 'lines'
+  | 'wind'
   | 'stranded'
   | 'hollow'
   | 'raids'

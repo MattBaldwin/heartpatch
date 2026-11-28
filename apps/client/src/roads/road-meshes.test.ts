@@ -6,6 +6,7 @@ import {
   clampLevel,
   hubArrays,
   linearRgb,
+  ringArrays,
   ROAD_LOOK,
 } from './road-meshes.js';
 
@@ -83,5 +84,28 @@ describe('road meshes (#621 W1-6)', () => {
         expect(out).toBeGreaterThan(0);
       }
     }
+  });
+
+  it('winds a Clockwork loop so its top faces up, its outer wall out and its inner wall in (#874)', () => {
+    const radius = 0.4;
+    const ring = ringArrays(1, radius); // a Path: no edge strip, so 3 quads a segment
+    const n = normalsOf(ring);
+    const p = ring.positions;
+    const segments = p.length / 3 / 12;
+    expect(Number.isInteger(segments)).toBe(true);
+    for (let seg = 0; seg < segments; seg++) {
+      const v = (k: number) => seg * 12 + k;
+      for (let k = 0; k < 4; k++) expect(n[v(k) * 3 + 1]).toBeCloseTo(1);
+      const out = (k: number) =>
+        (n[v(k) * 3] ?? 0) * (p[v(k) * 3] ?? 0) + (n[v(k) * 3 + 2] ?? 0) * (p[v(k) * 3 + 2] ?? 0);
+      for (let k = 4; k < 8; k++) expect(out(k)).toBeGreaterThan(0);
+      for (let k = 8; k < 12; k++) expect(out(k)).toBeLessThan(0);
+    }
+    // It runs round the building at `radius`, as wide as the arm.
+    const radii = Array.from({ length: p.length / 3 }, (_, i) =>
+      Math.hypot(p[i * 3] ?? 0, p[i * 3 + 2] ?? 0),
+    );
+    expect(Math.min(...radii)).toBeCloseTo(radius - ROAD_LOOK[0].width / 2);
+    expect(Math.max(...radii)).toBeCloseTo(radius + ROAD_LOOK[0].width / 2);
   });
 });

@@ -30,6 +30,8 @@ describe('road feed (#621 W1-6)', () => {
   it('knows a Wild Isle from a Cozy Patch', () => {
     expect(isWildIsleView(wild)).toBe(true);
     expect(isWildIsleView(testView())).toBe(false);
+    // A Clockwork Isle (#874) is a Wild Isle you wire up: it has roads too.
+    expect(isWildIsleView({ map: { ...wild.map, patchType: 'clockwork-isle' } })).toBe(true);
   });
 
   it('never asks about roads on a Cozy Patch', async () => {
