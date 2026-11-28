@@ -7,6 +7,7 @@ import { adventApi, type AdventApi } from './advent-api.js';
 import {
   ADVENT_TEXT,
   bagLine,
+  contentsIcons,
   contentsLine,
   dayLook,
   dayNumber,
@@ -382,6 +383,8 @@ export function createAdvent(options: AdventOptions): Advent {
       ),
     );
 
+    // A wrapped present from the bag, only while the bag says it holds one.
+    const bagPresents = inBag();
     // What's in the box: today's day while it waits, else whatever's open to catch up.
     const holds =
       today?.state === 'today'
@@ -427,8 +430,6 @@ export function createAdvent(options: AdventOptions): Advent {
         void open(missed.day, ADVENT_TEXT.revealDay(dayNumber(missed)));
       });
     }
-    // A wrapped present from the bag, only while the bag says it holds one.
-    const bagPresents = inBag();
     const presentBlock: HTMLElement[] = [];
     if (bagPresents > 0) {
       const presentButton = hpButton(ADVENT_TEXT.openPresent(bagPresents), {
@@ -439,16 +440,22 @@ export function createAdvent(options: AdventOptions): Advent {
       presentButton.addEventListener('click', () => {
         void openPresent();
       });
+      // One line of pictures (the sheet is at its height budget); the names are its label.
       presentBlock.push(
         el(
           'div',
-          { class: 'advent-box advent-present-box', 'data-testid': 'advent-present-contents' },
+          {
+            class: 'advent-box advent-present-box',
+            'data-testid': 'advent-present-contents',
+            'aria-label': `${ADVENT_TEXT.presentMightHold} ${contentsLine(current.presentContents)}`,
+            role: 'group',
+          },
           el('b', {}, ADVENT_TEXT.presentMightHold),
           ' ',
-          contentsLine(current.presentContents),
+          el('span', { 'aria-hidden': 'true' }, contentsIcons(current.presentContents)),
         ),
-        presentButton,
       );
+      presentBlock.push(presentButton);
     }
     // Catch-up is used for today: say so, kindly, instead of a button that can't work.
     const usedNote =
@@ -456,6 +463,9 @@ export function createAdvent(options: AdventOptions): Advent {
         ? el('p', { class: 'advent-used', 'data-testid': 'advent-used' }, ADVENT_TEXT.catchUpUsed)
         : null;
 
+    // A wrapped present adds a button to a sheet already at its height budget:
+    // the grid sits a little tighter then (rows stay 44 pt or more).
+    body.classList.toggle('advent-tight', bagPresents > 0);
     return [
       el('p', { class: 'advent-lead' }, ADVENT_TEXT.lead),
       grid,

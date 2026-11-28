@@ -52,7 +52,7 @@ function calendar(opened: number[], catchUpLeft: boolean): AdventView {
     today: day(5),
     days,
     catchUpLeft,
-    presentContents: ['treats'],
+    presentContents: CONTENTS,
   });
 }
 
@@ -64,10 +64,14 @@ async function stubDecember(page: Page, wrapped = 0) {
   let opened = [1, 4];
   let catchUpLeft = true;
   await page.route(/\/maps\/[^/]+\/(inventory|settle)$/, async (route) => {
-    const reply = await route.fetch();
-    const body = (await reply.json()) as { now: string; items: Record<string, number> };
-    const items = inBag > 0 ? { ...body.items, presents: inBag } : body.items;
-    await route.fulfill({ response: reply, json: { ...body, items, now: DECEMBER_NOW } });
+    try {
+      const reply = await route.fetch();
+      const body = (await reply.json()) as { now: string; items: Record<string, number> };
+      const items = inBag > 0 ? { ...body.items, presents: inBag } : body.items;
+      await route.fulfill({ response: reply, json: { ...body, items, now: DECEMBER_NOW } });
+    } catch {
+      // The test ended with a bag read still in flight: nothing is left to answer.
+    }
   });
   // A wrapped present from the bag: the server spends one; with none it says so kindly.
   await page.route(/\/maps\/[^/]+\/presents\/open$/, (route) => {
@@ -261,8 +265,11 @@ test('opens a wrapped present from the bag and shows what came out (#37 1d2)', a
   await expect.poll(async () => (await adventState(page))?.presents, { timeout: 30_000 }).toBe(2);
   await (await trayButton(page, 'advent-open')).tap();
   const sheet = page.getByTestId('advent-sheet');
-  await expect(sheet.getByTestId('advent-present-contents')).toContainText('might hold');
-  await expect(sheet.getByTestId('advent-present-contents')).not.toContainText(/%|chance|odds/i);
+  // What a wrapped present might hold: one line of pictures, names in its label, never odds.
+  const hint = sheet.getByTestId('advent-present-contents');
+  await expect(hint).toContainText('might hold');
+  await expect(hint).toHaveAttribute('aria-label', /Treats/);
+  await expect(hint).not.toContainText(/%|chance|odds/i);
   const present = sheet.getByTestId('advent-open-present');
   await expect(present).toHaveText('Open a wrapped present (2)');
   const box = await present.boundingBox();

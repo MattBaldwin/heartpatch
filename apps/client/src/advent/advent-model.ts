@@ -48,7 +48,7 @@ export const ADVENT_TEXT = {
   tapMissedOver: "That one's gone. See you next December ❄️",
   bag: 'Safe in your bag!',
   // A present from the bag (#37 1d2). One line each, like the rest.
-  presentMightHold: 'A wrapped present might hold:',
+  presentMightHold: 'A present might hold:',
   openPresent: (n: number) =>
     n > 1 ? `Open a wrapped present (${String(n)})` : 'Open a wrapped present',
   revealPresent: 'Your present had…',
@@ -168,4 +168,9 @@ export function bagLine(presentsLeft: number | null): string {
   return presentsLeft !== null && presentsLeft > 0
     ? ADVENT_TEXT.presentsLeft(presentsLeft)
     : ADVENT_TEXT.bag;
+}
+
+/** "🍬 🥧 ✨": what a wrapped present can hold, pictures only (one line; names go in the label). */
+export function contentsIcons(ids: readonly string[]): string {
+  return ids.map(itemIcon).join(' ');
 }

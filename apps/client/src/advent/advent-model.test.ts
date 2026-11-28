@@ -5,11 +5,13 @@ import {
   type AdventDayView,
   type AdventView,
 } from '@heartpatch/shared';
+import { itemIcon } from '../inventory/item-icons.js';
 import { describe, expect, it } from 'vitest';
 import {
   ADVENT_TEXT,
   bagLine,
   catchUpDays,
+  contentsIcons,
   contentsLine,
   dayLook,
   foundLine,
@@ -164,5 +166,10 @@ describe('a present from the bag (#37 1d2)', () => {
     ]) {
       expect(line.length).toBeLessThanOrEqual(40);
     }
+  });
+
+  it('draws what a present can hold as pictures, with the names kept for the label', () => {
+    expect(contentsIcons(['treats', 'pies'])).toBe(`${itemIcon('treats')} ${itemIcon('pies')}`);
+    expect(contentsLine(['treats'])).toContain('Treats');
   });
 });

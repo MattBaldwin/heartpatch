@@ -356,3 +356,32 @@
 .advent-body .advent-present-box + .hp-button {
   margin-top: 4px;
 }
+
+/* With a wrapped present in the bag the grid is a little tighter (tap targets stay 44 pt). */
+.advent-body.advent-tight .advent-day {
+  min-height: 44px;
+}
+
+.advent-body.advent-tight .advent-grid {
+  gap: 4px;
+}
+
+.advent-body.advent-tight > .hp-button {
+  --hp-button-h: 44px;
+
+  margin-top: 4px;
+}
+
+.advent-body .advent-present-box {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.advent-body.advent-tight .advent-lead {
+  margin: 2px 44px 4px 0;
+}
+
+.advent-body.advent-tight .advent-note {
+  margin: 3px 0;
+}
