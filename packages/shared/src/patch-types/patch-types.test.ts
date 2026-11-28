@@ -103,7 +103,9 @@ describe('patch types (#621)', () => {
   });
 
   it('only offers a Clockwork Isle building on a Clockwork Isle (#874)', () => {
-    const clockwork = BUILDINGS.filter((b) => b.patchTypes?.includes('clockwork-isle'));
+    const clockwork = BUILDINGS.filter(
+      (b) => b.patchTypes?.length === 1 && b.patchTypes[0] === 'clockwork-isle',
+    );
     expect(clockwork.map((b) => b.id)).toEqual([
       'windmill',
       'sorter',
@@ -133,7 +135,9 @@ describe('patch types (#621)', () => {
   it('never offers a Wild Isle building on a Cozy Patch', () => {
     const wildKinds: readonly string[] = WILD_ISLE_BUILDING_KINDS;
     const wildBuildings = BUILDINGS.filter(
-      (b) => wildKinds.includes(b.kind) && b.patchTypes?.includes('clockwork-isle') !== true,
+      (b) =>
+        wildKinds.includes(b.kind) &&
+        !(b.kind === 'works' && b.patchTypes?.[0] === 'clockwork-isle'),
     );
     expect(wildBuildings.map((b) => b.id)).toEqual([
       'bridge',
@@ -168,6 +172,20 @@ describe('patch types (#621)', () => {
       expect(isBuildableOn(HOME_BASE_RULES, b, 'cozy'), b.id).toBe(false);
       expect(isBuildableOn(HOME_BASE_RULES, b, 'wild-isle'), b.id).toBe(b.id !== 'waystation');
     }
+  });
+
+  it('lets a Bridge cross a Clockwork Isle river, and no other Wild Isle building (#874)', () => {
+    const both = BUILDINGS.filter(
+      (b) => buildsOnPatchType(b, 'wild-isle') && buildsOnPatchType(b, 'clockwork-isle'),
+    );
+    expect(both.filter((b) => b.patchTypes !== undefined).map((b) => b.id)).toEqual(['bridge']);
+    expect(
+      isBuildableOn(
+        HOME_BASE_RULES,
+        BUILDINGS.find((b) => b.id === 'bridge')!,
+        'clockwork-isle',
+      ),
+    ).toBe(true);
   });
 
   it('leaves every Cozy building buildable exactly as before, on every type', () => {

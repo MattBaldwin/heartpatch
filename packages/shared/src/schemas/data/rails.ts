@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ResourceCostSchema } from './common.js';
+import { ContentIdSchema, ResourceCostSchema } from './common.js';
 import { formatDataIssues, type Report } from './issues.js';
 
 /** How many levels a line (`tile_lines.level`) can have; the DB check matches. */
@@ -31,6 +31,8 @@ export const RailRulesSchema = z.strictObject({
         cost: ResourceCostSchema,
         reach: z.number().int().min(1).max(6),
         speedPercent: z.number().int().min(100).max(300),
+        /** Laid or raised to only once its owner knows this `RESEARCH_TREE` node. */
+        requiresResearch: ContentIdSchema.optional(),
       }),
     )
     .min(1)

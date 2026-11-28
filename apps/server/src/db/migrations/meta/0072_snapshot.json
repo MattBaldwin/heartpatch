@@ -1,5 +1,5 @@
 {
-  "id": "8220a3c4-c936-40a8-966f-b3db8ad57d2c",
+  "id": "53a7f9a9-51db-446a-b11d-5e3ec1f48678",
   "prevId": "786ddbd0-15e1-47be-9cde-ebb969479c69",
   "version": "7",
   "dialect": "postgresql",
@@ -7252,6 +7252,21 @@
           ],
           "isUnique": true,
           "where": "\"research_jobs\".\"claimed_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "research_jobs_building_id_idx": {
+          "name": "research_jobs_building_id_idx",
+          "columns": [
+            {
+              "expression": "building_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}

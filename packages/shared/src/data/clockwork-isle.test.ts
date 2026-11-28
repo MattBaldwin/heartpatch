@@ -88,7 +88,23 @@ describe('Clockwork Isle contracts (#874 C0)', () => {
 
   describe('research', () => {
     it('passes its checks, and every building that needs research names a node', () => {
-      expect(checkResearchTree(RESEARCH_TREE, resourceIds, BUILDINGS)).toEqual([]);
+      const rails = RAIL_RULES.levels.map((l, i) => ({
+        path: `rails.levels.${String(i)}`,
+        requiresResearch: l.requiresResearch,
+      }));
+      expect(checkResearchTree(RESEARCH_TREE, resourceIds, BUILDINGS, rails)).toEqual([]);
+      // Tidy Rails unlocks Rail level 2 and the Depot's level 2 (plan §6).
+      expect(RAIL_RULES.levels[1]?.requiresResearch).toBe('tidy-rails');
+      const depot = BUILDINGS.find((b) => b.id === 'rail-depot');
+      expect(depot?.kind === 'depot' && depot.levels[1]?.requiresResearch).toBe('tidy-rails');
+      // Without the rails, Tidy Rails still unlocks the Depot; without both, nothing.
+      expect(
+        checkResearchTree(
+          RESEARCH_TREE,
+          resourceIds,
+          BUILDINGS.filter((b) => b.id !== 'rail-depot'),
+        ).join('\n'),
+      ).toMatch(/nodes.2.id: "tidy-rails" unlocks nothing/);
       expect(RESEARCH_TREE.nodes.map((n) => [n.id, n.tier])).toEqual([
         ['sorting', 1],
         ['bright-bulbs', 1],
@@ -127,8 +143,9 @@ describe('Clockwork Isle contracts (#874 C0)', () => {
         ],
       };
       const problems = checkResearchTree(tree, resourceIds, [
-        { id: 'press', requiresResearch: 'pressing' },
-        { id: 'observatory', requiresResearch: 'telescopes' },
+        { id: 'press', requiresResearch: 'pressing', levels: [] },
+        { id: 'observatory', requiresResearch: 'telescopes', levels: [] },
+        { id: 'tower', levels: [{}, { requiresResearch: 'clocks' }] },
       ]).join('\n');
       expect(problems).toMatch(/nodes.1.id: duplicate id "sorting"/);
       expect(problems).toMatch(/nodes.2.requires.0: "sorting" is not on a lower tier/);
@@ -149,7 +166,16 @@ describe('Clockwork Isle contracts (#874 C0)', () => {
 
     it('parse a Depot, a Bench and the new flags, and the DB row kinds know them', () => {
       for (const kind of ['depot', 'research']) expect(BuildingKindSchema.parse(kind)).toBe(kind);
-      expect(windmill).toMatchObject({ kind: 'works', wind: true, makes: { resource: 'spark' } });
+      expect(windmill).toMatchObject({
+        kind: 'works',
+        wind: true,
+        generator: true,
+        makes: { resource: 'spark' },
+      });
+      // The Windmill is the one generator in Wave 1.
+      expect(BUILDINGS.filter((b) => b.kind === 'works' && b.generator).map((b) => b.id)).toEqual([
+        'windmill',
+      ]);
       expect(BUILDINGS.find((b) => b.id === 'sorter')).toMatchObject({
         needsPower: true,
         eats: { spark: 1, greens: 2 },
@@ -203,6 +229,26 @@ describe('Clockwork Isle contracts (#874 C0)', () => {
       expect(withRow({ ...pier, id: 'windy-pier', wind: true }).join('\n')).toMatch(
         /"windy-pier": only Clockwork Isle buildings feel the wind/,
       );
+      expect(withRow({ ...pier, id: 'zappy-pier', generator: true }).join('\n')).toMatch(
+        /"zappy-pier": only Clockwork Isle buildings make power/,
+      );
+      // Something must make power for what needs it.
+      const noGenerators = BUILDINGS.map((b) =>
+        b.kind === 'works' && b.generator ? { ...b, generator: undefined } : b,
+      );
+      expect(checkGameData({ ...GAME_DATA, buildings: noGenerators }).join('\n')).toMatch(
+        /needs power, but no building is a generator/,
+      );
+      // A Bridge crosses either isle's rivers; no other row lists both.
+      expect(
+        BUILDINGS.filter((b) => b.patchTypes?.length === 2).map((b) => [b.id, b.patchTypes]),
+      ).toEqual([['bridge', ['wild-isle', 'clockwork-isle']]]);
+      const shelter = BUILDINGS.find((b) => b.id === 'seawall')!;
+      expect(
+        withRow({ ...shelter, id: 'twin-wall', patchTypes: ['wild-isle', 'clockwork-isle'] }).join(
+          '\n',
+        ),
+      ).toMatch(/"twin-wall" is a Clockwork Isle building/);
       // A Clockwork works row isn't a Wild Isle one.
       expect(
         withRow({ ...windmill, id: 'wild-windmill', patchTypes: ['wild-isle'] }).join('\n'),

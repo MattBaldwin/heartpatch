@@ -576,7 +576,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       expect(res.statusCode).toBe(403);
       expect(errorOf(res)).toMatchObject({
         code: 'FORBIDDEN',
-        message: 'A Clockwork Isle is made for 6 Keepers. Try a Cozy Patch!',
+        message: "Clockwork Isles aren't quite ready yet. Make a Cozy Patch for now!",
       });
       expect(await mapsOwnedBy(tester)).toBe(0);
     });

@@ -40,5 +40,6 @@ ALTER TABLE "research_known" ADD CONSTRAINT "research_known_member_fk" FOREIGN K
 ALTER TABLE "tile_lines" ADD CONSTRAINT "tile_lines_tile_id_tiles_id_fk" FOREIGN KEY ("tile_id") REFERENCES "public"."tiles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tile_lines" ADD CONSTRAINT "tile_lines_owner_member_fk" FOREIGN KEY ("map_id","owner_user_id") REFERENCES "public"."map_members"("map_id","user_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "research_jobs_one_going_key" ON "research_jobs" USING btree ("map_id","user_id") WHERE "research_jobs"."claimed_at" is null;--> statement-breakpoint
+CREATE INDEX "research_jobs_building_id_idx" ON "research_jobs" USING btree ("building_id");--> statement-breakpoint
 CREATE INDEX "tile_lines_map_id_owner_user_id_idx" ON "tile_lines" USING btree ("map_id","owner_user_id");--> statement-breakpoint
 ALTER TABLE "tiles" ADD CONSTRAINT "tiles_wind_range" CHECK ("tiles"."wind" between 1 and 3);

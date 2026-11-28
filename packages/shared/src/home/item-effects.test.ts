@@ -135,6 +135,9 @@ describe('itemEffects (#241)', () => {
 
   it('calls a seasonal thing with no use yet a keepsake', () => {
     expect(itemEffects('fireworks')).toEqual([{ kind: 'keepsake', season: 'new-year' }]);
+    // The Gift Wrapper (#874) wraps them only on a Clockwork Isle: Presents
+    // stay a keepsake on every patch's Bag.
+    expect(itemEffects('presents')).toEqual([{ kind: 'keepsake', season: 'christmas' }]);
   });
 
   it('knows nothing about an unknown id', () => {

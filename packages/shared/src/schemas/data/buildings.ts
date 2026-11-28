@@ -209,6 +209,12 @@ export const WorksBuildingSchema = z.strictObject({
   weather: z.partialRecord(WeatherKindSchema, z.number().int().min(0).max(1000)).optional(),
   onlyWhile: WeatherKindSchema.exclude(['clear']).optional(),
   wind: z.literal(true).optional(),
+  /**
+   * Clockwork Isle (#874): it powers its owner's `needsPower` buildings
+   * joined to it by `POWER_RULES` (a Windmill; Wave 2's Solar Pane). Only on
+   * Clockwork rows (`checkGameData`).
+   */
+  generator: z.literal(true).optional(),
   levels: levels({
     pacePercent: z.number().int().min(100).max(1000),
     storageHours: z.number().int().min(1).max(240),
@@ -318,7 +324,11 @@ export const TravelBuildingSchema = z
 export const DepotBuildingSchema = z.strictObject({
   ...buildingBase,
   kind: z.literal('depot'),
-  levels: levels({ waitingCycles: z.number().int().min(1).max(96) }),
+  levels: levels({
+    waitingCycles: z.number().int().min(1).max(96),
+    /** This level is built only once its owner knows this `RESEARCH_TREE` node. */
+    requiresResearch: ContentIdSchema.optional(),
+  }),
 });
 
 /**

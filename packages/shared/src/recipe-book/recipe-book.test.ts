@@ -206,6 +206,7 @@ describe('whereToFind', () => {
         'joy-ember',
         'heart-petals',
         'turkey-feathers',
+        'presents',
         'fireworks',
         // Clockwork Isle (#874): Parts from Scrap Heaps (lane C1 places
         // them) and explore finds; Blueprints from the Research Bench.
@@ -215,6 +216,15 @@ describe('whereToFind', () => {
       ];
       expect(found, r.id).toBe(!elsewhere.includes(r.id));
     }
+  });
+
+  it('names a Clockwork Isle machine only for what nothing else makes (#874)', () => {
+    expect(whereToFind('spark').madeAt).toEqual(['windmill']);
+    // Treats have recipes and Presents a season: their pages read as before.
+    expect(whereToFind('treats').madeAt).toEqual([]);
+    expect(whereToFind('presents').madeAt).toEqual([]);
+    // A Wild Isle works still shows wherever it makes something.
+    expect(whereToFind('fish').madeAt).toEqual(['fishing-pier']);
   });
 
   it('points at terrains, home rings, bonuses and recipes', () => {

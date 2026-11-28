@@ -80,7 +80,9 @@ export const PublicBuildingSchema = z.object({
   unpowered: z.literal(true).optional(),
   /**
    * Clockwork Isle (#874): a Research Bench's node going now and when it's
-   * ready. Left out while idle, on every other kind, and by older servers.
+   * ready. Sent only to the bench's owner (research is theirs, like
+   * `research.started`); left out for everyone else, while idle, on every
+   * other kind, and by older servers.
    */
   research: z.object({ nodeId: ContentIdSchema, readyAt: z.iso.datetime() }).optional(),
 });

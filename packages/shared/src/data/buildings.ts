@@ -487,7 +487,8 @@ export const BUILDINGS: Building[] = [
     role: 'bridge',
     name: 'Bridge',
     description: 'Hop across the river! Every Keeper on the patch can use it.',
-    patchTypes: ['wild-isle'],
+    // Clockwork Isles have rivers too (#874): the same bridge crosses them.
+    patchTypes: ['wild-isle', 'clockwork-isle'],
     placement: 'land', // it stands on a river tile (`onWater`), not owned land
     onWater: 'river',
     maxPerTile: 1,
@@ -772,6 +773,7 @@ export const BUILDINGS: Building[] = [
     maxPerTile: 1,
     slot: 'ring',
     wind: true,
+    generator: true,
     makes: { resource: 'spark', quantity: 1, seconds: 15 * 60 }, // TUNE: 4 an hour at wind 2
     levels: [
       { cost: { timber: 12, stone: 6, parts: 4 }, pacePercent: 100, storageHours: 24, upkeep: 0 }, // TUNE:
@@ -811,7 +813,7 @@ export const BUILDINGS: Building[] = [
     id: 'research-bench',
     kind: 'research',
     name: 'Research Bench',
-    description: 'Tinker with Parts and Spark to dream up new builds!',
+    description: 'Tinker with Parts and Spark Jars to dream up new builds!',
     patchTypes: ['clockwork-isle'],
     placement: 'homestead',
     maxPerHome: 1, // one bench a Keeper's patch; one research at a time anyway
@@ -835,7 +837,11 @@ export const BUILDINGS: Building[] = [
     slot: 'ring',
     levels: [
       { cost: { timber: 14, parts: 8 }, waitingCycles: 12 }, // TUNE:
-      { cost: { timber: 28, parts: 16, blueprints: 1 }, waitingCycles: 24 }, // TUNE:
+      {
+        cost: { timber: 28, parts: 16, blueprints: 1 },
+        waitingCycles: 24,
+        requiresResearch: 'tidy-rails',
+      }, // TUNE:
     ],
   },
   {

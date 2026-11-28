@@ -1545,6 +1545,8 @@ export const researchJobs = pgTable(
     uniqueIndex('research_jobs_one_going_key')
       .on(t.mapId, t.userId)
       .where(sql`${t.claimedAt} is null`),
+    // Every building's take-down sets its jobs' bench to null: keep that a lookup.
+    index('research_jobs_building_id_idx').on(t.buildingId),
     check('research_jobs_ready_after_start', sql`${t.readyAt} >= ${t.startedAt}`),
     check(
       'research_jobs_claimed_when_ready',

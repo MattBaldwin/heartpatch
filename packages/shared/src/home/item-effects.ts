@@ -135,9 +135,11 @@ export function itemEffects(resourceId: string, data: ItemData = GAME_DATA): Ite
   // Wild Isle works (#621 W1-8) that make it, for an item with nothing else
   // to say but the recipes it goes into (Fish, Flour and Salt: Pies): Water
   // and Greens keep today's chips, so a Cozy Patch's Bag reads as before.
+  // A seasonal thing keeps its keepsake chip on every patch: the Gift
+  // Wrapper (#874) makes Presents only on a Clockwork Isle.
   const works = data.buildings.filter((b) => b.kind === 'works' && b.makes.resource === item.id);
   const onlyRecipes = !effects.some((e) => e.kind !== 'recipes');
-  if (onlyRecipes && works.length > 0) {
+  if (onlyRecipes && works.length > 0 && item.season === undefined) {
     effects.push({ kind: 'made-at', buildings: works.map((b) => b.id) });
   }
 

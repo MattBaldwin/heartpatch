@@ -8,6 +8,12 @@ import type { RailRules } from '../schemas/data/rails.js';
 export const RAIL_RULES: RailRules = {
   levels: [
     { cost: { timber: 2, parts: 1 }, reach: 2, speedPercent: 125 }, // TUNE: Rail
-    { cost: { timber: 4, stone: 2, parts: 2 }, reach: 3, speedPercent: 150 }, // TUNE: Tidy rail
+    // TUNE: Tidy rail
+    {
+      cost: { timber: 4, stone: 2, parts: 2 },
+      reach: 3,
+      speedPercent: 150,
+      requiresResearch: 'tidy-rails',
+    },
   ],
 };

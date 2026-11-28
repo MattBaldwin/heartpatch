@@ -244,8 +244,14 @@ export const GameDataSchema = z
         report(['buildings', i, 'slot'], `"${b.id}": fences go on edges, and only fences`);
       }
       // Clockwork Isle rows (#874): `['clockwork-isle']` alone, one of its
-      // kinds; only they need power, research or wind.
-      const clockwork = b.patchTypes?.includes('clockwork-isle') === true;
+      // kinds; only they need power, research or wind, or make power. A Wild
+      // Isle travel row may list both isles (a Bridge crosses either's rivers).
+      const shared =
+        b.kind === 'travel' &&
+        b.patchTypes?.length === 2 &&
+        b.patchTypes.includes('wild-isle') &&
+        b.patchTypes.includes('clockwork-isle');
+      const clockwork = b.patchTypes?.includes('clockwork-isle') === true && !shared;
       if (clockwork) {
         if (b.patchTypes?.length !== 1) {
           report(
@@ -284,10 +290,17 @@ export const GameDataSchema = z
             `"${b.id}": only Clockwork Isle buildings feel the wind`,
           );
         }
+        if (b.kind === 'works' && b.generator) {
+          report(
+            ['buildings', i, 'generator'],
+            `"${b.id}": only Clockwork Isle buildings make power`,
+          );
+        }
       }
       // Wild Isle kinds (#621) are never on a Cozy Patch's Build sheet.
       if (
         !(clockwork && b.kind === 'works') &&
+        !shared &&
         (WILD_ISLE_BUILDING_KINDS as readonly string[]).includes(b.kind) &&
         (b.patchTypes?.length !== 1 || b.patchTypes[0] !== 'wild-isle')
       ) {
@@ -304,6 +317,13 @@ export const GameDataSchema = z
         if (b.eats) checkCost(resources, b.eats, ['buildings', i, 'eats'], report);
       }
     });
+
+    // Something powers every building that needs power (#874).
+    const generators = data.buildings.filter((b) => b.kind === 'works' && b.generator);
+    const powered = data.buildings.find((b) => b.needsPower);
+    if (powered && generators.length === 0) {
+      report(['buildings'], `"${powered.id}" needs power, but no building is a generator`);
+    }
 
     data.careActions.forEach((c, i) => {
       checkCost(resources, c.cost, ['careActions', i, 'cost'], report);

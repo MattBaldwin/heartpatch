@@ -180,7 +180,7 @@ const MESSAGES = {
   wildIsleClosed: "Wild Isles aren't open yet. Make a Cozy Patch for now!",
   wildIsleSeats: 'A Wild Isle is made for 6 Keepers. Try a Cozy Patch!',
   clockworkIsleClosed: "Clockwork Isles aren't open yet. Make a Cozy Patch for now!",
-  clockworkIsleSeats: 'A Clockwork Isle is made for 6 Keepers. Try a Cozy Patch!',
+  clockworkIsleSeats: "Clockwork Isles aren't quite ready yet. Make a Cozy Patch for now!",
 } as const;
 
 /** How many times to retry on the (very unlikely) chance a new code is taken. */
