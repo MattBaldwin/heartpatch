@@ -160,7 +160,7 @@ export function buildingGuide(def: Building, ctx: BuildingGuideContext): Buildin
     description: def.description,
     group: GROUP_OF[def.kind],
     value: valueOf(def, ctx.economy),
-    place: placeOf(def),
+    place: placeOf(def, ctx.patchType),
     gate,
     cost: buildCost(def),
     levels: def.levels.map((l) => l.cost),
@@ -208,7 +208,7 @@ function valueOf(def: Building, economy: EconomyEffectRules): GuideValue[] {
   return out;
 }
 
-function placeOf(def: Building): GuidePlace[] {
+function placeOf(def: Building, patchType: PatchType): GuidePlace[] {
   const out: GuidePlace[] = [];
   if (def.kind === 'travel' && def.onWater !== undefined) {
     out.push({ kind: 'on-water', water: def.onWater });
@@ -224,7 +224,9 @@ function placeOf(def: Building): GuidePlace[] {
   const atHome = def.placement === 'home';
   if (def.maxPerHome !== undefined) out.push({ kind: 'per-home', max: def.maxPerHome, atHome });
   if (!atHome && def.maxPerTile !== undefined) out.push({ kind: 'per-tile', max: def.maxPerTile });
-  if (def.patchTypes) out.push({ kind: 'patch', patchTypes: def.patchTypes });
+  // Only the patch type being looked at (#874: a Bridge on a Wild Isle still
+  // reads "Wild Isle only", never naming a Clockwork Isle).
+  if (def.patchTypes) out.push({ kind: 'patch', patchTypes: [patchType] });
   if (def.season !== undefined) out.push({ kind: 'season', season: def.season });
   return out;
 }

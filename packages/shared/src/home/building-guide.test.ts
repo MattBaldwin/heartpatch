@@ -122,6 +122,13 @@ describe('buildingGuide (#715)', () => {
     expect(g.place).toContainEqual({ kind: 'patch', patchTypes: ['wild-isle'] });
   });
 
+  it('names only the patch type being looked at (#874: the Bridge crosses both isles)', () => {
+    const patch = (patchType: 'wild-isle' | 'clockwork-isle') =>
+      guide('bridge', { patchType }).place.filter((p) => p.kind === 'patch');
+    expect(patch('wild-isle')).toEqual([{ kind: 'patch', patchTypes: ['wild-isle'] }]);
+    expect(patch('clockwork-isle')).toEqual([{ kind: 'patch', patchTypes: ['clockwork-isle'] }]);
+  });
+
   it('canal carries water; shelters keep storms off; the vane forecasts', () => {
     expect(kinds(guide('canal').value)).toContain('carries-water');
     expect(guide('canal').group).toBe('water');

@@ -247,6 +247,8 @@ function toPublicTile(
     explored: explore.explored ?? false,
     homestead: explore.homestead ?? null,
     communityId: tile.communityId ?? null,
+    // Clockwork Isle (#874): left out when null, so Cozy and Wild tiles are as before.
+    ...(tile.wind != null ? { wind: tile.wind } : {}),
   };
 }
 
