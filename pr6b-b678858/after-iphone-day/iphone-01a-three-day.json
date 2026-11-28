@@ -1,0 +1,79 @@
+{
+ "file": "iphone-01a-three-day.png",
+ "device": "iphone",
+ "tz": "Asia/Dubai",
+ "reduced": false,
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "effects": {
+   "live": 19,
+   "meshes": 3,
+   "spawned": 22
+  },
+  "drawCalls": 57,
+  "playing": {
+   "kind": "move",
+   "at": 200
+  },
+  "framing": {
+   "distance": 44.308011450032765,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.142018779342723,
+    "bottom": 0.8755868544600939
+   },
+   "face": {
+    "top": 0.608224998739056,
+    "bottom": 0.642365596367214
+   },
+   "team": [
+    {
+     "top": 0.6823748084209705,
+     "bottom": 0.7148596332512374
+    },
+    {
+     "top": 0.6848409204477072,
+     "bottom": 0.7181605899090449
+    },
+    {
+     "top": 0.6811152680023204,
+     "bottom": 0.7160447965906522
+    }
+   ],
+   "teamFeet": 0.763963432191454,
+   "bossFacing": 0.9895397542902367
+  },
+  "camera": {
+   "x": 10.361182216181694,
+   "y": 9.015809291808917,
+   "z": -41.98256550456093
+  }
+ },
+ "peakLiveThisRound": 0,
+ "caption": "Puddlepuff used Count to Three!",
+ "sticker": {
+  "top": 0.15125274658203125,
+  "bottom": 0.20085992947430678,
+  "left": 12.131181716918945,
+  "right": 58.66568946838379,
+  "text": "3!"
+ },
+ "strip": {
+  "top": 0.07863849765258216,
+  "bottom": 0.13028169014084506,
+  "left": 12,
+  "right": 329,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "handle": {
+  "top": 0.8849765258215962,
+  "bottom": 0.960093896713615,
+  "left": 16,
+  "right": 377,
+  "text": "Round 2PPP"
+ }
+}

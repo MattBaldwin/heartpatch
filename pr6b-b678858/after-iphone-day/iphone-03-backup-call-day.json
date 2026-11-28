@@ -1,0 +1,79 @@
+{
+ "file": "iphone-03-backup-call-day.png",
+ "device": "iphone",
+ "tz": "Asia/Dubai",
+ "reduced": false,
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "effects": {
+   "live": 45,
+   "meshes": 2,
+   "spawned": 90
+  },
+  "drawCalls": 56,
+  "playing": {
+   "kind": "effect",
+   "at": 300
+  },
+  "framing": {
+   "distance": 44.47295372119755,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.142018779342723,
+    "bottom": 0.8755868544600939
+   },
+   "face": {
+    "top": 0.5421554408061535,
+    "bottom": 0.6056834936201075
+   },
+   "team": [
+    {
+     "top": 0.6819828576504117,
+     "bottom": 0.7163662954029617
+    },
+    {
+     "top": 0.6850194519658026,
+     "bottom": 0.7194872492704131
+    },
+    {
+     "top": 0.6795584224889274,
+     "bottom": 0.7161718599467597
+    }
+   ],
+   "teamFeet": 0.7681862420108897,
+   "bossFacing": 0.9892983881801816
+  },
+  "camera": {
+   "x": 10.28570447873107,
+   "y": 9.03448128699095,
+   "z": -41.479998127530436
+  }
+ },
+ "peakLiveThisRound": 48,
+ "caption": "Puddlepuff called for backup! 📣",
+ "sticker": {
+  "top": 0.14820955840634628,
+  "bottom": 0.20390312660468016,
+  "left": 12.267065048217773,
+  "right": 108.13918113708496,
+  "text": "Backup!"
+ },
+ "strip": {
+  "top": 0.07863849765258216,
+  "bottom": 0.13028169014084506,
+  "left": 12,
+  "right": 329,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "handle": {
+  "top": 0.8849765258215962,
+  "bottom": 0.960093896713615,
+  "left": 16,
+  "right": 377,
+  "text": "Round 4PPFlinched!P"
+ }
+}
