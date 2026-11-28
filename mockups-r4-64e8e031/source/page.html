@@ -1,0 +1,8 @@
+<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<style>html,body{margin:0;background:#fde8f0}svg{display:block}</style>
+<div id=root></div>
+<script src=kit.js></script><script src=kit2.js></script><script src=tiles.js></script><script src=frames-m3.js></script><script src=frames-m1m2.js></script><script src=frames-m4.js></script><script src=frames-r4.js></script>
+<script>
+const q=new URLSearchParams(location.search);const [m,v]=q.get('f').split('.');
+document.getElementById('root').innerHTML=(window[m.toUpperCase()][v])(q);
+</script>
