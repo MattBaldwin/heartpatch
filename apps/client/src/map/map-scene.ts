@@ -50,6 +50,9 @@ import {
   type BulbTile,
 } from './bulb-layout.js';
 import { FenceField } from './fence-field.js';
+import { TreeField } from './tree-field.js';
+import { treeSpot } from './tree-layout.js';
+import { treeOf } from './tree-model.js';
 import { fenceLength, fencePlacements } from './fence-layout.js';
 import { KEEPER_PLACES } from '../procedural/keeper/keeper-config.js';
 import { KeeperField } from '../procedural/keeper/keeper-field.js';
@@ -198,6 +201,22 @@ export interface MapSceneStats {
   readonly bulbs: number;
   readonly bulbsLit: boolean;
   readonly bulbsTwinkle: boolean;
+  /**
+   * The Patch Tree (#37 2d), or null while it isn't planted (or its post
+   * isn't on this map): its post, the ornaments drawn (at most
+   * `CHRISTMAS.tree.ornamentCap`), the star, whether it's lit (night) and
+   * twinkling, and its box and its post tile's on screen (CSS px), for the
+   * test that it never covers a label.
+   */
+  readonly tree: {
+    readonly postIndex: number;
+    readonly ornaments: number;
+    readonly starLit: boolean;
+    readonly lit: boolean;
+    readonly twinkle: boolean;
+    readonly rect: ScreenRect | null;
+    readonly tileRect: ScreenRect | null;
+  } | null;
   /** Tiles under a lit Hearthfire's soft glow (its safe radius, #18). */
   readonly safeTiles: number;
   /** Clothing ids each drawn Keeper wears (#43), by drawing order. */
@@ -457,6 +476,9 @@ export class MapScene {
   /** Twinkle Lights' bulbs (#37 2a): one thin-instanced quad, lit on December nights. */
   private readonly bulbs: BulbField;
   private lightsTiles = 0;
+  /** The Patch Tree (#37 2d): one mesh, its ornaments and star in it; and its post tile. */
+  private readonly tree: TreeField;
+  private treeAt: { postIndex: number; tile: PublicTile } | null = null;
   /** What the Build sheet lights on a tile (#371). */
   private readonly buildArea: BuildAreaField;
   /** The soft glow over tiles a lit Hearthfire keeps safe (#18). */
@@ -598,6 +620,7 @@ export class MapScene {
     });
     // Before `applyAmbient`, which says whether they're lit and twinkle.
     this.bulbs = new BulbField(scene, this.clock);
+    this.tree = new TreeField(scene, this.clock);
     // Start as the tier and motion setting say, so nothing shows for a frame
     // that would then be hidden (drifting motes under reduced motion).
     const tier = options.tier ?? 'high';
@@ -712,6 +735,7 @@ export class MapScene {
       bulbs: this.bulbs.count,
       bulbsLit: this.bulbs.count > 0 && this.bulbs.state.lit,
       bulbsTwinkle: this.bulbs.count > 0 && this.bulbs.state.twinkle,
+      tree: this.treeStats(),
       keepersWearing: this.keepers.handles.map((h) => h.params.worn),
       props: this.propCount,
       propKinds: this.propGroups.length,
@@ -967,6 +991,42 @@ export class MapScene {
     this.bulbs.set(bulbLayout(tiles, HEX_SIZE));
   }
 
+  /**
+   * The Patch Tree (#37 2d) at the post the server picked
+   * (`MapView.christmas.tree.postIndex`, never worked out here, rule 1);
+   * nothing while it isn't planted or that post isn't on the map.
+   */
+  private plantTree(view: MapView): void {
+    const tree = treeOf(view);
+    const post = tree ? view.posts?.find((p) => p.index === tree.postIndex) : undefined;
+    const tile = post ? this.tiles.get(hexKey(post)) : undefined;
+    if (!tree || !tile) {
+      this.treeAt = null;
+      this.tree.set(null);
+      return;
+    }
+    this.treeAt = { postIndex: tree.postIndex, tile };
+    const at = treeSpot(tile, HEX_SIZE);
+    this.tree.set({
+      x: at.x,
+      y: topOf(tile) + DOME * 0.5,
+      z: at.z,
+      ornaments: tree.ornaments,
+      starLit: tree.starLit,
+    });
+  }
+
+  private treeStats(): MapSceneStats['tree'] {
+    const state = this.tree.state;
+    if (!state || !this.treeAt) return null;
+    return {
+      postIndex: this.treeAt.postIndex,
+      ...state,
+      rect: this.tree.screenRect(),
+      tileRect: tileScreenRectOf(this.scene, this.treeAt.tile),
+    };
+  }
+
   /** Where the camera starts: this player's Heart Seed, else the map centre. */
   homeOf(view: MapView, userId: string | null): GroundPoint {
     const slot = view.members.find((m) => m.user.id === userId)?.homeSlot ?? null;
@@ -1075,6 +1135,7 @@ export class MapScene {
       })),
     );
     this.stringBulbs(view);
+    this.plantTree(view);
     const safe: Matrix[] = [];
     for (const key of mapSafeTiles(view)) {
       const tile = this.tiles.get(key);
@@ -1763,6 +1824,9 @@ export class MapScene {
     // twinkle only while ambient life is live (steady under reduced motion).
     const lit = this.night && this.christmas;
     this.bulbs.setLight(lit, lit && this.mode === 'live');
+    // The Patch Tree (#37 2d) follows the same rules: it's only there in December
+    // (the server sends it then), lit at night, twinkling only with ambient life live.
+    this.tree.setLight(this.night, this.night && this.mode === 'live');
     if (this.lanternMat) {
       const glow = this.night ? HALLOWEEN.glow.night : HALLOWEEN.glow.day;
       this.lanternMat.emissiveColor = linear(HALLOWEEN.glowColor).scale(glow);

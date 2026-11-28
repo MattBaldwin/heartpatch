@@ -10,7 +10,13 @@ import { NIGHT_LOOK } from '../../hollow/hollow-config.js';
 import { CHRISTMAS, HEX_SIZE } from '../map-config.js';
 import { maxZoomFor } from '../map-layout.js';
 import { MapScene, type MapSceneStats } from '../map-scene.js';
-import { testPatch, testWildIsle, withHomeBuildings, withTwinkleLights } from '../test-view.js';
+import {
+  testPatch,
+  testWildIsle,
+  withHomeBuildings,
+  withPatchTree,
+  withTwinkleLights,
+} from '../test-view.js';
 import { galleryWeather, galleryWeatherKind } from '../../weather/gallery-weather.js';
 import {
   createWeatherLayer,
@@ -41,6 +47,8 @@ setPerfReports(false);
  * `&built=1` first puts an Ember Den and Training Grounds by each Heart Seed), and
  * `&motion=1` turns reduced motion off so they twinkle, and `&t=` (seconds)
  * moves the terrain clock there once, so two shots show the twinkle move.
+ * `&tree=N` plants the Patch Tree (#37 2d) at the post nearest the middle
+ * with N ornaments (`&star=1` lights its star); `&focus=tree` centres it.
  * Nothing moves (the terrain clock never ticks), so a shot is the same every time.
  */
 
@@ -55,7 +63,8 @@ const tier = pickInitialTier(params.get('tier'), params.get('quality'));
 const patch = params.get('patch') === 'cozy' ? 'cozy' : 'wild';
 const night = params.get('night') === '1';
 const far = params.get('far') === '1';
-const focus = params.get('focus')?.split(',').map(Number) ?? null;
+const focusParam = params.get('focus');
+const focus = focusParam === 'tree' ? null : (focusParam?.split(',').map(Number) ?? null);
 const distance = Number(params.get('dist')) || null;
 const weatherKind = galleryWeatherKind(params.get('weather'));
 const seasons = params.get('season') === 'christmas' ? ['christmas'] : [];
@@ -69,8 +78,16 @@ const motion = params.get('motion') === '1';
 const patchView: MapView = patch === 'cozy' ? testPatch() : testWildIsle();
 const bare = params.get('built') === '1' ? withHomeBuildings(patchView) : patchView;
 const lightsAt = params.get('lightsAt') === 'land' ? 'land' : 'home';
-const view: MapView =
+const lit: MapView =
   lightsPerKeeper > 0 ? withTwinkleLights(bare, lightsPerKeeper, lightsAt) : bare;
+const view: MapView = params.has('tree')
+  ? withPatchTree(
+      lit,
+      Math.max(0, Math.floor(Number(params.get('tree')) || 0)),
+      params.get('star') === '1',
+    )
+  : lit;
+const treePost = view.posts?.find((p) => p.index === view.christmas?.tree?.postIndex) ?? null;
 
 let stage: Stage | null = null;
 let weather: WeatherLayer | null = null;
@@ -139,9 +156,11 @@ await boot(canvas, {
         farthest = maxZoomFor(map.bounds, CAMERA.maxDistance);
         const [q, r] = focus ?? [];
         const start =
-          q !== undefined && r !== undefined
-            ? hexToWorld({ q, r }, HEX_SIZE)
-            : map.homeOf(view, view.members[0]?.user.id ?? null);
+          focusParam === 'tree' && treePost
+            ? hexToWorld(treePost, HEX_SIZE)
+            : q !== undefined && r !== undefined
+              ? hexToWorld({ q, r }, HEX_SIZE)
+              : map.homeOf(view, view.members[0]?.user.id ?? null);
         return { bounds: map.bounds, start, maxDistance: farthest };
       },
       tier,

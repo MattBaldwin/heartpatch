@@ -1,0 +1,59 @@
+/* The Patch Tree's line on the map (#37 2d): a soft banner that drifts in, holds and fades. */
+
+.tree-beat[hidden] {
+  display: none;
+}
+
+/* The Eve beat's spot (eve.css): under the map's name and the gathering chip. */
+.tree-beat {
+  position: fixed;
+  z-index: 4;
+  top: calc(env(safe-area-inset-top) + 164px);
+  left: 0;
+  right: 0;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin: 0 auto;
+  padding: var(--hp-pad-y) 20px;
+  border-radius: 999px;
+  background: #2f6b4a;
+  color: #fff;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+  pointer-events: none;
+  animation: tree-beat 3.2s ease-in-out both;
+}
+
+.tree-beat-still {
+  animation: tree-beat-fade 3.2s linear both;
+}
+
+@keyframes tree-beat {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.92);
+  }
+  12%,
+  80% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes tree-beat-fade {
+  0% {
+    opacity: 0;
+  }
+  10%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}

@@ -73,4 +73,14 @@ describe('statsPage (#573)', () => {
     // No Night yet, or the Long Night switched off: no crown.
     expect(statsPage({ ...stats, keeperOfTheNight: null }, A).keepers[1]?.crowns).toEqual([]);
   });
+
+  it("puts hearts of warmth on a patch-mate's card, never on mine, never in their order (#37 2d)", () => {
+    const warm = statsPage(stats, B, [{ userId: A, warmth: 3 }]);
+    expect(warm.keepers.map((k) => k.hearts)).toEqual([3, 0]);
+    // The cards keep the server's order whatever the warmth.
+    expect(warm.keepers.map((k) => k.userId)).toEqual([A, B]);
+    // None yet, out of season or an older server: no hearts.
+    expect(statsPage(stats, B, []).keepers.map((k) => k.hearts)).toEqual([0, 0]);
+    expect(page.keepers.map((k) => k.hearts)).toEqual([0, 0]);
+  });
 });

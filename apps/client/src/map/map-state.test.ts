@@ -449,4 +449,56 @@ describe('MapState', () => {
     expect(tileOf().fences).toEqual([]);
     expect(state.apply(event('fence.built', { ...by }, 8))).toBe('resync');
   });
+
+  it('hangs ornaments on the Patch Tree in place, and a late or repeated event changes nothing (#37 2d)', () => {
+    const view = testView();
+    const state = new MapState({
+      ...view,
+      christmas: { presentWaiting: false, tree: { postIndex: 0, ornaments: 4, starLit: false } },
+    });
+    const decorated = (ornaments: number, starLit: boolean, seq: number) =>
+      event(
+        'tree.decorated',
+        {
+          postIndex: 0,
+          fromUserId: userId(1),
+          toUserId: userId(2),
+          source: 'gift',
+          added: 1,
+          ornaments,
+          starLit,
+        },
+        seq,
+      );
+    expect(state.apply(decorated(5, false, 2))).toBe('redraw');
+    expect(state.view.christmas?.tree).toEqual({ postIndex: 0, ornaments: 5, starLit: false });
+    // The gift's own pickup comes after: it leaves the tree alone.
+    expect(
+      state.apply(event('gift.collected', { fromUserId: userId(1), toUserId: userId(2) }, 3)),
+    ).toBe('none');
+    expect(state.view.christmas?.tree?.ornaments).toBe(5);
+    expect(state.apply(decorated(5, false, 4))).toBe('none');
+    expect(state.apply(decorated(12, true, 5))).toBe('redraw');
+    expect(state.view.christmas?.tree).toEqual({ postIndex: 0, ornaments: 12, starLit: true });
+    // A malformed one: refetch rather than guess.
+    expect(state.apply(event('tree.decorated', { postIndex: 0 }, 6))).toBe('resync');
+  });
+
+  it('plants the Patch Tree from its first decoration (#37 2d)', () => {
+    const state = new MapState(testView());
+    const first = {
+      postIndex: 1,
+      fromUserId: userId(1),
+      toUserId: userId(2),
+      source: 'present-gift',
+      added: 2,
+      ornaments: 2,
+      starLit: false,
+    };
+    expect(state.apply(event('tree.decorated', first))).toBe('redraw');
+    expect(state.view.christmas).toEqual({
+      presentWaiting: false,
+      tree: { postIndex: 1, ornaments: 2, starLit: false },
+    });
+  });
 });

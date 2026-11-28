@@ -1,9 +1,10 @@
-import type { PatchStats } from '@heartpatch/shared';
+import type { MapViewChristmas, PatchStats } from '@heartpatch/shared';
 import { el, messageOf } from '../ui/dom.js';
 import { slotIcon } from './map-legend.js';
 import { mapApi } from './map-api.js';
 import { statsPage, type KeeperCard, type StatLine, type StatsPage } from './patch-stats-view.js';
 import { hpClose } from '../ui/button/button.js';
+import { TREE_TEXT } from './tree-model.js';
 import './patch-stats.css';
 
 // Patch stats (#573): who's winning what, a crown per category. A DOM sheet
@@ -11,8 +12,11 @@ import './patch-stats.css';
 // under the patch's name. The server works the numbers out (rule 1).
 
 export interface PatchStatsScreen {
-  /** Shows the stats for a patch and loads them, as `userId` sees them. */
-  show: (mapId: string, userId: string | null) => void;
+  /**
+   * Shows the stats for a patch and loads them, as `userId` sees them, with
+   * my `warmth` with each patch-mate (`MapView.christmas.warmth`, #37) as hearts.
+   */
+  show: (mapId: string, userId: string | null, warmth?: MapViewChristmas['warmth']) => void;
   close: () => void;
   readonly isOpen: boolean;
   /** The page on screen; null while loading or shut. */
@@ -69,6 +73,19 @@ function keeperItem(card: KeeperCard): HTMLElement {
       { class: 'patch-stats-lines' },
       ...card.lines.map((l) => statItem(l, 'patch-stats-line')),
     ),
+    ...(card.hearts > 0
+      ? [
+          el(
+            'p',
+            {
+              class: 'patch-stats-hearts',
+              'data-testid': 'patch-stats-hearts',
+              'aria-label': TREE_TEXT.hearts(card.hearts),
+            },
+            '💗'.repeat(card.hearts),
+          ),
+        ]
+      : []),
     el(
       'p',
       { class: 'patch-stats-buildings' },
@@ -135,7 +152,7 @@ export function createPatchStatsScreen(options: PatchStatsOptions): PatchStatsSc
   closeTop.addEventListener('click', hide);
 
   return {
-    show: (mapId, userId) => {
+    show: (mapId, userId, warmth) => {
       const mine = (ticket += 1);
       page = null;
       totals.replaceChildren();
@@ -147,7 +164,7 @@ export function createPatchStatsScreen(options: PatchStatsOptions): PatchStatsSc
         .stats(mapId)
         .then((stats) => {
           if (mine !== ticket) return;
-          page = statsPage(stats, userId);
+          page = statsPage(stats, userId, warmth);
           status.textContent = '';
           totals.replaceChildren(...page.totals.map((l) => statItem(l, 'patch-stats-total')));
           list.replaceChildren(...page.keepers.map(keeperItem));
