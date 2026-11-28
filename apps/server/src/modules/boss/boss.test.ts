@@ -1,4 +1,6 @@
 import {
+  GROWTH_RULES,
+  befriendedLevel,
   BattleResponseSchema,
   BossVisitResponseSchema,
   CatalogResponseSchema,
@@ -13,6 +15,7 @@ import {
   BOSS_EVENTS,
   SECRET_SPECIES,
   baseFormOf,
+  bossJoinLevel,
   bossVisitFor,
   bossWeekOf,
   type BossEventRules,
@@ -31,7 +34,7 @@ import { defaultBattleContent } from '../battles/service.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { EVOLUTION_STEPS } from '../care/service.js';
 import { grantItems } from '../inventory/service.js';
-import { BOSS_START, REAL_BAG_IS_REAL, REAL_BAG_RULES, bossHarness } from '../../../tests/boss.js';
+import { REAL_BAG_IS_REAL, REAL_BAG_RULES, bossHarness } from '../../../tests/boss.js';
 import { BossLooksResponseSchema } from './routes.js';
 
 const url = inject('testDatabaseUrl');
@@ -578,6 +581,8 @@ const SURE_REAL: BossEventRules = {
   befriend: { ...REAL_BAG_RULES.befriend, basePercent: 100 },
 };
 const bagIds = REAL_BAG_RULES.bag.map((b) => b.speciesId);
+/** A Monday evening after the Christmas weeks, so a 7-week walk meets no Eve (#37 X3). */
+const WEEKLY_WALK_START = '2027-01-04T19:00:00Z';
 const BOSS_LINE = SECRET_SPECIES.filter((s) => s.line === 'boss');
 
 /*
@@ -662,13 +667,17 @@ describe.skipIf(!url)('the mini-boss switch over the real bag (#234, needs DATAB
 
   it('on: every boss in the bag visits before one comes back', async () => {
     await h.start(REAL_BAG_RULES, { miniBosses: 'on' });
-    const kid = await h.player();
+    // The walk starts in January (#37 X3): from BOSS_START its sixth week is
+    // Christmas Eve's, whose own boss (never in the bag) stands in for the draw.
+    const walkStart = Date.parse(WEEKLY_WALK_START);
+    h.clock.setTime(walkStart);
+    const kid = await h.player(new Date(walkStart + 90 * 24 * 3_600_000));
     const mapId = await h.patch(kid);
     await h.grow(mapId, kid, 20);
     // A shuffle bag per cycle: any 2n − 1 weeks in a row hold one whole cycle.
     const weeks = 2 * bagIds.length - 1;
     for (let week = 0; week < weeks; week++) {
-      h.clock.setTime(Date.parse(BOSS_START) + week * WEEK_MS);
+      h.clock.setTime(walkStart + week * WEEK_MS);
       await h.toVisit(mapId, REAL_BAG_RULES);
       expect(await h.sweep([mapId])).toBe(1);
     }
@@ -723,6 +732,44 @@ describe.skipIf(!url)('the mini-boss switch over the real bag (#234, needs DATAB
       where: (t, { eq }) => eq(t.id, squishyId),
     });
     expect(friend?.speciesId).toBe(baseFormOf(bossId, EVOLUTION_STEPS));
+  });
+
+  it('the Christmas Eve boss befriends as Bundlebit, held below its growing-up level (#37 X3)', async () => {
+    // A test-only bag of Snowbundle: the same befriend path the Eve's asks take.
+    const snowOnly: BossEventRules = {
+      ...SURE_REAL,
+      bag: [{ speciesId: 'snowbundle', terrains: REAL_BAG_RULES.christmasEve!.terrains }],
+    };
+    await h.start(snowOnly, { miniBosses: 'on' });
+    const kid = await h.player();
+    const mapId = await h.patch(kid);
+    await h.grow(mapId, kid, 20);
+    await h.toVisit(mapId, snowOnly);
+    const started = await h.fight(kid, mapId);
+    expect((await windowsOf(mapId))[0]!.speciesId).toBe('snowbundle');
+    const won = await h.playOut(kid, started);
+    expect(won.view.phase).toMatchObject({ type: 'over', result: { winner: 'a' } });
+    await grantItems(db, { mapId, userId: kid.id }, { 'heart-charm': 3 }, 'dev-grant');
+    const yes = await h.call('POST', `/battles/${won.id}/befriend`, kid, { ask: 1 });
+    expect(yes.statusCode, yes.body).toBe(200);
+    const { squishyId } = yes.json<{ squishyId: string }>();
+    const friend = await db.query.squishies.findFirst({
+      where: (t, { eq }) => eq(t.id, squishyId),
+    });
+    expect(friend?.speciesId).toBe('bundlebit');
+    expect(friend!.level).toBe(
+      befriendedLevel(
+        'bundlebit',
+        bossJoinLevel(snowOnly.befriend, 20),
+        EVOLUTION_STEPS,
+        GROWTH_RULES,
+      ),
+    );
+    // Bundlebit grows into Snowbundle at 50 (owner yes): a join that high is held
+    // `befriendBelowEvolution` under it, so it always has the growing-up ahead.
+    expect(befriendedLevel('bundlebit', 50, EVOLUTION_STEPS, GROWTH_RULES)).toBe(
+      50 - GROWTH_RULES.befriendBelowEvolution!,
+    );
   });
 
   it('a fight already going still finishes after the switch closes, and can still befriend', async () => {

@@ -23,6 +23,8 @@ const LINES: readonly (readonly [string, string, string])[] = [
   ['snowpop', 'frostpop', 'papa-brrr'],
   ['zoomlet', 'revvy', 'rickeyride'],
 ];
+/** The Christmas Eve BIG squishy (#37 X3): its befriend form, then its boss form. */
+const EVE = ['bundlebit', 'snowbundle'] as const;
 
 const byId = new Map(BOSS_SPECIES.map((s) => [s.id, s]));
 const get = (id: string) => {
@@ -46,7 +48,7 @@ const secretWords = [...BOSS_SPECIES, ...BOSS_MOVES].flatMap((r) => [r.id, r.nam
 
 describe('mini-boss species (#234)', () => {
   it('ships four lines of three: base and middle legendary, the boss mythic', () => {
-    expect(BOSS_SPECIES.map((s) => s.id).sort()).toEqual(LINES.flat().slice().sort());
+    expect(BOSS_SPECIES.map((s) => s.id).sort()).toEqual([...LINES.flat(), ...EVE].sort());
     for (const [base, middle, boss] of LINES) {
       expect([base, middle, boss].map((id) => get(id).rarity)).toEqual([
         'legendary',
@@ -201,6 +203,7 @@ describe('mini-boss species (#234)', () => {
       'stink-bomb',
       'lawnmower-rumble',
       'drift-spin',
+      'snow-puff-flop',
     ]);
   });
 
@@ -236,5 +239,105 @@ describe('mini-boss species (#234)', () => {
       ...GAME_DATA.moves,
     ].map((r) => r.id);
     expect(publicIds.filter((id) => secretWords.some((word) => id.includes(word)))).toEqual([]);
+  });
+});
+
+describe('the Christmas Eve BIG squishy (#37 X3)', () => {
+  const [befriendForm, bossForm] = EVE;
+  const eve = BOSS_EVENTS.christmasEve;
+
+  it('visits on Christmas Eve only, never from the weekly bag', () => {
+    expect(eve?.speciesId).toBe(bossForm);
+    expect(BOSS_EVENTS.bag.map((e) => e.speciesId)).not.toContain(bossForm);
+    expect(BOSS_EVENTS.bag.map((e) => e.speciesId)).not.toContain(befriendForm);
+  });
+
+  it('is a frost · sleepy boss line, server-only and hidden until met', () => {
+    for (const id of EVE) {
+      expect(get(id)).toMatchObject({ element: 'frost', feeling: 'sleepy', line: 'boss' });
+      expect(hiddenUntilSeen(get(id)), id).toBe(true);
+      expect(SECRET_SPECIES).toContain(get(id));
+    }
+  });
+
+  it('joins as Bundlebit, which can grow into Snowbundle at 50 (owner question)', () => {
+    expect(BOSS_EVOLUTIONS.filter((e) => EVE.includes(e.from as (typeof EVE)[number]))).toEqual([
+      { from: befriendForm, into: bossForm, level: 50 },
+    ]);
+    expect(baseFormOf(bossForm, steps)).toBe(befriendForm);
+    expect(baseFormOf(befriendForm, steps)).toBe(befriendForm);
+  });
+
+  it('never wears the shimmer (#866): legendary, iridescent, by the art rules', () => {
+    for (const id of EVE) {
+      expect(get(id).rarity, id).toBe('legendary');
+      expect(get(id).visual.finish, id).toBe(ART_RULES.finishByRarity.legendary);
+      expect(get(id).visual.finish, id).not.toBe('shimmer');
+    }
+  });
+
+  it('lights only its crown (or bead): one accent part, and that part glows', () => {
+    for (const id of EVE) {
+      const { visual } = get(id);
+      expect(visual.glow, id).toBe('accent');
+      const accents = visual.parts.filter((p) => registry.parts.get(p)?.color === 'accent');
+      expect(accents, id).toHaveLength(1);
+    }
+    // The cranberry cap (Bundlebit) and cap band (Snowbundle) are the detail colour: never lit.
+    expect(get(befriendForm).visual.parts).toContain('acorn-cup');
+    expect(get(bossForm).visual.parts).toContain('fringe');
+    for (const part of ['acorn-cup', 'fringe']) {
+      expect(registry.parts.get(part)?.color, part).toBe('detail');
+    }
+  });
+
+  it('reads apart from Papa Brrr by shape, accent and finish (the ice-blue body hue is shared)', () => {
+    const brrr = get('papa-brrr').visual;
+    const snow = get(bossForm).visual;
+    // The two tiers: a wide, low base with a round head sat on it (the brief's gumdrop on a pillow).
+    expect(snow.body).toBe('mochi');
+    expect(snow.head?.body).toBe('orb');
+    expect(snow.body).not.toBe(brrr.body);
+    // None of the dad's signature parts.
+    for (const part of ['moustache', 'ball-cap', 'cap-brim', 'sneakers', 'dad-arms']) {
+      expect(snow.parts, part).not.toContain(part);
+    }
+    // A gold accent (the lit crown) where his is red; the cranberry is the detail colour.
+    expect(snow.palette[2]).toBe('#ffd25a');
+    expect(brrr.palette[2]).toBe('#e2574c');
+    expect(snow.palette[3]).toBe('#d9485a');
+    expect(snow.finish).toBe('iridescent');
+    expect(brrr.finish).toBe('shimmer');
+  });
+
+  it('is the bigger one, inside the evolution scale', () => {
+    const { min, max } = ART_RULES.evolutionScale;
+    const ratio = (get(bossForm).visual.size ?? 1) / (get(befriendForm).visual.size ?? 1);
+    expect(ratio).toBeGreaterThanOrEqual(min);
+    expect(ratio).toBeLessThanOrEqual(max);
+  });
+
+  it('keeps its stats in the bands: the befriend form a base, the boss form tuned at the Eve floor', () => {
+    expect(total(befriendForm)).toBeGreaterThanOrEqual(260);
+    expect(total(befriendForm)).toBeLessThanOrEqual(290);
+    // Tuned at the Eve floor (level 10), so under the weekly bosses' 340–440.
+    expect(total(bossForm)).toBeGreaterThanOrEqual(290);
+    expect(total(bossForm)).toBeLessThanOrEqual(440);
+    // Every stat grows from the befriend form, like a boss line's steps.
+    for (const stat of ['hp', 'attack', 'defense', 'speed'] as const) {
+      expect(get(bossForm).baseStats[stat], stat).toBeGreaterThan(
+        get(befriendForm).baseStats[stat],
+      );
+    }
+  });
+
+  it('signs off with Big Chilly Sneeze: frost + windup, a pair no other boss uses', () => {
+    const sneeze = BOSS_MOVES.find((m) => m.id === 'big-chilly-sneeze');
+    expect(sneeze).toMatchObject({ element: 'frost', effects: [{ type: 'windup' }] });
+    expect(get(bossForm).moves).toContain('big-chilly-sneeze');
+    const others = BOSS_MOVES.filter(
+      (m) => m.id !== 'big-chilly-sneeze' && m.element === 'frost',
+    ).flatMap((m) => (m.effects ?? []).map((e) => e.type));
+    expect(others).not.toContain('windup');
   });
 });
