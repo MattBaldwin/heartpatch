@@ -24,7 +24,7 @@ describe('the Patch Tree rules (#37 2c)', () => {
     expect(ornamentSourceOf([])).toBe('gift');
   });
 
-  it('orders a warmth pair the way Postgres orders its uuids', () => {
+  it('orders a warmth pair by its lowercase ids (the order the DB CHECK uses; the DB tests hit it)', () => {
     const a = '0a1b2c3d-0000-4000-8000-000000000000';
     const b = 'f0000000-0000-4000-8000-000000000000';
     expect(orderedPair(b, a)).toEqual([a, b]);

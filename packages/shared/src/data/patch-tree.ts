@@ -1,4 +1,5 @@
 import type { OrnamentSource } from '../schemas/christmas.js';
+import { PRESENT_ITEM } from '../schemas/data/advent.js';
 
 /** The Patch Tree's tunables (#37 2c, owner answer 5). Checked by `patch-tree.test.ts`. */
 export interface PatchTreeRules {
@@ -27,5 +28,5 @@ export const PATCH_TREE: PatchTreeRules = {
     gift: 1, // TUNE:
     'present-gift': 2, // TUNE: plan §3, "doubles warmth"
   },
-  presentItemId: 'presents',
+  presentItemId: PRESENT_ITEM,
 };

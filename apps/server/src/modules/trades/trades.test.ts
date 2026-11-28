@@ -42,8 +42,10 @@ import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
 import { createWardrobeRepo, insertClothing, WORN } from '../wardrobe/repo.js';
+import { createTreeRepo } from '../tree/repo.js';
 import { treePostOf } from '../tree/service.js';
 import { createTradesRepo } from './repo.js';
+import { createTradesService } from './service.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -1299,31 +1301,128 @@ describe.skipIf(!url)('trades, gifts and the mailbox (#271, needs DATABASE_URL)'
       expect(await treeEvents(mapId)).toEqual([]);
     });
 
-    it('hangs every ornament when two pickups land at once (one tree row, locked)', async () => {
+    it('adds up several gifts in one pickup, lighting the star on the one that crosses it', async () => {
       clock.setTime(Date.parse(DECEMBER));
       const server = await start();
       const [lee, sam, kai] = [await player(), await player(), await player()];
       const { mapId, postOf } = await patch(server, lee, sam, kai);
-      await viewOf(server, mapId, lee);
-      await grant(mapId, lee, { timber: 2 });
-      for (const to of [sam, kai]) {
-        const sent = await offer(server, mapId, lee, postOf(lee), {
+      await viewOf(server, mapId, lee); // plants it
+      await db.execute(
+        `update patch_trees set ornaments = ${String(PATCH_TREE.starAt - 2)} where map_id = '${mapId}'`,
+      );
+      await grant(mapId, lee, { timber: 1 });
+      await grant(mapId, kai, { [PATCH_TREE.presentItemId]: 1 });
+      for (const [from, give] of [
+        [lee, [{ kind: 'item', itemId: 'timber', quantity: 1 }]],
+        [kai, [{ kind: 'item', itemId: PATCH_TREE.presentItemId, quantity: 1 }]],
+      ] as const) {
+        const sent = await offer(server, mapId, from, postOf(from), {
           kind: 'gift',
-          toUserId: to.id,
-          give: [{ kind: 'item', itemId: 'timber', quantity: 1 }],
+          toUserId: sam.id,
+          give: [...give],
           want: [],
         });
         expect(sent.statusCode, sent.body).toBe(201);
       }
-      const picked = await Promise.all(
-        [sam, kai].map((to) =>
-          call(server, 'POST', `/maps/${mapId}/mailbox/pickup`, to, postOf(to)),
-        ),
+      // Sam picks both up in one tap.
+      const picked = await call(server, 'POST', `/maps/${mapId}/mailbox/pickup`, sam, postOf(sam));
+      expect(picked.statusCode, picked.body).toBe(200);
+      const total =
+        PATCH_TREE.starAt - 2 + PATCH_TREE.ornaments.gift + PATCH_TREE.ornaments['present-gift'];
+      const tree = await treeRow(mapId);
+      expect(tree?.ornaments).toBe(total);
+      expect(tree?.starLitAt?.getTime()).toBe(Date.parse(DECEMBER));
+      // One event per gift, each total running on from the last (offer-id order),
+      // and exactly one lights the star: the one that crosses it.
+      const decorated = (await treeEvents(mapId)).map((e) => e.payload);
+      expect(decorated).toHaveLength(2);
+      let running = PATCH_TREE.starAt - 2;
+      for (const d of decorated) {
+        running += d.added;
+        expect(d.ornaments).toBe(running);
+        expect(d.starLit).toBe(
+          d.ornaments >= PATCH_TREE.starAt && d.ornaments - d.added < PATCH_TREE.starAt,
+        );
+      }
+      expect(decorated.filter((d) => d.starLit)).toHaveLength(1);
+      expect(decorated.map((d) => d.source).sort()).toEqual(['gift', 'present-gift']);
+      // Two pairs, each warmed by its own gift.
+      const warmth = new Map(
+        (await warmthRows(mapId)).map((w) => [[w.userAId, w.userBId].join(':'), w.warmth]),
       );
-      expect(picked.map((r) => r.statusCode)).toEqual([200, 200]);
+      expect(warmth).toEqual(
+        new Map([
+          [[lee.id, sam.id].sort().join(':'), PATCH_TREE.warmth.gift],
+          [[kai.id, sam.id].sort().join(':'), PATCH_TREE.warmth['present-gift']],
+        ]),
+      );
+    });
+
+    it('counts every ornament when pickups on the same pair and map views land at once, tree unplanted', async () => {
+      clock.setTime(Date.parse(DECEMBER));
+      const server = await start();
+      const [lee, sam] = [await player(), await player()];
+      const { mapId, postOf } = await patch(server, lee, sam);
+      await grant(mapId, lee, { timber: 1 });
+      await grant(mapId, sam, { stone: 1 });
+      // Each way at once: both pickups write the one pair row and plant the tree.
+      for (const [from, to, itemId] of [
+        [lee, sam, 'timber'],
+        [sam, lee, 'stone'],
+      ] as const) {
+        const sent = await offer(server, mapId, from, postOf(from), {
+          kind: 'gift',
+          toUserId: to.id,
+          give: [{ kind: 'item', itemId, quantity: 1 }],
+          want: [],
+        });
+        expect(sent.statusCode, sent.body).toBe(201);
+      }
+      expect(await treeRow(mapId)).toBeNull();
+      const results = await Promise.all([
+        call(server, 'POST', `/maps/${mapId}/mailbox/pickup`, sam, postOf(sam)),
+        call(server, 'POST', `/maps/${mapId}/mailbox/pickup`, lee, postOf(lee)),
+        call(server, 'GET', `/maps/${mapId}/view`, lee),
+        call(server, 'GET', `/maps/${mapId}/view`, sam),
+      ]);
+      expect(results.map((r) => r.statusCode)).toEqual([200, 200, 200, 200]);
+      expect(
+        await db.query.patchTrees.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) }),
+      ).toHaveLength(1);
       expect((await treeRow(mapId))?.ornaments).toBe(2);
       expect((await treeEvents(mapId)).map((e) => e.payload.ornaments).sort()).toEqual([1, 2]);
-      expect(await warmthRows(mapId)).toHaveLength(2);
+      expect(await warmthRows(mapId)).toMatchObject([{ warmth: 2 }]);
+      expect(await warmthRows(mapId)).toHaveLength(1);
+    });
+
+    it('rolls the ornaments and warmth back with the pickup', async () => {
+      clock.setTime(Date.parse(DECEMBER));
+      const server = await start();
+      const [lee, sam] = [await player(), await player()];
+      const { mapId, postOf } = await patch(server, lee, sam);
+      await viewOf(server, mapId, lee);
+      await grant(mapId, lee, { timber: 1 });
+      const sent = await offer(server, mapId, lee, postOf(lee), {
+        kind: 'gift',
+        toUserId: sam.id,
+        give: [{ kind: 'item', itemId: 'timber', quantity: 1 }],
+        want: [],
+      });
+      const giftId = tradesOf(sent).offers.find((o) => o.kind === 'gift')!.id;
+      // The pickup runs, then its caller's transaction fails after it.
+      await expect(
+        withTransaction(db, async (tx) => {
+          await createTradesService({ db: tx, clock: () => clock }).pickup(sam, mapId, postOf(sam));
+          expect((await createTreeRepo(tx).findTree(mapId))?.ornaments).toBe(1);
+          throw new Error('after the pickup');
+        }),
+      ).rejects.toThrow('after the pickup');
+      expect((await treeRow(mapId))?.ornaments).toBe(0);
+      expect(await warmthRows(mapId)).toEqual([]);
+      expect(await treeEvents(mapId)).toEqual([]);
+      expect(
+        (await db.query.tradeOffers.findFirst({ where: (t, { eq }) => eq(t.id, giftId) }))!.status,
+      ).toBe('open');
     });
 
     it('hangs nothing on, and shows no, tree whose post is on another patch', async () => {

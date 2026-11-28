@@ -443,4 +443,40 @@ describe.skipIf(!url)('computer patch-mates trade and gift (#386d, needs DATABAS
     // A made thing that went home lands in no bag.
     expect(await bag(p.mapId, trader)).toEqual({});
   });
+  it('in December, a gift either way with a mate hangs an ornament and warms the pair (#37 2c)', async () => {
+    // Last in the file: it moves the shared clock into December (Chicago).
+    at = new Date('2026-12-01T17:00:00Z');
+    const p = await soloPatch();
+    const [taker, giver] = [p.mateIds[0]!, p.mateIds[1]!];
+    const pairOf = (mate: string) => [p.kid.id, mate].sort() as [string, string];
+    const tree = async () =>
+      db.query.patchTrees.findFirst({ where: (t, { eq }) => eq(t.mapId, p.mapId) });
+    const warmthWith = async (mate: string) => {
+      const [a, b] = pairOf(mate);
+      return (
+        await db.query.keeperWarmth.findFirst({
+          where: (t, { and, eq }) => and(eq(t.mapId, p.mapId), eq(t.userAId, a), eq(t.userBId, b)),
+        })
+      )?.warmth;
+    };
+    // A mate picks up the kid's gift inside its step's savepoint.
+    await kidOffers(p, taker, [item('timber', 5)], [], 'gift');
+    expect(await stepAt(ANSWER_ONLY, taker, new Date(at.getTime() + 40 * MINUTE_MS))).toMatchObject(
+      {
+        intent: 'answer-offer',
+        applied: true,
+      },
+    );
+    expect((await tree())?.ornaments).toBe(1);
+    expect(await warmthWith(taker)).toBe(1);
+    // The kid picks up a mate's gift at the post.
+    expect(await stepAt(GIFT_ONLY, giver)).toMatchObject({ intent: 'gift', applied: true });
+    await trades().pickup(p.kid, p.mapId, p.post);
+    expect((await tree())?.ornaments).toBe(2);
+    expect(await warmthWith(giver)).toBe(1);
+    const decorated = (
+      await db.query.gameEvents.findMany({ where: (t, { eq }) => eq(t.mapId, p.mapId) })
+    ).filter((e) => e.type === 'tree.decorated');
+    expect(decorated).toHaveLength(2);
+  });
 });

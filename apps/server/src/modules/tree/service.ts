@@ -1,6 +1,7 @@
 import {
   GAME_DATA,
   hexDistance,
+  hexKey,
   PATCH_TREE,
   tradingPostLabels,
   type MapViewChristmas,
@@ -76,9 +77,7 @@ export function orderedPair(x: string, y: string): [string, string] {
 function postOfTree(tree: PatchTreeDbRow, posts: readonly TreePostRow[]) {
   const post = posts.find((p) => p.id === tree.postTileId);
   if (!post) return null;
-  const index = tradingPostLabels(posts, GAME_DATA.mapGen.tradingPosts).get(
-    `${String(post.q)},${String(post.r)}`,
-  )?.index;
+  const index = tradingPostLabels(posts, GAME_DATA.mapGen.tradingPosts).get(hexKey(post))?.index;
   return index === undefined ? null : { post, index };
 }
 
@@ -120,8 +119,8 @@ export async function treeViewFor(
   const at = tree ? postOfTree(tree, posts) : null;
   const warmth = pairs
     .map((p) => ({ userId: p.userAId === userId ? p.userBId : p.userAId, warmth: p.warmth }))
-    .filter((w) => w.userId !== userId && memberIds.has(w.userId))
-    .sort((a, b) => (a.userId < b.userId ? -1 : 1));
+    .filter((w) => memberIds.has(w.userId))
+    .sort((a, b) => (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0));
   return {
     ...(tree && at
       ? {
@@ -175,6 +174,7 @@ export async function decorateForGifts(
   const posts = await repo.listPosts(mapId);
   if (!(await repo.findTree(mapId))) {
     const post = treePostOf(posts);
+    // No post on this patch, so no tree: the warmth above still counts.
     if (!post) return;
     await repo.plant(mapId, post.id, at);
   }
