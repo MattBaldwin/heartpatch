@@ -166,6 +166,17 @@ export function frameDistance(
 }
 
 /**
+ * How far a fighter's roll sweeps its height sideways (#190 PR 6b): a friend
+ * rolled over by an act (a flop, a knockback roll) or lying knocked down
+ * widens its fit radius, so the row's ends stay on screen. Only while
+ * `acting`: the idle sway rolls too, and counting it would pump the camera in
+ * and out in every battle.
+ */
+export function rollReach(roll: number, height: number, scale: number, acting: boolean): number {
+  return acting ? Math.abs(Math.sin(roll)) * height * Math.max(0, scale) : 0;
+}
+
+/**
  * The arena fog for a shot `distance` back (#234): the mood's own fog
  * (`base`, start and end) at the usual framing distance or closer, pushed back
  * by however far past `fogReference` the camera sits, so the fighters' ground

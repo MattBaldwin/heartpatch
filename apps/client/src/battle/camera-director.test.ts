@@ -14,6 +14,7 @@ import {
   fogFor,
   frameDistance,
   holdDrop,
+  rollReach,
   shakeOffset,
   shortBand,
   slideWant,
@@ -157,6 +158,36 @@ describe('a boss fight on a notched iPhone (#234)', () => {
   });
 });
 
+describe('rollReach (#190 PR 6b review)', () => {
+  it("never widens a standing fighter's fit for its idle sway, so a 1-v-1 phone camera holds still", () => {
+    const height = 2.7;
+    let swayed = 0;
+    for (const feeling of Object.keys(FEELING_TRAITS) as (keyof typeof FEELING_TRAITS)[]) {
+      const distances = new Set<number>();
+      let rolled = 0;
+      for (let now = 0; now <= 6000; now += 1000 / 60) {
+        const pose = readyPose(now, 0.4, feeling, false);
+        rolled = Math.max(rolled, Math.abs(pose.roll));
+        const idle = fit.map((f) => ({
+          ...f,
+          r: f.r + rollReach(pose.roll, height, pose.scale, false),
+        }));
+        distances.add(frameDistance(390 / 844, safe, idle).distance);
+      }
+      expect(distances.size, feeling).toBe(1);
+      swayed = Math.max(swayed, rolled);
+    }
+    // The sway does roll (cozy about 0.1 rad), so widening on every roll would pump the camera.
+    expect(swayed).toBeGreaterThan(0.05);
+  });
+
+  it("widens a fighter rolled over by an act by its height's sideways sweep", () => {
+    expect(rollReach(Math.PI / 2, 2.7, 1, true)).toBeCloseTo(2.7, 9);
+    expect(rollReach(-Math.PI / 2, 2.7, 0.5, true)).toBeCloseTo(1.35, 9);
+    expect(rollReach(Math.PI / 2, 2.7, 1, false)).toBe(0);
+    expect(rollReach(Math.PI / 2, 2.7, -0.2, true)).toBe(0);
+  });
+});
 describe('fogFor', () => {
   it("keeps the mood's own fog at the usual framing distance or closer", () => {
     expect(fogFor([25, 85], 30)).toEqual([25, 85]);

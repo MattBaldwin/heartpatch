@@ -58,6 +58,7 @@ import {
   cameraFor,
   CameraDirector,
   fogFor,
+  rollReach,
   type CameraShot,
   type FacePoint,
   type FitPoint,
@@ -1254,7 +1255,7 @@ export class BattleScene {
       strength: cue.strength,
       feeling: rig.out?.feeling ?? 'cozy',
       reduced: this.#options.reducedMotion,
-      ...(rig.boss && { steady: true }),
+      steady: rig.boss,
     };
   }
 
@@ -1438,7 +1439,14 @@ export class BattleScene {
         here.x = rig.root.position.x;
         here.z = rig.root.position.z;
         // A friend rolled over (a flop) sweeps its height sideways: the row's ends stay on screen (#190 PR 6b).
-        here.r = r + Math.abs(Math.sin(rig.pose.roll)) * (rig.out?.height ?? 2) * rig.pose.scale;
+        here.r =
+          r +
+          rollReach(
+            rig.pose.roll,
+            rig.out?.height ?? 2,
+            rig.pose.scale,
+            rig.act !== null || rig.down,
+          );
         here.h = h + Math.max(0, rig.pose.lift);
       }
     }
