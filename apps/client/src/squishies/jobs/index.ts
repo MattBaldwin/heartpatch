@@ -71,6 +71,8 @@ export interface Jobs {
   loadView: (mapId: string) => void;
   /** Calls `listener` with every fresh jobs view (a job changed, the board opened). */
   onView: (listener: (mapId: string, view: JobsView) => void) => void;
+  /** The newest jobs view of this map that reached `onView`, or null (#912: the guard picker). */
+  viewOf: (mapId: string) => JobsView | null;
   readonly isOpen: boolean;
   readonly debug: JobsDebug;
 }
@@ -117,7 +119,10 @@ export function createJobs(options: JobsOptions): Jobs {
     load: loadView,
     ...(options.invalidate ? { invalidate: options.invalidate } : {}),
   });
+  /** The newest view per map, for `viewOf`; it goes with the player. */
+  const latest = new Map<string, JobsView>();
   feed.listen((mapId, view) => {
+    latest.set(mapId, view);
     gatherers.setMine(mapId, view);
   });
 
@@ -144,6 +149,7 @@ export function createJobs(options: JobsOptions): Jobs {
       if (changed) {
         // Another player (or none): the last one's moods go, and so does anything still on its way.
         feed.reset();
+        latest.clear();
         gatherers.forget();
       }
       if (!user) jobs.close();
@@ -233,6 +239,7 @@ export function createJobs(options: JobsOptions): Jobs {
     gatherers,
     loadView,
     onView: feed.listen,
+    viewOf: (mapId) => latest.get(mapId) ?? null,
     get isOpen() {
       return board.isOpen || picker.isOpen;
     },
