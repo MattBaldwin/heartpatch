@@ -54,11 +54,29 @@
   visibility: hidden;
 }
 
-/* The thank-you gift and the wait for it have their own slot, a line under the toast spot
-   (patch line, land chip), and stay clear of the side trays' handles, so nothing covers them. */
+/* The thank-you gift and the wait for it share one stack top, a line under the toast spot
+   (patch line), and stay clear of the side trays' handles. Like land.css's stranded card, the
+   stack steps down below the land chip (164px, about 66px tall) and the cut-off card (212px,
+   two lines) when they show, so nothing overlaps them. */
+:root {
+  --eve-stack-top: 224px;
+}
+
+:root:has(.land-chip:not([hidden])) {
+  --eve-stack-top: 240px;
+}
+
+:root:has(.land-stranded:not([hidden])) {
+  --eve-stack-top: 296px;
+}
+
+:root:has(.land-stranded:not([hidden])):has(.land-chip:not([hidden]):not(.land-stranded)) {
+  --eve-stack-top: 320px;
+}
+
 .eve-gift,
 .eve-wait {
-  top: calc(env(safe-area-inset-top) + 224px);
+  top: calc(env(safe-area-inset-top) + var(--eve-stack-top));
   max-width: calc(100vw - 208px);
 }
 
