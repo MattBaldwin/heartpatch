@@ -1,0 +1,136 @@
+import { execSync } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import { expect, test } from './test.js';
+import { tapCanvas } from './claim-land.js';
+import { hook } from './dev-hook.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { realTap } from './touch.js';
+import { trayButton } from './trays.js';
+
+const OUT = process.env['CAPTURE_OUT'] ?? '/tmp/x3-out';
+const PHASE = process.env['CAPTURE_PHASE'] ?? 'night';
+const TZ = 'America/Sao_Paulo';
+const psql = (sql: string): string =>
+  execSync(
+    `PGPASSWORD=postgres psql -h localhost -U postgres heartpatch_x3cap -At -c "${sql}"`,
+  ).toString().trim();
+
+const DEVICE = process.env['CAPTURE_DEVICE'] === 'ipad' ? 'ipad' : 'iphone';
+test.use({
+  viewport: DEVICE === 'ipad' ? { width: 820, height: 1180 } : { width: 393, height: 852 },
+  deviceScaleFactor: 2,
+});
+const HIDE = '.dev-stats-stack,.dev-status{display:none !important}';
+
+interface BossMarker {
+  name: string;
+  known: boolean;
+  x: number;
+  y: number;
+}
+
+test('christmas eve fight capture', async ({ browser }, info) => {
+  test.skip(PHASE === 'gallery');
+  test.setTimeout(600_000);
+  mkdirSync(OUT, { recursive: true });
+  const device = DEVICE;
+  void info;
+  const page = await newPlayer(browser, uniqueName('eve'), undefined, { timezoneId: TZ });
+  if (device === 'iphone') {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp
+      .send('Emulation.setSafeAreaInsetsOverride', {
+        insets: { top: 59, bottom: 34, left: 0, right: 0 },
+      })
+      .catch((e: unknown) => console.log('no safe-area override', String(e)));
+  }
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Frost Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  for (let i = 0; i < 2; i++) {
+    await realTap(await trayButton(page, 'battle-dev-grant'));
+    await expect(page.locator('.battle-entry-note')).toContainText('joined you');
+  }
+  // Grow the whole team in the capture DB only.
+  const mapId = psql('select id from maps order by created_at desc limit 1');
+  psql(`update squishies set level = 20 where map_id = '${mapId}'`);
+  console.log('mapId', mapId, 'team', psql(`select count(*) from squishies where map_id='${mapId}'`));
+
+  // The visit: natural first, else the dev dry run.
+  const visit = async () =>
+    page.evaluate(async (id) => {
+      const res = await fetch(`/api/v1/maps/${id}/boss`);
+      return (await res.json()) as { boss: { state: string; event?: unknown; species: string | null } | null };
+    }, mapId);
+  let v = await visit();
+  console.log('natural visit', JSON.stringify(v));
+  if (!v.boss) {
+    const res = await page.evaluate(async (id) => {
+      const r = await fetch(`/api/v1/maps/${id}/dev/christmas-eve-now`, {
+        method: 'POST',
+        headers: { 'x-requested-with': 'heartpatch' },
+      });
+      return `${String(r.status)} ${await r.text()}`;
+    }, mapId);
+    console.log('christmas-eve-now', res);
+    v = await visit();
+    console.log('after dry run', JSON.stringify(v));
+  }
+  await page.goto('/?tier=high');
+  await page.addStyleTag({ content: HIDE });
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
+  const hint = page.getByTestId('tray-hint-ok');
+  if (await hint.isVisible().catch(() => false)) await hint.tap();
+
+  await expect
+    .poll(async () => (await hook<BossMarker>(page, 'boss'))?.name, { timeout: 60_000 })
+    .toBeTruthy();
+  const panel = page.getByTestId('tile-panel');
+  await expect(async () => {
+    const now = (await hook<BossMarker>(page, 'boss'))!;
+    await tapCanvas(page, now.x, now.y);
+    await expect(panel.getByTestId('boss-card')).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 60_000 });
+  await realTap(panel.getByTestId('boss-fight'));
+  await expect(page.getByTestId('boss-strip')).toBeVisible({ timeout: 60_000 });
+  // Entrance plays and goes.
+  await page.waitForTimeout(500);
+  await expect
+    .poll(async () => ((await hook<{ entrance: unknown }>(page, 'battle'))?.entrance ?? null) === null, {
+      timeout: 30_000,
+    })
+    .toBe(true);
+  await expect(page.getByTestId('boss-picker')).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(3000);
+  await page.screenshot({ path: `${OUT}/${device}-${PHASE}-01-fight.png` });
+  await realTap(page.getByTestId('boss-picker').getByTestId('boss-move').first());
+  await page.waitForTimeout(3500);
+  await page.screenshot({ path: `${OUT}/${device}-${PHASE}-02-fight-after-pick.png` });
+  const state = await hook<unknown>(page, 'battle');
+  console.log('battle', JSON.stringify(state).slice(0, 600));
+  console.log('quality', JSON.stringify(await hook<unknown>(page, 'quality')).slice(0,300));
+  console.log('boss name', await page.getByTestId('boss-name').innerText());
+});
+
+test('gallery capture', async ({ browser }) => {
+  test.skip(PHASE !== 'gallery');
+  test.setTimeout(400_000);
+  mkdirSync(OUT, { recursive: true });
+  const page = await newPlayer(browser, uniqueName('gal'), undefined, { timezoneId: TZ });
+  if (DEVICE === 'iphone') {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+      insets: { top: 59, bottom: 34, left: 0, right: 0 },
+    });
+  }
+  const shots: [string, string][] = JSON.parse(process.env['CAPTURE_SHOTS'] ?? '[]');
+  for (const [name, query] of shots) {
+    await page.goto(`/gallery.html?bosses&${query}`);
+    await page.addStyleTag({ content: HIDE + '.gallery-panel{display:none !important}' });
+    await page.waitForTimeout(12_000);
+    await page.screenshot({ path: `${OUT}/${DEVICE}-${name}.png` });
+    console.log('shot', name, await page.title());
+  }
+});
