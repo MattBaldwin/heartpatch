@@ -512,10 +512,11 @@ export const MILESTONE_TRACKS: MilestoneTrack[] = [
     // (`triesPerDay` on the 24th and the 25th's morning), each one chip.
     // So about 25 advent presents, 8 or 9 bag presents and up to 6 chips.
     // Left out: gifts (`gift.collected`: two kids could pass one Treat back
-    // and forth forever) and the Patch Tree (`tree.decorated`, not built
-    // yet; its lane adds it). Every chip counts, 0 points too: the fight's
-    // card says "You helped!", and the day's tries already cap them. The
-    // goal text names every source
+    // and forth forever). The Patch Tree (#37 2c) counts only the gift that
+    // lights its star (`tree.decorated` with `starLit`, for the giver): once
+    // a patch, so ornaments can't be farmed the same way. Every chip counts,
+    // 0 points too: the fight's card says "You helped!", and the day's tries
+    // already cap them. The goal text names every source
     // (`milestones.test.ts`), and never the Eve's BIG squishy (rule 6).
     id: 'christmas',
     name: 'Christmas',
@@ -527,24 +528,29 @@ export const MILESTONE_TRACKS: MilestoneTrack[] = [
         { eventType: 'advent.claimed', where: [], player: 'userId' },
         { eventType: 'present.opened', where: [], player: 'userId' },
         { eventType: 'boss.chipped', where: [], player: 'userId' },
+        {
+          eventType: 'tree.decorated',
+          where: [{ op: 'equals', field: 'starLit', value: true }],
+          player: 'fromUserId',
+        },
       ],
     },
     tiers: [
       {
         threshold: 5, // TUNE: about the first week of advent
-        goal: 'Open 5 advent or bag presents, or chip in on Christmas Eve.',
+        goal: 'Open 5 advent or bag presents, help on Eve, or light the star.',
         title: { id: 'jingle-pal', name: 'Jingle Pal' },
         coins: 25, // TUNE:
       },
       {
         threshold: 15, // TUNE: mid-December
-        goal: 'Open 15 advent or bag presents, or chip in on Christmas Eve.',
+        goal: 'Open 15 advent or bag presents, help on Eve, or light the star.',
         title: { id: 'cocoa-cuddler', name: 'Cocoa Cuddler' },
         coins: 50, // TUNE:
       },
       {
         threshold: 30, // TUNE: most of advent plus a few bag presents or Eve chips
-        goal: 'Open 30 advent or bag presents, or chip in on Christmas Eve.',
+        goal: 'Open 30 advent or bag presents, help on Eve, or light the star.',
         title: { id: 'merry-helper', name: 'Merry Helper' },
         coins: 100, // TUNE:
         clothing: 'jolly-elf-costume',

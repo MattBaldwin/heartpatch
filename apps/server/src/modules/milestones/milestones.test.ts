@@ -802,7 +802,7 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
     expect(trackOf(await milestones(server, kid), 'halloween')?.progress).toBe(1);
   });
 
-  it('counts advent, bag presents and Eve chips only in the Christmas window (#37)', async () => {
+  it('counts advent, bag presents, Eve chips and the lit star only in the Christmas window (#37)', async () => {
     const server = await start();
     const kid = await player();
     const pal = await player();
@@ -839,6 +839,24 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
           goal: 200,
         },
       },
+      // The Patch Tree (#37 2c): the gift that lights the star counts for its
+      // giver; an ornament that doesn't light it counts for nobody.
+      ...[true, false].map((starLit) => ({
+        mapId,
+        type: 'tree.decorated' as const,
+        actorUserId: pal.id,
+        payload: {
+          offerId: randomUUID(),
+          postTileId: randomUUID(),
+          postIndex: 0,
+          fromUserId: kid.id,
+          toUserId: pal.id,
+          source: 'gift' as const,
+          added: 1,
+          ornaments: starLit ? 12 : 13,
+          starLit,
+        },
+      })),
     ];
     clock = new Date('2026-10-20T12:00:00Z');
     for (const event of december()) await append(event);
@@ -847,7 +865,7 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
     clock = new Date('2026-12-05T12:00:00Z');
     for (const event of december()) await append(event);
     await run(mapId);
-    expect(trackOf(await milestones(server, kid), 'christmas')?.progress).toBe(3);
+    expect(trackOf(await milestones(server, kid), 'christmas')?.progress).toBe(4);
     expect(trackOf(await milestones(server, pal), 'christmas')?.progress).toBe(0);
   });
 
