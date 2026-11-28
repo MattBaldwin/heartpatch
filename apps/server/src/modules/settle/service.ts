@@ -39,8 +39,8 @@ import { createSettleRepo } from './repo.js';
  * crafts, the player's own gathers, and their gatherers' cycles (still capped
  * at `JOB_RULES.work.maxStoredCycles`, or a Rail Depot's `waitingCycles` for
  * a rail-joined gatherer on a Clockwork Isle (#874, ledger reason `depot`);
- * a full gatherer starts again from the settle). One transaction (rule 7), the same ledger rows and events a
- * Collect wrote (`item.crafted`, `resource.gathered`, `work.collected`), and
+ * a full gatherer starts again from the settle). One transaction (rule 7),
+ * the same ledger rows and events a Collect wrote (`item.crafted`, `resource.gathered`, `work.collected`), and
  * a gather's roll for found clothing. Training Grounds XP lands here too
  * (owner decision 2026-10-06: `squishy.trained`, plain XP per hour, capped at
  * `JOB_RULES.training.maxHours`). Crafting Factory batches (#294) bank
