@@ -2810,3 +2810,51 @@ Supervisor 57 (`session_01RAEPnEN2pnmBQBUmbqJXay`) was started fresh by the owne
 - C6 doesn't need C1 (it runs in parallel). `buildings/service.ts` is owned by C2 first, then C3 (R2.3, not the §3 table). C3 has no settle hook: ready research jobs are claimed lazily on read and grant once. The two tech squishies have no scarves (sup 55 answer 12: scarves are a Wardrobe accessory).
 - C0's contract changes over the plan stand: the Windmill is `homestead`; `RailRules` has no `depot` block (waitingCycles sit on Depot levels); `mapGen.clockworkIsle` is `{ island, … }`; there is an extra `wrapping` research node; `requiresResearch` also gates building levels.
 
+
+## Supervisor 58 (2026-11-28)
+
+Supervisor 58 (`session_01RAEPnEtQhE73T3Ju8gFD11`) was started by supervisor 57 at 05:06 UTC and handed off at ~06:30 UTC. Merged: #923, #917, #922, #919.
+
+**Owner ruling**
+- **Blueprint economy (owner, 2026-11-28 ~05:08):** research tier 1 grants **8** Blueprints instead of 6, one-time (not repeatable, so it can't be farmed); Blueprints stay sellable/tradable. C3 makes the data change (`// TUNE:`) and pins it in a test; C6's sim reports the balance against 8.
+
+**Coordinator rulings**
+- **#919 approval carry-over:** APPROVE on 01d29f8 carried to babf446: the only later commits were 2 doc nits (228c266), a main merge whose remerge diff is test pins + the regenerated 0072 journal timestamp + one comment, and a docs-only update-branch.
+- **Known flake with no rerun:** `push.spec.ts:146` failed on #919's bbbdaf1; rerun is 403 for everyone, so sup 58 used update-branch after the next main merge for a fresh run (it passed). No empty commits.
+- **Milestones footer overlap** (sup 56/57 follow-up) is not a bug: the XM WebKit frames show the subtitle in its own row ~25px below the scroll list's clip edge; the "overlap" was a card heading clipped mid-scroll. Lane closed without a PR.
+- **X5b's switch refusal was correct behaviour:** a lane may refuse a handoff message that comes only from the new supervisor; the new supervisor answers with verifiable facts (get_session parent id, old supervisor archived) rather than re-asserting.
+
+## Supervisor 59 (2026-11-28)
+
+Supervisor 59 (`session_01RAEPnHvbFEHhKmvrzRZUuG`) was started by supervisor 58 at 06:25 UTC. Merged: #921, #924.
+
+**Coordinator rulings**
+- **6b-2 boss mouth (#190):** at camera rise cap 3, the middle friend's head hides the boss's mouth in the leaf-burst and drift frames. Accepted as cosmetic: both eyes, the cheeks and the outline stay clear, the caption and sticker already say what happened, and no mouth pose carries game information there.
+- **6b-2 night frames:** a follow-up capture, not a blocker for #925. The fog and the sky dome change at night, so face and HUD contrast still need checking there.
+- **2d lane setup (#37):**
+  - It runs on Opus, per the plan and 2c's handoff, over §6's Sonnet default for client UI.
+  - Tags: `heartpatch:phase-1`, `heartpatch:phase-3`, `heartpatch:lane` and `issue-37`, with no batch tag.
+  - The `map.spec` draw-call ceilings (75/82 on main) may rise only by the measured amount, with the numbers in the PR.
+- **Lane over limits at PR merge:** 2c was past $20 and 200k when #921 merged. Instead of continuing to 2d it posted a Lane handoff, and a fresh lane took 2d (§6).
+
+## Supervisor 60 (2026-11-28)
+
+Supervisor 60 (`session_01RAEPnEJfBWim9YuLkAssUA`) was started by supervisor 59 at 06:55 UTC. Merged: #926. Supervisor 59 and the finished 2c session are archived (auto mode allowed both).
+
+**Coordinator rulings**
+- **C2 split (#874):** C2 split itself at its context limit. **C2a** is lines, power, unpowered intervals, rails in supply and the rail speed-up (`issue-874-c2-power-rails`). **C2b** is Rail Depot banking, handed to a fresh lane through a Lane handoff on #874. **C3 needs only C2a's merge** (its buildings gate places and upgrades the Clockwork rows, including `research` and `depot` kinds). If C2a doesn't make those placeable, C3 adds that in its one-call change and flags it. The cut rule (Depot to Wave 2 if not merged by Nov 29 ~14:00 UTC) now applies to C2b only.
+- **C4 brief:** written to `docs/plans/clockwork-wave-1-briefs/c4.md`. C4 runs on Opus, because a big feature's UI is coded on Opus (§6). It builds against C1's branch, opens its PR only after C1 merges, and builds `line-api.ts` against C2a's contract.
+- **C6 camera fog guard (#927):** `camera-director.test.ts` "far rim as fogged" used the roster's median fighter as its "ordinary team", so four small isle species moved it (0.5487 vs > 0.55). The threshold stays at 0.55. The fixture is pinned to the pre-#874 median (wickwhisker), so new content can't move the guard. It's a fixture-only change, because #925 rewrites much of that file.
+- **C6 "Every Common" milestone (#927):** isle-only species would make the track unreachable off the isle. C6 may edit `milestones.ts` minimally: a public `CLOCKWORK_ISLE_SPECIES` id set (membership isn't secret, because the isle shows them), excluded from `EVERYDAY_COMMON_SPECIES`, with a server test that every species whose spawn tables all name `patchTypes` is in the set. The track's threshold stays the same as on main.
+- **6b-2 at its cost cap (#925):** finish-only orders. Items 3–5 of the render check are answered in the PR body. Item 1 (iPad reshoot with safe-area insets) and item 2 (purple half-sphere in the flinched frames) are still open, and the joining-dim cause is unverified. A fresh lane takes these from the Lane handoff on #925.
+
+## Supervisor 61 (2026-11-28)
+
+Supervisor 61 (`session_01RAEPnEU6hfueSeLBaQoRek`) was started by supervisor 60 at 07:40 UTC. Merged: #927 (C6 tech squishies and the Clockwork sim), #930. Supervisor 60 is archived. Started lane C2b (`session_01RAEPnHWYt5UbApc4X9dF8W`) from C2's Lane handoff on #874.
+
+**Coordinator rulings**
+- **C2b, "rail-joined" (#874):** a gatherer is rail-joined when its work tile is connected by a chain of its owner's rail tiles to the tile holding that owner's Rail Depot. A rail on the work tile alone doesn't count. It reuses C2a's rail spots and reach, not a second algorithm.
+- **C2b, depot naming:** the building kind is `depot` and the building id is `rail-depot`. There's no conflict.
+- **C2b, lost chain before settle:** if a rail-chain tile or the Depot is lost before settle, the banked cycles 5–12 are lost. That's accepted for Wave 1. Wave 2 banks joined gatherers in the `lines/` and `buildings/` take-down paths.
+- **Windmill pace (C6 sim):** `makes.seconds` stays as it is. The row comment changes to 2 Spark Jars an hour at wind 2 (works cycles run at 200 %), because Spark is oversupplied in the sim. The comment fix goes into C6's G5 follow-up data PR.
+- **C4, rail level 2 label:** the label follows the shared data's name ("Tidy rail"), with the hint "Needs the Tidy Rails blueprint first." The brass look stays in the model. A shared `lineRefund` is a follow-up after #931, and C4 keeps a pinned mirror until then.

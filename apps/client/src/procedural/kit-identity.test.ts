@@ -243,7 +243,10 @@ const GOLDEN_SHAPES: Record<'low' | 'high' | 'hero', Record<string, string>> = {
     arc: 'ead50646549b00ab',
   },
 };
-const GOLDEN_ROSTER = 'df66e5c157262849';
+// Re-pinned on purpose by #874 C6: four new species (Gearbit, Cogwhirl,
+// Bulbun, Lanternbun) add their parts to the roster; every existing species'
+// parts are unchanged (was df66e5c157262849).
+const GOLDEN_ROSTER = '6b9fbe3a76bc4aa7';
 
 describe('ring splay and the metal role (#234 round 8)', () => {
   // A leaf-rake fan (round 8's variant B, dropped in round 11) keeps ring `splay` tested.

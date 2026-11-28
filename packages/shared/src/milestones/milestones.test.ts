@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { findAvoidedWords } from '../data/avoided-words.js';
 import { CLOTHING, CLOTHING_BY_ID } from '../data/clothing.js';
 import { EVERYDAY_COMMON_SPECIES, MILESTONE_RULES, MILESTONE_TRACKS } from '../data/milestones.js';
+import { CLOCKWORK_ISLE_SPECIES } from '../data/species-wave-3.js';
 import { SEASONS } from '../data/seasons.js';
 import { SPAWN_TABLES } from '../data/server/spawn-tables.js';
 import { SECRET_SPECIES } from '../data/server/secret-species.js';
@@ -29,9 +30,15 @@ describe('Every Common list (#732 B2)', () => {
     const evolved = new Set(SPECIES.flatMap((s) => s.evolutions.map((e) => e.into)));
     expect(EVERYDAY_COMMON_SPECIES).toEqual(
       SPECIES.filter(
-        (s) => s.rarity === 'common' && s.season === undefined && !evolved.has(s.id),
+        (s) =>
+          s.rarity === 'common' &&
+          s.season === undefined &&
+          !evolved.has(s.id) &&
+          !CLOCKWORK_ISLE_SPECIES.has(s.id),
       ).map((s) => s.id),
     );
+    // #874 C6: the isle's kinds leave the goal where it was on main.
+    expect(EVERYDAY_COMMON_SPECIES).toHaveLength(15);
     expect(EVERYDAY_COMMON_SPECIES.length).toBeGreaterThan(0);
     const secret = new Set(SECRET_SPECIES.map((s) => s.id));
     for (const id of EVERYDAY_COMMON_SPECIES) {
@@ -49,11 +56,25 @@ describe('Every Common list (#732 B2)', () => {
     // A kind that spawns only in a season's window (or never) would make the track unreachable.
     for (const id of EVERYDAY_COMMON_SPECIES) {
       const tables = SPAWN_TABLES.filter((t) => t.entries.some((e) => e.species === id));
+      // …and on every patch type: an isle-only table (#874) doesn't count.
       expect(
-        tables.some((t) => t.season === undefined),
+        tables.some((t) => t.season === undefined && t.patchTypes === undefined),
         id,
       ).toBe(true);
     }
+  });
+
+  // #874 C6: a kind found only on some patch types (every table it's in
+  // names `patchTypes`) is an isle kind, so the public set can't drift.
+  it('lists every isle-only kind in CLOCKWORK_ISLE_SPECIES', () => {
+    const spawned = new Set(SPAWN_TABLES.flatMap((t) => t.entries.map((e) => e.species)));
+    const isleOnly = [...spawned].filter((id) =>
+      SPAWN_TABLES.filter((t) => t.entries.some((e) => e.species === id)).every(
+        (t) => t.patchTypes !== undefined,
+      ),
+    );
+    expect(isleOnly.length).toBeGreaterThan(0);
+    for (const id of isleOnly) expect(CLOCKWORK_ISLE_SPECIES.has(id), id).toBe(true);
   });
 });
 
@@ -338,14 +359,30 @@ describe('milestoneCredits', () => {
       expect(credits(type, payload), type).toEqual([]);
       expect(credits(type, payload, ['thanksgiving']), type).toEqual([]);
     }
-    // Left out on purpose (see the track's comment): gifts and the Patch Tree.
+    // Left out on purpose (see the track's comment): gifts.
     const gift = { offerId: KID, fromUserId: PAL, toUserId: KID };
     expect(credits('gift.collected', gift, ['christmas'])).toEqual([]);
+    // The Patch Tree (#37 2c): only the gift that lights the star, for its giver.
+    const decorated = (starLit: boolean) => ({
+      offerId: PAL,
+      postTileId: PAL,
+      postIndex: 0,
+      fromUserId: KID,
+      toUserId: PAL,
+      source: 'gift',
+      added: 1,
+      ornaments: 12,
+      starLit,
+    });
+    expect(credits('tree.decorated', decorated(true), ['christmas'])).toEqual([step]);
+    expect(credits('tree.decorated', decorated(false), ['christmas'])).toEqual([]);
+    expect(credits('tree.decorated', decorated(true))).toEqual([]);
     expect(track('christmas').progress).toMatchObject({
       sources: [
         { eventType: 'advent.claimed' },
         { eventType: 'present.opened' },
         { eventType: 'boss.chipped' },
+        { eventType: 'tree.decorated' },
       ],
     });
   });
@@ -377,7 +414,8 @@ describe('milestoneCredits', () => {
     const named: Record<string, RegExp> = {
       'advent.claimed': /\badvent\b/i,
       'present.opened': /\bbag\b/i,
-      'boss.chipped': /\bchip in on Christmas Eve\b/,
+      'boss.chipped': /\bhelp on Eve\b/,
+      'tree.decorated': /\blight the star\b/,
     };
     const christmas = track('christmas');
     if (christmas.progress.from !== 'events') throw new Error('christmas counts events');

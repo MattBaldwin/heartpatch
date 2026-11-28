@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import recorded from '../../tests/fixtures/replay-pre-190.json' with { type: 'json' };
 import { BATTLE_RULES } from '../data/battle.js';
 import { GAME_DATA } from '../data/index.js';
+import { WAVE_3_SPECIES } from '../data/species-wave-3.js';
 import { hashString } from '../rng/index.js';
 import { BattleActionSchema, type BattleAction, type BattleSetup } from '../schemas/battle.js';
 import { createBattleContent } from './content.js';
@@ -39,7 +40,14 @@ const logged = recorded as unknown as { contentHash: string; battles: LoggedBatt
 const rulesBefore190 = { ...BATTLE_RULES };
 delete rulesBefore190.team;
 delete rulesBefore190.boss;
-const content = createBattleContent(GAME_DATA, rulesBefore190);
+// Species added to the public roster after the recording (#874's Clockwork
+// Isle wave) are left out too: none of these battles meets one, and the
+// content hash covers the whole roster.
+const addedSince = new Set<string>(WAVE_3_SPECIES.map((s) => s.id));
+const content = createBattleContent(
+  { ...GAME_DATA, species: GAME_DATA.species.filter((s) => !addedSince.has(s.id)) },
+  rulesBefore190,
+);
 
 describe('battles logged before the team format (#190) replay byte for byte', () => {
   it('rebuilds main’s content hash from today’s data without the #190 rules', () => {

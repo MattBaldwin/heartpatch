@@ -1,4 +1,5 @@
 import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
+import type { PatchType } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import {
   battles,
@@ -17,6 +18,8 @@ export interface SpawnMapRow {
   /** Null on hand-authored maps (tutorial, local seed data). */
   seed: string | null;
   kind: 'multiplayer' | 'tutorial';
+  /** Cozy, Wild Isle or Clockwork Isle (#874): spawn tables can name the types they spawn on. */
+  patchType: PatchType;
 }
 
 export interface SpawnTileRow {
@@ -86,7 +89,13 @@ export function createSpawnsRepo(db: Executor): SpawnsRepo {
   return {
     findMap: async (mapId) => {
       const [row] = await db
-        .select({ id: maps.id, timeZone: maps.timeZone, seed: maps.seed, kind: maps.kind })
+        .select({
+          id: maps.id,
+          timeZone: maps.timeZone,
+          seed: maps.seed,
+          kind: maps.kind,
+          patchType: maps.patchType,
+        })
         .from(maps)
         .where(eq(maps.id, mapId));
       return row ?? null;

@@ -8,6 +8,7 @@ import {
   isTradingPost,
   type Catalog,
   type Hex,
+  type PatchType,
   type PublicUser,
   type Species,
   type WildHints,
@@ -18,6 +19,7 @@ import {
   SERVER_GAME_DATA,
   SPAWN_RULES,
   SPAWN_TABLES,
+  spawnTablesFor,
   type SpawnData,
   type WildSpawn,
 } from '@heartpatch/shared/server';
@@ -104,6 +106,16 @@ export function createSpawnsService(options: SpawnsServiceOptions): SpawnsServic
   const now = options.clock ?? (() => new Date());
   const data = options.data ?? defaultSpawnData();
   const store = createSpawnsRepo(db);
+  // Each patch type's own spawn data, built once.
+  const byPatchType = new Map<PatchType, SpawnData>();
+  const dataFor = (patchType: PatchType): SpawnData => {
+    let typed = byPatchType.get(patchType);
+    if (!typed) {
+      typed = { ...data, tables: spawnTablesFor(data.tables, patchType) };
+      byPatchType.set(patchType, typed);
+    }
+    return typed;
+  };
 
   /**
    * Tiles the player can look for squishies on: their own land, then the
@@ -153,13 +165,14 @@ export function createSpawnsService(options: SpawnsServiceOptions): SpawnsServic
     const partnerLevel = tutorial ? null : await store.partnerLevel(mapId, userId);
     // Hand-authored maps have no secret seed; their spawns key off the map id.
     const mapSeed = map.seed ?? deriveSeed('hand-authored-map', map.id);
+    const spawnData = dataFor(map.patchType);
     const found = reach.flatMap((tile): TileSpawn[] => {
       if (gone.has(hexKey(tile))) return [];
       if (tutorial) return [{ tile, spawn: gladeSpawn(tile) }];
       const seed = deriveSeed(mapSeed, 'spawn', tile.q, tile.r, window.id);
       const spawn = resolveWildSpawn(
         { seed, terrain: tile.terrain, window, partnerLevel, lure },
-        data,
+        spawnData,
       );
       return spawn ? [{ tile, spawn }] : [];
     });
