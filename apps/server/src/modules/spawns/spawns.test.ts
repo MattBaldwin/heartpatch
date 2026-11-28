@@ -509,6 +509,84 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       expect((await at('2026-09-30T12:00:00-06:00')).tiles).toEqual([]);
     });
 
+    // #874 C6: a table naming `patchTypes` rolls only on maps of those types.
+    it('rolls the Clockwork tech squishies only on a Clockwork Isle, never on Cozy or Wild', async () => {
+      const server = await start({ HP_WILD_ISLE: 'on' });
+      const kid = await player();
+      const cozy = await patchWithSquishy(server, kid);
+      const wildRes = await call(server, 'POST', '/maps', kid, {
+        name: 'Splash Cove',
+        timeZone: 'America/Denver',
+        patchType: 'wild-isle',
+      });
+      expect(wildRes.statusCode, wildRes.body).toBe(201);
+      const wild = MapResponseSchema.parse(wildRes.json()).map.id;
+      // A Clockwork Isle can't be made until its layout lands (lane C1), so a
+      // Cozy Patch stands in: spawning reads only the map's `patch_type`.
+      const clockwork = await patchWithSquishy(server, kid);
+      await db.execute(`update maps set patch_type = 'clockwork-isle' where id = ${id(clockwork)}`);
+      // Forced roll: someone on every tile, and the Clockwork table on every
+      // terrain far outweighs the plain one.
+      const forced: SpawnData = {
+        ...defaultSpawnData(),
+        tables: [
+          {
+            id: 'plain-everywhere',
+            terrains: GAME_DATA.terrains.filter((t) => t.id !== 'trading-post').map((t) => t.id),
+            entries: [{ species: SECRET_WILD, weight: 1 }],
+          },
+          {
+            id: 'clockwork-everywhere',
+            terrains: GAME_DATA.terrains.filter((t) => t.id !== 'trading-post').map((t) => t.id),
+            patchTypes: ['clockwork-isle'],
+            entries: [
+              { species: 'gearbit', weight: 500 },
+              { species: 'bulbun', weight: 500 },
+            ],
+          },
+        ],
+        rules: { ...SPAWN_RULES, chance: 100 },
+      };
+      const { spawns } = services({ data: forced });
+      const found = async (mapId: string) => {
+        const { tiles } = await spawns.wildHints(kid, mapId);
+        expect(tiles.length, mapId).toBeGreaterThan(0);
+        const met = await Promise.all(
+          tiles.map((tile) =>
+            spawns.findWildEncounter({
+              mapId,
+              userId: kid.id,
+              mapKind: 'multiplayer',
+              now: clock,
+              tile,
+            }),
+          ),
+        );
+        return new Set(met.map((m) => m!.squishies[0]!.speciesId));
+      };
+      expect([...(await found(cozy))]).toEqual([SECRET_WILD]);
+      expect([...(await found(wild))]).toEqual([SECRET_WILD]);
+      const isle = await found(clockwork);
+      expect(isle.has('gearbit') || isle.has('bulbun')).toBe(true);
+
+      // The shipped tables: a Cozy Patch never meets either of them.
+      const shipped = createSpawnsService({
+        db,
+        clock: () => clock,
+        data: { ...defaultSpawnData(), rules: { ...SPAWN_RULES, chance: 100 } },
+      });
+      for (const tile of (await shipped.wildHints(kid, cozy)).tiles) {
+        const met = await shipped.findWildEncounter({
+          mapId: cozy,
+          userId: kid.id,
+          mapKind: 'multiplayer',
+          now: clock,
+          tile,
+        });
+        expect(['gearbit', 'bulbun']).not.toContain(met?.squishies[0]?.speciesId);
+      }
+    });
+
     it('never puts a wild squishy on a trading post, even when every terrain spawns (#269)', async () => {
       const server = await start();
       const kid = await player();

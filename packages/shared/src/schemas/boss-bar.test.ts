@@ -391,12 +391,14 @@ describe('battle content hash (pinned on purpose, #37 C0b)', () => {
   // (every stored battle replays against its hash). Re-pin only in a PR that
   // means to change content (X3).
   it('is unchanged by the Christmas Eve contracts', () => {
-    expect(createBattleContent(GAME_DATA).contentHash).toBe('28aea29116d27d7b660e7e4849f3caf2');
+    // Re-pinned on purpose by #874 C6: Gearbit, Cogwhirl, Bulbun and
+    // Lanternbun are new public species (was 28aea29116d27d7b660e7e4849f3caf2).
+    expect(createBattleContent(GAME_DATA).contentHash).toBe('e6af222b4dc42f60f6f5045bd19d5b26');
     expect(createBattleContent(serverBattleData(GAME_DATA, SERVER_GAME_DATA)).contentHash).toBe(
-      // Re-pinned on purpose by #37 X3: Snowbundle and Bundlebit, their four
-      // moves and the evolution row are new server battle content (was
-      // 73742c3adf689cad4491470975ac3536).
-      'e6506a67040d6ebd093bbe2f02e1b5da',
+      // Re-pinned on purpose by #37 X3 (Snowbundle and Bundlebit; was
+      // 73742c3adf689cad4491470975ac3536), then by #874 C6: the four
+      // Clockwork Isle species (was e6506a67040d6ebd093bbe2f02e1b5da).
+      '51be022fb70142d0d8c80fa0f54a3744',
     );
   });
 });

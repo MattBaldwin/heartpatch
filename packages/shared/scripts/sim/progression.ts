@@ -22,7 +22,7 @@ import { generateMap, type MapTile } from '../../src/mapgen/index.js';
 import { deriveSeed } from '../../src/rng/index.js';
 import type { BattleSetup, BattleSideSetup } from '../../src/schemas/battle.js';
 import type { Species } from '../../src/schemas/data/species.js';
-import { resolveWildSpawn, type SpawnData } from '../../src/spawns/resolve.js';
+import { resolveWildSpawn, spawnTablesFor, type SpawnData } from '../../src/spawns/resolve.js';
 import { spawnWindowAt, type SpawnWindow } from '../../src/spawns/window.js';
 import { resolveGuardians, type GuardianData } from '../../src/territory/guardians.js';
 import { journeyFor, journeyTeam } from '../../src/territory/journeys.js';
@@ -197,7 +197,8 @@ export function modelData(): ModelData {
       ...SERVER_GAME_DATA.secretEvolutions,
     ],
     guardians: { rules: GUARDIAN_RULES, species, seasons: GAME_DATA.seasons },
-    spawnTables: SPAWN_TABLES,
+    // A Cozy patch: a Clockwork Isle's own tables (#874) never spawn here.
+    spawnTables: spawnTablesFor(SPAWN_TABLES, 'cozy'),
   };
 }
 
