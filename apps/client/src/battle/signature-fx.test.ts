@@ -84,6 +84,14 @@ const SERVER_MOVES: readonly Move[] = [
   mv('speed-bump', 'spark', 70, [
     { type: 'stat', target: 'opponent', stat: 'speed', stages: -1, chance: 30 },
   ]),
+  // #37 X3: the Christmas Eve BIG squishy.
+  mv('snow-puff-flop', 'frost', 60, [], 'all-foes'),
+  mv('twinkle-twinkle', 'light', 55, [{ type: 'status', status: 'dizzy', chance: 30 }]),
+  mv('snug-snow-wrap', 'frost', 0, [
+    { type: 'heal', percent: 20 },
+    { type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 50 },
+  ]),
+  mv('big-chilly-sneeze', 'frost', 160, [{ type: 'windup' }]),
   mv('heart-glow', 'light', 0, [
     { type: 'heal', percent: 30 },
     { type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 100 },

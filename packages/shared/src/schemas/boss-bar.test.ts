@@ -310,8 +310,9 @@ describe('Christmas Eve rules (server-only data)', () => {
   if (!shipped) throw new Error('BOSS_EVENTS.christmasEve is missing');
   const eve = shipped;
 
-  it('ships a Christmas Eve block that checks clean, with no species until X3', () => {
-    expect(eve.speciesId).toBeNull();
+  it('ships a Christmas Eve block that checks clean, with its own species (X3)', () => {
+    expect(eve.speciesId).toBe('snowbundle');
+    expect(BOSS_EVENTS.bag.map((b) => b.speciesId)).not.toContain(eve.speciesId);
     expect(eve.day).toBe('12-24');
     expect(checkBossEventRules(BOSS_EVENTS, species, terrains, items)).toEqual([]);
     // Lowered gates (owner answer 3): never above the weekly ones.
@@ -392,7 +393,10 @@ describe('battle content hash (pinned on purpose, #37 C0b)', () => {
   it('is unchanged by the Christmas Eve contracts', () => {
     expect(createBattleContent(GAME_DATA).contentHash).toBe('28aea29116d27d7b660e7e4849f3caf2');
     expect(createBattleContent(serverBattleData(GAME_DATA, SERVER_GAME_DATA)).contentHash).toBe(
-      '73742c3adf689cad4491470975ac3536',
+      // Re-pinned on purpose by #37 X3: Snowbundle and Bundlebit, their four
+      // moves and the evolution row are new server battle content (was
+      // 73742c3adf689cad4491470975ac3536).
+      'e6506a67040d6ebd093bbe2f02e1b5da',
     );
   });
 });
