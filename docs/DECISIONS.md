@@ -2736,3 +2736,19 @@ Supervisor 53 (`session_01RAEPnH5P3wa88p6mTS2Jrh`) took over from supervisor 52 
 **Verdict decisions**
 - #904 render note: the empty track was too faint on a blue day sky, so it gets a darker (plum) track with light hairlines. The 4 pt core stays; don't thicken the line.
 - #903: merged on reviewer round 2 APPROVE with owner decision 2 folded in. Repeat Christmas Eve wins pay no mini-boss win coins, no Heart Coin, no weekly bundle and no boss drop. They still chip the patch bar and count toward the Christmas bundle and asks.
+
+## Supervisor 54 (2026-11-28 early)
+
+Supervisor 54 (`session_01RAEPnHD8sctJfWD9ZjYZhq`) took over from supervisor 53 at 00:38 UTC (§8 handoff; supervisor 53 retired and archived). Merged: #907 (handoff docs) → `64e8e03`. #904 was merged by supervisor 53 at the handoff (`0d04f19`).
+
+**Owner decisions (2026-11-28)**
+1. **Seasonal milestone goals list their activities.** "We should list out the activities instead of vaguely alluding to them" (owner, on the Cozy Harvest card). Every tier's goal names what counts (befriend which squishies, gather what, find what); never "Do 20 cozy harvest things". Applies to Cozy Harvest, Halloween and every future seasonal track; a shared test keeps tier goals naming every source kind the track counts.
+2. **A Christmas milestone track with a top-tier prize costume**, the same shape as Halloween's and Cozy Harvest's. It counts only activities that are live (presents opened, advent doors, chipping in on the Eve patch bar; gifts only if they can't be farmed); `tree.decorated` joins when the Patch Tree ships. The costume is milestone-only, untradable, never dropped or sold, and its look gets the owner's OK on the Mockup Board.
+
+**Coordinator rulings**
+- **X3 look:** the part kit has no scarf and `glow: 'accent'` lights every accent part, so Snowbundle ships the kit-only look: cranberry acorn-cup cap as a detail colour (never glows), gold sun-crown (Snowbundle) and lure-beads (Bundlebit) as the only lit parts, no scarf. No part-kit change in X3; a scarf or lone lit star is a separate kit lane if the owner asks.
+- **X3 test lines:** X3 may add the four `mv(...)` lines for its new secret moves to `apps/client/src/battle/signature-fx.test.ts` (test-only; that test hand-copies `SERVER_MOVES` by design).
+- **X5 splits into X5a (server + additive contract, Opus, ★ Fable second review) and X5b (client, Sonnet, after X5a).** Pre-authorised optional fields on `MapViewChristmasEveSchema`: `chippers` (int ≥ 0, a count, never who), `warmedUp` (boolean, never the head-start amount), per-viewer `thanks { kind, items, asksLeft, battleId }` while that Keeper's asks are open (it may outlive the visit's close). **No `boss.dozed` event:** the client refetches the map view at `closesAt` and on foreground. The pre-16:00 notice is a server fix (`BOSS_EVENTS.christmasEve.noticeDays`, `// TUNE:`). X5a writes the TECH_SPEC §5/§7 5e lines with its contract.
+- **#898 FX polish list → a later 5c lane** (`element-fx.ts` only), not boss PR 6. **In-fight "The whole patch did it!" sticker → a follow-up after PR 6**, not X5b (it lives in `battle/**`).
+- **2c waits for X5a** (both touch `apps/server/src/modules/maps/service.ts`).
+
