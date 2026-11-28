@@ -235,7 +235,8 @@ export const MyMapsResponseSchema = z.object({
   canMakeWildIsle: z.boolean().optional(),
   /**
    * Whether the create form offers a Clockwork Isle to this player (#874,
-   * `HP_CLOCKWORK_ISLE`). Left out (older servers, the switch off) hides it.
+   * `HP_CLOCKWORK_ISLE`): false while the switch is off for them. Left out
+   * (older servers) hides it too.
    */
   canMakeClockworkIsle: z.boolean().optional(),
 });
