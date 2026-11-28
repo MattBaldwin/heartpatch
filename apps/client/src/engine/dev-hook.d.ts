@@ -101,6 +101,8 @@ declare global {
         show(q: number, r: number): boolean;
         /** Plays one live event into the open map, as if the server sent it (#242). */
         replay(event: WsEventMessage): void;
+        /** Reads the map view again, as the Christmas Eve close or a thanks does (#37 X5b). */
+        refresh(): void;
       };
       /** The side trays over the map: shown, which is open, the hint, the handles' badges. */
       trays?(): TraysDebug;
@@ -227,6 +229,16 @@ declare global {
         x: number;
         y: number;
       } | null;
+      /** The Christmas Eve visit on the map (#37 X5b): its stage, notice, sheet and wait. */
+      eve?(): {
+        stage: 'notice' | 'open' | 'fell' | 'dozed' | null;
+        notice: string | null;
+        sheetOpen: boolean;
+        waiting: boolean;
+        beat: boolean;
+        asksLeft: number | null;
+        items: readonly string[] | null;
+      };
       /** Push nudges (#726): the offer's state and whether its card is up. */
       push?(): { offer: 'idle' | 'checking' | 'waiting' | 'showing' | 'done'; card: boolean };
     };
