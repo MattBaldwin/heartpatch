@@ -43,7 +43,15 @@ import { forgetPatch, patchToResume, rememberPatch } from './last-patch.js';
 import { closeListTo, LOBBY_PEEK_TEXT, lobbyChrome, type LobbyMode } from './lobby-chrome.js';
 import { lobbyApi } from './lobby-api.js';
 import { joinedSince, listKey, WAITING_POLL_MS } from './lobby-poll.js';
-import { isWildIsle, PATCH_TYPE_CHOICES, WILD_ISLE_CHIP, wildIsleOffered } from './patch-types.js';
+import {
+  CLOCKWORK_ISLE_CHIP,
+  clockworkIsleOffered,
+  isClockworkIsle,
+  isWildIsle,
+  PATCH_TYPE_CHOICES,
+  WILD_ISLE_CHIP,
+  wildIsleOffered,
+} from './patch-types.js';
 import '../../audio/audio.css';
 import '../auth/auth.css';
 import './lobby.css';
@@ -257,6 +265,8 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
 
   /** `MyMapsResponse.canMakeWildIsle` from the last list (#621); unknown until one loads. */
   let canMakeWildIsle: boolean | undefined;
+  /** `MyMapsResponse.canMakeClockworkIsle` from the last list (#874); unknown until one loads. */
+  let canMakeClockworkIsle: boolean | undefined;
 
   async function showList(message?: string): Promise<void> {
     refresh = () => void showList();
@@ -274,6 +284,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     try {
       mine = await lobbyApi.myMaps();
       canMakeWildIsle = mine.canMakeWildIsle ?? false;
+      canMakeClockworkIsle = mine.canMakeClockworkIsle ?? false;
     } catch (err) {
       if (at !== shown) return;
       show(
@@ -364,6 +375,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
           { class: 'lobby-map-name' },
           map.name,
           ...(isWildIsle(map) ? [wildIsleChip()] : []),
+          ...(isClockworkIsle(map) ? [clockworkIsleChip()] : []),
           // Someone is asking to join (#144): say so right on the row.
           ...(map.pendingRequests > 0
             ? [
@@ -523,12 +535,22 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     );
   }
 
+  /** The ⚙️ chip on a Clockwork Isle's row and card (#874). */
+  function clockworkIsleChip(): HTMLElement {
+    return el(
+      'span',
+      { class: 'lobby-badge lobby-badge-clockwork', 'data-testid': 'lobby-clockwork-chip' },
+      CLOCKWORK_ISLE_CHIP,
+    );
+  }
+
   /**
-   * Cozy Patch or Wild Isle (#621): two big cards, Cozy picked. The Wild
-   * card is there only while `wildIsleOffered`; `addWild` puts it in later
-   * when the answer arrives after the form is up.
+   * Cozy Patch, Wild Isle (#621) or Clockwork Isle (#874): big cards, Cozy
+   * picked. An isle's card is there only while the server offers it
+   * (`wildIsleOffered`, `clockworkIsleOffered`); `offer` puts one in later,
+   * in its table place, when the answer arrives after the form is up.
    */
-  function patchTypeCards(offerWild: boolean, onPick: (type: PatchType) => void) {
+  function patchTypeCards(offered: readonly PatchType[], onPick: (type: PatchType) => void) {
     let picked: PatchType = 'cozy';
     const group = el('div', {
       class: 'lobby-choices lobby-patch-types',
@@ -573,32 +595,43 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
         mark();
         onPick(picked);
       });
+      // In table order, whenever its answer arrived.
+      const order = (type: PatchType) => PATCH_TYPE_CHOICES.findIndex((c) => c.type === type);
+      const after = cards.find((c) => order(c.type) > order(choice.type));
       cards.push({ type: choice.type, card, label });
-      group.append(card);
+      if (after) after.card.before(card);
+      else group.append(card);
       mark();
     };
-    const [cozy, wild] = PATCH_TYPE_CHOICES;
-    if (cozy) add(cozy);
-    const addWild = () => {
-      if (wild && !cards.some((c) => c.type === wild.type)) add(wild);
+    const offer = (type: PatchType) => {
+      const choice = PATCH_TYPE_CHOICES.find((c) => c.type === type);
+      if (choice && !cards.some((c) => c.type === type)) add(choice);
     };
-    if (offerWild) addWild();
-    return { node: group, picked: () => picked, addWild };
+    offer('cozy');
+    for (const type of offered) offer(type);
+    return { node: group, picked: () => picked, offer };
   }
+
+  /** The isle cards the server offers this player now. */
+  const offeredIsles = (): PatchType[] => [
+    ...(wildIsleOffered(canMakeWildIsle) ? (['wild-isle'] as const) : []),
+    ...(clockworkIsleOffered(canMakeClockworkIsle) ? (['clockwork-isle'] as const) : []),
+  ];
 
   function showCreate(): void {
     // The name hint follows the picked card (Cozy first).
     const nameHint = document.createTextNode(PATCH_TYPE_CHOICES[0]?.nameHint ?? '');
-    const kinds = patchTypeCards(wildIsleOffered(canMakeWildIsle), (type) => {
+    const kinds = patchTypeCards(offeredIsles(), (type) => {
       nameHint.textContent = PATCH_TYPE_CHOICES.find((c) => c.type === type)?.nameHint ?? '';
     });
-    if (canMakeWildIsle === undefined) {
+    if (canMakeWildIsle === undefined || canMakeClockworkIsle === undefined) {
       // Opened before any list loaded (the tutorial's graduation): ask now.
       void lobbyApi
         .myMaps()
         .then((mine) => {
           canMakeWildIsle = mine.canMakeWildIsle ?? false;
-          if (wildIsleOffered(canMakeWildIsle)) kinds.addWild();
+          canMakeClockworkIsle = mine.canMakeClockworkIsle ?? false;
+          for (const type of offeredIsles()) kinds.offer(type);
         })
         .catch(() => undefined);
     }
@@ -993,6 +1026,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     show(
       title(map.name),
       ...(isWildIsle(map) ? [el('p', { class: 'lobby-chip-row' }, wildIsleChip())] : []),
+      ...(isClockworkIsle(map) ? [el('p', { class: 'lobby-chip-row' }, clockworkIsleChip())] : []),
       subtitle(isOwner ? 'You own this patch.' : 'A patch you belong to.'),
       ...(message ? [notice(message, 'ok')] : []),
       status,

@@ -203,6 +203,9 @@ process.env['HP_HOUSE'] ??= 'on';
 // Wild Isle (#621) ships behind HP_WILD_ISLE (off by default); lobby.spec.ts
 // needs it on to make one, and stands in a patch list without it for the off case.
 process.env['HP_WILD_ISLE'] ??= 'on';
+// Clockwork Isle (#874) ships behind HP_CLOCKWORK_ISLE (off by default);
+// lobby.spec.ts makes one, so the e2e server runs with it on.
+process.env['HP_CLOCKWORK_ISLE'] ??= 'on';
 // The Long Night (#727) ships behind HP_LONG_NIGHT (off by default; testers
 // after merge); long-night.spec.ts needs it on. The map-local day below is a
 // Tuesday, 4 days from the default Saturday (past its 3-day notice), so other

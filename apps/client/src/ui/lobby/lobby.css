@@ -305,6 +305,13 @@
   color: #1f5a78;
 }
 
+/* The ⚙️ chip on a Clockwork Isle's row and card (#874): warm brass on cream. */
+.lobby-badge-clockwork {
+  background: #f6e7c8;
+  font-weight: 600;
+  color: #6b4a14;
+}
+
 .lobby-chip-row {
   display: flex;
   justify-content: center;

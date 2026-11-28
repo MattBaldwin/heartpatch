@@ -305,3 +305,66 @@ test('makes a Wild Isle when the switch lets them, and hides the card when not (
   ]);
   await page.context().close();
 });
+
+test('makes a Clockwork Isle when the switch lets them, and hides the card when not (#874)', async ({
+  browser,
+}) => {
+  test.setTimeout(90_000); // one signup through the Keeper picker; CI renders in software
+  const page = await newPlayer(browser, uniqueName('cog'));
+  const lobby = page.getByTestId('lobby');
+  const kinds = lobby.getByTestId('lobby-patch-types');
+  const cozy = kinds.getByTestId('lobby-patch-type-cozy');
+  const clockwork = kinds.getByTestId('lobby-patch-type-clockwork-isle');
+
+  // The switch off for this player (HP_CLOCKWORK_ISLE): the list says false.
+  // Only the Clockwork card goes; the Wild one stays.
+  await page.route(/\/api\/v1\/maps$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    const response = await route.fetch();
+    const json = (await response.json()) as Record<string, unknown>;
+    json['canMakeClockworkIsle'] = false;
+    return route.fulfill({ response, json });
+  });
+  await page.reload();
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await expect(cozy).toHaveAttribute('aria-checked', 'true');
+  await expect(kinds.getByTestId('lobby-patch-type-wild-isle')).toBeVisible();
+  await expect(clockwork).toHaveCount(0);
+  await page.unroute(/\/api\/v1\/maps$/);
+
+  // The switch on (the e2e server's HP_CLOCKWORK_ISLE): the third card, last, Cozy still picked.
+  await lobby.getByRole('button', { name: 'Back to my patches' }).tap();
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await expect(clockwork).toBeVisible();
+  await expect(kinds.getByRole('radio')).toHaveCount(3);
+  await expect(kinds.getByRole('radio').last()).toHaveAttribute(
+    'data-testid',
+    'lobby-patch-type-clockwork-isle',
+  );
+  await expect(clockwork).toContainText('Wind, wires and workshops. For clever Keepers!');
+  await expect(cozy).toHaveAttribute('aria-checked', 'true');
+  await clockwork.tap();
+  await expect(clockwork).toHaveAttribute('aria-checked', 'true');
+  await expect(cozy).toHaveAttribute('aria-checked', 'false');
+  await expect(lobby.locator('#lobby-create .auth-hint')).toHaveText(/Tinker Bay/);
+
+  await lobby.getByLabel('Patch name').fill('Cog Cove');
+  const made = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && /\/api\/v1\/maps$/.test(r.url()),
+  );
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  const created = await made;
+  expect(created.status()).toBe(201);
+  expect(created.request().postDataJSON()).toMatchObject({ patchType: 'clockwork-isle' });
+  expect(((await created.json()) as { map: { patchType?: string } }).map.patchType).toBe(
+    'clockwork-isle',
+  );
+
+  // Its card and its row in the list wear the ⚙️ chip.
+  await expect(lobby.getByRole('heading', { name: 'Cog Cove' })).toBeVisible();
+  await expect(lobby.getByTestId('lobby-clockwork-chip')).toHaveText('⚙️ Clockwork Isle');
+  await lobby.getByRole('button', { name: 'Back to my patches' }).tap();
+  const row = lobby.getByRole('button', { name: /Cog Cove/ });
+  await expect(row.getByTestId('lobby-clockwork-chip')).toBeVisible();
+  await page.context().close();
+});
