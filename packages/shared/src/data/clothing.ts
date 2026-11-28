@@ -2103,9 +2103,16 @@ const MILESTONE: ClothingItem[] = [
           color: '#5e3a1f',
         },
         {
+          shape: 'box',
+          on: 'bottom',
+          at: [0, 0.08, -0.67],
+          size: [0.24, 0.2, 0.06],
+          color: '#f2c14e',
+        },
+        {
           shape: 'ellipsoid',
           on: 'bottom',
-          at: [-0.3, -0.2, 0.62],
+          at: [-0.24, -0.2, 0.62],
           size: [0.52, 0.34, 0.24],
           turn: [0, 0, 22],
           color: '#c8323c',
@@ -2113,17 +2120,10 @@ const MILESTONE: ClothingItem[] = [
         {
           shape: 'ellipsoid',
           on: 'bottom',
-          at: [0.3, -0.2, 0.62],
+          at: [0.24, -0.2, 0.62],
           size: [0.52, 0.34, 0.24],
           turn: [0, 0, -22],
           color: '#c8323c',
-        },
-        {
-          shape: 'ellipsoid',
-          on: 'bottom',
-          at: [0, -0.2, 0.72],
-          size: [0.24, 0.24, 0.2],
-          color: '#f2c14e',
         },
         { shape: 'capsule', on: 'legs', at: [0, 0, 0], size: [1.3, 1, 1.3], color: '#fff8ec' },
         {
