@@ -142,6 +142,18 @@ describe('bulb layout (#37 2a)', () => {
     }
   });
 
+  it('hangs no swag on a flat building, but keeps the edge bulbs off it', () => {
+    const t0 = tile(0, 0);
+    const c = hexToWorld(t0, SIZE);
+    const pad = { x: c.x + SIZE * 0.6, z: c.z, y: 0.35, radius: 0.2, footprint: 0.25, flat: true };
+    const bulbs = tileBulbs(tile(0, 0, { eaves: [pad] }), SIZE, FULL);
+    expect(bulbs.every((b) => (b.scale ?? 1) === 1)).toBe(true);
+    expect(bulbs.length).toBeLessThan(6 * B.perEdge);
+    for (const b of bulbs) {
+      expect(Math.hypot(b.x - pad.x, b.z - pad.z)).toBeGreaterThanOrEqual(pad.footprint);
+    }
+  });
+
   it('mixes the four colours along a string, and neighbours start apart', () => {
     const bulbs = tileBulbs(tile(0, 0), SIZE, FULL);
     expect(new Set(bulbs.map((b) => b.color))).toEqual(new Set([0, 1, 2, 3]));

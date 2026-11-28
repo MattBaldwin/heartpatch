@@ -69,6 +69,7 @@ import {
   HOLLOWED_LOOK,
   HOLLOWED_SQUARE,
   BORDER,
+  CHRISTMAS,
   ISLAND,
   LAND_FADE,
   MAP_DETAIL,
@@ -949,6 +950,8 @@ export class MapScene {
           y: y + box.max.y * s * 0.72,
           radius: reach * 0.9,
           footprint: reach,
+          // An open pad or a fire ring has no eaves to hang a swag from.
+          ...(CHRISTMAS.bulbs.noEaves.includes(building.kind) ? { flat: true } : {}),
         });
       }
       onTile.set(key, list);

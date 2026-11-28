@@ -35,6 +35,8 @@ export interface BulbEave {
   readonly radius: number;
   /** How far its footprint (walls, pad) reaches from its middle; edge bulbs inside it are left out. */
   readonly footprint: number;
+  /** A flat building (a pad) has no eaves: no swag, only the edge bulbs kept off it. */
+  readonly flat?: boolean;
 }
 
 /** A Twinkle Lights post: its foot, how tall it stands and how wide its coil is. */
@@ -83,6 +85,9 @@ export function bulbCounts(eaves: number, posts: number, budget: number): BulbCo
   return { perEdge, perEave, perPost };
 }
 
+/** How many of a tile's buildings get a swag (not the flat ones). */
+export const swags = (tile: BulbTile): number => tile.eaves.filter((e) => e.flat !== true).length;
+
 /** Every bulb on one lit tile, with `counts` bulbs on each string. */
 export function tileBulbs(tile: BulbTile, size: number, counts: BulbCounts): Bulb[] {
   const bulbs: Bulb[] = [];
@@ -127,6 +132,7 @@ export function tileBulbs(tile: BulbTile, size: number, counts: BulbCounts): Bul
     }
   }
   for (const eave of tile.eaves) {
+    if (eave.flat === true) continue;
     // On the camera's side (−z) of the building, three soft scallops.
     for (let i = 0; i < counts.perEave; i++) {
       const t = counts.perEave === 1 ? 0.5 : i / (counts.perEave - 1);
@@ -151,7 +157,7 @@ export function bulbLayout(tiles: readonly BulbTile[], size: number, cap: number
   if (tiles.length === 0 || cap <= 0) return [];
   const share = Math.floor(cap / tiles.length);
   const bulbs = tiles.flatMap((tile) =>
-    tileBulbs(tile, size, bulbCounts(tile.eaves.length, tile.posts.length, share)),
+    tileBulbs(tile, size, bulbCounts(swags(tile), tile.posts.length, share)),
   );
   return bulbs.slice(0, cap);
 }

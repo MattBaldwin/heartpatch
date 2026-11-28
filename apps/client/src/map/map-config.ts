@@ -781,6 +781,8 @@ export const CHRISTMAS = {
     hot: 0.6, // TUNE
     /** By day, unlit: the glass's colour, darker (coloured glass), with a small shine. */
     glass: 0.95, // TUNE
+    /** Building kinds with no eaves (an open pad, a fire ring): no swag, the edge bulbs just keep off them. */
+    noEaves: ['training-grounds', 'hearthfire'] as readonly string[], // TUNE
     /** A swag's bulbs under a building's eaves, as a share of an edge bulb (their halo stays off its walls). */
     eaveScale: 0.6, // TUNE
     /** The twinkle: how far a bulb dims (0-1) and how fast (radians a second). Still under reduced motion. */
