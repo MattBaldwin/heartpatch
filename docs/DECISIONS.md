@@ -2724,3 +2724,15 @@ Supervisor 52 (`session_01RAEPnGHXGzArmH6umqkTo1`) took over from supervisor 51 
 - #902 (#895): the fix also moved four DDL test files outside `src/db/` (`modules/boss/befriend`, `modules/starters`, `modules/admin`, `jobs`) onto their own databases; accepted, since the brief was to keep all DDL off the shared test DB. The 40P01 flake ruling lapses with this merge.
 - #898: merged with a SOFT render check (leaf burst, backup flash, drift weak; nothing hidden or on the face). The polish list in comment 7230472758 goes to PR 6 or a small 5c. `fast` red on `00fbf563` was the pre-#902 40P01 deadlock and was ruled a flake.
 
+
+## Supervisor 53 (2026-11-28 early)
+
+Supervisor 53 (`session_01RAEPnH5P3wa88p6mTS2Jrh`) took over from supervisor 52 at 23:53 UTC (§8 handoff; supervisor 52 retired and archived). Merged: #906 (handoff docs) → `2d92268`, #903 (#37 X2b) → `e13cbcf`.
+
+**Owner decisions (2026-11-28, one at a time, clickable)**
+3. **The patch bar is the same thin line everywhere:** the 4 pt full-width line under the boss strip is used on iPad and on a phone held sideways too, not only on an upright phone (extends decision 7225429326; #37 comment 7230538786).
+4. **Bundlebit can grow into Snowbundle at level 50** (`BOSS_EVOLUTIONS` row `bundlebit → snowbundle`, `// TUNE:`), the same pattern as the other BIG squishies. The boss itself stays single-form; this refines decision 4 of 2026-11-27 afternoon (#37 comment 7230928707).
+
+**Verdict decisions**
+- #904 render note: the empty track was too faint on a blue day sky, so it gets a darker (plum) track with light hairlines. The 4 pt core stays; don't thicken the line.
+- #903: merged on reviewer round 2 APPROVE with owner decision 2 folded in. Repeat Christmas Eve wins pay no mini-boss win coins, no Heart Coin, no weekly bundle and no boss drop. They still chip the patch bar and count toward the Christmas bundle and asks.
