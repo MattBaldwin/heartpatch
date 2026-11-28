@@ -111,7 +111,8 @@ const E2E_GROUPS = [
     'trick-or-treat',
     'whats-new',
   ],
-  // ~17.9 iPhone, ~24.2 iPad, before next-up (~2.5 min, #731); advent adds about 2 min (#37 1d).
+  // ~17.9 iPhone, ~24.2 iPad, before next-up (~2.5 min, #731); advent adds about 2 min (#37 1d);
+  // patch-tree about 4 min (#37 2d, 6 tests, ~35 s each on iPhone Chromium locally).
   [
     'advent',
     'buildings-guide',
@@ -124,6 +125,7 @@ const E2E_GROUPS = [
     'long-night',
     'map',
     'next-up',
+    'patch-tree',
     'push',
     'raids',
     'territory',
