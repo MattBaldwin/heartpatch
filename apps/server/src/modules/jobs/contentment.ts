@@ -20,7 +20,7 @@ import type { Executor } from '../../db/client.js';
 import { workPauseOf } from '../explore/homesteads.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { createSquishyJobsRepo, type JobRow } from './repo.js';
-import { seasonsAtFor, traitsOf, workAt, type JobMap } from './work.js';
+import { seasonsAtFor, traitsOf, workAt, workRulesFor, type JobMap } from './work.js';
 
 // Contentment and jobs (owner decision on #376, design doc §7): it drifts
 // down only while a squishy rests or its job doesn't suit it. Still lazy
@@ -80,7 +80,13 @@ export function holdFactsOf(row: JobRow, map: JobMap, at: Date, since: Date | nu
           fits: gatherFits(traitsOf(row.squishy), work.source.resource, JOB_RULES),
           fromMs,
           lostMs: row.atWork ? null : (row.lostAt?.getTime() ?? null),
-          fullMs: workFullAtMs(row.workSince.getTime(), work.cycleSeconds, JOB_RULES, pause),
+          // A Rail Depot's higher cap (#874) holds it longer, as `workAt` counts.
+          fullMs: workFullAtMs(
+            row.workSince.getTime(),
+            work.cycleSeconds,
+            workRulesFor(row.workTile),
+            pause,
+          ),
           seasonEndMs:
             resource?.season === undefined
               ? null

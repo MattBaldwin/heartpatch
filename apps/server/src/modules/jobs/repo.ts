@@ -1,4 +1,10 @@
-import { ElementIdSchema, FeelingIdSchema, type OwnedSquishy } from '@heartpatch/shared';
+import {
+  depotJoined,
+  ElementIdSchema,
+  FeelingIdSchema,
+  hexKey,
+  type OwnedSquishy,
+} from '@heartpatch/shared';
 import { and, asc, eq, getTableName, inArray, isNotNull, sql, type AnyColumn } from 'drizzle-orm';
 import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
@@ -35,6 +41,13 @@ export interface JobTileRow {
   roadLevel?: number | null;
   /** The working squishy's owner's rail level here (Clockwork Isle #874); null: none. Work tiles only. */
   railLevel?: number | null;
+  /**
+   * The highest level of the working squishy's owner's Rail Depots their
+   * rails join this tile to (Clockwork Isle #874, `depotJoined`); null:
+   * not rail-joined. Work tiles only. The gatherer then holds that level's
+   * `waitingCycles` instead of four.
+   */
+  depotLevel?: number | null;
 }
 
 /** One of a player's squishies with everything its job depends on. */
@@ -236,6 +249,86 @@ export function createSquishyJobsTxRepo(tx: Transaction): SquishyJobsTxRepo {
   return { ...queries(tx), appendEvent: (event) => appendGameEvent(tx, event) };
 }
 
+/**
+ * Fills in `depotLevel` on rail work tiles (#874): the highest level of the
+ * owner's Rail Depots their rails join that tile to (`depotJoined`), else
+ * null. Plain reads, no locks: the settle never writes a rail, depot or
+ * tile row it reads here (it holds the work tile's own lock already), so a
+ * line or depot changed mid-settle counts from the next one. Only Clockwork
+ * Isles have rails, so other patches read nothing more.
+ */
+async function withDepots(db: Executor, rows: JobRow[]): Promise<JobRow[]> {
+  const railed = rows.filter((r) => r.workTile?.railLevel != null);
+  if (railed.length === 0) return rows;
+  const mapIds = [...new Set(railed.map((r) => r.squishy.mapId))];
+  const owners = [...new Set(railed.map((r) => r.squishy.ownerUserId))];
+  const depots = await db
+    .select({
+      mapId: buildings.mapId,
+      ownerUserId: buildings.ownerUserId,
+      q: tiles.q,
+      r: tiles.r,
+      level: buildings.level,
+    })
+    .from(buildings)
+    .innerJoin(tiles, eq(tiles.id, buildings.tileId))
+    .where(
+      and(
+        inArray(buildings.mapId, mapIds),
+        inArray(buildings.ownerUserId, owners),
+        eq(buildings.kind, 'depot'),
+      ),
+    );
+  if (depots.length === 0) return rows;
+  const [land, rails] = await Promise.all([
+    db
+      .select({
+        mapId: tiles.mapId,
+        q: tiles.q,
+        r: tiles.r,
+        ownerUserId: tiles.ownerUserId,
+        terrain: tiles.terrain,
+      })
+      .from(tiles)
+      .where(and(inArray(tiles.mapId, mapIds), inArray(tiles.ownerUserId, owners))),
+    db
+      .select({
+        mapId: tileLines.mapId,
+        q: tiles.q,
+        r: tiles.r,
+        ownerUserId: tileLines.ownerUserId,
+        level: tileLines.level,
+      })
+      .from(tileLines)
+      .innerJoin(tiles, eq(tiles.id, tileLines.tileId))
+      .where(
+        and(
+          inArray(tileLines.mapId, mapIds),
+          inArray(tileLines.ownerUserId, owners),
+          eq(tileLines.kind, 'rail'),
+        ),
+      ),
+  ]);
+  const joinedFor = new Map<string, Map<string, number>>();
+  const joined = (mapId: string, userId: string) => {
+    const key = `${mapId}|${userId}`;
+    let found = joinedFor.get(key);
+    if (!found) {
+      const onMap = <T extends { mapId: string }>(list: readonly T[]) =>
+        list.filter((x) => x.mapId === mapId);
+      found = depotJoined(onMap(land), onMap(rails), onMap(depots), userId);
+      joinedFor.set(key, found);
+    }
+    return found;
+  };
+  return rows.map((row) => {
+    const tile = row.workTile;
+    if (!tile || tile.railLevel == null) return row;
+    const level = joined(row.squishy.mapId, row.squishy.ownerUserId).get(hexKey(tile)) ?? null;
+    return { ...row, workTile: { ...tile, depotLevel: level } };
+  });
+}
+
 function queries(db: Executor): SquishyJobsRepo {
   const selectJobs = () =>
     db
@@ -420,20 +513,23 @@ function queries(db: Executor): SquishyJobsRepo {
   return {
     transaction: (fn) => withTransaction(db, (tx) => fn(createSquishyJobsTxRepo(tx), tx)),
 
-    listMine: async (mapId, userId) =>
-      (
+    listMine: async (mapId, userId) => {
+      const rows = (
         await selectJobs()
           .where(and(eq(squishies.mapId, mapId), eq(squishies.ownerUserId, userId)))
           .orderBy(asc(squishies.id))
-      ).map(toJob),
+      ).map(toJob);
+      return withDepots(db, rows);
+    },
 
     listByIds: async (ids) => {
       if (ids.length === 0) return [];
-      return (
+      const rows = (
         await selectJobs()
           .where(inArray(squishies.id, [...ids]))
           .orderBy(asc(squishies.id))
       ).map(toJob);
+      return withDepots(db, rows);
     },
 
     listOwnedTiles: (mapId, userId) =>

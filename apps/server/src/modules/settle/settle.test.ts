@@ -14,6 +14,7 @@ import {
   type PublicTile,
   extraNodes,
   GAME_DATA,
+  hexNeighbors,
 } from '@heartpatch/shared';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -30,6 +31,7 @@ import {
   squishies,
   squishyAccessories,
   tileAttacks,
+  tileLines,
   users,
 } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -467,6 +469,236 @@ describe.skipIf(!url)(
       expect(after).toMatchObject({ readyCycles: 0, full: false });
       expect(Date.parse(after.nextReadyAt!)).toBe(clock.getTime() + work.cycleSeconds * 1000);
       expect(settled.nextAt).toBe(after.nextReadyAt);
+    });
+
+    describe('a Rail Depot (Clockwork Isle #874)', () => {
+      const DEPOT = GAME_DATA.buildings.find((b) => b.id === 'rail-depot');
+      const waitingAt = (level: number) =>
+        DEPOT?.kind === 'depot' ? DEPOT.levels[level - 1]!.waitingCycles : 0;
+
+      /** A Clockwork Isle (the gate is off and there's no C1 layout yet, so the patch type is set). */
+      async function isle() {
+        const server = await start();
+        const kid = await player();
+        const mapId = await newMap(server, kid);
+        await run(`update maps set patch_type = 'clockwork-isle' where id = '${mapId}'`);
+        return { server, kid, mapId };
+      }
+
+      /** A Rail Depot at `level`, put straight in (its command's checks aren't the point). */
+      async function depot(mapId: string, who: Player, tileId: string, level = 1) {
+        await db.insert(buildings).values({
+          mapId,
+          ownerUserId: who.id,
+          tileId,
+          buildingId: 'rail-depot',
+          kind: 'depot',
+          level,
+          spot: 0,
+        });
+      }
+
+      /** A Rail Depot far from `work`, on a homestead: no rail line reaches it. */
+      const farDepot = async (mapId: string, who: Player, level = 1) =>
+        depot(mapId, who, (await makeHomestead(db, mapId, who.id, clock)).id, level);
+
+      /**
+       * A rail line of mine from `work` to a Rail Depot: rails on `work` and
+       * the next tile along, and the Depot on the one after (all made mine).
+       */
+      async function railLineToDepot(
+        server: FastifyInstance,
+        who: Player,
+        mapId: string,
+        work: PublicTile,
+        level = 1,
+        skip: readonly PublicTile[] = [],
+      ) {
+        const all = await tilesOf(server, who, mapId);
+        const free = (h: { q: number; r: number }) =>
+          all.find(
+            (t) =>
+              t.q === h.q &&
+              t.r === h.r &&
+              t.ownerUserId === null &&
+              t.homeSlot === null &&
+              !skip.some((x) => x.q === t.q && x.r === t.r),
+          );
+        const step = hexNeighbors({ q: 0, r: 0 })
+          .map(
+            (d) =>
+              [
+                free({ q: work.q + d.q, r: work.r + d.r }),
+                free({ q: work.q + 2 * d.q, r: work.r + 2 * d.r }),
+              ] as const,
+          )
+          .find(([a, b]) => a && b);
+        expect(step).toBeDefined();
+        const [next, end] = step! as readonly [PublicTile, PublicTile];
+        for (const t of [next, end]) {
+          await run(
+            `update tiles set owner_user_id = '${who.id}' where id = '${await tileIdAt(mapId, t)}'`,
+          );
+        }
+        await rail(mapId, who, work);
+        await rail(mapId, who, next);
+        await depot(mapId, who, await tileIdAt(mapId, end), level);
+      }
+
+      const rail = async (mapId: string, who: Player, at: PublicTile) =>
+        db.insert(tileLines).values({
+          tileId: await tileIdAt(mapId, at),
+          kind: 'rail',
+          mapId,
+          ownerUserId: who.id,
+          builtAt: clock,
+        });
+
+      /** A gatherer on far land, away for `cycles` of its own cycles: its cycle and one cycle's Timber. */
+      async function awayFor(
+        server: FastifyInstance,
+        kid: Player,
+        mapId: string,
+        forest: PublicTile,
+        cycles: number,
+      ) {
+        const pet = await squishy(mapId, kid);
+        const set = await setJob(server, kid, mapId, pet, {
+          job: 'gatherer',
+          q: forest.q,
+          r: forest.r,
+        });
+        expect(set.statusCode, set.body).toBe(200);
+        const view = await jobs(server, kid, mapId);
+        const { cycleSeconds } = jobOf(view, pet).work!;
+        const one = view.spots.find((s) => s.q === forest.q && s.r === forest.r)!.quantity;
+        later(cycleSeconds * 1000 * cycles);
+        return { pet, cycleSeconds, one };
+      }
+
+      it.each([1, 2])(
+        'a rail-joined gatherer banks past four cycles, up to the L%i depot’s waitingCycles',
+        async (level) => {
+          const { server, kid, mapId } = await isle();
+          const forest = await farLand(server, kid, mapId, 'forest');
+          await railLineToDepot(server, kid, mapId, forest, level);
+          const cap = waitingAt(level);
+          expect(cap).toBeGreaterThan(JOB_RULES.work.maxStoredCycles);
+          const { pet, one } = await awayFor(server, kid, mapId, forest, cap + 10);
+          expect(jobOf(await jobs(server, kid, mapId), pet).work).toMatchObject({
+            readyCycles: cap,
+            full: true,
+          });
+
+          const settled = await settle(server, kid, mapId);
+          expect(settled.landed.find((l) => l.kind === 'work')!.items).toEqual({
+            timber: one * cap,
+          });
+          // One ledger row, reason `depot`, for the whole basket.
+          const rows = (await ledgerOf(mapId, kid)).filter((r) => r.refId === pet);
+          expect(rows.map((r) => [r.reason, r.itemId, r.delta])).toEqual([
+            ['depot', 'timber', one * cap],
+          ]);
+          expect(jobOf(await jobs(server, kid, mapId), pet).work).toMatchObject({
+            readyCycles: 0,
+            full: false,
+          });
+        },
+      );
+
+      it('a gatherer off the rails still naps at four, depot or not', async () => {
+        const { server, kid, mapId } = await isle();
+        const forest = await farLand(server, kid, mapId, 'forest');
+        await farDepot(mapId, kid);
+        const { one } = await awayFor(server, kid, mapId, forest, waitingAt(1) + 10);
+        const settled = await settle(server, kid, mapId);
+        expect(settled.landed.find((l) => l.kind === 'work')!.items).toEqual({
+          timber: one * JOB_RULES.work.maxStoredCycles,
+        });
+        const reasons = (await ledgerOf(mapId, kid)).map((r) => r.reason);
+        expect(reasons).toEqual(['work']);
+      });
+
+      it('a rail on the work tile with no rail line to the Depot naps at four too', async () => {
+        const { server, kid, mapId } = await isle();
+        const forest = await farLand(server, kid, mapId, 'forest');
+        await rail(mapId, kid, forest);
+        await farDepot(mapId, kid);
+        const { one } = await awayFor(server, kid, mapId, forest, waitingAt(1) + 10);
+        const settled = await settle(server, kid, mapId);
+        expect(settled.landed.find((l) => l.kind === 'work')!.items).toEqual({
+          timber: one * JOB_RULES.work.maxStoredCycles,
+        });
+      });
+
+      it('banks in one transaction: a failing second grant rolls everything back', async () => {
+        const { server, kid, mapId } = await isle();
+        const user = { id: kid.id, username: kid.username } as never;
+        const forest = await farLand(server, kid, mapId, 'forest');
+        const hills = await farLand(server, kid, mapId, 'hills', [forest]);
+        await railLineToDepot(server, kid, mapId, forest, 1, [hills]);
+        await railLineToDepot(server, kid, mapId, hills, 1, [forest]);
+        // The Timber gatherer banks first (lower squishy id); Stone's grant fails.
+        const [low, high] = [randomUUID(), randomUUID()].sort();
+        await squishy(mapId, kid, { id: low });
+        await squishy(mapId, kid, { id: high });
+        for (const [id, at] of [
+          [low!, forest],
+          [high!, hills],
+        ] as const) {
+          const set = await setJob(server, kid, mapId, id, { job: 'gatherer', q: at.q, r: at.r });
+          expect(set.statusCode, set.body).toBe(200);
+        }
+        const since = async () =>
+          (
+            await db.query.squishies.findMany({
+              where: (t, { inArray }) => inArray(t.id, [low!, high!]),
+            })
+          ).map((r) => r.workSince?.toISOString());
+        const before = await since();
+        later(DAY_MS);
+        // Fail the Stone grant, but only once Timber's is already in (the
+        // second grant of the same settle): plain SQL, this test's own ids.
+        const fn = `fail_stone_${String(process.pid)}_${String(counter)}`;
+        await run(
+          `create function ${fn}() returns trigger language plpgsql as $$
+           begin
+             if exists (select 1 from inventories where map_id = new.map_id
+                 and user_id = new.user_id and item_id = 'timber' and quantity > 0) then
+               raise exception 'forced grant failure';
+             end if;
+             return new;
+           end $$`,
+        );
+        await run(
+          `create trigger ${fn} before update on inventories for each row
+           when (new.user_id = '${kid.id}' and new.item_id = 'stone' and new.quantity > old.quantity)
+           execute function ${fn}()`,
+        );
+        try {
+          // The Stone upsert fails (drizzle wraps Postgres' error as its `cause`).
+          await expect(
+            createSettleService({ db, clock: () => clock }).settle(user, mapId),
+          ).rejects.toMatchObject({
+            message: expect.stringContaining('"item_id"') as unknown,
+            cause: { message: 'forced grant failure' },
+          });
+        } finally {
+          await run(`drop trigger ${fn} on inventories`);
+          await run(`drop function ${fn}()`);
+        }
+        // Nothing banked: no Timber, no ledger rows, no event, and both counts unmoved.
+        expect(await bag(mapId, kid)).toEqual({});
+        expect(await ledgerOf(mapId, kid)).toEqual([]);
+        expect((await eventsOf(mapId)).filter((e) => e.type === 'work.collected')).toEqual([]);
+        expect(await since()).toEqual(before);
+        // Fixed, the next settle banks both baskets, each up to the depot's cap.
+        const settled = await settle(server, kid, mapId);
+        const items = settled.landed.find((l) => l.kind === 'work')!.items;
+        expect(Object.keys(items).sort()).toEqual(['stone', 'timber']);
+        const reasons = new Set((await ledgerOf(mapId, kid)).map((r) => r.reason));
+        expect([...reasons]).toEqual(['depot']);
+      });
     });
 
     it('lands Training Grounds XP by itself, carrying part of a point, capped at a day', async () => {

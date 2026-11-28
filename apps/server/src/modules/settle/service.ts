@@ -37,9 +37,10 @@ import { createSettleRepo } from './repo.js';
  * rule 4): the client asks when a map opens and when the next thing is due
  * (`nextAt`), and the server banks whatever has finished by its clock:
  * crafts, the player's own gathers, and their gatherers' cycles (still capped
- * at `JOB_RULES.work.maxStoredCycles`; a full gatherer starts again from the
- * settle). One transaction (rule 7), the same ledger rows and events a
- * Collect wrote (`item.crafted`, `resource.gathered`, `work.collected`), and
+ * at `JOB_RULES.work.maxStoredCycles`, or a Rail Depot's `waitingCycles` for
+ * a rail-joined gatherer on a Clockwork Isle (#874, ledger reason `depot`);
+ * a full gatherer starts again from the settle). One transaction (rule 7),
+ * the same ledger rows and events a Collect wrote (`item.crafted`, `resource.gathered`, `work.collected`), and
  * a gather's roll for found clothing. Training Grounds XP lands here too
  * (owner decision 2026-10-06: `squishy.trained`, plain XP per hour, capped at
  * `JOB_RULES.training.maxHours`). Crafting Factory batches (#294) bank
@@ -231,7 +232,10 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
           if (!work) continue;
           const banked = work.progress.cycles > 0;
           if (banked && !isEmpty(work.ready)) {
-            await grantItems(tx, owner, work.ready, 'work', row.squishy.id);
+            // A Rail Depot's carts (#874) bring a rail-joined gatherer's
+            // basket home: up to its level's `waitingCycles`, in this same
+            // transaction as everything else (plan §5, the atomic depot).
+            await grantItems(tx, owner, work.ready, work.depot ? 'depot' : 'work', row.squishy.id);
             addInto(worked, work.ready);
           }
           if (!row.atWork) {
