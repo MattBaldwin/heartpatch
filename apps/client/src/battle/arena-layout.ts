@@ -289,12 +289,15 @@ export function groundShade(x: number, z: number, d: number, seed: number): numb
 }
 
 /** Where the sun (or moon) disc sits on the dome, from the key light. */
-export function sunPlacement(plan: Pick<ArenaPlan, 'mood'>): { x: number; y: number; z: number } {
+export function sunPlacement(
+  plan: Pick<ArenaPlan, 'mood'>,
+  maxElev = Infinity,
+): { x: number; y: number; z: number } {
   const [dx, dy, dz] = plan.mood.key.dir;
   const len = Math.hypot(dx, dy, dz) || 1;
   const az = Math.atan2(-dx, -dz);
   const d = ARENA_STAGE.skyRadius * 0.92;
-  const elev = Math.max(0.12, -dy / len) * (plan.mood.night ? 0.45 : 0.9);
+  const elev = Math.min(maxElev, Math.max(0.12, -dy / len) * (plan.mood.night ? 0.45 : 0.9));
   return {
     x: Math.sin(az) * d * Math.cos(elev),
     y: Math.sin(elev) * d,

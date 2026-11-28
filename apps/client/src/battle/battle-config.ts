@@ -201,7 +201,7 @@ export interface BossCameraBeats {
  */
 const BOSS_PROFILE = {
   /** Nearly level: a low hero shot looking up at the boss (the team fight was 21°). */
-  pitch: (4 * Math.PI) / 180, // TUNE
+  pitch: (6.5 * Math.PI) / 180, // TUNE: was 4°; a little higher keeps the near friends under the boss's mouth (#190 PR 6b)
   /**
    * Where it looks: about a 1.8× boss's chest high, over the middle of the
    * row across the view (the yaw), so both end friends get the same margin

@@ -144,6 +144,19 @@ describe('colours', () => {
     expect(sun.y).toBeGreaterThan(0);
   });
 
+  it("keeps a boss fight's sun low, clear of the HUD's name bar (#190 PR 6b)", () => {
+    for (const time of ['day', 'dusk', 'night'] as const) {
+      const plan = arenaPlan('meadow', time, 1);
+      const high = sunPlacement(plan);
+      const low = sunPlacement(plan, ARENA_STAGE.bossSunElev);
+      expect(low.y).toBeGreaterThan(0);
+      expect(low.y).toBeLessThanOrEqual(high.y + 1e-9);
+      expect(Math.asin(low.y / Math.hypot(low.x, low.y, low.z))).toBeLessThanOrEqual(
+        ARENA_STAGE.bossSunElev + 1e-9,
+      );
+    }
+  });
+
   it('mottles the ground and darkens its rim', () => {
     const seed = 4;
     const middle = groundShade(0, 0, 0, seed);

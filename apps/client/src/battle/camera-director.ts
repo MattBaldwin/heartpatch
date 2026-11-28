@@ -27,6 +27,10 @@ const BOSS_FIGHT_CAMERA: Readonly<BattleCameraConfig> = (() => {
   return { ...base, pitch, aim, feetY, feetRoom, fitFrom, fitHeight, focusShift };
 })();
 
+// TUNE: a boss push-in may close to this share of the distance that just fits the row's width: the
+// fit already leaves a margin, so a small push never crops an end friend (an 18% windup push did).
+const BOSS_FIGHT_CAMERA_SIDE_KEEP = 0.94;
+
 export interface Point3 {
   x: number;
   y: number;
@@ -123,7 +127,7 @@ export function frameDistance(
   safe: SafeRegion,
   fit: readonly FitPoint[],
   config: BattleCameraConfig = BATTLE_CAMERA,
-): { distance: number; shift: number } {
+): { distance: number; shift: number; side: number } {
   const tan = Math.tan(config.fov / 2);
   const feetY = Math.min(config.feetY, safe.bottom - config.feetRoom);
   const headroom = Math.max(0.15, (feetY - safe.top - 0.03) * 2);
@@ -133,12 +137,15 @@ export function frameDistance(
   const wide = tan * Math.max(0.3, aspect);
   const box = Math.max(config.fitHeight / (tan * headroom), config.fitHalfWidth / (wide * 0.95));
   let distance = 0;
+  // The least distance that keeps every fit point's width on screen (#190 PR 6b): a push-in stops here.
+  let side = 0;
   for (const f of fit) {
     const dx = f.x - config.aim.x;
     const dz = f.z - config.aim.z;
     // Along the view (ground-projected) and across it.
     const along = (dx * ys + dz * yc) * cp;
     const across = Math.abs(dx * yc - dz * ys) + f.r;
+    side = Math.max(side, across / (wide * 0.94) + along);
     distance = Math.max(distance, across / (wide * 0.94) + along);
     distance = Math.max(distance, Math.max(0, f.h - config.fitFrom) / (tan * headroom) + along);
   }
@@ -148,6 +155,7 @@ export function frameDistance(
   return {
     distance: Math.min(config.maxFitDistance, Math.max(distance, Math.min(box, reach))),
     shift,
+    side,
   };
 }
 
@@ -467,7 +475,13 @@ export class CameraDirector {
 
     const { aim, pitch, yaw, fov } = this.#config;
     const frame = frameDistance(aspect, safe, fit, this.#config);
-    const distance = frame.distance * (1 - this.#push);
+    // A push-in never crops an end friend (#190 PR 6b): in a boss fight it stops where the row's
+    // width meets the screen's edges (a windup's push reached 0.18 and clipped the left one).
+    const pushed = frame.distance * (1 - this.#push);
+    const distance =
+      this.#config === BOSS_FIGHT_CAMERA
+        ? Math.max(pushed, Math.min(frame.distance, frame.side * BOSS_FIGHT_CAMERA_SIDE_KEEP))
+        : pushed;
     const tx = aim.x + this.#focus.x;
     const tz = aim.z + this.#focus.z;
     const age = now - this.#shake.at;

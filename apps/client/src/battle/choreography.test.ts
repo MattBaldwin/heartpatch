@@ -448,6 +448,23 @@ describe("the BIG squishy's end beats (#190 PR 6)", () => {
     expect(at(0.95).lift).toBeCloseTo(0, 5);
   });
 
+  it("a BIG squishy's acts never turn its face from the camera, except its own twirl (#190 PR 6b)", () => {
+    for (const kind of ALL_ACTS) {
+      if (kind === 'taunt-twirl') continue;
+      for (const feeling of ['silly', 'spooky', 'cozy'] as const) {
+        for (const strength of [1, 2]) {
+          const steady = act(kind, { steady: true, feeling, strength });
+          for (let u = 0; u <= 1; u += 0.1) {
+            expect(actPose(steady, 1000 + 600 * u).spin).toBe(0);
+          }
+        }
+      }
+    }
+    // A squishy that isn't one still twirls (a silly dash winds up with a spin).
+    expect(actPose(act('dash', { feeling: 'silly' }), 1000 + 600 * 0.1).spin).toBeGreaterThan(0);
+    expect(actPose(act('taunt-twirl', { steady: true }), 1000 + 600 * 0.5).spin).toBeGreaterThan(0);
+  });
+
   it('reduced motion: no spin, a smaller wag, no shake', () => {
     const reduced = act('taunt-twirl', { reduced: true });
     for (let u = 0; u <= 1; u += 0.1) {

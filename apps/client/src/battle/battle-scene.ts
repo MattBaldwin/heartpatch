@@ -354,7 +354,12 @@ export class BattleScene {
     this.#instrumentation = new SceneInstrumentation(scene);
     const plan = arenaPlan(options.terrain, options.timeOfDay, arenaSeed(options.battleId));
     this.#shadowStretch = plan.mood.shadowStretch;
-    this.#arena = buildArena(scene, { plan, lowTier, reducedMotion: options.reducedMotion });
+    this.#arena = buildArena(scene, {
+      plan,
+      lowTier,
+      reducedMotion: options.reducedMotion,
+      bossFight: options.team !== undefined,
+    });
     this.#baseFog = [scene.fogStart, scene.fogEnd];
 
     const mine = options.mySide;
@@ -1236,6 +1241,7 @@ export class BattleScene {
       strength: cue.strength,
       feeling: rig.out?.feeling ?? 'cozy',
       reduced: this.#options.reducedMotion,
+      ...(rig.boss && { steady: true }),
     };
   }
 

@@ -146,6 +146,12 @@ export interface Act {
   readonly feeling: FeelingId;
   /** `prefers-reduced-motion`: smaller, no twirls (see CHOREO.reduced). */
   readonly reduced: boolean;
+  /**
+   * A BIG squishy's act (#190 PR 6b): it never turns its face from the camera
+   * (no twirls from a dash, a super hit or a silly follow-through), so its
+   * eyes stay in frame. Only its own taunt twirl turns it.
+   */
+  readonly steady?: boolean;
 }
 
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
@@ -227,7 +233,7 @@ function curve(act: Act, u: number): Pose {
   const f = FEELING_TRAITS[act.feeling];
   // Reduced motion: smaller moves and no twirls.
   const big = r ? CHOREO.reduced.size : CHOREO.exaggeration;
-  const twirl = r ? 0 : 1;
+  const twirl = r || (act.steady === true && act.kind !== 'taunt-twirl') ? 0 : 1;
   switch (act.kind) {
     case 'dash': {
       const reach = r ? act.reach * CHOREO.reduced.reach : act.reach;

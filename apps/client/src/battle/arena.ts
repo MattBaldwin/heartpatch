@@ -81,6 +81,8 @@ export interface ArenaOptions {
   readonly lowTier: boolean;
   /** Reduced motion: the motes hold still. */
   readonly reducedMotion: boolean;
+  /** A boss fight (#190 PR 6b): the sun sits low, clear of the HUD's name bar. */
+  readonly bossFight?: boolean;
 }
 
 const linear = (hex: string) => Color3.FromHexString(hex).toLinearSpace();
@@ -237,7 +239,7 @@ export function buildArena(scene: Scene, options: ArenaOptions): Arena {
       const sun = keep(
         CreateDisc('arena-sun', { radius: mood.night ? 4.5 : 5.5, tessellation: 40 }, scene),
       );
-      const at = sunPlacement(plan);
+      const at = sunPlacement(plan, options.bossFight ? ARENA_STAGE.bossSunElev : undefined);
       sun.position.set(at.x, at.y, at.z);
       sun.lookAt(Vector3.Zero());
       sun.rotate(Vector3.Up(), Math.PI);

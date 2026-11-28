@@ -985,7 +985,7 @@ describe('the boss camera: a low hero shot (#190 PR 2)', () => {
       'focusShift',
       'pitch',
     ]);
-    expect(boss.pitch).toBeCloseTo((4 * Math.PI) / 180, 12);
+    expect(boss.pitch).toBeCloseTo((6.5 * Math.PI) / 180, 12);
   });
 
   for (const f of FIGHTS) {
@@ -1305,6 +1305,23 @@ describe('the boss beats in the camera (#190 PR 2)', () => {
     director.cue(windup, 316);
     const first = director.shot(316 + 1000 / 60, 0.46, safe, fit).distance;
     expect(Math.abs(first - before)).toBeLessThan(base * 0.01);
+  });
+
+  it("a boss push-in never closes past the row's width, so no end friend is cropped (#190 PR 6b)", () => {
+    // A wide row on a phone: the width binds, so any deep push would clip the ends.
+    const row = [
+      { x: -4.3, z: -3.8, r: 4, h: 4 },
+      { x: 5.1, z: -1.4, r: 4, h: 4 },
+    ];
+    const director = new CameraDirector(homes, false, cameraFor(true));
+    const base = { distance: director.shot(0, 0.46, safe, row).distance };
+    const { side } = frameDistance(0.46, safe, row, cameraFor(true));
+    director.cue({ ...cue, push: 0.5, shake: 0 }, 0);
+    let d = base.distance;
+    for (let now = 0; now <= 1500; now += 1000 / 60)
+      d = director.shot(now, 0.46, safe, row).distance;
+    expect(d).toBeGreaterThanOrEqual(Math.min(base.distance, side * 0.94) - 1e-6);
+    expect(d).toBeLessThan(base.distance);
   });
 
   it('pulls back slowly after the boss is tuckered out', () => {
