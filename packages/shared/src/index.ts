@@ -189,6 +189,7 @@ export * from './schemas/far-hollow.js';
 export * from './schemas/trick-or-treat.js';
 export * from './gathering/index.js';
 export * from './recipe-book/index.js';
+export * from './research/index.js';
 export * from './home/index.js';
 export * from './care/index.js';
 export * from './schemas/care.js';
