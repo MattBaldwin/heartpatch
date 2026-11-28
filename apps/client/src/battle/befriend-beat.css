@@ -1,0 +1,78 @@
+/* The answer to an ask (#190 PR 6): a blush, and for a yes a dim and sparkles
+   where the BIG squishy shrinks to its base form. Only transform and opacity move. */
+
+.befriend-beat {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.befriend-blush {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at var(--beat-x) var(--beat-y),
+    rgb(255 157 181 / var(--beat-blush)) 0,
+    rgb(255 157 181 / 0%) var(--beat-r)
+  );
+  animation: befriend-beat-glow var(--beat-ms) ease-out both;
+}
+
+.befriend-dim {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at var(--beat-x) var(--beat-y),
+    rgb(20 10 40 / 0%) calc(var(--beat-r) * 0.55),
+    rgb(20 10 40 / var(--beat-dim)) var(--beat-r)
+  );
+  animation: befriend-beat-glow var(--beat-ms) ease-out both;
+}
+
+.befriend-sparkle {
+  position: absolute;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 0 6px rgb(255 255 255 / 90%);
+  animation: befriend-beat-burst var(--beat-ms) cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.befriend-sparkle-tint {
+  color: #ff9db5;
+}
+
+@keyframes befriend-beat-glow {
+  0% {
+    opacity: 0;
+  }
+
+  25% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes befriend-beat-burst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+
+  15% {
+    opacity: 1;
+  }
+
+  70% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rot));
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rot));
+  }
+}

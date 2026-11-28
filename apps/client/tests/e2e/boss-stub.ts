@@ -312,6 +312,8 @@ function playRound(
     });
     log.push({ ...at('b', 0), type: 'tuckered-out' });
   }
+  // The engine ends every battle with this event (the end beats play on it, #190 PR 6).
+  log.push({ turn, type: 'battle-end', winner: won ? 'a' : 'b', reason: 'tuckered-out' });
   const energies = new Map<string, number>();
   for (const e of log) {
     if (e['type'] === 'hit')

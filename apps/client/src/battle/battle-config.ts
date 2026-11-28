@@ -130,6 +130,10 @@ export const CHOREO = {
   dodge: { side: 0.9 }, // TUNE
   /** How far a tuckered-out squishy flops over and sinks. */
   faint: { roll: 1.35, sink: 0.1 }, // TUNE
+  /** The BIG squishy sat down, tuckered out (#190 PR 6): how far it sinks and squashes, and its nod. */
+  sit: { sink: 0.14, squash: 0.84, nod: 0.1 }, // TUNE
+  /** The BIG squishy's gentle taunt twirl (#190 PR 6): the little hop it takes while it turns. */
+  twirl: { lift: 0.2 }, // TUNE
   swap: { out: 0.45 }, // TUNE: fraction of the swap step spent hopping out
   swapIn: { height: 3 }, // TUNE: drops from this high
   /** The Heart Charm: when it lands, when the wobble ends, when the result shows (fractions). */
@@ -441,6 +445,22 @@ export const RARE_REVEAL = {
 export function revealStep(list: readonly number[], scale: number): number {
   return list[Math.min(Math.max(scale, 1), list.length) - 1] ?? 0;
 }
+
+/**
+ * The answer to a boss's ask (#190 PR 6). Index = the coarse warmth step 0–4
+ * (`BOSS_WARMTH_STEPS`): how many heart bursts rise, and how pink the blush
+ * glows. Never shown as a number.
+ */
+export const BEFRIEND_BEAT = {
+  bursts: [1, 1, 2, 2, 3], // TUNE: confetti bursts (12 hearts each; the heart pool holds 24)
+  blush: [0.25, 0.45, 0.65, 0.85, 1], // TUNE: share of `blushMax`
+  blushMax: 0.5, // TUNE: the glow's strongest opacity
+  burstGapMs: 380, // TUNE: between bursts (a burst's hearts live ~1.1 s)
+  dim: 0.3, // TUNE
+  sparkles: 14, // TUNE
+  ms: 1500, // TUNE
+  calmMs: 800, // TUNE: reduced motion
+} as const;
 
 /**
  * Befriending a rare one (#391): hearts that fall over the new friend, by the

@@ -393,3 +393,71 @@ describe('the boss camera beats (#190 PR 2)', () => {
     }
   });
 });
+
+describe("the BIG squishy's end beats (#190 PR 6)", () => {
+  const boss = ctx({ boss: 'b', user: 'b' });
+
+  it('the boss tuckered out sits down with a Zzz, no flop, no shake', () => {
+    const plan = planStep(step('tuckered', 'b', { ms: 1100 }), boss);
+    expect(plan.acts.map((a) => a.kind)).toEqual(['sit-down']);
+    expect(plan.effects.map((e) => e.kind)).toContain('sleepy');
+    expect(plan.effects.map((e) => e.kind)).not.toContain('dizzy');
+    expect(plan.camera.shake).toBe(0);
+    expect(plan.camera.push).toBe(BATTLE_CAMERA.koPush);
+    expect(plan.camera.relax).toBe(BATTLE_CAMERA.boss.beats.koRelax);
+  });
+
+  it('a friend tuckered out in a boss fight still flops, as before', () => {
+    const plan = planStep(step('tuckered', 'a', { ms: 1100 }), boss);
+    expect(plan.acts.map((a) => a.kind)).toEqual(['faint']);
+  });
+
+  it('the sit-down is upright and held, never rolled over', () => {
+    const held = heldPose('sit-down', 0, false);
+    expect(held.roll).toBe(0);
+    expect(held.lift).toBeLessThan(0);
+    expect(held.squash).toBeLessThan(1);
+    expect(actPose(act('sit-down'), 1000 + 600)).toMatchObject({
+      roll: 0,
+      lift: held.lift,
+      squash: expect.closeTo(held.squash, 1) as number,
+    });
+  });
+
+  it('the team tuckered out: the boss does one gentle taunt twirl, kindly framed', () => {
+    const end = step('end', 'a', { ms: 900 });
+    const plan = planStep(end, { ...boss, bossWon: true });
+    expect(plan.acts).toEqual([
+      expect.objectContaining({ side: 'b', kind: 'taunt-twirl', delay: 0 }),
+    ]);
+    // No red flash, no hit-stop, no push; the shake is nothing (the owner's cap is 0.2).
+    expect(plan.effects).toEqual([]);
+    expect(plan.hitStop).toBe(0);
+    expect(plan.camera).toMatchObject({ focus: null, push: 0, shake: 0, roll: 0 });
+    expect(plan.camera.shake).toBeLessThanOrEqual(0.2);
+    // Without the flag the end step is as it always was (a scoot, or my win).
+    expect(planStep(end, boss).acts).toEqual([]);
+  });
+
+  it('the twirl turns once, as a pure function of time', () => {
+    const a = act('taunt-twirl');
+    const at = (u: number) => actPose(a, 1000 + 600 * u);
+    expect(at(0.5).spin).toBeGreaterThan(0);
+    expect(at(0.95).spin).toBeCloseTo(Math.PI * 2, 5);
+    expect(at(0.5)).toEqual(at(0.5));
+    expect(at(0.95).lift).toBeCloseTo(0, 5);
+  });
+
+  it('reduced motion: no spin, a smaller wag, no shake', () => {
+    const reduced = act('taunt-twirl', { reduced: true });
+    for (let u = 0; u <= 1; u += 0.1) {
+      const pose = actPose(reduced, 1000 + 600 * u);
+      expect(pose.spin).toBe(0);
+      expect(finite(pose)).toBe(true);
+    }
+    const plan = planStep(step('end', 'a'), { ...boss, bossWon: true, reduced: true });
+    expect(plan.camera.shake).toBe(0);
+    const ko = planStep(step('tuckered', 'b'), { ...boss, reduced: true });
+    expect(ko.camera.push).toBe(0);
+  });
+});
