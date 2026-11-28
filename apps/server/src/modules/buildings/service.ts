@@ -168,8 +168,7 @@ const MESSAGES = {
   tooMany: (name: string) => `Your home already has all the ${name} it can hold!`,
   onlyOne: (name: string) => `You already have a ${name}! One is plenty.`,
   /** A per-player cap above one (Twinkle Lights, #37 2a): `onlyOne` would be untrue. */
-  allOfThem: (name: string, max: number) =>
-    `You've put up all the ${name} you can! ${String(max)} is the most.`,
+  allOfThem: (name: string) => `You've put up all the ${name} you can!`,
   noBuilding: "We couldn't find that building.",
   notAFire: 'Only fires need fuel.',
   full: "It's full! Come back after a night or two.",
@@ -871,7 +870,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
               throw new AppError(
                 'CONFLICT',
                 building.maxPerHome > 1
-                  ? MESSAGES.allOfThem(building.name, building.maxPerHome)
+                  ? MESSAGES.allOfThem(building.name)
                   : MESSAGES.onlyOne(building.name),
               );
             }

@@ -517,9 +517,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       await placed(server, kid, mapId, body(1));
       const third = await place(server, kid, mapId, body(2));
       expect(third.statusCode).toBe(409);
-      expect(errorOf(third).message).toBe(
-        "You've put up all the Twinkle Lights you can! 2 is the most.",
-      );
+      expect(errorOf(third).message).toBe("You've put up all the Twinkle Lights you can!");
       const cost = building('twinkle-lights').levels[0]!.cost;
       expect((await home(server, kid, mapId)).items).toEqual({
         timber: 60 - 2 * (cost['timber'] ?? 0),
