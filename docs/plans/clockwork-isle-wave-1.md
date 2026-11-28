@@ -155,12 +155,14 @@ A Sonnet mockup lane starts the moment the plan is OK (it writes no code) and pu
 | Nov 28 ~12:00 | #909 merged (expected); C0 merges `main`, regenerates 0072 | |
 | Nov 28 ~14:00 | **G2 contracts merged** (Opus + Fable review) | start **C1, C2, C3, C6** |
 | Nov 29 ~02:00 | **G3 mockups M1–M4 OK** (owner, evening ET Nov 28) | C4 and C5 may open PRs once their server deps merge; names settled |
-| Nov 29 ~16:00 | C1, C3, C6 merged; C2 merged (the biggest lane; split C2a lines + power / C2b rails + depot if it passes ~$20) | start **C4**, then **C5** when C2 and C3 are in |
+| Nov 29 ~12:00 | C1, C6 merged; **C2 merged** (the biggest lane; split C2a lines + power / C2b rails + depot if it passes ~$20) | start **C4**; **C3 opens its PR now** (it shares `buildings/service.ts` with C2, R2.2) |
+| Nov 29 ~20:00 | C3 merged | |
+| Nov 30 ~08:00 | **C4 merged** (its lobby card and line field were built against `testClockworkIsle()` while C1 ran) | start **C5** (models and the blade shader already built on M3 approval) |
 | Nov 30 ~20:00 | **G4 lanes merged**; `pnpm sim:clockwork` report posted | C4, C5 captures render-checked and on the Board |
 | Dec 1 ~02:00 | **G5 balance sim OK** (owner reads the report) | |
 | Dec 1 ~14:00 | **G6 e2e on a fresh Clockwork patch** green; `HP_CLOCKWORK_ISLE=testers`, owner plays | C7 flips to `on` on the owner's word |
 
-Slack is about half a day. If G2 slips past Nov 28 18:00, cut C6's species to data-only (no spawn filter) and move the Depot from C2 to Wave 2; the acceptance list still holds except "isle-only" spawns.
+**There is no slack**: C5 ends at G4. The cut rule therefore triggers early: if G2 slips past Nov 28 16:00, or C2 is not merged by Nov 29 ~14:00, cut C6's species to data-only (no spawn filter) and move the Depot from C2 to Wave 2; the acceptance list still holds except "isle-only" spawns.
 
 ### Fork table (open owner questions; plan both branches, mark the fork)
 
@@ -293,12 +295,13 @@ Delta for the reviewer's four blocking findings; the non-blocking ones are fixed
 
 DECISIONS "Christmas plan and the owner's seven answers (#37)", answer 1, records: *Clockwork Isle after Christmas, season-neutral, Fable plan lane in January; reason: patch type is fixed at creation, so a frosty isle would give Christmas only to new patches.* **The owner reversed this on 2026-11-28** (relayed by supervisor 55: Dec 1 target; Q1 = frosty Christmas headline; R1 = Gift Wrapper yes). Decision 7 in R1.3 therefore reads: **"Clockwork Isle ships Dec 1 as the Phase 3 Christmas headline with a frosty look; supersedes #37 answer 1; the season-neutral look is Wave 2."** The recorded reason still holds and is answered, not ignored: existing patches keep every #37 Christmas feature unchanged, and a Keeper who wants the frosty isle makes a new Clockwork Isle beside their patches (Q5: no patch-count rule changes). The Gift Wrapper's reach into the presents economy has the owner's explicit yes (R1.4), so #37 answer 7's "three December lanes" gains this one data row, not a lane.
 
-## R2.2 Who keeps power fresh
+## R2.2 Who keeps power fresh (round 2 wording)
 
-`buildings.unpowered_since` must change whenever a wire, a generator or the land under them changes hands. Ownership, all **C2**:
-- `refreshPower(tx, mapId, userIds, at)` lives in `territory/power-refresh.ts` (new) and is **called from inside `refreshSupply`** (`territory/supply.ts`, C2's), so every path that already refreshes supply refreshes power for free: captures (`territory/service.ts`), rewild (`rewild.ts`), fading (`tending.ts`), nightfall (`jobs/nightfall.ts`), and every line command (`modules/lines/`). None of those files changes.
-- Building placement, move and removal of a generator or a `needsPower` row: **C2 adds one `refreshPower` call** in `buildings/service.ts` `place`, `move` and `remove` (after the row write, before the event append). `buildings/service.ts` and `buildings/repo.ts` are therefore **C2's files first**; **C3 merges `main` after C2 lands** and adds its one-line `requiresResearch` call and the `PublicBuilding.research` read. C2 also writes `PublicBuilding.unpowered` in `repo.ts`.
-- `unpowered_since` is set to the **time the change took effect**, not `now`: a lazy fade's or rewild's recorded instant, a capture's battle end, a line command's `at`. Repowering clears it and banks nothing in between. Test: unpowered at T1 (a fade resolved later at T3 with `wild_at = T1`), repowered at T2, banks exactly `[T0, T1) ∪ [T2, now)`.
+`buildings.unpowered_since` is a **step-8 write** (TECH_SPEC §7: buildings in id order), so it can never run inside `refreshSupply`, which executes in the middle of step 6 and is followed by `tile_explore` locks (`refreshHomesteads`). Ownership, all **C2**:
+- `refreshPower(tx, mapId, userIds, at)` lives in `territory/power-refresh.ts` (new). It locks the players' generator and `needsPower` rows in id order (step 8), computes `powerReach` from **the owner's current tiles, live `tile_lines` and standing buildings only** (rows already taken down or marked lost are excluded), and sets or clears `unpowered_since = at` where the state changed.
+- It runs **after** supply and after any land-loss take-down, at the step-8 point each path already has: capture (`territory/service.ts`, after `takeDownOnLostLand`/`finishLostBuildings`), rewild (`rewild.ts`, after its take-down; this also covers Hollow Man takeovers, which reach `rewildTiles` from `hollow/service.ts`), fading nightfall (`tending.ts`), road commands (`roads/service.ts`, since a road can carry supply that a wire chain depends on), and every line command (`modules/lines/`). That is **one line in each of `territory/service.ts`, `rewild.ts`, `tending.ts` and `roads/service.ts`, owned by C2** and listed in its brief; `refreshSupply` itself is unchanged and keeps returning the affected players.
+- Building placement, move and removal of a generator or a `needsPower` row: **C2 adds one `refreshPower` call** in `buildings/service.ts` `place`, `move` and `remove`, after the row write (already step 8) and before the event append. `buildings/service.ts` and `buildings/repo.ts` are **C2's files first**; **C3 merges `main` after C2 lands** and adds its one-line `requiresResearch` call and the `PublicBuilding.research` read. C2 also writes `PublicBuilding.unpowered` in `repo.ts`.
+- `at` is **the job's own instant**, the same `at` the path passes to `refreshSupply` and writes as `wild_at` or the capture time, never a fresh `now()` taken later in the transaction. Repowering clears it and banks nothing in between. Test: unpowered at `at = T1`, repowered at `T2`, a machine banks exactly `[T0, T1) ∪ [T2, now)`; `lock-order.test.ts` holds a `tile_explore` row and a `buildings` row across a capture that unpowers a Sorter and sees no 40P01.
 
 ## R2.3 Lane overlaps, resolved
 
@@ -311,4 +314,4 @@ DECISIONS "Christmas plan and the owner's seven answers (#37)", answer 1, record
 | `data/species.ts` | C6 | C0 does not touch it |
 | `buildings-guide-model.ts` | C0 adds `PATCH_NAMES['clockwork-isle']` | C5 adds guide rows after C0 (sequenced by dependency, not parallel) |
 
-Timeline effect: C5 now starts after C4 as well as C2 and C3. C4 merges Nov 29 ~20:00 and C5 Nov 30 ~20:00 in the table above, so G4 does not move; the brief for C5 should say "start models and the blade shader on M3 approval, open the PR after C4".
+Timeline effect: C5 starts after C4 as well as C2 and C3, and C3 opens only after C2 merges. The §4 table now carries both (C2 Nov 29 ~12:00, C3 ~20:00, C4 Nov 30 ~08:00, C5 at G4); the half-day slack is gone and the cut rule in §4 triggers earlier. The brief for C5 should say "start models and the blade shader on M3 approval, open the PR after C4".
