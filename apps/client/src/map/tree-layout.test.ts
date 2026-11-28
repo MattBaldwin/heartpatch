@@ -11,6 +11,7 @@ import {
   TREE_REACH,
   TREE_TOP,
 } from './tree-layout.js';
+import { STAR_AT } from './tree-model.js';
 
 const T = CHRISTMAS.tree;
 
@@ -23,7 +24,7 @@ describe('the Patch Tree layout (#37 2d)', () => {
     expect(ornamentLayout(12)).toHaveLength(12);
     expect(ornamentLayout(500)).toHaveLength(T.ornamentCap);
     // The star's count fits on the tree with room to spare.
-    expect(T.ornamentCap).toBeGreaterThanOrEqual(12);
+    expect(T.ornamentCap).toBeGreaterThanOrEqual(STAR_AT);
   });
 
   it('keeps every ornament where it was as more go up', () => {
@@ -44,7 +45,7 @@ describe('the Patch Tree layout (#37 2d)', () => {
     }
     // A few already reach the top and the bottom thirds.
     const six = ornamentLayout(6).map((o) => o.y);
-    const span = TREE_TOP - (T.tiers[0]?.y ?? 0);
+    const span = TREE_TOP - T.tiers[0].y;
     expect(Math.max(...six) - Math.min(...six)).toBeGreaterThan(span * 0.4);
   });
 

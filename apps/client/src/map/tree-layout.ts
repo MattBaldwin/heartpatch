@@ -25,9 +25,8 @@ export interface Ornament {
 const GOLDEN = 0.6180339887498949;
 
 /** The lowest and highest an ornament hangs (model units): the bottom tier's skirt to under the star. */
-const LOW = (T.tiers[0]?.y ?? 0) + 0.015;
-const HIGH =
-  (T.tiers[T.tiers.length - 1]?.y ?? 0) + (T.tiers[T.tiers.length - 1]?.height ?? 0) * 0.55;
+const LOW = T.tiers[0].y + 0.015;
+const HIGH = T.tiers[2].y + T.tiers[2].height * 0.55;
 
 /** How far round from the camera's side (−z) ornaments hang, each way (radians): the back stays bare. */
 const ARC = Math.PI * 0.72; // TUNE

@@ -13,6 +13,7 @@ import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import type { Scene } from '@babylonjs/core/scene';
+import { CAMERA } from '../engine/config.js';
 import { CHRISTMAS } from './map-config.js';
 import type { TerrainClock } from './terrain-plugin.js';
 import { ornamentLayout, type Ornament } from './tree-layout.js';
@@ -198,6 +199,15 @@ function starMesh(scene: Scene): Mesh {
     const base = positions.length / 3;
     positions.push(x0, y0, -half, x1, y1, -half, x1, y1, half, x0, y0, half);
     indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+  // Tipped back to face the map camera (it looks down at `CAMERA.pitch`), so it
+  // shows its face, not its edge.
+  const tilt = CAMERA.pitch * 0.85; // TUNE
+  for (let i = 0; i < positions.length; i += 3) {
+    const y = positions[i + 1] ?? 0;
+    const z = positions[i + 2] ?? 0;
+    positions[i + 1] = y * Math.cos(tilt) - z * Math.sin(tilt);
+    positions[i + 2] = y * Math.sin(tilt) + z * Math.cos(tilt);
   }
   const normals: number[] = [];
   VertexData.ComputeNormals(positions, indices, normals);

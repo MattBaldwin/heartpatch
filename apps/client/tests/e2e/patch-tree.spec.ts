@@ -74,7 +74,13 @@ async function stubTree(page: Page, tree: Tree, night: boolean) {
     const home = view.tiles.filter((t) => t.homeSlot !== null && t.ownerUserId !== null);
     const dist = (a: { q: number; r: number }, b: { q: number; r: number }) =>
       (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
-    const near = (p: { q: number; r: number }) => Math.min(...home.map((h) => dist(h, p)));
+    // The middle of my home ring (my Heart Seed), where the camera starts: the
+    // post nearest it shows mid-screen, clear of the side trays' handles.
+    const mid = {
+      q: Math.round(home.reduce((n, t) => n + t.q, 0) / Math.max(1, home.length)),
+      r: Math.round(home.reduce((n, t) => n + t.r, 0) / Math.max(1, home.length)),
+    };
+    const near = (p: { q: number; r: number }) => dist(mid, p);
     const post = [...(view.posts ?? [])].sort((a, b) => near(a) - near(b))[0];
     if (post) {
       seen.postIndex = post.index;
@@ -144,7 +150,7 @@ async function labelsUnderTree(page: Page, rect: Box): Promise<string[]> {
           b.bottom > rect.y - gap;
         if (meets)
           hits.push(
-            `${node.className || node.dataset['testid'] || node.tagName}: ${node.textContent ?? ''}`,
+            `${node.className || node.dataset['testid'] || node.tagName}: ${node.textContent}`,
           );
       }
       return hits;
@@ -173,20 +179,24 @@ async function shoot(page: Page, name: string): Promise<void> {
 test.describe('the Patch Tree (#37 2d)', () => {
   test.describe.configure({ timeout: 300_000 });
 
-  for (const [ornaments, starLit] of [
-    [0, false],
-    [6, false],
-    [12, true],
+  for (const [ornaments, starLit, night] of [
+    [0, false, true],
+    [6, false, true],
+    [12, true, true],
+    [6, false, false],
   ] as const) {
-    test(`stands at its post with ${String(ornaments)} ornaments at night, over no label`, async ({
+    const when = night ? 'night' : 'day';
+    test(`stands at its post with ${String(ornaments)} ornaments by ${when}, over no label`, async ({
       browser,
     }) => {
       const page = await newPlayer(browser, uniqueName('tree'));
       await page.emulateMedia({ reducedMotion: 'reduce' });
-      const seen = await stubTree(page, { ornaments, starLit }, true);
+      const seen = await stubTree(page, { ornaments, starLit }, night);
+      // The quality tier pinned (dev `?tier=`, governor off), so a slow runner's frames stay sharp.
+      await page.goto('/?tier=high');
       await openPatch(page, 'Tree Patch');
       const tree = await treeOnScreen(page);
-      expect(tree).toMatchObject({ postIndex: seen.postIndex, ornaments, starLit, lit: true });
+      expect(tree).toMatchObject({ postIndex: seen.postIndex, ornaments, starLit, lit: night });
       // Inside its own tile, under the tile's top edge (where the post's flag sits).
       if (!tree.rect || !tree.tileRect) throw new Error('no tree rect');
       expect(tree.rect.y).toBeGreaterThanOrEqual(tree.tileRect.y);
@@ -197,7 +207,13 @@ test.describe('the Patch Tree (#37 2d)', () => {
       // Its post's flag is up, and no label is under the tree.
       await expect(page.locator('.post-flag').filter({ visible: true }).first()).toBeVisible();
       expect(await labelsUnderTree(page, tree.rect)).toEqual([]);
-      await shoot(page, `night-${String(ornaments)}`);
+      // On screen, not just in front of the camera.
+      const screen = page.viewportSize()!;
+      expect(tree.rect.x).toBeGreaterThanOrEqual(0);
+      expect(tree.rect.y).toBeGreaterThanOrEqual(0);
+      expect(tree.rect.x + tree.rect.width).toBeLessThanOrEqual(screen.width);
+      expect(tree.rect.y + tree.rect.height).toBeLessThanOrEqual(screen.height);
+      await shoot(page, `${when}-${String(ornaments)}`);
       await page.context().close();
     });
   }
@@ -219,7 +235,6 @@ test.describe('the Patch Tree (#37 2d)', () => {
     await openPatch(page, 'Deco Patch');
     const before = await treeOnScreen(page);
     expect(before).toMatchObject({ ornaments: 10, starLit: false, lit: false });
-    await shoot(page, 'day-10');
     const asked = views.length;
     const map = (await mapState(page))!;
     const decorated = (seq: number, total: number, lit: boolean) =>

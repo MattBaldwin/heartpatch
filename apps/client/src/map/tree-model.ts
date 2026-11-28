@@ -1,4 +1,4 @@
-import { PATCH_TREE, type MapView, type MapViewChristmas } from '@heartpatch/shared';
+import type { MapView, MapViewChristmas } from '@heartpatch/shared';
 
 /*
  * The Patch Tree on the map (#37 2d): what the map draws and says from
@@ -20,6 +20,15 @@ export const TREE_TEXT = {
   starLit: 'The star on the Patch Tree is lit! ⭐',
   hearts: (n: number) => `${String(n)} ${n === 1 ? 'heart' : 'hearts'} of warmth`,
 } as const;
+
+/**
+ * Ornaments that light the star: mirrors `PATCH_TREE.starAt` (shared
+ * data/patch-tree.ts), pinned equal by tree-model.test.ts. Not imported:
+ * patch-tree.ts imports the present item id from the advent data module, whose
+ * server-only schemas would then ride into the client build (rule 6,
+ * scripts/check-client-bundle.mjs). The server still decides when it's lit.
+ */
+export const STAR_AT = 12; // TUNE: mirrors PATCH_TREE.starAt (owner answer 5)
 
 /** The most hearts one patch-mate's card shows (more warmth still shows this many). */
 export const HEARTS_MAX = 5; // TUNE:
@@ -55,7 +64,7 @@ export function decorate(tree: PatchTree | null, event: Decorated): PatchTree {
 /**
  * The little line the map shows when the tree moved on between two views of
  * the same patch: the star lighting, else ornaments going up (with how many
- * are left to light the star, from `PATCH_TREE.starAt`). Null when nothing
+ * are left to light the star, from `STAR_AT`). Null when nothing
  * went up (the same tree, a fresh copy, or the first view of a patch).
  */
 export function treeNotice(before: PatchTree | null, after: PatchTree | null): string | null {
@@ -64,7 +73,7 @@ export function treeNotice(before: PatchTree | null, after: PatchTree | null): s
   const added = after.ornaments - (before?.ornaments ?? 0);
   if (added <= 0) return null;
   const went = added === 1 ? TREE_TEXT.ornament : TREE_TEXT.ornaments(added);
-  const left = PATCH_TREE.starAt - after.ornaments;
+  const left = STAR_AT - after.ornaments;
   return !after.starLit && left > 0 ? `${went} ${TREE_TEXT.toGo(left)}` : went;
 }
 

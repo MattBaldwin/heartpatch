@@ -802,30 +802,30 @@ export const CHRISTMAS = {
     /** From the post tile's middle: left of the hut and towards the camera (−z). */
     offset: { x: -0.27, z: -0.13 }, // TUNE
     /** The tub it stands in (a toy's base), the trunk, then three tiers bottom up. */
-    tub: { radius: 0.075, height: 0.06, color: '#d4495a' }, // TUNE
-    trunk: { radius: 0.028, height: 0.07, color: '#8a5a3a' }, // TUNE
+    tub: { radius: 0.1, height: 0.085, color: '#e0334a' }, // TUNE
+    trunk: { radius: 0.03, height: 0.06, color: '#8a5a3a' }, // TUNE
     // Tall, narrow cones, so it reads as a fir from the map's tilt (not a round bush).
     tiers: [
-      { radius: 0.135, height: 0.18, y: 0.11 },
-      { radius: 0.105, height: 0.17, y: 0.22 },
-      { radius: 0.075, height: 0.16, y: 0.32 },
+      { radius: 0.12, height: 0.17, y: 0.13 },
+      { radius: 0.095, height: 0.16, y: 0.24 },
+      { radius: 0.068, height: 0.15, y: 0.34 },
     ], // TUNE
     /** Two greens, so the tiers read apart. sRGB. */
-    greens: ['#2f8a4c', '#45a862'], // TUNE
+    greens: ['#1f6e3a', '#2f8a4c'], // TUNE
     /** The star on top: its outer radius, how thick, its middle's height. */
-    star: { radius: 0.06, depth: 0.026, y: 0.5, lit: '#ffd84d', unlit: '#b8a878' }, // TUNE
+    star: { radius: 0.075, depth: 0.026, y: 0.53, lit: '#ffd84d', unlit: '#b8a878' }, // TUNE
     /** One ornament's radius. */
-    ornamentRadius: 0.026, // TUNE
+    ornamentRadius: 0.03, // TUNE
     /**
      * Most ornaments drawn: the star's count fills the tree, and a few more
      * after it squeeze in; past this the tree looks the same (the count
      * still goes up on the server).
      */
     ornamentCap: 18, // TUNE
-    /** Red, gold, blue, pink, white. sRGB. */
-    ornamentColors: ['#ff5d52', '#ffcc4d', '#6cb8ff', '#ff8fd0', '#fff4e0'], // TUNE
+    /** Red, gold, blue, pink, warm white: saturated, so a lit one reads as its colour, not pastel. sRGB. */
+    ornamentColors: ['#ff2a2a', '#ffc21a', '#2a8cff', '#ff3db8', '#fff0b0'], // TUNE
     /** How brightly lit ornaments and the lit star glow at night (× their colour). */
-    glow: { ornament: 3.2, star: 3.6, dayStar: 0.8 }, // TUNE
+    glow: { ornament: 4.5, star: 4.5, dayStar: 0.8 }, // TUNE
     /** Lit ornaments twinkle like the bulbs: how far they dim (0–1), how fast. Still under reduced motion. */
     twinkle: { amount: 0.35, speed: 1.5 }, // TUNE
   },

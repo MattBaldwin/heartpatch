@@ -42,7 +42,7 @@ export function createTreeLayer(options: {
     beat.classList.toggle('tree-beat-still', reduced());
     // Restart the drift-in for a second line while the first is still up.
     beat.hidden = true;
-    void beat.offsetWidth;
+    void beat.getBoundingClientRect();
     beat.hidden = false;
     clearTimeout(timer);
     timer = setTimeout(() => {

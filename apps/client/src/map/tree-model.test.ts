@@ -1,11 +1,23 @@
 import { PATCH_TREE } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { decorate, heartsFor, HEARTS_MAX, treeNotice, treeOf, TREE_TEXT } from './tree-model.js';
+import {
+  decorate,
+  heartsFor,
+  HEARTS_MAX,
+  STAR_AT,
+  treeNotice,
+  treeOf,
+  TREE_TEXT,
+} from './tree-model.js';
 
 const A = '00000000-0000-4000-8000-00000000000a';
 const B = '00000000-0000-4000-8000-00000000000b';
 
 describe('the Patch Tree model (#37 2d)', () => {
+  it("mirrors the server's star count (it can't import it: rule 6)", () => {
+    expect(STAR_AT).toBe(PATCH_TREE.starAt);
+  });
+
   it("reads the server's tree, and nothing before it's planted", () => {
     expect(treeOf(null)).toBeNull();
     expect(treeOf({})).toBeNull();
