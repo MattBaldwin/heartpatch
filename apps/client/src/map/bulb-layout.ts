@@ -82,17 +82,31 @@ export interface BulbCounts {
 }
 
 /**
- * Bulbs per string for a tile with `eaves` swags and `posts` posts and room
- * for `budget` bulbs: the edges first (they spread the light round the
- * tile), then the post, then the eaves share what's left.
+ * Bulbs per string for a tile with `eaves` swags, `posts` posts and `edges`
+ * edges to string, in room for `budget` bulbs. Each swag and coil keeps a
+ * few (`B.keep`) so a busy patch never loses them; the edges then share the
+ * rest (they spread the light round the tile), and what's left tops up the
+ * coil, then the swags. With too little room even for that, the edges come
+ * first.
  */
-export function bulbCounts(eaves: number, posts: number, budget: number): BulbCounts {
+export function bulbCounts(eaves: number, posts: number, budget: number, edges = 6): BulbCounts {
   const room = Math.max(0, Math.floor(budget));
-  const perEdge = Math.min(B.perEdge, Math.floor(room / 6));
-  let left = room - perEdge * 6;
-  const perPost = posts === 0 ? 0 : Math.min(B.perPost, Math.floor(left / posts));
-  left -= perPost * posts;
-  const perEave = eaves === 0 ? 0 : Math.min(B.perEave, Math.floor(left / eaves));
+  const keepPost = Math.min(B.perPost, B.keep);
+  const keepEave = Math.min(B.perEave, B.keep);
+  const kept = keepPost * posts + keepEave * eaves;
+  if (edges > 0 && room < kept + edges * 2) {
+    const perEdge = Math.min(B.perEdge, Math.floor(room / edges));
+    let left = room - perEdge * edges;
+    const perPost = posts === 0 ? 0 : Math.min(B.perPost, Math.floor(left / posts));
+    left -= perPost * posts;
+    const perEave = eaves === 0 ? 0 : Math.min(B.perEave, Math.floor(left / eaves));
+    return { perEdge, perEave, perPost };
+  }
+  const perEdge = edges === 0 ? 0 : Math.min(B.perEdge, Math.floor((room - kept) / edges));
+  let left = room - kept - perEdge * edges;
+  const perPost = posts === 0 ? 0 : Math.min(B.perPost, keepPost + Math.floor(left / posts));
+  left -= (perPost - keepPost) * posts;
+  const perEave = eaves === 0 ? 0 : Math.min(B.perEave, keepEave + Math.floor(left / eaves));
   return { perEdge, perEave, perPost };
 }
 
@@ -180,7 +194,7 @@ export function bulbLayout(tiles: readonly BulbTile[], size: number, cap: number
       }),
     );
     const t = skip.size > 0 ? { ...tile, skip } : tile;
-    return tileBulbs(t, size, bulbCounts(swags(tile), tile.posts.length, share));
+    return tileBulbs(t, size, bulbCounts(swags(tile), tile.posts.length, share, 6 - skip.size));
   });
   return bulbs.slice(0, cap);
 }

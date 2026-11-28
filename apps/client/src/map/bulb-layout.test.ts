@@ -170,9 +170,14 @@ describe('bulb layout (#37 2a)', () => {
 
   it('gives every string its full count while the patch fits, and respaces past it', () => {
     expect(bulbCounts(1, 1, 1000)).toEqual(FULL);
-    // Edges first, then the post, then the eaves share what's left.
-    expect(bulbCounts(2, 1, 30)).toEqual({ perEdge: 5, perEave: 0, perPost: 0 });
-    expect(bulbCounts(2, 1, 40)).toEqual({ perEdge: 5, perEave: 2, perPost: 5 });
+    // Swags and coils keep a few, the edges share the rest, then the coil and swags top up.
+    expect(bulbCounts(2, 1, 30)).toEqual({ perEdge: 3, perEave: 3, perPost: 5 });
+    expect(bulbCounts(2, 1, 40)).toEqual({ perEdge: 5, perEave: 3, perPost: 4 });
+    // A busy patch (600 over 24 tiles) still swags its house and coils its post.
+    expect(bulbCounts(1, 1, 25)).toEqual({ perEdge: 3, perEave: 3, perPost: 4 });
+    // A tile sharing two edges with lit neighbours strings four.
+    expect(bulbCounts(1, 1, 25, 4)).toEqual({ perEdge: 4, perEave: 4, perPost: 5 });
+    // Too little room even for that: edges first.
     expect(bulbCounts(0, 1, 13)).toEqual({ perEdge: 2, perEave: 0, perPost: 1 });
     expect(bulbCounts(0, 0, 0)).toEqual({ perEdge: 0, perEave: 0, perPost: 0 });
     // Fewer bulbs on a string still span its whole edge, evenly.
