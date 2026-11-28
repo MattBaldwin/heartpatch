@@ -102,4 +102,33 @@ export const MAP_GEN: MapGenSettings = {
     landBandPercent: 15, // TUNE: claimable land per home within ±15 % of the average
     attempts: 60, // TUNE: water layouts tried before a RangeError
   },
+  // Clockwork Isle (#874, plan §3 row C1): a Wild Isle's island with no
+  // offshore isles, then wind and Scrap Heaps. One layout per seat count the
+  // create path accepts (MAP_MAX_PLAYERS, 6). The river count isn't a knob:
+  // the Wild Isle generator runs one past each group of homes (three on six
+  // seats).
+  clockworkIsle: {
+    island: {
+      layouts: [{ players: 6, radius: 18, homeDistance: 11, oceanRings: 2 }], // TUNE:
+      coastRing: 1,
+      oceanTerrain: 'ocean',
+      coastTerrain: 'coast',
+      riverTerrain: 'river',
+      lakeTerrain: 'wild-lake',
+      waterMinFromSeed: 3, // TUNE: past TERRITORY_RULES keepRadius (2), as on a Wild Isle
+      homeWaterSteps: 3, // TUNE:
+      rivers: { wiggle: 3, apart: 4, lakePercent: 50 }, // TUNE:
+      lakes: { count: [1, 3], size: [3, 6] }, // TUNE: a little less water: room for machines
+      isles: { count: [0, 0], size: [3, 5], offshore: 1 }, // TUNE: no offshore isles in Wave 1
+      minRegionLand: 50, // TUNE:
+      minPieceLand: 30, // TUNE:
+      landBandPercent: 15, // TUNE:
+      attempts: 60, // TUNE:
+    },
+    // TUNE: smoothing passes and the coast and hill nudges (percent of the
+    // score scale); the 15 / 50 / 35 % split is WIND_SPLIT in the generator.
+    wind: { smoothing: 3, coastBonus: 15, hillBonus: 10 },
+    // TUNE: two Parts heaps 2–3 steps from every Heart Seed (SCRAP_HEAP_REACH).
+    scrapHeaps: { perHome: 2, minFromSeed: 2 },
+  },
 };

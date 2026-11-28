@@ -563,7 +563,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       expect((await createMap(server, owner)).patchType).toBe('cozy');
     });
 
-    it('opens the choice to the testers only, and makes none until the isle has a layout', async () => {
+    it('opens the choice to the testers only', async () => {
       const tester = await player();
       const other = await player();
       server = await start({
@@ -576,16 +576,54 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
         code: 'FORBIDDEN',
         message: /aren't open yet/,
       });
-      // The generator's layout lands with lane C1: until then even a tester
-      // is refused before a seed is drawn.
-      expect(GAME_DATA.mapGen.clockworkIsle).toBeUndefined();
+      expect(await mapsOwnedBy(other)).toBe(0);
       const res = await clockworkIsle(tester);
-      expect(res.statusCode).toBe(403);
-      expect(errorOf(res)).toMatchObject({
-        code: 'FORBIDDEN',
-        message: "Clockwork Isles aren't quite ready yet. Make a Cozy Patch for now!",
+      expect(res.statusCode).toBe(201);
+      expect(MapResponseSchema.parse(res.json()).map.patchType).toBe('clockwork-isle');
+    });
+
+    it('stores a Clockwork Isle with wind on every land tile and its Scrap Heaps (#874 C1)', async () => {
+      server = await start({ HP_CLOCKWORK_ISLE: 'on' });
+      const owner = await player();
+      const res = await clockworkIsle(owner);
+      expect(res.statusCode).toBe(201);
+      const map = MapResponseSchema.parse(res.json()).map;
+      expect(map).toMatchObject({ patchType: 'clockwork-isle', maxPlayers: 6, role: 'owner' });
+      const row = await mapRow(map.id);
+      expect(row?.patchType).toBe('clockwork-isle');
+      // The seed stays on the server.
+      expect(res.body).not.toContain(row!.seed!);
+      const generated = generateMap(GAME_DATA, {
+        seed: row!.seed!,
+        playerCount: MAP_MAX_PLAYERS,
+        patchType: 'clockwork-isle',
       });
-      expect(await mapsOwnedBy(tester)).toBe(0);
+      const stored = await tilesOf(map.id);
+      expect(stored).toHaveLength(generated.tiles.length);
+      const byKey = new Map(stored.map((t) => [`${t.q},${t.r}`, t]));
+      for (const t of generated.tiles) {
+        expect(byKey.get(`${t.q},${t.r}`)).toMatchObject({
+          terrain: t.terrain,
+          nodeResource: t.nodeResource,
+          homeSlot: t.homeSlot,
+          wind: t.wind ?? null,
+        });
+      }
+      const waterTerrains = ['ocean', 'river', 'wild-lake'];
+      const land = stored.filter((t) => !waterTerrains.includes(t.terrain));
+      expect(land.every((t) => t.wind !== null && t.wind >= 1 && t.wind <= 3)).toBe(true);
+      expect(
+        stored.filter((t) => waterTerrains.includes(t.terrain)).every((t) => t.wind === null),
+      ).toBe(true);
+      expect(stored.some((t) => t.nodeResource === 'parts')).toBe(true);
+
+      // The view carries each land tile's wind, and never the seed.
+      const viewRes = await call(server, 'GET', `/maps/${map.id}/view`, owner);
+      expect(viewRes.body).not.toContain(row!.seed!);
+      const view = MapViewSchema.parse(viewRes.json());
+      expect(view.map.patchType).toBe('clockwork-isle');
+      const windy = view.tiles.filter((t) => t.wind !== undefined);
+      expect(windy).toHaveLength(land.length);
     });
 
     it('offers it to every player when the switch is on', async () => {
