@@ -2029,10 +2029,16 @@ const MILESTONE: ClothingItem[] = [
         {
           shape: 'ellipsoid',
           on: 'hat',
-          glow: true,
           at: [0.56, 0.2, 0.1],
-          size: [0.3, 0.3, 0.3],
-          color: '#fff8ec',
+          size: [0.44, 0.4, 0.44],
+          color: '#fffaf0',
+        },
+        {
+          shape: 'ellipsoid',
+          on: 'hat',
+          at: [0.7, 0.1, 0.16],
+          size: [0.28, 0.26, 0.28],
+          color: '#fffaf0',
         },
         {
           shape: 'ellipsoid',
@@ -2054,7 +2060,7 @@ const MILESTONE: ClothingItem[] = [
           glow: true,
           at: [-0.32, 0.06, -0.58],
           size: [0.2, 0.27, 0.12],
-          color: '#ffe600',
+          color: '#ffec3d',
         },
         {
           shape: 'ellipsoid',
@@ -2062,7 +2068,7 @@ const MILESTONE: ClothingItem[] = [
           glow: true,
           at: [-0.11, -0.06, -0.62],
           size: [0.2, 0.27, 0.12],
-          color: '#00d0ff',
+          color: '#4fdcff',
         },
         {
           shape: 'ellipsoid',
@@ -2070,7 +2076,7 @@ const MILESTONE: ClothingItem[] = [
           glow: true,
           at: [0.11, -0.06, -0.62],
           size: [0.2, 0.27, 0.12],
-          color: '#ff3d9a',
+          color: '#ff6fb5',
         },
         {
           shape: 'ellipsoid',
@@ -2078,13 +2084,13 @@ const MILESTONE: ClothingItem[] = [
           glow: true,
           at: [0.32, 0.06, -0.58],
           size: [0.2, 0.27, 0.12],
-          color: '#7dff3a',
+          color: '#a4ff5c',
         },
         {
           shape: 'cone',
           on: 'bottom',
-          at: [0, -0.14, 0],
-          size: [1.38, 1.8, 1.32],
+          at: [0, -0.1, 0],
+          size: [1.46, 1.8, 1.42],
           color: '#2f8f5b',
         },
         {
@@ -2093,13 +2099,6 @@ const MILESTONE: ClothingItem[] = [
           at: [0, 0.08, 0],
           size: [1.34, 0.32, 1.3],
           color: '#5e3a1f',
-        },
-        {
-          shape: 'box',
-          on: 'bottom',
-          at: [0, 0.08, -0.67],
-          size: [0.24, 0.2, 0.06],
-          color: '#f2c14e',
         },
         {
           shape: 'ellipsoid',
