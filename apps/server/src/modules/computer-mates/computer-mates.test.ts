@@ -643,7 +643,10 @@ describe('a computer mate’s team species', () => {
     for (const patchType of ['cozy', 'wild-isle'] as const) {
       const pool = teamSpecies(patchType).map((s) => s.id);
       expect(pool.length, patchType).toBeGreaterThan(0);
-      expect(pool.filter((id) => isleOnly.has(id)), patchType).toEqual([]);
+      expect(
+        pool.filter((id) => isleOnly.has(id)),
+        patchType,
+      ).toEqual([]);
     }
   });
 
