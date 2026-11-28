@@ -162,7 +162,7 @@
     ipad() { // iPad: idle pair + battle side by side
       const W = 1024, H = 1366;
       return svg(W, H, `<rect width="${W}" height="${H}" fill="url(#gBgDay)"/>` + snowfall(W, H, 80) +
-        txt(W / 2, 70, 'Clockwork Isle squishies', { fs: 32, fw: 800, anchor: 'middle' }) + txt(W / 2, 100, 'Gearbit and Bulbun (draft names)', { fs: 16, fw: 600, fill: '#8c7b94', anchor: 'middle' }) +
+        txt(W / 2, 70, 'Clockwork Isle squishies', { fs: 32, fw: 800, anchor: 'middle' }) + txt(W / 2, 100, 'Gearbit and Bulbun', { fs: 16, fw: 600, fill: '#8c7b94', anchor: 'middle' }) +
         `<g>${snow(300, 470, 220, 46)}<g transform="translate(300 466) scale(2.1)">${gearbit({ mood: 'idle', gearRot: 6 })}</g>${chip(300, 500, 'Gearbit', 'yellow')}${chip(300, 534, '⚡ Spark · Joy', 'cream')}</g>` +
         `<g>${snow(724, 470, 220, 46)}<g transform="translate(724 466) scale(2.1)">${bulbun({ mood: 'idle' })}</g>${chip(724, 500, 'Bulbun', 'lilac')}${chip(724, 534, '💡 Light · Cozy', 'cream')}</g>` +
         `<g transform="translate(0 600)"><rect x="40" y="0" width="${W - 80}" height="680" rx="36" fill="url(#gArena)" stroke="#eadff0" stroke-width="2"/>${hpBar(80, 40, 280, 'Bulbun', 7, 0.78)}${hpBar(W - 360, 440, 280, 'Gearbit', 8, 0.92)}

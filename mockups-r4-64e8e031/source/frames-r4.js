@@ -10,9 +10,10 @@
   // ---- tile lookups for a projected plate set ('mid' | 'wide' | 'ipad')
   function grid(set) {
     const m = new Map(g.TILES[set].map(([q, r, x, y]) => [q + ',' + r, [x, y]]));
+    const meta = new Map(g.TILES[set].map(([q, r, x, y, own, terr]) => [q + ',' + r, { own, terr }]));
     const c = m.get('-2,10'), e = m.get('-1,10');
     const sp = Math.abs(e[0] - c[0]);
-    return { at: (q, r) => m.get(q + ',' + r) || null, sp, s: (0.82 * sp) / 76, has: (q, r) => m.has(q + ',' + r) };
+    return { meta: (q, r) => meta.get(q + ',' + r) || null, at: (q, r) => m.get(q + ',' + r) || null, sp, s: (0.82 * sp) / 76, has: (q, r) => m.has(q + ',' + r) };
   }
   const NB = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, -1], [-1, 1]];
   const hexDist = (a, b) => (Math.abs(a[0] - b[0]) + Math.abs(a[0] + a[1] - b[0] - b[1]) + Math.abs(a[1] - b[1])) / 2;
@@ -82,32 +83,47 @@
   }
   function nightLight(G, town) {
     let s = '<g style="mix-blend-mode:screen">';
+    const win = { windmill1: [-35, 11], windmill2: [-47, 12], beacon: [-97, 22], clock: [-40, 13], townA: [-42, 15], townB: [-42, 15] };
     for (const [q, r, t] of town) {
       const c = G.at(q, r); if (!c) continue;
-      const hgt = { windmill2: 40, windmill1: 32, beacon: 98, clock: 70, townA: 36, townB: 36 }[t] || 15;
-      s += `<circle cx="${c[0]}" cy="${c[1] - hgt * G.s * 0.45}" r="${(t === 'beacon' ? 20 : 26) * G.s}" fill="url(#gGlow)" opacity=".8"/>`;
+      const [wy, wr] = win[t] || [-14, 15];
+      s += `<circle cx="${c[0]}" cy="${c[1] + wy * G.s}" r="${wr * G.s}" fill="url(#gGlow)" opacity=".8"/>`;
     }
     const b = town.find((x) => x[2] === 'beacon');
-    if (b) { const c = G.at(b[0], b[1]); s += `<ellipse cx="${c[0]}" cy="${c[1] - 10 * G.s}" rx="${2.1 * G.sp}" ry="${1.2 * G.sp}" fill="url(#gCone2)"/><circle cx="${c[0]}" cy="${c[1] - 100 * G.s}" r="${34 * G.s}" fill="url(#gGlow)"/>`; }
+    if (b) { const c = G.at(b[0], b[1]); s += `<ellipse cx="${c[0]}" cy="${c[1] - 10 * G.s}" rx="${2.1 * G.sp}" ry="${1.2 * G.sp}" fill="url(#gCone2)"/>`; }
     return s + '</g>';
   }
 
   // ------------------------------------------------------------- the cozy metropolis
   function metropolis(set, plateName, W, H, radius, { night = false } = {}) {
     const G = grid(set), center = [-2, 10];
-    const tiles = []; for (let q = -12; q <= 8; q++) for (let r = 0; r <= 20; r++) if (G.has(q, r) && hexDist([q, r], center) <= radius) tiles.push([q, r]);
+    const tiles = [];
+    const calm = new Set(['meadow', 'forest', 'old-forest', 'hills', 'pumpkin-fields']);
+    for (let q = -12; q <= 8; q++) for (let r = 0; r <= 20; r++) {
+      const mt = G.meta(q, r); if (!mt) continue;
+      const d = hexDist([q, r], center);
+      if (mt.own === 1) { tiles.push([q, r]); continue; }
+      if (d > radius || mt.own !== 0 || !calm.has(mt.terr)) continue;
+      // keep clear of other patches and the shore: every neighbour must be calm neutral land or mine
+      if (NB.every(([dq, dr]) => { const n = G.meta(q + dq, r + dr); return n && (n.own === 1 || (n.own === 0 && calm.has(n.terr))); })) { const c = G.at(q, r); if (c && c[0] > 36 && c[0] < W - 36) tiles.push([q, r]); }
+    }
     const hash = (q, r) => { let h = (q * 73856093) ^ (r * 19349663); h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967295; };
     const pool = [['houseA', 9], ['houseB', 8], ['houseC', 8], ['houseD', 8], ['workshop', 7], ['townA', 7], ['townB', 6], ['greenhouse', 4], ['tank', 3], ['windmill1', 4], ['windmill2', 2], ['beacon', 3], ['sorter', 5], ['depot', 2], ['bench', 3], ['clock', 2]];
     const total = pool.reduce((a, [, w]) => a + w, 0);
     const list = [];
+    const sails = []; // windmill / beacon / clock tiles already placed
+    const cottages = ['houseA', 'houseB', 'houseC', 'houseD'];
     for (const [q, r] of tiles) {
       const h = hash(q, r); if (h < 0.1 && hexDist([q, r], center) > 0) continue; // a few quiet tiles keep their trees
       let x = hash(r + 7, q + 3) * total, t = pool[0][0]; for (const [n, w] of pool) { x -= w; if (x <= 0) { t = n; break; } }
-      // tall things toward the back (smaller r on screen = further), squat in front
+      if (['windmill1', 'windmill2', 'beacon', 'clock'].includes(t)) {
+        const near = sails.some(([sq, sr]) => hexDist([q, r], [sq, sr]) < 3);
+        if (near) t = cottages[Math.floor(hash(q + 5, r + 9) * 4)]; else sails.push([q, r]);
+      }
       list.push([q, r, t]);
     }
     // a clock tower in the middle
-    const mid = list.findIndex(([q, r]) => q === -2 && r === 9); if (mid >= 0) list[mid][2] = 'clock';
+    const mid = list.findIndex(([q, r]) => q === -2 && r === 9); if (mid >= 0) { list[mid][2] = 'clock'; for (let i = list.length - 1; i >= 0; i--) { const [q, r, t] = list[i]; if (i !== mid && ['windmill1', 'windmill2', 'beacon', 'clock'].includes(t) && hexDist([q, r], [-2, 9]) < 3) list[i][2] = 'houseD'; } }
     const bg = plate(plateName, W, H) + frost(W, H, night);
     const inner = roads(G, list) + buildings(G, list, 'lit');
     return bg + (night ? `<g style="filter:brightness(.82)">${inner}</g>` + nightLight(G, list) : inner);
@@ -131,7 +147,7 @@
       const sc = scene('wide', 'wide', W, H);
       const defsB = `<defs><linearGradient id="fadeV" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".14" stop-color="#fff"/><stop offset=".86" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>` + [0, 1, 2].map((i) => `<mask id="mb${i}" maskUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><rect x="0" y="${i * 230 - 28}" width="${W}" height="286" fill="${i === 0 ? '#fff' : 'url(#fadeV)'}"/></mask>`).join('') + `</defs>`;
       const lab = (y, t) => { const w = t.length * 8 + 28; return `<g transform="translate(${W - 16 - w} ${y})"><rect width="${w}" height="30" rx="15" fill="#fff" opacity=".95" stroke="#eadff0" stroke-width="1.5"/><text x="${w / 2}" y="20" text-anchor="middle" font-size="13.5" font-weight="800" fill="#2f4f86">${t}</text></g>`; };
-      return svg(W, H, sc.svg + defsB + [1, 2, 3].map((st, i) => `<g mask="url(#mb${i})">${PC.windLayer(st, 0, i * 230 - 28, W, i * 230 + 258, 62)}</g>`).join('') + lab(74, '💨 Little breeze') + lab(304, '💨 Good breeze') + lab(534, '❄️ Big brrr!')); },
+      return svg(W, H, sc.svg + defsB + [1, 2, 3].map((st, i) => `<g mask="url(#mb${i})">${PC.windLayer(st, 0, i * 230 - 28, W, i * 230 + 258, 62)}</g>`).join('') + lab(74, '💨 Little breeze') + lab(250, '💨 Good breeze') + lab(600, '❄️ Big brrr!')); },
     night() { const W = 393, H = 852; return svg(W, H, scene('mid', 'midnight', W, H, { night: true }).svg); },
     ipad() { const W = 1024, H = 1366; return svg(W, H, scene('ipad', 'ipad-wide', W, H).svg); },
     ipadnight() { const W = 1024, H = 1366; return svg(W, H, scene('ipad', 'ipad-widenight', W, H, { night: true }).svg); },
@@ -197,7 +213,7 @@
     STATES.forEach(([st, name], i) => {
       const cx = cw * i + cw / 2, cy = 168;
       s += `${hexTile(cx, cy, R)}${K2.roadRing(cx, cy + 1, R * 0.55, R * 0.32, 5.5)}<g transform="translate(${cx} ${cy + 3}) scale(${scale})">${fn(st)}</g>${chip(cx, 218, names ? names[i] : name, st === 'lit' ? 'green' : st === 'out' ? 'grey' : 'cream')}`;
-      if (chips && chips[st]) s += chip(cx, 38, chips[st], 'blue');
+      if (chips && chips[st]) s += chip(cx, 24, chips[st], 'blue');
     });
     return s + '</g>';
   }
@@ -214,9 +230,9 @@
       m3row(W, 160, 'Research Bench', 'Tinker up new blueprints', (s) => K2.bench({ state: s }), 1.1, null) +
       m3row(W, 460, 'Clockwork Beacon', 'The Hollow Man keeps his distance', (s) => K2.beacon({ state: s }), 0.78, null)); },
     skyline() { const W = 393, H = 852; // all six on one baseline: the skyline's rhythm
-      const items = [['Sorter', K2.sorter({ state: 'lit' }), 0.95], ['Depot', K2.depot({ state: 'lit', stub: false, withCart: false }), 0.95], ['Bench', K2.bench({ state: 'lit' }), 1.05], ['Windmill', K2.windmill({ level: 1, state: 'lit' }), 0.8], ['Beacon', K2.beacon({ state: 'lit' }), 0.86], ['Windmill II', K2.windmill({ level: 2, state: 'lit' }), 0.68]];
-      let s = title(W, 'Skyline', 'Squat, medium and tall: every tile different.') + `<rect x="0" y="330" width="${W}" height="360" fill="#fff" opacity=".65"/><rect x="0" y="604" width="${W}" height="26" fill="#efe3cf" stroke="#bda88e" stroke-width="2"/><path d="M0 617 H${W}" stroke="#fff" stroke-width="2.4" stroke-dasharray="10 12" stroke-linecap="round"/>`;
-      items.forEach(([n, art, sc], i) => { const x = 36 + i * 64.2; s += `<g transform="translate(${x} 596) scale(${sc})">${art}</g>${txt(x, 656, n, { fs: 10, fw: 800, anchor: 'middle' })}`; });
+      const items = [['Sorter', K2.sorter({ state: 'lit' }), 0.7], ['Depot', K2.depot({ state: 'lit', stub: false, withCart: false }), 0.72], ['Bench', K2.bench({ state: 'lit' }), 0.82], ['Windmill', K2.windmill({ level: 1, state: 'lit' }), 0.62], ['Beacon', K2.beacon({ state: 'lit' }), 0.66], ['Windmill II', K2.windmill({ level: 2, state: 'lit' }), 0.5]];
+      let s = title(W, 'Skyline', 'Squat, medium and tall: every tile different.') + `<rect x="0" y="406" width="${W}" height="22" fill="#efe3cf" stroke="#bda88e" stroke-width="2"/><path d="M0 417 H${W}" stroke="#fff" stroke-width="2.4" stroke-dasharray="10 12" stroke-linecap="round"/>`;
+      items.forEach(([n, art, sc], i) => { const x = 34 + i * 65; s += `<g transform="translate(${x} 402) scale(${sc})">${art}</g>${txt(x, 458, n, { fs: 10, fw: 800, anchor: 'middle' })}`; });
       return frame(W, H, s); },
     ipad() { const W = 1024, H = 1366;
       const items = [['Windmill · L1', (s) => K2.windmill({ level: 1, state: s }), 1.25, WN], ['Windmill · L2', (s) => K2.windmill({ level: 2, state: s }), 1.0, WN], ['Sorter', (s) => K2.sorter({ state: s }), 1.5, null], ['Rail Depot', (s) => K2.depot({ state: s }), 1.15, null], ['Research Bench', (s) => K2.bench({ state: s }), 1.6, null], ['Clockwork Beacon', (s) => K2.beacon({ state: s }), 1.15, null]];
