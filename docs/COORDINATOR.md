@@ -193,7 +193,26 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **State (supervisor 58 → supervisor 59, 2026-11-28 ~06:30 UTC): read this first; every block below is history.** Decisions are in DECISIONS "Supervisor 58 (2026-11-28)". Supervisor 58 (`session_01RAEPnEtQhE73T3Ju8gFD11`, started by sup 57) handed off at ~200k context.
+- **State (supervisor 59 → supervisor 60, 2026-11-28 ~07:00 UTC): read this first; every block below is history.** Decisions are in DECISIONS "Supervisor 59 (2026-11-28)". Supervisor 59 (`session_01RAEPnHvbFEHhKmvrzRZUuG`, started by sup 58, lineage depth 2) handed off at ~200k context. Three MCP reconnects in its first 30 minutes reloaded about 10–25k of tool schemas each, so budget for them.
+  - **Main** is `b0fd6bc` (#924) or later. Supervisor 59 merged #921 (2c Patch Tree server) and #924 (sup 58 docs). Supervisor 58 is retired and archived.
+  - **Running lanes.** All were told to report to supervisor 59 by id; re-route each one to you.
+    - **C1** `session_01RAEPnErLBEdRwZEVg8NjdE` (#874 isle generator, data, test view): confirmed. At 06:44 it had committed locally (5654fe8) and was running the gate and reviewer round 1; no PR yet. **Brief C4 (isle map client) from `docs/plans/clockwork-wave-1-briefs/` when C1 is near ready.**
+    - **C2** `session_01RAEPnFEVgDhsn5bv2VRXD4` (#874 rails/Depot): **not yet confirmed**. It's at ~298k context, so it got finish-only orders at 06:47: open the PR, run the reviewer loop, post a Lane handoff on #874. It's on the critical path: C3 waits on its merge. **Cut rule: C2 not merged by Nov 29 ~14:00 UTC → Depot to Wave 2.** A helper confirmed its brief arrived whole.
+    - **C3** `session_01RAEPnFHAAhWEDVRwRQfbyN` (#874 research bench): confirmed. Its research module and the 8-Blueprint tier-1 grant are pushed on `issue-874-c3-research-bench`, with 14 DB tests the lane reports green. It waits for C2's merge to do the buildings gate, add `PublicBuilding.research` and open its PR.
+    - **C6** `session_01RAEPnF5RidFi2PHFYU7mLS` (#874 tech squishies + balance sim): **not yet confirmed**; at 06:47 it was writing the sim model.
+    - **6b-2** `session_01RAEPnFUDggYXNDUx4V3tf2` (#190 boss camera/HUD): confirmed. **PR #925** is open (head 7635549). The helper render-check of e77553d was PASS with nits, and the mouth hidden at rise cap 3 is accepted. Five items were sent to the lane and are owed on #925 before `ready`:
+      1. iPad captures have no safe-area insets: reshoot with about 24 top and 20 bottom, and confirm the HUD uses env(safe-area-inset-*).
+      2. A purple half-sphere sits on the middle friend's head in the flinched frames.
+      3. An "Everyone!" sticker lingers on screen.
+      4. The joining frame isn't dimmed.
+      5. The iPad and iPhone win cards differ.
+
+      Flag-only: "until Thursday" vs "Back tomorrow!" copy, a green leaf streak, tails sticking straight up. Night frames are a follow-up. **X3c follows #925's merge** (#37 c7232526927).
+    - **2d** `session_01RAEPnE4uCYEuFuHLdiKxsv` (#37 Patch Tree client, Opus, branch `issue-37-2d-patch-tree-client`), started ~06:42 by a helper from 2c's Lane handoff (#37 comment 7235426889). Its brief is in sup 59's scratchpad only; its contents are summarised in DECISIONS. It owes WebKit frames at 0, 6 and 12 ornaments at night, iPhone and iPad.
+    - **2c** `session_01RAEPnGsSwsq1qTPhHfDTsp` is done (past $25 / 349k). Auto mode refused `archive_session`; the owner was told and can archive it.
+  - **Coordinator decisions open from 2c** (#921 Coordinator notes): the gift-farming loophole on the tree's own effects (Eve head start, Hollow light, Aurorelle warmth), no per-season reset (the 2027 tree would start lit), and the star can light from Dec 1 before 2d draws the tree. 2d was told to flag these, not change them.
+  - **Follow-ups:** unchanged from sup 57's block: X5b landscape/tile-panel stack overlap and SE gift wrap, Beacon lit only while powered, computer-mates `'wild-isle'` key, 5c, "whole patch did it!" sticker, X7 dry run (now unblocked), 1e nudge ruling, #900 items 5–6.
+- **State (supervisor 58 → supervisor 59, 2026-11-28 ~06:30 UTC): history.** Decisions are in DECISIONS "Supervisor 58 (2026-11-28)". Supervisor 58 (`session_01RAEPnEtQhE73T3Ju8gFD11`, started by sup 57) handed off at ~200k context.
   - **Main** is `75d9fc9` (#919 C0) or later. Merged by sup 58: #923 (sup 57 docs), #917 (XM Christmas milestones), #922 (X5b Eve thanks), #919 (C0 Clockwork contracts). XM, X5b, C0 and the Milestones-footer lane are done/archived (the footer "overlap" was not real: a helper confirmed the line sits ~25px below the list's clip edge in the WebKit frames; no PR).
   - **Running lanes** (all report to sup 58 by id; re-route each to you):
     - **C1** `session_01RAEPnErLBEdRwZEVg8NjdE`, **C2** `session_01RAEPnFEVgDhsn5bv2VRXD4`, **C3** `session_01RAEPnFHAAhWEDVRwRQfbyN`, **C6** `session_01RAEPnF5RidFi2PHFYU7mLS` (Opus, started ~06:22 by a sup 58 helper from `docs/plans/clockwork-wave-1-briefs/*.md` with sup 58's id; C3/C6 also got the Blueprint ruling. Spot-check one lane's first user event to confirm the whole brief arrived; none has reported `opened` yet). Owner deadline: full Wave 1 by Dec 1. Plan cut rule: C2 not merged by Nov 29 ~14:00 → Depot to Wave 2. C4 (isle map client) waits on C1.
