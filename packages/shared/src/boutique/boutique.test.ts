@@ -29,6 +29,11 @@ describe('boutique data', () => {
       }
       if (item.rarity === 'mythic') expect(item.boutiquePrice, item.id).toBeUndefined();
     }
+    // Milestone prizes are earned, never bought (#44; the Jolly Elf Costume, #37).
+    for (const item of CLOTHING.filter((i) => i.sources.includes('milestone'))) {
+      expect(item.sources, item.id).not.toContain('boutique');
+      expect(item.boutiquePrice, item.id).toBeUndefined();
+    }
     // Every Halloween rack has something to sell.
     expect(CLOTHING.some((i) => i.season === 'halloween' && i.boutiquePrice)).toBe(true);
   });
