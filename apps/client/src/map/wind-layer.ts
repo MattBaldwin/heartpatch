@@ -8,17 +8,20 @@ import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import type { Scene } from '@babylonjs/core/scene';
-import {
-  hexToWorld,
-  isWaterTerrain,
-  type MapView,
-  type PublicTile,
-} from '@heartpatch/shared';
+import { hexToWorld, isWaterTerrain, type MapView, type PublicTile } from '@heartpatch/shared';
 import { hexDisc } from '../roads/road-field.js';
 import { el } from '../ui/dom.js';
 import type { MeshArrays } from './hex-mesh.js';
 import { HEX_SIZE } from './map-config.js';
-import { DOME, meshFrom, overlayMaterial, placeAt, setInstances, TILE_RADIUS, topOf } from './map-scene.js';
+import {
+  DOME,
+  meshFrom,
+  overlayMaterial,
+  placeAt,
+  setInstances,
+  TILE_RADIUS,
+  topOf,
+} from './map-scene.js';
 import type { MapLayer, MapLayerHost } from './map-screen.js';
 import type { TerrainClock } from './terrain-plugin.js';
 import './wind.css';
@@ -58,7 +61,7 @@ export const WIND_LOOK = {
     [0.36, 0.66, 0.97, 0.32],
   ],
   /** Arrow size by strength (a big brrr has a big arrow). */
-  scale: [0.62, 0.82, 1.05],
+  scale: [0.7, 0.9, 1.15],
   /** The way the wind blows (radians about the up axis, Babylon yaw): towards the far right. */
   yaw: -0.3,
   /** How far an arrow drifts in one loop, in tiles' widths. */
@@ -115,34 +118,35 @@ export function hasWind(view: Pick<MapView, 'map' | 'tiles'>): boolean {
 }
 
 /**
- * The arrow: a flat double chevron (">>") pointing along +x on y = 0,
- * one unit long, white (each instance's tint is its colour).
+ * The arrow: two long arrows side by side ("⇉", mockup M1), pointing along
+ * +x on y = 0, about one unit long, white (each instance's tint is its
+ * colour). Drawn from both sides (no culling), so winding doesn't matter.
  */
 export function arrowArrays(): MeshArrays & { colors: number[] } {
   const positions: number[] = [];
   const indices: number[] = [];
   const colors: number[] = [];
-  const width = 0.09; // TUNE: the stroke, along x
-  const half = 0.2; // TUNE: half the chevron's height, along z
-  const chevron = (x0: number) => {
-    // Two strokes meeting at the tip (x0 + half), each a quad.
-    const tip = x0 + half;
-    for (const side of [-1, 1]) {
-      const base = positions.length / 3;
-      positions.push(
-        x0, 0, side * half,
-        x0 + width, 0, side * half,
-        tip + width, 0, 0,
-        tip, 0, 0,
-      );
-      for (let i = 0; i < 4; i++) colors.push(1, 1, 1, 1);
-      // Face up whichever way the stroke runs.
-      if (side > 0) indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
-      else indices.push(base, base + 2, base + 1, base, base + 3, base + 2);
-    }
+  const shaft = 0.035; // TUNE: half the shaft's width
+  const head = 0.11; // TUNE: half the head's width
+  const tail = -0.5;
+  const neck = 0.22;
+  const tip = 0.5;
+  const vertex = (x: number, z: number): number => {
+    positions.push(x, 0, z);
+    colors.push(1, 1, 1, 1);
+    return positions.length / 3 - 1;
   };
-  chevron(-0.42);
-  chevron(-0.12);
+  for (const z of [-0.14, 0.14]) {
+    const a = vertex(tail, z - shaft);
+    const b = vertex(neck, z - shaft);
+    const c = vertex(neck, z + shaft);
+    const d = vertex(tail, z + shaft);
+    indices.push(a, b, c, a, c, d);
+    const h0 = vertex(neck, z - head);
+    const h1 = vertex(tip, z);
+    const h2 = vertex(neck, z + head);
+    indices.push(h0, h1, h2);
+  }
   return { positions, indices, colors };
 }
 

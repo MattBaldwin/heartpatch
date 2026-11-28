@@ -42,5 +42,10 @@ export function clockworkFrost(patchType: PatchType | undefined): ClockworkFrost
 
 /** The four floats the shader reads as `terrainFrost`: tint, rim strength, rim power, on/off. */
 export function frostUniform(frost: ClockworkFrost): [number, number, number, number] {
-  return [frost.tint * frost.amount, frost.rimStrength * frost.amount, frost.rimPower, frost.amount];
+  return [
+    frost.tint * frost.amount,
+    frost.rimStrength * frost.amount,
+    frost.rimPower,
+    frost.amount,
+  ];
 }

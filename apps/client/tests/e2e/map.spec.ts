@@ -35,6 +35,8 @@ interface MapDebug {
   bulbs?: number;
   bulbsLit?: boolean;
   bulbsTwinkle?: boolean;
+  /** A Clockwork Isle's frost tint (#874). */
+  frost?: boolean;
 }
 
 /**
@@ -62,11 +64,27 @@ const WILD_BUDGET = {
   farTriangles: 680_000,
 } as const;
 
+/**
+ * Clockwork Isle's budget (#874 C4, plan §5, TUNE): Wild Isle's 82 plus its
+ * own layers at their worst, every one a single thin-instanced mesh: wire
+ * posts, wires (lit and dark share one mesh, tinted per instance), rails,
+ * the wind's arrows and its wash. The frost is a terrain-plugin uniform (no
+ * draw call). Measured on `/island.html?patch=clockwork` with sample lines
+ * on every Keeper's land and the wind shown.
+ */
+const CLOCKWORK_BUDGET = {
+  drawCalls: 88,
+  nearTriangles: 1_400_000,
+  farTriangles: 680_000,
+} as const;
+
 /** The dev island page's hook (src/map/gallery/island-gallery-main.ts). */
 type IslandHooks = Window & {
   __islandMap?: {
     ready: () => boolean;
     stats: () => MapDebug | null;
+    lines: () => { wires: number; litWires: number; rails: number } | null;
+    wind: () => { shown: boolean; tiles: readonly number[]; moving: boolean } | null;
     weather: () => {
       clouds: number;
       rain: number;
@@ -678,4 +696,54 @@ test('a real tap on the weather chip opens the Forecast sheet, and the top bar f
   expect(gap).not.toBeNull();
   expect(gap!).toBeGreaterThanOrEqual(4);
   await page.context().close();
+});
+
+test('keeps a Clockwork Isle with wires, rails, wind and frost in its budget (#874)', async ({
+  page,
+}) => {
+  test.setTimeout(240_000); // shader compiles; CI renders in software
+  const shaderErrors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' && /shader|compile|link/i.test(msg.text())) {
+      shaderErrors.push(msg.text());
+    }
+  });
+  const seen: Record<string, { drawCalls: number; triangles: number }> = {};
+  const measure = async (query: string) => {
+    const stats = await islandStats(page, `tier=high&${query}`);
+    seen[query] = { drawCalls: stats.drawCalls, triangles: stats.activeTriangles };
+    return stats;
+  };
+  const near = await measure('patch=clockwork&lines=1&wind=1');
+  expect(near.detail).toBe('near');
+  expect(near.frost).toBe(true);
+  const hooks = await page.evaluate(() => {
+    const hook = (window as IslandHooks).__islandMap;
+    return { lines: hook?.lines() ?? null, wind: hook?.wind() ?? null };
+  });
+  // Wires lit and dark, rails, and wind of all three strengths on land.
+  expect(hooks.lines?.wires ?? 0).toBeGreaterThan(0);
+  expect(hooks.lines?.litWires ?? 0).toBeGreaterThan(0);
+  expect(hooks.lines?.litWires ?? 0).toBeLessThan(hooks.lines?.wires ?? 0);
+  expect(hooks.lines?.rails ?? 0).toBeGreaterThan(0);
+  expect(hooks.wind?.shown).toBe(true);
+  for (const n of hooks.wind?.tiles ?? []) expect(n).toBeGreaterThan(0);
+  // The gallery never ticks: the arrows stand still.
+  expect(hooks.wind?.moving).toBe(false);
+  expect(near.drawCalls).toBeLessThanOrEqual(CLOCKWORK_BUDGET.drawCalls);
+  expect(near.activeTriangles).toBeLessThanOrEqual(CLOCKWORK_BUDGET.nearTriangles);
+  const far = await measure('patch=clockwork&lines=1&wind=1&far=1');
+  expect(far.detail).toBe('far');
+  expect(far.drawCalls).toBeLessThanOrEqual(near.drawCalls);
+  expect(far.activeTriangles).toBeLessThanOrEqual(CLOCKWORK_BUDGET.farTriangles);
+  // Christmas at night (snow falls through the season, the frost stays).
+  const snowy = await measure('patch=clockwork&lines=1&wind=1&season=christmas&night=1');
+  expect(snowy.frost).toBe(true);
+  expect(snowy.snow).toBe(1);
+  expect(snowy.drawCalls).toBeLessThanOrEqual(CLOCKWORK_BUDGET.drawCalls);
+  // Cozy and Wild Isle wear no frost.
+  expect((await measure('patch=wild')).frost).toBe(false);
+  expect((await measure('patch=cozy')).frost).toBe(false);
+  expect(shaderErrors).toEqual([]);
+  test.info().annotations.push({ type: 'clockwork budget', description: JSON.stringify(seen) });
 });

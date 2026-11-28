@@ -1,5 +1,5 @@
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
-import { hexToWorld, type MapView } from '@heartpatch/shared';
+import { hexKey, hexToWorld, type MapView } from '@heartpatch/shared';
 import { boot } from '../../engine/boot.js';
 import { CAMERA } from '../../engine/config.js';
 import { setPerfReports } from '../../engine/perf-report.js';
@@ -10,7 +10,16 @@ import { NIGHT_LOOK } from '../../hollow/hollow-config.js';
 import { CHRISTMAS, HEX_SIZE } from '../map-config.js';
 import { maxZoomFor } from '../map-layout.js';
 import { MapScene, type MapSceneStats } from '../map-scene.js';
-import { testPatch, testWildIsle, withHomeBuildings, withTwinkleLights } from '../test-view.js';
+import {
+  testClockworkIsle,
+  testPatch,
+  testWildIsle,
+  withHomeBuildings,
+  withTwinkleLights,
+} from '../test-view.js';
+import { galleryLines } from '../../lines/gallery-lines.js';
+import { LineField, type LineFieldStats } from '../../lines/line-field.js';
+import { createWindLayer, type WindLayer, type WindStats } from '../wind-layer.js';
 import { galleryWeather, galleryWeatherKind } from '../../weather/gallery-weather.js';
 import {
   createWeatherLayer,
@@ -41,6 +50,9 @@ setPerfReports(false);
  * `&built=1` first puts an Ember Den and Training Grounds by each Heart Seed), and
  * `&motion=1` turns reduced motion off so they twinkle, and `&t=` (seconds)
  * moves the terrain clock there once, so two shots show the twinkle move.
+ * `?patch=clockwork` is a Clockwork Isle (#874, `testClockworkIsle`): the
+ * frost tint is on; `&lines=1` lays sample wires (half lit) and rails on
+ * every Keeper's land, `&wind=1` shows the wind layer.
  * Nothing moves (the terrain clock never ticks), so a shot is the same every time.
  */
 
@@ -52,7 +64,12 @@ if (!canvas) throw new Error('missing #game canvas');
 const params = new URLSearchParams(window.location.search);
 const pinTier = isQualityTier(params.get('tier'));
 const tier = pickInitialTier(params.get('tier'), params.get('quality'));
-const patch = params.get('patch') === 'cozy' ? 'cozy' : 'wild';
+const patch =
+  params.get('patch') === 'cozy'
+    ? 'cozy'
+    : params.get('patch') === 'clockwork'
+      ? 'clockwork'
+      : 'wild';
 const night = params.get('night') === '1';
 const far = params.get('far') === '1';
 const focus = params.get('focus')?.split(',').map(Number) ?? null;
@@ -66,7 +83,10 @@ const snowAt = params.has('snow')
 
 const lightsPerKeeper = Math.max(0, Math.floor(Number(params.get('lights')) || 0));
 const motion = params.get('motion') === '1';
-const patchView: MapView = patch === 'cozy' ? testPatch() : testWildIsle();
+const patchView: MapView =
+  patch === 'cozy' ? testPatch() : patch === 'clockwork' ? testClockworkIsle() : testWildIsle();
+const showLines = patch === 'clockwork' && params.get('lines') === '1';
+const showWind = patch === 'clockwork' && params.get('wind') === '1';
 const bare = params.get('built') === '1' ? withHomeBuildings(patchView) : patchView;
 const lightsAt = params.get('lightsAt') === 'land' ? 'land' : 'home';
 const view: MapView =
@@ -75,6 +95,8 @@ const view: MapView =
 let stage: Stage | null = null;
 let weather: WeatherLayer | null = null;
 let map: MapScene | null = null;
+let lineField: LineField | null = null;
+let wind: WindLayer | null = null;
 
 await boot(canvas, {
   preference: parseRendererPreference(params.get('renderer')),
@@ -136,6 +158,21 @@ await boot(canvas, {
             invalidate: () => stage?.invalidate(),
           });
         }
+        if (showLines) {
+          // A Clockwork Isle's wires and rails (#874), as the lines layer draws them.
+          lineField = new LineField(scene);
+          lineField.draw(galleryLines(view), new Map(view.tiles.map((t) => [hexKey(t), t])));
+        }
+        if (showWind) {
+          const host = map;
+          wind = createWindLayer();
+          wind.layer.attach(scene, view, {
+            clock: host.terrainClock,
+            mode: () => host.ambientMode,
+            invalidate: () => stage?.invalidate(),
+          });
+          wind.setShown(true);
+        }
         farthest = maxZoomFor(map.bounds, CAMERA.maxDistance);
         const [q, r] = focus ?? [];
         const start =
@@ -182,6 +219,10 @@ declare global {
       weather: () => WeatherStats | null;
       /** The terrain clock: it stands still under reduced motion. */
       clock: () => number | null;
+      /** A Clockwork Isle's sample lines (#874); null without `&lines=1`. */
+      lines: () => LineFieldStats | null;
+      /** A Clockwork Isle's wind layer (#874); null without `&wind=1`. */
+      wind: () => WindStats | null;
     };
   }
 }
@@ -192,4 +233,6 @@ window.__islandMap = {
   tier: () => stage?.quality.snapshot.tier ?? null,
   weather: () => weather?.stats() ?? null,
   clock: () => map?.terrainClock.time ?? null,
+  lines: () => lineField?.debug ?? null,
+  wind: () => wind?.debug ?? null,
 };

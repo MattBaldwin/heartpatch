@@ -27,11 +27,12 @@ function patchAround(): { centre: PublicTile; tiles: Map<HexKey, PublicTile> } {
   const byKey = new Map<HexKey, PublicTile>(
     base.tiles.map((t) => [hexKey(t), { ...t, buildings: [...t.buildings] }]),
   );
-  const centre = land.find((t) =>
-    hexNeighbors(t).every((n) => {
-      const x = byKey.get(hexKey(n));
-      return x && x.terrain !== 'ocean' && x.terrain !== 'river' && x.homeSlot === null;
-    }) && t.homeSlot === null,
+  const centre = land.find(
+    (t) =>
+      hexNeighbors(t).every((n) => {
+        const x = byKey.get(hexKey(n));
+        return x && x.terrain !== 'ocean' && x.terrain !== 'river' && x.homeSlot === null;
+      }) && t.homeSlot === null,
   );
   if (!centre) throw new Error('no centre');
   for (const h of [centre, ...hexNeighbors(centre)]) {
@@ -41,7 +42,12 @@ function patchAround(): { centre: PublicTile; tiles: Map<HexKey, PublicTile> } {
   return { centre: byKey.get(hexKey(centre)) ?? centre, tiles: byKey };
 }
 
-const line = (q: number, r: number, kind: 'wire' | 'rail', extra: Partial<PublicLine> = {}): PublicLine => ({
+const line = (
+  q: number,
+  r: number,
+  kind: 'wire' | 'rail',
+  extra: Partial<PublicLine> = {},
+): PublicLine => ({
   q,
   r,
   kind,

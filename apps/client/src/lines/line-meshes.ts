@@ -15,16 +15,16 @@ import { sideDistance } from './line-layout.js';
 /** The look, in model units and sRGB hex. TUNE: all of it. */
 export const LINE_LOOK = {
   post: {
-    height: 0.3,
-    width: 0.032,
+    height: 0.36,
+    width: 0.052,
     wood: '#8a5a36',
     cap: '#d9a441', // brass
-    capHeight: 0.035,
+    capHeight: 0.045,
     /** The cross bar the wire hangs from. */
-    bar: 0.11,
+    bar: 0.15,
   },
   wire: {
-    thickness: 0.014,
+    thickness: 0.024,
     /** How far the wire dips at the side's middle, below the post's top. */
     sag: 0.07,
     segments: 6,

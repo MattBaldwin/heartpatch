@@ -115,7 +115,8 @@ export class LineField {
         }
       } else {
         railCount += 1;
-        const tint = RAIL_TINT[Math.min(Math.max(piece.level, 1), RAIL_TINT.length) - 1] ?? RAIL_TINT[0];
+        const tint =
+          RAIL_TINT[Math.min(Math.max(piece.level, 1), RAIL_TINT.length) - 1] ?? RAIL_TINT[0];
         for (const arm of armPlacements(railSides(piece.mask), piece.ringed, LINE_RING, HEX_SIZE)) {
           rails.push(armAt(p.x, y, p.z, arm));
           railTint.push(tint[0], tint[1], tint[2], 1);
@@ -125,8 +126,10 @@ export class LineField {
     setInstances(this.posts, posts, true);
     setInstances(this.spans, spans, true);
     setInstances(this.rails, rails, true);
-    if (spans.length > 0) this.spans.thinInstanceSetBuffer('color', new Float32Array(spanTint), 4, false);
-    if (rails.length > 0) this.rails.thinInstanceSetBuffer('color', new Float32Array(railTint), 4, false);
+    if (spans.length > 0)
+      this.spans.thinInstanceSetBuffer('color', new Float32Array(spanTint), 4, false);
+    if (rails.length > 0)
+      this.rails.thinInstanceSetBuffer('color', new Float32Array(railTint), 4, false);
     this.stats = {
       wires,
       litWires,

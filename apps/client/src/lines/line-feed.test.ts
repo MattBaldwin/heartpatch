@@ -69,10 +69,7 @@ describe('line feed (#874 C4)', () => {
     feed.follow(at(clockwork, 1));
     slow.finish([]);
     await flush();
-    feed.apply(
-      { q: 2, r: 3, kind: 'wire', line: { level: 1 }, items: {}, refund: {} },
-      ME,
-    );
+    feed.apply({ q: 2, r: 3, kind: 'wire', line: { level: 1 }, items: {}, refund: {} }, ME);
     // Drawn at once, dark until the server says.
     expect(feed.lines).toEqual([wire(2, 3, false)]);
     expect(slow.fetch).toHaveBeenCalledTimes(2);

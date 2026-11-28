@@ -134,7 +134,9 @@ describe('wire and rail cards (#874 C4)', () => {
     );
     expect(lineRefund('rail', 2)).toEqual(want);
     // One Part of wire floors to nothing back.
-    expect(lineRefund('wire', 1, { ...POWER_RULES, wire: { ...POWER_RULES.wire, cost: { parts: 1 } } })).toEqual({});
+    expect(
+      lineRefund('wire', 1, { ...POWER_RULES, wire: { ...POWER_RULES.wire, cost: { parts: 1 } } }),
+    ).toEqual({});
     expect(refundText({})).toBe('');
   });
 

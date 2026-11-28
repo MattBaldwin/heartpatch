@@ -35,7 +35,8 @@ export interface LinePiece {
 export const DEPOT_ID = 'rail-depot';
 
 /** Does a wire meet this building (a Windmill or a machine that needs power)? */
-const wireMeets = (buildingId: string): boolean => isGenerator(buildingId) || needsPower(buildingId);
+const wireMeets = (buildingId: string): boolean =>
+  isGenerator(buildingId) || needsPower(buildingId);
 
 /** Does a rail meet this building (the Rail Depot)? */
 const railMeets = (buildingId: string): boolean => buildingId === DEPOT_ID;
@@ -44,11 +45,7 @@ const railMeets = (buildingId: string): boolean => buildingId === DEPOT_ID;
  * The tiles a line of `kind` owned by `owner` runs into besides its own
  * kind: the owner's tiles with a building it meets end on.
  */
-export function lineJoins(
-  tiles: Iterable<PublicTile>,
-  kind: LineKind,
-  owner: string,
-): Set<HexKey> {
+export function lineJoins(tiles: Iterable<PublicTile>, kind: LineKind, owner: string): Set<HexKey> {
   const meets = kind === 'wire' ? wireMeets : railMeets;
   const joins = new Set<HexKey>();
   for (const tile of tiles) {
