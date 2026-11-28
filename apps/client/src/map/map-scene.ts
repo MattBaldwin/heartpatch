@@ -42,6 +42,7 @@ import { BorderField } from './border-field.js';
 import { BuildAreaField, type BuildAreaView } from './build-area.js';
 import { buildAreaAt, type BuildAreaHit } from './build-area-layout.js';
 import { BulbField } from './bulb-field.js';
+import { clockworkFrost, type ClockworkFrost } from './clockwork-frost.js';
 import {
   bulbLayout,
   litTiles,
@@ -220,6 +221,8 @@ export interface MapSceneStats {
   readonly halloween: boolean;
   /** Christmas snow (#37): how far the first snow has faded in (0–1), or null out of season. */
   readonly snow: number | null;
+  /** A Clockwork Isle's frost tint is on (#874). */
+  readonly frost: boolean;
   readonly night: boolean;
   /** Ambient life: `live`, `still` (reduced motion) or `off` (low tier or a slow device). */
   readonly ambient: AmbientMode;
@@ -534,6 +537,8 @@ export class MapScene {
   /** The first snow's fade is still playing (from `fadeStart`, the first live tick). */
   private snowFading = false;
   private fadeStart: number | null = null;
+  /** A Clockwork Isle's frost (#874): one uniform on the tile, ground and prop materials. */
+  private readonly frost: ClockworkFrost | null;
   /** The island ground's materials and their own colours, snowed with the tiles. */
   private readonly grounds: { mat: PBRMaterial; rgb: Rgb; ground: 'grass' | 'beach' }[] = [];
 
@@ -542,6 +547,7 @@ export class MapScene {
     this.seasons = options.seasons ?? [];
     this.halloween = options.halloween === true;
     this.christmas = this.seasons.includes('christmas');
+    this.frost = clockworkFrost(view.map.patchType);
     this.snowFading = this.christmas && options.snowFade === true && options.reducedMotion !== true;
     this.snowCover = this.snowFading ? 0 : 1;
     // The uniform starts where the snow is (caps on from the first frame unless the fade plays).
@@ -725,6 +731,7 @@ export class MapScene {
       activeTriangles: activeTriangles(this.scene),
       halloween: this.halloween,
       snow: this.christmas ? this.snowCover : null,
+      frost: this.frost !== null,
       night: this.night,
       ambient: this.mode,
       motes: this.ambient.stats.motes,
@@ -1295,6 +1302,11 @@ export class MapScene {
     return outer;
   }
 
+  /** The terrain plugin's frost option (#874): a Clockwork Isle's, else none. */
+  private frostOption(): { frost?: ClockworkFrost } {
+    return this.frost ? { frost: this.frost } : {};
+  }
+
   /** Island ground (grass, beach, an isle's sand), softened like wild land part way, since nobody owns it. */
   private islandMaterial(name: string, color: string, ground: 'grass' | 'beach'): PBRMaterial {
     const mat = vinyl(this.scene, name, { ...FALLBACK_LOOK, color, roughness: 0.85 });
@@ -1305,9 +1317,12 @@ export class MapScene {
     // Christmas (#37): the ground off the map snows too, so the patch is no white island on green.
     const drawn = this.christmas ? snowGroundRgb(own, ground, this.snowCover) : own;
     mat.albedoColor = new Color3(...drawn.map(toLinear));
-    if (this.christmas) {
-      this.grounds.push({ mat, rgb: own, ground });
-      attachTerrainPlugin(mat, this.clock, { snow: this.snow });
+    if (this.christmas) this.grounds.push({ mat, rgb: own, ground });
+    if (this.christmas || this.frost) {
+      attachTerrainPlugin(mat, this.clock, {
+        ...(this.christmas ? { snow: this.snow } : {}),
+        ...this.frostOption(),
+      });
     }
     return mat;
   }
@@ -1395,6 +1410,7 @@ export class MapScene {
       const plugin = attachTerrainPlugin(mat, this.clock, {
         water: group.key === 'lake',
         ...(this.christmas ? { snow: this.snow } : {}),
+        ...this.frostOption(),
       });
       if (!plugin) animated = false;
       const matrices = group.tiles.map((tile) => tileMatrix(tile, h));
@@ -1637,7 +1653,10 @@ export class MapScene {
     }
     const propMat = vinyl(this.scene, 'prop-mat', { color: '#ffffff' });
     // Christmas (#37): snow on the tops of trees, rocks and bushes, in the shader (0 draw calls).
-    attachTerrainPlugin(propMat, this.clock, this.christmas ? { snow: this.snow, caps: true } : {});
+    attachTerrainPlugin(propMat, this.clock, {
+      ...(this.christmas ? { snow: this.snow, caps: true } : {}),
+      ...this.frostOption(),
+    });
     // Jack-o'-lanterns and Juniper's crystals glow softly (lanterns brighter at night).
     const glowing = (name: string, color: string, glow: number): PBRMaterial => {
       const m = vinyl(this.scene, name, { color: '#ffffff' });

@@ -19,6 +19,8 @@ import { createLandScreen } from './land/land-screen.js';
 import { createStrandedCard } from './land/stranded-card.js';
 import { createStrandedLayer } from './roads/stranded-layer.js';
 import { createRoads } from './roads/roads-screen.js';
+import { createLines } from './lines/lines-screen.js';
+import { createWindLayer } from './map/wind-layer.js';
 import { HollowLayer } from './hollow/hollow-layer.js';
 import { createExploreScreen } from './explore/explore-screen.js';
 import { createDarkLand, darkTiles, heartSeedOf } from './hollow/dark-land.js';
@@ -689,7 +691,21 @@ const roads = createRoads({
     const view = maps.view;
     if (view) postFlags.update?.(view);
   },
+  // A Clockwork Isle's rails join land home like roads (#874).
+  rails: () => ({ spots: lines.rails(), version: lines.version() }),
 });
+// Wires and rails on a Clockwork Isle (#874): their map layer, Build cards and Take up.
+const lines = createLines({
+  me: () => signedIn?.id ?? null,
+  invalidate: () => stage?.invalidate(),
+  supply: (view) => roads.supply(view),
+  onLinesChange: () => {
+    const view = maps.view;
+    if (view) postFlags.update?.(view);
+  },
+});
+// A Clockwork Isle's wind (#874): soft arrows over the land, tinted by strength.
+const windLayer = createWindLayer();
 // Trading posts' flags and rings on the map (#269), for whoever is signed in.
 // A Wild Isle's posts follow my supply line (#863).
 const postFlags = createPostFlags(
@@ -1453,6 +1469,7 @@ const buildingsGuide = createBuildingsGuide({
     inventory.clearSource,
     fences.buildSource,
     roads.buildSource,
+    lines.buildSource,
     roads.bridgeSource,
   ],
   now: () => new Date(inventory.gameNow()),
@@ -1463,7 +1480,13 @@ const buildingsGuide = createBuildingsGuide({
 const tileBuild = createTileBuild({
   guide: buildingsGuide,
   // Clear land (#242) sits with the buildings it makes room for.
-  sources: [home.buildSource, inventory.clearSource, fences.buildSource, roads.buildSource],
+  sources: [
+    home.buildSource,
+    inventory.clearSource,
+    fences.buildSource,
+    roads.buildSource,
+    lines.buildSource,
+  ],
   area: () => maps,
   onRecipeBook: () => {
     recipeBook.open();
@@ -1553,6 +1576,7 @@ const maps = createMapScreen({
     land.tileActions,
     fences.tileActions,
     roads.tileActions,
+    lines.tileActions,
     exceptBossTile(bossPicker, territory.tileActions),
     jobs.tileActions,
     journeys.tileActions,
@@ -1568,7 +1592,7 @@ const maps = createMapScreen({
       },
     },
   ),
-  hudExtras: [heartCoins.mapPill, weatherChip.node],
+  hudExtras: [heartCoins.mapPill, weatherChip.node, windLayer.chip],
   onHudChange: (mapId) => {
     hudMapId = mapId;
     // My Home's dots follow the patch on screen (off the map, they keep it).
@@ -1599,6 +1623,8 @@ const maps = createMapScreen({
     jobs.gatherers,
     land.layer,
     roads.layer,
+    lines.layer,
+    windLayer.layer,
     strandedLayer,
     postFlags,
     bossMarker,
@@ -2584,6 +2610,8 @@ if (import.meta.env.DEV) {
     tileBuild: () => tileBuild.debug,
     buildingsGuide: () => buildingsGuide.debug,
     roads: () => roads.debug,
+    lines: () => lines.debug,
+    wind: () => windLayer.debug,
     stranded: () => ({ ...strandedLayer.debug, card: strandedCard.shown }),
     hollow: () => hollow.debug,
     land: () => land.debug,

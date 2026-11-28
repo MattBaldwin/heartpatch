@@ -1,0 +1,44 @@
+/* A Clockwork Isle's 💨 chip (#874): at the end of the patch-name card's
+   row, like the weather chip, over the legend's whole-row tap and tappable
+   though the HUD is not. Pressed, it wears the wind's blue. */
+.wind-chip {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  border: 2px solid rgb(255 255 255 / 85%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 70%);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  pointer-events: auto;
+}
+
+.wind-chip[aria-pressed='true'] {
+  border-color: #6fb3ec;
+  background: #d6ecfb;
+}
+
+/* 44pt to the finger, 32 to the eye. */
+.wind-chip::after {
+  content: '';
+  position: absolute;
+  inset: -8px -4px;
+}
+
+.wind-chip[hidden] {
+  display: none;
+}
+
+.wind-chip:focus-visible {
+  outline: 3px solid #b8487a;
+  outline-offset: 3px;
+}

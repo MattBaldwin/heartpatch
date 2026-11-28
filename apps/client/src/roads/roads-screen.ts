@@ -6,6 +6,7 @@ import {
   type MapView,
   type PublicRoad,
   type PublicTile,
+  type RailSpot,
   type Supply,
 } from '@heartpatch/shared';
 import type { BuildCard } from '../building/build-model.js';
@@ -61,6 +62,11 @@ export interface RoadsOptions {
   homeApi?: Pick<typeof realHomeApi, 'place'>;
   /** The roads were read again: my supply line moved, so posts' reach may have (#863). */
   onRoadsChange?: () => void;
+  /**
+   * A Clockwork Isle's rails (#874), which join land home like roads, and a
+   * number that bumps when they change; none elsewhere.
+   */
+  rails?: () => { readonly spots: readonly RailSpot[]; readonly version: number };
 }
 
 export interface RoadsDebug {
@@ -152,15 +158,28 @@ export function createRoads(options: RoadsOptions): Roads {
   };
 
   // The supply line, memoised on what it reads.
-  let memo: { view: MapView; version: number; me: string; supply: Supply } | null = null;
+  let memo: {
+    view: MapView;
+    version: number;
+    rails: number;
+    me: string;
+    supply: Supply;
+  } | null = null;
   const supplyFor = (v: MapView): Supply | undefined => {
     const me = options.me();
     if (!me || !isWildIsleView(v) || !feed.loaded) return undefined;
-    if (memo && memo.view === v && memo.version === feed.version && memo.me === me) {
+    const rails = options.rails?.() ?? { spots: [], version: 0 };
+    if (
+      memo &&
+      memo.view === v &&
+      memo.version === feed.version &&
+      memo.rails === rails.version &&
+      memo.me === me
+    ) {
       return memo.supply;
     }
-    const supply = supplyOf(v, feed.roads, me);
-    memo = { view: v, version: feed.version, me, supply };
+    const supply = supplyOf(v, feed.roads, me, rails.spots);
+    memo = { view: v, version: feed.version, rails: rails.version, me, supply };
     return supply;
   };
 

@@ -26,6 +26,8 @@ import type { TerritoryDebug } from '../territory/territory-screen.js';
 import type { TileBuildDebug } from '../building/tile-build.js';
 import type { BuildingsGuideDebug } from '../building/buildings-guide.js';
 import type { RoadsDebug } from '../roads/roads-screen.js';
+import type { LinesDebug } from '../lines/lines-screen.js';
+import type { WindStats } from '../map/wind-layer.js';
 import type { FenceDebug } from '../fences/fence-screen.js';
 import type { TutorialDebug } from '../tutorial/tutorial-screen.js';
 import type { KeeperDebug } from '../ui/keeper/keeper-screen.js';
@@ -131,6 +133,10 @@ declare global {
       buildingsGuide?(): BuildingsGuideDebug;
       /** Wild Isle roads the client has, and how many it drew per level (#621). */
       roads?(): RoadsDebug;
+      /** A Clockwork Isle's wires and rails (#874). */
+      lines?(): LinesDebug;
+      /** A Clockwork Isle's wind layer (#874). */
+      wind?(): WindStats;
       /** Cut-off land drawn by look, and whether the "Some land is cut off!" card shows (#621). */
       stranded?(): { grace: number; fading: number; card: boolean };
       /** Each hex's centre and six corners on screen, in CSS pixels (dev tooling). */

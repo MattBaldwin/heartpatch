@@ -1,4 +1,10 @@
-import type { MapView, PublicRoad, RoadsView, RoadTileResponse } from '@heartpatch/shared';
+import {
+  patchRules,
+  type MapView,
+  type PublicRoad,
+  type RoadsView,
+  type RoadTileResponse,
+} from '@heartpatch/shared';
 
 // The roads on a Wild Isle, as the client has them (#621 W1-6). The map view
 // doesn't carry roads, so this reads `GET /maps/:id/roads` and reads it again
@@ -7,9 +13,12 @@ import type { MapView, PublicRoad, RoadsView, RoadTileResponse } from '@heartpat
 // when it finishes. My own commands answer with the tile's road, applied at
 // once. Pure of the DOM and the GPU, so it is unit-tested.
 
-/** Is this map a Wild Isle? (Cozy Patches have no roads and answer NOT_FOUND.) */
+/**
+ * Does this map have roads: a Wild Isle, or a Clockwork Isle (#874, a Wild
+ * Isle you wire up)? Cozy Patches have none and answer NOT_FOUND.
+ */
 export function isWildIsleView(view: Pick<MapView, 'map'>): boolean {
-  return view.map.patchType === 'wild-isle';
+  return patchRules(view.map.patchType ?? 'cozy').travel !== null;
 }
 
 export interface RoadFeed {

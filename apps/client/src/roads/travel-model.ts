@@ -7,7 +7,9 @@ import {
   hexNeighbors,
   travelBuildCheck,
   supplyMap,
+  RAIL_RULES,
   TRAVEL_RULES,
+  withRails,
   ferryShore,
   type BuildableProblem,
   type BridgeSpot,
@@ -17,6 +19,7 @@ import {
   type MapView,
   type PublicRoad,
   type PublicTile,
+  type RailSpot,
   type Supply,
   type TravelBuilding,
 } from '@heartpatch/shared';
@@ -100,8 +103,18 @@ export function supplyOf(
   view: Pick<MapView, 'tiles'>,
   roads: readonly PublicRoad[],
   me: string,
+  rails: readonly RailSpot[] = [],
 ): Supply {
-  return supplyMap(view.tiles, roads, bridgesOf(view.tiles), me, TRAVEL_RULES, docksOf(view.tiles));
+  // A Clockwork Isle's rails (#874) are road spots with their own levels (`withRails`).
+  const joined = withRails(roads, rails, TRAVEL_RULES, rails.length > 0 ? RAIL_RULES : null);
+  return supplyMap(
+    view.tiles,
+    joined.roads,
+    bridgesOf(view.tiles),
+    me,
+    joined.rules,
+    docksOf(view.tiles),
+  );
 }
 
 function travelCard(

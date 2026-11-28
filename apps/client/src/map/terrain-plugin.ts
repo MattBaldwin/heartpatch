@@ -8,6 +8,7 @@ import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { Scene } from '@babylonjs/core/scene';
 import { EXPLORE_RULES } from '@heartpatch/shared';
 import { DRIFT_MODE } from './ambient-layout.js';
+import { frostUniform, type ClockworkFrost } from './clockwork-frost.js';
 import { AMBIENT, CHRISTMAS, MUTED } from './map-config.js';
 
 /**
@@ -27,6 +28,10 @@ import { AMBIENT, CHRISTMAS, MUTED } from './map-config.js';
  *   snow) catch the moon, and with `caps` the tops of props go white. Both
  *   follow the `snow` uniform (`SnowLight`), so the first snow's fade
  *   compiles nothing and adds no draw call.
+ *
+ * - Frost (`frost` option, a Clockwork Isle, #874): a cool tint over the
+ *   colour and a pale frost rim where a surface turns from the eye, from
+ *   one uniform (`ClockworkFrost`), so it adds no draw call.
  *
  * - Drain (`drain` option, a grey village tile while exploring, #306 2a):
  *   everything the material draws goes grey, a touch darker and cooler, and
@@ -189,6 +194,12 @@ const FRAGMENT_BEFORE_LIGHTS = /* glsl */ `
   surfaceAlbedo = mix(surfaceAlbedo, terrainSnowCap, tsUp * terrainSnow.x);
 }
 #endif
+#ifdef TERRAIN_FROST
+{
+  // Frost (#874): a cool tint over the colour, keeping its light and shade.
+  surfaceAlbedo = mix(surfaceAlbedo, surfaceAlbedo * terrainFrostColor * 1.08, terrainFrost.x);
+}
+#endif
 #ifdef TERRAIN_DRAIN
 if (terrainDrain.x > 0.0) {
   float tdCover = 0.0;
@@ -211,6 +222,13 @@ if (terrainDrain.x > 0.0) {
 `;
 
 const FRAGMENT_BEFORE_FOG = /* glsl */ `
+#ifdef TERRAIN_FROST
+{
+  // A frost rim (#874): pale where the surface turns away from the eye.
+  float tfF = 1.0 - clamp(dot(normalW, viewDirectionW), 0.0, 1.0);
+  finalColor.rgb += terrainFrost.y * pow(tfF, terrainFrost.z) * terrainFrostRim;
+}
+#endif
 #ifdef TERRAIN_SNOW
 {
   // Moonlit snow (#37): bright albedo gets some of itself back, cool, after lighting.
@@ -240,6 +258,8 @@ export interface TerrainPluginOptions {
   /** Christmas snow (#37): the moonlit lift, and with `caps` snow on what faces up. */
   readonly snow?: SnowLight;
   readonly caps?: boolean;
+  /** A Clockwork Isle's frost (#874): the cool tint and frost rim. */
+  readonly frost?: ClockworkFrost;
 }
 
 /**
@@ -271,6 +291,7 @@ export class TerrainPlugin extends MaterialPluginBase {
   private readonly glint: { value: number } | null;
   private readonly snow: SnowLight | null;
   private readonly caps: boolean;
+  private readonly frost: ClockworkFrost | null;
   private readonly capColor = Color3.FromHexString(CHRISTMAS.caps.color).toLinearSpace();
   private readonly muteTint = Color3.FromHexString(MUTED.tint).toLinearSpace();
 
@@ -282,6 +303,7 @@ export class TerrainPlugin extends MaterialPluginBase {
       TERRAIN_DRAIN: false,
       TERRAIN_SNOW: false,
       TERRAIN_SNOW_CAPS: false,
+      TERRAIN_FROST: false,
     });
     this.clock = clock;
     this.water = options.water === true;
@@ -289,6 +311,7 @@ export class TerrainPlugin extends MaterialPluginBase {
     this.glint = options.glint ?? null;
     this.snow = options.snow ?? null;
     this.caps = options.caps === true;
+    this.frost = options.frost ?? null;
     this._enable(true);
   }
 
@@ -307,6 +330,7 @@ export class TerrainPlugin extends MaterialPluginBase {
     defines['TERRAIN_DRAIN'] = this.drain !== null && !KEEP_COLOUR.has(mesh);
     defines['TERRAIN_SNOW'] = this.snow !== null;
     defines['TERRAIN_SNOW_CAPS'] = this.snow !== null && this.caps;
+    defines['TERRAIN_FROST'] = this.frost !== null;
   }
 
   override getAttributes(attributes: string[], _scene: Scene, mesh: AbstractMesh): void {
@@ -335,6 +359,14 @@ export class TerrainPlugin extends MaterialPluginBase {
           { name: 'terrainMoon', size: 3, type: 'vec3' },
         ]
       : [];
+    // The frost's only on a Clockwork Isle's materials (#874).
+    const frost = this.frost
+      ? [
+          { name: 'terrainFrost', size: 4, type: 'vec4' },
+          { name: 'terrainFrostColor', size: 3, type: 'vec3' },
+          { name: 'terrainFrostRim', size: 3, type: 'vec3' },
+        ]
+      : [];
     return {
       ubo: [
         { name: 'terrainTime', size: 1, type: 'float' },
@@ -343,6 +375,7 @@ export class TerrainPlugin extends MaterialPluginBase {
         { name: 'terrainMute', size: 4, type: 'vec4' },
         ...drain,
         ...snow,
+        ...frost,
       ],
       vertex: 'uniform float terrainTime;\nuniform vec2 terrainWater;',
       fragment: [
@@ -350,7 +383,7 @@ export class TerrainPlugin extends MaterialPluginBase {
         'uniform vec2 terrainMuteMix;',
         'uniform vec2 terrainWater;',
         'uniform vec4 terrainMute;',
-        ...[...drain, ...snow].map((u) => `uniform ${u.type} ${u.name};`),
+        ...[...drain, ...snow, ...frost].map((u) => `uniform ${u.type} ${u.name};`),
       ].join('\n'),
     };
   }
@@ -378,6 +411,13 @@ export class TerrainPlugin extends MaterialPluginBase {
       const c = this.capColor;
       uniformBuffer.updateFloat3('terrainSnowCap', c.r, c.g, c.b);
       uniformBuffer.updateFloat3('terrainMoon', night.moon[0], night.moon[1], night.moon[2]);
+    }
+    const f = this.frost;
+    if (f) {
+      const [tint, rim, power, on] = frostUniform(f);
+      uniformBuffer.updateFloat4('terrainFrost', tint, rim, power, on);
+      uniformBuffer.updateFloat3('terrainFrostColor', f.color[0], f.color[1], f.color[2]);
+      uniformBuffer.updateFloat3('terrainFrostRim', f.rim[0], f.rim[1], f.rim[2]);
     }
     const d = this.drain;
     if (!d) return;
