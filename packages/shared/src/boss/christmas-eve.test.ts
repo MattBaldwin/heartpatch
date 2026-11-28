@@ -47,13 +47,19 @@ describe('the Christmas Eve visit schedule (#37 X1)', () => {
     expect(christmasEveVisitFor('seed', '2026-12-21', plain)).toBeNull();
   });
 
-  it('runs with the week’s bag boss standing in until the species lands (X3)', () => {
-    expect(EVE.speciesId).toBeNull();
-    const plan = christmasEveVisitFor('seed', '2026-12-21', RULES)!;
+  it('runs with the week’s bag boss standing in when there is no species', () => {
+    // X3 set Snowbundle; a null species still falls back to the bag draw.
+    expect(EVE.speciesId).toBe('snowbundle');
+    const noSpecies = { ...RULES, christmasEve: { ...EVE, speciesId: null } };
+    const plan = christmasEveVisitFor('seed', '2026-12-21', noSpecies)!;
     const draw = bossVisitFor('seed', '2026-12-21', null, RULES)!;
     expect(plan.boss).toEqual({ speciesId: draw.boss.speciesId, terrains: EVE.terrains });
+    expect(christmasEveVisitFor('seed', '2026-12-21', RULES)!.boss).toEqual({
+      speciesId: 'snowbundle',
+      terrains: EVE.terrains,
+    });
     // No species and nothing in the bag: no visit at all.
-    expect(christmasEveVisitFor('seed', '2026-12-21', { ...RULES, bag: [] })).toBeNull();
+    expect(christmasEveVisitFor('seed', '2026-12-21', { ...noSpecies, bag: [] })).toBeNull();
   });
 });
 

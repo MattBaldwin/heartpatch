@@ -37,7 +37,7 @@ import { litSafeTiles } from '../buildings/hearthfire.js';
 import { createBuildingsRepo, type BuildingRow } from '../buildings/repo.js';
 import { foldHabitatLean } from '../care/evolution.js';
 import { applyXp, growthEvents, type Growth } from '../care/service.js';
-import { clearGoingOn } from '../clearing/repo.js';
+import { clearGoingOn, createClearingRepo } from '../clearing/repo.js';
 import { homesteadOf } from '../explore/homesteads.js';
 import { createExploreRepo } from '../explore/repo.js';
 import { createInventoryRepo } from '../inventory/repo.js';
@@ -347,12 +347,13 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
     userId: string,
     at: Date,
   ): Promise<JobsView> => {
-    const [mine, owned, safe, buildings, explored] = await Promise.all([
+    const [mine, owned, safe, buildings, explored, clears] = await Promise.all([
       repo.listMine(map.id, userId),
       repo.listOwnedTiles(map.id, userId),
       firelitTiles(tx, repo, map, at),
       createBuildingsRepo(tx).listOwned(map.id, userId),
       createExploreRepo(tx).listOwnersExplored(map.id),
+      createClearingRepo(tx).listActive(map.id, userId),
     ]);
     // A squishy in a trade (#271) waits at the post, not on my board: it has
     // no job, and one heading my way stays a surprise until I pick it up.
@@ -452,8 +453,14 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
     // A building blocks its tile's land yield outside home (owner decision
     // 2026-10-11, #295): no spot there. A home building leaves its ring node be.
     const built = new Set(buildings.filter((b) => b.homeSlot === null).map((b) => b.tileId));
+    // Nor where `setJob` would say no (#912): a napping homestead (#199) or
+    // land being cleared (#242). Offered, the board's tap only got a refusal.
+    const clearingTiles = new Set(clears.map((c) => c.tileId));
     const spots = owned.flatMap((tile) => {
       if (tile.homeSlot === null && built.has(tile.id)) return [];
+      if (napping.has(`${String(tile.q)},${String(tile.r)}`) || clearingTiles.has(tile.id)) {
+        return [];
+      }
       const source = workSource(tile, GAME_DATA.resources, JOB_RULES);
       if (!source) return [];
       const resource = GAME_DATA.resources.find((r) => r.id === source.resource);

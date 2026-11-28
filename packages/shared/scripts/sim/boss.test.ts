@@ -4,11 +4,17 @@ import {
   bossContent,
   bossGates,
   bossSetup,
+  christmasBag,
   renderBossSim,
+  renderChristmasSim,
   runBossSim,
+  runChristmasSim,
+  runPatchTally,
   simBosses,
   standInBosses,
 } from './boss.js';
+import { bossLevelFor } from '../../src/boss/schedule.js';
+import { GROWTH_RULES } from '../../src/data/care.js';
 import { BOSS_EVENTS } from '../../src/data/server/boss-events.js';
 import { hiddenUntilSeen } from '../../src/schemas/data/species.js';
 
@@ -81,5 +87,73 @@ describe('pnpm sim:boss (#190)', () => {
     const report = renderBossSim(cells, gates, small, []);
     expect(report).toContain('| team of 3 |');
     expect(report).toMatch(/PASS|FAIL/);
+  });
+
+  it('runs the Christmas Eve boss on its own, gated at the Eve floor (#37 X3)', () => {
+    expect(christmasBag().map((e) => e.speciesId)).toEqual([BOSS_EVENTS.christmasEve?.speciesId]);
+    expect(christmasBag({ ...BOSS_EVENTS, christmasEve: undefined })).toEqual([]);
+    const tiny = { ...small, games: 2 };
+    const bag = runBossSim(tiny, content);
+    const runs = runChristmasSim(tiny, bag, content);
+    expect(runs.map((r) => r.level)).toEqual([
+      small.christmas.gatedLevel,
+      ...small.christmas.referenceLevels,
+    ]);
+    const [gated, ...reference] = runs;
+    expect(new Set(gated!.cells.map((c) => c.boss))).toEqual(new Set(['snowbundle']));
+    expect(gated!.cells.every((c) => c.level === small.christmas.gatedLevel)).toBe(true);
+    expect(gated!.gates).toHaveLength(5);
+    expect(gated!.gates[4]!.name).toContain('bag bosses');
+    for (const run of reference) expect(run.gates).toEqual([]);
+    // The bag's own cells are untouched by the Eve run.
+    expect(runBossSim(tiny, content)).toEqual(bag);
+  });
+
+  it('reads the spread gate across the Eve boss and the bag', () => {
+    const cell = (boss: string, winPercent: number) => ({
+      shape: 'team of 3',
+      boss,
+      bonus: 0,
+      games: 1,
+      level: 10,
+      winPercent,
+      medianRounds: 7,
+    });
+    const spread = (eve: number, bag: number[]) =>
+      bossGates(
+        [cell('snowbundle', eve)],
+        small,
+        bag.map((w, i) => cell(`b${String(i)}`, w)),
+      )[4]!;
+    expect(spread(58, [61, 56])).toMatchObject({ pass: true, value: '5 points' });
+    expect(spread(70, [56])).toMatchObject({ pass: false, value: '14 points' });
+  });
+
+  it('tallies the Eve bar points a patch of Keepers chips (`--patch`)', () => {
+    const tiny = {
+      ...small,
+      christmas: { ...small.christmas, patch: { patches: 2, tries: 3, partnerLevels: [5, 30] } },
+    };
+    const tally = runPatchTally(tiny, content)!;
+    const eve = BOSS_EVENTS.christmasEve!;
+    expect(tally.rows.map((r) => [r.partnerLevel, r.bossLevel, r.fights])).toEqual(
+      [5, 30].map((p) => [p, bossLevelFor(p, eve.gates, GROWTH_RULES.maxLevel), 6]),
+    );
+    // At the Eve floor for a little Partner, Partner + bonus above it.
+    expect(tally.rows.map((r) => r.bossLevel)).toEqual([eve.gates.minLevel, 32]);
+    for (const row of tally.rows) {
+      expect(row.pointsPerFight).toBeGreaterThanOrEqual(0);
+      expect(row.pointsPerFight).toBeLessThanOrEqual(eve.bar.pointsPerWin);
+    }
+    expect(Math.abs(tally.pointsPerKeeper - tally.pointsPerFight * 3)).toBeLessThanOrEqual(2);
+    expect(runPatchTally(tiny, content)).toEqual(tally);
+    expect(runPatchTally(tiny, content, { ...BOSS_EVENTS, christmasEve: undefined })).toBeNull();
+    const report = renderChristmasSim(
+      runChristmasSim({ ...tiny, games: 1 }, [], content),
+      tally,
+      tiny,
+    );
+    expect(report).toContain('Patch tally');
+    expect(report).toContain('(the Eve floor, gated)');
   });
 });

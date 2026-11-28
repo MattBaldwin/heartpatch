@@ -52,6 +52,8 @@ export interface JobBoardDebug {
   readonly team: readonly string[];
   readonly ready: Readonly<Record<string, number>>;
   readonly note: string;
+  /** What the last job tap said, in its squishy's row (#912), or ''. */
+  readonly rowNote: string;
 }
 
 export interface JobBoard {
@@ -86,6 +88,14 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   /** A spot to offer first (opened from the tile panel). */
   let wantSpot: { q: number; r: number } | null = null;
   let working = false;
+  /**
+   * What the last job tap said, in the tapped squishy's row (#912): the sheet
+   * scrolls, so a note under the title was off-screen on a phone and a
+   * refused tap only flashed (the territory fix, #526).
+   */
+  let rowNote: { squishyId: string; text: string } | null = null;
+  /** The row note just changed: scroll it into sight after the next render. */
+  let revealRowNote = false;
   let ticker: number | undefined;
   /** Each gatherer's job line, so the countdown updates its text and nothing else. */
   let lines = new Map<string, { squishy: JobSquishy; node: HTMLElement }>();
@@ -192,8 +202,13 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     return api.view(id);
   };
 
-  /** Runs one command for the board on screen, one at a time; a CONFLICT refetches. */
+  /**
+   * Runs one command for a squishy on the board, one at a time. A refusal
+   * shows in its row; a CONFLICT also closes its picker (what it showed may
+   * be stale) and refetches.
+   */
   async function act(
+    squishyId: string,
     run: (
       mapId: string,
       send: <T>(command: (key: string) => Promise<T>) => Promise<T | null>,
@@ -203,13 +218,16 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     if (!id || working) return;
     const mine = ticket;
     working = true;
+    rowNote = null;
     render();
     try {
       await run(id, (command) => sendCommand(sendDeps, command, () => mine === ticket));
     } catch (err) {
       if (mine !== ticket) return;
-      say(messageOf(err));
+      noteRow(squishyId, messageOf(err));
       if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
+        picking = null;
+        pickingGrounds = null;
         const fresh = await api.view(id).catch(() => null);
         if (fresh && mine === ticket) setView(fresh);
       }
@@ -219,15 +237,26 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     }
   }
 
-  const assign = (squishy: JobSquishy, job: SetJobRequest, done: string) =>
-    act(async (id, send) => {
+  /** Says `text` in this squishy's row ('' clears it). */
+  const noteRow = (squishyId: string, text: string) => {
+    rowNote = text ? { squishyId, text } : null;
+    revealRowNote = rowNote !== null;
+  };
+
+  /** Gives the squishy a job; true once the server took it. */
+  const assign = async (squishy: JobSquishy, job: SetJobRequest, done: string) => {
+    let took = false;
+    await act(squishy.squishy.id, async (id, send) => {
       const res = await send((key) => api.setJob(id, squishy.squishy.id, job, key));
       if (!res) return;
       setView(res);
       picking = null;
       pickingGrounds = null;
-      say(done);
+      noteRow(squishy.squishy.id, done);
+      took = true;
     });
+    return took;
+  };
 
   /** The shared job buttons and pickers (`job-actions.ts`), wired to this board. */
   const actionContext = (current: JobsView): JobActionsContext => ({
@@ -240,9 +269,9 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     gather: (squishy, spot, fits) => {
       const name = nameOf(current, squishy);
       const mine = ticket;
-      void assign(squishy, { job: 'gatherer', q: spot.q, r: spot.r }, '').then(() => {
+      void assign(squishy, { job: 'gatherer', q: spot.q, r: spot.r }, '').then((took) => {
         // Still the same opening of this board, and the job went through.
-        if (mine !== ticket || picking !== null || sheet.hidden) return;
+        if (!took || mine !== ticket || picking !== null || sheet.hidden) return;
         cheer(
           squishy.squishy.id,
           fits ? JOBS_TEXT.lovesIt(name) : JOBS_TEXT.notKeen(name),
@@ -253,16 +282,19 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     pickSpot: (squishy) => {
       picking = squishy.squishy.id;
       pickingGrounds = null;
+      rowNote = null;
       render();
     },
     pickGrounds: (squishy) => {
       pickingGrounds = squishy.squishy.id;
       picking = null;
+      rowNote = null;
       render();
     },
     cancel: () => {
       picking = null;
       pickingGrounds = null;
+      rowNote = null;
       render();
     },
   });
@@ -311,6 +343,16 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
             : s.training && !s.training.firelit
               ? [el('p', { class: 'jobs-dark' }, JOBS_TEXT.dark)]
               : []),
+          // Right above its job buttons, where the finger just was (#912).
+          ...(rowNote?.squishyId === s.squishy.id
+            ? [
+                el(
+                  'p',
+                  { class: 'jobs-row-note', role: 'status', 'data-testid': 'jobs-row-note' },
+                  rowNote.text,
+                ),
+              ]
+            : []),
           picking === s.squishy.id
             ? spotPicker(s, ctx)
             : pickingGrounds === s.squishy.id
@@ -320,6 +362,10 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       }),
     );
     placeToast();
+    if (revealRowNote) {
+      revealRowNote = false;
+      list.querySelector('[data-testid="jobs-row-note"]')?.scrollIntoView({ block: 'nearest' });
+    }
     tick();
   }
 
@@ -406,6 +452,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     view = null;
     picking = null;
     pickingGrounds = null;
+    rowNote = null;
     clearToast();
     say('');
   }
@@ -418,6 +465,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       wantSpot = spot ?? null;
       picking = null;
       pickingGrounds = null;
+      rowNote = null;
       sheet.hidden = false;
       say('');
       render();
@@ -442,6 +490,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
         team: view?.team ?? [],
         ready: view ? readyTotal(view) : {},
         note: note.textContent,
+        rowNote: rowNote?.text ?? '',
       };
     },
   };

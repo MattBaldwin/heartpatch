@@ -31,12 +31,22 @@ import type { Species } from '../../schemas/data/species.js';
  * Charge hits harder the lower her energy (`low-energy`), and Ask Your
  * Mother calls in Mama Bear Charge (`assist`; the server sends its def with
  * the battle, so a kid who met Papa Brrr can read its name).
+ *
+ * The Christmas Eve BIG squishy (#37 X3, owner decision 4): Snowbundle, a
+ * Christmas-only frost boss that never joins the weekly bag, and Bundlebit,
+ * the tiny form that joins a patch. Both legendary, so iridescent: never the
+ * shimmer (#866). Its signature pairs frost with `windup` (frost + `assist`
+ * is Papa Brrr's).
  */
 
 const RAKE_PALETTE = ['#9fd46e', '#fff6dc', '#f08a3c', '#b07a48']; // #810 round 8: wood-brown crossbar, not orange
 const MOM_PALETTE = ['#ff8a6a', '#fff0e6', '#ffd166', '#8a3550'];
 const DAD_PALETTE = ['#a9d4f5', '#f4fbff', '#e2574c', '#f7f1ea'];
 const KART_PALETTE = ['#ffd84a', '#bff0ff', '#3f8fe8', '#4a3a5c'];
+// #37 X3 (docs/art/37-frost-briefs.md): ice-blue, snow white, a gold lit
+// crown (the accent, so `glow: 'accent'` lights only it) and the cranberry
+// cap band (the detail colour, so it never glows).
+const SNOW_PALETTE = ['#c2e2f9', '#f4fbff', '#ffd25a', '#d9485a']; // TUNE: a touch deeper than the brief's #d9eefc so the white belly reads; still lighter than Papa Brrr's #a9d4f5
 
 /** The boss forms' signature moves (and two the middle forms learn first). */
 export const BOSS_MOVES: Move[] = [
@@ -178,6 +188,46 @@ export const BOSS_MOVES: Move[] = [
     power: 70, // TUNE:
     accuracy: 100,
     effects: [{ type: 'stat', target: 'opponent', stat: 'speed', stages: -1, chance: 30 }], // TUNE:
+  },
+  // ── The Christmas Eve BIG squishy (#37 X3) ──
+  {
+    id: 'snow-puff-flop',
+    name: 'Snow Puff Flop',
+    description: 'A big belly-flop into the snow. FWUMP! Flakes puff over everyone.',
+    element: 'frost',
+    power: 60, // TUNE:
+    accuracy: 100,
+    targets: 'all-foes',
+  },
+  {
+    id: 'twinkle-twinkle',
+    name: 'Twinkle Twinkle',
+    description: 'Its gold crown twinkles so brightly that heads start to spin.',
+    element: 'light',
+    power: 55, // TUNE:
+    accuracy: 100,
+    effects: [{ type: 'status', status: 'dizzy', chance: 30 }], // TUNE:
+  },
+  {
+    id: 'snug-snow-wrap',
+    name: 'Snug Snow Wrap',
+    description: 'Snuggles up all warm and cozy. Feels better and a bit sturdier.',
+    element: 'frost',
+    power: 0,
+    accuracy: 100,
+    effects: [
+      { type: 'heal', percent: 20 }, // TUNE:
+      { type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 50 }, // TUNE:
+    ],
+  },
+  {
+    id: 'big-chilly-sneeze',
+    name: 'Big Chilly Sneeze',
+    description: 'Ah… ah… AH-CHOO! A huge snowy sneeze. It takes a round to build up, so brace!',
+    element: 'frost',
+    power: 160, // TUNE: like Count to Three, a little softer
+    accuracy: 100,
+    effects: [{ type: 'windup' }],
   },
 ];
 
@@ -615,6 +665,72 @@ export const BOSS_SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['spark'], feelings: ['silly'] },
   },
+  // ── The Christmas Eve BIG squishy (#37 X3; frost · sleepy): Christmas-only,
+  // never in the weekly bag. Owner decision 4 (2026-11-27): one boss form
+  // and a tiny befriend form; Bundlebit is what joins your patch. ──
+  {
+    // befriend form
+    id: 'bundlebit',
+    name: 'Bundlebit',
+    description:
+      'A tiny snow-bundle in a bobble hat. It bounces on the spot and leaves little flakes.',
+    element: 'frost',
+    feeling: 'sleepy',
+    rarity: 'legendary',
+    line: 'boss',
+    baseStats: { hp: 85, attack: 60, defense: 75, speed: 55 }, // TUNE: total 275
+    moves: ['snowball-toss', 'snow-snuggle', 'night-light-hug'],
+    evolutions: [],
+    visual: {
+      body: 'blob',
+      palette: SNOW_PALETTE,
+      parts: ['sleepy-eyes', 'tiny-smile', 'blush-cheeks', 'acorn-cup', 'lure-beads'],
+      size: 1,
+      finish: 'iridescent',
+      glow: 'accent',
+      pose: 'sit',
+      attackPart: 'crown',
+    },
+    habitatPreferences: { elements: ['frost'], feelings: ['sleepy'] },
+  },
+  {
+    // boss form
+    id: 'snowbundle',
+    name: 'Snowbundle',
+    description:
+      'A great big, sleepy snow-heap with a twinkly gold crown. It came down from the hills to see the lights.',
+    element: 'frost',
+    feeling: 'sleepy',
+    // Legendary, not mythic: its finish is iridescent, never the shimmer (#866).
+    rarity: 'legendary',
+    line: 'boss',
+    // TUNE: total 309, tuned in `pnpm sim:boss` at the Eve floor (level 10),
+    // where little Keepers fight; lower than the weekly bosses because the
+    // sim's at-level team there is small (Partner 10 with friends at 7 and 4).
+    baseStats: { hp: 95, attack: 70, defense: 88, speed: 56 },
+    moves: ['snow-puff-flop', 'twinkle-twinkle', 'snug-snow-wrap', 'big-chilly-sneeze'],
+    evolutions: [],
+    visual: {
+      body: 'mochi',
+      palette: SNOW_PALETTE,
+      parts: [
+        'sleepy-eyes',
+        'tiny-smile',
+        'blush-cheeks',
+        'dad-belly-patch',
+        'fringe',
+        'crystal-crown',
+        'round-hands',
+      ],
+      size: 1.4,
+      finish: 'iridescent',
+      glow: 'accent',
+      head: { body: 'orb', size: 1.05, forward: 0.02, up: 0.82 },
+      pose: 'sit',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['frost'], feelings: ['sleepy'] },
+  },
 ];
 
 /**
@@ -633,4 +749,8 @@ export const BOSS_EVOLUTIONS: SecretEvolution[] = [
   { from: 'frostpop', into: 'papa-brrr', level: 50 }, // TUNE: kid + 20
   { from: 'zoomlet', into: 'revvy', level: 30 }, // TUNE:
   { from: 'revvy', into: 'rickeyride', level: 50 }, // TUNE: kid + 20
+  // #37 X3: the server joins a befriended boss as its line's base form
+  // (`baseFormOf`), so this row is what makes Snowbundle join as Bundlebit.
+  // Owner answer (2026-11-28, #37): yes, Bundlebit can grow into Snowbundle at 50.
+  { from: 'bundlebit', into: 'snowbundle', level: 50 }, // TUNE:
 ];

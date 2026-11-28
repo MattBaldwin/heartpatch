@@ -1,6 +1,7 @@
 import {
   GAME_DATA,
   TERRITORY_RULES,
+  type JobsView,
   type MapView,
   type Supply,
   type OwnedSquishy,
@@ -44,6 +45,15 @@ export interface TerritoryScreenOptions {
   supply?: (view: MapView) => Supply | undefined;
   /** The week of a Long Night (#727): "He'll come looking on Saturday 🔥", added to the dark-land line. */
   darkSoon?: () => string | null;
+  /**
+   * My jobs (#912): the guard picker says what each squishy does now, and
+   * saving guards asks for a fresh jobs view so the job board follows.
+   */
+  jobs?: {
+    viewOf: (mapId: string) => JobsView | null;
+    load: (mapId: string) => void;
+    onView: (listener: (mapId: string) => void) => void;
+  };
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -100,6 +110,22 @@ export const TERRITORY_TEXT = {
   pickTitle: (max: number) => `Who stands watch? Pick up to ${String(max)}.`,
   noSquishies: 'No squishy friends yet. Befriend one first!',
   elsewhere: 'on watch elsewhere',
+  // Who's on watch, by name (#912), like a gatherer's "🧺 Mochi is gathering here".
+  guardsHere: (...names: readonly string[]) => {
+    const list =
+      names.length <= 1
+        ? (names[0] ?? '')
+        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1] ?? ''}`;
+    return `🛡️ ${list} ${names.length === 1 ? 'is' : 'are'} on watch here`;
+  },
+  // The picker says each squishy's job now, and what picking it ends (#912).
+  hereNow: 'on watch here',
+  gatheringNow: '🧺 gathering now',
+  teamNow: '⚔️ on your team',
+  trainingNow: '🎯 practicing now',
+  stopsGathering: 'stops gathering to guard',
+  leavesTeam: 'leaves the team to guard',
+  stopsTraining: 'stops practicing to guard',
   saved: 'Your guards are in place!',
   shielded: "You're new here, so nobody can challenge your land yet.",
   mystery: 'Mystery squishy',
@@ -216,6 +242,8 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
       status = fresh;
       picking = null;
       note = TERRITORY_TEXT.saved;
+      // Guarding took them off any other job: the job board follows (#912).
+      options.jobs?.load(id);
     });
 
   // ── Drawing ───────────────────────────────────────────────────────────
@@ -280,11 +308,29 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
         .filter((d) => d.q !== tile.q || d.r !== tile.r)
         .flatMap((d) => d.squishyIds),
     );
+    const here = new Set(
+      (status?.defenders ?? [])
+        .filter((d) => d.q === tile.q && d.r === tile.r)
+        .flatMap((d) => d.squishyIds),
+    );
+    const jobsView = mapId ? (options.jobs?.viewOf(mapId) ?? null) : null;
+    /** What it does now, or what picking it ends (#912); null when it rests. */
+    const jobHint = (id: string, on: boolean): string | null => {
+      if (here.has(id)) return TERRITORY_TEXT.hereNow;
+      if (elsewhere.has(id)) return TERRITORY_TEXT.elsewhere;
+      const job = jobsView?.squishies.find((j) => j.squishy.id === id)?.job;
+      if (job === 'gatherer')
+        return on ? TERRITORY_TEXT.stopsGathering : TERRITORY_TEXT.gatheringNow;
+      if (job === 'team') return on ? TERRITORY_TEXT.leavesTeam : TERRITORY_TEXT.teamNow;
+      if (job === 'training') return on ? TERRITORY_TEXT.stopsTraining : TERRITORY_TEXT.trainingNow;
+      return null;
+    };
     const list = el(
       'ul',
       { class: 'territory-picker', 'data-testid': 'territory-picker' },
       ...squishies.map((s) => {
         const on = chosen.includes(s.id);
+        const hint = jobHint(s.id, on);
         const toggle = el(
           'button',
           {
@@ -294,8 +340,14 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
             'data-squishy': s.id,
           },
           el('span', { class: 'territory-pick-name' }, `${speciesName(s)} · Lv ${String(s.level)}`),
-          ...(elsewhere.has(s.id)
-            ? [el('span', { class: 'territory-pick-hint' }, TERRITORY_TEXT.elsewhere)]
+          ...(hint
+            ? [
+                el(
+                  'span',
+                  { class: 'territory-pick-hint', 'data-testid': 'territory-pick-job' },
+                  hint,
+                ),
+              ]
             : []),
         );
         toggle.disabled = working || (!on && chosen.length >= max);
@@ -318,6 +370,15 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
         button(TERRITORY_TEXT.cancel, cancelPick, {}, true),
       ),
     ];
+  }
+
+  /** "🛡️ Mochi is on watch here" (#912): my guards on this tile, by name. */
+  function guardNames(ids: readonly string[]): HTMLElement[] {
+    const names = ids.flatMap((id) => {
+      const s = status?.squishies.find((x) => x.id === id);
+      return s ? [speciesName(s)] : [];
+    });
+    return names.length > 0 ? [line(TERRITORY_TEXT.guardsHere(...names), 'territory-guards')] : [];
   }
 
   function cancelPick(): void {
@@ -460,12 +521,15 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
                 : TERRITORY_TEXT.watchNone,
               'territory-watch',
             ),
+            ...guardNames(ids),
             ...(watchInTheDark(tile, view) ? [darkLine()] : []),
             button(
               TERRITORY_TEXT.pick,
               () => {
                 picking = ids;
                 note = '';
+                // Fresh jobs for the picker's tags; they redraw it when they land.
+                if (mapId) options.jobs?.load(mapId);
                 render();
               },
               { 'data-testid': 'territory-pick' },
@@ -516,6 +580,11 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
       ticker = undefined;
     }
   }
+
+  // A fresh jobs view redraws an open guard picker, so its tags are today's (#912).
+  options.jobs?.onView((id) => {
+    if (id === mapId && picking !== null && !working) render();
+  });
 
   const reset = () => {
     generation += 1;
