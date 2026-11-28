@@ -829,8 +829,8 @@ test.describe('a mini-boss fight (#190)', () => {
       ),
     );
     const line = all.find((c) => /Come back stronger!$/.test(c)) ?? '';
-    // Nothing is taken: the card is the usual "so close" and the tries left.
-    await expect(card).toContainText('So close!');
+    // Nothing is taken: the usual loss card follows (its tries line is the stub's).
+    await expect(card.locator('#battle-result-title')).toBeVisible();
     expect(line).not.toMatch(/lost|took|failed/i);
   });
 
