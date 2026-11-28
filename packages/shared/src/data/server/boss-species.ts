@@ -46,7 +46,7 @@ const KART_PALETTE = ['#ffd84a', '#bff0ff', '#3f8fe8', '#4a3a5c'];
 // #37 X3 (docs/art/37-frost-briefs.md): ice-blue, snow white, a gold lit
 // star (the accent, so `glow: 'accent'` lights only it) and the cranberry
 // cap band (the detail colour, so it never glows).
-const SNOW_PALETTE = ['#d9eefc', '#ffffff', '#ffd25a', '#d9485a'];
+const SNOW_PALETTE = ['#c2e2f9', '#f4fbff', '#ffd25a', '#d9485a']; // TUNE: a touch deeper than the brief's #d9eefc so the white belly reads; still lighter than Papa Brrr's #a9d4f5
 
 /** The boss forms' signature moves (and two the middle forms learn first). */
 export const BOSS_MOVES: Move[] = [
@@ -202,7 +202,7 @@ export const BOSS_MOVES: Move[] = [
   {
     id: 'twinkle-twinkle',
     name: 'Twinkle Twinkle',
-    description: 'Its star twinkles so brightly that heads start to spin.',
+    description: 'Its gold crown twinkles so brightly that heads start to spin.',
     element: 'light',
     power: 55, // TUNE:
     accuracy: 100,
@@ -665,7 +665,7 @@ export const BOSS_SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['spark'], feelings: ['silly'] },
   },
-  // ── The Christmas Eve BIG squishy (#37 X3; frost · cozy): Christmas-only,
+  // ── The Christmas Eve BIG squishy (#37 X3; frost · sleepy): Christmas-only,
   // never in the weekly bag. Owner decision 4 (2026-11-27): one boss form
   // and a tiny befriend form; Bundlebit is what joins your patch. ──
   {
@@ -675,46 +675,53 @@ export const BOSS_SPECIES: Species[] = [
     description:
       'A tiny snow-bundle in a bobble hat. It bounces on the spot and leaves little flakes.',
     element: 'frost',
-    feeling: 'cozy',
+    feeling: 'sleepy',
     rarity: 'legendary',
     line: 'boss',
-    baseStats: { hp: 80, attack: 60, defense: 75, speed: 60 }, // TUNE: total 275
+    baseStats: { hp: 85, attack: 60, defense: 75, speed: 55 }, // TUNE: total 275
     moves: ['snowball-toss', 'snow-snuggle', 'night-light-hug'],
     evolutions: [],
     visual: {
       body: 'blob',
       palette: SNOW_PALETTE,
-      parts: ['oval-eyes', 'tiny-smile', 'blush-cheeks', 'belly-oval', 'acorn-cup', 'lure-beads'],
+      parts: [
+        'sleepy-eyes',
+        'tiny-smile',
+        'blush-cheeks',
+        'belly-patch',
+        'acorn-cup',
+        'lure-beads',
+      ],
       size: 1,
       finish: 'iridescent',
       glow: 'accent',
       pose: 'sit',
       attackPart: 'crown',
     },
-    habitatPreferences: { elements: ['frost'], feelings: ['cozy'] },
+    habitatPreferences: { elements: ['frost'], feelings: ['sleepy'] },
   },
   {
     // boss form
     id: 'snowbundle',
     name: 'Snowbundle',
     description:
-      'A great big, sleepy snow-heap with a twinkly gold star on top. It came down from the hills to see the lights.',
+      'A great big, sleepy snow-heap with a twinkly gold crown. It came down from the hills to see the lights.',
     element: 'frost',
-    feeling: 'cozy',
+    feeling: 'sleepy',
     // Legendary, not mythic: its finish is iridescent, never the shimmer (#866).
     rarity: 'legendary',
     line: 'boss',
-    // TUNE: total 340, tuned in `pnpm sim:boss` at the Eve floor (level 10):
-    // a team of 3 at level wins 58%. At level 25 it is 85% (the team side
-    // grows faster than any boss; the bag bosses win 20–36% at 10).
-    baseStats: { hp: 105, attack: 78, defense: 97, speed: 60 },
+    // TUNE: total 309, tuned in `pnpm sim:boss` at the Eve floor (level 10),
+    // where little Keepers fight; lower than the weekly bosses because the
+    // sim's at-level team there is small (Partner 10 with friends at 7 and 4).
+    baseStats: { hp: 95, attack: 70, defense: 88, speed: 56 },
     moves: ['snow-puff-flop', 'twinkle-twinkle', 'snug-scarf-wrap', 'big-chilly-sneeze'],
     evolutions: [],
     visual: {
       body: 'mochi',
       palette: SNOW_PALETTE,
       parts: [
-        'oval-eyes',
+        'sleepy-eyes',
         'tiny-smile',
         'blush-cheeks',
         'belly-oval',
@@ -729,7 +736,7 @@ export const BOSS_SPECIES: Species[] = [
       pose: 'sit',
       attackPart: 'arms',
     },
-    habitatPreferences: { elements: ['frost'], feelings: ['cozy'] },
+    habitatPreferences: { elements: ['frost'], feelings: ['sleepy'] },
   },
 ];
 

@@ -1,3 +1,4 @@
+import { BOSS_EVENTS } from '../../src/data/server/boss-events.js';
 /**
  * Mini-boss team battle settings (`pnpm sim:boss`, #190). Like the other
  * sims, the model only reads game data and reports; it never changes a
@@ -87,7 +88,7 @@ export const BOSS_SIM_CONFIG: BossSimConfig = {
     referenceLevels: [25], // TUNE: the weekly sim level
     patch: {
       patches: 250, // TUNE:
-      tries: 3, // TUNE: the addendum's "3 tries" (`triesPerDay`)
+      tries: BOSS_EVENTS.triesPerDay, // the addendum's "3 tries": one patch-local day's (Christmas morning gives 3 more)
       // TUNE: a mixed patch, little siblings to grown-ups (the Eve gate is player 5).
       partnerLevels: [5, 8, 12, 16, 20, 25, 30, 40],
     },

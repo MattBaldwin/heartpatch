@@ -1,4 +1,6 @@
 import {
+  GROWTH_RULES,
+  befriendedLevel,
   BattleResponseSchema,
   BossVisitResponseSchema,
   CatalogResponseSchema,
@@ -13,6 +15,7 @@ import {
   BOSS_EVENTS,
   SECRET_SPECIES,
   baseFormOf,
+  bossJoinLevel,
   bossVisitFor,
   bossWeekOf,
   type BossEventRules,
@@ -754,8 +757,19 @@ describe.skipIf(!url)('the mini-boss switch over the real bag (#234, needs DATAB
       where: (t, { eq }) => eq(t.id, squishyId),
     });
     expect(friend?.speciesId).toBe('bundlebit');
-    // Bundlebit grows into Snowbundle at 50 (owner yes), so it joins below that.
-    expect(friend!.level).toBeLessThan(50);
+    expect(friend!.level).toBe(
+      befriendedLevel(
+        'bundlebit',
+        bossJoinLevel(snowOnly.befriend, 20),
+        EVOLUTION_STEPS,
+        GROWTH_RULES,
+      ),
+    );
+    // Bundlebit grows into Snowbundle at 50 (owner yes): a join that high is held
+    // `befriendBelowEvolution` under it, so it always has the growing-up ahead.
+    expect(befriendedLevel('bundlebit', 50, EVOLUTION_STEPS, GROWTH_RULES)).toBe(
+      50 - GROWTH_RULES.befriendBelowEvolution!,
+    );
   });
 
   it('a fight already going still finishes after the switch closes, and can still befriend', async () => {

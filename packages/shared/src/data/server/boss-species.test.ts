@@ -252,9 +252,9 @@ describe('the Christmas Eve BIG squishy (#37 X3)', () => {
     expect(BOSS_EVENTS.bag.map((e) => e.speciesId)).not.toContain(befriendForm);
   });
 
-  it('is a frost · cozy boss line, server-only and hidden until met', () => {
+  it('is a frost · sleepy boss line, server-only and hidden until met', () => {
     for (const id of EVE) {
-      expect(get(id)).toMatchObject({ element: 'frost', feeling: 'cozy', line: 'boss' });
+      expect(get(id)).toMatchObject({ element: 'frost', feeling: 'sleepy', line: 'boss' });
       expect(hiddenUntilSeen(get(id)), id).toBe(true);
       expect(SECRET_SPECIES).toContain(get(id));
     }
@@ -317,11 +317,18 @@ describe('the Christmas Eve BIG squishy (#37 X3)', () => {
     expect(ratio).toBeLessThanOrEqual(max);
   });
 
-  it('keeps its stats in the bands: the befriend form a base, the boss form sim-tuned', () => {
+  it('keeps its stats in the bands: the befriend form a base, the boss form tuned at the Eve floor', () => {
     expect(total(befriendForm)).toBeGreaterThanOrEqual(260);
     expect(total(befriendForm)).toBeLessThanOrEqual(290);
-    expect(total(bossForm)).toBeGreaterThanOrEqual(340);
+    // Tuned at the Eve floor (level 10), so under the weekly bosses' 340–440.
+    expect(total(bossForm)).toBeGreaterThanOrEqual(290);
     expect(total(bossForm)).toBeLessThanOrEqual(440);
+    // Every stat grows from the befriend form, like a boss line's steps.
+    for (const stat of ['hp', 'attack', 'defense', 'speed'] as const) {
+      expect(get(bossForm).baseStats[stat], stat).toBeGreaterThan(
+        get(befriendForm).baseStats[stat],
+      );
+    }
   });
 
   it('signs off with Big Chilly Sneeze: frost + windup, a pair no other boss uses', () => {

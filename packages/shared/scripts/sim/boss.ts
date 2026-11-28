@@ -226,7 +226,7 @@ export function bossGates(
     {
       name:
         spreadWith.length > 0
-          ? `within ${String(g.bossSpread)} points of the bag bosses`
+          ? `within ${String(g.bossSpread)} points of the bag bosses at level ${String(spreadWith[0]?.level ?? config.level)}`
           : `bosses within ${String(g.bossSpread)} points of each other`,
       value: `${String(Math.max(...rates) - Math.min(...rates))} points`,
       pass: rates.length > 0 && Math.max(...rates) - Math.min(...rates) <= g.bossSpread,
@@ -338,6 +338,8 @@ export function runPatchTally(
     const bossLevel = bossLevelFor(partnerLevel, eve.gates, GROWTH_RULES.maxLevel);
     // `bossSetup` puts the boss at `level` and each member at `level + bonus - below`,
     // so a bonus of `partnerLevel - bossLevel` (zero or less) gives the Partner its own level.
+    // Rows whose bonus matches (Partner 8 and up: −2) replay the same seeds at
+    // other levels: common random numbers, so rows differ by level alone.
     const at = { ...config, level: bossLevel, seed: `${config.seed}-patch` };
     let wins = 0;
     let points = 0;
@@ -414,7 +416,7 @@ export function renderChristmasSim(
           `| ${String(r.partnerLevel)} | ${String(r.bossLevel)} | ${String(r.fights)} | ${String(r.winPercent)} | ${String(r.pointsPerFight)} |`,
       ),
       '',
-      `A Keeper chips **${String(tally.pointsPerFight)}** points a fight and **${String(tally.pointsPerKeeper)}** over ${String(p.tries)} tries. \`goalPerKeeper\` is ${String(eve.bar.goalPerKeeper)}.`,
+      `A Keeper chips **${String(tally.pointsPerFight)}** points a fight and **${String(tally.pointsPerKeeper)}** over ${String(p.tries)} tries (one patch-local day's; the Eve spans the evening and Christmas morning, so up to ${String(tally.pointsPerKeeper * 2)} with both). \`goalPerKeeper\` is ${String(eve.bar.goalPerKeeper)}.`,
       '',
     );
   }

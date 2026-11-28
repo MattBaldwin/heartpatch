@@ -56,9 +56,10 @@ export const BOSS_EVENTS: BossEventRules = {
     contributorMinFights: 1, // TUNE
     bar: {
       pointsPerWin: 100, // TUNE: one full win is 100 however strong the boss
-      // TUNE: kept by `pnpm sim:boss --patch` (X3): a Keeper chips ~74 a
-      // fight and ~221 over 3 tries, so about half the patch using its tries
-      // (or everyone fighting twice, less the lights' head start) fills it.
+      // TUNE: kept by `pnpm sim:boss --patch` (X3): a Keeper chips ~75 a
+      // fight, ~226 over an evening's 3 tries (Christmas morning gives 3
+      // more), so about half the patch using its evening tries, or a quarter
+      // using every try, fills it: a cozy night where it usually falls.
       goalPerKeeper: 120,
       minGoal: 200, // TUNE
       maxGoal: 1200, // TUNE
