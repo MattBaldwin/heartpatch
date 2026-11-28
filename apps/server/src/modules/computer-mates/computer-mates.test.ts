@@ -6,7 +6,7 @@ import {
   parseGameEventPayload,
   type MapDetail,
 } from '@heartpatch/shared';
-import { COMPUTER_MATES } from '@heartpatch/shared/server';
+import { COMPUTER_MATES, SPAWN_TABLES } from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -20,6 +20,7 @@ import { createPushRepo } from '../push/repo.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { createTradesRepo } from '../trades/repo.js';
 import { createComputerMatesRepo, mapIs } from './repo.js';
+import { teamSpecies } from './service.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -625,5 +626,33 @@ describe.skipIf(!url)('computer patch-mates (#386a, needs DATABASE_URL)', () => 
     expect(members.map((m) => m.userId)).toEqual([owner.id]);
 
     expect(await createComputerMatesRepo(db).countActivePlayers(map.id)).toBe(1);
+  });
+});
+
+// #874 C6: a table naming patch types (a Clockwork Isle's tech squishies)
+// only fills mate teams on those patches.
+describe('a computer mate’s team species', () => {
+  const isleOnly = new Set(
+    SPAWN_TABLES.filter((t) => t.patchTypes !== undefined).flatMap((t) =>
+      t.entries.map((e) => e.species),
+    ),
+  );
+
+  it('never draws an isle-only squishy on a Cozy Patch or a Wild Isle', () => {
+    expect(isleOnly.size).toBeGreaterThan(0);
+    for (const patchType of ['cozy', 'wild-isle'] as const) {
+      const pool = teamSpecies(patchType).map((s) => s.id);
+      expect(pool.length, patchType).toBeGreaterThan(0);
+      expect(
+        pool.filter((id) => isleOnly.has(id)),
+        patchType,
+      ).toEqual([]);
+    }
+  });
+
+  it('can draw them on a Clockwork Isle, alongside everyone else', () => {
+    const pool = teamSpecies('clockwork-isle').map((s) => s.id);
+    expect(pool).toEqual(expect.arrayContaining(['gearbit', 'bulbun']));
+    expect(pool.length).toBe(teamSpecies('cozy').length + 2);
   });
 });

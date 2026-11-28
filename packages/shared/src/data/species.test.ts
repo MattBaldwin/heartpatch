@@ -12,6 +12,7 @@ import { SPAWN_TABLES } from './server/spawn-tables.js';
 import { MOVES, SPECIES } from './species.js';
 import { WAVE_1_SPECIES } from './species-wave-1.js';
 import { WAVE_2_SPECIES } from './species-wave-2.js';
+import { WAVE_3_SPECIES } from './species-wave-3.js';
 import { TRADING_POST_TERRAIN } from '../territory/reach.js';
 import { isWater } from '../schemas/data/terrains.js';
 
@@ -24,10 +25,10 @@ import { isWater } from '../schemas/data/terrains.js';
 const byId = new Map(SPECIES.map((s) => [s.id, s]));
 const evolvedIds = new Set(SPECIES.flatMap((s) => s.evolutions.map((e) => e.into)));
 /**
- * Wave-1 and wave-2 kinds (#382): their first forms, measured apart from the
+ * Wave-1, wave-2 (#382) and wave-3 (#874) kinds: their first forms, measured apart from the
  * launch lines. Their kids and teens (#443) are evolved forms like any other.
  */
-const waveIds = new Set([...WAVE_1_SPECIES, ...WAVE_2_SPECIES].map((w) => w.id));
+const waveIds = new Set([...WAVE_1_SPECIES, ...WAVE_2_SPECIES, ...WAVE_3_SPECIES].map((w) => w.id));
 const standalone = SPECIES.filter((s) => !evolvedIds.has(s.id) && waveIds.has(s.id));
 const standaloneIds = new Set(standalone.map((s) => s.id));
 /** Base forms: the first squishy of each launch line. */
