@@ -240,3 +240,29 @@ Evolutions: Gearbit → Cogwhirl, Bulbun → Lanternbun (names pun-friendly, STY
 4. Machines never gather in Wave 1; only squishies and Keepers do.
 5. The Beacon is a `lights` row with `needsPower` and no `glowNights` (every night).
 6. Wave 1 adds no milestone, no new terrain and no weather on the isle.
+
+---
+
+# Revision 1 (2026-11-28, after the owner's answers to Q1–Q3)
+
+Owner answers via supervisor 55: **Q1 = frosty Christmas headline** (winter-wind machines, a presents tie-in; a season-neutral look is Wave 2; Clockwork code stays out of the Christmas lanes' files). **Q2 = haul and sort only** (only squishies gather; happy squishies make machines faster). **Q3 = wires like roads.** Q4 and Q5 are still open. This is a delta on the plan above; everything not named here stands.
+
+## R1.1 What the frosty headline changes
+
+- **Look, not rules.** The isle keeps the Wild Isle terrains and generator. Frost is client dressing: a Clockwork-only cool tint and frost rim on tiles and props through the existing terrain plugin (one uniform set when `map.patchType === 'clockwork-isle'`), warm brass and bulb glow against it; Christmas snow already falls on every map through `season=christmas`. Wave 2 drops the tint for the season-neutral look. This is **C4's** work (owns `map/clockwork-frost.ts`, new) and **M1** shows it. No terrain, generator or server change.
+- **Winter wind.** The wind map is still fixed from the seed in Wave 1; the Windmill's text says it runs on winter wind ("Brrr! The colder the wind, the faster it spins"). Wind fronts that change pace are Wave 2 (weather on the isle stays off).
+- **Presents tie-in: the Gift Wrapper.** One more data row, no engine code: `gift-wrapper` (kind `works`, `patchTypes: ['clockwork-isle']`, `season: 'christmas'`, `needsPower`, `requiresResearch: 'wrapping'`), eats `{ spark: 1, parts: 2, treats: 2 }` → makes 1 `presents` per 8 h **TUNE**, L1 `{ timber: 10, parts: 10, blueprints: 1 }` storage 24 h. Research node `wrapping` (tier 1, `{ parts: 6, spark: 4 }`, 2 h, grants 1 Blueprint). The `presents` resource already exists (#37) and a wrapped present from the bag opens through #905's flow. **Owner/Christmas-coordinator check:** a machine-made present uses the same open roll as a gifted one. If that is not wanted, the row and node are dropped with no other change. C0 adds both rows in `data/buildings.ts` and `data/research.ts` after #909 merges; nothing under `advent/`, `boss/` or `christmas.ts` is touched (the "out of Christmas files" rule holds).
+- **Frosty names at the mockup step.** M1–M4 are drawn frosty (snow on blades and rails, scarves on the squishies). Names stay drafts until Q4; the supervisor should ask whether Gearbit and Bulbun keep tinker names or get winter ones (for example Frostcog, Glowbun).
+- **Wave 2 gains:** the season-neutral look, wind fronts, a Patch Tree hook (ornaments from the Gift Wrapper) once the 2c tree lane has merged, and the "happy squishies make machines faster" bonus (below).
+
+## R1.2 Happy squishies make machines faster (Q2)
+
+Recommended **Wave 2**, not Wave 1: contentment is a checkpoint that drifts (`contentment`, `contentment_since`), so a pace bonus has to be an integral over the settle window to stay honest, which is about half a lane in `production.ts` plus a sim change. Wave 1 closes the loop the other way: the Sorter makes Treats, Treats make happy squishies. If the owner wants it in Wave 1, it goes to **C2** as `CLOCKWORK.happyBonus`: `pacePercent` +25 % **TUNE** on a machine while its owner has at least one squishy at contentment ≥ 80 on the patch, evaluated per settle interval; add about 6 hours to C2 and pre-authorize its split.
+
+## R1.3 Scope, lanes and timeline after revision 1
+
+- Wave 1 scope table: "Christmas tie-in" row becomes **Gift Wrapper + frosty look** (Wave 1), season-neutral look (Wave 2).
+- C0 adds the two rows above; C3 nothing new (the tree is data); C4 adds the frost tint and M1 shows it; C5 adds the `gift-wrapper` model (a wrapping table with a ribbon spool); C6 draws the two squishies frosty.
+- Timeline unchanged. The frost tint is a shader uniform and the Wrapper is a data row, so no gate moves.
+- Risks: one more collision class, **the presents economy** (#37, PRs #905 and the advent module). The Wrapper's output rate is capped by `storageHours` and the sim guard "an engaged kid wraps at most 2 presents a day" **TUNE** keeps it from swamping advent presents.
+- Decisions to record, added: 7. Clockwork Isle ships as the Phase 3 Christmas headline with a frosty look; the season-neutral look is Wave 2. 8. The Gift Wrapper is the one presents tie-in; machine-made presents open like gifted ones.
