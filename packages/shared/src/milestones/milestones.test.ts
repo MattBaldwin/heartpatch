@@ -99,6 +99,26 @@ describe('milestone data', () => {
     }
   });
 
+  it('names every kind of thing a seasonal track counts, in every tier (#34)', () => {
+    // The card shows only the next tier's goal, so each tier has to say what counts.
+    const kind = {
+      'squishy.captured': /befriend/i,
+      'resource.gathered': /gather/i,
+      'clothing.found': /find/i,
+    };
+    for (const id of ['halloween', 'cozy-harvest']) {
+      const t = track(id);
+      if (t.progress.from !== 'events') throw new Error(`${id} counts events`);
+      for (const source of t.progress.sources) {
+        const words = kind[source.eventType as keyof typeof kind];
+        expect(words, `${id} source ${source.eventType} has copy words`).toBeDefined();
+        for (const tier of t.tiers) {
+          expect(tier.goal, `${id} ${String(tier.threshold)}`).toMatch(words);
+        }
+      }
+    }
+  });
+
   it('gives account-bound milestone pieces that only milestones give', () => {
     const rewarded = ALL.flatMap((t) => t.tiers.flatMap((tier) => tier.clothing ?? []));
     expect(new Set(rewarded).size).toBe(rewarded.length);

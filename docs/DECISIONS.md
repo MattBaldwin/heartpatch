@@ -2752,3 +2752,29 @@ Supervisor 54 (`session_01RAEPnHD8sctJfWD9ZjYZhq`) took over from supervisor 53 
 - **#898 FX polish list → a later 5c lane** (`element-fx.ts` only), not boss PR 6. **In-fight "The whole patch did it!" sticker → a follow-up after PR 6**, not X5b (it lives in `battle/**`).
 - **2c waits for X5a** (both touch `apps/server/src/modules/maps/service.ts`).
 
+## Supervisor 55 (2026-11-28)
+
+Supervisor 55 (`session_01RAEPnHAU8pDk6gLHtPzbJQ`) took over from supervisor 54 at 01:24 UTC (§8 handoff; supervisor 54 retired and archived). Merged: #911 (handoff docs) → `5eafa55`.
+
+**Owner decisions (2026-11-28)**
+1. **Jobs bug (#912):** "gather timber flashes but doesn't assign" and "guards don't show they have a job" are fixed as a priority lane (PR #915). The owner wasn't sure which spot failed, so both likely refusals (napping homestead, land being cleared) are covered and every setJob refusal shows next to the tapped row.
+2. **Clockwork Isle (#874): the full Wave 1 by Dec 1, 2026.**
+3. **Clockwork Isle is a frosty Christmas headline** (supersedes the earlier "after Christmas, season-neutral" note): winter-wind machines; the frost is client dressing only; a season-neutral look follows in Wave 2.
+4. **Machines haul and sort only;** only squishies (and Keepers) gather.
+5. **Power runs along wires** following the road pattern (roads are per-tile on main).
+6. **Name: Clockwork Isle** (code id `clockwork-isle`).
+7. **New patches only:** a patch's type never changes; no limit on how many patches a Keeper creates or joins is added or changed.
+8. **Gift Wrapper:** yes; a machine-made present opens with the same roll as a gifted one.
+9. **"Happy squishies make machines faster" is Wave 2.**
+10. **Clockwork look (mockup round 1–2 feedback):** buildings are centred on their tiles like Cozy and Wild; they read as **cozy steampunk** (varied materials and colours: brass, copper with verdigris, dark iron, brick, painted wood, pipes, chimneys, steam, gauges, gears; warm window and lamp light), not all glowing gold; **mixed heights** (squat and tall); **every tile leaves room for a road to wrap around its building**, so a large patch feels like a **cozy metropolis**.
+11. **Tech squishy names: Gearbit** (brass, gear ears) and **Bulbun** (bulb nose).
+12. **Scarves are a Wardrobe accessory,** not part of a species' look.
+13. **Snowbundle (X3):** names Snowbundle and Bundlebit approved; the move "Snug Scarf Wrap" becomes **"Snug Snow Wrap"**; look approved, but **bigger in the fight (~2.5× a Puddlepuff)**.
+
+**Coordinator rulings**
+- **G1 Clockwork plan OK** (#874 plan comment 7231940706 + revisions 1–2). C0 contracts lane and a mockup lane started at once.
+- **Clockwork Beacon is `kind: 'lights'`** and a powered Beacon counts toward the Christmas Eve head start; `christmas.test.ts`'s lights pin filters `patchTypes === undefined` after #909.
+- **#909 server wording:** a third Twinkle Lights uses the existing count message, not "One is plenty". Bloom on high tier not visibly changing bulbs is a follow-up note only.
+- **XM (#917) merges after #905 and #913** and keeps `present.opened`; drop it only if #905 isn't merged by Nov 30 18:00 UTC.
+- **Boss PR 6 splits:** #916 ships beats 1–4 + #890 follow-ups; 5a–5e camera/HUD and captures go to a fresh PR 6b lane after #916 merges.
+- **Mockup Board images are embedded as data URIs** (the owner saw blank boxes for separately published image files).
