@@ -1,0 +1,72 @@
+{
+ "file": "iphone-05-tuckered-day.png",
+ "device": "iphone",
+ "tz": "Asia/Dubai",
+ "reduced": false,
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "effects": {
+   "live": 5,
+   "meshes": 1,
+   "spawned": 31
+  },
+  "drawCalls": 55,
+  "playing": {
+   "kind": "tuckered",
+   "at": 700
+  },
+  "framing": {
+   "distance": 42.64206476141295,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.142018779342723,
+    "bottom": 0.8755868544600939
+   },
+   "face": null,
+   "team": [],
+   "rise": 0.5443831628900633,
+   "teamFeet": null,
+   "bossFacing": 0.9894237448305542
+  },
+  "camera": {
+   "x": 9.844692857592234,
+   "y": 9.371601935581218,
+   "z": -39.68865736667953
+  }
+ },
+ "peakLiveThisRound": 58,
+ "caption": "Puddlepuff is all tuckered out! 💤",
+ "sticker": {
+  "top": 0.1472136895981193,
+  "bottom": 0.20489897750353028,
+  "left": 12.311532020568848,
+  "right": 124.32909488677979,
+  "text": "Everyone!"
+ },
+ "strip": {
+  "top": 0.07863849765258216,
+  "bottom": 0.13028169014084506,
+  "left": 12,
+  "right": 329,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "handle": {
+  "top": 0.8849765258215962,
+  "bottom": 0.960093896713615,
+  "left": 16,
+  "right": 377,
+  "text": "Round 1PPP"
+ },
+ "friendCallout": null,
+ "captionPill": {
+  "top": 0.8315727699530516,
+  "bottom": 0.8685446009389671,
+  "left": 61.96875,
+  "right": 331.03125,
+  "text": "Puddlepuff is all tuckered out! 💤"
+ }
+}

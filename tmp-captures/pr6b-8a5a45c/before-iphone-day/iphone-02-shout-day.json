@@ -1,0 +1,79 @@
+{
+ "file": "iphone-02-shout-day.png",
+ "device": "iphone",
+ "tz": "Asia/Dubai",
+ "reduced": false,
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "effects": {
+   "live": 62,
+   "meshes": 4,
+   "spawned": 59
+  },
+  "drawCalls": 58,
+  "playing": {
+   "kind": "move",
+   "at": 260
+  },
+  "framing": {
+   "distance": 44.1743369838105,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.142018779342723,
+    "bottom": 0.8755868544600939
+   },
+   "face": {
+    "top": 0.6172575006417873,
+    "bottom": 0.6524090781296286
+   },
+   "team": [
+    {
+     "top": 0.6826617181301153,
+     "bottom": 0.7139630435438977
+    },
+    {
+     "top": 0.6794430849973192,
+     "bottom": 0.713426817606082
+    },
+    {
+     "top": 0.675271073722461,
+     "bottom": 0.713026199182102
+    }
+   ],
+   "teamFeet": 0.7593949727450082,
+   "bossFacing": 0.9894814627503873
+  },
+  "camera": {
+   "x": 10.371720671724589,
+   "y": 7.081445977975321,
+   "z": -42.024815112801825
+  }
+ },
+ "peakLiveThisRound": 0,
+ "caption": "Puddlepuff used Full Name Shout!",
+ "sticker": {
+  "top": 0.1472136895981193,
+  "bottom": 0.20489897750353028,
+  "left": 12.311532020568848,
+  "right": 124.32909488677979,
+  "text": "Everyone!"
+ },
+ "strip": {
+  "top": 0.07863849765258216,
+  "bottom": 0.13028169014084506,
+  "left": 12,
+  "right": 329,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "handle": {
+  "top": 0.8849765258215962,
+  "bottom": 0.960093896713615,
+  "left": 16,
+  "right": 377,
+  "text": "Round 3PPP"
+ }
+}

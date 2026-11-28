@@ -1,0 +1,91 @@
+{
+ "file": "iphone-04-drift-day.png",
+ "device": "iphone",
+ "tz": "Asia/Dubai",
+ "reduced": false,
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "effects": {
+   "live": 78,
+   "meshes": 4,
+   "spawned": 127
+  },
+  "drawCalls": 58,
+  "playing": {
+   "kind": "move",
+   "at": 440
+  },
+  "framing": {
+   "distance": 43.47699743204521,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.142018779342723,
+    "bottom": 0.8755868544600939
+   },
+   "face": {
+    "top": 0.6963271218998752,
+    "bottom": 0.7544741460722908
+   },
+   "team": [
+    {
+     "top": 0.7839253391527803,
+     "bottom": 0.8184493481397861,
+     "head": 0.7323758974210988
+    },
+    {
+     "top": 0.7796120899953951,
+     "bottom": 0.8171920627920186,
+     "head": 0.7270636070657249
+    },
+    {
+     "top": 0.7718494592495272,
+     "bottom": 0.8116380586542785,
+     "head": 0.7208856766361169
+    }
+   ],
+   "rise": 3,
+   "teamFeet": 0.8697074268704603,
+   "bossFacing": 0.9865246980043507
+  },
+  "camera": {
+   "x": 10.099130473581155,
+   "y": 11.921735834286546,
+   "z": -40.823495184211886
+  }
+ },
+ "peakLiveThisRound": 0,
+ "caption": "Puddlepuff used Drift Spin!",
+ "sticker": {
+  "top": 0.1472136895981193,
+  "bottom": 0.20489897750353028,
+  "left": 12.311532020568848,
+  "right": 124.32909488677979,
+  "text": "Everyone!"
+ },
+ "strip": {
+  "top": 0.07863849765258216,
+  "bottom": 0.13028169014084506,
+  "left": 12,
+  "right": 329,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "handle": {
+  "top": 0.8849765258215962,
+  "bottom": 0.960093896713615,
+  "left": 16,
+  "right": 377,
+  "text": "Round 5PPFlinched!P"
+ },
+ "friendCallout": null,
+ "captionPill": {
+  "top": 0.8315727699530516,
+  "bottom": 0.8685446009389671,
+  "left": 83.6953125,
+  "right": 309.3046875,
+  "text": "Puddlepuff used Drift Spin!"
+ }
+}

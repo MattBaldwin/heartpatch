@@ -1,0 +1,63 @@
+{
+ "file": "iphone-07b-not-yet-day.png",
+ "device": "iphone",
+ "tz": "Asia/Dubai",
+ "reduced": false,
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "effects": {
+   "live": 20,
+   "meshes": 2,
+   "spawned": 34
+  },
+  "drawCalls": 56,
+  "playing": null,
+  "framing": {
+   "distance": 67.23568160260646,
+   "fogEnd": 112.23568160260646,
+   "band": {
+    "top": 0.1983568075117371,
+    "bottom": 0.4209397007042254
+   },
+   "face": null,
+   "team": [],
+   "rise": 0.009484447411303106,
+   "teamFeet": null,
+   "bossFacing": 0.9886884569993222
+  },
+  "camera": {
+   "x": 15.718636202663726,
+   "y": 11.620779684702075,
+   "z": -64.57333541831807
+  }
+ },
+ "peakLiveThisRound": 58,
+ "caption": "",
+ "sticker": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Everyone!"
+ },
+ "strip": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "handle": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Round 1PPP"
+ },
+ "friendCallout": null,
+ "captionPill": null
+}

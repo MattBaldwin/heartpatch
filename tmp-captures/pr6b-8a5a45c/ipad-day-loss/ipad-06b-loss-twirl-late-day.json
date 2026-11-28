@@ -1,0 +1,66 @@
+{
+ "file": "ipad-06b-loss-twirl-late-day.png",
+ "device": "ipad",
+ "tz": "Asia/Dubai",
+ "reduced": false,
+ "inner": {
+  "w": 820,
+  "h": 1180,
+  "dpr": 2
+ },
+ "battle": {
+  "effects": {
+   "live": 4,
+   "meshes": 1,
+   "spawned": 18
+  },
+  "drawCalls": 55,
+  "playing": null,
+  "framing": {
+   "distance": 37.811216490176356,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.09322033898305085,
+    "bottom": 0.7312102754237289
+   },
+   "face": {
+    "top": 0.5530955757047877,
+    "bottom": 0.6141440043985279
+   },
+   "team": [],
+   "rise": 0,
+   "teamFeet": null,
+   "bossFacing": 0.9410031217315413
+  },
+  "camera": {
+   "x": 8.815915798665046,
+   "y": 8.280351223162032,
+   "z": -36.14082138153105
+  }
+ },
+ "peakLiveThisRound": 56,
+ "caption": "",
+ "sticker": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Everyone!"
+ },
+ "strip": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Puddlepuff👣⏳"
+ },
+ "handle": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Round 1P💤P💤P💤"
+ },
+ "friendCallout": null,
+ "captionPill": null
+}

@@ -1,0 +1,72 @@
+{
+ "file": "iphone-06-loss-twirl-day.png",
+ "device": "iphone",
+ "tz": "Asia/Dubai",
+ "reduced": false,
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "effects": {
+   "live": 4,
+   "meshes": 1,
+   "spawned": 18
+  },
+  "drawCalls": 55,
+  "playing": {
+   "kind": "end",
+   "at": 500
+  },
+  "framing": {
+   "distance": 57.31328650379105,
+   "fogEnd": 102.31328650379105,
+   "band": {
+    "top": 0.142018779342723,
+    "bottom": 0.8755868544600939
+   },
+   "face": null,
+   "team": [],
+   "rise": 0,
+   "teamFeet": null,
+   "bossFacing": -0.23074937107824145
+  },
+  "camera": {
+   "x": 13.631008508573128,
+   "y": 10.488048223829942,
+   "z": -54.98327790740155
+  }
+ },
+ "peakLiveThisRound": 56,
+ "caption": "Your team is all tuckered out! Puddlepuff is here until Thursday. Come back stronger!",
+ "sticker": {
+  "top": 0.1472136895981193,
+  "bottom": 0.20489897750353028,
+  "left": 12.311532020568848,
+  "right": 124.32909488677979,
+  "text": "Everyone!"
+ },
+ "strip": {
+  "top": 0.07863849765258216,
+  "bottom": 0.13028169014084506,
+  "left": 12,
+  "right": 329,
+  "text": "Puddlepuff👣⏳"
+ },
+ "handle": {
+  "top": 0.8849765258215962,
+  "bottom": 0.960093896713615,
+  "left": 16,
+  "right": 377,
+  "text": "Round 1P💤P💤P💤"
+ },
+ "friendCallout": null,
+ "captionPill": {
+  "top": 0.8086854460093896,
+  "bottom": 0.8685446009389671,
+  "left": 16,
+  "right": 377,
+  "text": "Your team is all tuckered out! Puddlepuff is here until Thursday. Come back stronger!"
+ }
+}

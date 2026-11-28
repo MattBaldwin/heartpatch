@@ -1,0 +1,91 @@
+{
+ "file": "ipad-02b-flinched-day.png",
+ "device": "ipad",
+ "tz": "Asia/Dubai",
+ "reduced": false,
+ "inner": {
+  "w": 820,
+  "h": 1180,
+  "dpr": 2
+ },
+ "battle": {
+  "effects": {
+   "live": 7,
+   "meshes": 1,
+   "spawned": 15
+  },
+  "drawCalls": 55,
+  "playing": {
+   "kind": "effect",
+   "at": 250
+  },
+  "framing": {
+   "distance": 34.615469137148274,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.05254237288135593,
+    "bottom": 0.9389830508474576
+   },
+   "face": {
+    "top": 0.5655983288221225,
+    "bottom": 0.6310342664106412
+   },
+   "team": [
+    {
+     "top": 0.7135562932215744,
+     "bottom": 0.7552192098934213,
+     "head": 0.6447783930754095
+    },
+    {
+     "top": 0.7210241285162959,
+     "bottom": 0.7640749763061101,
+     "head": 0.6586832229967412
+    },
+    {
+     "top": 0.7030206230277873,
+     "bottom": 0.7444294656081389,
+     "head": 0.6317888495134357
+    }
+   ],
+   "rise": 0.35138963844305965,
+   "teamFeet": 0.8197553832443363,
+   "bossFacing": 0.9705370140231157
+  },
+  "camera": {
+   "x": 8.248144969640022,
+   "y": 8.269971990852033,
+   "z": -33.35057617217961
+  }
+ },
+ "peakLiveThisRound": 62,
+ "caption": "Puddlepuff flinched! No move this round.",
+ "sticker": {
+  "top": 0.056293274184404794,
+  "bottom": 0.09794401395118843,
+  "left": 12.311532020568848,
+  "right": 124.32909488677979,
+  "text": "Everyone!"
+ },
+ "strip": {
+  "top": 0.006779661016949152,
+  "bottom": 0.04406779661016949,
+  "left": 104,
+  "right": 664,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "handle": {
+  "top": 0.9457627118644067,
+  "bottom": 1,
+  "left": 16,
+  "right": 804,
+  "text": "Round 1PPFlinched!P"
+ },
+ "friendCallout": null,
+ "captionPill": {
+  "top": 0.9072033898305085,
+  "bottom": 0.9338983050847458,
+  "left": 245.8828125,
+  "right": 574.1171875,
+  "text": "Puddlepuff flinched! No move this round."
+ }
+}

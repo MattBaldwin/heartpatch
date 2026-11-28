@@ -1,0 +1,66 @@
+{
+ "file": "ipad-06c-loss-card-day.png",
+ "device": "ipad",
+ "tz": "Asia/Dubai",
+ "reduced": false,
+ "inner": {
+  "w": 820,
+  "h": 1180,
+  "dpr": 2
+ },
+ "battle": {
+  "effects": {
+   "live": 0,
+   "meshes": 0,
+   "spawned": 18
+  },
+  "drawCalls": 54,
+  "playing": null,
+  "framing": {
+   "distance": 37.820593919019984,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.09322033898305085,
+    "bottom": 0.7312102754237289
+   },
+   "face": {
+    "top": 0.5466791405982632,
+    "bottom": 0.6098429374360645
+   },
+   "team": [],
+   "rise": 0,
+   "teamFeet": null,
+   "bossFacing": 0.8626432332041285
+  },
+  "camera": {
+   "x": 8.797385915541973,
+   "y": 8.281412778244011,
+   "z": -36.14312318755669
+  }
+ },
+ "peakLiveThisRound": 56,
+ "caption": "",
+ "sticker": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Everyone!"
+ },
+ "strip": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Puddlepuff👣⏳"
+ },
+ "handle": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Round 1P💤P💤P💤"
+ },
+ "friendCallout": null,
+ "captionPill": null
+}

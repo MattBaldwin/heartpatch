@@ -1,0 +1,63 @@
+{
+ "file": "iphone-08b-joined-day.png",
+ "device": "iphone",
+ "tz": "Asia/Dubai",
+ "reduced": false,
+ "inner": {
+  "w": 393,
+  "h": 852,
+  "dpr": 2
+ },
+ "battle": {
+  "effects": {
+   "live": 3,
+   "meshes": 2,
+   "spawned": 35
+  },
+  "drawCalls": 56,
+  "playing": null,
+  "framing": {
+   "distance": 67.64396769035207,
+   "fogEnd": 112.64396769035207,
+   "band": {
+    "top": 0.1983568075117371,
+    "bottom": 0.445587588028169
+   },
+   "face": null,
+   "team": [],
+   "rise": 1.91288445486532,
+   "teamFeet": null,
+   "bossFacing": 0.9885202890167993
+  },
+  "camera": {
+   "x": 15.883588072305038,
+   "y": 13.570398989425621,
+   "z": -64.91697827089367
+  }
+ },
+ "peakLiveThisRound": 58,
+ "caption": "",
+ "sticker": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Everyone!"
+ },
+ "strip": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "handle": {
+  "top": 0,
+  "bottom": 0,
+  "left": 0,
+  "right": 0,
+  "text": "Round 1PPP"
+ },
+ "friendCallout": null,
+ "captionPill": null
+}

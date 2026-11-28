@@ -1,0 +1,91 @@
+{
+ "file": "ipad-03b-backup-flash-day.png",
+ "device": "ipad",
+ "tz": "Asia/Dubai",
+ "reduced": false,
+ "inner": {
+  "w": 820,
+  "h": 1180,
+  "dpr": 2
+ },
+ "battle": {
+  "effects": {
+   "live": 50,
+   "meshes": 4,
+   "spawned": 93
+  },
+  "drawCalls": 58,
+  "playing": {
+   "kind": "move",
+   "at": 110
+  },
+  "framing": {
+   "distance": 32.166890163900476,
+   "fogEnd": 90,
+   "band": {
+    "top": 0.05254237288135593,
+    "bottom": 0.9389830508474576
+   },
+   "face": {
+    "top": 0.6431541920872292,
+    "bottom": 0.6900759404561341
+   },
+   "team": [
+    {
+     "top": 0.7679066272714715,
+     "bottom": 0.8206181686582544,
+     "head": 0.6922181954688826
+    },
+    {
+     "top": 0.77492879334852,
+     "bottom": 0.8193248542700196,
+     "head": 0.6963689928649299
+    },
+    {
+     "top": 0.7824719128962914,
+     "bottom": 0.8198851640757343,
+     "head": 0.7090897380678187
+    }
+   ],
+   "rise": 1.3295160505854848,
+   "teamFeet": 0.8959070452623392,
+   "bossFacing": 0.9905864706493526
+  },
+  "camera": {
+   "x": 7.321757523487419,
+   "y": 8.970911394058286,
+   "z": -29.58211964265637
+  }
+ },
+ "peakLiveThisRound": 48,
+ "caption": "Backup! Mama Bear Charge!",
+ "sticker": {
+  "top": 0.05701232522220935,
+  "bottom": 0.09722496291338387,
+  "left": 12.267065048217773,
+  "right": 108.13918113708496,
+  "text": "Backup!"
+ },
+ "strip": {
+  "top": 0.006779661016949152,
+  "bottom": 0.04406779661016949,
+  "left": 104,
+  "right": 664,
+  "text": "Puddlepuff👣PPP⏳"
+ },
+ "handle": {
+  "top": 0.9457627118644067,
+  "bottom": 1,
+  "left": 16,
+  "right": 804,
+  "text": "Round 4PPFlinched!P"
+ },
+ "friendCallout": null,
+ "captionPill": {
+  "top": 0.9072033898305085,
+  "bottom": 0.9338983050847458,
+  "left": 292.0234375,
+  "right": 527.9765625,
+  "text": "Backup! Mama Bear Charge!"
+ }
+}
