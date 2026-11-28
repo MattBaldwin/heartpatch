@@ -73,6 +73,12 @@ export interface BossHud {
     handlers: PickerHandlers,
   ) => void;
   hidePicker: () => void;
+  /**
+   * The sheet can't be tapped, tabbed to or read out (the BIG squishy's entrance
+   * covers it, #190 PR 6): `inert`, not just covered, so a keyboard or a screen
+   * reader can't reach a move under the show either.
+   */
+  setInert: (on: boolean) => void;
   /** The fight closed: the picker goes and the sheet rests, so the next fight opens without a slide. */
   reset: () => void;
   dispose: () => void;
@@ -484,7 +490,11 @@ export function mountBossHud(): BossHud {
       chipTap = null;
       drawChips();
     },
+    setInert: (on) => {
+      dock.inert = on;
+    },
     reset: () => {
+      dock.inert = false;
       hud.hidePicker();
       dock.dataset['sheet'] = 'rest';
       // Nothing of the last fight carries into the next: its order dots, its stickers.

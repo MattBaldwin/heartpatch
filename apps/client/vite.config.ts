@@ -124,7 +124,7 @@ export default defineConfig({
     css: {
       include: [
         /[\\/]ui[\\/](rarity[\\/]rarity|wardrobe[\\/]wardrobe)\.css/,
-        /[\\/]battle[\\/](rare-reveal|befriend-cheer|battle)\.css/,
+        /[\\/]battle[\\/](rare-reveal|befriend-cheer|befriend-beat|battle)\.css/,
       ],
     },
   },

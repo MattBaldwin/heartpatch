@@ -17,15 +17,19 @@ import type { BattleScene } from './battle-scene.js';
 import { otherSide, type BattleContent } from './battle-view.js';
 import { befriendPanel, mountBossHud, type OrderMover, type PickerMove } from './boss-hud.js';
 import {
+  BOSS_TEXT,
   befriendView,
   bossCallout,
+  bossDisplayName,
   bossPlates,
   bossResult,
   bossSlot,
+  bossWon,
   goTo,
   isAreaMove,
   isOwnMove,
   isWindupMove,
+  lossLine,
   pickerFor,
   pickMove,
   sameAgain,
@@ -79,6 +83,13 @@ export interface BossBattle {
   playing: (b: PlayerBattle, steps: readonly PlaybackStep[]) => void;
   /** A step plays: its callout over the right plate, and the boss's "Stomp again!". */
   step: (b: PlayerBattle, step: PlaybackStep, names: BattleContent) => void;
+  /** The picker can't be reached while the entrance covers it (#190 PR 6). */
+  inert: (on: boolean) => void;
+  /**
+   * The caption for a step of the end beats (#190 PR 6): the BIG squishy tuckered
+   * out, or the team tuckered out and the day it leaves; null for any other step.
+   */
+  caption: (b: PlayerBattle, step: PlaybackStep, names: BattleContent) => string | null;
   /** The card's words and its befriend panel, or null when it isn't a boss card. */
   result: (
     b: PlayerBattle,
@@ -104,6 +115,12 @@ export interface BossBattle {
 function samePicks(a: Readonly<Record<number, string>>, b: Readonly<Record<number, string>>) {
   const keys = Object.keys(a);
   return keys.length === Object.keys(b).length && keys.every((k) => a[Number(k)] === b[Number(k)]);
+}
+
+/** The BIG squishy's name, "The BIG squishy" when this client doesn't know its species (rule 6). */
+function bossNameOf(b: PlayerBattle, names: BattleContent): string {
+  const boss = b.view.sides[otherSide(b.mySide)].squishies[bossSlot(b)];
+  return bossDisplayName(names.species, boss?.speciesId, (id) => names.speciesName(id));
 }
 
 export function createBossBattle(deps: BossBattleDeps): BossBattle {
@@ -396,9 +413,20 @@ export function createBossBattle(deps: BossBattleDeps): BossBattle {
       else if (extra) ui.callout('boss', extra);
       else if (step.callout) ui.callout(step.side === b.mySide ? step.slot : 'boss', step.callout);
     },
+    inert: (on) => {
+      ui.setInert(on);
+    },
+    caption: (b, step, names) => {
+      const bossSide = otherSide(b.mySide);
+      const name = bossNameOf(b, names);
+      if (step.kind === 'tuckered' && step.side === bossSide) return BOSS_TEXT.tuckeredOut(name);
+      if (step.kind === 'end' && bossWon(b)) {
+        return lossLine(b.boss, name, deps.now(), deps.timeZone(b));
+      }
+      return null;
+    },
     result: (b, names) => {
-      const boss = b.view.sides[otherSide(b.mySide)].squishies[bossSlot(b)];
-      const name = names.speciesName(boss?.speciesId ?? '');
+      const name = bossNameOf(b, names);
       const card = bossResult(b, name, deps.now(), deps.timeZone(b));
       if (!card) return null;
       latest = b;

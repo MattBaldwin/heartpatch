@@ -386,7 +386,11 @@ describe('ribbon tabs', () => {
       'Build',
       'Halloween',
       'Thanksgiving',
+      'Christmas',
     ]);
+    // Twinkle Lights go up in December (#37 2a).
+    const christmas = bookTabs(views)[4]!;
+    expect(views.filter(christmas.matches).map((p) => p.key)).toEqual(['building:twinkle-lights']);
     const halloween = bookTabs(views)[2]!;
     expect(views.filter(halloween.matches).map((p) => p.key)).toEqual([
       'recipe:pumpkin-treats',

@@ -1,8 +1,10 @@
 import {
   AdventViewSchema,
   ClaimAdventResponseSchema,
+  OpenPresentResponseSchema,
   type AdventView,
   type ClaimAdventResponse,
+  type OpenPresentResponse,
 } from '@heartpatch/shared';
 import { apiCallFor } from '../net/api.js';
 
@@ -18,6 +20,15 @@ export const adventApi = {
       method: 'POST',
       body: { day },
       schema: ClaimAdventResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
+  /** Opens one wrapped present from the bag. The server finds out if there is one. */
+  openPresent: (mapId: string, key: string): Promise<OpenPresentResponse> =>
+    apiCallFor(`/maps/${mapId}/presents/open`, {
+      method: 'POST',
+      body: {},
+      schema: OpenPresentResponseSchema,
       headers: { 'idempotency-key': key },
     }),
 };

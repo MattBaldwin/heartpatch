@@ -86,6 +86,9 @@ const LEFT: Readonly<Record<string, (n: number) => string>> = {
   defender: (n) => `Keep your land safe ${String(n)} more ${plural(n, 'time', 'times')}`,
   rescuer: (n) => `Bring ${String(n)} more home from the Hollow`,
   seeker: (n) => `Search ${String(n)} more ${plural(n, 'spot', 'spots')}`,
+  // The seasonal tracks' goals name every activity, too long for the chip.
+  halloween: (n) => `Do ${String(n)} more Halloween ${plural(n, 'thing', 'things')}`,
+  'cozy-harvest': (n) => `Do ${String(n)} more harvest ${plural(n, 'thing', 'things')}`,
 };
 
 /** Where each track is played (mockup "Where each Go button leads"); others go to the map. */

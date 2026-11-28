@@ -4,7 +4,7 @@
  * on the playtest devices.
  */
 
-import type { CommunityKindId } from '@heartpatch/shared';
+import type { BuildingRowKind, CommunityKindId } from '@heartpatch/shared';
 
 /** Centre-to-corner size of one hex tile, in world units. */
 export const HEX_SIZE = 0.65; // TUNE: about 7 tiles across a portrait iPhone at the start zoom
@@ -749,6 +749,46 @@ export const CHRISTMAS = {
   sky: {
     day: { inner: '#f3f7ff', mid: '#dfe7fb', cloud: '#ffffff' }, // TUNE
     night: { inner: '#56649f', mid: '#2c3262', cloud: '#8e9bd0' }, // TUNE
+  },
+  /**
+   * Twinkle Lights (#37 2a): bulbs strung round a tile holding one, along its
+   * six edges (on a fence's top where it has one) and in swags under its
+   * buildings' eaves, plus a few round the lights' own post. One
+   * thin-instanced quad each (2 triangles), one draw call for the patch.
+   */
+  bulbs: {
+    /** Most bulbs on the map; a busy patch respaces every string to fit. */
+    cap: 600,
+    /** Bulbs along each hex edge (corners left free), at most. */
+    perEdge: 5, // TUNE
+    /** In one swag under a building's eaves, at most. */
+    perEave: 5, // TUNE
+    /** Round the Twinkle Lights' own post. */
+    perPost: 5, // TUNE
+    /** Each coil and swag keeps this many on a busy patch before the edges share the rest. */
+    keep: { post: 3, eave: 4 }, // TUNE
+    /** Warm white, red, green, gold (the approved M0 colours, green lifted). sRGB. */
+    colors: ['#fff0c4', '#ff5d52', '#7dffb2', '#ffcc4d'], // TUNE: a bright mint green (deeper reads murky at night)
+    /** By day the same bulbs are unlit glass in these (pale cream, red, green, bright gold). sRGB. */
+    glassColors: ['#f2e8cc', '#ff6f66', '#6fe3a4', '#f0c24f'], // TUNE
+    /** Over the rim, over a fence's top, and the dip between two corners (world units). */
+    rimLift: 0.07, // TUNE
+    fenceLift: 0.2, // TUNE: over the tallest fence (0.17)
+    sag: 0.03, // TUNE
+    /** The bulb's quad, world units across (its halo fills it; the glass is `core` of it). */
+    size: 0.3, // TUNE
+    core: 0.12, // TUNE: the glass's radius, a share of the quad (0.5 is its edge)
+    /** Lit: the halo's strength and the glass's white-hot middle. */
+    halo: 1, // TUNE
+    hot: 0.6, // TUNE
+    /** By day, unlit: the glass's colour, darker (coloured glass), with a small shine. */
+    glass: 0.95, // TUNE
+    /** Building kinds with no eaves (an open pad, a fire ring): no swag, the edge bulbs just keep off them. */
+    noEaves: ['training-grounds', 'hearthfire'] as readonly BuildingRowKind[], // TUNE
+    /** A swag's bulbs under a building's eaves, as a share of an edge bulb (their halo stays off its walls). */
+    eaveScale: 0.6, // TUNE
+    /** The twinkle: how far a bulb dims (0-1) and how fast (radians a second). Still under reduced motion. */
+    twinkle: { amount: 0.4, speed: 1.8 }, // TUNE
   },
 } as const;
 

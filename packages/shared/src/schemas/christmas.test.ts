@@ -17,6 +17,7 @@ import {
   PatchTreeRowSchema,
 } from './christmas.js';
 import { BuildingSchema, LightsBuildingSchema } from './data/buildings.js';
+import { isBuildable } from './data/home-base.js';
 import { checkPushRules, checkPushText } from './data/push.js';
 import { BuildingKindSchema } from './buildings.js';
 import { GAME_EVENTS, parseGameEventPayload } from './events.js';
@@ -188,9 +189,24 @@ describe('new kinds', () => {
       levels: [{ cost: { timber: 6, glimmer: 2 } }],
     };
     expect(BuildingSchema.parse(lights)).toEqual(lights);
-    // Not in the data, and not buildable, until 2a.
-    expect(BUILDINGS.some((b) => b.kind === 'lights')).toBe(false);
-    expect((HOME_BASE_RULES.buildableKinds as readonly string[]).includes('lights')).toBe(false);
+    // Lane 2a: in the data and buildable. The kind id must be `lights`, or the
+    // Christmas Eve head start (X2 counts `buildings.kind = 'lights'`) stays 0.
+    const twinkle = BUILDINGS.find((b) => b.id === 'twinkle-lights');
+    expect(twinkle?.kind).toBe('lights');
+    expect(BUILDINGS.filter((b) => b.kind === 'lights').map((b) => b.id)).toEqual([
+      'twinkle-lights',
+    ]);
+    expect((HOME_BASE_RULES.buildableKinds as readonly string[]).includes('lights')).toBe(true);
+    if (twinkle?.kind !== 'lights') throw new Error('no Twinkle Lights');
+    expect(twinkle.season).toBe('christmas');
+    expect(twinkle.placement).toBe('owned');
+    expect(twinkle.glowNights).toEqual(['12-24', '12-25']);
+    expect(twinkle.safeRadius).toBe(0);
+    expect(twinkle.maxPerTile).toBe(1);
+    expect(twinkle.maxPerHome).toBeGreaterThan(0);
+    // Timber plus Glimmer, no fuel.
+    expect(Object.keys(twinkle.levels[0]?.cost ?? {}).sort()).toEqual(['glimmer', 'timber']);
+    expect(isBuildable(HOME_BASE_RULES, twinkle)).toBe(true);
     // A Clockwork beacon (#874) is the same kind with a wider reach.
     const beacon = { ...lights, id: 'clockwork-beacon', safeRadius: 2 };
     expect(LightsBuildingSchema.parse(beacon)).toEqual(beacon);
@@ -290,7 +306,10 @@ describe('battle content hash (pinned on purpose, #37 C0)', () => {
   it('is unchanged by the Christmas contracts', () => {
     expect(createBattleContent(GAME_DATA).contentHash).toBe('28aea29116d27d7b660e7e4849f3caf2');
     expect(createBattleContent(serverBattleData(GAME_DATA, SERVER_GAME_DATA)).contentHash).toBe(
-      '73742c3adf689cad4491470975ac3536',
+      // Re-pinned on purpose by #37 X3: Snowbundle and Bundlebit, their four
+      // moves and the evolution row are new server battle content (was
+      // 73742c3adf689cad4491470975ac3536).
+      'e6506a67040d6ebd093bbe2f02e1b5da',
     );
   });
 });

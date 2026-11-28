@@ -16,6 +16,7 @@ import {
   type PublicTile,
 } from '@heartpatch/shared';
 import { isWaterTile } from './map-dressing.js';
+import { findHomeBases } from './map-layout.js';
 
 // A realistic map view for unit tests: a real generated 4-player map, as the
 // server would send it, with members taking home slots in order. Pinned to
@@ -254,4 +255,96 @@ export function testWildIsle(players = 6, extra = 30): MapView {
     tiles,
   };
   return grown(view, extra, (t) => t.terrain !== 'junipers-gap' && !isWaterTile(t));
+}
+
+/**
+ * Twinkle Lights (#37 2a) on `perKeeper` of each Keeper's tiles, as the
+ * server would send them: their Heart Seed's tile first (beside its other
+ * buildings, on a free ring spot), then their other land nearest home; with
+ * `land`, only their land out past the home ring.
+ */
+export function withTwinkleLights(
+  view: MapView,
+  perKeeper: number,
+  at: 'home' | 'land' = 'home',
+): MapView {
+  const chosen = new Map<string, number>();
+  let n = 0;
+  const homes = findHomeBases(view.tiles);
+  for (const m of view.members) {
+    const seed = homes.find((h) => h.seed.ownerUserId === m.user.id)?.seed ?? null;
+    const own = view.tiles
+      .filter((t) => t.ownerUserId === m.user.id && (at === 'home' || t.homeSlot === null))
+      .sort(
+        (a, b) =>
+          (seed && hexKey(a) === hexKey(seed) ? -1 : 0) -
+            (seed && hexKey(b) === hexKey(seed) ? -1 : 0) ||
+          (seed ? hexDistance(a, seed) - hexDistance(b, seed) : 0) ||
+          a.q - b.q ||
+          a.r - b.r,
+      );
+    for (const t of own.slice(0, perKeeper)) {
+      const used = new Set(t.buildings.map((b) => b.spot));
+      // West of the seed, away from the Keeper (who stands east of it).
+      const spot = [4, 6, 5, 3, 2, 1, 0].find((s) => !used.has(s)) ?? 4;
+      chosen.set(hexKey(t), spot);
+    }
+  }
+  return {
+    ...view,
+    tiles: view.tiles.map((t) => {
+      const spot = chosen.get(hexKey(t));
+      if (spot === undefined) return t;
+      n++;
+      return {
+        ...t,
+        buildings: [
+          ...t.buildings,
+          {
+            id: `0190a8c4-0000-7000-8000-b${String(n).padStart(11, '0')}`,
+            buildingId: 'twinkle-lights',
+            kind: 'lights' as const,
+            level: 1,
+            spot,
+            lit: null,
+            safeRadius: null,
+          },
+        ],
+      };
+    }),
+  };
+}
+
+/** An Ember Den and Training Grounds behind and left of each Keeper's Heart Seed (spots 3 and 5), clear of the Keeper. */
+export function withHomeBuildings(view: MapView): MapView {
+  const seeds = new Set(
+    findHomeBases(view.tiles)
+      .filter((h) => h.seed.ownerUserId !== null)
+      .map((h) => hexKey(h.seed)),
+  );
+  let n = 0;
+  const row = (buildingId: string, kind: 'habitat' | 'training-grounds', spot: number) => ({
+    id: `0190a8c4-0000-7000-8000-d${String(++n).padStart(11, '0')}`,
+    buildingId,
+    kind,
+    level: 1,
+    spot,
+    lit: null,
+    safeRadius: null,
+  });
+  return {
+    ...view,
+    tiles: view.tiles.map((t) =>
+      seeds.has(hexKey(t))
+        ? {
+            ...t,
+            buildings: [
+              ...t.buildings,
+              row('ember-den', 'habitat', 3),
+              row('training-grounds', 'training-grounds', 5),
+            ],
+          }
+        : t,
+    ),
+  };
 }
