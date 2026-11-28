@@ -12,6 +12,7 @@ import { CHRISTMAS } from './map-config.js';
 // Every bulb is a thin instance of one quad, so the patch's bulbs are one
 // draw call however many; `CHRISTMAS.bulbs.cap` bounds them, and a busy
 // patch respaces each string with fewer bulbs rather than dropping tiles.
+// Edge bulbs under a building's footprint are left out (they'd sit on it).
 
 const B = CHRISTMAS.bulbs;
 
@@ -21,6 +22,8 @@ export interface Bulb {
   readonly y: number;
   readonly z: number;
   readonly color: number;
+  /** Its size as a share of a full bulb (a swag's are smaller); 1 when left out. */
+  readonly scale?: number;
 }
 
 /** A building on a lit tile whose eaves get a swag: its middle, eave height and reach. */
@@ -85,10 +88,14 @@ export function tileBulbs(tile: BulbTile, size: number, counts: BulbCounts): Bul
   // Each tile starts its colours somewhere else, so neighbours don't match.
   const start = Math.floor(hash01(tile.q, tile.r, 140) * B.colors.length);
   let n = 0;
-  const push = (x: number, y: number, z: number) => {
-    bulbs.push({ x, y, z, color: (start + n) % B.colors.length });
+  const push = (x: number, y: number, z: number, scale = 1) => {
+    const color = (start + n) % B.colors.length;
+    bulbs.push(scale === 1 ? { x, y, z, color } : { x, y, z, color, scale });
     n++;
   };
+  // A building whose footprint reaches the edge hides that part of the string.
+  const covered = (x: number, z: number) =>
+    tile.eaves.some((e) => Math.hypot(x - e.x, z - e.z) < e.radius);
   // Pointy-top: edge e runs between the corners at 60e - 30° and 60e + 30°,
   // pulled in like the fences (`FENCE_INSET`) so a fenced edge's bulbs sit on it.
   const reach = size * FENCE_INSET;
@@ -100,6 +107,7 @@ export function tileBulbs(tile: BulbTile, size: number, counts: BulbCounts): Bul
       const t = (i + 1) / (counts.perEdge + 1);
       const x = centre.x + reach * (Math.cos(a0) + (Math.cos(a1) - Math.cos(a0)) * t);
       const z = centre.z + reach * (Math.sin(a0) + (Math.sin(a1) - Math.sin(a0)) * t);
+      if (covered(x, z)) continue;
       push(x, tile.rim + lift - B.sag * Math.sin(Math.PI * t), z);
     }
   }
@@ -123,6 +131,7 @@ export function tileBulbs(tile: BulbTile, size: number, counts: BulbCounts): Bul
         eave.x + Math.cos(a) * eave.radius,
         eave.y - B.sag * Math.abs(Math.sin(3 * Math.PI * t)),
         eave.z + Math.sin(a) * eave.radius,
+        B.eaveScale,
       );
     }
   }

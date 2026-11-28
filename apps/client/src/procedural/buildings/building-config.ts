@@ -111,7 +111,7 @@ export const BUILDING_COLORS = {
   // Twinkle Lights (#37 2a): a candy-striped post with a garland and a gold
   // star, its string coiled at its foot. The bulbs are the map's BulbField.
   lightsPost: '#fff4ef', // TUNE
-  lightsStripe: '#ef5a5a', // TUNE
+  lightsStripe: '#ff4d57', // TUNE: bright, so the stripes survive the night
   lightsGarland: '#3f8c4a', // TUNE
   lightsStar: '#ffcc4d', // TUNE
   lightsCord: '#2f6b3b', // TUNE

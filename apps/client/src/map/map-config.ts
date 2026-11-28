@@ -767,6 +767,8 @@ export const CHRISTMAS = {
     perPost: 5, // TUNE
     /** Warm white, red, green, gold (the approved M0 colours). sRGB. */
     colors: ['#fff0c4', '#ff5d52', '#5fe39a', '#ffcc4d'], // TUNE
+    /** By day the same bulbs are unlit glass in these (pale cream, red, green, bright gold). sRGB. */
+    glassColors: ['#f2e8cc', '#ff6f66', '#6fe3a4', '#f0c24f'], // TUNE
     /** Over the rim, over a fence's top, and the dip between two corners (world units). */
     rimLift: 0.07, // TUNE
     fenceLift: 0.2, // TUNE: over the tallest fence (0.17)
@@ -778,7 +780,9 @@ export const CHRISTMAS = {
     halo: 1, // TUNE
     hot: 0.6, // TUNE
     /** By day, unlit: the glass's colour, darker (coloured glass), with a small shine. */
-    glass: 0.62, // TUNE
+    glass: 0.95, // TUNE
+    /** A swag's bulbs under a building's eaves, as a share of an edge bulb (their halo stays off its walls). */
+    eaveScale: 0.6, // TUNE
     /** The twinkle: how far a bulb dims (0-1) and how fast (radians a second). Still under reduced motion. */
     twinkle: { amount: 0.4, speed: 1.8 }, // TUNE
   },

@@ -115,6 +115,24 @@ describe('bulb layout (#37 2a)', () => {
     }
   });
 
+  it('keeps a swag smaller than an edge bulb, and leaves out edge bulbs under a building', () => {
+    const t0 = tile(0, 0);
+    const c = hexToWorld(t0, SIZE);
+    const bare = tileBulbs(t0, SIZE, FULL);
+    expect(bare.every((b) => (b.scale ?? 1) === 1)).toBe(true);
+    // A wide building on the east side reaches over edge 0.
+    const wide = { x: c.x + SIZE * 0.6, z: c.z, y: 0.8, radius: SIZE * 0.4 };
+    const bulbs = tileBulbs(tile(0, 0, { eaves: [wide] }), SIZE, FULL);
+    const swag = bulbs.slice(-B.perEave);
+    expect(swag.every((b) => b.scale === B.eaveScale)).toBe(true);
+    expect(B.eaveScale).toBeLessThan(1);
+    const edges = bulbs.slice(0, -B.perEave);
+    expect(edges.length).toBeLessThan(6 * B.perEdge);
+    for (const b of edges) {
+      expect(Math.hypot(b.x - wide.x, b.z - wide.z)).toBeGreaterThanOrEqual(wide.radius);
+    }
+  });
+
   it('mixes the four colours along a string, and neighbours start apart', () => {
     const bulbs = tileBulbs(tile(0, 0), SIZE, FULL);
     expect(new Set(bulbs.map((b) => b.color))).toEqual(new Set([0, 1, 2, 3]));

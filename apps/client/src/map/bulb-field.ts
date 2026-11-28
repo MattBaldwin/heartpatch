@@ -82,7 +82,9 @@ const FRAGMENT_BEFORE_FRAGCOLOR = /* glsl */ `
   float bulbHalo = pow(max(0.0, 1.0 - bulbD / 0.5), 1.6) * ${f(B.halo)} * bulbGlow;
   // Unlit: darker glass with a little shine up and to the left.
   float bulbShine = 1.0 - smoothstep(0.0, ${f(B.core * 0.45)}, length(vBulbUv - vec2(-0.04, 0.05)));
-  vec3 bulbOff = mix(bulbTint * ${f(B.glass)}, vec3(1.0), bulbShine * 0.6);
+  // …and a pale rim, so it reads as glass, not a bead.
+  float bulbRim = smoothstep(${f(B.core * 0.55)}, ${f(B.core)}, bulbD) * 0.35;
+  vec3 bulbOff = mix(bulbTint * ${f(B.glass)}, vec3(1.0), max(bulbShine * 0.7, bulbRim));
   vec3 bulbRgb = mix(bulbOff, bulbOn, bulbLit);
   float bulbAlpha = max(bulbCore, bulbHalo * bulbLit);
   // The halo is the bulb's own colour, so a warm white glows warm, a red glows red.
@@ -167,13 +169,16 @@ function bulbQuad(scene: Scene): Mesh {
 
 /**
  * The patch's Twinkle Lights bulbs (#37 2a): `set` redraws them all from the
- * latest layout; `setLight` switches night and the twinkle (uniforms only,
- * so nothing recompiles and no frame of JS work per bulb).
+ * latest layout; `setLight` switches night and the twinkle (uniforms, and
+ * the glass colours once at the switch: nothing recompiles, no per-frame JS).
  */
 export class BulbField {
   private readonly mesh: Mesh;
   private readonly light = new BulbLight();
+  /** Lit colours at night, unlit glass by day (`glassColors`), linear. */
   private readonly colors = B.colors.map((hex) => Color3.FromHexString(hex).toLinearSpace());
+  private readonly glass = B.glassColors.map((hex) => Color3.FromHexString(hex).toLinearSpace());
+  private shown: readonly Bulb[] = [];
   /** False under WebGPU: the bulb plugin is GLSL only, so nothing is drawn there. */
   private readonly drawable: boolean;
   private drawn = 0;
@@ -206,12 +211,27 @@ export class BulbField {
   }
 
   setLight(lit: boolean, twinkle: boolean): void {
+    const was = this.light.lit;
     this.light.lit = lit ? 1 : 0;
     this.light.twinkle = twinkle ? B.twinkle.amount : 0;
+    // Day and night colour the glass differently: one buffer write at the switch.
+    if (was !== this.light.lit && this.shown.length > 0) this.paint();
+  }
+
+  /** Each bulb's colour for now: lit, or unlit glass. */
+  private paint(): void {
+    const palette = this.light.lit > 0 ? this.colors : this.glass;
+    const colors = new Float32Array(this.shown.length * 4);
+    this.shown.forEach((b, i) => {
+      const c = palette[b.color] ?? palette[0];
+      colors.set([c?.r ?? 1, c?.g ?? 1, c?.b ?? 1, 1], i * 4);
+    });
+    this.mesh.thinInstanceSetBuffer('color', colors, 4, false);
   }
 
   set(bulbs: readonly Bulb[]): void {
     const shown = this.drawable ? bulbs : [];
+    this.shown = shown;
     this.drawn = shown.length;
     if (shown.length === 0) {
       // Hidden by disabling, never by a count of 0 (`MapAmbient.set`).
@@ -219,17 +239,15 @@ export class BulbField {
       return;
     }
     const matrices = new Float32Array(shown.length * 16);
-    const colors = new Float32Array(shown.length * 4);
     const m = new Matrix();
     shown.forEach((b, i) => {
-      Matrix.ScalingToRef(B.size, B.size, B.size, m);
+      const size = B.size * (b.scale ?? 1);
+      Matrix.ScalingToRef(size, size, size, m);
       m.setTranslationFromFloats(b.x, b.y, b.z);
       m.copyToArray(matrices, i * 16);
-      const c = this.colors[b.color] ?? this.colors[0];
-      colors.set([c?.r ?? 1, c?.g ?? 1, c?.b ?? 1, 1], i * 4);
     });
     this.mesh.thinInstanceSetBuffer('matrix', matrices, 16, false);
-    this.mesh.thinInstanceSetBuffer('color', colors, 4, false);
+    this.paint();
     this.mesh.setEnabled(true);
   }
 

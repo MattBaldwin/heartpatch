@@ -1726,42 +1726,47 @@ function buildModel(
       break;
     }
     case 'twinkle-lights': {
-      // A candy-striped post on a snowy step, a garland ring and a gold star
-      // on top, the bulb string coiled at its foot. The bulbs themselves are
+      // A chunky candy-striped post on a snowy step, a garland ring and a
+      // gold star on top, the bulb string coiled at its foot: four wide
+      // stripes, so they still read zoomed out and at night. The bulbs are
       // the map's BulbField (#37 2a: strung round the tile, lit at night).
-      part(body, cylinder(0.08, 0.46, 0.5, 18), C.wellStone, [0, 0.04, 0]);
-      for (let i = 0; i < 6; i++) {
-        part(body, cylinder(0.12, 0.1, 0.1, 12), i % 2 === 0 ? C.lightsPost : C.lightsStripe, [
+      part(body, cylinder(0.08, 0.5, 0.54, 18), C.wellStone, [0, 0.04, 0]);
+      for (let i = 0; i < 4; i++) {
+        part(body, cylinder(0.2, 0.15, 0.15, 14), i % 2 === 0 ? C.lightsPost : C.lightsStripe, [
           0,
-          0.14 + i * 0.12,
+          0.18 + i * 0.2,
           0,
         ]);
       }
       part(
         body,
-        CreateTorus(`${name}-garland`, { diameter: 0.2, thickness: 0.07, tessellation: 18 }, scene),
+        CreateTorus(
+          `${name}-garland`,
+          { diameter: 0.26, thickness: 0.09, tessellation: 18 },
+          scene,
+        ),
         C.lightsGarland,
-        [0, 0.8, 0],
+        [0, 0.9, 0],
       );
       part(
         body,
-        CreateTorus(`${name}-coil`, { diameter: 0.3, thickness: 0.045, tessellation: 20 }, scene),
+        CreateTorus(`${name}-coil`, { diameter: 0.36, thickness: 0.05, tessellation: 20 }, scene),
         C.lightsCord,
-        [0.02, 0.1, 0],
+        [0.02, 0.11, 0],
         [1, 0.8, 1],
       );
-      // The star: two crossed flat diamonds, gold.
+      // The star: two crossed flat diamonds, gold, round a gold bead.
       for (const turn of [0, Math.PI / 2]) {
         part(
           body,
-          cylinder(0.08, 0, 0.2, 4),
+          cylinder(0.1, 0, 0.26, 4),
           C.lightsStar,
-          [0, 0.98, 0],
+          [0, 1.1, 0],
           [1, 1, 0.35],
           [Math.PI / 2, turn, 0],
         );
       }
-      part(body, sphere(0.1, 10), C.lightsStar, [0, 0.98, 0], [1, 1, 0.6]);
+      part(body, sphere(0.13, 10), C.lightsStar, [0, 1.1, 0], [1, 1, 0.6]);
       break;
     }
     default:

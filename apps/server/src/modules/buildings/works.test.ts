@@ -69,6 +69,7 @@ describe('a Cozy Patch’s Build sheet (#621 W1-8, plan §10)', () => {
         "water-well",
         "greenhouse",
         "pumpkin-barn",
+        "twinkle-lights",
         "warehouse",
       ]
     `);

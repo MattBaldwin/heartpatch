@@ -502,7 +502,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
         buildingId: 'twinkle-lights',
         q: lands[i]!.q,
         r: lands[i]!.r,
-        spot: 0,
+        spot: 1, // a ring spot
       });
 
       // October (the suite's clock): out of season.
