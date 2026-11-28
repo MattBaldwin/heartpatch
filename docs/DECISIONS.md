@@ -2823,3 +2823,16 @@ Supervisor 58 (`session_01RAEPnEtQhE73T3Ju8gFD11`) was started by supervisor 57 
 - **Known flake with no rerun:** `push.spec.ts:146` failed on #919's bbbdaf1; rerun is 403 for everyone, so sup 58 used update-branch after the next main merge for a fresh run (it passed). No empty commits.
 - **Milestones footer overlap** (sup 56/57 follow-up) is not a bug: the XM WebKit frames show the subtitle in its own row ~25px below the scroll list's clip edge; the "overlap" was a card heading clipped mid-scroll. Lane closed without a PR.
 - **X5b's switch refusal was correct behaviour:** a lane may refuse a handoff message that comes only from the new supervisor; the new supervisor answers with verifiable facts (get_session parent id, old supervisor archived) rather than re-asserting.
+
+## Supervisor 59 (2026-11-28)
+
+Supervisor 59 (`session_01RAEPnHvbFEHhKmvrzRZUuG`) was started by supervisor 58 at 06:25 UTC. Merged: #921, #924.
+
+**Coordinator rulings**
+- **6b-2 boss mouth (#190):** at camera rise cap 3, the middle friend's head hides the boss's mouth in the leaf-burst and drift frames. Accepted as cosmetic: both eyes, the cheeks and the outline stay clear, the caption and sticker already say what happened, and no mouth pose carries game information there.
+- **6b-2 night frames:** a follow-up capture, not a blocker for #925. The fog and the sky dome change at night, so face and HUD contrast still need checking there.
+- **2d lane setup (#37):**
+  - It runs on Opus, per the plan and 2c's handoff, over §6's Sonnet default for client UI.
+  - Tags: `heartpatch:phase-1`, `heartpatch:phase-3`, `heartpatch:lane` and `issue-37`, with no batch tag.
+  - The `map.spec` draw-call ceilings (75/82 on main) may rise only by the measured amount, with the numbers in the PR.
+- **Lane over limits at PR merge:** 2c was past $20 and 200k when #921 merged. Instead of continuing to 2d it posted a Lane handoff, and a fresh lane took 2d (§6).
