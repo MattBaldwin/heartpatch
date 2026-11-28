@@ -24,7 +24,7 @@ import {
   type SafeRegion,
 } from './camera-director.js';
 import { actPose, FEELING_TRAITS, readyPose, REST, type Act, type Pose } from './choreography.js';
-import { faceSpan, posedFace } from './face-span.js';
+import { faceSpan, posedFace, topSpan } from './face-span.js';
 
 const homes = { a: HOMES.mine, b: HOMES.theirs } as const;
 /** The team fight's camera from #234 to #190 PR 1: the 1-v-1's, tilted down 21°. */
@@ -1336,6 +1336,21 @@ describe('the boss camera: a low hero shot (#190 PR 2)', () => {
           expect(clear).toBeGreaterThan(gap + 0.01);
         }
       }
+    });
+
+    it("counts a tuft, ears or horns over the head in a friend's top (topSpan)", () => {
+      const tops = GAME_DATA.species.map((sp) => ({
+        id: sp.id,
+        top: topSpan(squishyParams(sp, `${sp.id}-1`, registry), registry),
+      }));
+      // Never under the head's top, never a giant's reach.
+      for (const t of tops) {
+        expect(t.top, t.id).toBeGreaterThanOrEqual(1);
+        expect(t.top, t.id).toBeLessThan(2);
+      }
+      // Some kinds wear something over the head (the 5b frames: a tuft hid the mouth).
+      expect(tops.filter((t) => t.top > 1.05).length).toBeGreaterThan(0);
+      expect(tops.filter((t) => t.top === 1).length).toBeGreaterThan(0);
     });
 
     it('needs no rise without a friend in front of the mouth, outside a boss fight, or with no tops', () => {

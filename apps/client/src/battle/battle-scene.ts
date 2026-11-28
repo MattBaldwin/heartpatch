@@ -80,7 +80,7 @@ import {
   type Pose,
   type SquishCue,
 } from './choreography.js';
-import { faceAt, posedFace } from './face-span.js';
+import { faceAt, posedFace, topSpan } from './face-span.js';
 import { EffectPool, type EffectStats } from './effects.js';
 import { emit, type Point } from './element-fx.js';
 
@@ -202,6 +202,8 @@ interface Fighter {
   readonly radius: number;
   /** Its eyes and mouth (#868): world heights above its feet at rest, or null with no face. */
   readonly face: { readonly low: number; readonly high: number } | null;
+  /** Its highest point (#190 PR 6b): a tuft, ears or hat over its head, world units above its feet at rest. */
+  readonly top: number;
 }
 
 /**
@@ -629,6 +631,10 @@ export class BattleScene {
       height: tall * scale,
       radius: (Math.max((body?.width ?? 1) * sx, (body?.depth ?? 1) * sz) * scale) / 2,
       face: faceAt(handle.params, this.#options.registry, scale),
+      // Its highest point: a tuft or ears over its head, or its hat (#190 PR 6b).
+      top:
+        Math.max(tall, topSpan(handle.params, this.#options.registry) * handle.params.height) *
+        scale,
     };
     rig.bench.set(instanceId, fighter);
     return fighter;
@@ -1515,7 +1521,7 @@ export class BattleScene {
       point.r = (rig.out?.radius ?? 1) * Math.max(0, rig.pose.scale);
       // The body's top (head, ears, tuft, hat), posed like the face: it stays under the boss's mouth (#190 PR 6b).
       const pose = rig.pose;
-      const tall = (rig.out?.height ?? 0) * Math.max(0, pose.scale) * pose.squash;
+      const tall = (rig.out?.top ?? 0) * Math.max(0, pose.scale) * pose.squash;
       point.top = pose.lift + tall * Math.cos(pose.lean);
       faces.push(point);
     }

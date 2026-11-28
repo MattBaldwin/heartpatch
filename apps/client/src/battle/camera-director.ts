@@ -544,7 +544,9 @@ export class CameraDirector {
     if (!face) this.#riseWant = 0;
     else if (seen && !away) this.#riseWant = clearRise(shot, face, team, this.#rise, this.#config);
     const rose = this.#rise;
-    this.#rise += (this.#riseWant - this.#rise) * k;
+    // Quick to rise (a friend hops up or the boss closes in), gentle back down, like the slide.
+    this.#rise +=
+      (this.#riseWant - this.#rise) * (this.#riseWant > this.#rise ? Math.min(1, k * 3) : k);
     if (Math.abs(this.#rise) < 1e-5) this.#rise = 0;
     shot.position.y += this.#rise - rose;
     shot.target.y += this.#rise - rose;
