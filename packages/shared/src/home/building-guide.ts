@@ -79,7 +79,9 @@ export type GuideValue =
   /** A travel building: what it joins up (`reach` for a waystation). */
   | { readonly kind: 'travel'; readonly role: TravelBuilding['role']; readonly reach?: number }
   /** Taking it down gives every bit of it back (a Jack-o'-Lantern kit). */
-  | { readonly kind: 'refund-all' };
+  | { readonly kind: 'refund-all' }
+  /** Twinkle Lights (#37 2a): bulbs round its tile, lit every night of its season. */
+  | { readonly kind: 'twinkles'; readonly season: string | null };
 
 /** Where it can go. */
 export type GuidePlace =
@@ -204,6 +206,7 @@ function valueOf(def: Building, economy: EconomyEffectRules): GuideValue[] {
         : { kind: 'travel', role: def.role, reach: def.reach },
     );
   }
+  if (def.kind === 'lights') out.push({ kind: 'twinkles', season: def.season ?? null });
   if (def.refundPercent === 100) out.push({ kind: 'refund-all' });
   return out;
 }

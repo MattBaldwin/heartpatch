@@ -129,7 +129,7 @@ export function waterRefusalOf(
  * The kinds placed through `isBuildableOn`: the Wild Isle kinds (travel's
  * Waystation still waits) and the Clockwork Isle ones (#874). A Clockwork
  * `works` row lists `['clockwork-isle']`, so it goes up only there; the
- * Beacon (`lights`) waits for `lights` to join `buildableKinds` (#909).
+ * Beacon (`lights`) goes up through `buildableKinds` like Twinkle Lights.
  */
 const PLACED_BY_PATCH: readonly Building['kind'][] = [
   ...WILD_ISLE_BUILDING_KINDS,

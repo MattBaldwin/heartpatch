@@ -112,6 +112,13 @@ describe('nearestGoals', () => {
     expect(other?.go).toBe('map');
   });
 
+  it('keeps the seasonal chip lines short (#34)', () => {
+    const [harvest] = nearestGoals([track('cozy-harvest', [4], 1, 0, { season: 'thanksgiving' })]);
+    expect(harvest?.short).toBe('Do 3 more harvest things');
+    const [spooky] = nearestGoals([track('halloween', [5], 4, 0, { season: 'halloween' })]);
+    expect(spooky?.short).toBe('Do 1 more Halloween thing');
+  });
+
   it('lists the prize as chips', () => {
     const [goal] = nearestGoals([track('territory', [10], 1)]);
     expect(goal?.prizes).toEqual(["Explorer's Hat", '25 Patch Coins', 'Title: territory title 0']);

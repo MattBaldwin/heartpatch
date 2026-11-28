@@ -28,8 +28,12 @@ const unlocked = (collected: string[]) => unlockedPageKeys(PAGES, new Set(collec
 
 describe('recipe book pages', () => {
   it('lists every recipe in the game, then every buildable building, in data order', () => {
-    const buildable = GAME_DATA.buildings.filter((b) =>
-      (HOME_BASE_RULES.buildableKinds as readonly string[]).includes(b.kind),
+    // A patch-typed row (#874: the Clockwork Beacon, a `lights` row) has no
+    // page: the book is the account's, read on every patch type.
+    const buildable = GAME_DATA.buildings.filter(
+      (b) =>
+        (HOME_BASE_RULES.buildableKinds as readonly string[]).includes(b.kind) &&
+        b.patchTypes === undefined,
     );
     expect(PAGES.map((p) => p.key)).toEqual([
       ...GAME_DATA.recipes.filter(isAvailableRecipe).map((r) => `recipe:${r.id}`),

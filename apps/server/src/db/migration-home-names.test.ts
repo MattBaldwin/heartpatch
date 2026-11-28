@@ -19,7 +19,10 @@ const migrationSql = readFileSync(join(migrationsFolder, file ?? 'missing.sql'),
 
 /** The kinds buildable when 0050 ran; resource buildings and the Warehouse joined later (#601). */
 const BUILDABLE = new Set<string>(
-  HOME_BASE_RULES.buildableKinds.filter((kind) => kind !== 'resource' && kind !== 'warehouse'),
+  // Kinds made buildable after 0050 (#601, #37 2a): none stood before it.
+  HOME_BASE_RULES.buildableKinds.filter(
+    (kind) => kind !== 'resource' && kind !== 'warehouse' && kind !== 'lights',
+  ),
 );
 /**
  * Buildings added after 0050: none was placed before it, so its back-fill

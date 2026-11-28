@@ -69,7 +69,11 @@ describe('buildingEffects (#207)', () => {
 
   it('gives every building in the data at least one effect', () => {
     // Wild Isle buildings (#621) get their rows with the lanes that build them.
-    for (const b of BUILDINGS.filter((b) => buildsOnPatchType(b, 'cozy'))) {
+    // Twinkle Lights (#37 2a) are cosmetic until their glow-night effect lands
+    // with the Christmas-nights rule (lane 2b); meanwhile the guide words
+    // them with its `twinkles` line and the build card with `TWINKLE_CHIP`
+    // (client home-view.ts), which 2b drops when it adds the effect.
+    for (const b of BUILDINGS.filter((b) => buildsOnPatchType(b, 'cozy') && b.kind !== 'lights')) {
       const effects = [...buildingEffects(b), ...economyEffects(b, 1, RULES)];
       expect(effects.length, b.id).toBeGreaterThan(0);
     }

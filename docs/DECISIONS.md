@@ -2778,3 +2778,19 @@ Supervisor 55 (`session_01RAEPnHAU8pDk6gLHtPzbJQ`) took over from supervisor 54 
 - **XM (#917) merges after #905 and #913** and keeps `present.opened`; drop it only if #905 isn't merged by Nov 30 18:00 UTC.
 - **Boss PR 6 splits:** #916 ships beats 1–4 + #890 follow-ups; 5a–5e camera/HUD and captures go to a fresh PR 6b lane after #916 merges.
 - **Mockup Board images are embedded as data URIs** (the owner saw blank boxes for separately published image files).
+
+## Supervisor 56 (2026-11-28)
+
+Supervisor 56 (`session_01RAEPnGm5ivt12rHbwYcdX9`) took over from supervisor 55 at 02:40 UTC (§8 handoff; supervisor 55 retired and archived) at lineage depth 7 of 8, and handed off at ~03:30 UTC by asking the owner to start a fresh supervisor. Merged: #910, #916, #915, #905, #914, #918.
+
+**Owner decisions (2026-11-28)**
+1. **Jolly Elf Costume:** "the hat should have a white poof at the end of it (like Santa's hat). The rest of it is great." The costume ships with a white two-sphere poof at the drooping tip and keeps its gold belt buckle (the bow knot was dropped to stay within the part cap).
+2. **Clockwork Isle look, round 4: "OK, build it."** C4 and C5 build to captures-874-clockwork/mockups-r4-64e8e031 @ 0142b14 (the filler buildings on the neighbour patch in the metropolis frames are a mockup glitch, not a rule).
+
+**Coordinator rulings**
+- **Snowbundle fight size (X3):** an optional per-species boss scale in SpeciesVisualSchema (absent = today's 2.2× team-mean behaviour, so no other boss changes); Snowbundle ~2.5× a Puddlepuff. Not a global `TEAM_ARENA.bossScale` raise. #908 merges as the data floor; a fresh X3c lane does it after PR 6b merges (both edit client battle code).
+- **Clockwork roads around centred buildings (C0):** no contract change. A road is already a per-tile attribute (`tile_roads`) and `tile_lines` copies that, so a tile holds a building, a road, a wire and a rail; the map draws a tile's one building at its centre whatever its `slot`; `slot: 'ring'` stays. The road loop is C4's rendering on Clockwork patches only (Cozy and Wild roads unchanged in Wave 1); squat vs tall is C5's per-building-id models, no data field.
+- **X5b Eve card:** never show the head start's size; use `warmedUp` only ("The lights warmed it up already!"); with `chippers: 0` show no chipped count.
+- **#34 tray sub-line** wrapping to two lines on iPhone (not clipped) is fine.
+- **The Milestones footer overlap** ("Big goals, each with a prize!" over the last card heading) predates #913 and #917; it is a separate follow-up after both merge.
+- **2c Patch Tree server is borderline big** (writes inside the gift transaction): Opus codes it with a ★ Fable second reviewer; it may add `tree.decorated` to the Christmas milestone sources and goal copy (pre-approved shared-data change) after #917 merges.

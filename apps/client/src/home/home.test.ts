@@ -29,6 +29,7 @@ import {
   buildRows,
   effectChip,
   effectChips,
+  TWINKLE_CHIP,
   FIRES_ON_LAND,
   HOME_SAFE_LINE,
   freeHomeTiles,
@@ -683,6 +684,9 @@ describe('what each building does (#207)', () => {
       '🏠 Room for 3',
     ]);
     expect(effectChips(GROUNDS!)).toEqual(['🏋️ 2 squishies · 5 XP/hr']);
+    // Twinkle Lights (#37 2a): cosmetic until 2b's Christmas-nights effect.
+    const twinkle = GAME_DATA.buildings.find((b) => b.id === 'twinkle-lights');
+    expect(twinkle && effectChips(twinkle)).toEqual([TWINKLE_CHIP]);
     expect(LAND_FIRE?.description).toBe(
       'Keeps squishies out on your land safe from the Hollow Man at night.',
     );

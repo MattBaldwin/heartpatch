@@ -50,11 +50,14 @@ describe('itemEffects (#241)', () => {
   });
 
   it('lists what a gathered thing goes into', () => {
-    // Glimmer builds two fences and the Warehouse (#601 PR 9), takes the
+    // Glimmer builds two fences, Twinkle Lights (#37 2a) and the Warehouse (#601 PR 9), takes the
     // others (the fire and the Factory too, #294) to their top level (#203),
     // and goes into the explorer's Lantern (#199).
     expect(itemEffects('glimmer')).toEqual([
-      { kind: 'build-with', buildings: ['glimmer-rail', 'lantern-fence', 'warehouse'] },
+      {
+        kind: 'build-with',
+        buildings: ['glimmer-rail', 'lantern-fence', 'twinkle-lights', 'warehouse'],
+      },
       {
         kind: 'upgrades',
         buildings: [

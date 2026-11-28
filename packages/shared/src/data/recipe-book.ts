@@ -89,6 +89,11 @@ export const RECIPE_BOOK: RecipeBookData = {
       page: 'building:pumpkin-barn',
       line: 'Gather some Timber and Stone, and this page opens!',
     },
+    // Twinkle Lights (#37 2a): Timber and a little Glimmer, built in December.
+    {
+      page: 'building:twinkle-lights',
+      line: 'Gather some Timber and a little Glimmer, and this page opens!',
+    },
     // The Warehouse (#601 PR 9): lots of Timber and Stone, and some Glimmer.
     {
       page: 'building:warehouse',
