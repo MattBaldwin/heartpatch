@@ -943,7 +943,13 @@ export class MapScene {
         list.posts.push({ x: p.x, z: p.z, y, height: box.max.y * s, radius: BULB_COIL * s });
       } else {
         // TUNE: under the roof's edge, a little out from the walls.
-        list.eaves.push({ x: p.x, z: p.z, y: y + box.max.y * s * 0.72, radius: reach * 0.9 });
+        list.eaves.push({
+          x: p.x,
+          z: p.z,
+          y: y + box.max.y * s * 0.72,
+          radius: reach * 0.9,
+          footprint: reach,
+        });
       }
       onTile.set(key, list);
     }

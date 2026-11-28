@@ -44,6 +44,7 @@ describe('Twinkle Lights data (#37 2a)', () => {
       z: 0,
       y: 0.5,
       radius: 0.1,
+      footprint: 0.1,
     }));
     const tiles = Array.from({ length: worst }, (_, i) =>
       tile(i, -i, { eaves: heavy, posts: [{ x: 0, z: 0, y: 0.3, height: 0.3, radius: 0.04 }] }),
@@ -94,7 +95,7 @@ describe('bulb layout (#37 2a)', () => {
   });
 
   it('hangs a swag under each building’s eaves on the camera side, and coils the post', () => {
-    const eave = { x: 1, z: 2, y: 0.8, radius: 0.2 };
+    const eave = { x: 1, z: 2, y: 0.8, radius: 0.2, footprint: 0.2 };
     const post = { x: -1, z: 0.5, y: 0.3, height: 0.4, radius: 0.05 };
     const t = tile(0, 0, { eaves: [eave], posts: [post] });
     const bulbs = tileBulbs(t, SIZE, FULL);
@@ -121,7 +122,13 @@ describe('bulb layout (#37 2a)', () => {
     const bare = tileBulbs(t0, SIZE, FULL);
     expect(bare.every((b) => (b.scale ?? 1) === 1)).toBe(true);
     // A wide building on the east side reaches over edge 0.
-    const wide = { x: c.x + SIZE * 0.6, z: c.z, y: 0.8, radius: SIZE * 0.4 };
+    const wide = {
+      x: c.x + SIZE * 0.6,
+      z: c.z,
+      y: 0.8,
+      radius: SIZE * 0.36,
+      footprint: SIZE * 0.4,
+    };
     const bulbs = tileBulbs(tile(0, 0, { eaves: [wide] }), SIZE, FULL);
     const swag = bulbs.slice(-B.perEave);
     expect(swag.every((b) => b.scale === B.eaveScale)).toBe(true);
@@ -129,7 +136,9 @@ describe('bulb layout (#37 2a)', () => {
     const edges = bulbs.slice(0, -B.perEave);
     expect(edges.length).toBeLessThan(6 * B.perEdge);
     for (const b of edges) {
-      expect(Math.hypot(b.x - wide.x, b.z - wide.z)).toBeGreaterThanOrEqual(wide.radius);
+      expect(Math.hypot(b.x - wide.x, b.z - wide.z)).toBeGreaterThanOrEqual(
+        wide.footprint + B.size * B.core,
+      );
     }
   });
 

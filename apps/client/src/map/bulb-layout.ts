@@ -33,6 +33,8 @@ export interface BulbEave {
   /** World height of the swag's top. */
   readonly y: number;
   readonly radius: number;
+  /** How far its footprint (walls, pad) reaches from its middle; edge bulbs inside it are left out. */
+  readonly footprint: number;
 }
 
 /** A Twinkle Lights post: its foot, how tall it stands and how wide its coil is. */
@@ -94,8 +96,10 @@ export function tileBulbs(tile: BulbTile, size: number, counts: BulbCounts): Bul
     n++;
   };
   // A building whose footprint reaches the edge hides that part of the string.
+  // A bulb's glass reaches `core` of its quad out from where it hangs.
+  const clear = B.size * B.core;
   const covered = (x: number, z: number) =>
-    tile.eaves.some((e) => Math.hypot(x - e.x, z - e.z) < e.radius);
+    tile.eaves.some((e) => Math.hypot(x - e.x, z - e.z) < e.footprint + clear);
   // Pointy-top: edge e runs between the corners at 60e - 30° and 60e + 30°,
   // pulled in like the fences (`FENCE_INSET`) so a fenced edge's bulbs sit on it.
   const reach = size * FENCE_INSET;

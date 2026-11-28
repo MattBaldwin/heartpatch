@@ -286,7 +286,7 @@ export function withTwinkleLights(
     for (const t of own.slice(0, perKeeper)) {
       const used = new Set(t.buildings.map((b) => b.spot));
       // The camera side, away from the Keeper (who stands east of the seed).
-      const spot = [5, 4, 6, 3, 2, 1, 0].find((s) => !used.has(s)) ?? 5;
+      const spot = [6, 5, 3, 4, 2, 1, 0].find((s) => !used.has(s)) ?? 6;
       chosen.set(hexKey(t), spot);
     }
   }

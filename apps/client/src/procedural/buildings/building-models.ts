@@ -1730,7 +1730,7 @@ function buildModel(
       // gold star on top, the bulb string coiled at its foot: four wide
       // stripes, so they still read zoomed out and at night. The bulbs are
       // the map's BulbField (#37 2a: strung round the tile, lit at night).
-      part(body, cylinder(0.08, 0.5, 0.54, 18), C.wellStone, [0, 0.04, 0]);
+      part(body, cylinder(0.08, 0.36, 0.4, 18), C.wellStone, [0, 0.04, 0]);
       for (let i = 0; i < 4; i++) {
         part(body, cylinder(0.2, 0.15, 0.15, 14), i % 2 === 0 ? C.lightsPost : C.lightsStripe, [
           0,
@@ -1750,7 +1750,7 @@ function buildModel(
       );
       part(
         body,
-        CreateTorus(`${name}-coil`, { diameter: 0.36, thickness: 0.05, tessellation: 20 }, scene),
+        CreateTorus(`${name}-coil`, { diameter: 0.3, thickness: 0.05, tessellation: 20 }, scene),
         C.lightsCord,
         [0.02, 0.11, 0],
         [1, 0.8, 1],
