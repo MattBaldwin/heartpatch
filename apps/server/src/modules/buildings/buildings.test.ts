@@ -27,7 +27,15 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { keepers, sessions, squishies, tileDefenders, users } from '../../db/schema.js';
+import {
+  keepers,
+  researchJobs,
+  researchKnown,
+  sessions,
+  squishies,
+  tileDefenders,
+  users,
+} from '../../db/schema.js';
 import { mapLocalTime } from '../../lib/time.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -1460,6 +1468,123 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
         habitatId: null,
       });
       expect(out.statusCode).toBe(200);
+    });
+  });
+
+  describe('research gates (Clockwork Isle #874 C3)', () => {
+    const PLENTY = { timber: 99, stone: 99, glimmer: 9, parts: 99, blueprints: 9 };
+    const makeClockwork = (mapId: string) =>
+      db.execute(`update maps set patch_type = 'clockwork-isle' where id = '${mapId}'`);
+    const learn = (mapId: string, who: Player, nodeId: string) =>
+      db.insert(researchKnown).values({ mapId, userId: who.id, nodeId });
+    const upgrade = (server: FastifyInstance, who: Player, mapId: string, id: string) =>
+      call(server, 'POST', `/maps/${mapId}/buildings/${id}/upgrade`, who);
+
+    it('refuses a Sorter until Sorting is known, then builds it', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await makeClockwork(mapId);
+      await give(mapId, kid, PLENTY);
+      const plot = await openHomestead(mapId, kid);
+      const body = { buildingId: 'sorter', q: plot.q, r: plot.r, spot: 1 };
+
+      const early = await place(server, kid, mapId, body);
+      expect(early.statusCode).toBe(409);
+      expect(errorOf(early).message).toBe('Tinker first! Research Sorting at your Bench.');
+      expect((await home(server, kid, mapId)).items).toMatchObject({ parts: 99, blueprints: 9 });
+
+      await learn(mapId, kid, 'sorting');
+      const sorter = await placed(server, kid, mapId, body);
+      expect(sorter.buildingId).toBe('sorter');
+    });
+
+    it("refuses a Clockwork Beacon until Bright Bulbs is known; another Keeper's research doesn't count", async () => {
+      const server = await start();
+      const [kid, friend] = [await player(), await player()];
+      const mapId = await newMap(server, kid);
+      await join(server, kid, friend, mapId);
+      await makeClockwork(mapId);
+      await give(mapId, kid, PLENTY);
+      await learn(mapId, friend, 'bright-bulbs');
+      const plot = await openHomestead(mapId, kid);
+      const body = { buildingId: 'clockwork-beacon', q: plot.q, r: plot.r, spot: 1 };
+      const early = await place(server, kid, mapId, body);
+      expect(early.statusCode).toBe(409);
+      expect(errorOf(early).message).toBe('Tinker first! Research Bright Bulbs at your Bench.');
+      await learn(mapId, kid, 'bright-bulbs');
+      expect((await placed(server, kid, mapId, body)).buildingId).toBe('clockwork-beacon');
+    });
+
+    it('keeps Clockwork buildings off a Cozy Patch, researched or not', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await give(mapId, kid, PLENTY);
+      await learn(mapId, kid, 'sorting');
+      const plot = await openHomestead(mapId, kid);
+      for (const buildingId of ['sorter', 'research-bench', 'rail-depot', 'clockwork-beacon']) {
+        const res = await place(server, kid, mapId, { buildingId, q: plot.q, r: plot.r, spot: 1 });
+        expect(res.statusCode, buildingId).toBe(409);
+        expect(errorOf(res).message, buildingId).not.toMatch(/Tinker first/);
+      }
+    });
+
+    it('gates the Rail Depot’s level 2 behind Tidy Rails', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await makeClockwork(mapId);
+      await give(mapId, kid, PLENTY);
+      const plot = await openHomestead(mapId, kid);
+      const depot = await placed(server, kid, mapId, {
+        buildingId: 'rail-depot',
+        q: plot.q,
+        r: plot.r,
+        spot: 1,
+      });
+      const early = await upgrade(server, kid, mapId, depot.id);
+      expect(early.statusCode).toBe(409);
+      expect(errorOf(early).message).toBe('Tinker first! Research Tidy Rails at your Bench.');
+      await learn(mapId, kid, 'tidy-rails');
+      const res = await upgrade(server, kid, mapId, depot.id);
+      expect(res.statusCode, res.body).toBe(200);
+      expect(
+        HomeResponseSchema.parse(res.json()).buildings.find((b) => b.id === depot.id)?.level,
+      ).toBe(2);
+    });
+
+    it('shows my going research on my bench, and only to me', async () => {
+      const server = await start();
+      const [kid, friend] = [await player(), await player()];
+      const mapId = await newMap(server, kid);
+      await join(server, kid, friend, mapId);
+      await makeClockwork(mapId);
+      await give(mapId, kid, PLENTY);
+      const plot = await openHomestead(mapId, kid);
+      const bench = await placed(server, kid, mapId, {
+        buildingId: 'research-bench',
+        q: plot.q,
+        r: plot.r,
+        spot: 1,
+      });
+      expect(bench.research).toBeUndefined();
+      const readyAt = new Date(Date.parse(START) + 2 * 3600 * 1000);
+      await db.insert(researchJobs).values({
+        mapId,
+        userId: kid.id,
+        buildingId: bench.id,
+        nodeId: 'sorting',
+        startedAt: clock,
+        readyAt,
+      });
+      const mine = (await home(server, kid, mapId)).buildings.find((b) => b.id === bench.id);
+      expect(mine?.research).toEqual({ nodeId: 'sorting', readyAt: readyAt.toISOString() });
+      // The map view every member sees never carries it.
+      const shown = (await view(server, friend, mapId)).tiles.flatMap((t) => t.buildings ?? []);
+      const theirs = shown.find((b) => b.id === bench.id);
+      expect(theirs).toBeDefined();
+      expect(theirs).not.toHaveProperty('research');
     });
   });
 });

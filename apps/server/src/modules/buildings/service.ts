@@ -68,6 +68,8 @@ import { assertAllowedText } from '../../lib/filter.js';
 import { mapLocalTime, type Clock } from '../../lib/time.js';
 import { foldHabitatLean } from '../care/evolution.js';
 import { createInventoryRepo } from '../inventory/repo.js';
+import { createResearchRepo } from '../research/repo.js';
+import { requireResearch } from '../research/service.js';
 import {
   consumeItems,
   grantItems,
@@ -214,6 +216,22 @@ const MESSAGES = {
 
 /** Wild Isle kinds (#621): built by the map's patch type, never through `buildableKinds`. */
 const WILD_KINDS: readonly string[] = WILD_ISLE_BUILDING_KINDS;
+
+/**
+ * Built by the map's patch type (`requireWildPatch`, in the transaction):
+ * the Wild Isle kinds, and every Clockwork Isle row (#874: its own
+ * `research` and `depot` kinds, and its `works` and `lights` rows).
+ */
+const placedByPatch = (building: Building): boolean =>
+  WILD_KINDS.includes(building.kind) || (building.patchTypes?.includes('clockwork-isle') ?? false);
+
+/** The research a building's level needs first (#874: Tidy Rails for the Depot's level 2). */
+const levelResearch = (building: Building, level: number): string | undefined => {
+  const row: object | undefined = building.levels[level - 1];
+  return row && 'requiresResearch' in row && typeof row.requiresResearch === 'string'
+    ? row.requiresResearch
+    : undefined;
+};
 
 /** How far canals carry water (#621 W1-8): the Canal's `maxRun`, for fields beside one. */
 const CANAL_RUN = Math.max(
@@ -395,13 +413,17 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     const { timeZone } = map;
     const houseShown = houseOn(user, map.kind);
     const local = mapLocalTime(at, timeZone);
-    const [tiles, buildings, squishies, items, naming] = await Promise.all([
+    const [tiles, buildings, squishies, items, naming, research] = await Promise.all([
       repo.listHomeTiles(mapId, userId),
       repo.listOwned(mapId, userId),
       repo.listSquishies(mapId, userId),
       createInventoryRepo(tx).list({ mapId, userId }),
       // Naming my home (#306): patches only, so the Glade's home stays as it was.
       map.kind === 'multiplayer' ? createMapsRepo(tx).memberNaming(mapId, userId) : null,
+      // My research going (Clockwork Isle #874), shown on its bench: mine alone,
+      // so only here, never in the map view. A ready one shows until a read of
+      // `GET …/research` claims it.
+      createResearchRepo(tx).going({ mapId, userId }),
     ]);
     const seed = heartSeedOf(tiles);
     // Wild Isle works (#621 W1-8): their weather, read only if one follows it.
@@ -427,8 +449,8 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         heartSeed: isSeed(t, seed),
         nodeResource: t.nodeResource,
       })),
-      buildings: buildings.map((b) =>
-        toMyBuilding(
+      buildings: buildings.map((b) => ({
+        ...toMyBuilding(
           b,
           local,
           squishies.filter((s) => s.habitatBuildingId === b.id || s.trainingBuildingId === b.id)
@@ -438,7 +460,10 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           warehouseIn(buildings),
           ctx,
         ),
-      ),
+        ...(research?.buildingId === b.id
+          ? { research: { nodeId: research.nodeId, readyAt: research.readyAt.toISOString() } }
+          : {}),
+      })),
       squishies: active.map((s) => ({
         id: s.id,
         speciesId: s.speciesId,
@@ -828,7 +853,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       // Wild Isle kinds (#621) go up only on a Wild Isle, checked in the
       // transaction once membership is (`travelRulesFor`, `requireWildPatch`);
       // they aren't in `buildableKinds`, so no Cozy Build sheet lists them.
-      if (!WILD_KINDS.includes(building.kind) && !isBuildable(HOME_BASE_RULES, building)) {
+      if (!placedByPatch(building) && !isBuildable(HOME_BASE_RULES, building)) {
         throw new AppError('CONFLICT', MESSAGES.notYet);
       }
       // A clear that's done but not settled yet finishes first, as before a
@@ -841,7 +866,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         async ({ repo, tx, at, local, timeZone, mapKind, home, outer }) => {
           const travel =
             building.kind === 'travel' ? await travelRulesFor(tx, mapId, building) : null;
-          if (building.kind !== 'travel' && WILD_KINDS.includes(building.kind)) {
+          if (building.kind !== 'travel' && placedByPatch(building)) {
             await requireWildPatch(tx, mapId, building);
           }
           if (!inSeason(building, new Set(seasonsOn(at, timeZone)))) {
@@ -852,6 +877,12 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           // Moves, removals and fuel aren't gated.
           const page = recipeBookPage(buildingPageKey(building.id));
           if (page) await requirePageOpen(tx, user.id, page);
+          // Clockwork Isle (#874): researched first ("Tinker first! …"), a plain read.
+          await requireResearch(
+            tx,
+            { mapId, userId: user.id },
+            building.requiresResearch ?? levelResearch(building, 1),
+          );
           // A homestead (#199) is its owner's explore row for the tile, read
           // after the tile locks and before the buildings (tech spec §7 step 6).
           const homestead =
@@ -1197,6 +1228,12 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           const building = requireBuildingData(locked.buildingId);
           const cost = upgradeCost(building, locked.level);
           if (!cost) throw new AppError('CONFLICT', MESSAGES.topLevel(building.name));
+          // A level gated by research (#874: Tidy Rails for the Depot's level 2), a plain read.
+          await requireResearch(
+            tx,
+            { mapId, userId: user.id },
+            levelResearch(building, locked.level + 1),
+          );
           // Trainees (squishies, step 10) are locked before the cost's inventory
           // rows (step 11).
           const trainees =

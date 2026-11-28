@@ -513,6 +513,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // The Research Bench on a Clockwork Isle (#874).
         await api.register(
           researchRoutes(createResearchService({ db, clock, ...publish }), {
+            hooks: authHooks,
+            idempotency,
+          }),
+        );
         // Wires and rails on my Clockwork Isle land (#874).
         await api.register(
           linesRoutes(createLinesService({ db, clock, ...publish }), {

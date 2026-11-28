@@ -28,7 +28,15 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { buildings, keepers, sessions, tileLines, tileTending, users } from '../../db/schema.js';
+import {
+  buildings,
+  keepers,
+  researchKnown,
+  sessions,
+  tileLines,
+  tileTending,
+  users,
+} from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { productionAt } from '../buildings/production.js';
@@ -310,6 +318,11 @@ describe.skipIf(!url)('wires, rails and power (needs DATABASE_URL)', () => {
     expect(again.statusCode).toBe(409);
     expect(errorOf(again).message).toBe("There's a rail here already!");
 
+    // Tidy rails need Tidy Rails researched first (#874 C3).
+    const early = await line(server, kid, mapId, at, 'rail', '/upgrade');
+    expect(early.statusCode).toBe(409);
+    expect(errorOf(early).message).toBe('Tinker first! Research Tidy Rails at your Bench.');
+    await db.insert(researchKnown).values({ mapId, userId: kid.id, nodeId: 'tidy-rails' });
     const raised = await line(server, kid, mapId, at, 'rail', '/upgrade');
     expect(raised.statusCode, raised.body).toBe(200);
     expect(lineOf(raised).line).toEqual({ level: 2 });

@@ -27,6 +27,7 @@ import { createInventoryRepo } from '../inventory/repo.js';
 import { consumeItems, grantItems } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
+import { requireResearch } from '../research/service.js';
 import { createRoadsRepo, type RoadTileRow } from '../roads/repo.js';
 import { lockAndRefreshPower } from '../territory/power-refresh.js';
 import { createTerritoryRepo } from '../territory/repo.js';
@@ -266,9 +267,16 @@ export function createLinesService(options: LinesServiceOptions): LinesService {
         const line = liveLine(row);
         if (!line) throw new AppError('NOT_FOUND', MESSAGES.noLine(kind));
         const level = line.level + 1;
-        // C3 adds the level's `requiresResearch` check here (Tidy rails).
         const cost = lineCost(kind, level, rules);
         if (!cost) throw new AppError('CONFLICT', MESSAGES.top(kind));
+        // A level gated by research (Tidy rails, #874 C3): "Tinker first!" until known.
+        if (kind === 'rail') {
+          await requireResearch(
+            tx,
+            { mapId, userId: user.id },
+            rules.rails.levels[level - 1]?.requiresResearch,
+          );
+        }
         await repo.setLevel(tile.id, kind, level);
         const events = await refreshFor(tx, mapId, user.id, kind, at);
         await consumeItems(tx, { mapId, userId: user.id }, cost, 'line', tile.id);
