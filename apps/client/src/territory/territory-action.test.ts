@@ -334,6 +334,14 @@ describe('territory words (style guide)', () => {
     expect(TERRITORY_TEXT.noTries(formatWait(30_000))).toBe('New tries in less than a minute 🌙');
   });
 
+  it('names who stands watch, like a gatherer (#912)', () => {
+    expect(TERRITORY_TEXT.guardsHere('Pip')).toBe('🛡️ Pip is on watch here');
+    expect(TERRITORY_TEXT.guardsHere('Pip', 'Mochi')).toBe('🛡️ Pip and Mochi are on watch here');
+    expect(TERRITORY_TEXT.guardsHere('Pip', 'Mochi', 'Bun')).toBe(
+      '🛡️ Pip, Mochi and Bun are on watch here',
+    );
+  });
+
   it('keeps buttons short', () => {
     for (const label of [
       TERRITORY_TEXT.claim,

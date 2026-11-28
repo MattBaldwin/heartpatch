@@ -624,6 +624,8 @@ const territory = withFences(
       supply: (view) => roads.supply(view),
       // The week of a Long Night, the dark-land line says when he comes (#727).
       darkSoon: () => hollow.darkSoon(),
+      // The guard picker says who does what, and saved guards refresh the jobs (#912).
+      jobs: { viewOf: jobs.viewOf, load: jobs.loadView, onView: jobs.onView },
     }),
     raidReport,
   ),
