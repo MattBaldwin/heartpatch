@@ -49,6 +49,7 @@ export const CLOCKWORK_LIMITS = [
   'a missing Glimmer (the Beacon) is swapped for at the trading post (`GLIMMER_SWAP`) the session the rest of the cost is covered; exploring finds none',
   'no upkeep (Wave 1 has none); nothing is sold, so Heart Coins are not modelled; a run that ends short of its plan is shown, not padded',
   'one Windmill each; its tile’s wind is the plan’s, all fortnight (Wave 1 has no wind fronts)',
+  'the Sorter always settles before the Gift Wrapper (`SETTLE_ORDER`); the server puts eaters last and keeps row order between two eaters, so the Wrapper may find a few more Treats here than there',
 ] as const;
 
 const HOUR_MS = 3_600_000;
@@ -85,17 +86,27 @@ function works(id: string): WorksBuilding {
   if (b.kind !== 'works') throw new Error(`"${id}" is not a works`);
   return b;
 }
-interface AnyLevel {
-  readonly cost: Readonly<Counts>;
-  readonly pacePercent?: number;
-  readonly waitingCycles?: number;
-  readonly requiresResearch?: string;
-}
-function levelOf(b: Building, level: number): AnyLevel {
-  const row = (b.levels as readonly AnyLevel[])[level - 1];
+type BuildingLevel = Building['levels'][number];
+type WorksLevel = WorksBuilding['levels'][number];
+
+function levelOf(b: Building, level: number): BuildingLevel {
+  const row: BuildingLevel | undefined = b.levels[level - 1];
   if (row === undefined) throw new Error(`${b.id} has no level ${String(level)}`);
   return row;
 }
+function worksLevel(b: WorksBuilding, level: number): WorksLevel {
+  const row = b.levels[level - 1];
+  if (row === undefined) throw new Error(`${b.id} has no level ${String(level)}`);
+  return row;
+}
+/** A level's optional field, on the kinds that have it. */
+const pacePercentOf = (row: BuildingLevel) => ('pacePercent' in row ? row.pacePercent : undefined);
+const waitingCyclesOf = (row: BuildingLevel) =>
+  'waitingCycles' in row ? row.waitingCycles : undefined;
+const levelResearchOf = (row: BuildingLevel) =>
+  'requiresResearch' in row ? row.requiresResearch : undefined;
+/** `POWER_RULES.windPace` at a tile's wind. */
+const windPaceAt = (wind: 1 | 2 | 3): number => POWER_RULES.windPace[`${wind}`];
 const requiresOf = (b: Building): string | undefined =>
   'requiresResearch' in b ? b.requiresResearch : undefined;
 
@@ -114,7 +125,7 @@ export const tier1Blueprints = (nodes: readonly ResearchNode[]): number =>
 /** Every Blueprint a Wave 1 build costs, level by level (each built once). */
 export function blueprintSinks(): { building: string; level: number; blueprints: number }[] {
   return BUILDINGS.filter((b) => b.patchTypes?.includes('clockwork-isle')).flatMap((b) =>
-    (b.levels as readonly AnyLevel[]).flatMap((row, i) =>
+    [...b.levels].flatMap((row: BuildingLevel, i) =>
       (row.cost['blueprints'] ?? 0) > 0
         ? [{ building: b.id, level: i + 1, blueprints: row.cost['blueprints'] ?? 0 }]
         : [],
@@ -158,8 +169,8 @@ export const stepName = (step: ClockworkStep): string =>
 export function windmillPerDay(level: number, wind: 1 | 2 | 3): number {
   const mill = works('windmill');
   const source = worksSource(mill);
-  const cycle = productionCycleSeconds(source.seconds, levelOf(mill, level) as never, JOB_RULES);
-  const pace = POWER_RULES.windPace[String(wind) as '1' | '2' | '3'];
+  const cycle = productionCycleSeconds(source.seconds, worksLevel(mill, level), JOB_RULES);
+  const pace = windPaceAt(wind);
   return (source.perCycle * 86_400 * pace) / (cycle * 100);
 }
 
@@ -277,8 +288,8 @@ export function runClockworkKid(input: RunInput): ClockworkRun {
     for (const m of order) {
       const data = works(m.id);
       const source = worksSource(data);
-      const row = levelOf(data, m.level) as Parameters<typeof storageCycles>[0] & AnyLevel;
-      const cycleSeconds = productionCycleSeconds(source.seconds, row as never, JOB_RULES);
+      const row = worksLevel(data, m.level);
+      const cycleSeconds = productionCycleSeconds(source.seconds, row, JOB_RULES);
       const progress = pacedProgress(
         {
           sinceMs: m.sinceMs,
@@ -313,7 +324,8 @@ export function runClockworkKid(input: RunInput): ClockworkRun {
       const speed = joined && rail ? rail.speedPercent : 100;
       const cycleMs = Math.floor((g.seconds * JOB_RULES.work.cyclePercent * 1000) / speed);
       const cap = joined
-        ? (levelOf(building('rail-depot'), depot).waitingCycles ?? JOB_RULES.work.maxStoredCycles)
+        ? (waitingCyclesOf(levelOf(building('rail-depot'), depot)) ??
+          JOB_RULES.work.maxStoredCycles)
         : JOB_RULES.work.maxStoredCycles;
       const cycles = Math.min(cap, Math.floor((atMs - g.sinceMs) / cycleMs));
       add(bag, { [g.resource]: cycles * g.quantity });
@@ -327,7 +339,7 @@ export function runClockworkKid(input: RunInput): ClockworkRun {
     switch (step.kind) {
       case 'build': {
         const b = building(step.building);
-        const need = requiresOf(b) ?? levelOf(b, step.level).requiresResearch;
+        const need = requiresOf(b) ?? levelResearchOf(levelOf(b, step.level));
         if (need && !known.has(need)) return `waits for ${need}`;
         if (step.level > 1 && levels.get(step.building) !== step.level - 1) return 'level order';
         if (b.kind === 'works' && b.needsPower && !levels.has('windmill')) return 'no Windmill';
@@ -362,8 +374,7 @@ export function runClockworkKid(input: RunInput): ClockworkRun {
           return;
         }
         if (step.building === 'windmill' && step.wind) windmillWind = step.wind;
-        const basePercent =
-          b.wind === true ? POWER_RULES.windPace[String(windmillWind) as '1' | '2' | '3'] : 100;
+        const basePercent = b.wind === true ? windPaceAt(windmillWind) : 100;
         machines.push({
           id: b.id,
           level: step.level,
@@ -377,7 +388,7 @@ export function runClockworkKid(input: RunInput): ClockworkRun {
         const benchLevel = levels.get('research-bench');
         if (!node || benchLevel === undefined) throw new Error(`can't research ${step.node}`);
         const bench = levelOf(building('research-bench'), benchLevel);
-        const pace = bench.pacePercent ?? 100;
+        const pace = pacePercentOf(bench) ?? 100;
         research = { node, doneMs: atMs + Math.ceil((node.seconds * 1000 * 100) / pace) };
         return;
       }
@@ -519,7 +530,7 @@ export function upkeepRows(config: ClockworkConfig): UpkeepRow[] {
     b.levels.map((row, i) => {
       const source = worksSource(b);
       const cycle = productionCycleSeconds(source.seconds, row, JOB_RULES);
-      const cycles = (86_400 * (b.wind ? POWER_RULES.windPace['2'] : 100)) / (cycle * 100);
+      const cycles = (86_400 * (b.wind ? windPaceAt(2) : 100)) / (cycle * 100);
       const made = { [source.resource]: cycles * source.perCycle };
       const eaten = eatenBy(b.eats, 1);
       const net =

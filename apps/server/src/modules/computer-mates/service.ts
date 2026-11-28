@@ -5,12 +5,14 @@ import {
   GAME_DATA,
   Rng,
   type ComputerMatesState,
+  type PatchType,
   type PublicUser,
   type Species,
 } from '@heartpatch/shared';
 import {
   COMPUTER_MATES,
   SERVER_GAME_DATA,
+  spawnTablesFor,
   type ComputerMateRules,
   type ComputerMatesSecrets,
 } from '@heartpatch/shared/server';
@@ -79,12 +81,14 @@ export function changeAtOf(
 
 /**
  * Base forms (nothing evolves into them) of common and uncommon species that
- * the patch's year-round spawn tables can hold: a computer mate's team.
+ * the patch's year-round spawn tables can hold: a computer mate's team. Only
+ * this patch type's tables (#874: a Clockwork Isle's tech squishies never
+ * join a mate on a Cozy Patch or a Wild Isle).
  */
-export function teamSpecies(): Species[] {
+export function teamSpecies(patchType: PatchType): Species[] {
   const evolved = new Set(GAME_DATA.species.flatMap((s) => s.evolutions.map((e) => e.into)));
   const spawnable = new Set(
-    SERVER_GAME_DATA.spawnTables
+    spawnTablesFor(SERVER_GAME_DATA.spawnTables, patchType)
       .filter((t) => t.season === undefined)
       .flatMap((t) => t.entries.map((e) => e.species)),
   );
@@ -177,7 +181,7 @@ async function fillWithin(
     // The team, once, at creation (refreshing levels is #386c's).
     if (existing === undefined && seed !== undefined) {
       const rng = Rng.fromSeed(deriveSeed(seed, 'team'));
-      const pool = teamSpecies();
+      const pool = teamSpecies(await repo.patchTypeOf(mapId));
       const size = rng.int(secrets.rules.teamSize.min, secrets.rules.teamSize.max);
       const level = Math.max(1, partnerLevel + tuning.levelOffset);
       const battles = createBattlesRepo(tx);

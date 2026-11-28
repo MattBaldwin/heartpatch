@@ -345,7 +345,7 @@ export const SPAWN_TABLES: SpawnTable[] = [
     id: 'clockwork-gearbit',
     terrains: ['meadow', 'hills'],
     patchTypes: ['clockwork-isle'],
-    entries: [{ species: 'gearbit', weight: 8 }], // TUNE: about 1 in 4 isle meadow spawns
+    entries: [{ species: 'gearbit', weight: 8 }], // TUNE: about 1 in 6 isle meadow and hill spawns
   },
   {
     // Bulbun comes out when its nose starts to glow: dusk and night.

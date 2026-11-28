@@ -1,6 +1,6 @@
 # Clockwork Isle balance (`pnpm sim:clockwork`)
 
-#874 Wave 1, lane C6. 14 days from 2026-12-01, a casual and an engaged kid on one Clockwork Isle homestead, every number read from the data (`BUILDINGS`, `POWER_RULES`, `RAIL_RULES`, `RESEARCH_TREE`, `RESOURCES`, `JOB_RULES`, `GLIMMER_SWAP`). Each kid runs twice: with the research tree as the data has it, and with the owner's Blueprint ruling (supervisor 58, 2026-11-28: tier 1 grants 8). 4 runs in 1.0 s.
+#874 Wave 1, lane C6. 14 days from 2026-12-01, a casual and an engaged kid on one Clockwork Isle homestead, every number read from the data (`BUILDINGS`, `POWER_RULES`, `RAIL_RULES`, `RESEARCH_TREE`, `RESOURCES`, `JOB_RULES`, `GLIMMER_SWAP`). Each kid runs twice: with the research tree as the data has it, and with the owner's Blueprint ruling (supervisor 58, 2026-11-28: tier 1 grants 8). 4 runs in 0.8 s.
 
 ## Guards (with the ruling)
 
@@ -112,3 +112,4 @@ A day's output at sell price, less what it eats (fed every cycle), at wind 2; up
 - a missing Glimmer (the Beacon) is swapped for at the trading post (`GLIMMER_SWAP`) the session the rest of the cost is covered; exploring finds none
 - no upkeep (Wave 1 has none); nothing is sold, so Heart Coins are not modelled; a run that ends short of its plan is shown, not padded
 - one Windmill each; its tile’s wind is the plan’s, all fortnight (Wave 1 has no wind fronts)
+- the Sorter always settles before the Gift Wrapper (`SETTLE_ORDER`); the server puts eaters last and keeps row order between two eaters, so the Wrapper may find a few more Treats here than there
