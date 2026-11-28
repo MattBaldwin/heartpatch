@@ -22,7 +22,7 @@ export const EVE_TEXT = {
   dozedTitle: 'Thanks for helping! 💤',
   dozedLine: 'It dozed off and wandered home at dawn.',
   bundleHead: 'Look what it left you:',
-  waiting: 'Your thanks is on its way…',
+  waiting: 'Your thanks is coming! 🎁',
   asksHead: 'Ask it to be your friend?',
   asksLeft: (n: number) => `${String(n)} ${n === 1 ? 'ask' : 'asks'} left`,
   ask: 'Ask',

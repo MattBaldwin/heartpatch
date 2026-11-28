@@ -87,11 +87,18 @@ export function createEveLayer(options: EveLayerOptions): EveLayer {
   const gift = hpButton(EVE_TEXT.chip, { testId: 'eve-gift' });
   gift.classList.add('eve-gift');
   gift.hidden = true;
+  // The wait is a status line, not a button: nothing to tap yet.
+  const waitEl = el(
+    'div',
+    { class: 'eve-wait', role: 'status', 'data-testid': 'eve-wait' },
+    EVE_TEXT.waiting,
+  );
+  waitEl.hidden = true;
   const beatEl = el('div', { class: 'eve-beat', role: 'status', 'data-testid': 'eve-beat' });
   beatEl.hidden = true;
   const sheet = el('div', { class: 'eve-sheet', 'data-testid': 'eve-sheet' });
   sheet.hidden = true;
-  root.append(chip, gift, beatEl, sheet);
+  root.append(chip, gift, waitEl, beatEl, sheet);
   gift.addEventListener('click', () => {
     sheetOpen = true;
     render();
@@ -185,9 +192,8 @@ export function createEveLayer(options: EveLayerOptions): EveLayer {
       sheetOpen = true;
     }
     // A fall with no thanks yet and a Keeper who chipped: the gentle wait, never an error.
-    gift.hidden = !(model || waiting) || sheetOpen || beat;
-    gift.textContent = model ? EVE_TEXT.chip : EVE_TEXT.waiting;
-    gift.disabled = !model;
+    gift.hidden = !model || sheetOpen || beat;
+    waitEl.hidden = model !== null || !waiting || beat;
     beatEl.hidden = !beat;
     beatEl.textContent = beat ? EVE_TEXT.fallBeat : '';
     beatEl.classList.toggle('eve-beat-still', reduced());
