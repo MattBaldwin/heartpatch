@@ -28,12 +28,13 @@ Owner direction (2026-11-28), via supervisor 55. Frosty Christmas headline, cozy
 | `m3-bench-and-beacon.png` | Research Bench (visible blueprint) and Clockwork Beacon (dark iron lattice, brass lantern) | "Tinker up a blueprint." / "The Beacon hums." |
 | `m3-skyline-heights.png` | All six on one baseline | "Squat, medium and tall." |
 | `m3-ipad-all-machines.png` | All six in all 3 states | |
-| `m4-*` | Gearbit and Bulbun (round 3 fixes carried: brass-orange Gearbit, no cheek circles, key on a stem) | |
+| `m4-idle.png`, `m4-battle.png`, `m4-part-sheet.png`, `m4-ipad.png` | **Gearbit** (brass, gear ears, wind-up key on its back) and **Bulbun** (bulb nose), base look **without scarves**: idle, in battle, part sheet, iPad | "Gearbit's ears spin when it's happy. Bulbun's nose glows at dusk." |
+| `m4-wardrobe-scarf.png` | Both wearing the Frosty Scarf, shown as a **Wardrobe accessory** card (red or teal, "Put it on") | "A scarf for snowy days." |
 
 States: **Working** (warm windows, steam), **Resting** (dim windows, no steam), **Needs power / Needs a wire** (grey glass, snow on the chimney, dangling wire, ⚡ badge).
 
 ## How these were made
 Terrain, hexes, snow and the night look are real renders of the game's map scene (`island.html?patch=wild&season=christmas`). A temporary local hook in the dev gallery (not committed) printed each hex's screen position (`source/proj.js` shows how; positions are in `source/tiles.js`). Everything Clockwork is original SVG (`source/kit2.js` buildings, `source/frames-r4.js` scenes). Map frames are 2x (the game caps DPR at 2); phone M3/M4 are 3x. No outside assets.
 
-## Draft names still open
-Gearbit and Bulbun (frosty alternatives Frostcog and Glowbun).
+## Names (owner decided)
+**Gearbit** (gear ears, brass) and **Bulbun** (bulb nose). The scarf is a Wardrobe item, not part of either species.

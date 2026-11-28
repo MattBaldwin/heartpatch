@@ -30,7 +30,7 @@
 
   // ---------------------------------------------------------------- Gearbit
   // opts: mood 'idle'|'cheer'|'battle', frostHat, key (show wind-up key), gearRot
-  function gearbit({ mood = 'idle', scale = 1, flip = false, gearRot = 0, scarfOn = true, labels = false } = {}) {
+  function gearbit({ mood = 'idle', scale = 1, flip = false, gearRot = 0, scarfOn = false, labels = false } = {}) {
     const battle = mood === 'battle', cheer = mood === 'cheer';
     const squash = battle ? 'scale(1.06 .94)' : cheer ? 'scale(.97 1.05)' : '';
     return `<g transform="scale(${flip ? -scale : scale} ${scale})">
@@ -61,7 +61,7 @@
   }
 
   // ----------------------------------------------------------------- Bulbun
-  function bulbun({ mood = 'idle', scale = 1, flip = false, glowOn = true, scarfOn = true } = {}) {
+  function bulbun({ mood = 'idle', scale = 1, flip = false, glowOn = true, scarfOn = false } = {}) {
     const battle = mood === 'battle', cheer = mood === 'cheer';
     return `<g transform="scale(${flip ? -scale : scale} ${scale})">
       <ellipse cx="2" cy="4" rx="52" ry="12" fill="url(#gShadow)"/>
@@ -138,12 +138,26 @@
       const keyArt = `<g transform="translate(66 84) rotate(-10) scale(1.05)"><rect x="-3.6" y="-4" width="7.2" height="30" rx="3.6" fill="url(#gBrass)" stroke="${C.brassLo}" stroke-width="1.3"/><path d="M0 -8 C-20 -10 -22 -34 -9 -36 C-2 -37 0 -30 0 -26 C0 -30 2 -37 9 -36 C22 -34 20 -10 0 -8Z" fill="url(#gBrass)" stroke="${C.brassLo}" stroke-width="1.5" stroke-linejoin="round"/><rect x="-8" y="20" width="16" height="5" rx="2.5" fill="url(#gCopper)"/></g>`;
       const scarfArt = `<g transform="translate(62 94) scale(1.15)"><g transform="translate(0 -4)">${scarf('#e5555f', '#a83a48', 1)}</g></g>`;
       return svg(W, H, `<rect width="${W}" height="${H}" fill="url(#gBgDay)"/>` + snowfall(W, H, 30) +
-        txt(W / 2, 100, 'Tinker parts', { fs: 22, fw: 800, anchor: 'middle' }) + txt(W / 2, 122, 'Mix and match for the isle squishies', { fs: 13, fw: 600, fill: '#8c7b94', anchor: 'middle' }) +
+        txt(W / 2, 100, 'Tinker parts', { fs: 22, fw: 800, anchor: 'middle' }) + txt(W / 2, 122, 'The base look. No scarves here.', { fs: 13, fw: 600, fill: '#8c7b94', anchor: 'middle' }) +
         row(140, earArt, 'Gear ears', 'Spins when it is happy.', 'Gearbit') +
         row(276, noseArt, 'Bulb nose', 'Soft glass. Glows at dusk.', 'Bulbun') +
         row(412, keyArt, 'Wind-up key', 'Turns when it skips about.', 'Gearbit') +
-        row(548, scarfArt, 'Frosty scarf', 'Red or teal wool. Snowy days.', 'Both') +
+        row(548, scarfArt, 'Frosty scarf', 'Red or teal wool. Snowy days.', 'Wardrobe item') +
         `<g transform="translate(14 690)"><rect width="${W - 28}" height="116" rx="24" fill="#fff" opacity=".7"/>${txt(24, 34, 'Same parts, new looks', { fs: 15, fw: 800 })}<g transform="translate(86 104) scale(.4)">${gearbit({ mood: 'idle', scarfOn: false })}</g><g transform="translate(196 104) scale(.4)">${bulbun({ mood: 'idle', scarfOn: false })}</g><g transform="translate(300 104) scale(.4)">${gearbit({ mood: 'cheer', gearRot: 20 })}</g></g>`);
+    },
+    wardrobe() { // phone: the scarf as a Wardrobe accessory
+      const W = 393, H = 852;
+      const sw = (x, y, c1, c2, label, sel) => `<g transform="translate(${x} ${y})"><rect width="150" height="64" rx="20" fill="#fff" stroke="${sel ? '#7a4b12' : '#eadff0'}" stroke-width="${sel ? 3 : 2}"/><g transform="translate(34 40) scale(.5)">${scarf(c1, c2, 1)}</g>${txt(70, 38, label, { fs: 14, fw: 800 })}</g>`;
+      return svg(W, H, `<rect width="${W}" height="${H}" fill="url(#gBgDay)"/>` + snowfall(W, H, 36) + hills(W, H, 300) +
+        txt(W / 2, 100, 'Wardrobe', { fs: 22, fw: 800, anchor: 'middle' }) + txt(W / 2, 122, 'Dress-up for squishies', { fs: 13, fw: 600, fill: '#8c7b94', anchor: 'middle' }) +
+        `<g>${snow(110, 410, 100, 24)}<g transform="translate(110 410) scale(1.25)">${gearbit({ mood: 'cheer', gearRot: 10, scarfOn: true })}</g>${chip(110, 436, 'Gearbit', 'yellow')}</g>` +
+        `<g>${snow(286, 410, 100, 24)}<g transform="translate(286 410) scale(1.25)">${bulbun({ mood: 'cheer', scarfOn: true })}</g>${chip(286, 436, 'Bulbun', 'lilac')}</g>` +
+        `<g transform="translate(14 500)"><rect width="${W - 28}" height="212" rx="26" fill="#fff" opacity=".96" stroke="#eadff0" stroke-width="2"/>` +
+        txt(24, 40, 'Frosty Scarf', { fs: 20, fw: 800 }) + `<g transform="translate(${W - 28 - 24 - 150} 20)"><rect width="150" height="26" rx="13" fill="#dff4ea"/><text x="75" y="17.5" text-anchor="middle" font-size="12.5" font-weight="800" fill="#24684a">Wardrobe accessory</text></g>` +
+        txt(24, 66, 'Wool, with a little knot. Just for looks.', { fs: 13, fw: 600, fill: '#8c7b94' }) +
+        sw(24, 86, '#e5555f', '#a83a48', 'Red', true) + sw(190, 86, '#6cc4c9', '#3d98a0', 'Teal', false) +
+        `<g transform="translate(24 162)"><rect width="${W - 76}" height="38" rx="19" fill="url(#gBrass)"/><text x="${(W - 76) / 2}" y="25" text-anchor="middle" font-size="15" font-weight="800" fill="#5a3a0d">Put it on</text></g></g>` +
+        K.frostSparkles([[30, 160, 5], [350, 220, 6], [340, 620, 5]]));
     },
     ipad() { // iPad: idle pair + battle side by side
       const W = 1024, H = 1366;
